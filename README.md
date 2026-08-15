@@ -1,10 +1,29 @@
 # Sensei Code
 
-**A local-first, governed, autonomous multi-agent development environment powered by Sensei.**
+**A uniform surface for your coding agents, with a layer of architectural knowledge underneath.**
 
-Sensei Code is the terminal application that makes the full Sensei workflow usable as a normal coding experience.
+Sensei Code does not replace Claude Code, Codex, or Cursor Agent. It gives them the context an agent session cannot give itself — the repository's governed invariants, contracts, failure modes, forbidden fixes, and proof obligations — and it makes the **task**, not the agent session, the unit of continuity.
 
-It should feel familiar to users of Claude Code, Codex, Cursor Agent, Pi, and similar tools: open a repository, describe a task, watch work happen, inspect decisions, and continue the conversation. The difference is that Sensei Code does not treat one model session as architect, implementor, reviewer, authority, and memory at the same time.
+Switch from one agent to another mid-task and the architectural context, the scope, the decisions already made, and the evidence survive the switch, because they live in Sensei rather than in a transcript.
+
+For changes that warrant it, the same application can run a fully governed pipeline: isolated candidates, deterministic audit, Sensei admission, exact-artifact apply, and verification. That is opt-in, not the default.
+
+It should feel familiar to users of Claude Code, Codex, Cursor Agent, Pi, and similar tools: open a repository, describe a task, watch work happen, inspect decisions, and continue the conversation. The difference is the architectural knowledge underneath, and the fact that Sensei Code does not treat one model session as architect, implementor, reviewer, authority, and memory at the same time.
+
+In **assisted mode**, the default:
+
+```text
+        HUMAN + their coding agent
+                    |
+              SENSEI CODE
+     context · task identity · continuity
+                    |
+                 SENSEI
+    invariants | contracts | failure modes
+      forbidden fixes | proof obligations
+```
+
+In **governed mode**, opt-in per task:
 
 ```text
                          HUMAN
@@ -52,9 +71,27 @@ Modern coding agents are powerful implementors, but an agent session does not au
 
 Sensei already owns those semantics. Sensei Code is the missing workflow layer that lets a developer use them without manually relaying prompts, diffs, receipts, worktrees, and evidence among several terminals.
 
+## Two modes
+
+### Assisted (default)
+
+You drive your agent. Sensei Code supplies the governed architectural context, keeps the task identity, and surfaces what Sensei observes (preflight, edit checks, diff audit) while the work happens. The agent writes in your checkout; you commit. Nothing is sealed and nothing is admitted.
+
+Context is delivered through whatever each agent supports — generated `CLAUDE.md` / `AGENTS.md` / rules files, hook-driven briefings, MCP tools, or a prompt preamble — and it is selected proportionally to the file's rigor class rather than dumped wholesale.
+
+Absence is typed. "No invariants apply here" and "the graph has no coverage here" are different answers, and the second one is never rendered as a blank panel.
+
+### Governed (opt-in)
+
+The autonomous pipeline: isolated candidate worktrees, bounded workers, deterministic diff audit, reviewer cycles, Sensei admission, exact-artifact apply, verification, and completion. It costs more and it buys receipts.
+
+**A task is governed because the canonical Sensei records exist for it — never because a config key says so.** An assisted task is never presented as a governed run.
+
+Neither mode uses Sensei's own code-generation stack. The coding agents generate; Sensei governs. See [`docs/architecture.md`](docs/architecture.md) section 3.4 for the evidence behind that decision.
+
 ## Authority, not permission popups
 
-Sensei Code is designed to be autonomous during normal development. It does **not** ask the user whether it may read a file, run a test, create a candidate worktree, or let a bounded worker repair a failed test.
+In governed mode, Sensei Code is designed to be autonomous during normal development. It does **not** ask the user whether it may read a file, run a test, create a candidate worktree, or let a bounded worker repair a failed test.
 
 It uses three authority levels:
 
@@ -112,6 +149,37 @@ The foundation deliberately stops short of pretending that reviewer acceptance i
 See [docs/architecture.md](docs/architecture.md) and [docs/implementation-status.md](docs/implementation-status.md).
 
 ## Experience
+
+Assisted mode — the agent is yours, the context is Sensei's:
+
+```text
+$ sensei-code
+
+◆ SENSEI
+  workspace identity verified · graph generation 2026-08-15T09:14Z (HEAD-2)
+  golang/architecture/agentcommand/ · rigor class B
+  4 invariants · 2 failure modes · 1 forbidden fix
+  proof obligations: api_agent_test.go:TestVendorBoundaryRepair
+  runtime coverage: UNAVAILABLE (no crossing source)
+
+● CLAUDE
+  working in your checkout...
+
+◆ SENSEI
+  edit check: api_agent.go
+  ⚑ forbidden fix nearby: "widen the vendor boundary to pass the test"
+
+● CLAUDE
+  ...
+
+◆ SENSEI
+  diff audit: 2 files · contracts represented · no forbidden fix observed
+
+✓ REVIEWED WORKING TREE
+  assisted task · no admission requested · yours to commit
+```
+
+Governed mode — opt-in, receipts at the end:
 
 ```text
 $ sensei-code
@@ -308,13 +376,16 @@ Raw worker activity is persisted but collapsed in the normal UI. This keeps the 
 ## Project rules
 
 1. **Sensei is not an agent.** It is the governance boundary.
-2. **Absence of evidence is not success.** Fail closed when Sensei cannot establish required truth.
-3. **Workers do not own architecture.** They implement bounded contracts.
-4. **Reviewer acceptance is not admission.** Sensei owns admission and verification.
-5. **Routine execution is autonomous.** Do not convert worker uncertainty into human permission prompts.
-6. **Human interruption means an authority boundary was reached.** Keep it rare and explicit.
-7. **Local UI state is not project truth.** Durable architectural truth belongs to Sensei/repository governance sources.
-8. **Manual work must never masquerade as a governed run.** Receipts and exact bindings matter.
+2. **Sensei Code does not replace your coding agent.** Assisted mode is the default; the agents keep generating the code.
+3. **Mode is derived from receipts, not configuration.** Governed means the canonical Sensei records exist.
+4. **Injected context carries its provenance.** Every claim names the graph generation it came from; absence is typed, not blank.
+5. **Absence of evidence is not success.** Fail closed when Sensei cannot establish required truth.
+6. **Workers do not own architecture.** They implement bounded contracts.
+7. **Reviewer acceptance is not admission.** Sensei owns admission and verification.
+8. **Routine execution is autonomous in governed mode.** Do not convert worker uncertainty into human permission prompts.
+9. **Human interruption means an authority boundary was reached.** Keep it rare and explicit.
+10. **Local UI state is not project truth.** Durable architectural truth belongs to Sensei/repository governance sources.
+11. **Manual work must never masquerade as a governed run.** Receipts and exact bindings matter.
 
 ## License
 

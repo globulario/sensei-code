@@ -7,9 +7,11 @@
 
 Sensei Code is the local interactive product surface for governed AI software development with Sensei.
 
-It is intentionally **not a coding agent**. It is an autonomous orchestrator that coordinates an architect, bounded implementation workers, reviewers, Git worktrees, local tools, and the full Sensei governance model.
+It is intentionally **not a coding agent**, and it is not a replacement for the coding agent a developer already uses. It is the layer underneath them: a uniform surface that carries governed architectural knowledge, task identity, and honest state into whichever agent is doing the work — and, when a change warrants it, an orchestrator that can run the full governed candidate pipeline.
 
-The product goal is a terminal experience comparable to Claude Code, Codex, Cursor Agent, or Pi while preserving a fundamentally different authority structure underneath.
+The product goal is a terminal experience comparable to Claude Code, Codex, Cursor Agent, or Pi, with a layer of architectural knowledge where those tools have plain agent integration.
+
+Sensei Code runs in two modes, described in section 3. The flow below is **governed mode**; assisted mode is the default and stops at a reviewed working tree.
 
 ```text
 user intent
@@ -57,7 +59,135 @@ Sensei Code preserves five independent roles:
 
 Git owns repository object identity and history mechanics. GitHub may provide collaboration, CI, and publication, but neither is architectural authority.
 
-## 3. Sensei is upstream authority
+## 3. Operating modes
+
+Sensei Code has two operating modes over the same machinery. They differ in who drives the agent, where the agent writes, and what receipts exist at the end.
+
+### 3.1 Assisted mode (default)
+
+The developer keeps using their coding agent the way they use it today. Sensei Code supplies what the agent session cannot supply for itself: governed architectural context, a durable task identity, continuity across agents, and honest state.
+
+```text
+human + their agent (Claude Code / Codex / Cursor)
+    |
+    v
+Sensei Code supplies architectural context + task identity
+    |
+    v
+agent works in the developer's checkout
+    |
+    v
+Sensei observes: preflight, edit checks, diff audit
+    |
+    v
+reviewed working tree
+    |
+    v
+human commits
+```
+
+Assisted mode does **not** replace the coding agent, does not seal a candidate, and does not request admission. Its product claim is narrower and honest:
+
+- the agent starts with the repository's governed architectural context rather than an inferred one;
+- the unit of continuity is the **task**, not the agent session, so work survives switching from one agent to another;
+- Sensei's observations (preflight, edit check, diff audit, forbidden fixes) are surfaced as the work happens;
+- absence, staleness, and unavailability of that context are stated rather than hidden.
+
+This is the primary adoption surface. Most repositories and most changes should never need more than this.
+
+### 3.2 Governed mode (opt-in)
+
+Governed mode is the autonomous orchestrated pipeline described in the rest of this document: isolated candidate worktrees, bounded workers, deterministic diff audit, reviewer cycles, Sensei admission, exact-artifact apply, verification, and terminal completion.
+
+It costs more (isolation, sealing, evidence, admission latency) and it buys receipts. It is selected per task, and the natural selector is the change's rigor class rather than a global preference.
+
+### 3.3 Mode is derived from receipts, not configuration
+
+A task is governed because the canonical Sensei task, candidate, admission, verification, and completion records exist for it — not because a config key says `governed`.
+
+Sensei Code must make it structurally impossible for an assisted task to be presented as a governed one. Where a governed record does not exist, the surface says so in the same words Sensei would use.
+
+### 3.4 What Sensei Code does not use
+
+Sensei Code does **not** invoke Sensei's governed *synthesis and generation* stack (the O1–O3 interpretation → planning → generation path). Code generation belongs to the coding agents, in both modes.
+
+This is deliberate and evidence-based. In Sensei's own grpc-go comparison, an agent working with Sensei context solved 3/3 tasks while the governed synthesis driver produced 1/3 candidates, and both of its failures were the O3 whole-file-rewrite protocol failing to scale (a 128KB snapshot), not a reasoning failure. The R1 pilot showed the same ordering at larger n (9/9 against 5/9).
+
+The counter-evidence is preserved rather than discarded: the single candidate the synthesis driver did produce was the *more disciplined* repair — one file and four lines against the real feature flag, where the agent's accepted solve touched three files and deleted roughly a hundred test helpers. Generation quality is not the reason O3 is out of the path; protocol scaling is. If that scaling problem is solved upstream, this decision should be revisited on the evidence.
+
+What Sensei Code **does** use, in governed mode, are Sensei's evaluation, admission, verification, and closure owners — applied to an agent-produced candidate.
+
+### 3.5 Open contract question
+
+Sensei's candidate evaluation and admission owners were built around candidates that Sensei's own driver generated. Whether they accept an **externally generated** candidate — an agent-produced worktree diff sealed by Sensei Code — is an open contract question against Sensei core, not a settled integration.
+
+It must be resolved before governed mode can be called complete. Until it is resolved, governed mode terminates at *candidate ready for governed admission*, which is the fail-closed boundary already described in section 14. Sensei Code must not invent a local candidate artifact format to route around the question.
+
+## 4. Architectural context
+
+Assisted mode's entire value is the context it injects. That makes context quality a governance concern, not a UX concern: context that is confidently wrong makes several agents wrong in unison and faster than they would have been alone.
+
+### 4.1 The context packet
+
+Assembled from canonical Sensei sources for the file, component, or task in view:
+
+```text
+repository and domain identity
+graph authority and generation
+task identity and briefing
+applicable invariants
+governing contracts
+known failure modes
+forbidden fixes
+required tests and proof obligations
+impact / blast radius
+relevant architectural decisions
+unresolved or contested knowledge
+```
+
+### 4.2 Typed absence
+
+Every field is one of `present`, `empty-proven`, `absent`, `stale`, or `unavailable`.
+
+An empty panel is not an answer. "No invariants apply to this file" and "the graph has no coverage for this file" are different facts, and only the first is safe to act on. A briefing that returns nothing because the graph is behind HEAD must say that, with the generation it was answered from.
+
+This is the same rule as section 10.1 applied to the read path, and it is the failure mode most likely to make the product actively harmful.
+
+### 4.3 Proportional selection
+
+Context value comes from selection, not volume. Injecting every invariant into every turn burns the agent's budget and dilutes the ones that matter.
+
+Sensei already owns the dial: rigor class (`sensei rigor`, `docs/rigor_classes.yaml`, strictest-of-matching). How much context a file receives, and whether a change is a candidate for governed mode at all, should be a function of its rigor class.
+
+### 4.4 Delivery
+
+Context reaches an agent through whichever mechanism that agent actually supports:
+
+```text
+Claude Code   generated CLAUDE.md, PreToolUse briefing push, Sensei MCP tools
+Codex         generated AGENTS.md, prompt preamble, MCP where supported
+Cursor        rules files
+other         prompt preamble
+```
+
+Sensei Code owns the assembly and the freshness guarantee. It does not own the semantics of anything in the packet.
+
+### 4.5 Task continuity
+
+The handoff contract is what makes the task, rather than the session, the unit of work. When a second agent picks up a task, it receives:
+
+```text
+task identity and current state
+the context packet, refreshed at the current graph generation
+decisions already made, and by whom
+scope declared so far
+work already performed, as diff and evidence
+open questions
+```
+
+A second agent must never begin from a cold prompt on a task that is already underway. Proving this handoff is the first thing worth demonstrating about the product.
+
+## 5. Sensei is upstream authority
 
 Sensei Code consumes public Sensei contracts. It must not reproduce weaker private versions of them.
 
@@ -79,13 +209,15 @@ The primary integration boundary is the existing `awareness-mcp` JSON-RPC stdio 
 
 This boundary lets Sensei evolve independently while keeping its semantics canonical.
 
-## 4. Authority model
+## 6. Authority model
 
 The application distinguishes **capability** from **authority**.
 
 A capability says what a process can physically do. Authority says who is entitled to make a decision.
 
-### 4.1 Level 1: execution authority
+The three levels below describe **governed mode**, where Sensei Code drives the agents. In **assisted mode** the developer is driving, so the delegation is different: the human is the architect of record, Level 2 delegation does not apply, and Sensei Code's role is to inform and to observe rather than to decide. Level 1 capability limits and Level 3 authority crossings still hold in both modes.
+
+### 6.1 Level 1: execution authority
 
 Sensei Code owns routine workflow execution inside the configured local capability envelope.
 
@@ -105,7 +237,7 @@ Examples:
 
 These actions do not require interactive permission prompts when their local capability is granted.
 
-### 4.2 Level 2: architectural authority
+### 6.2 Level 2: architectural authority
 
 The architect is delegated architectural authority for normal design decisions that preserve existing human-owned intent and governed contracts.
 
@@ -120,7 +252,7 @@ Examples:
 
 The architect must use repository evidence and Sensei context. Model memory is not project authority.
 
-### 4.3 Level 3: human authority
+### 6.3 Level 3: human authority
 
 The workflow pauses only when a decision would cross authority the architect does not own.
 
@@ -136,7 +268,7 @@ Examples:
 
 The interaction is a small numbered choice, normally 1/2/3. The selected option becomes an input to the architect, which then produces a bounded plan and the same workflow resumes.
 
-### 4.4 Authority failure is not worker failure
+### 6.4 Authority failure is not worker failure
 
 A build failure, test failure, malformed model response, agent crash, or weak candidate is not inherently a Level-3 event.
 
@@ -155,7 +287,7 @@ failure
 
 This is a defining product property.
 
-## 5. Capability envelope
+## 7. Capability envelope
 
 Repository-local configuration grants routine physical capabilities once.
 
@@ -177,7 +309,7 @@ Capabilities are not silently widened by agents.
 
 Worker execution is additionally bounded by worktree placement, provider sandbox mechanisms when available, and the architectural contract supplied in the prompt. Stronger OS-level sandboxing is a planned hardening layer for providers that cannot mechanically enforce the complete candidate boundary themselves.
 
-## 6. Process architecture
+## 8. Process architecture
 
 ```text
 +------------------------------------------------------------------+
@@ -209,7 +341,7 @@ Worker execution is additionally bounded by worktree placement, provider sandbox
 
 The event bus crosses these components. UI rendering never consumes provider stdout as its source of truth.
 
-## 7. Repository layout
+## 9. Repository layout
 
 The implementation starts small and package-oriented:
 
@@ -233,7 +365,7 @@ internal/
 
 The package structure may evolve, but semantic ownership must remain explicit.
 
-## 8. Sensei MCP boundary
+## 10. Sensei MCP boundary
 
 Sensei's `awareness-mcp` is started as a child process using direct argv, not shell interpolation.
 
@@ -267,11 +399,11 @@ awareness_challenge
 
 `sensei-code doctor` checks that the minimum required subset is available before a run.
 
-### 8.1 No fake green state
+### 10.1 No fake green state
 
 If Sensei returns unavailable, stale, refused, waiting, uncertifiable, scope-violated, or incomplete, Sensei Code preserves that meaning. It does not translate lack of proof into success.
 
-## 9. Provider model
+## 11. Provider model
 
 Providers are adapters, not authorities.
 
@@ -286,7 +418,7 @@ worker fallback: Codex, candidate workspace
 
 Provider authentication remains owned by the provider CLI.
 
-### 9.1 Architect protocol
+### 11.1 Architect protocol
 
 The architect must return a bounded machine decision:
 
@@ -318,7 +450,7 @@ Sensei Code normalizes human option IDs to the terminal's 1/2/3 interface. Model
 
 Malformed responses fail closed and may be automatically retried.
 
-### 9.2 Reviewer protocol
+### 11.2 Reviewer protocol
 
 The reviewer returns one of:
 
@@ -332,7 +464,7 @@ escalate
 
 Reviewer acceptance is not Sensei admission.
 
-## 10. Candidate isolation
+## 12. Candidate isolation
 
 Each worker receives a separate Git worktree created from the exact current base.
 
@@ -347,9 +479,39 @@ They are not stored inside `<repo>/.sensei-code`, because session state and cand
 
 Failed candidates may be retained temporarily as diagnostic evidence. Lifecycle/garbage-collection policy will be added once sealed candidate identity and admission application are wired.
 
-## 11. Autonomous task state machine
+## 13. Task state machines
 
-The first vertical slice implements:
+### 13.1 Assisted mode
+
+```text
+TASK
+  |
+  v
+workspace identity + graph generation
+  |
+  v
+context packet assembled (typed absence preserved)
+  |
+  v
+agent session (any provider) in the developer's checkout
+  |
+  +--> agent switched --> handoff packet --> agent session
+  |
+  v
+Sensei observation: preflight / edit check / diff audit
+  |
+  v
+reviewed working tree
+  |
+  v
+human commits
+```
+
+No candidate is sealed and no admission is requested. The task record holds identity, context provenance, decisions, and observations — and it is never reported as a governed run.
+
+### 13.2 Governed mode
+
+The autonomous vertical slice implements:
 
 ```text
 TASK
@@ -397,7 +559,9 @@ HUMAN 1/2/3                       |
 
 If the primary worker does not converge within the configured review budget, Sensei Code automatically tries the next configured bounded worker.
 
-## 12. Admission/apply boundary
+## 14. Admission/apply boundary
+
+This section applies to **governed mode** only. Assisted mode has no admission step, and must never display one; its terminal state is a reviewed working tree owned by the human.
 
 The workflow must not equate a good candidate with an admitted change.
 
@@ -421,7 +585,7 @@ The next implementation slice therefore must:
 
 Until this is wired, the engine terminates at **candidate ready for governed admission**. That is an intentional fail-closed boundary.
 
-## 13. Event architecture
+## 15. Event architecture
 
 Every important action becomes a structured event:
 
@@ -450,7 +614,7 @@ They are:
 
 Raw worker output is evidence/debug material, not the normal user interface.
 
-## 14. TUI
+## 16. TUI
 
 The TUI uses the Charm v2 family:
 
@@ -476,7 +640,7 @@ Stable actor markers:
 
 Color reinforces meaning but cannot be the sole semantic signal.
 
-## 15. Persistence
+## 17. Persistence
 
 Local UX state lives under:
 
@@ -490,7 +654,7 @@ This directory is not architectural authority and should be ignored by Git.
 
 Project architectural truth remains in Sensei-owned repository sources and Sensei receipts.
 
-## 16. Failure semantics
+## 18. Failure semantics
 
 The workflow fails closed when:
 
@@ -504,7 +668,7 @@ The workflow fails closed when:
 
 The workflow does not fail merely because one worker failed. Provider failure is a recoverable execution event until the bounded recovery policy is exhausted.
 
-## 17. Security
+## 19. Security
 
 Initial security boundaries:
 
@@ -524,7 +688,7 @@ Planned hardening:
 - network capability policy;
 - sealed candidate digest lifecycle and exact replay/application.
 
-## 18. Testing strategy
+## 20. Testing strategy
 
 Tests should emphasize authority and failure semantics rather than only happy-path rendering.
 
@@ -540,10 +704,13 @@ Required classes:
 - Level-3 rendezvous/resume
 - Sensei unavailability/refusal propagation
 - eventual exact candidate admission/apply/verify replay
+- context packet absence typing: `absent`, `stale`, and `unavailable` must not render as `empty-proven`
+- agent handoff: a second provider receives prior scope, decisions, and evidence
+- an assisted task cannot be rendered with governed-run vocabulary
 
 The TUI should remain a projection of tested workflow state so rendering bugs cannot redefine governance semantics.
 
-## 19. Milestones
+## 21. Milestones
 
 ### M0: Go foundation
 
@@ -568,8 +735,23 @@ The TUI should remain a projection of tested workflow state so rendering bugs ca
 - local session log
 - doctor
 
-### M2: full governed candidate lifecycle
+### M2: assisted mode
 
+The default product surface, reusing M1's context, session, and event machinery.
+
+- context packet assembly with typed absence and graph provenance
+- rigor-proportional context selection
+- per-provider delivery (CLAUDE.md / AGENTS.md / rules / preamble / MCP)
+- durable task identity across agent sessions
+- agent handoff packet
+- Sensei observation surfaced in-session (preflight, edit check, diff audit)
+- assisted tasks structurally distinguishable from governed runs
+
+Exit condition: two different coding agents work the same task in sequence, and the second one starts from the first one's context, scope, and decisions rather than a cold prompt.
+
+### M3: full governed candidate lifecycle
+
+- resolve the external-candidate contract question (section 3.5) with Sensei core
 - canonical task/convergence binding
 - sealed candidate identity
 - Sensei admission request
@@ -578,7 +760,7 @@ The TUI should remain a projection of tested workflow state so rendering bugs ca
 - required proof/test/runtime evidence
 - terminal completion
 
-### M3: operational polish
+### M4: operational polish
 
 - resume active sessions
 - worktree cleanup/leases
@@ -587,21 +769,24 @@ The TUI should remain a projection of tested workflow state so rendering bugs ca
 - richer progress indicators
 - model/provider selection
 
-### M4: collaboration
+### M5: collaboration
 
 - optional GitHub issue/PR/CI adapters
 - publication policies
 - review packets
 
-## 20. Non-negotiable laws
+## 22. Non-negotiable laws
 
 1. **Sensei is governance, not another agent.**
-2. **Routine execution is autonomous.**
-3. **Architectural authority belongs to the architect until a human-owned boundary is reached.**
-4. **Human prompts represent authority crossings, not agent nervousness.**
-5. **Workers mutate candidates, not canonical authority.**
-6. **Reviewer acceptance is not admission.**
-7. **Scope compliance is not correctness certification.**
-8. **Absence of evidence is not proof.**
-9. **Local UI state is not project truth.**
-10. **A governed run must be backed by the real Sensei receipts and exact bindings it claims.**
+2. **Sensei Code does not replace the developer's coding agent.** Assisted mode is the default; the agents keep generating the code.
+3. **Mode is derived from receipts, not configuration.** A task is governed because the canonical Sensei records exist, never because a setting says so.
+4. **Injected context carries its provenance.** Every claim handed to an agent names the graph generation it came from, and absence is typed rather than blank.
+5. **Routine execution is autonomous in governed mode.**
+6. **Architectural authority belongs to the architect until a human-owned boundary is reached.**
+7. **Human prompts represent authority crossings, not agent nervousness.**
+8. **Workers mutate candidates, not canonical authority.**
+9. **Reviewer acceptance is not admission.**
+10. **Scope compliance is not correctness certification.**
+11. **Absence of evidence is not proof.**
+12. **Local UI state is not project truth.**
+13. **A governed run must be backed by the real Sensei receipts and exact bindings it claims.**
