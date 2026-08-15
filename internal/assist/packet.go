@@ -20,11 +20,11 @@ const PacketVersion = 1
 type Presence string
 
 const (
-	Present      Presence = "present"
-	EmptyProven  Presence = "empty-proven"
-	Absent       Presence = "absent"
-	Stale        Presence = "stale"
-	Unavailable  Presence = "unavailable"
+	Present     Presence = "present"
+	EmptyProven Presence = "empty-proven"
+	Absent      Presence = "absent"
+	Stale       Presence = "stale"
+	Unavailable Presence = "unavailable"
 )
 
 type Observation struct {
@@ -81,6 +81,14 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	if err != nil {
 		return ContextPacket{}, fmt.Errorf("Sensei preflight: %w", err)
 	}
+	workspaceStatus := observed("sensei:sensei_workspace_status", workspace)
+	if err := requireEvidence("workspace status", workspaceStatus); err != nil {
+		return ContextPacket{}, err
+	}
+	preflightStatus := observed("sensei:awareness_preflight", preflight)
+	if err := requireEvidence("preflight", preflightStatus); err != nil {
+		return ContextPacket{}, err
+	}
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -94,8 +102,8 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 		BaseSHA:         strings.TrimSpace(baseSHA),
 		Files:           cleanFiles(files),
 		CreatedAt:       now,
-		WorkspaceStatus: observed("sensei:sensei_workspace_status", workspace),
-		Preflight:       observed("sensei:awareness_preflight", preflight),
+		WorkspaceStatus: workspaceStatus,
+		Preflight:       preflightStatus,
 		Authority: Authority{
 			Mode:      "assisted",
 			Admission: "not-requested",
@@ -103,13 +111,34 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	}, nil
 }
 
+// observed classifies what Sensei actually returned. A transport success is not
+// itself evidence: a result carrying neither text nor structured content is
+// recorded as absent, never as a present observation.
 func observed(source string, result sensei.ToolResult) Observation {
+	text := firstText(result)
+	if strings.TrimSpace(text) == "" && len(result.Structured) == 0 {
+		return Observation{
+			State:  Absent,
+			Source: source,
+			Reason: "Sensei returned neither text nor structured content",
+		}
+	}
 	return Observation{
 		State:      Present,
 		Source:     source,
-		Text:       firstText(result),
+		Text:       text,
 		Structured: result.Structured,
 	}
+}
+
+// requireEvidence fails closed when a required Sensei surface produced nothing
+// certifiable. Without it an empty answer would be carried forward as though
+// Sensei had supplied context.
+func requireEvidence(label string, o Observation) error {
+	if o.State == Present {
+		return nil
+	}
+	return fmt.Errorf("Sensei %s is %s: %s", label, o.State, o.Reason)
 }
 
 func UnavailableObservation(source, reason string) Observation {
@@ -183,8 +212,11 @@ func validateObservation(o Observation) error {
 	if strings.TrimSpace(o.Source) == "" {
 		return errors.New("observation source is empty")
 	}
-	if o.State == Unavailable && strings.TrimSpace(o.Reason) == "" {
-		return errors.New("unavailable observation must explain why")
+	switch o.State {
+	case Absent, Stale, Unavailable:
+		if strings.TrimSpace(o.Reason) == "" {
+			return fmt.Errorf("%s observation must explain why", o.State)
+		}
 	}
 	return nil
 }

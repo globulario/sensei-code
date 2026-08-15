@@ -1,0 +1,10 @@
+forbidden_fixes:
+  - id: forbidden_fix.sensei_code.derive_observation_presence_from_transport_success
+    title: Derive observation presence from transport success
+    summary: Treating a returned-without-error Sensei call as Present. Presence must be decided by inspecting the returned evidence; a call that succeeds at the transport layer but carries neither text nor structured content is Absent and must fail the build of any packet that requires it.
+    protects:
+      files:
+        - internal/assist/packet.go
+    related_invariants:
+      - sensei_code.assisted_context.source_is_sensei
+    reason: Treating a returned-without-error Sensei call as Present. Presence must be decided by inspecting the returned evidence; a call that succeeds at the transport layer but carries neither text nor structured content is Absent and must fail the build of any packet that requires it.

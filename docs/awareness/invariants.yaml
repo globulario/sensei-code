@@ -8,10 +8,13 @@ invariants:
     protects:
       files:
         - internal/assist/
+        - internal/assist/packet.go
+        - internal/assist/handoff.go
         - cmd/sensei-code/assist.go
     required_tests:
       - internal/assist/packet_test.go:TestBuildUsesSenseiAndCarriesProvenance
       - internal/assist/packet_test.go:TestBuildFailsClosedWhenRequiredSenseiEvidenceIsUnavailable
+      - internal/assist/packet_test.go:TestBuildFailsClosedWhenSenseiAnswersWithoutEvidence
 
   - id: sensei_code.assisted_context.never_claims_admission
     title: Assisted context and handoff packets must never claim governed admission
@@ -22,6 +25,8 @@ invariants:
     protects:
       files:
         - internal/assist/
+        - internal/assist/packet.go
+        - internal/assist/handoff.go
         - cmd/sensei-code/assist.go
         - .github/workflows/
     required_tests:
@@ -39,3 +44,18 @@ invariants:
         - cmd/sensei-code/assist.go
     required_tests:
       - internal/assist/packet_test.go:TestHandoffBindsToExactContextAndCannotClaimAdmission
+
+  - id: sensei_code.sensei_boundary.refusal_carries_its_reason
+    title: A refused or unavailable Sensei surface must carry its reason
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: When Sensei refuses a tool call or its server cannot be reached, Sensei Code must propagate the reason Sensei gave. Discarding the tool result text or the server stderr turns a governed refusal into an indistinguishable transport fault and defeats law 8.
+    protects:
+      files:
+        - internal/sensei/mcp.go
+    required_tests:
+      - internal/sensei/mcp_test.go:TestRefusalReasonIsPreserved
+      - internal/sensei/mcp_test.go:TestStderrTailKeepsBoundedSuffix
+    contract: Sensei Code fails closed on missing Sensei evidence and names the cause

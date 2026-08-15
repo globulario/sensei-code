@@ -17,12 +17,17 @@ import (
 type fakeSensei struct {
 	calls []string
 	fail  string
+	empty string
 }
 
 func (f *fakeSensei) CallTool(name string, args map[string]any) (sensei.ToolResult, error) {
 	f.calls = append(f.calls, name)
 	if name == f.fail {
 		return sensei.ToolResult{}, errors.New("unavailable")
+	}
+	if name == f.empty {
+		// A well-formed transport success that carries no evidence at all.
+		return sensei.ToolResult{}, nil
 	}
 	result := sensei.ToolResult{Structured: map[string]any{"tool": name}}
 	result.Content = append(result.Content, struct {
@@ -67,14 +72,23 @@ func TestBuildFailsClosedWhenRequiredSenseiEvidenceIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestBuildFailsClosedWhenSenseiAnswersWithoutEvidence(t *testing.T) {
+	repo := initTestRepo(t)
+	caller := &fakeSensei{empty: "awareness_preflight"}
+	_, err := Build(context.Background(), repo, caller, "task-1", "fix bootstrap", nil, time.Now())
+	if err == nil {
+		t.Fatal("Build accepted an empty Sensei response as present evidence")
+	}
+}
+
 func TestHandoffBindsToExactContextAndCannotClaimAdmission(t *testing.T) {
 	contextPacket := ContextPacket{
-		Version:    PacketVersion,
-		TaskID:     "task-1",
-		Task:       "fix bootstrap",
-		Repository: "/repo",
-		BaseSHA:    "0123456789abcdef",
-		CreatedAt:  time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC),
+		Version:         PacketVersion,
+		TaskID:          "task-1",
+		Task:            "fix bootstrap",
+		Repository:      "/repo",
+		BaseSHA:         "0123456789abcdef",
+		CreatedAt:       time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC),
 		WorkspaceStatus: Observation{State: Present, Source: "sensei:sensei_workspace_status"},
 		Preflight:       Observation{State: Present, Source: "sensei:awareness_preflight"},
 		Authority:       Authority{Mode: "assisted", Admission: "not-requested"},

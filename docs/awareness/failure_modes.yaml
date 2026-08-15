@@ -46,3 +46,17 @@ failure_modes:
 #    related_invariants:
 #      - your.real.invariant_id
 #      - meta.fallback_must_degrade_semantics
+  - id: failure.sensei_code.empty_sensei_tool_response_accepted_as_present_evidence
+    title: Empty Sensei tool response accepted as present evidence
+    severity: critical
+    description: assist.observed() stamped State=Present from the transport outcome alone, never inspecting the result. A Sensei tool that returned successfully with no text and no structured content produced a present-looking observation, and the context packet was written as though Sensei had supplied evidence.
+    protects:
+      files:
+        - internal/assist/packet.go
+    related_invariants:
+      - sensei_code.assisted_context.source_is_sensei
+    required_tests:
+      - internal/assist/packet_test.go:TestBuildFailsClosedWhenSenseiAnswersWithoutEvidence
+    evidence:
+      - 'internal/assist/packet.go observed() hardcoded State: Present'
+      - the pre-existing fail-closed test only covered CallTool transport errors, so the empty-response path was uncovered

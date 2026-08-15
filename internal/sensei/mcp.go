@@ -14,11 +14,44 @@ import (
 )
 
 type Client struct {
-	cmd  *exec.Cmd
-	in   io.WriteCloser
-	out  *bufio.Reader
-	mu   sync.Mutex
-	next atomic.Int64
+	cmd    *exec.Cmd
+	in     io.WriteCloser
+	out    *bufio.Reader
+	stderr *stderrTail
+	mu     sync.Mutex
+	next   atomic.Int64
+}
+
+const (
+	// stderrTailLimit bounds how much of the Sensei server's stderr is retained.
+	stderrTailLimit = 4096
+	// maxFrameBytes caps a declared Content-Length so a corrupt header cannot
+	// drive an unbounded allocation.
+	maxFrameBytes = 64 << 20
+)
+
+// stderrTail keeps the last stderrTailLimit bytes the Sensei server wrote. The
+// stream was previously discarded, which erased the one diagnostic explaining
+// why a Sensei surface was unavailable.
+type stderrTail struct {
+	mu  sync.Mutex
+	buf []byte
+}
+
+func (s *stderrTail) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.buf = append(s.buf, p...)
+	if len(s.buf) > stderrTailLimit {
+		s.buf = s.buf[len(s.buf)-stderrTailLimit:]
+	}
+	return len(p), nil
+}
+
+func (s *stderrTail) String() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return strings.TrimSpace(string(s.buf))
 }
 
 type rpcRequest struct {
@@ -58,16 +91,29 @@ func Start(ctx context.Context, dir, command string, args []string) (*Client, er
 	if err != nil {
 		return nil, err
 	}
-	cmd.Stderr = io.Discard
+	tail := &stderrTail{}
+	cmd.Stderr = tail
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
-	c := &Client{cmd: cmd, in: in, out: bufio.NewReader(out)}
+	c := &Client{cmd: cmd, in: in, out: bufio.NewReader(out), stderr: tail}
 	if err := c.initialize(); err != nil {
 		_ = c.Close()
-		return nil, err
+		return nil, c.withStderr(err)
 	}
 	return c, nil
+}
+
+// withStderr attaches what the Sensei server reported on stderr, so an
+// unavailable surface names its cause instead of failing opaquely.
+func (c *Client) withStderr(err error) error {
+	if c.stderr == nil {
+		return err
+	}
+	if tail := c.stderr.String(); tail != "" {
+		return fmt.Errorf("%w: sensei stderr: %s", err, tail)
+	}
+	return err
 }
 
 func (c *Client) initialize() error {
@@ -89,9 +135,20 @@ func (c *Client) CallTool(name string, args map[string]any) (ToolResult, error) 
 		return ToolResult{}, err
 	}
 	if result.IsError {
-		return result, fmt.Errorf("sensei tool %s returned an error", name)
+		return result, fmt.Errorf("sensei tool %s refused: %s", name, refusalReason(result))
 	}
 	return result, nil
+}
+
+// refusalReason recovers the reason Sensei gave for refusing. Dropping it would
+// leave a fail-closed refusal indistinguishable from a transport fault.
+func refusalReason(result ToolResult) string {
+	for _, item := range result.Content {
+		if item.Type == "text" && strings.TrimSpace(item.Text) != "" {
+			return strings.TrimSpace(item.Text)
+		}
+	}
+	return "no reason supplied"
 }
 
 func (c *Client) ListTools() (json.RawMessage, error) {
@@ -129,11 +186,23 @@ func (c *Client) call(method string, params any, out any) error {
 	for {
 		body, err := readFrame(c.out)
 		if err != nil {
-			return err
+			return c.withStderr(err)
+		}
+		// A frame carrying a method is a server-initiated request or
+		// notification, not the reply to id. Anything that is not valid JSON at
+		// all is a protocol fault and must be reported, not skipped.
+		var probe struct {
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(body, &probe); err != nil {
+			return c.withStderr(fmt.Errorf("sensei MCP sent a malformed frame: %w", err))
+		}
+		if probe.Method != "" {
+			continue
 		}
 		var resp rpcResponse
 		if err := json.Unmarshal(body, &resp); err != nil {
-			continue
+			return c.withStderr(fmt.Errorf("sensei MCP sent a malformed response: %w", err))
 		}
 		if resp.ID != id {
 			continue
@@ -183,6 +252,9 @@ func readFrame(r *bufio.Reader) ([]byte, error) {
 	}
 	if length < 0 {
 		return nil, fmt.Errorf("missing Content-Length")
+	}
+	if length > maxFrameBytes {
+		return nil, fmt.Errorf("frame of %d bytes exceeds the %d byte limit", length, maxFrameBytes)
 	}
 	b := make([]byte, length)
 	_, err := io.ReadFull(r, b)
