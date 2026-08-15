@@ -95,3 +95,28 @@ func contains(haystack, needle string) bool {
 		return false
 	})()
 }
+
+func TestMissingCodexToolsFindsBlockedEvidenceTools(t *testing.T) {
+	// Only one tool allowlisted: Codex cancels every other Sensei call, so the
+	// server must not be reported as usable.
+	toml := "[mcp_servers.sensei]\ncommand = \"awareness-mcp\"\n\n[mcp_servers.sensei.tools.awareness_metadata]\napproval_mode = \"approve\"\n"
+	missing := missingCodexTools(toml)
+	if len(missing) != len(ReadOnlyTools)-1 {
+		t.Fatalf("missing = %v, want every read-only tool except awareness_metadata", missing)
+	}
+	for _, tool := range missing {
+		if tool == "awareness_metadata" {
+			t.Fatal("reported an allowlisted tool as missing")
+		}
+	}
+}
+
+func TestMissingCodexToolsEmptyWhenAllAllowlisted(t *testing.T) {
+	toml := "[mcp_servers.sensei]\ncommand = \"awareness-mcp\"\n"
+	for _, tool := range ReadOnlyTools {
+		toml += "\n[mcp_servers.sensei.tools." + tool + "]\napproval_mode = \"approve\"\n"
+	}
+	if missing := missingCodexTools(toml); len(missing) != 0 {
+		t.Fatalf("missing = %v, want none", missing)
+	}
+}

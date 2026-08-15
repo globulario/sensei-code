@@ -49,6 +49,16 @@ green. Provider **end-to-end orchestration is still not claimed**: the smoke tes
 deliberately stopped short of submitting a task, so no provider was actually driven through
 a workflow.
 
+### Codex MCP tool allowlist
+
+Codex treats `[mcp_servers.sensei.tools.<name>]` tables in `~/.codex/config.toml` as an
+**allowlist**: a tool with no table is cancelled at call time, reported to the agent as
+"user cancelled MCP tool call". A Sensei server can therefore be registered and still be
+unusable. `sensei-code mcp` reports that case as `partial` rather than `configured`, and
+can add the missing entries. Only read-only evidence tools are allowlisted; `awareness_propose`,
+the admission and verification tools, and the task/projection tools are deliberately left
+out so an agent cannot mutate governance state unattended.
+
 ### Required Sensei toolchain
 
 `doctor` requires the `sensei_workspace_status`, `sensei_workspace_admit_change`, and
@@ -78,7 +88,6 @@ It does **not** yet claim:
 - proof/runtime evidence completion
 - `complete_task` terminal completion
 - Git commit/push/PR from the interactive workflow
-- session resume after process restart
 - worker OS sandbox hardening beyond worktree/provider mechanisms
 
 Those are the next governed implementation slices. They must reuse Sensei's canonical owners rather than inventing Sensei Code substitutes.

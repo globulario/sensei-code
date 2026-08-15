@@ -52,7 +52,30 @@ const (
 	// It is never reported as configured: an unverified surface is not a
 	// working one.
 	Unknown State = "unknown"
+	// Partial means the server is registered but the agent cannot actually
+	// reach the evidence tools. Reporting that as configured would describe a
+	// route to Sensei the agent does not have.
+	Partial State = "partial"
 )
+
+// ReadOnlyTools are the Sensei surfaces an agent needs to consult the graph.
+// Deliberately absent: awareness_propose writes to the graph, the admission and
+// verification tools decide admission, and the task/projection tools move
+// governance state. Those stay behind an explicit approval so an agent cannot
+// mutate governance unattended.
+var ReadOnlyTools = []string{
+	"awareness_metadata",
+	"awareness_briefing",
+	"awareness_preflight",
+	"awareness_impact",
+	"awareness_query",
+	"awareness_resolve",
+	"awareness_edit_check",
+	"awareness_audit_diff",
+	"sensei_workspace_status",
+	"task_briefing",
+	"task_status",
+}
 
 // Status describes one agent's access to Sensei.
 type Status struct {
@@ -169,10 +192,32 @@ func describeCodex() Status {
 		st.Detail = "no [mcp_servers." + ServerName + "] in config.toml"
 		return st
 	}
-	st.State = Configured
 	st.Command = command
+	// Codex treats the per-tool tables as an allowlist: a tool with no table is
+	// cancelled at call time. A registered server whose evidence tools are all
+	// blocked is not usable, so it is reported as partial rather than
+	// configured.
+	if missing := missingCodexTools(string(b)); len(missing) != 0 {
+		st.State = Partial
+		st.Detail = fmt.Sprintf("%d of %d evidence tools not allowlisted (%s)",
+			len(missing), len(ReadOnlyTools), strings.Join(missing, ", "))
+		return st
+	}
+	st.State = Configured
 	st.Detail = resolvable(command)
 	return st
+}
+
+// missingCodexTools lists the read-only Sensei tools that have no allowlist
+// entry, and which Codex therefore refuses to call.
+func missingCodexTools(content string) []string {
+	var missing []string
+	for _, tool := range ReadOnlyTools {
+		if !strings.Contains(content, "[mcp_servers."+ServerName+".tools."+tool+"]") {
+			missing = append(missing, tool)
+		}
+	}
+	return missing
 }
 
 // codexServerCommand finds the command of the [mcp_servers.sensei] table. It
@@ -229,6 +274,16 @@ func Configure(repoRoot string, a Agent, command string, args []string) (Status,
 		return current, nil
 	case Unknown:
 		return current, fmt.Errorf("%s: %s", Label(a), current.Detail)
+	case Partial:
+		// The server entry is the user's; only the missing tool allowlist
+		// entries are added.
+		if a != Codex {
+			return current, fmt.Errorf("%s: %s", Label(a), current.Detail)
+		}
+		if err := allowCodexTools(); err != nil {
+			return current, err
+		}
+		return describe(repoRoot, a), nil
 	}
 	var err error
 	switch a {
@@ -266,6 +321,25 @@ func configureClaude(repoRoot, command string, args []string) error {
 	return os.WriteFile(path, append(b, '\n'), 0o644)
 }
 
+// allowCodexTools adds allowlist entries for the read-only Sensei tools that
+// are missing. Existing entries are never rewritten.
+func allowCodexTools() error {
+	path, err := codexPath()
+	if err != nil {
+		return err
+	}
+	existing, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	body := string(existing)
+	for _, tool := range missingCodexTools(body) {
+		body = strings.TrimRight(body, "\n") +
+			fmt.Sprintf("\n\n[mcp_servers.%s.tools.%s]\napproval_mode = %q\n", ServerName, tool, "approve")
+	}
+	return os.WriteFile(path, []byte(body), 0o600)
+}
+
 func configureCodex(command string, args []string) error {
 	path, err := codexPath()
 	if err != nil {
@@ -288,6 +362,9 @@ func configureCodex(command string, args []string) error {
 	body := strings.TrimRight(string(existing), "\n")
 	if body != "" {
 		body += "\n"
+	}
+	for _, tool := range ReadOnlyTools {
+		block += fmt.Sprintf("\n[mcp_servers.%s.tools.%s]\napproval_mode = %q\n", ServerName, tool, "approve")
 	}
 	return os.WriteFile(path, []byte(body+block), 0o600)
 }
