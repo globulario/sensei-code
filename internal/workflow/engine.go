@@ -171,6 +171,18 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
 		return
 	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.PlanProposed, planSummary(decision), decision))
+	approved, err := e.approvePlan(ctx, taskID, decision)
+	if err != nil {
+		fail(err)
+		return
+	}
+	if !approved {
+		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
+			"Holding off. Nothing has been implemented -- tell me what to change about the plan.", nil))
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
+		return
+	}
 	plan := decision.Plan
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
@@ -211,6 +223,50 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
+}
+
+// approvePlan shows the architect's bounded plan and waits for the human to
+// accept it before any worker touches a candidate. The architect may decide
+// ordinary architectural questions on its own, but committing the human's
+// repository to a body of work is theirs to start.
+func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureDecision) (bool, error) {
+	options := []authority.Option{
+		{ID: "1", Label: "Implement this plan", Description: "hand it to the bounded workers"},
+		{ID: "2", Label: "Not yet, let us talk about it", Description: "nothing is implemented"},
+	}
+	decision := authority.Decision{
+		Level:          authority.Human,
+		Subject:        "Implement this plan?",
+		Reason:         d.Summary,
+		Recommendation: "1",
+		Options:        options,
+	}
+	choice, err := e.awaitChoice(ctx, taskID, decision, options)
+	if err != nil {
+		return false, err
+	}
+	return strings.HasPrefix(choice, "1:"), nil
+}
+
+// planSummary renders the plan as something an architect can read and judge:
+// the decision, then the concrete work it commits to.
+func planSummary(d architectureDecision) string {
+	var b strings.Builder
+	if summary := strings.TrimSpace(d.Summary); summary != "" {
+		b.WriteString(summary)
+		b.WriteString("\n")
+	}
+	if len(d.Steps) != 0 {
+		b.WriteString("\nPlan:\n")
+		for i, step := range d.Steps {
+			b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, strings.TrimSpace(step)))
+		}
+	} else if plan := strings.TrimSpace(d.Plan); plan != "" {
+		b.WriteString("\nPlan:\n  ")
+		b.WriteString(strings.ReplaceAll(plan, "\n", "\n  "))
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID, task, initialPlan string, worker config.Agent, workspace string) (bool, string, string, string, error) {
@@ -277,6 +333,7 @@ type architectureDecision struct {
 	Decision       string             `json:"decision"`
 	Summary        string             `json:"summary"`
 	Message        string             `json:"message,omitempty"`
+	Steps          []string           `json:"steps,omitempty"`
 	Plan           string             `json:"plan"`
 	HumanQuestion  string             `json:"human_question,omitempty"`
 	Recommendation string             `json:"recommendation,omitempty"`
@@ -397,6 +454,13 @@ func (e *Engine) awaitHuman(ctx context.Context, taskID string, d architectureDe
 	if strings.TrimSpace(decision.Subject) == "" {
 		decision.Subject = "Architectural authority reached a human-owned boundary."
 	}
+	return e.awaitChoice(ctx, taskID, decision, options)
+}
+
+// awaitChoice presents a numbered decision to the human and blocks until they
+// answer. It is the single place a task waits on a person, so every gate --
+// architectural authority and plan approval alike -- looks the same in the UI.
+func (e *Engine) awaitChoice(ctx context.Context, taskID string, decision authority.Decision, options []authority.Option) (string, error) {
 	ch := make(chan string, 1)
 	e.mu.Lock()
 	e.pending[taskID] = ch
@@ -492,8 +556,11 @@ Choose ONE decision:
   and conversationally in "message", as the architect of THIS repository, using the Sensei
   evidence below. If the Sensei evidence shows something worth their attention, say so.
   Never start implementation work for a "reply".
-- "proceed" only when the human actually asked for a change to the repository, and give a
-  bounded implementation contract in "plan".
+- "proceed" only when the human actually asked for a change to the repository. Give a
+  bounded implementation contract in "plan", and break it into "steps": the concrete pieces
+  of work, in order, each one a short line an architect can accept or reject on sight. The
+  human reads the steps and decides whether the work starts, so write them as commitments,
+  not as a description of the request.
 - "escalate" when a human-owned authority boundary is genuinely in play.
 
 Return ONLY JSON in this exact shape:
@@ -502,6 +569,7 @@ Return ONLY JSON in this exact shape:
   "message": "your words to the human, only when replying",
   "summary": "concise architectural decision, when proceeding or escalating",
   "plan": "bounded implementation contract, only when proceeding",
+  "steps": ["concrete piece of work", "..."],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}]

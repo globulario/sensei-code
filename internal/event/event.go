@@ -28,7 +28,9 @@ const (
 	Status      Kind = "status"
 	// ArchitectSpoke carries the architect's own words to the human. It is
 	// conversation, not activity, and is always shown.
-	ArchitectSpoke    Kind = "architect.spoke"
+	ArchitectSpoke Kind = "architect.spoke"
+	// PlanProposed carries a bounded plan awaiting the human's go-ahead.
+	PlanProposed      Kind = "plan.proposed"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
 	AgentStarted      Kind = "agent.started"

@@ -194,8 +194,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, tea.ClearScreen)
 			}
 		} else {
-			if summary := activitySummary(e); summary != "" {
-				m.activity = summary
+			if phase := currentPhase(e); phase != "" {
+				m.activity = phase
 			}
 			if m.verbose && e.Kind != event.TaskCreated {
 				if line := renderEvent(e); line != "" {
@@ -376,6 +376,10 @@ func renderEvent(e event.Event) string {
 	case event.SourceUser:
 		prefix = userStyle.Render("⚑ YOU")
 	}
+	if e.Kind == event.PlanProposed {
+		prefix = architectStyle.Render("◈ ARCHITECT · PLAN")
+		indent = "  "
+	}
 	if e.Kind == event.AuthorityRequired {
 		prefix = authorityStyle.Render("⚑ HUMAN AUTHORITY")
 		indent = "  "
@@ -518,7 +522,7 @@ func max(a, b int) int {
 // few lines the human actually needs to read.
 func isConversation(e event.Event) bool {
 	switch e.Kind {
-	case event.ArchitectSpoke, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+	case event.ArchitectSpoke, event.PlanProposed, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
 		return true
 	case event.TaskCreated, event.Output, event.SenseiResult:
 		return false
@@ -536,26 +540,55 @@ func isConversation(e event.Event) bool {
 		strings.TrimSpace(e.Summary) != ""
 }
 
-// activitySummary renders one short line for the status bar so background work
-// stays visible without entering the transcript.
-func activitySummary(e event.Event) string {
-	switch e.Source {
-	case event.SourceSensei:
-		return "sensei · evidence"
-	case event.SourceGit:
-		return "git · candidate worktree"
-	case event.SourceTests:
-		return "tests"
-	case event.SourceClaude:
-		return "worker Claude · " + firstLine(e.Summary)
-	case event.SourceCodex:
-		return "worker Codex · " + firstLine(e.Summary)
-	case event.SourceArchitect:
-		return "architect · " + firstLine(e.Summary)
-	case event.SourceReviewer:
-		return "reviewer · " + firstLine(e.Summary)
+// currentPhase names what the system is doing, for the bar above the prompt.
+// It deliberately ignores raw agent output: streaming every stdout line through
+// the status bar replaced it several times a second, which is motion rather
+// than information. An architect wants to know which stage is running, not to
+// watch a worker's console scroll past unreadably.
+func currentPhase(e event.Event) string {
+	if e.Kind == event.Output {
+		return ""
 	}
-	return firstLine(e.Summary)
+	switch e.Kind {
+	case event.SenseiResult:
+		return "consulting Sensei"
+	case event.CandidateAudited:
+		return "Sensei auditing the candidate diff"
+	case event.CandidateChanged:
+		return "candidate diff ready"
+	}
+	switch e.Source {
+	case event.SourceArchitect:
+		if e.Kind == event.AgentStarted {
+			return "architect thinking"
+		}
+		return ""
+	case event.SourceReviewer:
+		if e.Kind == event.AgentStarted {
+			return "reviewer reading the candidate"
+		}
+		return ""
+	case event.SourceClaude, event.SourceCodex:
+		if e.Kind == event.AgentStarted {
+			return "worker " + workerLabel(e.Source) + " implementing"
+		}
+		return ""
+	case event.SourceGit:
+		return "preparing the candidate worktree"
+	case event.SourceTests:
+		return "running tests"
+	case event.SourceSystem:
+		// Retries and fallbacks are infrequent and worth reading.
+		return firstLine(e.Summary)
+	}
+	return ""
+}
+
+func workerLabel(source event.Source) string {
+	if source == event.SourceClaude {
+		return "Claude"
+	}
+	return "Codex"
 }
 
 func firstLine(s string) string {
