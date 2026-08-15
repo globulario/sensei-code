@@ -1,0 +1,35 @@
+invariants:
+  - id: sensei_code.assisted_context.source_is_sensei
+    title: Assisted architectural context must come from Sensei and preserve its provenance
+    severity: critical
+    status: active
+    protects:
+      files:
+        - internal/assist/
+        - cmd/sensei-code/assist.go
+    required_tests:
+      - internal/assist/packet_test.go:TestBuildUsesSenseiAndCarriesProvenance
+      - internal/assist/packet_test.go:TestBuildFailsClosedWhenRequiredSenseiEvidenceIsUnavailable
+
+  - id: sensei_code.assisted_context.never_claims_admission
+    title: Assisted context and handoff packets must never claim governed admission
+    severity: critical
+    status: active
+    protects:
+      files:
+        - internal/assist/
+        - cmd/sensei-code/assist.go
+        - .github/workflows/
+    required_tests:
+      - internal/assist/packet_test.go:TestHandoffBindsToExactContextAndCannotClaimAdmission
+
+  - id: sensei_code.handoff.bound_to_exact_context
+    title: Cross-agent handoff must remain bound to the exact task context it continues
+    severity: high
+    status: active
+    protects:
+      files:
+        - internal/assist/handoff.go
+        - cmd/sensei-code/assist.go
+    required_tests:
+      - internal/assist/packet_test.go:TestHandoffBindsToExactContextAndCannotClaimAdmission
