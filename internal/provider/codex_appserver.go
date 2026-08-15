@@ -194,7 +194,8 @@ func (c *appServer) waitNotification(method string, match func(json.RawMessage) 
 }
 
 func numericID(raw json.RawMessage) (int64, bool) {
-	if len(raw) == 0 {
+	trimmed := strings.TrimSpace(string(raw))
+	if trimmed == "" || trimmed == "null" {
 		return 0, false
 	}
 	var n int64
