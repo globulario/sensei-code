@@ -1,0 +1,92 @@
+schema_version: protection.coverage/v1
+status: COMPLETE
+manual_count: 0
+derived_count: 11
+provisional_count: 0
+generation_identity: 21862c1c8fbaa82beb93eb8481eddea5c3d1ed4bba793f5c65112e177fb83736
+gaps: []
+protected_paths:
+    - path: .github/workflows
+      reasons:
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.never_claims_admission
+    - path: cmd/sensei-code/assist.go
+      reasons:
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.never_claims_admission
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.source_is_sensei
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.handoff.bound_to_exact_context
+    - path: docs/awareness/activation_rules.yaml
+      reasons:
+        - origin: governed_source
+          kind: authored_awareness_source
+          source: docs/awareness/activation_rules.yaml
+    - path: docs/awareness/failure_modes.yaml
+      reasons:
+        - origin: governed_source
+          kind: authored_awareness_source
+          source: docs/awareness/failure_modes.yaml
+    - path: docs/awareness/high_risk_files.yaml
+      reasons:
+        - origin: governed_source
+          kind: authored_awareness_source
+          source: docs/awareness/high_risk_files.yaml
+    - path: docs/awareness/incident_patterns.yaml
+      reasons:
+        - origin: governed_source
+          kind: authored_awareness_source
+          source: docs/awareness/incident_patterns.yaml
+    - path: docs/awareness/invariants.yaml
+      reasons:
+        - origin: governed_source
+          kind: authored_awareness_source
+          source: docs/awareness/invariants.yaml
+    - path: docs/awareness/meta_principles.yaml
+      reasons:
+        - origin: governed_source
+          kind: authored_awareness_source
+          source: docs/awareness/meta_principles.yaml
+    - path: internal/assist
+      reasons:
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.never_claims_admission
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.source_is_sensei
+    - path: internal/assist/handoff.go
+      reasons:
+        - origin: governed_relation
+          kind: protects.files
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.handoff.bound_to_exact_context
+    - path: internal/assist/packet_test.go
+      reasons:
+        - origin: governed_relation
+          kind: required_test
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.never_claims_admission
+        - origin: governed_relation
+          kind: required_test
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.source_is_sensei
+        - origin: governed_relation
+          kind: required_test
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.assisted_context.source_is_sensei
+        - origin: governed_relation
+          kind: required_test
+          source: docs/awareness/invariants.yaml
+          knowledge_ref: sensei_code.handoff.bound_to_exact_context

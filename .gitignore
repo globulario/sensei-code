@@ -34,3 +34,9 @@ go.work.sum
 
 # Sensei Code local, non-authoritative state
 /.sensei-code/
+
+# Sensei local Oxigraph store data. The graph-authority marker and transaction
+# files are deliberately NOT ignored: they bind a published graph identity to a
+# revision, so they are authority evidence and stay tracked, as in
+# globulario/services.
+/.sensei/data/
