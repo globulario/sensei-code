@@ -105,7 +105,22 @@ The architect may resolve normal architectural questions autonomously, using rep
 
 ### Level 3: human authority
 
-Sensei Code interrupts only when a decision reaches authority the architect does not own, such as changing human-owned product intent, an invariant, an externally meaningful contract, a trust boundary, or another explicit policy.
+Sensei Code interrupts when a decision reaches authority the architect does not own — human-owned product intent, an invariant, an externally meaningful contract, a trust boundary, an explicit policy — **or when Sensei cannot certify the decision at all.**
+
+The trigger is a property of the graph, not a model's confidence. A model deciding whether to bother you is not a control: a confidently wrong architect never escalates, and an uncertain one escalates when nothing is at stake. So the conditions are computable:
+
+```text
+the decision touches a region with no graph coverage at this generation
+a claim in the governing plan is contradicted by the graph
+the governing contract is unknown, contested, or absent
+the change would alter human-owned intent, an invariant, or a trust boundary
+the graph is not fresh enough to answer the question being decided
+Sensei cannot establish who owns the authority for this decision
+```
+
+The corollary matters as much: outside those conditions, **do not ask**. A prompt that a certifiable rule could have answered is a defect.
+
+And every answer you give is written back into the graph as an intent, invariant, contract, or forbidden fix — so the same question is certifiable next time and never reaches you again. Without that, the interruption rate plateaus and the system has merely stopped asking rather than learned. With it, your involvement shrinks toward genuinely new territory.
 
 The UI then presents a small numbered decision surface:
 
@@ -405,12 +420,15 @@ Raw worker activity is persisted but collapsed in the normal UI. This keeps the 
 3. **Mode is derived from receipts, not configuration.** Governed means the canonical Sensei records exist.
 4. **Injected context carries its provenance.** Every claim names the graph generation it came from; absence is typed, not blank.
 5. **Absence of evidence is not success.** Fail closed when Sensei cannot establish required truth.
-6. **Workers do not own architecture.** They implement bounded contracts.
-7. **Reviewer acceptance is not admission.** Sensei owns admission and verification.
-8. **Routine execution is autonomous in governed mode.** Do not convert worker uncertainty into human permission prompts.
-9. **Human interruption means an authority boundary was reached.** Keep it rare and explicit.
-10. **Local UI state is not project truth.** Durable architectural truth belongs to Sensei/repository governance sources.
-11. **Manual work must never masquerade as a governed run.** Receipts and exact bindings matter.
+6. **Architectural authority extends exactly as far as Sensei can certify it.** Not one decision further.
+7. **Escalation is triggered by certifiability, not by model uncertainty.** And do not ask a human what a certifiable rule already answers.
+8. **Every human answer becomes a governed entry.** An unrecorded decision guarantees the question returns.
+9. **Workers do not own architecture.** They implement bounded contracts.
+10. **Reviewer acceptance is not admission.** Sensei owns admission and verification.
+11. **Routine execution is autonomous in governed mode.** Do not convert worker uncertainty into human permission prompts.
+12. **Human interruption means an authority boundary was reached.** Keep it rare and explicit.
+13. **Local UI state is not project truth.** Durable architectural truth belongs to Sensei/repository governance sources.
+14. **Manual work must never masquerade as a governed run.** Receipts and exact bindings matter.
 
 ## License
 

@@ -276,7 +276,11 @@ The application distinguishes **capability** from **authority**.
 
 A capability says what a process can physically do. Authority says who is entitled to make a decision.
 
-The three levels below describe **governed mode**, where Sensei Code drives the agents. In **assisted mode** the developer is driving, so the delegation is different: the human is the architect of record, Level 2 delegation does not apply, and Sensei Code's role is to inform and to observe rather than to decide. Level 1 capability limits and Level 3 authority crossings still hold in both modes.
+The three levels below describe **governed mode**, where Sensei Code drives the agents. In **assisted mode** the developer is driving, so Level 2 delegation does not apply and Sensei Code's role is to inform and observe rather than to decide. Level 1 capability limits and Level 3 crossings hold in both modes.
+
+The human's architectural role is **intent and policy**: what the system is for, which invariants hold, which contracts are externally meaningful, where the trust boundaries are. That work is rare, durable, and belongs in Sensei rather than in a conversation. The architect model's role is **implementation architecture** within those rules.
+
+That delegation is only as safe as Sensei's ability to check it, which is the subject of section 7.5.
 
 ### 7.1 Level 1: execution authority
 
@@ -313,9 +317,11 @@ Examples:
 
 The architect must use repository evidence and Sensei context. Model memory is not project authority.
 
+This delegation is bounded by what Sensei can certify. The architect holds authority inside the certifiable region and does not hold it outside — see section 7.5.
+
 ### 7.3 Level 3: human authority
 
-The workflow pauses only when a decision would cross authority the architect does not own.
+The workflow pauses when a decision would cross authority the architect does not own, or when Sensei cannot certify the decision at all.
 
 Examples:
 
@@ -328,6 +334,8 @@ Examples:
 - resolve authority ownership that Sensei cannot establish
 
 The interaction is a small numbered choice, normally 1/2/3. The selected option becomes an input to the architect, which then produces a bounded plan and the same workflow resumes.
+
+The answer does not stop there. See section 7.6.
 
 ### 7.4 Authority failure is not worker failure
 
@@ -347,6 +355,55 @@ failure
 ```
 
 This is a defining product property.
+
+### 7.5 Escalation is triggered by certifiability, not by model uncertainty
+
+A model deciding whether to involve the human is not a control. It fails in exactly the case that matters: a confidently wrong architect does not escalate. It also produces the interruption noise section 7.4 exists to prevent, because an uncertain model escalates when nothing is actually at stake.
+
+The trigger is therefore a property of the graph, not a self-report.
+
+**The architect holds Level-2 authority inside the region Sensei can certify:**
+
+| Sensei can certify | Sensei cannot certify |
+|---|---|
+| an invariant is violated | whether this is the right architecture for the problem |
+| a change matches a known forbidden fix | whether a claim in the plan is true of the repository |
+| the change stayed inside the declared envelope | whether the task itself is the wrong task |
+| required tests executed against this exact result | anything in a region the graph does not cover |
+| the graph is fresh and the domain is scoped | contracts that are unknown, contested, or absent |
+
+The right column is not a defect list to be closed. Some of it is irreducible. It is the definition of where human authority actually lives.
+
+**Escalate when any of these hold:**
+
+```text
+the decision touches a region with no graph coverage at this generation
+a claim in the governing plan is contradicted by the graph
+the governing contract is unknown, contested, or absent
+the change would alter human-owned intent, an invariant, or a trust boundary
+the graph is not fresh enough to answer the question being decided
+Sensei cannot establish who owns the authority for this decision
+```
+
+This is computable, and it fails in the right direction: an unknown pulls the human in, a known does not. A model's confidence is an input to nothing.
+
+The corollary matters as much: **outside those conditions, do not ask.** A human prompt that a certifiable rule could have answered is a defect, not caution.
+
+### 7.6 Human answers become durable
+
+Every Level-3 resolution is a governed write, not a conversational reply.
+
+```text
+human answers a Level-3 question
+    -> the answer is proposed into the graph
+       as an intent, invariant, contract, or forbidden fix
+    -> the same question is certifiable next time
+    -> it never reaches a human again
+```
+
+Without this, the interruption rate plateaus and the system merely stopped asking rather than learning. With it, human involvement shrinks toward genuinely new territory, which is the only version of "autonomous" worth having.
+
+An unrecorded Level-3 answer is a bug. If the answer cannot be expressed as a governed entry, that is itself a finding — Sensei's `contract_unknown` path exists for it.
 
 ## 8. Capability envelope
 
@@ -487,7 +544,10 @@ The architect must return a bounded machine decision:
 {
   "decision": "proceed",
   "summary": "...",
-  "plan": "..."
+  "plan": "...",
+  "claims": [
+    {"statement": "...", "about": "path or component", "source": "graph|repository|inference"}
+  ]
 }
 ```
 
@@ -510,6 +570,12 @@ or a genuine human escalation:
 Sensei Code normalizes human option IDs to the terminal's 1/2/3 interface. Model-supplied IDs are not authority.
 
 Malformed responses fail closed and may be automatically retried.
+
+**On `claims`.** These are the factual premises the plan rests on. They exist so that section 7.5's contradiction check has something to check: Sensei Code resolves each claim against the graph before the plan governs anything, and a contradicted claim is an escalation rather than a warning.
+
+A plan whose premises are all `inference` is not thereby wrong, but it is uncertifiable — and uncertifiable plans do not carry Level-2 authority.
+
+This is the smallest available guard against the failure mode Sensei's own R1 pilot identified: an interpretation becomes governing authority without ever being checked, and a single false premise loses a task the same model solves once the premise is corrected.
 
 ### 12.2 Reviewer protocol
 
@@ -769,6 +835,9 @@ Required classes:
 - freshness: a graph generation behind `HEAD` is reported as `behind`, never silently answered as current
 - readiness: `doctor` and the UI return the same verdict from the same computation
 - a cold repository reaches a labeled degraded session rather than a fabricated binding
+- escalation fires on each certifiability condition in section 7.5, and does **not** fire on model-reported uncertainty alone
+- a plan carrying a claim the graph contradicts escalates rather than governing
+- a resolved Level-3 answer produces a governed graph entry, and the same question is certifiable on replay
 - agent handoff: a second provider receives prior scope, decisions, and evidence
 - an assisted task cannot be rendered with governed-run vocabulary
 
@@ -860,11 +929,14 @@ Exit condition: two different coding agents work the same task in sequence, and 
 3. **Mode is derived from receipts, not configuration.** A task is governed because the canonical Sensei records exist, never because a setting says so.
 4. **Injected context carries its provenance.** Every claim handed to an agent names the graph generation it came from, and absence is typed rather than blank.
 5. **Routine execution is autonomous in governed mode.**
-6. **Architectural authority belongs to the architect until a human-owned boundary is reached.**
-7. **Human prompts represent authority crossings, not agent nervousness.**
-8. **Workers mutate candidates, not canonical authority.**
-9. **Reviewer acceptance is not admission.**
-10. **Scope compliance is not correctness certification.**
-11. **Absence of evidence is not proof.**
-12. **Local UI state is not project truth.**
-13. **A governed run must be backed by the real Sensei receipts and exact bindings it claims.**
+6. **Architectural authority belongs to the architect inside the region Sensei can certify, and nowhere else.**
+7. **Escalation is triggered by certifiability, not by model uncertainty.** A model's confidence is an input to nothing. Equally: do not ask a human what a certifiable rule already answers.
+8. **Every human answer becomes a governed entry.** An unrecorded Level-3 resolution is a bug, because it guarantees the same question returns.
+9. **A plan's premises are checkable or the plan is uncertifiable.** Uncertifiable plans do not carry architectural authority.
+10. **Human prompts represent authority crossings, not agent nervousness.**
+11. **Workers mutate candidates, not canonical authority.**
+12. **Reviewer acceptance is not admission.**
+13. **Scope compliance is not correctness certification.**
+14. **Absence of evidence is not proof.**
+15. **Local UI state is not project truth.**
+16. **A governed run must be backed by the real Sensei receipts and exact bindings it claims.**
