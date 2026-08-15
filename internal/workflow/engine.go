@@ -124,7 +124,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
 
-	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), e.Config.Architect.Name, task, firstText(workspaceStatus), firstText(preflight)))
+	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, firstText(workspaceStatus), firstText(preflight)))
 	if err != nil {
 		fail(err)
 		return
@@ -183,7 +183,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID, ta
 
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
 		prompt := implementationPrompt(task, plan, feedback, cycle)
-		impl := agent.CLI{Name: worker.Name, Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID}
+		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID}
 		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
@@ -253,7 +253,7 @@ type reviewDecision struct {
 }
 
 func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string) (architectureDecision, error) {
-	architect := agent.CLI{Name: e.Config.Architect.Name, Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID}
+	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt
@@ -304,7 +304,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string)
 }
 
 func (e *Engine) resolveReview(ctx context.Context, taskID, prompt string) (reviewDecision, error) {
-	reviewer := agent.CLI{Name: e.Config.Reviewer.Name, Command: e.Config.Reviewer.Command, Args: e.Config.Reviewer.Args, Source: event.SourceReviewer, SessionID: e.SessionID}
+	reviewer := agent.CLI{Name: e.Config.Reviewer.Name, Label: config.DisplayName(e.Config.Reviewer.Name), Command: e.Config.Reviewer.Command, Args: e.Config.Reviewer.Args, Source: event.SourceReviewer, SessionID: e.SessionID}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt

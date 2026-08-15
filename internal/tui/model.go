@@ -186,6 +186,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if isConversation(e) {
 			if line := renderEvent(e); line != "" {
 				m.lines = append(m.lines, line, "")
+				// Scrolling rewrites every row with different text. The diff
+				// renderer does not clear to end of line when a row shrinks, so
+				// a shorter row keeps the tail of the row it replaced.
+				cmds = append(cmds, tea.ClearScreen)
 			}
 		} else {
 			if summary := activitySummary(e); summary != "" {
@@ -194,6 +198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.verbose && e.Kind != event.TaskCreated {
 				if line := renderEvent(e); line != "" {
 					m.lines = append(m.lines, line)
+					cmds = append(cmds, tea.ClearScreen)
 				}
 			}
 		}
@@ -281,6 +286,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+text, "")
 				m.input.Reset()
 				m.engine.Submit(m.ctx, text)
+				cmds = append(cmds, tea.ClearScreen)
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -326,10 +332,10 @@ func renderEvent(e event.Event) string {
 	case event.SourceReviewer:
 		prefix = architectStyle.Render("◈ REVIEWER")
 	case event.SourceClaude:
-		prefix = "    " + workerStyle.Render("└ worker · claude")
+		prefix = "    " + workerStyle.Render("└ worker · Claude")
 		indent = "      "
 	case event.SourceCodex:
-		prefix = "    " + workerStyle.Render("└ worker · codex")
+		prefix = "    " + workerStyle.Render("└ worker · Codex")
 		indent = "      "
 	case event.SourceGit:
 		prefix = "    " + dimStyle.Render("└ git")
@@ -507,9 +513,9 @@ func activitySummary(e event.Event) string {
 	case event.SourceTests:
 		return "tests"
 	case event.SourceClaude:
-		return "worker claude · " + firstLine(e.Summary)
+		return "worker Claude · " + firstLine(e.Summary)
 	case event.SourceCodex:
-		return "worker codex · " + firstLine(e.Summary)
+		return "worker Codex · " + firstLine(e.Summary)
 	case event.SourceArchitect:
 		return "architect · " + firstLine(e.Summary)
 	case event.SourceReviewer:

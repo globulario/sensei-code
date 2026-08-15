@@ -36,15 +36,26 @@ type Runner interface {
 }
 
 type CLI struct {
-	Name      string
+	// Name is the load-bearing identifier: output normalization matches on it.
+	Name string
+	// Label is what humans see. It defaults to Name when unset, and is kept
+	// separate so renaming for display can never change parsing behaviour.
+	Label     string
 	Command   string
 	Args      []string
 	Source    event.Source
 	SessionID string
 }
 
+func (c CLI) label() string {
+	if strings.TrimSpace(c.Label) != "" {
+		return c.Label
+	}
+	return c.Name
+}
+
 func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Result, error) {
-	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentStarted, c.Name+" started", nil))
+	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentStarted, c.label()+" started", nil))
 	var out strings.Builder
 	_, err := processx.Run(ctx, req.Workspace, c.Command, c.Args, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
 		if line.Stream == "stdout" {
@@ -57,7 +68,7 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 		return Result{}, err
 	}
 	text, sid := normalizeOutput(c.Name, out.String())
-	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.Name+" finished", nil))
+	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.label()+" finished", nil))
 	return Result{Text: text, SessionID: sid}, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type Permissions struct {
@@ -45,7 +46,10 @@ func Default() Config {
 	var c Config
 	c.Sensei.Command = "awareness-mcp"
 	c.Sensei.Args = []string{"--awareness-addr", "localhost:10120"}
-	c.Architect = Agent{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
+	// The architect is the agent the human talks to. It runs through the codex
+	// CLI, which authenticates with a ChatGPT subscription, so it is named for the
+	// account it speaks as rather than for the binary that carries it.
+	c.Architect = Agent{Name: "chatgpt", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
 	c.Implementors = []Agent{
 		{Name: "claude", Command: "claude", Args: []string{"-p", "--output-format", "stream-json", "--permission-mode", "bypassPermissions"}},
 		{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "workspace-write", "-"}},
@@ -95,4 +99,26 @@ func Save(repo string, c Config) error {
 	}
 	b = append(b, '\n')
 	return os.WriteFile(p, b, 0o600)
+}
+
+// DisplayName renders an agent identifier for humans. The identifier itself is
+// load-bearing -- output normalization and event routing match on it -- so it is
+// never replaced by this label.
+func DisplayName(name string) string {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "chatgpt":
+		return "ChatGPT"
+	case "codex":
+		return "Codex"
+	case "claude":
+		return "Claude"
+	case "antigravity", "agy":
+		return "Antigravity"
+	case "grok":
+		return "Grok"
+	case "":
+		return "agent"
+	default:
+		return name
+	}
 }
