@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/provider"
 )
 
 func TestConfiguredCommandsAreUnique(t *testing.T) {
@@ -21,6 +22,35 @@ func TestConfiguredCommandsAreUnique(t *testing.T) {
 		if !seen[want] {
 			t.Fatalf("missing command %q in %v", want, got)
 		}
+	}
+}
+
+func TestConfiguredProvidersAreUnique(t *testing.T) {
+	cfg := config.Default()
+	got := configuredProviders(cfg)
+	if len(got) != 2 {
+		t.Fatalf("configuredProviders(default)=%v want two providers", got)
+	}
+	seen := map[provider.ID]bool{}
+	for _, id := range got {
+		seen[id] = true
+	}
+	if !seen[provider.Codex] || !seen[provider.Claude] {
+		t.Fatalf("configuredProviders(default)=%v want codex+claude", got)
+	}
+}
+
+func TestWarningsDoNotMasqueradeAsPassButDoNotBlockReadiness(t *testing.T) {
+	report := Report{Checks: []Check{{Name: "provider:antigravity", Status: Warn, Detail: "auth state unknown"}}}
+	if !report.OK() {
+		t.Fatal("warning-only doctor report should remain usable")
+	}
+	if report.Checks[0].Status == Pass {
+		t.Fatal("unknown provider auth must not be represented as PASS")
+	}
+	report.Checks = append(report.Checks, Check{Name: "provider:codex", Status: Fail})
+	if report.OK() {
+		t.Fatal("FAIL should block doctor readiness")
 	}
 }
 
