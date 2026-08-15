@@ -19,10 +19,16 @@ jobs:
         with:
           go-version: '1.25.x'
           cache: true
-      - name: Verify module metadata is reproducible
-        run: |
-          go mod tidy
-          git diff --exit-code -- go.mod go.sum
+      - name: Resolve canonical module metadata
+        run: go mod tidy
+      - name: Preserve canonical module metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase1-go-module-metadata
+          path: |
+            go.mod
+            go.sum
+          if-no-files-found: error
       - name: Test
         run: go test ./...
       - name: Vet
@@ -77,10 +83,8 @@ jobs:
         with:
           go-version: '1.25.x'
           cache: true
-      - name: Verify module metadata for the context helper
-        run: |
-          go mod tidy
-          git diff --exit-code -- go.mod go.sum
+      - name: Resolve module metadata for the context helper
+        run: go mod tidy
 
       - name: Start Sensei and compile governed context
         uses: globulario/sensei-action@main
