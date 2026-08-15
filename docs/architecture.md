@@ -121,7 +121,7 @@ What Sensei Code **does** use, in governed mode, are Sensei's evaluation, admiss
 
 Sensei's candidate evaluation and admission owners were built around candidates that Sensei's own driver generated. Whether they accept an **externally generated** candidate — an agent-produced worktree diff sealed by Sensei Code — is an open contract question against Sensei core, not a settled integration.
 
-It must be resolved before governed mode can be called complete. Until it is resolved, governed mode terminates at *candidate ready for governed admission*, which is the fail-closed boundary already described in section 14. Sensei Code must not invent a local candidate artifact format to route around the question.
+It must be resolved before governed mode can be called complete. Until it is resolved, governed mode terminates at *candidate ready for governed admission*, which is the fail-closed boundary already described in section 15. Sensei Code must not invent a local candidate artifact format to route around the question.
 
 ## 4. Architectural context
 
@@ -151,7 +151,7 @@ Every field is one of `present`, `empty-proven`, `absent`, `stale`, or `unavaila
 
 An empty panel is not an answer. "No invariants apply to this file" and "the graph has no coverage for this file" are different facts, and only the first is safe to act on. A briefing that returns nothing because the graph is behind HEAD must say that, with the generation it was answered from.
 
-This is the same rule as section 10.1 applied to the read path, and it is the failure mode most likely to make the product actively harmful.
+This is the same rule as section 11.1 applied to the read path, and it is the failure mode most likely to make the product actively harmful.
 
 ### 4.3 Proportional selection
 
@@ -187,7 +187,68 @@ open questions
 
 A second agent must never begin from a cold prompt on a task that is already underway. Proving this handoff is the first thing worth demonstrating about the product.
 
-## 5. Sensei is upstream authority
+## 5. Readiness, install, and freshness
+
+Sensei Code's value is proportional to the quality and freshness of the graph behind it. That makes installation and readiness a governance concern rather than a packaging chore: a stale graph does not fail loudly, it answers confidently and wrongly.
+
+This section is likely to be the bulk of the engineering effort. The orchestration layer is thin because Sensei already owns the semantics; the edges are not.
+
+### 5.1 The install must swallow the whole runtime
+
+A user installing Sensei Code should not have to know that a triple store is involved.
+
+```text
+sensei-code binary
+Sensei binaries
+the store (bundled, versioned with the binaries)
+graph state directory
+provider CLIs (detected, never installed silently)
+```
+
+Any step a user must perform by hand is a step where the product fails for everyone who is not already an expert in it.
+
+### 5.2 Freshness is a first-class state, not a health check
+
+The graph is answered from a generation. That generation has a relationship to `HEAD` and to the working tree, and that relationship must be computed and displayed, not assumed.
+
+```text
+fresh          graph generation covers HEAD
+behind         graph generation predates HEAD by N commits
+uncovered      the files in view are not represented at this generation
+unbuilt        no graph for this repository/domain
+unavailable    the store or service cannot be reached
+mismatched     graph identity does not match this checkout
+```
+
+Assisted mode must display the current state and the generation alongside any context it injects. Governed mode fails closed on anything other than `fresh` unless the human explicitly accepts a weaker state for that task.
+
+The failure this prevents is specific and has already been observed in practice: a briefing answered from a stale baseline returns nothing for recently added code, and an empty briefing is indistinguishable from a clean one unless the surface says which it is. See section 4.2.
+
+### 5.3 Hazards the product must absorb
+
+These are real operational hazards of the current runtime. They are listed because a "simple orchestrator" will encounter every one of them, and because an end user cannot be expected to navigate any of them.
+
+- **Marker binding.** A build performed without an explicit graph-marker target can rebind the marker of a running daemon. Sensei Code must never invoke a build that can reach another instance's state.
+- **Shared process lifetime.** Stopping the graph service also stops the store, and restarting it can incur a silent multi-second store-recovery window during which answers are unavailable rather than wrong. That window must be a displayed state, not a hang.
+- **Provenance-degrading builds.** Some build paths produce binaries whose provenance is unstamped. Readiness must detect this rather than treat any binary as equivalent.
+- **Domain scope.** A combined multi-project graph answers out-of-project questions unless it is scoped. Sensei Code must resolve and pin the repository's domain before injecting anything.
+- **Port and instance collision.** Readiness must bind to an explicitly identified instance. It must never stop or reconfigure a service it did not start.
+
+### 5.4 Cold repositories
+
+A repository with no graph is the normal first-run case, not an error.
+
+Sensei Code guides the user through the explicit onboarding Sensei already owns (init, import/bootstrap, build, serve). It must not fabricate placeholder bindings, and it must not silently mutate governance sources to reach a green state.
+
+Until a repository has a graph, assisted mode degrades honestly to an ordinary agent session with typed-absent context. That is a legitimate product state and must be labeled as one.
+
+### 5.5 `doctor` is the contract
+
+`sensei-code doctor` is the single machine-readable statement of whether the loop can run: binaries, versions, store, graph generation and freshness, domain resolution, required tool subset, provider readiness.
+
+Every readiness fact the UI shows comes from the same computation. Two code paths answering "are we ready" will eventually disagree, and the optimistic one will win in the UI.
+
+## 6. Sensei is upstream authority
 
 Sensei Code consumes public Sensei contracts. It must not reproduce weaker private versions of them.
 
@@ -209,7 +270,7 @@ The primary integration boundary is the existing `awareness-mcp` JSON-RPC stdio 
 
 This boundary lets Sensei evolve independently while keeping its semantics canonical.
 
-## 6. Authority model
+## 7. Authority model
 
 The application distinguishes **capability** from **authority**.
 
@@ -217,7 +278,7 @@ A capability says what a process can physically do. Authority says who is entitl
 
 The three levels below describe **governed mode**, where Sensei Code drives the agents. In **assisted mode** the developer is driving, so the delegation is different: the human is the architect of record, Level 2 delegation does not apply, and Sensei Code's role is to inform and to observe rather than to decide. Level 1 capability limits and Level 3 authority crossings still hold in both modes.
 
-### 6.1 Level 1: execution authority
+### 7.1 Level 1: execution authority
 
 Sensei Code owns routine workflow execution inside the configured local capability envelope.
 
@@ -237,7 +298,7 @@ Examples:
 
 These actions do not require interactive permission prompts when their local capability is granted.
 
-### 6.2 Level 2: architectural authority
+### 7.2 Level 2: architectural authority
 
 The architect is delegated architectural authority for normal design decisions that preserve existing human-owned intent and governed contracts.
 
@@ -252,7 +313,7 @@ Examples:
 
 The architect must use repository evidence and Sensei context. Model memory is not project authority.
 
-### 6.3 Level 3: human authority
+### 7.3 Level 3: human authority
 
 The workflow pauses only when a decision would cross authority the architect does not own.
 
@@ -268,7 +329,7 @@ Examples:
 
 The interaction is a small numbered choice, normally 1/2/3. The selected option becomes an input to the architect, which then produces a bounded plan and the same workflow resumes.
 
-### 6.4 Authority failure is not worker failure
+### 7.4 Authority failure is not worker failure
 
 A build failure, test failure, malformed model response, agent crash, or weak candidate is not inherently a Level-3 event.
 
@@ -287,7 +348,7 @@ failure
 
 This is a defining product property.
 
-## 7. Capability envelope
+## 8. Capability envelope
 
 Repository-local configuration grants routine physical capabilities once.
 
@@ -309,7 +370,7 @@ Capabilities are not silently widened by agents.
 
 Worker execution is additionally bounded by worktree placement, provider sandbox mechanisms when available, and the architectural contract supplied in the prompt. Stronger OS-level sandboxing is a planned hardening layer for providers that cannot mechanically enforce the complete candidate boundary themselves.
 
-## 8. Process architecture
+## 9. Process architecture
 
 ```text
 +------------------------------------------------------------------+
@@ -341,7 +402,7 @@ Worker execution is additionally bounded by worktree placement, provider sandbox
 
 The event bus crosses these components. UI rendering never consumes provider stdout as its source of truth.
 
-## 9. Repository layout
+## 10. Repository layout
 
 The implementation starts small and package-oriented:
 
@@ -365,7 +426,7 @@ internal/
 
 The package structure may evolve, but semantic ownership must remain explicit.
 
-## 10. Sensei MCP boundary
+## 11. Sensei MCP boundary
 
 Sensei's `awareness-mcp` is started as a child process using direct argv, not shell interpolation.
 
@@ -399,11 +460,11 @@ awareness_challenge
 
 `sensei-code doctor` checks that the minimum required subset is available before a run.
 
-### 10.1 No fake green state
+### 11.1 No fake green state
 
 If Sensei returns unavailable, stale, refused, waiting, uncertifiable, scope-violated, or incomplete, Sensei Code preserves that meaning. It does not translate lack of proof into success.
 
-## 11. Provider model
+## 12. Provider model
 
 Providers are adapters, not authorities.
 
@@ -418,7 +479,7 @@ worker fallback: Codex, candidate workspace
 
 Provider authentication remains owned by the provider CLI.
 
-### 11.1 Architect protocol
+### 12.1 Architect protocol
 
 The architect must return a bounded machine decision:
 
@@ -450,7 +511,7 @@ Sensei Code normalizes human option IDs to the terminal's 1/2/3 interface. Model
 
 Malformed responses fail closed and may be automatically retried.
 
-### 11.2 Reviewer protocol
+### 12.2 Reviewer protocol
 
 The reviewer returns one of:
 
@@ -464,7 +525,7 @@ escalate
 
 Reviewer acceptance is not Sensei admission.
 
-## 12. Candidate isolation
+## 13. Candidate isolation
 
 Each worker receives a separate Git worktree created from the exact current base.
 
@@ -479,9 +540,9 @@ They are not stored inside `<repo>/.sensei-code`, because session state and cand
 
 Failed candidates may be retained temporarily as diagnostic evidence. Lifecycle/garbage-collection policy will be added once sealed candidate identity and admission application are wired.
 
-## 13. Task state machines
+## 14. Task state machines
 
-### 13.1 Assisted mode
+### 14.1 Assisted mode
 
 ```text
 TASK
@@ -509,7 +570,7 @@ human commits
 
 No candidate is sealed and no admission is requested. The task record holds identity, context provenance, decisions, and observations — and it is never reported as a governed run.
 
-### 13.2 Governed mode
+### 14.2 Governed mode
 
 The autonomous vertical slice implements:
 
@@ -559,7 +620,7 @@ HUMAN 1/2/3                       |
 
 If the primary worker does not converge within the configured review budget, Sensei Code automatically tries the next configured bounded worker.
 
-## 14. Admission/apply boundary
+## 15. Admission/apply boundary
 
 This section applies to **governed mode** only. Assisted mode has no admission step, and must never display one; its terminal state is a reviewed working tree owned by the human.
 
@@ -585,7 +646,7 @@ The next implementation slice therefore must:
 
 Until this is wired, the engine terminates at **candidate ready for governed admission**. That is an intentional fail-closed boundary.
 
-## 15. Event architecture
+## 16. Event architecture
 
 Every important action becomes a structured event:
 
@@ -614,7 +675,7 @@ They are:
 
 Raw worker output is evidence/debug material, not the normal user interface.
 
-## 16. TUI
+## 17. TUI
 
 The TUI uses the Charm v2 family:
 
@@ -640,7 +701,7 @@ Stable actor markers:
 
 Color reinforces meaning but cannot be the sole semantic signal.
 
-## 17. Persistence
+## 18. Persistence
 
 Local UX state lives under:
 
@@ -654,7 +715,7 @@ This directory is not architectural authority and should be ignored by Git.
 
 Project architectural truth remains in Sensei-owned repository sources and Sensei receipts.
 
-## 18. Failure semantics
+## 19. Failure semantics
 
 The workflow fails closed when:
 
@@ -668,7 +729,7 @@ The workflow fails closed when:
 
 The workflow does not fail merely because one worker failed. Provider failure is a recoverable execution event until the bounded recovery policy is exhausted.
 
-## 19. Security
+## 20. Security
 
 Initial security boundaries:
 
@@ -688,7 +749,7 @@ Planned hardening:
 - network capability policy;
 - sealed candidate digest lifecycle and exact replay/application.
 
-## 20. Testing strategy
+## 21. Testing strategy
 
 Tests should emphasize authority and failure semantics rather than only happy-path rendering.
 
@@ -705,12 +766,15 @@ Required classes:
 - Sensei unavailability/refusal propagation
 - eventual exact candidate admission/apply/verify replay
 - context packet absence typing: `absent`, `stale`, and `unavailable` must not render as `empty-proven`
+- freshness: a graph generation behind `HEAD` is reported as `behind`, never silently answered as current
+- readiness: `doctor` and the UI return the same verdict from the same computation
+- a cold repository reaches a labeled degraded session rather than a fabricated binding
 - agent handoff: a second provider receives prior scope, decisions, and evidence
 - an assisted task cannot be rendered with governed-run vocabulary
 
 The TUI should remain a projection of tested workflow state so rendering bugs cannot redefine governance semantics.
 
-## 21. Milestones
+## 22. Milestones
 
 ### M0: Go foundation
 
@@ -735,7 +799,21 @@ The TUI should remain a projection of tested workflow state so rendering bugs ca
 - local session log
 - doctor
 
-### M2: assisted mode
+### M2: readiness, install, and freshness
+
+Section 5. Sequenced ahead of assisted mode because assisted mode injects context, and context from an unknown generation is worse than no context.
+
+- single-artifact install covering the binaries and the store
+- one readiness computation behind `doctor` and the UI
+- graph generation resolved and compared against `HEAD`
+- freshness state displayed with every injected packet
+- domain resolved and pinned before any injection
+- cold-repository onboarding guidance without fabricated bindings
+- never build, stop, or reconfigure an instance Sensei Code did not start
+
+Exit condition: a developer who has never run Sensei installs Sensei Code, opens an un-onboarded repository, and reaches either a working assisted session or an accurate statement of what is missing — without hand-editing state or knowing that a triple store exists.
+
+### M3: assisted mode
 
 The default product surface, reusing M1's context, session, and event machinery.
 
@@ -749,7 +827,7 @@ The default product surface, reusing M1's context, session, and event machinery.
 
 Exit condition: two different coding agents work the same task in sequence, and the second one starts from the first one's context, scope, and decisions rather than a cold prompt.
 
-### M3: full governed candidate lifecycle
+### M4: full governed candidate lifecycle
 
 - resolve the external-candidate contract question (section 3.5) with Sensei core
 - canonical task/convergence binding
@@ -760,7 +838,7 @@ Exit condition: two different coding agents work the same task in sequence, and 
 - required proof/test/runtime evidence
 - terminal completion
 
-### M4: operational polish
+### M5: operational polish
 
 - resume active sessions
 - worktree cleanup/leases
@@ -769,13 +847,13 @@ Exit condition: two different coding agents work the same task in sequence, and 
 - richer progress indicators
 - model/provider selection
 
-### M5: collaboration
+### M6: collaboration
 
 - optional GitHub issue/PR/CI adapters
 - publication policies
 - review packets
 
-## 22. Non-negotiable laws
+## 23. Non-negotiable laws
 
 1. **Sensei is governance, not another agent.**
 2. **Sensei Code does not replace the developer's coding agent.** Assisted mode is the default; the agents keep generating the code.

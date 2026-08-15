@@ -240,7 +240,32 @@ GitHub is optional collaboration and publication infrastructure, not project aut
 
 Model providers own their own authentication. Sensei Code does not collect ChatGPT, Claude, or Cursor credentials.
 
+## Readiness and freshness
+
+The context Sensei Code injects is only as good as the graph behind it, and a stale graph does not fail loudly — it answers confidently and wrongly. Readiness is therefore part of the product, not a setup step.
+
+Every injected packet carries the graph generation it was answered from, and one of:
+
+```text
+fresh          graph generation covers HEAD
+behind         graph generation predates HEAD by N commits
+uncovered      the files in view are not represented at this generation
+unbuilt        no graph for this repository/domain
+unavailable    the store or service cannot be reached
+mismatched     graph identity does not match this checkout
+```
+
+Assisted mode shows the state and keeps working. Governed mode fails closed on anything but `fresh` unless the human explicitly accepts a weaker state for that task.
+
+A repository with no graph is the normal first run, not an error. Sensei Code guides the explicit onboarding Sensei owns and never fabricates bindings to reach a green status; until then it degrades honestly to an ordinary agent session with typed-absent context.
+
+`sensei-code doctor` is the single computation behind all of this — binaries, versions, store, generation, freshness, domain, tool subset, provider readiness. The UI reads the same answer the CLI prints.
+
+See [`docs/architecture.md`](docs/architecture.md) section 5, including the operational hazards the product is expected to absorb so that users never meet them.
+
 ## Install and build
+
+The shipped artifact is expected to cover the whole runtime — the Sensei Code binary, the Sensei binaries, and the store — so that installing it does not require knowing that a triple store is involved. Provider CLIs are detected, never installed silently.
 
 Sensei Code targets Go 1.25+ because the current Charm v2 packages require that toolchain.
 
