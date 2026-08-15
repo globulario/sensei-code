@@ -15,6 +15,7 @@ import (
 
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/mcpconfig"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -72,6 +73,7 @@ type Model struct {
 	busy          bool
 	verbose       bool
 	loginMenu     bool
+	mcpMenu       bool
 	pendingTask   string
 	pending       *authority.Decision
 	mode          mode
@@ -211,6 +213,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closedMsg:
 		return m, tea.Quit
 	case tea.KeyPressMsg:
+		if m.mcpMenu {
+			key := msg.String()
+			if key == "ctrl+c" {
+				return m, tea.Quit
+			}
+			if key == "esc" {
+				m.mcpMenu = false
+				return m, tea.Batch(cmds...)
+			}
+			agent, ok := mcpAgentFor(key)
+			if !ok {
+				return m, tea.Batch(cmds...)
+			}
+			m.mcpMenu = false
+			status, err := mcpconfig.Configure(m.engine.Repo.Root, agent, m.engine.Config.Sensei.Command, m.engine.Config.Sensei.Args)
+			if err != nil {
+				m.lines = append(m.lines, errorStyle.Render("✗ MCP"), "  "+mcpconfig.Label(agent)+": "+err.Error(), "")
+			} else {
+				m.lines = append(m.lines, senseiStyle.Render("◆ MCP"), "  "+mcpconfig.Label(agent)+": "+string(status.State)+" · "+status.Detail, "")
+			}
+			cmds = append(cmds, tea.ClearScreen)
+			return m, tea.Batch(cmds...)
+		}
 		if m.loginMenu {
 			key := msg.String()
 			if key == "ctrl+c" {
@@ -269,6 +294,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loginMenu = true
 				return m, tea.Batch(cmds...)
 			}
+			if text == "/mcp" && !m.busy {
+				m.input.Reset()
+				m.mcpMenu = true
+				return m, tea.Batch(cmds...)
+			}
 			if text == "/clear" && !m.busy {
 				m.input.Reset()
 				m.lines = banner(false)
@@ -306,10 +336,10 @@ var (
 	errorStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F7768E"))
 	authorityStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF9E64"))
 
-	// The composer sits between two white rules, the way Claude Code frames its
-	// prompt, so the input is always findable no matter how long the transcript.
+	// The composer sits between two rules with no side walls, so the prompt
+	// reads as part of the page rather than a box dropped onto it.
 	composerBorder = lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder(), true, false).
 			BorderForeground(lipgloss.Color("#FFFFFF")).
 			Padding(0, 1)
 	promptGlyphStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#E0AF68"))
@@ -370,6 +400,8 @@ func (m Model) statusLine() string {
 	switch {
 	case m.pending != nil:
 		return authorityStyle.Render("⚑ human authority required — choose an option above")
+	case m.mcpMenu:
+		return workingStyle.Render("● Sensei MCP access — choose an agent to configure, Esc to cancel")
 	case m.loginMenu:
 		return workingStyle.Render("● provider login — choose 1-4, Esc to cancel")
 	case m.busy:
@@ -383,7 +415,7 @@ func (m Model) statusLine() string {
 		}
 		return line
 	default:
-		return hintStyle.Render("● ready — describe a task, or /login to connect a provider")
+		return hintStyle.Render("● ready — describe a task · /login · /mcp · /clear")
 	}
 }
 
@@ -401,6 +433,8 @@ func (m Model) View() tea.View {
 	switch {
 	case m.pending != nil:
 		composer = renderAuthority(*m.pending, inner)
+	case m.mcpMenu:
+		composer = renderMCP(m.engine.Repo.Root, inner)
 	case m.loginMenu:
 		composer = renderProviderLogin(inner)
 	default:
@@ -573,4 +607,37 @@ func padRow(row string, width int) string {
 		return row + strings.Repeat(" ", gap)
 	}
 	return row
+}
+
+func mcpAgentFor(key string) (mcpconfig.Agent, bool) {
+	for i, agent := range mcpconfig.Ordered {
+		if key == fmt.Sprintf("%d", i+1) {
+			return agent, true
+		}
+	}
+	return "", false
+}
+
+// renderMCP shows where each agent gets Sensei from. An agent whose
+// configuration Sensei Code cannot read is shown as unknown rather than as
+// working, because an unverified route to Sensei is not a route to Sensei.
+func renderMCP(repoRoot string, width int) string {
+	var b strings.Builder
+	b.WriteString(architectStyle.Render("Sensei MCP access"))
+	b.WriteString("\n\nEach agent reaches Sensei through its own MCP configuration, so what it\nsees is what Sensei said. Sensei Code never answers for Sensei.\n")
+	for i, status := range mcpconfig.Describe(repoRoot) {
+		mark := dimStyle.Render("○")
+		switch status.State {
+		case mcpconfig.Configured:
+			mark = workerStyle.Render("●")
+		case mcpconfig.Missing:
+			mark = authorityStyle.Render("○")
+		}
+		b.WriteString(fmt.Sprintf("\n  %d. %s %-20s %s", i+1, mark, mcpconfig.Label(status.Agent), status.State))
+		if status.Detail != "" {
+			b.WriteString("\n       " + dimStyle.Render(status.Detail))
+		}
+	}
+	b.WriteString("\n\nChoose a number to configure it. Esc. Cancel")
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Width(max(30, width)).Render(b.String())
 }

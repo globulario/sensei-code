@@ -81,6 +81,43 @@ func (e *Engine) ResolveHuman(taskID, optionID string) bool {
 	}
 }
 
+// conversationSoFar reconstructs the dialogue with the architect from the
+// session record. The architect process is started fresh for every turn, so
+// without this it has no memory and reintroduces itself on every message.
+// The current task is excluded: it is quoted separately as the live request.
+func (e *Engine) conversationSoFar(current string, limit int) string {
+	if e.Store == nil {
+		return ""
+	}
+	events, err := e.Store.Load()
+	if err != nil {
+		return ""
+	}
+	var turns []string
+	for _, ev := range events {
+		text := strings.TrimSpace(ev.Summary)
+		if text == "" {
+			continue
+		}
+		switch {
+		case ev.Kind == event.TaskCreated:
+			turns = append(turns, "HUMAN: "+text)
+		case ev.Kind == event.ArchitectSpoke:
+			turns = append(turns, "YOU: "+text)
+		case ev.Source == event.SourceArchitect && ev.Kind == event.Status:
+			turns = append(turns, "YOU (decision): "+text)
+		}
+	}
+	// run() records the live request before reaching the architect.
+	if n := len(turns); n > 0 && turns[n-1] == "HUMAN: "+strings.TrimSpace(current) {
+		turns = turns[:n-1]
+	}
+	if len(turns) > limit {
+		turns = turns[len(turns)-limit:]
+	}
+	return strings.Join(turns, "\n")
+}
+
 func (e *Engine) run(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	fail := func(err error) {
@@ -124,7 +161,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
 
-	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, firstText(workspaceStatus), firstText(preflight)))
+	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, e.conversationSoFar(task, 40), firstText(workspaceStatus), firstText(preflight)))
 	if err != nil {
 		fail(err)
 		return
@@ -430,7 +467,7 @@ func decodeModelJSON(text string, dst any) error {
 	return nil
 }
 
-func architecturePrompt(repoRoot, domain, architectName, task, workspaceStatus, preflight string) string {
+func architecturePrompt(repoRoot, domain, architectName, task, conversation, workspaceStatus, preflight string) string {
 	if strings.TrimSpace(domain) == "" {
 		domain = "(no repository domain is bound in this checkout)"
 	}
@@ -453,8 +490,7 @@ Choose ONE decision:
 - "reply" when the human is greeting you, asking a question, or wants information,
   discussion, or your opinion rather than a change to the repository. Answer them directly
   and conversationally in "message", as the architect of THIS repository, using the Sensei
-  evidence below. Introduce yourself on a greeting, say what this repository is, and ask what
-  they want to work on. If the Sensei evidence shows something worth their attention, say so.
+  evidence below. If the Sensei evidence shows something worth their attention, say so.
   Never start implementation work for a "reply".
 - "proceed" only when the human actually asked for a change to the repository, and give a
   bounded implementation contract in "plan".
@@ -472,14 +508,23 @@ Return ONLY JSON in this exact shape:
 }
 When escalating, provide 2 or 3 concrete options. Do not ask about ordinary implementation details.
 
-WHAT THE HUMAN SAID:
+You are resumed fresh for every turn, so the dialogue so far is given below. Continue it:
+you have already met this person if it is not empty. Introduce yourself and say what this
+repository is ONLY when the conversation is empty. Never repeat a greeting, never restate
+your role, and never re-describe the repository the human is already working in. Answer what
+they actually asked, and keep it short unless they asked for depth.
+
+CONVERSATION SO FAR:
+%s
+
+WHAT THE HUMAN JUST SAID:
 %s
 
 SENSEI WORKSPACE AUTHORITY:
 %s
 
 SENSEI PREFLIGHT:
-%s`, architectName, repoRoot, domain, task, workspaceStatus, preflight)
+%s`, architectName, repoRoot, domain, conversationOrNone(conversation), task, workspaceStatus, preflight)
 }
 
 func implementationPrompt(task, plan, feedback string, cycle int) string {
@@ -550,4 +595,13 @@ Return ONLY architecture JSON with decision="proceed" unless the human choice it
 
 PREVIOUS ESCALATION:
 %s`, original, choice, d.Summary)
+}
+
+// conversationOrNone keeps the architect prompt unambiguous: an empty section
+// could read as truncation, so a first turn says so explicitly.
+func conversationOrNone(conversation string) string {
+	if strings.TrimSpace(conversation) == "" {
+		return "(nothing yet - this is the first thing they have said to you)"
+	}
+	return conversation
 }
