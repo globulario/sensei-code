@@ -69,6 +69,8 @@ invariants:
     protects:
       files:
         - internal/provider/
+        - internal/provider/provider.go
+        - internal/provider/codex_appserver.go
         - cmd/sensei-code/providers.go
         - internal/tui/model.go
     required_tests:
@@ -83,7 +85,10 @@ invariants:
     protects:
       files:
         - internal/provider/
+        - internal/provider/provider.go
+        - internal/provider/codex_appserver.go
         - internal/doctor/
+        - internal/doctor/doctor.go
     required_tests:
       - internal/provider/provider_test.go:TestFormatStatusPreservesUnknownAuth
       - internal/doctor/doctor_test.go:TestWarningsDoNotMasqueradeAsPassButDoNotBlockReadiness

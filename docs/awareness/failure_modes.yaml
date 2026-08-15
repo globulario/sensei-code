@@ -60,3 +60,15 @@ failure_modes:
     evidence:
       - 'internal/assist/packet.go observed() hardcoded State: Present'
       - the pre-existing fail-closed test only covered CallTool transport errors, so the empty-response path was uncovered
+  - id: failure.sensei_code.invariant_anchored_only_to_a_directory_is_invisible_to_file
+    title: Invariant anchored only to a directory is invisible to file-level preflight
+    severity: high
+    description: 'Writing protects.files with only a trailing-slash directory (internal/provider/) yields package-level briefing but ZERO direct preflight anchors on the files inside it. Preflight returns PREFLIGHT_STATUS_EMPTY and briefing degrades to ''inferred from this package, NOT this file'', so an agent editing the protected file is never told the rule exists. This shipped twice: first on the assist invariants, then again on the provider credential invariants in PR #5. List concrete file paths alongside the directory.'
+    protects:
+      files:
+        - docs/awareness/invariants.yaml
+    related_invariants:
+      - sensei_code.provider.credentials_remain_provider_owned
+    evidence:
+      - preflight on internal/provider/provider.go returned PREFLIGHT_STATUS_EMPTY while two critical invariants protected internal/provider/
+      - 'briefing reported BRIEFING_STATUS_DEGRADED: anchored to sibling files, NOT to this file'

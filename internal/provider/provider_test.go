@@ -102,9 +102,9 @@ func TestNumericID(t *testing.T) {
 
 func TestLoginErrorMessage(t *testing.T) {
 	cases := map[string]string{
-		"":                         "provider rejected login",
-		"null":                     "provider rejected login",
-		`"access denied"`:          "access denied",
+		"":                        "provider rejected login",
+		"null":                    "provider rejected login",
+		`"access denied"`:         "access denied",
 		`{"message":"cancelled"}`: "cancelled",
 	}
 	for raw, want := range cases {
