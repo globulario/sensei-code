@@ -47,6 +47,12 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "context":
+			fatalIf(runContext(ctx, repo, cfg, os.Args[2:]))
+			return
+		case "handoff":
+			fatalIf(runHandoff(os.Args[2:]))
+			return
 		case "help", "--help", "-h":
 			printUsage()
 			return
@@ -82,5 +88,7 @@ Usage:
   sensei-code          launch the interactive governed workspace
   sensei-code init     create the local capability/provider configuration
   sensei-code doctor   verify Git, providers, and the Sensei MCP surface
+  sensei-code context  build an assisted context packet from live Sensei evidence
+  sensei-code handoff  bind agent continuity to an exact context packet
   sensei-code help     show this help`)
 }

@@ -1,0 +1,146 @@
+name: Phase 1 Codex Task
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Task for Codex to implement
+        required: true
+        type: string
+      files:
+        description: Optional comma-separated file hints
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  implement:
+    name: Sensei context to Codex to PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require hosted Codex credential
+        if: ${{ env.OPENAI_API_KEY == '' }}
+        run: |
+          echo '::error::OPENAI_API_KEY is required for the hosted Phase 1 Codex worker.'
+          exit 1
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.x'
+          cache: false
+
+      - name: Resolve module metadata
+        run: go mod tidy
+
+      - name: Verify starting point
+        run: go test ./...
+
+      - name: Start Sensei and compile governed context
+        uses: globulario/sensei-action@main
+        with:
+          mode: advisory
+          sarif: 'false'
+
+      - name: Build assisted context packet from live Sensei
+        shell: bash
+        env:
+          TASK: ${{ inputs.task }}
+          FILES: ${{ inputs.files }}
+        run: |
+          set -euo pipefail
+          go run ./cmd/sensei-code context \
+            --task "$TASK" \
+            --task-id "github-run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --files "$FILES" \
+            --out "$RUNNER_TEMP/sensei-context.json"
+
+      - name: Prepare implementation prompt
+        shell: bash
+        env:
+          TASK: ${{ inputs.task }}
+        run: |
+          set -euo pipefail
+          {
+            echo "Implement the following Sensei Code task in this checkout:"
+            echo
+            printf '%s\n' "$TASK"
+            echo
+            echo "The following packet came from live Sensei for the exact starting HEAD. Preserve its provenance and do not infer missing authority. This is assisted mode, so your change is a candidate working-tree change only. It is not admitted."
+            echo
+            echo "## Sensei context packet"
+            cat "$RUNNER_TEMP/sensei-context.json"
+            echo
+            echo "Modify only what the task and evidence justify. Add or update tests. Do not commit, push, merge, or change repository secrets. The workflow owns Git history and the PR boundary."
+          } > "$RUNNER_TEMP/codex-implementation-prompt.md"
+
+      - name: Run Codex implementor
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          prompt-file: ${{ runner.temp }}/codex-implementation-prompt.md
+          output-file: ${{ runner.temp }}/codex-implementation.md
+          sandbox: workspace-write
+          safety-strategy: drop-sudo
+
+      - name: Verify candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test ./...
+          go vet ./...
+          go build ./cmd/sensei-code
+          if git diff --quiet && git diff --cached --quiet; then
+            echo '::error::Codex produced no working-tree change.'
+            exit 1
+          fi
+
+      - name: Create candidate branch and commit
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH="codex/task-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git config user.name "sensei-code[bot]"
+          git config user.email "sensei-code[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "feat: Codex candidate for hosted Sensei task"
+          git push --set-upstream origin "$BRANCH"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+
+      - name: Open pull request with gh
+        shell: bash
+        env:
+          TASK: ${{ inputs.task }}
+          BRANCH: ${{ steps.candidate.outputs.branch }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Task"
+            printf '%s\n' "$TASK"
+            echo
+            echo "## Phase 1 provenance"
+            echo "- implementation: OpenAI Codex GitHub Action"
+            echo "- architectural context: live Sensei context packet bound to the starting HEAD"
+            echo "- local verification before publication: go test, go vet, go build"
+            echo "- authority: candidate only; this PR is not Sensei admission"
+            echo
+            echo "The PR workflow independently runs the enforcing Sensei architectural gate and, when configured, a read-only Codex review."
+          } > "$RUNNER_TEMP/pr-body.md"
+          gh pr create \
+            --base "$GITHUB_REF_NAME" \
+            --head "$BRANCH" \
+            --title "Codex: ${TASK:0:80}" \
+            --body-file "$RUNNER_TEMP/pr-body.md"
