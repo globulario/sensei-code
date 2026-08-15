@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	"charm.land/bubbles/v2/textarea"
@@ -12,11 +14,16 @@ import (
 
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 type eventMsg event.Event
 type closedMsg struct{}
+type providerLoginFinishedMsg struct {
+	id  provider.ID
+	err error
+}
 
 type Model struct {
 	ctx           context.Context
@@ -28,6 +35,7 @@ type Model struct {
 	width, height int
 	busy          bool
 	verbose       bool
+	loginMenu     bool
 	pendingTask   string
 	pending       *authority.Decision
 }
@@ -61,6 +69,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.SetWidth(max(20, msg.Width-4))
+	case providerLoginFinishedMsg:
+		if msg.err != nil {
+			m.lines = append(m.lines, errorStyle.Render("✗ PROVIDER"), "  "+provider.Label(msg.id)+": "+msg.err.Error())
+		} else {
+			m.lines = append(m.lines, workerStyle.Render("✓ PROVIDER"), "  "+provider.Label(msg.id)+" login flow completed")
+		}
+		m.loginMenu = false
 	case eventMsg:
 		e := event.Event(msg)
 		if e.Kind == event.AuthorityRequired {
@@ -90,6 +105,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closedMsg:
 		return m, tea.Quit
 	case tea.KeyPressMsg:
+		if m.loginMenu {
+			key := msg.String()
+			if key == "ctrl+c" {
+				return m, tea.Quit
+			}
+			if key == "esc" {
+				m.loginMenu = false
+				return m, tea.Batch(cmds...)
+			}
+			id, err := provider.Parse(key)
+			if err != nil {
+				return m, tea.Batch(cmds...)
+			}
+			exe, err := os.Executable()
+			if err != nil {
+				m.lines = append(m.lines, errorStyle.Render("✗ PROVIDER"), "  resolve Sensei Code executable: "+err.Error())
+				m.loginMenu = false
+				return m, tea.Batch(cmds...)
+			}
+			m.loginMenu = false
+			m.lines = append(m.lines, dimStyle.Render("provider login · "+provider.Label(id)))
+			cmd := exec.Command(exe, "login", string(id))
+			return m, tea.ExecProcess(cmd, func(err error) tea.Msg {
+				return providerLoginFinishedMsg{id: id, err: err}
+			})
+		}
 		if m.pending != nil {
 			key := msg.String()
 			if key == "ctrl+c" {
@@ -121,6 +162,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case "enter":
 			text := strings.TrimSpace(m.input.Value())
+			if text == "/login" && !m.busy {
+				m.input.Reset()
+				m.loginMenu = true
+				return m, tea.Batch(cmds...)
+			}
 			if text != "" && !m.busy {
 				m.busy = true
 				m.lines = append(m.lines, "", userStyle.Render("You"), "> "+text)
@@ -189,6 +235,8 @@ func (m Model) View() tea.View {
 	var composer string
 	if m.pending != nil {
 		composer = renderAuthority(*m.pending, max(40, m.width-4))
+	} else if m.loginMenu {
+		composer = renderProviderLogin(max(40, m.width-4))
 	} else {
 		composer = m.input.View()
 	}
@@ -196,6 +244,8 @@ func (m Model) View() tea.View {
 	status := "ready"
 	if m.pending != nil {
 		status = "human authority required · choose 1/2/3"
+	} else if m.loginMenu {
+		status = "provider login · choose 1/2/3/4 · Esc cancel"
 	} else if m.busy {
 		status = "working autonomously"
 	}
@@ -209,6 +259,17 @@ func (m Model) View() tea.View {
 	v.AltScreen = true
 	v.WindowTitle = "Sensei Code"
 	return v
+}
+
+func renderProviderLogin(width int) string {
+	var b strings.Builder
+	b.WriteString(architectStyle.Render("Provider login"))
+	b.WriteString("\n\nCredentials stay with each native provider client. Sensei Code stores no OAuth tokens.\n")
+	for i, id := range provider.Ordered {
+		b.WriteString(fmt.Sprintf("\n  %d. %s", i+1, provider.Label(id)))
+	}
+	b.WriteString("\n\nEsc. Cancel")
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Width(max(30, width)).Render(b.String())
 }
 
 func renderAuthority(d authority.Decision, width int) string {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -16,6 +17,7 @@ type Status string
 
 const (
 	Pass Status = "PASS"
+	Warn Status = "WARN"
 	Fail Status = "FAIL"
 )
 
@@ -31,7 +33,7 @@ type Report struct {
 
 func (r Report) OK() bool {
 	for _, check := range r.Checks {
-		if check.Status != Pass {
+		if check.Status == Fail {
 			return false
 		}
 	}
@@ -50,6 +52,22 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 			continue
 		}
 		report.Checks = append(report.Checks, Check{Name: "executable:" + command, Status: Pass, Detail: path})
+	}
+
+	for _, id := range configuredProviders(cfg) {
+		status := provider.StatusFor(ctx, id)
+		check := Check{Name: "provider:" + string(id), Detail: provider.FormatStatus(status)}
+		switch {
+		case !status.Installed:
+			check.Status = Fail
+		case status.AuthKnown && !status.Authenticated:
+			check.Status = Fail
+		case !status.AuthKnown:
+			check.Status = Warn
+		default:
+			check.Status = Pass
+		}
+		report.Checks = append(report.Checks, check)
 	}
 
 	if _, err := exec.LookPath(cfg.Sensei.Command); err != nil {
@@ -118,6 +136,36 @@ func configuredCommands(cfg config.Config) []string {
 	add(cfg.Reviewer.Command)
 	sort.Strings(commands)
 	return commands
+}
+
+func configuredProviders(cfg config.Config) []provider.ID {
+	seen := map[provider.ID]bool{}
+	out := []provider.ID{}
+	add := func(a config.Agent) {
+		var id provider.ID
+		switch strings.ToLower(strings.TrimSpace(a.Name)) {
+		case "chatgpt", "openai":
+			id = provider.ChatGPT
+		case "codex":
+			id = provider.Codex
+		case "claude", "anthropic":
+			id = provider.Claude
+		case "antigravity", "agy", "google":
+			id = provider.Antigravity
+		default:
+			return
+		}
+		if !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	add(cfg.Architect)
+	for _, a := range cfg.Implementors {
+		add(a)
+	}
+	add(cfg.Reviewer)
+	return out
 }
 
 func toolNames(raw json.RawMessage) ([]string, error) {
