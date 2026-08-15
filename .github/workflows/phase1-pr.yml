@@ -48,7 +48,7 @@ jobs:
       - name: Enforce repository invariants
         id: sensei-gate
         continue-on-error: true
-        uses: globulario/sensei-action@fix/setup-go-cache-ownership
+        uses: globulario/sensei-action@main
         with:
           mode: enforce
           sarif: 'false'
@@ -87,7 +87,7 @@ jobs:
         run: go mod tidy
 
       - name: Start Sensei and compile governed context
-        uses: globulario/sensei-action@fix/setup-go-cache-ownership
+        uses: globulario/sensei-action@main
         with:
           mode: advisory
           sarif: 'false'
