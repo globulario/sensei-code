@@ -2,6 +2,8 @@ package provider
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -31,6 +33,19 @@ func TestParseProviderChoices(t *testing.T) {
 	}
 	if _, err := Parse("mystery"); err == nil {
 		t.Fatal("Parse(mystery) unexpectedly succeeded")
+	}
+}
+
+func TestProviderStatusHasNoCredentialFields(t *testing.T) {
+	typeOf := reflect.TypeOf(Status{})
+	for i := 0; i < typeOf.NumField(); i++ {
+		field := typeOf.Field(i)
+		name := strings.ToLower(field.Name + " " + field.Tag.Get("json"))
+		for _, forbidden := range []string{"token", "secret", "credential", "password", "api_key", "apikey"} {
+			if strings.Contains(name, forbidden) {
+				t.Fatalf("provider Status must not carry credentials: field %s", field.Name)
+			}
+		}
 	}
 }
 
