@@ -59,3 +59,31 @@ invariants:
       - internal/sensei/mcp_test.go:TestRefusalReasonIsPreserved
       - internal/sensei/mcp_test.go:TestStderrTailKeepsBoundedSuffix
     contract: Sensei Code fails closed on missing Sensei evidence and names the cause
+
+  - id: sensei_code.provider.credentials_remain_provider_owned
+    title: Provider authentication credentials must remain owned by the native provider client
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    protects:
+      files:
+        - internal/provider/
+        - cmd/sensei-code/providers.go
+        - internal/tui/model.go
+    required_tests:
+      - internal/provider/provider_test.go:TestProviderStatusHasNoCredentialFields
+
+  - id: sensei_code.provider.unknown_auth_is_not_connected
+    title: Unknown provider authentication state must never be rendered as authenticated
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    protects:
+      files:
+        - internal/provider/
+        - internal/doctor/
+    required_tests:
+      - internal/provider/provider_test.go:TestFormatStatusPreservesUnknownAuth
+      - internal/doctor/doctor_test.go:TestWarningsDoNotMasqueradeAsPassButDoNotBlockReadiness
