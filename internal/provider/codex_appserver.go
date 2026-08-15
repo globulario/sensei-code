@@ -43,6 +43,12 @@ type rpcError struct {
 	Data    json.RawMessage `json:"data,omitempty"`
 }
 
+type loginCompleted struct {
+	LoginID string          `json:"loginId"`
+	Success bool            `json:"success"`
+	Error   json.RawMessage `json:"error"`
+}
+
 func startAppServer(ctx context.Context) (*appServer, error) {
 	path, err := exec.LookPath("codex")
 	if err != nil {
@@ -265,25 +271,22 @@ func LoginChatGPT(ctx context.Context) error {
 	}
 	fmt.Println("Waiting for ChatGPT login to complete...")
 
-	_, err = c.waitNotification("account/login/completed", func(raw json.RawMessage) bool {
-		var p struct {
-			LoginID string `json:"loginId"`
-			Success bool   `json:"success"`
-			Error   any    `json:"error"`
-		}
-		if json.Unmarshal(raw, &p) != nil || p.LoginID != result.LoginID {
-			return false
-		}
-		if !p.Success {
-			return true
-		}
-		return true
+	raw, err := c.waitNotification("account/login/completed", func(raw json.RawMessage) bool {
+		var p loginCompleted
+		return json.Unmarshal(raw, &p) == nil && p.LoginID == result.LoginID
 	})
 	if err != nil {
 		if errors.Is(loginCtx.Err(), context.DeadlineExceeded) {
 			return errors.New("ChatGPT login timed out")
 		}
 		return err
+	}
+	var completed loginCompleted
+	if err := json.Unmarshal(raw, &completed); err != nil {
+		return fmt.Errorf("decode ChatGPT login completion: %w", err)
+	}
+	if !completed.Success {
+		return fmt.Errorf("ChatGPT login failed: %s", loginErrorMessage(completed.Error))
 	}
 	account, err := c.readAccount()
 	if err != nil {
@@ -292,7 +295,7 @@ func LoginChatGPT(ctx context.Context) error {
 	if !account.Authenticated || account.Type != "chatgpt" {
 		return errors.New("ChatGPT login did not produce an authenticated Codex account")
 	}
-	fmt.Printf("Connected to ChatGPT")
+	fmt.Print("Connected to ChatGPT")
 	if account.Plan != "" {
 		fmt.Printf(" (%s)", account.Plan)
 	}
@@ -301,6 +304,23 @@ func LoginChatGPT(ctx context.Context) error {
 	}
 	fmt.Println()
 	return nil
+}
+
+func loginErrorMessage(raw json.RawMessage) string {
+	if len(raw) == 0 || string(raw) == "null" {
+		return "provider rejected login"
+	}
+	var message string
+	if json.Unmarshal(raw, &message) == nil && strings.TrimSpace(message) != "" {
+		return message
+	}
+	var payload struct {
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(raw, &payload) == nil && strings.TrimSpace(payload.Message) != "" {
+		return payload.Message
+	}
+	return strings.TrimSpace(string(raw))
 }
 
 func LogoutCodex(ctx context.Context) error {
