@@ -47,6 +47,15 @@ func main() {
 				os.Exit(1)
 			}
 			return
+		case "providers", "accounts":
+			fatalIf(runProviders(ctx))
+			return
+		case "login":
+			fatalIf(runLogin(ctx, os.Args[2:]))
+			return
+		case "logout":
+			fatalIf(runLogout(ctx, os.Args[2:]))
+			return
 		case "context":
 			fatalIf(runContext(ctx, repo, cfg, os.Args[2:]))
 			return
@@ -85,10 +94,15 @@ func printUsage() {
 	fmt.Println(`Sensei Code
 
 Usage:
-  sensei-code          launch the interactive governed workspace
-  sensei-code init     create the local capability/provider configuration
-  sensei-code doctor   verify Git, providers, and the Sensei MCP surface
-  sensei-code context  build an assisted context packet from live Sensei evidence
-  sensei-code handoff  bind agent continuity to an exact context packet
-  sensei-code help     show this help`)
+  sensei-code             launch the interactive workspace
+  sensei-code init        create the local capability/provider configuration
+  sensei-code doctor      verify Git, providers, and the Sensei MCP surface
+  sensei-code providers   show provider installation/authentication state
+  sensei-code login       connect a provider using its native authentication
+  sensei-code logout      disconnect a provider using its native authentication
+  sensei-code context     build an assisted context packet from live Sensei evidence
+  sensei-code handoff     bind agent continuity to an exact context packet
+  sensei-code help        show this help
+
+Inside the TUI, use /login to connect ChatGPT, Codex, Claude, or Antigravity.`)
 }
