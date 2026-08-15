@@ -81,12 +81,21 @@ func StatusFor(ctx context.Context, id ID) Status {
 			return status
 		}
 		status.AuthKnown = true
-		status.Authenticated = account.Authenticated
 		status.AuthMode = account.Type
 		status.Account = account.Email
 		status.Plan = account.Plan
-		if !account.Authenticated {
-			status.Detail = "not logged in"
+		if id == ChatGPT {
+			status.Authenticated = account.Authenticated && account.Type == "chatgpt"
+			if account.Authenticated && account.Type != "chatgpt" {
+				status.Detail = "Codex is authenticated with " + nonempty(account.Type, "another auth mode") + ", not ChatGPT"
+			} else if !status.Authenticated {
+				status.Detail = "not logged in with ChatGPT"
+			}
+		} else {
+			status.Authenticated = account.Authenticated
+			if !account.Authenticated {
+				status.Detail = "not logged in"
+			}
 		}
 		return status
 	case Claude:
@@ -200,4 +209,11 @@ func runInteractive(ctx context.Context, name string, args ...string) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func nonempty(value, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
 }
