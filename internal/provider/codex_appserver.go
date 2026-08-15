@@ -87,6 +87,50 @@ func startAppServer(ctx context.Context) (*appServer, error) {
 	return c, nil
 }
 
+// closeGrace bounds how long Close waits for the Codex app-server to exit on
+// its own after stdin is closed. Killing it outright denies it the chance to
+// persist credential changes it has already acknowledged.
+const closeGrace = 3 * time.Second
+
+const (
+	// accountSettleTimeout bounds how long to wait for Codex to settle an
+	// acknowledged login or logout before giving up.
+	accountSettleTimeout = 10 * time.Second
+	accountSettlePoll    = 250 * time.Millisecond
+)
+
+// awaitAccount polls the owner until the account reaches the expected state.
+// Codex acknowledges a login or logout before the credential has settled, so a
+// single immediate read observes the previous state: after a real logout it
+// still reports authenticated, and after a real login it still reports signed
+// out. Reporting either verbatim states the opposite of the truth. The wait is
+// bounded and returns the last observed account so the caller fails closed with
+// what Sensei actually saw.
+func (c *appServer) awaitAccount(wantAuthenticated bool, wantType string) (CodexAccount, error) {
+	return awaitAccountState(c.readAccount, wantAuthenticated, wantType, accountSettleTimeout, accountSettlePoll)
+}
+
+func awaitAccountState(read func() (CodexAccount, error), wantAuthenticated bool, wantType string, timeout, poll time.Duration) (CodexAccount, error) {
+	deadline := time.Now().Add(timeout)
+	var last CodexAccount
+	var lastErr error
+	for {
+		last, lastErr = read()
+		if lastErr == nil && last.Authenticated == wantAuthenticated {
+			if !wantAuthenticated || wantType == "" || last.Type == wantType {
+				return last, nil
+			}
+		}
+		if !time.Now().Before(deadline) {
+			if lastErr != nil {
+				return CodexAccount{}, lastErr
+			}
+			return last, nil
+		}
+		time.Sleep(poll)
+	}
+}
+
 func (c *appServer) Close() {
 	if c == nil {
 		return
@@ -94,9 +138,19 @@ func (c *appServer) Close() {
 	if c.stdin != nil {
 		_ = c.stdin.Close()
 	}
-	if c.cmd != nil && c.cmd.Process != nil {
-		_ = c.cmd.Process.Kill()
+	if c.cmd == nil || c.cmd.Process == nil {
+		return
+	}
+	exited := make(chan struct{})
+	go func() {
 		_ = c.cmd.Wait()
+		close(exited)
+	}()
+	select {
+	case <-exited:
+	case <-time.After(closeGrace):
+		_ = c.cmd.Process.Kill()
+		<-exited
 	}
 }
 
@@ -289,7 +343,7 @@ func LoginChatGPT(ctx context.Context) error {
 	if !completed.Success {
 		return fmt.Errorf("ChatGPT login failed: %s", loginErrorMessage(completed.Error))
 	}
-	account, err := c.readAccount()
+	account, err := c.awaitAccount(true, "chatgpt")
 	if err != nil {
 		return fmt.Errorf("verify ChatGPT login: %w", err)
 	}
@@ -330,7 +384,22 @@ func LogoutCodex(ctx context.Context) error {
 		return err
 	}
 	defer c.Close()
-	return c.call("account/logout", nil, nil)
+	if err := c.call("account/logout", nil, nil); err != nil {
+		return err
+	}
+	// Confirm against the owner instead of trusting the call. account/logout
+	// returns before Codex has persisted the removal, so reporting success here
+	// would claim a logout that may not have happened -- and because the next
+	// app-server start refreshes from the surviving refresh token, the observed
+	// result was "still connected" after a logout that reported success.
+	account, err := c.awaitAccount(false, "")
+	if err != nil {
+		return fmt.Errorf("confirm Codex logout: %w", err)
+	}
+	if account.Authenticated {
+		return errors.New("Codex reported logout but the account is still authenticated")
+	}
+	return nil
 }
 
 func openURL(url string) error {

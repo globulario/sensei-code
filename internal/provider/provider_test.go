@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseProviderChoices(t *testing.T) {
@@ -111,5 +112,41 @@ func TestLoginErrorMessage(t *testing.T) {
 		if got := loginErrorMessage(json.RawMessage(raw)); got != want {
 			t.Fatalf("loginErrorMessage(%q)=%q want %q", raw, got, want)
 		}
+	}
+}
+
+func TestAwaitAccountStateWaitsForCodexToSettle(t *testing.T) {
+	// Codex acknowledges a login before the credential has settled, so the
+	// first reads still report signed out. A single read would report the
+	// opposite of the truth.
+	calls := 0
+	read := func() (CodexAccount, error) {
+		calls++
+		if calls < 3 {
+			return CodexAccount{}, nil
+		}
+		return CodexAccount{Authenticated: true, Type: "chatgpt", Plan: "plus"}, nil
+	}
+	got, err := awaitAccountState(read, true, "chatgpt", time.Second, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Authenticated || got.Type != "chatgpt" {
+		t.Fatalf("awaitAccountState returned %+v, want the settled authenticated account", got)
+	}
+}
+
+func TestAwaitAccountStateFailsClosedWhenStateNeverSettles(t *testing.T) {
+	read := func() (CodexAccount, error) {
+		return CodexAccount{Authenticated: true, Type: "chatgpt"}, nil
+	}
+	// A logout that never takes effect must surface the state actually
+	// observed, not an assumed success.
+	got, err := awaitAccountState(read, false, "", 20*time.Millisecond, time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Authenticated {
+		t.Fatal("awaitAccountState hid a logout that never took effect")
 	}
 }

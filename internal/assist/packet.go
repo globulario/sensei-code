@@ -83,7 +83,7 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	// a graph hosting more than one domain cannot scope itself, and answers
 	// with a domain_scope blind spot. The domain is Sensei's fact, never
 	// re-derived here.
-	if domain := repositoryDomain(workspace); domain != "" {
+	if domain := sensei.RepositoryDomain(workspace); domain != "" {
 		preflightArgs["domain"] = domain
 	}
 	preflight, err := caller.CallTool("awareness_preflight", preflightArgs)
@@ -118,22 +118,6 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 			Admission: "not-requested",
 		},
 	}, nil
-}
-
-// repositoryDomain reads the repository domain out of Sensei's
-// sensei.workspace.identity.v1 receipt. It returns "" when Sensei did not state
-// one, so an unbound workspace leaves preflight unscoped rather than being
-// given a domain Sensei never asserted.
-func repositoryDomain(result sensei.ToolResult) string {
-	binding, ok := result.Structured["binding"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	domain, ok := binding["repository_domain"].(string)
-	if !ok {
-		return ""
-	}
-	return strings.TrimSpace(domain)
 }
 
 // observed classifies what Sensei actually returned. A transport success is not

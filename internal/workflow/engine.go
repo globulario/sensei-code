@@ -93,7 +93,15 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
 
-	preflight, err := sc.CallTool("awareness_preflight", map[string]any{"task": task, "files": []string{}, "mode": "compact"})
+	preflightArgs := map[string]any{"task": task, "files": []string{}, "mode": "compact"}
+	// Scope preflight to the domain Sensei just stated in the workspace identity
+	// receipt. Left unscoped against a graph hosting more than one domain,
+	// Sensei cannot resolve the repository and answers UNKNOWN_IMPACT with a
+	// domain_scope blind spot, which is not usable architectural evidence.
+	if domain := sensei.RepositoryDomain(workspaceStatus); domain != "" {
+		preflightArgs["domain"] = domain
+	}
+	preflight, err := sc.CallTool("awareness_preflight", preflightArgs)
 	if err != nil {
 		fail(fmt.Errorf("Sensei preflight: %w", err))
 		return

@@ -8,3 +8,12 @@ forbidden_fixes:
     related_invariants:
       - sensei_code.assisted_context.source_is_sensei
     reason: Treating a returned-without-error Sensei call as Present. Presence must be decided by inspecting the returned evidence; a call that succeeds at the transport layer but carries neither text nor structured content is Absent and must fail the build of any packet that requires it.
+  - id: forbidden_fix.sensei_code.report_a_provider_state_change_from_the_acknowledgement_of_t
+    title: Report a provider state change from the acknowledgement of the call that requested it
+    summary: Treating a successful account/logout or a login-completed notification as proof that the account state changed. The provider acknowledges before it settles. Confirm the resulting state by reading it back from the owner within a bounded wait, and report what was actually observed.
+    protects:
+      files:
+        - internal/provider/codex_appserver.go
+    related_invariants:
+      - sensei_code.provider.unknown_auth_is_not_connected
+    reason: Treating a successful account/logout or a login-completed notification as proof that the account state changed. The provider acknowledges before it settles. Confirm the resulting state by reading it back from the owner within a bounded wait, and report what was actually observed.

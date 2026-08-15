@@ -260,3 +260,21 @@ func readFrame(r *bufio.Reader) ([]byte, error) {
 	_, err := io.ReadFull(r, b)
 	return b, err
 }
+
+// RepositoryDomain reads the repository domain out of Sensei's
+// sensei.workspace.identity.v1 receipt. Callers pass it to domain-scoped
+// surfaces such as awareness_preflight: a graph hosting more than one domain
+// cannot scope itself and answers with a domain_scope blind spot. It returns ""
+// when Sensei stated no domain, so an unbound workspace leaves the query
+// unscoped rather than being given a domain Sensei never asserted.
+func RepositoryDomain(result ToolResult) string {
+	binding, ok := result.Structured["binding"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	domain, ok := binding["repository_domain"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(domain)
+}

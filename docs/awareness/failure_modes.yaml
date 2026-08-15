@@ -72,3 +72,18 @@ failure_modes:
     evidence:
       - preflight on internal/provider/provider.go returned PREFLIGHT_STATUS_EMPTY while two critical invariants protected internal/provider/
       - 'briefing reported BRIEFING_STATUS_DEGRADED: anchored to sibling files, NOT to this file'
+  - id: failure.sensei_code.provider_auth_state_claimed_from_an_acknowledged_call_instea
+    title: Provider auth state claimed from an acknowledged call instead of confirmed with the owner
+    severity: critical
+    description: Codex acknowledges account/logout and account/login/completed before the credential has settled on disk. LogoutCodex reported 'logged out' and exited 0 while the tokens survived and the next app-server start refreshed them, so the account stayed connected. LoginChatGPT read the account immediately after the completion notification, saw the pre-settle state, and reported 'ChatGPT login did not produce an authenticated Codex account' for a login that had in fact succeeded. Both directions stated the opposite of provider truth. Confirm the owner's settled state with a bounded wait; never report an acknowledged call as an accomplished state change.
+    protects:
+      files:
+        - internal/provider/codex_appserver.go
+    related_invariants:
+      - sensei_code.provider.unknown_auth_is_not_connected
+    required_tests:
+      - internal/provider/provider_test.go:TestAwaitAccountStateWaitsForCodexToSettle
+      - internal/provider/provider_test.go:TestAwaitAccountStateFailsClosedWhenStateNeverSettles
+    evidence:
+      - sensei-code logout 2 printed 'logged out' exit 0 while providers still showed connected and ~/.codex/auth.json retained access/refresh/id tokens with last_refresh bumped
+      - sensei-code login 1 exited 1 with 'did not produce an authenticated Codex account' while auth.json had been recreated and providers showed connected plus
