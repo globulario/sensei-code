@@ -34,11 +34,31 @@ This file distinguishes implemented behavior from planned Sensei Code architectu
 
 ## Verified in the current development environment
 
-The non-UI core packages are formatted, vetted, and tested with the locally available Go toolchain.
+Verified locally on Go 1.25.0 (2026-08-15), Phase 2 local smoke test:
 
-The current environment contains Go 1.23.2. Current Charm v2 packages require Go 1.25, and this environment cannot reach the Go module proxy, so the full TUI dependency graph cannot be compiled here. The TUI source was written against the current Charm v2 APIs and must be compiled in a networked Go 1.25+ environment before the PR is promoted from draft.
+- `go mod tidy`, `go test ./...`, `go vet ./...` all pass.
+- `go build -o bin/sensei-code ./cmd/sensei-code` compiles the **full module including the TUI**. The earlier statement that the Charm v2 dependency graph could not be compiled reflected a Go 1.23.2 environment and is no longer true; GitHub Phase 1 also compiles the module on Go 1.25.
+- `sensei-code init` writes `.sensei-code/config.json`.
+- `sensei-code doctor` passes with every required Sensei MCP tool available.
+- `sensei-code context` produces a real context packet from live Sensei evidence, carrying a `sensei.workspace.identity.v1` receipt with `composition_state: complete`.
+- `sensei-code handoff` binds a handoff to that packet's exact digest.
+- The TUI launches, renders, accepts composer input, and toggles agent activity with Ctrl+O.
 
-The current environment also does not contain the `codex` or `claude` executables, so provider end-to-end integration is not claimed here.
+`codex` and `claude` executables are present and resolve on PATH, so `doctor` reports them
+green. Provider **end-to-end orchestration is still not claimed**: the smoke test
+deliberately stopped short of submitting a task, so no provider was actually driven through
+a workflow.
+
+### Required Sensei toolchain
+
+`doctor` requires the `sensei_workspace_status`, `sensei_workspace_admit_change`, and
+`sensei_workspace_verify_admission` MCP tools. These are registered in
+`globulario/sensei` `cmd/awareness-mcp/main.go`, but they are **absent from Homebrew
+`sensei` 1.3.0**, whose `awareness-mcp` exposes 17 tools rather than 24. Against that older
+binary `doctor` fails on those three checks and `sensei-code context` fails closed with
+`unknown tool "sensei_workspace_status"`. Build `awareness-mcp` from a current Sensei
+checkout until a release carries these tools. This is a Sensei packaging lag, not a Sensei
+Code defect: no Sensei Code change can or should paper over a missing governance surface.
 
 ## Intentionally not yet claimed
 

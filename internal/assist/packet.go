@@ -73,11 +73,20 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	if err != nil {
 		return ContextPacket{}, fmt.Errorf("Sensei workspace status: %w", err)
 	}
-	preflight, err := caller.CallTool("awareness_preflight", map[string]any{
+	preflightArgs := map[string]any{
 		"task":  task,
 		"files": cleanFiles(files),
 		"mode":  "compact",
-	})
+	}
+	// Sensei already stated the repository domain in the workspace identity
+	// receipt. Carry that value through instead of leaving preflight unscoped:
+	// a graph hosting more than one domain cannot scope itself, and answers
+	// with a domain_scope blind spot. The domain is Sensei's fact, never
+	// re-derived here.
+	if domain := repositoryDomain(workspace); domain != "" {
+		preflightArgs["domain"] = domain
+	}
+	preflight, err := caller.CallTool("awareness_preflight", preflightArgs)
 	if err != nil {
 		return ContextPacket{}, fmt.Errorf("Sensei preflight: %w", err)
 	}
@@ -109,6 +118,22 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 			Admission: "not-requested",
 		},
 	}, nil
+}
+
+// repositoryDomain reads the repository domain out of Sensei's
+// sensei.workspace.identity.v1 receipt. It returns "" when Sensei did not state
+// one, so an unbound workspace leaves preflight unscoped rather than being
+// given a domain Sensei never asserted.
+func repositoryDomain(result sensei.ToolResult) string {
+	binding, ok := result.Structured["binding"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	domain, ok := binding["repository_domain"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(domain)
 }
 
 // observed classifies what Sensei actually returned. A transport success is not

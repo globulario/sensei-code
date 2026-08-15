@@ -15,13 +15,19 @@ import (
 )
 
 type fakeSensei struct {
-	calls []string
-	fail  string
-	empty string
+	calls  []string
+	fail   string
+	empty  string
+	domain string
+	args   map[string]map[string]any
 }
 
 func (f *fakeSensei) CallTool(name string, args map[string]any) (sensei.ToolResult, error) {
 	f.calls = append(f.calls, name)
+	if f.args == nil {
+		f.args = map[string]map[string]any{}
+	}
+	f.args[name] = args
 	if name == f.fail {
 		return sensei.ToolResult{}, errors.New("unavailable")
 	}
@@ -30,6 +36,9 @@ func (f *fakeSensei) CallTool(name string, args map[string]any) (sensei.ToolResu
 		return sensei.ToolResult{}, nil
 	}
 	result := sensei.ToolResult{Structured: map[string]any{"tool": name}}
+	if name == "sensei_workspace_status" && f.domain != "" {
+		result.Structured["binding"] = map[string]any{"repository_domain": f.domain}
+	}
 	result.Content = append(result.Content, struct {
 		Type string `json:"type"`
 		Text string `json:"text"`
@@ -69,6 +78,28 @@ func TestBuildFailsClosedWhenRequiredSenseiEvidenceIsUnavailable(t *testing.T) {
 	_, err := Build(context.Background(), repo, caller, "task-1", "fix bootstrap", nil, time.Now())
 	if err == nil {
 		t.Fatal("Build succeeded without required Sensei preflight")
+	}
+}
+
+func TestBuildScopesPreflightToTheDomainSenseiStated(t *testing.T) {
+	repo := initTestRepo(t)
+	caller := &fakeSensei{domain: "github.com/globulario/sensei-code"}
+	if _, err := Build(context.Background(), repo, caller, "task-1", "fix bootstrap", nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got := caller.args["awareness_preflight"]["domain"]; got != "github.com/globulario/sensei-code" {
+		t.Fatalf("preflight domain = %v, want the domain Sensei stated in the identity receipt", got)
+	}
+}
+
+func TestBuildLeavesPreflightUnscopedWhenSenseiStatesNoDomain(t *testing.T) {
+	repo := initTestRepo(t)
+	caller := &fakeSensei{}
+	if _, err := Build(context.Background(), repo, caller, "task-1", "fix bootstrap", nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := caller.args["awareness_preflight"]["domain"]; ok {
+		t.Fatal("Build invented a domain Sensei never asserted")
 	}
 }
 
