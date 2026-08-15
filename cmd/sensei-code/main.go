@@ -71,14 +71,27 @@ func main() {
 			os.Exit(2)
 		}
 	}
-	sessionID := "session-" + time.Now().UTC().Format("20060102T150405.000000000Z")
+	// Continue the most recent conversation, the way a returning shell session
+	// would. /clear starts a fresh one without deleting the old record.
+	sessionID, resumed := session.Latest(repo.Root)
+	if !resumed {
+		sessionID = session.ID(time.Now())
+	}
 	store, err := session.New(repo.Root, sessionID)
 	fatalIf(err)
+	var history []event.Event
+	if resumed {
+		history, err = store.Load()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code: could not replay the previous session:", err)
+			history = nil
+		}
+	}
 	bus := event.NewBus()
 	events, unsubscribe := bus.Subscribe(512)
 	defer unsubscribe()
 	engine := workflow.New(repo, cfg, bus, store, sessionID)
-	p := tea.NewProgram(tui.New(ctx, engine, events))
+	p := tea.NewProgram(tui.New(ctx, engine, events, history))
 	_, err = p.Run()
 	fatalIf(err)
 }

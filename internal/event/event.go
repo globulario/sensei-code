@@ -24,8 +24,11 @@ const (
 type Kind string
 
 const (
-	TaskCreated       Kind = "task.created"
-	Status            Kind = "status"
+	TaskCreated Kind = "task.created"
+	Status      Kind = "status"
+	// ArchitectSpoke carries the architect's own words to the human. It is
+	// conversation, not activity, and is always shown.
+	ArchitectSpoke    Kind = "architect.spoke"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
 	AgentStarted      Kind = "agent.started"

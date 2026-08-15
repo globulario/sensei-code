@@ -78,9 +78,10 @@ type Model struct {
 	frame         int
 	startedAt     time.Time
 	wordIdx       int
+	activity      string
 }
 
-func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event) Model {
+func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event, history []event.Event) Model {
 	ta := textarea.New()
 	ta.Placeholder = "Describe a task for Sensei Code..."
 	ta.Prompt = "› "
@@ -88,7 +89,42 @@ func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event
 	ta.SetWidth(80)
 	ta.ShowLineNumbers = false
 	focusCmd := ta.Focus()
-	return Model{ctx: ctx, engine: engine, events: events, input: ta, initCmd: focusCmd, lines: []string{"◆ SENSEI CODE", "  autonomous, governed development", ""}}
+	return Model{
+		ctx:     ctx,
+		engine:  engine,
+		events:  events,
+		input:   ta,
+		initCmd: focusCmd,
+		lines:   append(banner(len(history) > 0), replayConversation(history)...),
+	}
+}
+
+func banner(resumed bool) []string {
+	lines := []string{senseiStyle.Render("◆ SENSEI CODE"), dimStyle.Render("  autonomous, governed development"), ""}
+	if resumed {
+		lines = append(lines, dimStyle.Render("  resumed earlier conversation · /clear to start fresh"), "")
+	}
+	return lines
+}
+
+// replayConversation rebuilds the dialogue from a recorded session so a
+// relaunch continues where the last one stopped. Only conversation is replayed;
+// recorded activity described work that is already finished.
+func replayConversation(history []event.Event) []string {
+	var lines []string
+	for _, e := range history {
+		if e.Source == event.SourceSystem && e.Kind == event.TaskCreated {
+			lines = append(lines, userStyle.Render("You"), promptGlyphStyle.Render("› ")+strings.TrimSpace(e.Summary), "")
+			continue
+		}
+		if !isConversation(e) {
+			continue
+		}
+		if line := renderEvent(e); line != "" {
+			lines = append(lines, line, "")
+		}
+	}
+	return lines
 }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(m.initCmd, waitEvent(m.events), tick()) }
@@ -144,11 +180,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingTask = ""
 			m.busy = true
 		}
-		// TaskCreated echoes the task text back, but the composer already
-		// wrote it under "You", so rendering it again duplicates the prompt.
-		if e.Kind != event.TaskCreated && (e.Kind != event.Output || m.verbose) {
+		// The transcript is the conversation with the architect. Sensei
+		// receipts, worker output, git and retries are activity: they feed the
+		// status bar, and reach the transcript only in streaming mode.
+		if isConversation(e) {
 			if line := renderEvent(e); line != "" {
-				m.lines = append(m.lines, line)
+				m.lines = append(m.lines, line, "")
+			}
+		} else {
+			if summary := activitySummary(e); summary != "" {
+				m.activity = summary
+			}
+			if m.verbose && e.Kind != event.TaskCreated {
+				if line := renderEvent(e); line != "" {
+					m.lines = append(m.lines, line)
+				}
 			}
 		}
 		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed {
@@ -216,6 +262,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if text == "/login" && !m.busy {
 				m.input.Reset()
 				m.loginMenu = true
+				return m, tea.Batch(cmds...)
+			}
+			if text == "/clear" && !m.busy {
+				m.input.Reset()
+				m.lines = banner(false)
+				m.activity = ""
+				if err := m.engine.RotateSession(); err != nil {
+					m.lines = append(m.lines, errorStyle.Render("✗ SESSION"), "  "+err.Error(), "")
+				}
 				return m, tea.Batch(cmds...)
 			}
 			if text != "" && !m.busy {
@@ -315,8 +370,12 @@ func (m Model) statusLine() string {
 		word := workingWords[m.wordIdx%len(workingWords)]
 		spin := spinnerFrames[m.frame%len(spinnerFrames)]
 		elapsed := time.Since(m.startedAt).Round(time.Second)
-		return workingStyle.Render(fmt.Sprintf("%s %s…", spin, word)) +
+		line := workingStyle.Render(fmt.Sprintf("%s %s…", spin, word)) +
 			hintStyle.Render(fmt.Sprintf("  (%s · ctrl+c to quit)", elapsed))
+		if m.activity != "" {
+			line += hintStyle.Render("  " + m.activity)
+		}
+		return line
 	default:
 		return hintStyle.Render("● ready — describe a task, or /login to connect a provider")
 	}
@@ -344,13 +403,22 @@ func (m Model) View() tea.View {
 
 	bottom := m.statusLine() + "\n" + composer + "\n" + m.modeLine()
 
-	// Give the transcript whatever the composer block does not need, so the
-	// prompt stays pinned to the bottom at any terminal height.
+	// The composer owns the bottom of the screen; the transcript gets the rest
+	// and is anchored to its foot, so the newest line always sits directly above
+	// the prompt and older lines scroll off the top.
 	available := max(3, m.height-lipgloss.Height(bottom))
-	start := max(0, len(m.lines)-available)
-	body := strings.Join(m.lines[start:], "\n")
-	if pad := available - lipgloss.Height(body); pad > 0 {
-		body += strings.Repeat("\n", pad)
+	rows := wrapRows(m.lines, width)
+	if len(rows) > available {
+		rows = rows[len(rows)-available:]
+	}
+	body := strings.Join(rows, "\n")
+	if pad := available - len(rows); pad > 0 {
+		blank := strings.Repeat(" ", width)
+		head := make([]string, pad)
+		for i := range head {
+			head[i] = blank
+		}
+		body = strings.Join(head, "\n") + "\n" + body
 	}
 
 	v := tea.NewView(body + "\n" + bottom)
@@ -402,4 +470,101 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// isConversation reports whether an event is part of the dialogue with the
+// architect. Sensei receipts, worker output, git and retry notices are activity
+// about the work, not turns in the conversation, and would otherwise bury the
+// few lines the human actually needs to read.
+func isConversation(e event.Event) bool {
+	switch e.Kind {
+	case event.ArchitectSpoke, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+		return true
+	case event.TaskCreated, event.Output, event.SenseiResult:
+		return false
+	case event.WorkflowCompleted:
+		// A bare completion after a conversational reply has nothing to add.
+		return strings.TrimSpace(e.Summary) != ""
+	}
+	// Agent lifecycle ("codex started") is activity, not speech.
+	if e.Kind == event.AgentStarted || e.Kind == event.AgentFinished {
+		return false
+	}
+	// The architect announcing its bounded decision is the architect speaking,
+	// but only when it actually said something.
+	return e.Source == event.SourceArchitect && e.Kind == event.Status &&
+		strings.TrimSpace(e.Summary) != ""
+}
+
+// activitySummary renders one short line for the status bar so background work
+// stays visible without entering the transcript.
+func activitySummary(e event.Event) string {
+	switch e.Source {
+	case event.SourceSensei:
+		return "sensei · evidence"
+	case event.SourceGit:
+		return "git · candidate worktree"
+	case event.SourceTests:
+		return "tests"
+	case event.SourceClaude:
+		return "worker claude · " + firstLine(e.Summary)
+	case event.SourceCodex:
+		return "worker codex · " + firstLine(e.Summary)
+	case event.SourceArchitect:
+		return "architect · " + firstLine(e.Summary)
+	case event.SourceReviewer:
+		return "reviewer · " + firstLine(e.Summary)
+	}
+	return firstLine(e.Summary)
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if len(s) > 60 {
+		s = s[:57] + "…"
+	}
+	return s
+}
+
+// wrapRows expands logical transcript lines into the screen rows they actually
+// occupy, so the bottom-anchored view counts real rows rather than entries.
+func wrapRows(lines []string, width int) []string {
+	blank := strings.Repeat(" ", width)
+	out := make([]string, 0, len(lines))
+	// A transcript entry may itself be several lines; each is wrapped on its own
+	// so indents are computed per line rather than from the entry's first line.
+	var flat []string
+	for _, line := range lines {
+		flat = append(flat, strings.Split(line, "\n")...)
+	}
+	for _, line := range flat {
+		// Every row is padded to the full width. An unpadded short row leaves
+		// the previous frame's characters behind on that line.
+		if strings.TrimSpace(line) == "" {
+			out = append(out, blank)
+			continue
+		}
+		// Wrapped text keeps the logical line's indent, so a continuation stays
+		// visually inside the section it belongs to instead of resetting to the
+		// left margin and reading like a new speaker.
+		indent := line[:len(line)-len(strings.TrimLeft(line, " "))]
+		body := strings.TrimLeft(line, " ")
+		wrap := lipgloss.NewStyle().Width(max(8, width-len(indent)))
+		for _, row := range strings.Split(wrap.Render(body), "\n") {
+			out = append(out, padRow(indent+row, width))
+		}
+	}
+	return out
+}
+
+// padRow extends a row to the full terminal width. Rows are measured by visible
+// cells, not bytes, so styled text pads correctly.
+func padRow(row string, width int) string {
+	if gap := width - lipgloss.Width(row); gap > 0 {
+		return row + strings.Repeat(" ", gap)
+	}
+	return row
 }

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/event"
 )
@@ -50,4 +52,35 @@ func (s *Store) Load() ([]event.Event, error) {
 		out = append(out, e)
 	}
 	return out, sc.Err()
+}
+
+// ID mints a session identifier that sorts chronologically as a string, so the
+// most recent session can be found without reading any file.
+func ID(t time.Time) string {
+	return "session-" + t.UTC().Format("20060102T150405.000000000Z")
+}
+
+// Latest returns the most recent recorded session for this repository, so a
+// relaunch can continue the conversation instead of starting blank.
+func Latest(repo string) (string, bool) {
+	dir := filepath.Join(repo, ".sensei-code", "sessions")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+	var ids []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, entry.Name(), "events.jsonl")); err != nil {
+			continue
+		}
+		ids = append(ids, entry.Name())
+	}
+	if len(ids) == 0 {
+		return "", false
+	}
+	sort.Strings(ids)
+	return ids[len(ids)-1], true
 }

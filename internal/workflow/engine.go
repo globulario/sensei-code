@@ -33,6 +33,22 @@ func New(repo gitx.Repo, cfg config.Config, bus *event.Bus, store *session.Store
 	return &Engine{Repo: repo, Config: cfg, Bus: bus, Store: store, SessionID: sessionID, pending: make(map[string]chan string)}
 }
 
+// RotateSession starts a fresh session log, abandoning the previous
+// conversation without deleting its record. It is only safe between tasks; the
+// TUI calls it for /clear, which it refuses while a task is running.
+func (e *Engine) RotateSession() error {
+	id := session.ID(time.Now())
+	store, err := session.New(e.Repo.Root, id)
+	if err != nil {
+		return err
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.SessionID = id
+	e.Store = store
+	return nil
+}
+
 func (e *Engine) emit(ev event.Event) {
 	if e.Store != nil {
 		_ = e.Store.Append(ev)
@@ -108,11 +124,17 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
 
-	plan, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(task, firstText(workspaceStatus), firstText(preflight)))
+	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), e.Config.Architect.Name, task, firstText(workspaceStatus), firstText(preflight)))
 	if err != nil {
 		fail(err)
 		return
 	}
+	if decision.Decision == "reply" {
+		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, decision.Message, decision))
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
+		return
+	}
+	plan := decision.Plan
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
 		fail(errors.New("candidate worktree capability is not granted"))
@@ -198,11 +220,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID, ta
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case "escalate":
-			newPlan, err := e.resolveArchitecture(ctx, taskID, escalationPrompt(task, plan, lastAudit, review))
+			revised, err := e.resolveArchitecture(ctx, taskID, escalationPrompt(task, plan, lastAudit, review))
 			if err != nil {
 				return false, plan, lastReview, lastAudit, err
 			}
-			plan = newPlan
+			if strings.TrimSpace(revised.Plan) == "" {
+				return false, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
+			}
+			plan = revised.Plan
 			feedback = "The architect resolved the review escalation. Reconcile the current candidate with the revised plan."
 		default:
 			return false, plan, lastReview, lastAudit, fmt.Errorf("unsupported review decision %q", review.Decision)
@@ -214,6 +239,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID, ta
 type architectureDecision struct {
 	Decision       string             `json:"decision"`
 	Summary        string             `json:"summary"`
+	Message        string             `json:"message,omitempty"`
 	Plan           string             `json:"plan"`
 	HumanQuestion  string             `json:"human_question,omitempty"`
 	Recommendation string             `json:"recommendation,omitempty"`
@@ -226,7 +252,7 @@ type reviewDecision struct {
 	Instructions string `json:"instructions,omitempty"`
 }
 
-func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string) (string, error) {
+func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string) (architectureDecision, error) {
 	architect := agent.CLI{Name: e.Config.Architect.Name, Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -246,26 +272,35 @@ func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string)
 		}
 		d.Decision = strings.ToLower(strings.TrimSpace(d.Decision))
 		switch d.Decision {
+		case "reply":
+			// The human asked something rather than requesting a change. The
+			// architect answers and the governed candidate pipeline never
+			// starts: there is nothing to implement, admit, or verify.
+			if strings.TrimSpace(d.Message) == "" {
+				lastErr = errors.New("architect returned REPLY without a message")
+				continue
+			}
+			return d, nil
 		case "proceed":
 			if strings.TrimSpace(d.Plan) == "" {
 				lastErr = errors.New("architect returned PROCEED without a plan")
 				continue
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, d.Summary, d))
-			return d.Plan, nil
+			return d, nil
 		case "escalate":
 			choice, err := e.awaitHuman(ctx, taskID, d)
 			if err != nil {
-				return "", err
+				return architectureDecision{}, err
 			}
 			prompt = humanResolutionPrompt(prompt, d, choice)
 			attempt = 0 // the human answer establishes a new architectural question.
 			continue
 		default:
-			lastErr = fmt.Errorf("architect decision must be proceed or escalate, got %q", d.Decision)
+			lastErr = fmt.Errorf("architect decision must be reply, proceed, or escalate, got %q", d.Decision)
 		}
 	}
-	return "", fmt.Errorf("architect could not produce a bounded decision: %w", lastErr)
+	return architectureDecision{}, fmt.Errorf("architect could not produce a bounded decision: %w", lastErr)
 }
 
 func (e *Engine) resolveReview(ctx context.Context, taskID, prompt string) (reviewDecision, error) {
@@ -395,30 +430,56 @@ func decodeModelJSON(text string, dst any) error {
 	return nil
 }
 
-func architecturePrompt(task, workspaceStatus, preflight string) string {
-	return fmt.Sprintf(`You are the architectural authority for a Sensei-governed software task.
-Do not edit files. Inspect the repository as needed. Sensei is the governance authority; do not weaken or reinterpret its contracts.
-You may decide normal architectural questions autonomously. Escalate only when the task would change human-owned intent, an invariant, an externally meaningful contract, a trust boundary, or another explicitly human-owned policy.
+func architecturePrompt(repoRoot, domain, architectName, task, workspaceStatus, preflight string) string {
+	if strings.TrimSpace(domain) == "" {
+		domain = "(no repository domain is bound in this checkout)"
+	}
+	return fmt.Sprintf(`You are the architect for this repository, working inside Sensei Code. You are the
+single agent the human talks to. Implementation workers (Claude, Codex, and others) never
+speak to the human directly: you direct them and you report what they did.
+
+Your identity: %s, acting as architect.
+Repository: %s
+Repository domain: %s
+
+Sensei is the governance authority for architectural truth, invariants, contracts, evidence,
+and admission. Do not edit files, do not weaken or reinterpret Sensei's contracts, and do not
+claim admission. You may decide ordinary architectural questions autonomously. Escalate only
+when the request would change human-owned intent, an invariant, an externally meaningful
+contract, a trust boundary, or another explicitly human-owned policy.
+
+Choose ONE decision:
+
+- "reply" when the human is greeting you, asking a question, or wants information,
+  discussion, or your opinion rather than a change to the repository. Answer them directly
+  and conversationally in "message", as the architect of THIS repository, using the Sensei
+  evidence below. Introduce yourself on a greeting, say what this repository is, and ask what
+  they want to work on. If the Sensei evidence shows something worth their attention, say so.
+  Never start implementation work for a "reply".
+- "proceed" only when the human actually asked for a change to the repository, and give a
+  bounded implementation contract in "plan".
+- "escalate" when a human-owned authority boundary is genuinely in play.
 
 Return ONLY JSON in this exact shape:
 {
-  "decision": "proceed" | "escalate",
-  "summary": "concise architectural decision",
-  "plan": "bounded implementation contract when proceeding",
+  "decision": "reply" | "proceed" | "escalate",
+  "message": "your words to the human, only when replying",
+  "summary": "concise architectural decision, when proceeding or escalating",
+  "plan": "bounded implementation contract, only when proceeding",
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}]
 }
 When escalating, provide 2 or 3 concrete options. Do not ask about ordinary implementation details.
 
-TASK:
+WHAT THE HUMAN SAID:
 %s
 
 SENSEI WORKSPACE AUTHORITY:
 %s
 
 SENSEI PREFLIGHT:
-%s`, task, workspaceStatus, preflight)
+%s`, architectName, repoRoot, domain, task, workspaceStatus, preflight)
 }
 
 func implementationPrompt(task, plan, feedback string, cycle int) string {
