@@ -1,540 +1,321 @@
 # Sensei Code
 
-**Governed multi-agent software development powered by Sensei.**
+**A local-first, governed, autonomous multi-agent development environment powered by Sensei.**
 
-Sensei Code is a local-first interactive development environment for working with AI coding agents through the full Sensei governance model.
+Sensei Code is the terminal application that makes the full Sensei workflow usable as a normal coding experience.
 
-The experience should feel familiar to users of Claude Code, Codex, Cursor Agent, Pi, and other conversational coding tools: open a repository, describe what you want, discuss the change, watch agents work, inspect the result, and continue the conversation.
-
-The difference is what sits underneath the conversation.
-
-Sensei Code does not ask one model to be architect, implementor, reviewer, authority, and historian at the same time. It coordinates specialized agents around **Sensei**, which owns the architectural truth, task bindings, authority, admission, evidence, and closure rules for the repository.
+It should feel familiar to users of Claude Code, Codex, Cursor Agent, Pi, and similar tools: open a repository, describe a task, watch work happen, inspect decisions, and continue the conversation. The difference is that Sensei Code does not treat one model session as architect, implementor, reviewer, authority, and memory at the same time.
 
 ```text
-human
-  |
-  v
-Sensei Code
-  |
-  +--> Sensei ---------------- architecture, authority, proof, closure
-  |
-  +--> OpenAI architect ------- understanding, planning, review
-  |
-  +--> Claude Code worker ----- bounded implementation
-  |
-  +--> Codex worker ----------- bounded implementation
-  |
-  +--> other agents ----------- replaceable execution providers
-  |
-  +--> Git -------------------- exact repository history and worktrees
-  |
-  `--> GitHub (optional) ------ issues, PRs, CI, collaboration
+                         HUMAN
+                    ultimate authority
+                          ^
+                          | rare escalation
+                          |
+                    ARCHITECT / REVIEWER
+                         OpenAI
+                          ^
+                          | architectural authority
+                          |
+                       SENSEI CODE
+                  autonomous orchestrator
+                          |
+          +---------------+---------------+
+          |                               |
+       Claude Code                       Codex
+        implementor                    implementor
+          |                               |
+          +---------------+---------------+
+                          |
+                     Git worktrees
+                          |
+                        SENSEI
+        truth | governance | evidence | admission | closure
 ```
 
-If **Sensei is the constitution and closure engine**, Sensei Code is the place where people and agents actually work through it.
+**Sensei knows and governs. Sensei Code coordinates work. Agents implement.**
 
 > Sensei Code makes Sensei easier to adopt without making Sensei easier to bypass.
 
----
+## Why it exists
 
-## Why Sensei Code exists
+Modern coding agents are powerful implementors, but an agent session does not automatically answer repository-owned questions such as:
 
-AI coding tools have become excellent interactive implementors. They can inspect repositories, edit files, run tests, and explain their work.
-
-What they do not automatically provide is a shared, repository-owned answer to questions such as:
-
-- What architectural rules apply to this task?
+- What architectural rules apply to this change?
 - Which source is authoritative?
-- Which failure modes and forbidden fixes are already known?
-- Which files and components may legally change?
-- Which tests and proof obligations are required?
-- Was the implementation produced from the exact repository state that was reviewed?
-- Did the observed result match the admitted operation?
+- Which known failure modes and forbidden fixes already exist?
+- What scope may change?
+- What tests and proof obligations are required?
+- Did the candidate stay inside the admitted envelope?
 - Is the evidence fresh and bound to the exact result?
-- May this result become part of the project's authoritative history?
+- Is the task actually complete?
 
-Sensei already provides those structures.
+Sensei already owns those semantics. Sensei Code is the missing workflow layer that lets a developer use them without manually relaying prompts, diffs, receipts, worktrees, and evidence among several terminals.
 
-The remaining adoption problem is workflow. Using an AI architect, Claude Code, Codex, Git, GitHub, Sensei briefings, worktrees, gates, admission, evidence, and review manually means moving information among several terminals and conversations.
+## Authority, not permission popups
 
-Sensei Code turns that relay race into one local interactive workspace.
+Sensei Code is designed to be autonomous during normal development. It does **not** ask the user whether it may read a file, run a test, create a candidate worktree, or let a bounded worker repair a failed test.
 
----
+It uses three authority levels:
 
-## Product thesis
+### Level 1: execution authority
 
-Traditional AI coding tools center the **agent session**.
+Sensei Code may act autonomously inside its configured local capability envelope. Typical actions include repository inspection, worktree creation, worker execution, builds, tests, Sensei queries, candidate audits, retries, and bounded repair cycles.
 
-Sensei Code centers the **governed software change**.
+### Level 2: architectural authority
+
+The architect may resolve normal architectural questions autonomously, using repository evidence and Sensei context. A worker failure does not become a human question merely because an agent is uncertain.
+
+### Level 3: human authority
+
+Sensei Code interrupts only when a decision reaches authority the architect does not own, such as changing human-owned product intent, an invariant, an externally meaningful contract, a trust boundary, or another explicit policy.
+
+The UI then presents a small numbered decision surface:
 
 ```text
-human + architect
-      |
-      v
-understand governed repository state
-      |
-      v
-create a bounded task and architecture plan
-      |
-      v
-produce an isolated candidate with a worker agent
-      |
-      v
-evaluate candidate and collect evidence
-      |
-      v
-review the exact candidate
-      |
-      v
-Sensei admission
-      |
-      v
-apply the exact admitted artifact
-      |
-      v
-verify the exact result and proof obligations
-      |
-      v
-human commit / PR / merge decision
+╭─ ⚑ HUMAN AUTHORITY REQUIRED ───────────────────────────────────╮
+│                                                               │
+│ The proposed fix would change a human-owned contract.         │
+│                                                               │
+│ Architect recommendation: 1                                   │
+│                                                               │
+│  1. Preserve the contract and redesign the implementation     │
+│  2. Change the product policy                                 │
+│  3. Stop the task                                              │
+│                                                               │
+╰───────────────────────────────────────────────────────────────╯
 ```
 
-The model can reason. The worker can implement. The reviewer can recommend. **Sensei determines what is governed and provable. The human retains final authority over publication and merge.**
+Normal execution keeps flowing. Authority crossings do not.
 
----
+## Current implementation
 
-## What the experience should feel like
+The first Go foundation is being built around these boundaries:
 
-The end product is a terminal-first interactive application:
+- Bubble Tea v2 terminal application
+- Bubbles v2 textarea input
+- Lip Gloss v2 styling
+- structured event bus and JSONL session history
+- explicit execution / architectural / human authority model
+- direct structured MCP connection to Sensei's `awareness-mcp`
+- Sensei workspace identity and preflight before architecture
+- OpenAI/Codex architect and reviewer adapters
+- Claude Code primary worker with Codex fallback
+- isolated sibling Git worktrees for candidates
+- autonomous bounded review/repair cycles
+- Sensei deterministic diff audit before reviewer acceptance
+- Level-3 human authority rendezvous and resume
+- `sensei-code doctor` readiness checks
+
+The foundation deliberately stops short of pretending that reviewer acceptance is Sensei admission. The next governed slice binds candidate output to Sensei's canonical admission/apply/verification contracts.
+
+See [docs/architecture.md](docs/architecture.md) and [docs/implementation-status.md](docs/implementation-status.md).
+
+## Experience
 
 ```text
 $ sensei-code
 
-  Sensei Code
-  repo: github.com/globulario/Globular
-  head: 920077c4
-  sensei: ready / graph fresh / governed
+◆ SENSEI
+  workspace identity verified
+  briefing and preflight loaded
 
-> Fix the release packaging problem where a bundled dependency is tied to
-  the build host's systemd patch version.
+◈ ARCHITECT
+  architecture resolved
+  bounded implementation contract issued
 
-Sensei
-  Loaded repository identity and task context.
-  8 applicable invariants
-  3 known failure modes
-  2 required proof obligations
-  impact: release pipeline, packaging, installer portability
+● CLAUDE
+  implementing in isolated candidate worktree...
 
-Architect
-  I want to separate release inputs from host package discovery...
-  Proposed scope: ...
-  Required evidence: ...
+◆ SENSEI
+  candidate diff audited
+  contracts: represented
+  forbidden fixes: none observed
 
-Approve architecture? [y/N]
+◈ REVIEWER
+  REVISE: add the missing clean-room regression test
 
-Worker: Claude Code
-  creating isolated candidate workspace...
-  implementing...
-  tests: PASS
+● CLAUDE
+  repairing autonomously...
 
-Sensei evaluation
-  candidate sealed
-  gate: PASS
-  closure requirements: 5/5 represented
+◆ SENSEI
+  candidate diff audited
 
-Reviewer
-  Recommendation: ACCEPT CANDIDATE
-  No architectural amendment required.
+◈ REVIEWER
+  ACCEPT
 
-Request Sensei admission? [y/N]
+✓ READY
+  candidate ready for governed admission
+
+───────────────────────────────────────────────────────────────
+> _
+───────────────────────────────────────────────────────────────
+ready · agent activity collapsed · Ctrl+O toggle
 ```
 
-The user should be able to stay in that environment for the whole task instead of manually relaying prompts, diffs, SHAs, and test output between tools.
+If the architect reaches human-owned authority, the conversation pauses at the numbered decision and resumes the same workflow after the answer.
 
----
+## Local-first model
 
-## Sensei is not a plugin
-
-Sensei Code is intentionally built **around the full Sensei model**.
-
-Sensei owns:
-
-- repository and domain identity
-- graph authority and freshness
-- governed architectural knowledge
-- intents, invariants, contracts, failure modes, and forbidden fixes
-- briefing and impact analysis
-- preflight and edit checks
-- task/session bindings
-- authority and admission
-- synthesis state and budgets
-- sealed candidate artifacts
-- deterministic evaluation
-- evidence and proof obligations
-- governed candidate application
-- admission verification
-- closure and completion truth
-- immutable receipts and provenance
-
-Sensei Code must never reproduce a weaker private version of those concepts in its own database.
-
-When Sensei says a fact is unknown, stale, refused, uncertifiable, or incomplete, Sensei Code surfaces that state. It does not turn absence of evidence into a green checkmark.
-
----
-
-## Agent roles
-
-### Architect
-
-The default primary architect is an OpenAI runtime authenticated through the user's existing ChatGPT/Codex login.
-
-The architect:
-
-- discusses the task with the human
-- reads the repository through Sensei and Git
-- investigates relevant history
-- identifies architectural questions
-- proposes a bounded plan
-- identifies contracts, invariants, scope, risks, and proof obligations
-- reviews worker results
-- may request bounded corrections
-
-The architect does **not** gain admission, merge, or architectural authority merely because it produced the plan.
-
-### Workers
-
-Workers are replaceable implementation engines.
-
-Initial targets:
-
-- Claude Code
-- Codex CLI
-
-Later adapters may support Cursor Agent and other capable local agent runtimes.
-
-A worker:
-
-- operates inside an isolated, exact-base candidate workspace
-- receives the admitted/bounded task context and Sensei access appropriate to the run
-- implements the requested change
-- runs required commands and tests
-- returns evidence and a candidate result
-
-A worker does not own the architecture it implements.
-
-### Reviewer
-
-The reviewer receives the governing task, Sensei context, exact candidate/result identity, diff, evidence, tests, and findings.
-
-Its output is a recommendation such as:
-
-```text
-ACCEPT
-REVISE
-REJECT
-ARCHITECTURAL_QUESTION
-```
-
-A reviewer recommendation is evidence for the human workflow. It is not Sensei admission and it is not merge authority.
-
-### Human maintainer
-
-The human remains responsible for genuinely open architectural decisions and final publication authority.
-
-Sensei Code should make approvals explicit rather than burying them inside conversational prose.
-
----
-
-## Local first
-
-Sensei Code must work with a local Git repository without requiring GitHub.
-
-The local core consists of:
+The core runtime is local:
 
 ```text
 Sensei Code
-Sensei
+Sensei / awareness-mcp
 Git
-native provider CLIs
-compiler / tests / local tooling
+Codex CLI
+Claude Code
+compiler / tests / repository tooling
 ```
 
-GitHub is an optional collaboration and publication surface for:
+GitHub is optional collaboration and publication infrastructure, not project authority.
 
-- issues
-- pull requests
-- CI
-- review discussions
-- remote backup
-- collaboration and merge history
+Model providers own their own authentication. Sensei Code does not collect ChatGPT, Claude, or Cursor credentials.
 
-GitHub is not the source of architectural truth. Sensei is not replaced when GitHub is unavailable.
+## Install and build
 
----
+Sensei Code targets Go 1.25+ because the current Charm v2 packages require that toolchain.
 
-## Native subscription authentication
-
-Sensei Code should not become a credential vault for AI providers.
-
-Provider runtimes keep ownership of their own authentication:
-
-```text
-OpenAI     -> Codex / Codex app-server login
-Anthropic  -> Claude Code login
-Cursor     -> Cursor Agent login, when supported
-GitHub     -> git / gh authentication
+```bash
+go build ./cmd/sensei-code
 ```
 
-Sensei Code records only the minimum readiness information it needs, such as installed, authenticated, ready, expired, unavailable, and supported capabilities.
+Initialize a repository-local configuration:
 
-Tokens and provider secrets remain with the native provider runtime whenever possible.
-
----
-
-## Exact work, not conversational claims
-
-A governed run is bound to exact identities.
-
-At minimum, Sensei Code must preserve and surface:
-
-- repository identity
-- base revision
-- worktree/candidate identity
-- task identity
-- Sensei graph/generation identity
-- provider and role
-- candidate artifact digest
-- evaluation receipt
-- admission decision
-- applied result identity
-- verification and evidence receipts
-
-The application must never report that a manual editor or agent session was governed merely because Sensei happened to be installed in the repository.
-
-Manual sessions remain useful for exploration and low-risk work. Governed sessions require the real Sensei bindings and receipts.
-
----
-
-## Reuse Sensei's synthesis engine
-
-Sensei already contains the governed synthesis machinery required for the dangerous part of the workflow:
-
-```text
-interpretation
-  -> planning
-  -> generation
-  -> deterministic evaluation
-  -> bounded retry / replan
-  -> sealed candidate
-  -> admission
-  -> governed apply
-  -> verification
+```bash
+sensei-code init
 ```
 
-Sensei Code should orchestrate and present that machinery rather than implement a second synthesis or admission system.
+Check the execution surface before the first task:
 
-This also updates an early Sensei Dashboard assumption. A worker does not need authority to mutate the canonical checkout merely to produce a candidate. It works in a disposable, pinned candidate workspace. **Admission is required before the sealed candidate becomes an authoritative applied result.**
-
-That boundary keeps experimentation useful without allowing an agent's private workspace to silently become project truth.
-
----
-
-## Multi-agent orchestration
-
-Sensei Code is provider-neutral at its orchestration layer.
-
-A task may use one worker or several bounded lanes:
-
-```text
-                 Architect
-                    |
-          +---------+---------+
-          |                   |
-       Claude                Codex
-       lane A                lane B
-          |                   |
-          +---------+---------+
-                    |
-             candidate review
-                    |
-            explicit selection
-                    |
-             Sensei admission
+```bash
+sensei-code doctor
 ```
 
-Parallel workers never create implicit consensus or authority. Each lane has its own exact candidate identity and evidence. Selecting a candidate for admission must be an explicit, auditable decision.
+The doctor checks Git, configured model-provider executables, Sensei MCP startup, and the canonical Sensei tools required by the workflow.
 
-The simplest workflow remains one architect + one worker + one reviewer. Additional workers are a capability, not a requirement.
+Then launch the interactive application from a governed repository:
 
----
-
-## Planned command surface
-
-The exact CLI is not frozen yet, but the intended shape is conversational first with explicit control commands:
-
-```text
+```bash
 sensei-code
-sensei-code open .
-sensei-code resume
-sensei-code status
 ```
 
-Inside the interactive shell:
+## Local configuration
+
+Configuration is stored in:
 
 ```text
-/help
-/task
-/status
-/sensei
-/plan
-/agents
-/run claude
-/run codex
-/diff
-/evidence
-/review
-/admit
-/apply
-/verify
-/pr
-/resume
+<repository>/.sensei-code/config.json
 ```
 
-Most users should not need to memorize the commands. Typing a task in natural language should start the workflow and Sensei Code should stop at the boundaries that require explicit decisions.
+It is local state and should not be committed.
 
----
+The default capability envelope permits routine local development but refuses external/destructive authority:
 
-## Relationship to Sensei Dashboard
+```json
+{
+  "permissions": {
+    "read_repository": true,
+    "write_candidates": true,
+    "create_worktrees": true,
+    "run_builds": true,
+    "run_tests": true,
+    "local_commit": true,
+    "push": false,
+    "force_push": false,
+    "production_deploy": false
+  }
+}
+```
 
-Sensei Code carries forward the strongest architectural ideas from the earlier Sensei Dashboard workspace work:
-
-- Sensei core owns architectural truth and admission
-- orchestration is local
-- agents have explicit roles and capabilities
-- workers run in isolated exact-base workspaces
-- provider authentication remains provider-owned
-- Git/GitHub preserve durable code history
-- mutable execution state is separate from architectural projections
-- manual and governed sessions remain distinguishable
-- the human retains final merge authority
-
-What changes is the product center.
-
-Sensei Dashboard began as an architectural observatory with an AI workspace added beside it. Sensei Code makes the **interactive governed development workflow itself** the primary product surface.
-
-The architecture map and richer visualizations can return later as views over the same canonical Sensei state. They are not prerequisites for the first usable product.
-
----
-
-## Repository architecture
-
-The planned implementation is a single local Go application with narrow adapters around Sensei, Git, provider runtimes, and optional GitHub integration.
+The default provider roles are:
 
 ```text
-cmd/sensei-code/
-internal/
-  app/            interactive application state machine
-  session/        local resumable UX sessions
-  sensei/         typed Sensei client / contract adapters
-  architect/      architect runtime abstraction
-  provider/       worker provider abstractions and adapters
-  review/         reviewer orchestration
-  worktree/       exact-base Git workspace management
-  git/            Git operations and identity
-  github/         optional GitHub publication gateway
-  evidence/       presentation/index of Sensei-owned evidence
-  ui/             terminal UI
-  protocol/       typed events between runtimes and UI
+architect:     Codex, read-only repository access
+implementor 1: Claude Code, isolated candidate worktree
+implementor 2: Codex, isolated candidate worktree fallback
+reviewer:      Codex, read-only repository access
 ```
 
-See [`docs/architecture.md`](docs/architecture.md) for the governing architecture and lifecycle.
+Provider commands are adapters, not architectural identities. They can be replaced without changing the Sensei-owned governance model.
 
----
+## Sensei integration
 
-## Initial milestones
+Sensei Code speaks directly to Sensei's structured MCP bridge rather than scraping terminal prose or duplicating Sensei semantics.
 
-### M0 — Architecture
+The integration surface includes canonical tools such as:
 
-- product README
-- governing architecture
-- authority boundaries
-- provider and Sensei integration contracts
+```text
+sensei_workspace_status
+awareness_briefing
+awareness_impact
+awareness_preflight
+awareness_audit_diff
+task_status
+task_briefing
+advance_task
+sensei_workspace_admit_change
+sensei_workspace_verify_admission
+complete_task
+inspect_terminal
+recover_projections
+awareness_investigate
+awareness_evidence_coverage
+awareness_candidates
+awareness_challenge
+```
 
-### M1 — Local shell and repository readiness
+Not every tool is wired into the first vertical slice yet. Sensei remains the owner of those semantics as each stage is added.
 
-- open repository
-- detect Git/Sensei/provider runtimes
-- verify Sensei workspace identity and graph readiness
-- guide onboarding when a repository is not Sensei-ready
-- resumable local session
+## Candidate isolation
 
-### M2 — Architect
+Workers never receive the canonical checkout as their normal mutation surface.
 
-- OpenAI architect runtime
-- persistent task conversation
-- Sensei briefing / impact / preflight integration
-- explicit architecture proposal and approval boundary
+Candidate worktrees are created beside the repository:
 
-### M3 — Worker lanes
+```text
+/work/project/
+/work/.project.sensei-code-worktrees/
+    task-.../
+        claude/
+        codex/
+```
 
-- Claude Code adapter
-- Codex adapter
-- exact-base isolated workspaces
-- normalized agent events
-- cancellation and failure handling
+This separates local application/session state from candidate execution state and reduces the blast radius of autonomous workers.
 
-### M4 — Governed candidate pipeline
+A candidate worktree is still not authority. It becomes meaningful only through Sensei-governed evaluation, admission, application, verification, and completion.
 
-- invoke Sensei synthesis/evaluation machinery
-- sealed candidate presentation
-- evidence and required-proof views
-- bounded retry / replan surfaced honestly
+## Structured events
 
-### M5 — Review, admission, apply, verification
+Provider stdout is normalized into an event stream. The TUI is only one projection of that stream.
 
-- exact-candidate reviewer
-- explicit admission request
-- exact admitted artifact application
-- Sensei verification
-- exact-result review
+Important event classes include:
 
-### M6 — GitHub workflow
+```text
+task.created
+agent.started
+agent.finished
+candidate.changed
+candidate.audited
+authority.required
+authority.resolved
+workflow.completed
+workflow.failed
+```
 
-- issue/PR bindings
-- push and draft PR flow
-- CI observation
-- exact-SHA review and publication receipts
+Raw worker activity is persisted but collapsed in the normal UI. This keeps the interface conversational while preserving evidence for debugging and future JSON/IDE/CI frontends.
 
-### M7 — Product-quality terminal UX
+## Project rules
 
-- polished streaming TUI
-- session resume
-- multiple worker lanes
-- provider capability negotiation
-- richer Sensei architecture, evidence, and evolution views
+1. **Sensei is not an agent.** It is the governance boundary.
+2. **Absence of evidence is not success.** Fail closed when Sensei cannot establish required truth.
+3. **Workers do not own architecture.** They implement bounded contracts.
+4. **Reviewer acceptance is not admission.** Sensei owns admission and verification.
+5. **Routine execution is autonomous.** Do not convert worker uncertainty into human permission prompts.
+6. **Human interruption means an authority boundary was reached.** Keep it rare and explicit.
+7. **Local UI state is not project truth.** Durable architectural truth belongs to Sensei/repository governance sources.
+8. **Manual work must never masquerade as a governed run.** Receipts and exact bindings matter.
 
----
+## License
 
-## Non-goals
-
-Sensei Code is not:
-
-- a replacement for Sensei
-- a second architecture database
-- a new model provider
-- a credential broker
-- an IDE that silently owns the repository
-- an excuse to infer PASS from missing evidence
-- an autonomous merge bot
-- a system where model consensus creates authority
-
-The product can automate more over time, but automation must remain downstream of explicit authority and evidence.
-
----
-
-## Design law
-
-The central law of Sensei Code is simple:
-
-> **Agents may propose, reason, implement, test, and review. They do not become authoritative merely by participating in the workflow.**
-
-Sensei Code exists to make that disciplined workflow feel as natural as today's best conversational coding tools.
+See [LICENSE](LICENSE).
