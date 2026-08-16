@@ -57,6 +57,12 @@ All P0 slices from `docs/first-working-version-review.md` are implemented, with
 the P0.4 caveat recorded above: the capability envelope is enforced for push,
 force-push and candidate isolation, and open for the rest.
 
+Specified but not yet implemented: `docs/p1-level-1-routine.md`, which makes
+ceremony proportional to measured risk without reducing verification. It is
+sequenced after the P0 merge and after the governed acceptance run passes,
+because a path that skips steps is much harder to debug while the full path has
+never completed.
+
 Not yet started, tracked in the same review: the P1 items, including `doctor` as
 the single readiness computation promised by the architecture, splitting the
 workflow monolith by semantic ownership, and making event/session persistence
