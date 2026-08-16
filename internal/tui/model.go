@@ -102,6 +102,11 @@ type Model struct {
 	startedAt time.Time
 	wordIdx   int
 	activity  string
+	// scrollTop is the first transcript row shown when the reader has scrolled
+	// back. atBottom follows new output instead, which is what you want while a
+	// task is running and not what you want while reading something above it.
+	scrollTop int
+	atBottom  bool
 }
 
 func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event, history []event.Event) Model {
@@ -113,12 +118,13 @@ func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event
 	ta.ShowLineNumbers = false
 	focusCmd := ta.Focus()
 	m := Model{
-		ctx:     ctx,
-		engine:  engine,
-		events:  events,
-		input:   ta,
-		initCmd: focusCmd,
-		lines:   append(banner(len(history) > 0), replayConversation(history)...),
+		ctx:      ctx,
+		engine:   engine,
+		events:   events,
+		input:    ta,
+		initCmd:  focusCmd,
+		lines:    append(banner(len(history) > 0), replayConversation(history)...),
+		atBottom: true,
 		// A task that was approved and then interrupted still has its candidate
 		// on disk. Offering it is the difference between resuming work and
 		// silently abandoning it.
@@ -255,6 +261,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case closedMsg:
 		return m, tea.Quit
 	case tea.KeyPressMsg:
+		if updated, handled := m.scroll(msg.String()); handled {
+			return updated, tea.Batch(append(cmds, tea.ClearScreen)...)
+		}
 		if m.mcpMenu {
 			key := msg.String()
 			if key == "ctrl+c" {
@@ -372,6 +381,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+text, "")
 			m.input.Reset()
 			m.currentTask = m.engine.Submit(m.ctx, text)
+			m.atBottom = true
 			cmds = append(cmds, tea.ClearScreen)
 			return m, tea.Batch(cmds...)
 		}
@@ -522,11 +532,25 @@ func (m Model) View() tea.View {
 	// the prompt and older lines scroll off the top.
 	available := max(3, m.height-lipgloss.Height(bottom))
 	rows := wrapRows(m.lines, width)
+
+	// The window is clamped here rather than when the key is pressed, because
+	// how many rows the transcript occupies depends on the width it is wrapped
+	// to, and that is only known while rendering.
+	hidden, visible := 0, available
 	if len(rows) > available {
-		rows = rows[len(rows)-available:]
+		// The "earlier lines" note occupies a row, so it takes one from the
+		// content rather than overwriting it: hiding a line to announce that
+		// lines are hidden is the opposite of the point.
+		visible = available - 1
+		top := len(rows) - visible
+		if !m.atBottom {
+			top = min(max(0, m.scrollTop), top)
+		}
+		hidden = top
+		rows = rows[top : top+visible]
 	}
 	body := strings.Join(rows, "\n")
-	if pad := available - len(rows); pad > 0 {
+	if pad := available - lipgloss.Height(body); pad > 0 {
 		blank := strings.Repeat(" ", width)
 		head := make([]string, pad)
 		for i := range head {
@@ -535,6 +559,15 @@ func (m Model) View() tea.View {
 		body = strings.Join(head, "\n") + "\n" + body
 	}
 
+	if len(rows) < available {
+		// Say what is above and how to reach it; a reader otherwise has no way
+		// to know the transcript continues past the top of the window.
+		note := fmt.Sprintf("  ↑ %d earlier line%s · PgUp/PgDn to scroll", hidden, plural(hidden))
+		if hidden == 0 {
+			note = "  ↑ top of the conversation · PgDn or ctrl+g to return"
+		}
+		body = padRow(hintStyle.Render(note), width) + "\n" + body
+	}
 	v := tea.NewView(body + "\n" + bottom)
 	v.AltScreen = true
 	v.WindowTitle = "Sensei Code"
@@ -925,4 +958,56 @@ func renderHelp() string {
 // indentBlock shifts a rendered command result under its heading.
 func indentBlock(text, prefix string) string {
 	return prefix + strings.ReplaceAll(strings.TrimRight(text, "\n"), "\n", "\n"+prefix)
+}
+
+// scroll moves the transcript window. It reports whether it handled the key, so
+// every other binding is left untouched.
+func (m Model) scroll(key string) (Model, bool) {
+	page := max(1, m.height-8)
+	switch key {
+	case "pgup":
+		m.scrollTop = max(0, m.scrollPosition()-page)
+		m.atBottom = false
+	case "pgdown":
+		m.scrollTop = m.scrollPosition() + page
+		m.atBottom = false
+	case "shift+up":
+		m.scrollTop = max(0, m.scrollPosition()-1)
+		m.atBottom = false
+	case "shift+down":
+		m.scrollTop = m.scrollPosition() + 1
+		m.atBottom = false
+	case "ctrl+g":
+		// Back to following new output, without having to page down through
+		// everything that arrived while reading.
+		m.atBottom = true
+		return m, true
+	default:
+		return m, false
+	}
+	return m, true
+}
+
+// scrollPosition is where the window currently starts, so paging up from the
+// bottom continues from what is on screen rather than from row zero.
+func (m Model) scrollPosition() int {
+	if !m.atBottom {
+		return m.scrollTop
+	}
+	rows := len(wrapRows(m.lines, max(40, m.width)))
+	return max(0, rows-max(3, m.height-8))
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
+}
+
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
