@@ -17,10 +17,10 @@
 //	go test -tags acceptance ./internal/acceptance/ -run TestGovernedRun -v -timeout 20m
 //
 // It answers the human rendezvous itself, which is the one thing a canary has
-// to do carefully. It approves the plan, because that is the decision under
-// test, and it declines the pull request, because publication is human-owned
-// and a test that opened one would be doing the exact thing this product exists
-// never to do on its own.
+// to do carefully: approve the plan, authorize at an architectural boundary,
+// and decline the pull request, because publication is human-owned and a test
+// that opened one would be doing the exact thing this product exists never to
+// do on its own. See answer() for why authorizing is the right default here.
 package acceptance
 
 import (
@@ -161,9 +161,21 @@ func TestGovernedRunEndToEnd(t *testing.T) {
 // The plan is approved because that is the transition under test. The pull
 // request is declined because publication is human-owned; an acceptance test
 // that opened one would be performing the single action this whole product is
-// built never to take by itself. A Level-3 authority question takes the
-// architect's own recommendation when it offered one, since the point is to
-// exercise the routing, not to second-guess it from a test.
+// built never to take by itself.
+//
+// A Level-3 authority question authorizes. That is a deliberate choice and it
+// is worth being explicit about why, because the safe-looking answer is the
+// wrong one here. The default option set leads with "preserve current intent
+// and require another design", and answering that sends the architect back to
+// replan -- which proves the escalation fired and nothing after it. A canary
+// that stops at the first refusal never reaches the candidate, the worker, the
+// audit, the reviewer or the handoff, so it cannot tell us those work.
+//
+// This is a property of the test, not of the product. Authorizing here is safe
+// precisely because of what has already been proved by reaching this point: the
+// worker is confined to a candidate worktree cut from an exact base, push and
+// force-push are refused by git itself, and nothing merges without a human. The
+// blast radius of a wrong answer is a worktree we then read.
 func answer(t *testing.T, engine *workflow.Engine, taskID string, ev event.Event) {
 	t.Helper()
 	var decision authority.Decision
@@ -181,12 +193,13 @@ func answer(t *testing.T, engine *workflow.Engine, taskID string, ev event.Event
 	case strings.Contains(subject, "implement this plan"):
 		t.Logf("approving the plan (option 1)")
 	default:
-		if r := strings.TrimSpace(decision.Recommendation); r != "" {
-			choice = r
-		}
+		choice = authorizeOption(decision)
 		t.Logf("LEVEL-3 authority question: %s", oneLine(decision.Subject))
 		t.Logf("  reason: %s", oneLine(decision.Reason))
-		t.Logf("  answering with option %s", choice)
+		for _, o := range decision.Options {
+			t.Logf("    %s) %s", o.ID, oneLine(o.Label))
+		}
+		t.Logf("  authorizing with option %s", choice)
 	}
 
 	// The engine registers its pending channel before emitting, but a retry
@@ -198,6 +211,46 @@ func answer(t *testing.T, engine *workflow.Engine, taskID string, ev event.Event
 		time.Sleep(200 * time.Millisecond)
 	}
 	t.Errorf("could not deliver the human answer %q for %q", choice, decision.Subject)
+}
+
+// authorizeOption picks the option that lets the work proceed.
+//
+// It prefers an explicitly authorizing label, then the architect's own
+// recommendation, then the first option that is neither a refusal nor a stop.
+// Options are matched by meaning rather than by number because the numbers are
+// assigned by the engine in whatever order the architect supplied them, and a
+// canary that hard-coded "2" would silently start answering something else the
+// first time an architect returned its options the other way round.
+func authorizeOption(d authority.Decision) string {
+	for _, o := range d.Options {
+		if strings.Contains(strings.ToLower(o.Label), "authoriz") {
+			return o.ID
+		}
+	}
+	if r := strings.TrimSpace(d.Recommendation); r != "" {
+		for _, o := range d.Options {
+			if o.ID == r && !refuses(o.Label) {
+				return r
+			}
+		}
+	}
+	for _, o := range d.Options {
+		if !refuses(o.Label) {
+			return o.ID
+		}
+	}
+	return "1"
+}
+
+// refuses reports whether an option label stops or reverses the work.
+func refuses(label string) bool {
+	label = strings.ToLower(label)
+	for _, marker := range []string{"stop", "preserve current", "require another", "not yet", "do not", "abandon", "cancel"} {
+		if strings.Contains(label, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 // declineOption finds the option that does not open a pull request, rather than
