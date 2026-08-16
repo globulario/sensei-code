@@ -205,3 +205,57 @@ func funcBody(t *testing.T, rel, name string) string {
 	}
 	return out
 }
+
+// TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge guards the boundary
+// P0.6 could easily blur. Approving a plan and agreeing to open a pull request
+// are product confirmations, not answers to questions the graph could not
+// settle, and proposing them as contracts would fill Sensei's review queue with
+// restatements of the user interface.
+func TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge(t *testing.T) {
+	body := fileText(t, "internal/workflow/engine.go")
+	// The persistence call must be reached only under a condition check.
+	if !strings.Contains(body, "authority.Persist") {
+		t.Fatal("resolutions are no longer submitted to Sensei at all")
+	}
+	for _, caller := range []string{"approvePlan", "offerPullRequest"} {
+		fn := funcBody(t, "internal/workflow/engine.go", caller)
+		if strings.Contains(fn, "authority.Persist") {
+			t.Errorf("%s proposes a governance contract for an ordinary confirmation", caller)
+		}
+	}
+}
+
+// TestReplayIsAvoidedByTheGraphNotByACache states how "asking the same question
+// twice" is actually prevented, because the mechanism is easy to get wrong.
+//
+// A promoted resolution becomes graph knowledge, so the next scoped preflight
+// covers the region and routeAuthority returns architectural authority without
+// asking anyone. Nothing consults a local record of past answers: doing so
+// would let this program's own unpromoted proposal act as canon, which is
+// precisely the separation the design keeps.
+func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
+	// Before: the region is uncovered, so a human owns it.
+	uncovered := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
+	if got := routeAuthority(uncovered, nil); got.Route != RouteHuman {
+		t.Fatalf("an uncovered region did not ask the human: %+v", got)
+	}
+
+	// After promotion the same question is covered, and no human is asked.
+	covered := scopedPreflight(t, `{
+		"status": "PREFLIGHT_STATUS_OK",
+		"required_actions": ["Change risk: blast=local, approval=none"],
+		"direct_invariants": [{"id":"invariant:promoted.from.resolution","label":"the human decided this","severity":"critical","status":"active"}],
+		`+healthyAuthority+`
+	}`)
+	if got := routeAuthority(covered, nil); got.Route != RouteArchitectural {
+		t.Fatalf("a promoted resolution still reprompted the human: %+v", got)
+	}
+
+	// And the router has no access to any local store of past answers.
+	router := fileText(t, "internal/workflow/authority.go")
+	for _, forbidden := range []string{"Load", "ReadFile", "resolutions"} {
+		if strings.Contains(router, forbidden) {
+			t.Errorf("the router reads %q; replay avoidance must come from the graph, not from a local cache", forbidden)
+		}
+	}
+}

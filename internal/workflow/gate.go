@@ -40,6 +40,10 @@ func (c certifiedStart) RiskClass() string { return c.preflight.RiskClass }
 // RequiredActions are the actions Sensei says this change requires.
 func (c certifiedStart) RequiredActions() []string { return c.preflight.RequiredActions }
 
+// BaseSHA is the repository commit the graph was certified against, used to
+// bind a human resolution to the state it was decided on.
+func (c certifiedStart) BaseSHA() string { return c.preflight.Authority.SourceRepoCommit }
+
 // GraphBuildCommit is the graph generation that certified this start.
 func (c certifiedStart) GraphBuildCommit() string { return c.preflight.Authority.GraphBuildCommit }
 

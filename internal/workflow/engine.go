@@ -317,7 +317,7 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 		Recommendation: "1",
 		Options:        options,
 	}
-	choice, err := e.awaitChoice(ctx, taskID, decision, options)
+	choice, err := e.awaitChoice(ctx, nil, taskID, "", "", "", decision, options)
 	if err != nil {
 		return false, err
 	}
@@ -346,7 +346,7 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 	if verdict := e.behavioralVerdict(ctx, "open a pull request from an AI-generated candidate", tc.Domain); verdict != "" {
 		reason += "\n\n" + verdict
 	}
-	choice, err := e.awaitChoice(ctx, taskID, authority.Decision{
+	choice, err := e.awaitChoice(ctx, nil, taskID, "", "", "", authority.Decision{
 		Level:          authority.Human,
 		Subject:        "Open a pull request for this candidate?",
 		Reason:         reason,
@@ -756,7 +756,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
 			case routing.RequiresHuman():
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
-				choice, err := e.awaitHuman(ctx, taskID, d, routing.Condition)
+				choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
 				if err != nil {
 					return architectureDecision{}, err
 				}
@@ -790,7 +790,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
-			choice, err := e.awaitHuman(ctx, taskID, d, routing.Condition)
+			choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -855,7 +855,7 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string,
 	return routeAuthority(scoped, d.Claims), nil
 }
 
-func (e *Engine) awaitHuman(ctx context.Context, taskID string, d architectureDecision, condition string) (string, error) {
+func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
 	options := d.Options
 	if len(options) == 0 {
 		options = []authority.Option{
@@ -889,13 +889,13 @@ func (e *Engine) awaitHuman(ctx context.Context, taskID string, d architectureDe
 	if condition = strings.TrimSpace(condition); condition != "" {
 		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
-	return e.awaitChoice(ctx, taskID, decision, options)
+	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), start.BaseSHA(), decision, options)
 }
 
 // awaitChoice presents a numbered decision to the human and blocks until they
 // answer. It is the single place a task waits on a person, so every gate --
 // architectural authority and plan approval alike -- looks the same in the UI.
-func (e *Engine) awaitChoice(ctx context.Context, taskID string, decision authority.Decision, options []authority.Option) (string, error) {
+func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option) (string, error) {
 	ch := make(chan string, 1)
 	e.mu.Lock()
 	e.pending[taskID] = ch
@@ -913,7 +913,35 @@ func (e *Engine) awaitChoice(ctx context.Context, taskID string, decision author
 	case choice := <-ch:
 		for _, option := range options {
 			if option.ID == choice {
-				e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, map[string]string{"option": option.ID}))
+				// The answer is authoritative for this run the moment it is
+				// given. Whether it becomes project knowledge is Sensei's
+				// question, asked separately and answered honestly.
+				// Only a real certifiability condition is worth teaching the
+				// project. An empty condition means this rendezvous was an
+				// ordinary product confirmation -- approve this plan, open this
+				// pull request -- and filing those as proposed contracts would
+				// fill Sensei's review queue with restatements of the UI.
+				if strings.TrimSpace(condition) == "" {
+					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, map[string]string{"option": option.ID}))
+				} else {
+					resolution := authority.Resolution{
+						TaskID: taskID, SessionID: e.SessionID, Domain: domain, BaseSHA: baseSHA,
+						DecidedAt: time.Now().UTC(),
+						Question:  decision.Subject, Condition: condition,
+						OptionID: option.ID, OptionLabel: option.Label,
+					}
+					if isStopOption(option.Label) {
+						// Stopping is not a governing decision about the
+						// architecture, so there is nothing to propose.
+						resolution.State = authority.Unsupported
+						resolution.Detail = "the human stopped the task rather than resolving the question"
+					} else {
+						resolution = authority.Persist(senseiProposer{sc}, resolution)
+					}
+					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, resolution))
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
+				}
+
 				if isStopOption(option.Label) {
 					return "", errors.New("task stopped by human authority")
 				}
@@ -1387,3 +1415,19 @@ type repoHead struct {
 
 func (r repoHead) Head() (string, error)  { return r.repo.Head(r.ctx) }
 func (r repoHead) IsClean() (bool, error) { return r.repo.IsClean(r.ctx) }
+
+// senseiProposer adapts the MCP client to the narrow write surface the
+// authority package needs, so resolutions can be submitted without that package
+// depending on the transport.
+type senseiProposer struct{ sc *sensei.Client }
+
+func (p senseiProposer) CallTool(name string, args map[string]any) (authority.ToolResult, error) {
+	if p.sc == nil {
+		return authority.ToolResult{}, errors.New("Sensei is unavailable, so the resolution cannot be proposed")
+	}
+	result, err := p.sc.CallTool(name, args)
+	if err != nil {
+		return authority.ToolResult{}, err
+	}
+	return authority.ToolResult{Structured: result.Structured, Text: firstText(result), IsError: result.IsError}, nil
+}
