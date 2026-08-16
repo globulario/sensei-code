@@ -49,6 +49,22 @@ green. Provider **end-to-end orchestration is still not claimed**: the smoke tes
 deliberately stopped short of submitting a task, so no provider was actually driven through
 a workflow.
 
+### Capability enforcement
+
+`.sensei-code/config.json` declares nine capabilities. They are not all enforced, and the
+difference matters because the flags read like guarantees:
+
+- `read_repository`, `write_candidates`, `create_worktrees` are checked by the workflow
+  before it acts.
+- `push` and `force_push` are enforced for workers: when `push` is false a pre-push hook is
+  installed and the worker's git is pointed at it through `GIT_CONFIG_*`, so git refuses the
+  push rather than the worker being merely asked not to. This stops accidents, not a
+  determined process, since anything that can edit its own environment can route around it.
+  The candidate worktree branch remains the real blast-radius boundary.
+- `run_builds`, `run_tests`, `local_commit` and `production_deploy` are **not enforced**.
+  They are conveyed to workers as instructions in the prompt, and a prompt is not an
+  enforcement boundary. Do not read them as sandboxing.
+
 ### Codex MCP tool allowlist
 
 Codex treats `[mcp_servers.sensei.tools.<name>]` tables in `~/.codex/config.toml` as an

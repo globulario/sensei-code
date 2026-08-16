@@ -161,6 +161,12 @@ func (p ContextPacket) Validate() error {
 	if strings.TrimSpace(p.Task) == "" || strings.TrimSpace(p.Repository) == "" || strings.TrimSpace(p.BaseSHA) == "" {
 		return errors.New("context packet is missing task, repository, or base SHA")
 	}
+	// Task identity is what makes a packet traceable across agents. An empty id
+	// silently collapses every task into the same anonymous one, and a handoff
+	// comparing two empty ids would call them a match.
+	if strings.TrimSpace(p.TaskID) == "" {
+		return errors.New("context packet is missing a task id")
+	}
 	if p.Authority.Mode != "assisted" || p.Authority.Admission != "not-requested" {
 		return errors.New("assisted context packet must not claim governed admission")
 	}

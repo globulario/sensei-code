@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 )
@@ -14,9 +15,18 @@ type Line struct{ Stream, Text string }
 type Result struct{ ExitCode int }
 
 func Run(ctx context.Context, dir, name string, args []string, stdin io.Reader, onLine func(Line)) (Result, error) {
+	return RunWithEnv(ctx, dir, name, args, nil, stdin, onLine)
+}
+
+// RunWithEnv runs a command with extra environment entries appended to the
+// inherited environment.
+func RunWithEnv(ctx context.Context, dir, name string, args, extraEnv []string, stdin io.Reader, onLine func(Line)) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Stdin = stdin
+	if len(extraEnv) != 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return Result{}, err

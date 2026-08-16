@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -172,5 +173,56 @@ func runGit(t *testing.T, dir string, args ...string) {
 	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+}
+
+func scopedContext(files []string) ContextPacket {
+	return ContextPacket{
+		Version:         PacketVersion,
+		TaskID:          "task-1",
+		Task:            "fix bootstrap",
+		Repository:      "/repo",
+		BaseSHA:         "0123456789abcdef",
+		Files:           files,
+		CreatedAt:       time.Date(2026, 8, 15, 12, 0, 0, 0, time.UTC),
+		WorkspaceStatus: Observation{State: Present, Source: "sensei:sensei_workspace_status"},
+		Preflight:       Observation{State: Present, Source: "sensei:awareness_preflight"},
+		Authority:       Authority{Mode: "assisted", Admission: "not-requested"},
+	}
+}
+
+func TestHandoffRefusesWorkOutsideTheContextFileScope(t *testing.T) {
+	ctxPacket := scopedContext([]string{"a.go"})
+	_, err := NewHandoff(ctxPacket, "claude", "codex", "half done", nil,
+		[]string{"a.go", "b.go"}, nil, nil, time.Now())
+	if err == nil {
+		t.Fatal("handoff accepted work on a file the context packet never preflighted")
+	}
+	if !strings.Contains(err.Error(), "b.go") {
+		t.Fatalf("error should name the out-of-scope file, got: %v", err)
+	}
+}
+
+func TestHandoffAllowsWorkInsideTheContextFileScope(t *testing.T) {
+	ctxPacket := scopedContext([]string{"a.go", "b.go"})
+	if _, err := NewHandoff(ctxPacket, "claude", "codex", "half done", nil,
+		[]string{"a.go"}, nil, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHandoffWithNoDeclaredScopeIsUnconstrained(t *testing.T) {
+	// A task-only packet asserted no file scope, so there is nothing to escape.
+	if _, err := NewHandoff(scopedContext(nil), "claude", "codex", "half done", nil,
+		[]string{"anything.go"}, nil, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestContextPacketRequiresATaskID(t *testing.T) {
+	p := scopedContext([]string{"a.go"})
+	p.TaskID = ""
+	if err := p.Validate(); err == nil {
+		t.Fatal("a context packet with no task id was accepted, so two tasks would be indistinguishable")
 	}
 }

@@ -42,6 +42,10 @@ func NewHandoff(contextPacket ContextPacket, fromAgent, toAgent, summary string,
 	if fromAgent == "" || toAgent == "" || summary == "" {
 		return HandoffPacket{}, errors.New("handoff requires from agent, to agent, and summary")
 	}
+	if outside := outsideScope(cleanFiles(changedFiles), contextPacket.Files); len(outside) != 0 {
+		return HandoffPacket{}, fmt.Errorf("handoff reports work outside the context packet's file scope: %s",
+			strings.Join(outside, ", "))
+	}
 	if now.IsZero() {
 		now = time.Now().UTC()
 	} else {
@@ -92,7 +96,39 @@ func (p HandoffPacket) ValidateAgainst(contextPacket ContextPacket) error {
 	if p.Authority.Mode != "assisted" || p.Authority.Admission != "not-requested" {
 		return errors.New("assisted handoff must not claim governed admission")
 	}
+	if outside := outsideScope(p.ChangedFiles, contextPacket.Files); len(outside) != 0 {
+		return fmt.Errorf("handoff reports work outside the context packet's file scope: %s",
+			strings.Join(outside, ", "))
+	}
 	return nil
+}
+
+// outsideScope returns the changed files the context packet never covered.
+//
+// The packet's preflight evidence was gathered for exactly the files the packet
+// declares. A handoff that reports work on other files presents un-preflighted
+// work as continuing the same bounded context, which is the binding this packet
+// exists to guarantee. A packet declaring no files asserted no file scope at
+// all, so there is nothing to escape and nothing to check.
+func outsideScope(changed, scope []string) []string {
+	if len(scope) == 0 {
+		return nil
+	}
+	inScope := make(map[string]struct{}, len(scope))
+	for _, file := range scope {
+		inScope[strings.TrimSpace(file)] = struct{}{}
+	}
+	var outside []string
+	for _, file := range changed {
+		file = strings.TrimSpace(file)
+		if file == "" {
+			continue
+		}
+		if _, ok := inScope[file]; !ok {
+			outside = append(outside, file)
+		}
+	}
+	return outside
 }
 
 func (p HandoffPacket) Write(path string, contextPacket ContextPacket) error {

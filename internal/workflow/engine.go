@@ -15,6 +15,7 @@ import (
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/gitguard"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
@@ -252,12 +253,18 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, tc, plan, worker, workspace)
 		if err != nil {
 			failures = append(failures, worker.Name+": "+err.Error())
+			// A worktree for a candidate that never converged is debris. Left
+			// behind it accumulates one abandoned checkout and one branch per
+			// attempt, and the next run has to guess which are still live.
+			e.discardWorktree(ctx, taskID, workspace, worker.Name)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" candidate did not converge; trying next bounded worker", map[string]string{"error": err.Error()}))
 			continue
 		}
 		plan = finalPlan
 		if accepted {
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+				"candidate kept for inspection at "+workspace, nil))
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "candidate ready for governed admission", map[string]any{
 				"workspace":   workspace,
 				"implementor": worker.Name,
@@ -293,6 +300,22 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 		return false, err
 	}
 	return strings.HasPrefix(choice, "1:"), nil
+}
+
+// discardWorktree removes a candidate that will not be used. An accepted
+// candidate is deliberately kept: it is the deliverable, and the human needs it
+// to inspect or apply the work. Only abandoned attempts are cleaned up, and a
+// failure to clean up is reported rather than hidden, because a worktree that
+// is still on disk while Sensei Code believes it is gone is worse than one
+// everybody knows about.
+func (e *Engine) discardWorktree(ctx context.Context, taskID, workspace, worker string) {
+	if err := e.Repo.RemoveWorktree(ctx, workspace); err != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			"could not remove the abandoned candidate worktree "+workspace+": "+err.Error(), nil))
+		return
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+		"removed the abandoned "+worker+" candidate worktree", nil))
 }
 
 // emitChangeReport tells the architect what the candidate actually changed.
@@ -418,9 +441,20 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 	feedback := ""
 	var lastReview, lastAudit string
 
+	// Publication is human-owned, so a worker's git is pointed at a hook that
+	// refuses pushes. Without this the capability flags were prompt text only.
+	var guardEnv []string
+	if !e.Config.Permissions.Push {
+		env, err := gitguard.Install(workspace)
+		if err != nil {
+			return false, plan, lastReview, lastAudit, fmt.Errorf("install the push guard: %w", err)
+		}
+		guardEnv = env
+	}
+
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
 		prompt := implementationPrompt(tc, plan, feedback, cycle)
-		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID}
+		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv}
 		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}

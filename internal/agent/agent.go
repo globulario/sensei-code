@@ -45,6 +45,10 @@ type CLI struct {
 	Args      []string
 	Source    event.Source
 	SessionID string
+	// Env are extra environment entries for this agent's process, used to
+	// enforce capability boundaries the agent must not be able to talk its way
+	// past.
+	Env []string
 }
 
 func (c CLI) label() string {
@@ -57,7 +61,7 @@ func (c CLI) label() string {
 func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Result, error) {
 	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentStarted, c.label()+" started", nil))
 	var out strings.Builder
-	_, err := processx.Run(ctx, req.Workspace, c.Command, c.Args, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
+	_, err := processx.RunWithEnv(ctx, req.Workspace, c.Command, c.Args, c.Env, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
 		if line.Stream == "stdout" {
 			out.WriteString(line.Text)
 			out.WriteByte('\n')
