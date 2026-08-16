@@ -521,9 +521,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 	// refuses pushes. Without this the capability flags were prompt text only.
 	var guardEnv []string
 	if !e.Config.Permissions.Push {
-		// Outside the worktree: a guard installed inside the candidate shows up
-		// in the worker's own working tree and can be committed into the change
-		// it is supposed to be protecting.
+		// Beside the candidates, never inside one: a guard installed in the
+		// worktree shows up in the worker's own working tree and can be
+		// committed into the change it is meant to protect. One shared location
+		// rather than one per task, because the hook is identical for all of
+		// them and a copy per task is litter nobody cleans up.
 		env, err := gitguard.Install(filepath.Join(filepath.Dir(workspace), ".guard"))
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("install the push guard: %w", err)

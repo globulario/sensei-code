@@ -449,14 +449,15 @@ func checkAbandonedWorktrees(ctx context.Context, o Options) Check {
 	live := liveWorktrees(ctx, o.RepoRoot)
 	var empty, holding []string
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+			// Dot directories here are Sensei Code's own, not candidates.
 			continue
 		}
 		path := filepath.Join(root, entry.Name())
 		if live[path] {
 			continue
 		}
-		if isEmptyDir(path) {
+		if holdsOnlyToolArtefacts(path) {
 			empty = append(empty, path)
 			continue
 		}
@@ -500,20 +501,33 @@ func liveWorktrees(ctx context.Context, repoRoot string) map[string]bool {
 	return live
 }
 
-func isEmptyDir(path string) bool {
+// toolArtefacts are directories Sensei Code puts beside a candidate for its own
+// purposes. They are not the user's work, so a candidate holding nothing else is
+// removable rather than being preserved as if it contained something.
+var toolArtefacts = map[string]bool{".guard": true}
+
+func holdsOnlyToolArtefacts(path string) bool {
 	entries, err := os.ReadDir(path)
-	return err == nil && len(entries) == 0
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if !toolArtefacts[entry.Name()] {
+			return false
+		}
+	}
+	return true
 }
 
 func removeAll(paths []string) error {
 	for _, p := range paths {
-		if !isEmptyDir(p) {
-			// Refuse anything that gained content between the check and the
+		if !holdsOnlyToolArtefacts(p) {
+			// Refuse anything that gained real content between the check and the
 			// repair: this deletes directories, and the check is the only thing
-			// that established they were empty.
-			return fmt.Errorf("%s is no longer empty; left alone", p)
+			// that established they held nothing worth keeping.
+			return fmt.Errorf("%s now holds files; left alone", p)
 		}
-		if err := os.Remove(p); err != nil {
+		if err := os.RemoveAll(p); err != nil {
 			return err
 		}
 	}

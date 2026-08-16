@@ -248,3 +248,28 @@ func TestQuickInspectionOmitsChecksItCannotAffordRatherThanPassingThem(t *testin
 		t.Fatal("the quick inspection checked nothing")
 	}
 }
+
+func TestToolArtefactsAreNotMistakenForWork(t *testing.T) {
+	// A candidate holding only the push-guard directory holds nothing of the
+	// user's, and refusing to clean it up leaves litter forever.
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo")
+	worktrees := filepath.Join(root, ".repo-worktrees")
+	guardOnly := filepath.Join(worktrees, "task-1")
+	if err := os.MkdirAll(filepath.Join(guardOnly, ".guard", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := checkAbandonedWorktrees(context.Background(), Options{RepoRoot: repo})
+	if c.Repair == nil {
+		t.Fatalf("a candidate holding only tool artefacts was treated as work: %+v", c)
+	}
+	if err := c.Repair(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(guardOnly); !os.IsNotExist(err) {
+		t.Fatal("the artefact-only candidate was not removed")
+	}
+}
