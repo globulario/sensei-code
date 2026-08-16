@@ -84,11 +84,36 @@ func (r Repo) CreateWorktree(ctx context.Context, taskID string) (string, error)
 		return "", err
 	}
 	branch := r.WorktreeBranch(taskID)
-	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, "HEAD")
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git worktree add: %w: %s", err, strings.TrimSpace(string(b)))
+	return path, r.addWorktree(ctx, path, branch, "HEAD")
+}
+
+// CreateWorktreeAt cuts a candidate from an exact commit rather than from
+// whatever HEAD happens to mean at this instant.
+//
+// The distinction matters on re-entry: a task interrupted and resumed later
+// must continue from the base its plan was approved against, and "HEAD" is not
+// that base once anything else has been committed.
+func (r Repo) CreateWorktreeAt(ctx context.Context, taskID, baseSHA string) (string, error) {
+	base := strings.TrimSpace(baseSHA)
+	if base == "" {
+		return "", fmt.Errorf("refusing to create a candidate worktree without an explicit base commit")
 	}
-	return path, nil
+	path := r.WorktreePath(taskID)
+	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
+		return path, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	return path, r.addWorktree(ctx, path, r.WorktreeBranch(taskID), base)
+}
+
+func (r Repo) addWorktree(ctx context.Context, path, branch, base string) error {
+	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, base)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git worktree add: %w: %s", err, strings.TrimSpace(string(b)))
+	}
+	return nil
 }
 
 func (r Repo) RemoveWorktree(ctx context.Context, path string) error {

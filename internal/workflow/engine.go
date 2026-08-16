@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -13,10 +12,11 @@ import (
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/behavioral"
+	"github.com/globulario/sensei-code/internal/broker"
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/event"
-	"github.com/globulario/sensei-code/internal/gitguard"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/publish"
@@ -173,6 +173,8 @@ type taskContext struct {
 	// Report is the rendered change report, set once the candidate is judged so
 	// the pull request body carries the same evidence the architect saw.
 	Report string
+	// Identity binds this task to the exact base it governs.
+	Identity candidate.Identity
 }
 
 // intent renders the architect's stated reasoning for the roles downstream.
@@ -235,8 +237,20 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
 
+	// The start gate runs before the architect is consulted. Its refusal is not
+	// overridable by the architect's decision, because an architect handed a
+	// stale or uncertifiable graph produces a confident, specific plan built on
+	// invariants that no longer hold — which reads as excellent work.
+	start, err := certifyStart(workspaceStatus, preflight)
+	if err != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
+		e.reportOutcome(ctx, "blocked", task, err.Error())
+		fail(err)
+		return
+	}
+
 	conversation := e.conversationSoFar(task, 40)
-	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, conversation, firstText(workspaceStatus), firstText(preflight)))
+	decision, err := e.resolveArchitecture(ctx, sc, start, taskID, task, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, conversation, firstText(workspaceStatus), firstText(preflight)))
 	if err != nil {
 		fail(err)
 		return
@@ -281,7 +295,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		return
 	}
 
-	e.implement(ctx, sc, taskID, &tc, plan, "", fail)
+	e.implement(ctx, sc, start, taskID, &tc, plan, "", fail)
 }
 
 // approvePlan shows the architect's bounded plan and waits for the human to
@@ -532,7 +546,7 @@ func planSummary(d architectureDecision) string {
 // tc is a pointer because the change report is produced here and read by the
 // caller when it offers publication. Taking it by value silently dropped the
 // report, and the pull request body went out with the evidence missing.
-func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, initialPlan string, worker config.Agent, workspace, carried string) (bool, string, string, string, error) {
+func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, tc *taskContext, initialPlan string, worker config.Agent, workspace, carried string) (bool, string, string, string, error) {
 	task := tc.Task
 	plan := initialPlan
 	// A handover from the previous worker is review feedback that has not been
@@ -540,20 +554,32 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 	feedback := carried
 	var lastReview, lastAudit string
 
-	// Publication is human-owned, so a worker's git is pointed at a hook that
-	// refuses pushes. Without this the capability flags were prompt text only.
-	var guardEnv []string
-	if !e.Config.Permissions.Push {
-		// Beside the candidates, never inside one: a guard installed in the
-		// worktree shows up in the worker's own working tree and can be
-		// committed into the change it is meant to protect. One shared location
-		// rather than one per task, because the hook is identical for all of
-		// them and a copy per task is litter nobody cleans up.
-		env, err := gitguard.Install(filepath.Join(filepath.Dir(workspace), ".guard"))
-		if err != nil {
-			return false, plan, lastReview, lastAudit, fmt.Errorf("install the push guard: %w", err)
+	// Candidate isolation is the blast-radius boundary, so it is checked rather
+	// than assumed: the workspace is a string threaded through several call
+	// sites, and one that accidentally holds the canonical root looks like
+	// nothing at all until a worker has edited the human's own files.
+	if err := broker.GuardCanonicalCheckout(e.Repo.Root, workspace); err != nil {
+		return false, plan, lastReview, lastAudit, err
+	}
+
+	// The declared capability envelope is realised here rather than described
+	// in a prompt. This runs unconditionally: force_push needs its own hook
+	// even when push itself is granted, which the previous push-only condition
+	// could not express.
+	envelope := broker.New(e.Config.Permissions)
+	guardEnv, err := envelope.Enforce(broker.GuardDir(e.Repo.Root, taskID), workspace)
+	if err != nil {
+		return false, plan, lastReview, lastAudit, fmt.Errorf("install the capability guard: %w", err)
+	}
+	if gaps := envelope.Unenforceable(); len(gaps) != 0 {
+		// Denied, but not mechanically preventable. Said out loud so the
+		// transcript never implies a boundary the runtime does not have.
+		names := make([]string, 0, len(gaps))
+		for _, g := range gaps {
+			names = append(names, string(g))
 		}
-		guardEnv = env
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"declared but not mechanically enforced: "+strings.Join(names, ", "), nil))
 	}
 
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
@@ -578,12 +604,35 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), nil))
 
-		audit, err := sc.CallTool("awareness_audit_diff", map[string]any{"diff": diff, "task": task})
+		auditArgs := map[string]any{"diff": diff, "task": task}
+		// Scope the audit to the domain the start gate certified, so the audit
+		// evaluates this candidate against this repository's rules rather than
+		// whatever the graph resolves by default.
+		if domain := start.Domain(); domain != "" {
+			auditArgs["domain"] = domain
+		}
+		// Bind the audit to the exact base this candidate was cut from, so its
+		// verdict names the pair it judged rather than an implied HEAD.
+		if base := tc.Identity.BaseSHA; base != "" {
+			auditArgs["expected_head"] = base
+		}
+		audit, err := sc.CallTool("awareness_audit_diff", auditArgs)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("Sensei diff audit: %w", err)
 		}
 		lastAudit = firstText(audit)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit, audit.Structured))
+
+		// The audit is decoded before the reviewer is consulted. The reviewer
+		// still receives the prose, because prose is what a model reasons over,
+		// but the verdict that governs acceptance is the structured one.
+		verdict, err := sensei.DecodeDiffAudit(audit)
+		if err != nil {
+			return false, plan, lastReview, lastAudit, err
+		}
+		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, audit.Structured))
+		}
 
 		review, err := e.resolveReview(ctx, taskID, reviewPrompt(*tc, plan, diff, lastAudit))
 		if err != nil {
@@ -592,6 +641,15 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		lastReview = review.Summary
 		switch review.Decision {
 		case "accept":
+			// Sensei owns this transition. A reviewer that accepts over a
+			// refusal does not conclude the candidate; the refusal becomes the
+			// next revision instruction instead.
+			if judged := judgeCandidate(review.Decision, verdict); !judged.Accepted {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					"reviewer accepted but Sensei refused; the refusal governs: "+judged.Refusal, audit.Structured))
+				feedback = reviseInstruction(judged)
+				continue
+			}
 			tc.Report = e.emitChangeReport(ctx, sc, taskID, tc, diff, lastAudit)
 			// The decision is recorded now rather than at approval. At approval
 			// the architect can only name files it intends to create, and a
@@ -606,7 +664,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case "escalate":
-			revised, err := e.resolveArchitecture(ctx, taskID, escalationPrompt(task, plan, lastAudit, review))
+			revised, err := e.resolveArchitecture(ctx, sc, start, taskID, task, escalationPrompt(task, plan, lastAudit, review))
 			if err != nil {
 				return false, plan, lastReview, lastAudit, err
 			}
@@ -635,6 +693,10 @@ type architectureDecision struct {
 	HumanQuestion  string             `json:"human_question,omitempty"`
 	Recommendation string             `json:"recommendation,omitempty"`
 	Options        []authority.Option `json:"options,omitempty"`
+	// Claims are the factual premises the plan rests on. They are evidence the
+	// router reads, not a verdict: a premise the architect marks "inference" is
+	// the model telling us nothing checked it.
+	Claims []Claim `json:"claims,omitempty"`
 }
 
 type reviewDecision struct {
@@ -643,7 +705,7 @@ type reviewDecision struct {
 	Instructions string `json:"instructions,omitempty"`
 }
 
-func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string) (architectureDecision, error) {
+func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
 	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -677,12 +739,55 @@ func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string)
 				lastErr = errors.New("architect returned PROCEED without a plan")
 				continue
 			}
+			// The architect proposes; it does not decide whether the proposal
+			// carries architectural authority. A confident model proceeding
+			// through a region the graph cannot cover is the exact failure this
+			// routing exists to catch, and it is invisible at the time because
+			// the model sounds no different than usual.
+			routing, err := e.routePlan(sc, start, task, d)
+			if err != nil {
+				return architectureDecision{}, err
+			}
+			switch {
+			case routing.Route == RouteCannotEstablish:
+				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
+			case routing.RequiresHuman():
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+				choice, err := e.awaitHuman(ctx, taskID, d, routing.Condition)
+				if err != nil {
+					return architectureDecision{}, err
+				}
+				prompt = humanResolutionPrompt(prompt, d, choice)
+				attempt = 0
+				continue
+			}
 			// No status line here: the caller renders this decision, either as a
 			// plan awaiting approval or as a revised plan during review. Emitting
 			// the summary as well printed it twice.
 			return d, nil
 		case "escalate":
-			choice, err := e.awaitHuman(ctx, taskID, d)
+			// A model asking to escalate is asking for more investigation. It
+			// does not by itself create a human interruption: if Sensei can
+			// certify the region, the certification is handed back and the
+			// architect decides architecturally. A nervous model must not be
+			// able to manufacture Level-3 events, for the same reason a
+			// confident one must not be able to skip them.
+			routing, err := e.routePlan(sc, start, task, d)
+			if err != nil {
+				return architectureDecision{}, err
+			}
+			if routing.Granted() {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
+				prompt = certifiedResolutionPrompt(prompt, d)
+				attempt = 0
+				continue
+			}
+			if routing.Route == RouteCannotEstablish {
+				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
+			}
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+			choice, err := e.awaitHuman(ctx, taskID, d, routing.Condition)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -725,7 +830,29 @@ func (e *Engine) resolveReview(ctx context.Context, taskID, prompt string) (revi
 	return reviewDecision{}, fmt.Errorf("reviewer could not produce a bounded decision: %w", lastErr)
 }
 
-func (e *Engine) awaitHuman(ctx context.Context, taskID string, d architectureDecision) (string, error) {
+// routePlan asks Sensei whether the region this plan intends to touch is one it
+// can certify, and routes authority on the answer.
+//
+// This is the first preflight in the workflow that can name files: the start
+// gate ran before a plan existed. The architect's own decision is not consulted
+// here and is not a parameter.
+func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string, d architectureDecision) (Routing, error) {
+	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
+	if domain := start.Domain(); domain != "" {
+		args["domain"] = domain
+	}
+	result, err := sc.CallTool("awareness_preflight", args)
+	if err != nil {
+		return Routing{}, fmt.Errorf("Sensei scoped preflight: %w", err)
+	}
+	scoped, err := sensei.DecodePreflight(result)
+	if err != nil {
+		return Routing{}, err
+	}
+	return routeAuthority(scoped, d.Claims), nil
+}
+
+func (e *Engine) awaitHuman(ctx context.Context, taskID string, d architectureDecision, condition string) (string, error) {
 	options := d.Options
 	if len(options) == 0 {
 		options = []authority.Option{
@@ -752,6 +879,12 @@ func (e *Engine) awaitHuman(ctx context.Context, taskID string, d architectureDe
 	}
 	if strings.TrimSpace(decision.Subject) == "" {
 		decision.Subject = "Architectural authority reached a human-owned boundary."
+	}
+	// Every Level-3 interruption states the condition that produced it. An
+	// interruption a human cannot trace back to a specific certifiability
+	// condition is one they learn to click through.
+	if condition = strings.TrimSpace(condition); condition != "" {
+		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
 	return e.awaitChoice(ctx, taskID, decision, options)
 }
@@ -886,9 +1019,24 @@ Return ONLY JSON in this exact shape:
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
-  "options": [{"id":"1","label":"...","description":"..."}]
+  "options": [{"id":"1","label":"...","description":"..."}],
+  "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference"}]
 }
 When escalating, provide 2 or 3 concrete options. Do not ask about ordinary implementation details.
+
+CLAIMS ARE REQUIRED WHENEVER YOU PROCEED. List every factual premise your plan
+depends on, and mark each one honestly:
+  graph      - you read it from Sensei (a briefing, an invariant, an impact result)
+  repository - you read it in the code or in a file in this repository
+  inference  - you concluded it without checking
+
+Mark a premise "inference" whenever you did not actually verify it. That is not a
+failure and it is not penalised: it routes the plan to a human for that one
+premise, which is exactly what should happen. Claiming "graph" or "repository"
+for something you reasoned your way to is the only wrong answer here, because it
+converts an unchecked assumption into certified authority. Whether the plan
+proceeds is decided from Sensei evidence, not from how confident you sound, so
+there is nothing to gain by overstating a source.
 
 You are resumed fresh for every turn, so the dialogue so far is given below. Continue it:
 you have already met this person if it is not empty. Introduce yourself and say what this
@@ -1040,6 +1188,33 @@ PREVIOUS ESCALATION:
 %s`, original, choice, d.Summary)
 }
 
+// certifiedResolutionPrompt answers an architect that asked to escalate a
+// question Sensei can in fact certify.
+//
+// The reply is deliberately not "you were wrong to ask". The architect gets the
+// certification as evidence and is asked to decide on it, because the useful
+// behaviour to reinforce is asking when unsure, not staying quiet — what must
+// not happen is the asking alone interrupting a human.
+func certifiedResolutionPrompt(original string, d architectureDecision) string {
+	return fmt.Sprintf(`%s
+
+AUTHORITY ROUTING RESULT:
+You asked to escalate this to a human. Sensei certifies the region your plan
+touches: the graph is authoritative and current, it covers the planned files,
+and it reports no blind spots or approval gate for this change class.
+
+That means this question has architectural authority and does not require a
+human. Decide it yourself on the evidence and return ONLY architecture JSON with
+decision="proceed" and a bounded plan.
+
+If you still believe a human must decide, the plan must name the specific
+premise you cannot verify as a claim with source="inference"; a general feeling
+of risk is not a human-owned boundary.
+
+YOUR PREVIOUS ESCALATION:
+%s`, original, d.Summary)
+}
+
 // conversationOrNone keeps the architect prompt unambiguous: an empty section
 // could read as truncation, so a first turn says so explicitly.
 func conversationOrNone(conversation string) string {
@@ -1053,18 +1228,35 @@ func conversationOrNone(conversation string) string {
 // It is separate from run so a resumed task can enter here: the architect has
 // already decided and the human has already approved, and asking either of them
 // again would be inventing a decision that was made before the restart.
-func (e *Engine) implement(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, plan, carried string, fail func(error)) {
+func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, tc *taskContext, plan, carried string, fail func(error)) {
 	task := tc.Task
 	// One candidate for the whole task. A worker that runs out of review cycles
 	// hands the work on rather than taking it with it, so the next worker
 	// continues from the same checkout and keeps every fix the reviewer has
 	// already extracted.
-	workspace, createErr := e.Repo.CreateWorktree(ctx, taskID)
+	// The base is established before the worktree exists and is never
+	// recomputed afterwards, so a resumed task continues from the state its
+	// plan was approved against rather than from wherever HEAD has moved to.
+	identity, idErr := candidate.Establish(
+		e.Repo.Root, taskID, start.Domain(),
+		e.Repo.WorktreePath(taskID), e.Repo.WorktreeBranch(taskID),
+		repoHead{ctx: ctx, repo: e.Repo}, time.Now(),
+	)
+	if idErr != nil {
+		fail(idErr)
+		return
+	}
+	if bound, err := identity.BindGraph(e.Repo.Root, start.GraphBuildCommit(), start.SourceRepoCommit()); err == nil {
+		identity = bound
+	}
+	tc.Identity = identity
+
+	workspace, createErr := e.Repo.CreateWorktreeAt(ctx, taskID, identity.BaseSHA)
 	if createErr != nil {
 		fail(fmt.Errorf("create the candidate worktree: %w", createErr))
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"workspace": workspace}))
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, identity.Summary(), identity))
 
 	// carried arrives non-empty on a resume, so the first worker starts from the
 	// findings the interrupted run had already earned.
@@ -1074,7 +1266,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, taskID string
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
 		}
-		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, tc, plan, worker, workspace, carried)
+		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
 		if err != nil {
 			failures = append(failures, worker.Name+": "+err.Error())
 			// The candidate stays: it holds real work, and the reviewer's
@@ -1136,12 +1328,38 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
 
+		// Resume re-runs the full start gate, not just the workspace read. A
+		// task interrupted an hour ago was certified against the graph as it
+		// stood then; the graph may have been rebuilt, gone stale, or lost its
+		// domain binding since. Resuming on the strength of the earlier
+		// certification would carry a receipt across a gap in which the thing
+		// it certified changed.
+		preflightArgs := map[string]any{"task": task.Task, "files": []string{}, "mode": "compact"}
+		if domain := sensei.RepositoryDomain(workspaceStatus); domain != "" {
+			preflightArgs["domain"] = domain
+		}
+		preflight, err := sc.CallTool("awareness_preflight", preflightArgs)
+		if err != nil {
+			fail(fmt.Errorf("Sensei preflight: %w", err))
+			return
+		}
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
+
+		start, err := certifyStart(workspaceStatus, preflight)
+		if err != nil {
+			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
+			e.reportOutcome(ctx, "blocked", task.Task, err.Error())
+			fail(err)
+			return
+		}
+
 		tc := taskContext{
 			Task:            task.Task,
 			Conversation:    e.conversationSoFar(task.Task, 40),
 			WorkspaceStatus: firstText(workspaceStatus),
+			Preflight:       firstText(preflight),
 			Rationale:       task.Plan,
-			Domain:          sensei.RepositoryDomain(workspaceStatus),
+			Domain:          start.Domain(),
 		}
 		carried := ""
 		if r := strings.TrimSpace(task.Review); r != "" {
@@ -1149,7 +1367,17 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
-		e.implement(ctx, sc, task.TaskID, &tc, task.Plan, carried, fail)
+		e.implement(ctx, sc, start, task.TaskID, &tc, task.Plan, carried, fail)
 	}()
 	return task.TaskID
 }
+
+// repoHead adapts the context-taking git surface to the narrow interface the
+// candidate package needs, so identity policy stays testable without a repo.
+type repoHead struct {
+	ctx  context.Context
+	repo gitx.Repo
+}
+
+func (r repoHead) Head() (string, error)  { return r.repo.Head(r.ctx) }
+func (r repoHead) IsClean() (bool, error) { return r.repo.IsClean(r.ctx) }
