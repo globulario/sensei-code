@@ -157,11 +157,61 @@ The first Go foundation is being built around these boundaries:
 - autonomous bounded review/repair cycles
 - Sensei deterministic diff audit before reviewer acceptance
 - Level-3 human authority rendezvous and resume
-- `sensei-code doctor` readiness checks
+- `sensei-code doctor` readiness checks, naming the fix for each failure
+- an architect command set over Sensei: `/report`, `/focus`, `/why`, `/debt`,
+  `/audit`, `/gate`, `/refactor`, `/learn`
+- plan proposed and accepted by the human before any worker starts
+- guidance typed during a run, delivered at the next worker cycle
+- one candidate per task, handed between workers instead of restarted
+- `/resume` for a task interrupted after approval
+- pull request creation from an accepted candidate, never a merge
 
 The foundation deliberately stops short of pretending that reviewer acceptance is Sensei admission. The next governed slice binds candidate output to Sensei's canonical admission/apply/verification contracts.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/implementation-status.md](docs/implementation-status.md).
+
+## Commands
+
+Anything you type that is not a command is a task: describe it and the architect
+plans it, you accept the plan, and only then does a worker touch a candidate.
+The commands answer questions without starting any work. `/help` lists them, and
+that listing is generated from the same declaration the dispatcher reads, so it
+cannot describe a command that does not exist.
+
+**Understand the codebase**
+
+| | |
+|---|---|
+| `/report` | what Sensei knows about this repository, with each count's provenance |
+| `/focus <path>` | what governs one file, before you change it |
+| `/why <id>` | read the rule behind a name, what it protects and what proves it |
+| `/debt` | the surfaces no invariant protects, largest first |
+
+**Keep a change under control**
+
+| | |
+|---|---|
+| `/audit` | Sensei's own repository evaluation and corpus validation, quoted |
+| `/gate` | check the working diff against what governs it, before you commit |
+| `/refactor <target>` | ask the architect for a bounded refactor plan |
+
+**Teach Sensei**
+
+| | |
+|---|---|
+| `/learn <what broke>` | queue a scar so the next agent cannot repeat it |
+
+**Session**: `/resume`, `/login`, `/mcp`, `/clear`, `/help`.
+
+Two habits are worth forming. `/focus` before editing a file tells you what it is
+bound by; on a governed path it will say `SECURITY_RISK · human_approval_required`
+rather than letting you find out afterwards. `/debt` tells you where an agent's
+change would meet nothing that could refuse it, which is where AI-written code
+accumulates risk fastest.
+
+Every command ends with what it does not establish. A count measures what is
+recorded, never whether the code obeys it, and a class Sensei holds nothing for
+is knowledge it was never given rather than evidence the repository is clean.
 
 ## Experience
 

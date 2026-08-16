@@ -865,6 +865,9 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		case "/focus":
 			text, err := architect.RunFocus(client, domain, arg)
 			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/why":
+			text, err := architect.RunWhy(client, domain, arg)
+			return commandResultMsg{name: c.Name, text: text, err: err}
 		case "/learn":
 			text, err := architect.RunLearn(client, domain, arg)
 			return commandResultMsg{name: c.Name, text: text, err: err}

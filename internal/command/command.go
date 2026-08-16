@@ -57,6 +57,11 @@ var Registry = []Command{
 		Detail:  "Sensei's briefing and impact for a path: the invariants that protect it, the failure modes recorded against it, the fixes forbidden there, and the tests that must pass.",
 	},
 	{
+		Name: "/why", Arg: "<invariant or failure id>", Kind: Understand, NeedsIdle: true,
+		Summary: "read the rule behind a name Sensei gave you",
+		Detail:  "Resolves one invariant, failure mode or forbidden fix and shows what it says, what it protects and which tests prove it. A rule you cannot read is a rule you cannot follow.",
+	},
+	{
 		Name: "/debt", Kind: Understand, NeedsIdle: true,
 		Summary: "where this repository is ungoverned",
 		Detail:  "Ranks the surfaces carrying code that no invariant protects. This is the debt an agent accumulates fastest, because ungoverned code is where nothing can refuse a bad change.",

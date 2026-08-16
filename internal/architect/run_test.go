@@ -86,3 +86,26 @@ func TestFocusFailsWhenSenseiRefuses(t *testing.T) {
 		t.Fatal("focus reported on a briefing Sensei never gave")
 	}
 }
+
+func TestWhyAcceptsEitherFormOfAnID(t *testing.T) {
+	// An architect copies whichever form they were shown: /focus prints the
+	// bare corpus id, awareness_query prints the class-prefixed one.
+	cases := map[string]string{
+		"sensei_code.publication.never_merges":           "invariant:sensei_code.publication.never_merges",
+		"invariant:sensei_code.publication.never_merges": "invariant:sensei_code.publication.never_merges",
+		"failure.sensei_code.something_broke":            "failure_mode:failure.sensei_code.something_broke",
+		"forbidden_fix.sensei_code.do_not_do_this":       "forbidden_fix:forbidden_fix.sensei_code.do_not_do_this",
+	}
+	for given, want := range cases {
+		if got := qualify(given); got != want {
+			t.Fatalf("qualify(%q) = %q, want %q", given, got, want)
+		}
+	}
+}
+
+func TestWhyRefusesAnEmptyAnswerRatherThanShowingNothing(t *testing.T) {
+	c := &fakeCaller{results: map[string]sensei.ToolResult{"awareness_query": {}}}
+	if _, err := RunWhy(c, "d", "sensei_code.nope"); err == nil {
+		t.Fatal("an id Sensei holds nothing for was rendered as a rule")
+	}
+}

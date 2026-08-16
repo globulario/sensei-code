@@ -275,3 +275,128 @@ func firstLine(text string, limit int) string {
 	}
 	return text
 }
+
+// RunWhy reads back one rule by id.
+//
+// /focus names the invariants that govern a file, and a name is not a rule. An
+// architect asked to "verify invariant X still holds" cannot do that without
+// reading X, and a rule that cannot be read is one that will be guessed at.
+func RunWhy(caller Caller, domain, id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", errors.New("/why needs an id: /why sensei_code.publication.never_merges")
+	}
+	bare := normaliseID(id)
+	// The class is usually implied by the id, but an architect copies whatever
+	// they were shown, so the others are tried rather than refusing on a guess.
+	for _, class := range candidateClasses(id) {
+		args := map[string]any{"class": class, "id": bare}
+		if domain != "" {
+			args["domain"] = domain
+		}
+		result, err := caller.CallTool("awareness_resolve", args)
+		if err != nil {
+			continue
+		}
+		node, ok := result.Structured["node"].(map[string]any)
+		if !ok || node == nil {
+			continue
+		}
+		return renderNode(class, node), nil
+	}
+	// Holding nothing under this id is not the same as the rule not mattering;
+	// most often the id was mistyped or belongs to another domain.
+	return "", fmt.Errorf("Sensei holds no invariant, failure mode or forbidden fix under %q in this domain", id)
+}
+
+func candidateClasses(id string) []string {
+	switch {
+	case strings.HasPrefix(id, "failure"):
+		return []string{"failure_mode", "invariant", "forbidden_fix"}
+	case strings.HasPrefix(id, "forbidden_fix"):
+		return []string{"forbidden_fix", "invariant", "failure_mode"}
+	default:
+		return []string{"invariant", "failure_mode", "forbidden_fix"}
+	}
+}
+
+// renderNode shows the rule and, just as importantly, what proves it. An
+// invariant with no test behind it is an intention rather than a guarantee, and
+// the reader should be able to see which one they have.
+func renderNode(class string, node map[string]any) string {
+	var b strings.Builder
+	b.WriteString("Why — " + str(node, "id") + "\n")
+	b.WriteString("  " + class)
+	if severity := str(node, "severity"); severity != "" {
+		b.WriteString(" · " + severity)
+	}
+	if status := str(node, "status"); status != "" {
+		b.WriteString(" · " + status)
+	}
+	b.WriteString("\n\n  " + str(node, "label") + "\n")
+
+	protects, tests, other := splitRelated(node)
+	writeList(&b, "  protects:", protects)
+	writeList(&b, "  proven by:", tests)
+	writeList(&b, "  related:", other)
+	if len(tests) == 0 {
+		b.WriteString("\n  no test is recorded against this rule, so it states an intention rather than\n  something that would be caught if it were broken\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func splitRelated(node map[string]any) (protects, tests, other []string) {
+	raw, _ := node["related_ids"].([]any)
+	for _, item := range raw {
+		id, _ := item.(string)
+		switch {
+		case strings.HasPrefix(id, "source_file:"):
+			protects = append(protects, strings.TrimPrefix(id, "source_file:"))
+		case strings.HasPrefix(id, "test:"):
+			tests = append(tests, strings.TrimPrefix(id, "test:"))
+		case id != "":
+			other = append(other, id)
+		}
+	}
+	return
+}
+
+func writeList(b *strings.Builder, title string, items []string) {
+	if len(items) == 0 {
+		return
+	}
+	b.WriteString("\n" + title + "\n")
+	for _, item := range items {
+		b.WriteString("    " + item + "\n")
+	}
+}
+
+// qualify accepts the id in either the form Sensei prints or the bare corpus
+// form, because an architect copies whichever one they were shown.
+func qualify(id string) string {
+	for _, prefix := range []string{"invariant:", "failure_mode:", "failure:", "forbidden_fix:"} {
+		if strings.HasPrefix(id, prefix) {
+			return id
+		}
+	}
+	switch {
+	case strings.HasPrefix(id, "failure."):
+		return "failure_mode:" + id
+	case strings.HasPrefix(id, "forbidden_fix."):
+		return "forbidden_fix:" + id
+	default:
+		return "invariant:" + id
+	}
+}
+
+// normaliseID strips the class prefix Sensei's graph queries print, so an id
+// copied from either surface resolves.
+func normaliseID(id string) string {
+	id = strings.TrimSpace(id)
+	for _, prefix := range []string{"invariant:", "failure_mode:", "failure:", "forbidden_fix:"} {
+		if strings.HasPrefix(id, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(id, prefix))
+		}
+	}
+	return id
+}
