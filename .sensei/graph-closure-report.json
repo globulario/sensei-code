@@ -1,0 +1,16 @@
+{
+  "domain": "github.com/globulario/sensei-code",
+  "certified_source_root": "/home/dave/Documents/github.com/globulario/sensei-code/docs/awareness",
+  "marker_digest_sha256": "c6a2893142e5c9652a39f2f9042e72f4e6f27f928d51291426eebbc6b0276710",
+  "source_identities": 161,
+  "expected_to_project": 161,
+  "identities_projected": 161,
+  "identities_missing": 0,
+  "identities_explicitly_excluded": 2,
+  "unexpected_foreign_provenance": 0,
+  "unresolved_attribution": 0,
+  "class_emits_no_provenance": 2,
+  "duplicate_canonical_subjects": 0,
+  "published_triples": 120985,
+  "closure_proven": true
+}
