@@ -262,3 +262,42 @@ func asContractError(err error, target **ContractError) bool {
 	}
 	return ok
 }
+
+// TestUnverifiableAuditIsNotActionable pins the distinction a real run needed.
+//
+// A blocking finding names something in the candidate, so the worker can change
+// it. An audit that could not run names something about the environment, and no
+// edit to the candidate changes that. Treating the second as the first made one
+// run produce a byte-identical diff four times.
+func TestUnverifiableAuditIsNotActionable(t *testing.T) {
+	unverifiable, err := DecodeDiffAudit(structured(t, "", `{
+		"decision": "cannot_verify", "availability": "cannot_verify",
+		"reason_codes": ["graph_unavailable"],
+		"limitations": ["graph impact query failed for internal/tui/x_test.go: context deadline exceeded"]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unverifiable.Actionable() {
+		t.Fatal("an audit that could not run was treated as something the worker can fix")
+	}
+	// And the reason must reach whoever reads it.
+	d := unverifiable.Diagnostic()
+	if !strings.Contains(d, "graph impact query failed") {
+		t.Fatalf("diagnostic drops the limitation that explains the verdict: %q", d)
+	}
+	if !strings.Contains(d, "internal/tui/x_test.go") {
+		t.Fatalf("diagnostic does not name the file the audit failed on: %q", d)
+	}
+
+	blocking, err := DecodeDiffAudit(structured(t, "", `{
+		"decision": "block", "availability": "available",
+		"findings": [{"id":"inv.x","file":"a.go","disposition":"block","detail":"widens scope"}]
+	}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !blocking.Actionable() {
+		t.Fatal("a blocking finding was treated as unfixable, which would stop the review loop that is supposed to fix it")
+	}
+}

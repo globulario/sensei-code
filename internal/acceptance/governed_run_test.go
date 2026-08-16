@@ -280,8 +280,12 @@ func repoRoot(t *testing.T) string {
 
 func oneLine(s string) string {
 	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " · "))
-	if len(s) > 160 {
-		return s[:160] + "…"
+	// Deliberately generous. The first run truncated a diff audit at 160
+	// characters and cut off the limitations, which were the only part that
+	// said why the audit could not be performed -- so the log recorded that
+	// something went wrong and hid what.
+	if len(s) > 1200 {
+		return s[:1200] + "…"
 	}
 	return s
 }

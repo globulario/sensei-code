@@ -647,6 +647,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			if judged := judgeCandidate(review.Decision, verdict); !judged.Accepted {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"reviewer accepted but Sensei refused; the refusal governs: "+judged.Refusal, audit.Structured))
+				// A refusal the worker cannot act on must stop the loop rather
+				// than drive it. An audit that could not run objects to the
+				// environment, not to the candidate, so sending it back produces
+				// a byte-identical diff and consumes the next cycle for nothing.
+				if !verdict.Actionable() {
+					return false, plan, lastReview, lastAudit, fmt.Errorf(
+						"Sensei could not verify this candidate and no edit to it would change that: %s", judged.Refusal)
+				}
 				feedback = reviseInstruction(judged)
 				continue
 			}

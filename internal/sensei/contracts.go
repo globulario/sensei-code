@@ -285,6 +285,29 @@ func (d DiffAuditDecision) ReviewerMayAccept() bool {
 // merely could not be completed.
 func (d DiffAuditDecision) Blocks() bool { return d.Decision == AuditBlock }
 
+// Actionable reports whether a worker could plausibly fix what the audit
+// objected to.
+//
+// A blocking finding names something in the candidate: the worker changes the
+// code and the next audit differs. An audit that could not run names something
+// about the environment -- the graph was unreachable, the snapshot shifted, the
+// repository context was missing -- and no edit to the candidate changes that.
+//
+// The distinction is not pedantry, it is the difference between a review loop
+// that converges and one that burns every cycle on identical work. A real run
+// produced the same 3078-byte diff four times because an unverifiable audit was
+// handed back as though it were a finding to address.
+func (d DiffAuditDecision) Actionable() bool {
+	switch d.Decision {
+	case AuditBlock, AuditReview:
+		return true
+	case AuditCannotVerify:
+		return false
+	default:
+		return false
+	}
+}
+
 // Diagnostic explains why acceptance is not available, naming the findings
 // that carry the refusal so the worker gets something it can act on.
 func (d DiffAuditDecision) Diagnostic() string {
@@ -317,6 +340,14 @@ func (d DiffAuditDecision) Diagnostic() string {
 	}
 	if len(d.ReasonCodes) != 0 {
 		parts = append(parts, "reason codes: "+strings.Join(d.ReasonCodes, ", "))
+	}
+	// Limitations carry the sentence that actually explains the verdict --
+	// which file, which query, which mismatch. Without them a cannot_verify
+	// reaches the worker as the bare token "graph_unavailable", which is not
+	// something anyone can act on. One real run spent four review cycles
+	// producing a byte-identical diff because that was all it had been told.
+	if len(d.Limitations) != 0 {
+		parts = append(parts, strings.Join(d.Limitations, "; "))
 	}
 	return strings.Join(parts, " · ")
 }
