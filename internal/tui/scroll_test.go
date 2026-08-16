@@ -25,8 +25,7 @@ func TestTheTopOfTheTranscriptIsReachable(t *testing.T) {
 	if strings.Contains(m.View().Content, "line-000") {
 		t.Fatal("the first line is visible at the bottom, so this proves nothing")
 	}
-	m.atBottom = false
-	m.scrollTop = 0
+	m.scrollUp = 10000 // further than the transcript is long
 	if !strings.Contains(m.View().Content, "line-000") {
 		t.Fatal("scrolling to the top does not reach the first line")
 	}
@@ -53,10 +52,10 @@ func TestPagingUpFromTheBottomContinuesFromTheScreen(t *testing.T) {
 	if !handled {
 		t.Fatal("pgup was not handled")
 	}
-	if scrolled.atBottom {
+	if scrolled.scrollUp == 0 {
 		t.Fatal("paging up left the view following new output")
 	}
-	if scrolled.scrollTop == 0 {
+	if strings.Contains(scrolled.View().Content, "line-000") {
 		t.Fatal("one page up jumped to the very top instead of one screen back")
 	}
 	if !strings.Contains(scrolled.View().Content, "line-1") {
@@ -66,10 +65,9 @@ func TestPagingUpFromTheBottomContinuesFromTheScreen(t *testing.T) {
 
 func TestReturningToTheBottomFollowsNewOutputAgain(t *testing.T) {
 	m := transcript(24)
-	m.atBottom = false
-	m.scrollTop = 0
+	m.scrollUp = 10000
 	returned, handled := m.scroll("ctrl+g")
-	if !handled || !returned.atBottom {
+	if !handled || returned.scrollUp != 0 {
 		t.Fatal("ctrl+g did not return to following new output")
 	}
 	if !strings.Contains(returned.View().Content, "line-199") {
@@ -92,5 +90,30 @@ func TestResizingChangesHowMuchIsVisible(t *testing.T) {
 	large := len(strings.Split(transcript(40).View().Content, "\n"))
 	if large <= small {
 		t.Fatalf("a taller terminal rendered %d rows, not more than %d", large, small)
+	}
+}
+
+func TestASingleLineScrollActuallyMoves(t *testing.T) {
+	// The arrow keys appeared dead because the key handler estimated the bottom
+	// with different arithmetic than the renderer, so one line was clamped back.
+	m := transcript(24)
+	moved, handled := m.scroll("up")
+	if !handled {
+		t.Fatal("up was not handled")
+	}
+	if moved.View().Content == m.View().Content {
+		t.Fatal("scrolling up one line changed nothing on screen")
+	}
+}
+
+func TestScrollingPastTheStartRestsAtTheStart(t *testing.T) {
+	m := transcript(24)
+	m.scrollUp = 1 << 20
+	content := m.View().Content
+	if !strings.Contains(content, "line-000") {
+		t.Fatal("scrolling far past the start does not show the start")
+	}
+	if !strings.Contains(content, "top of the conversation") {
+		t.Fatalf("the reader is not told they are at the start:\n%s", content)
 	}
 }

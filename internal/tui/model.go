@@ -102,11 +102,16 @@ type Model struct {
 	startedAt time.Time
 	wordIdx   int
 	activity  string
-	// scrollTop is the first transcript row shown when the reader has scrolled
-	// back. atBottom follows new output instead, which is what you want while a
-	// task is running and not what you want while reading something above it.
-	scrollTop int
-	atBottom  bool
+	// scrollUp is how many rows above the newest the transcript is scrolled,
+	// zero meaning it follows new output.
+	//
+	// It is an offset from the bottom rather than an absolute row, because the
+	// bottom is the only position both this and the renderer can agree on
+	// without duplicating the height arithmetic. An earlier version stored the
+	// top row and recomputed it here with a slightly different formula, so a
+	// one-line scroll was clamped straight back and the arrow keys appeared
+	// dead.
+	scrollUp int
 }
 
 func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event, history []event.Event) Model {
@@ -118,13 +123,12 @@ func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event
 	ta.ShowLineNumbers = false
 	focusCmd := ta.Focus()
 	m := Model{
-		ctx:      ctx,
-		engine:   engine,
-		events:   events,
-		input:    ta,
-		initCmd:  focusCmd,
-		lines:    append(banner(len(history) > 0), replayConversation(history)...),
-		atBottom: true,
+		ctx:     ctx,
+		engine:  engine,
+		events:  events,
+		input:   ta,
+		initCmd: focusCmd,
+		lines:   append(banner(len(history) > 0), replayConversation(history)...),
 		// A task that was approved and then interrupted still has its candidate
 		// on disk. Offering it is the difference between resuming work and
 		// silently abandoning it.
@@ -189,6 +193,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.SetWidth(max(20, msg.Width-6))
+	case tea.MouseWheelMsg:
+		switch msg.Button {
+		case tea.MouseWheelUp:
+			m.scrollUp += 3
+		case tea.MouseWheelDown:
+			m.scrollUp = max(0, m.scrollUp-3)
+		}
+		cmds = append(cmds, tea.ClearScreen)
 	case tickMsg:
 		if m.busy || m.running != "" {
 			m.frame++
@@ -381,7 +393,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+text, "")
 			m.input.Reset()
 			m.currentTask = m.engine.Submit(m.ctx, text)
-			m.atBottom = true
+			m.scrollUp = 0
 			cmds = append(cmds, tea.ClearScreen)
 			return m, tea.Batch(cmds...)
 		}
@@ -542,10 +554,9 @@ func (m Model) View() tea.View {
 		// content rather than overwriting it: hiding a line to announce that
 		// lines are hidden is the opposite of the point.
 		visible = available - 1
-		top := len(rows) - visible
-		if !m.atBottom {
-			top = min(max(0, m.scrollTop), top)
-		}
+		// Clamped here, where the wrapped row count is finally known. Scrolling
+		// past the start simply rests at the start.
+		top := len(rows) - visible - min(m.scrollUp, max(0, len(rows)-visible))
 		hidden = top
 		rows = rows[top : top+visible]
 	}
@@ -562,13 +573,17 @@ func (m Model) View() tea.View {
 	if len(rows) < available {
 		// Say what is above and how to reach it; a reader otherwise has no way
 		// to know the transcript continues past the top of the window.
-		note := fmt.Sprintf("  ↑ %d earlier line%s · PgUp/PgDn to scroll", hidden, plural(hidden))
+		note := fmt.Sprintf("  ↑ %d earlier line%s · ↑↓ or wheel to scroll · ctrl+g for the end", hidden, plural(hidden))
 		if hidden == 0 {
-			note = "  ↑ top of the conversation · PgDn or ctrl+g to return"
+			note = "  ↑ top of the conversation · ↓ or ctrl+g to return"
 		}
 		body = padRow(hintStyle.Render(note), width) + "\n" + body
 	}
 	v := tea.NewView(body + "\n" + bottom)
+	// The wheel is what most people try first, and in the alternate screen the
+	// terminal's own scrollback is unavailable, so without this there is no
+	// pointer gesture that works at all.
+	v.MouseMode = tea.MouseModeCellMotion
 	v.AltScreen = true
 	v.WindowTitle = "Sensei Code"
 	return v
@@ -965,37 +980,30 @@ func indentBlock(text, prefix string) string {
 func (m Model) scroll(key string) (Model, bool) {
 	page := max(1, m.height-8)
 	switch key {
+	// Arrow keys scroll: the composer is a single line, so up and down do
+	// nothing there, and they are the first thing a reader reaches for. PgUp is
+	// kept but cannot be relied on alone, because terminals and multiplexers
+	// routinely capture it for their own scrollback before the program sees it.
+	case "up", "shift+up", "ctrl+p":
+		m.scrollUp++
+	case "down", "shift+down", "ctrl+n":
+		m.scrollUp = max(0, m.scrollUp-1)
+	case "ctrl+u":
+		m.scrollUp += page / 2
+	case "ctrl+d":
+		m.scrollUp = max(0, m.scrollUp-page/2)
 	case "pgup":
-		m.scrollTop = max(0, m.scrollPosition()-page)
-		m.atBottom = false
+		m.scrollUp += page
 	case "pgdown":
-		m.scrollTop = m.scrollPosition() + page
-		m.atBottom = false
-	case "shift+up":
-		m.scrollTop = max(0, m.scrollPosition()-1)
-		m.atBottom = false
-	case "shift+down":
-		m.scrollTop = m.scrollPosition() + 1
-		m.atBottom = false
-	case "ctrl+g":
-		// Back to following new output, without having to page down through
-		// everything that arrived while reading.
-		m.atBottom = true
-		return m, true
+		m.scrollUp = max(0, m.scrollUp-page)
+	case "ctrl+g", "end":
+		// Back to following new output, without paging down through everything
+		// that arrived while reading.
+		m.scrollUp = 0
 	default:
 		return m, false
 	}
 	return m, true
-}
-
-// scrollPosition is where the window currently starts, so paging up from the
-// bottom continues from what is on screen rather than from row zero.
-func (m Model) scrollPosition() int {
-	if !m.atBottom {
-		return m.scrollTop
-	}
-	rows := len(wrapRows(m.lines, max(40, m.width)))
-	return max(0, rows-max(3, m.height-8))
 }
 
 func plural(n int) string {
