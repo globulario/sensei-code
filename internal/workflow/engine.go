@@ -752,6 +752,19 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
 			case routing.RequiresHuman():
+				// Authorizing does not change the graph, so the router will
+				// reach this same condition on the next plan. Ask once per
+				// condition per task and then honour the answer, or the human
+				// is interrogated in a loop and the run never starts.
+				if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition); asked {
+					if !authorized {
+						return architectureDecision{}, fmt.Errorf(
+							"the human declined this architectural change and the plan still requires it: %s", routing.Condition)
+					}
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
+					return d, nil
+				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
 				choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
 				if err != nil {
@@ -785,6 +798,15 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			}
 			if routing.Route == RouteCannotEstablish {
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
+			}
+			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition); asked {
+				if !authorized {
+					return architectureDecision{}, fmt.Errorf(
+						"the human declined this and the architect returned to it: %s", routing.Condition)
+				}
+				prompt = certifiedResolutionPrompt(prompt, d)
+				attempt = 0
+				continue
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
 			choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
@@ -1518,4 +1540,54 @@ func openFindings(review, audit string, cause error) []taskstate.Finding {
 		out = append(out, taskstate.Finding{Source: "previous worker stopped", Detail: cause.Error()})
 	}
 	return out
+}
+
+// answeredConditions reports the certifiability conditions this task has
+// already put to the human, and whether each answer authorized the work.
+//
+// It exists because authorizing does not change the graph. The router reads
+// Sensei, Sensei still reports the region uncovered, and without this the same
+// condition escalates again on the very next plan -- which is what happened:
+// one acceptance run asked the human the identical question thirteen times and
+// never reached a candidate. The human's answer has to be remembered by the
+// thing that would otherwise ask again.
+//
+// This is deliberately run-scoped and read from the session record. It is not a
+// cache of canon and it does not make the answer project knowledge: that path
+// is authority.Persist, and it stays separate. What is remembered here binds
+// this task only, which is exactly the status a resolution has before Sensei
+// promotes it.
+func (e *Engine) answeredConditions(taskID string) map[string]bool {
+	out := map[string]bool{}
+	if e.Store == nil {
+		return out
+	}
+	events, err := e.Store.Load()
+	if err != nil {
+		return out
+	}
+	for _, ev := range events {
+		if ev.TaskID != taskID || ev.Kind != event.AuthorityResolved {
+			continue
+		}
+		var res authority.Resolution
+		if json.Unmarshal(ev.Payload, &res) != nil {
+			continue
+		}
+		if c := strings.TrimSpace(res.Condition); c != "" {
+			out[c] = authority.Authorizes(res.OptionLabel)
+		}
+	}
+	return out
+}
+
+// applyAnsweredCondition decides what to do with a routing whose condition the
+// human has already settled for this task.
+//
+// authorized reports whether the run may proceed without asking again. asked
+// reports whether the question has been put at all, so a caller can tell "the
+// human said yes" from "the human has not been asked".
+func (e *Engine) applyAnsweredCondition(taskID, condition string) (authorized, asked bool) {
+	answer, ok := e.answeredConditions(taskID)[strings.TrimSpace(condition)]
+	return answer, ok
 }

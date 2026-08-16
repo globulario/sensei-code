@@ -307,3 +307,42 @@ func exprPath(e ast.Expr) string {
 		return ""
 	}
 }
+
+// TestAnAnsweredConditionIsNotAskedTwice is the loop the acceptance run found.
+//
+// Authorizing does not change the graph. The router reads Sensei, Sensei still
+// reports the region uncovered, and the identical condition escalates on the
+// very next plan. One real run asked the human the same question thirteen times
+// and never reached a candidate.
+func TestAnAnsweredConditionIsNotAskedTwice(t *testing.T) {
+	body := fileText(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "applyAnsweredCondition") {
+		t.Fatal("the escalation path does not consult conditions the human already answered")
+	}
+	fn := funcBody(t, "internal/workflow/engine.go", "answeredConditions")
+	if !strings.Contains(fn, "e.Store.Load") {
+		t.Error("answered conditions are not read from the session record")
+	}
+	if !strings.Contains(fn, "authority.Authorizes") {
+		t.Error("an answer is not classified, so a refusal would read the same as an authorization")
+	}
+}
+
+// TestRememberingAnAnswerIsNotMakingItCanonical keeps the two paths apart. The
+// run-scoped memory binds this task only; whether the answer becomes project
+// knowledge is still Sensei's decision via authority.Persist.
+func TestRememberingAnAnswerIsNotMakingItCanonical(t *testing.T) {
+	fn := funcBody(t, "internal/workflow/engine.go", "answeredConditions")
+	if strings.Contains(fn, "authority.Persist") {
+		t.Error("the run-scoped memory writes to Sensei; remembering an answer must not promote it")
+	}
+	if strings.Contains(fn, "os.ReadFile") || strings.Contains(fn, "os.WriteFile") {
+		t.Error("answered conditions use a separate store; the session record is the one source")
+	}
+	// The router still knows nothing about it: routing stays a pure function of
+	// Sensei evidence and claims.
+	router := fileText(t, "internal/workflow/authority.go")
+	if strings.Contains(router, "answeredConditions") || strings.Contains(router, "Authorizes") {
+		t.Error("the router consults past answers; it must route on Sensei evidence alone and let the caller apply the answer")
+	}
+}

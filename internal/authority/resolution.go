@@ -265,3 +265,35 @@ func firstNonEmpty(values ...string) string {
 	}
 	return ""
 }
+
+// Authorizes reports whether a chosen option let the work proceed.
+//
+// This classifies an answer the human gave to *our own* option set — the
+// default Preserve / Authorize / Stop triple that awaitHuman generates — so it
+// is matching strings this repository wrote, not a model's prose. That is the
+// only reason label matching is acceptable here, and it is why the default set
+// is checked first and exactly.
+//
+// It is not a governance gate. It exists so a run can tell whether a question
+// it already asked was answered yes or no, and therefore stop asking. An
+// unrecognised label reads as not-authorizing, because continuing on an answer
+// nobody understood is worse than asking once more.
+func Authorizes(label string) bool {
+	l := strings.ToLower(strings.TrimSpace(label))
+	if l == "" {
+		return false
+	}
+	for _, refusal := range []string{
+		"preserve current human-owned intent",
+		"stop this task",
+		"not yet",
+		"require another design",
+		"do not",
+		"abandon",
+	} {
+		if strings.Contains(l, refusal) {
+			return false
+		}
+	}
+	return strings.Contains(l, "authoriz") || strings.Contains(l, "approve") || strings.Contains(l, "proceed")
+}
