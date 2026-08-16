@@ -11,6 +11,7 @@ import (
 
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/authority"
+	"github.com/globulario/sensei-code/internal/behavioral"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/event"
@@ -152,6 +153,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	fail := func(err error) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+		e.reportOutcome(ctx, "failure", task, err.Error())
 	}
 	if task == "" {
 		fail(errors.New("task is empty"))
@@ -209,6 +211,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		return
 	}
 	if !approved {
+		e.reportOutcome(ctx, "blocked", task, "the human declined the proposed plan")
 		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
 			"Holding off. Nothing has been implemented -- tell me what to change about the plan.", nil))
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
@@ -251,6 +254,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 		plan = finalPlan
 		if accepted {
+			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "candidate ready for governed admission", map[string]any{
 				"workspace":   workspace,
 				"implementor": worker.Name,
@@ -286,6 +290,23 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 		return false, err
 	}
 	return strings.HasPrefix(choice, "1:"), nil
+}
+
+// reportOutcome files what became of a task with the behavioral service, so
+// principles are learned from real runs. It is deliberately fire-and-forget:
+// the workflow's own result is what happened, whether or not the fact could be
+// filed, and a reporting failure must never turn a successful task into a
+// failed one.
+func (e *Engine) reportOutcome(ctx context.Context, status, task, note string) {
+	client := behavioral.New(e.Config.Behavioral)
+	if err := client.Record(ctx, behavioral.Outcome{
+		Status: status,
+		Theme:  "sensei_code.candidate_workflow",
+		Note:   strings.TrimSpace(task + " -- " + note),
+	}); err != nil && !errors.Is(err, behavioral.ErrNotConfigured) {
+		e.emit(event.New(e.SessionID, "", event.SourceSystem, event.Status,
+			"behavioral outcome not recorded: "+err.Error(), nil))
+	}
 }
 
 // recordDecision writes the accepted plan into Sensei as an architectural

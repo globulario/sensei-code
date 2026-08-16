@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/globulario/sensei-code/internal/behavioral"
 )
 
 type Permissions struct {
@@ -35,11 +37,12 @@ type Config struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	} `json:"sensei"`
-	Architect    Agent       `json:"architect"`
-	Implementors []Agent     `json:"implementors"`
-	Reviewer     Agent       `json:"reviewer"`
-	Workflow     Workflow    `json:"workflow"`
-	Permissions  Permissions `json:"permissions"`
+	Architect    Agent             `json:"architect"`
+	Implementors []Agent           `json:"implementors"`
+	Reviewer     Agent             `json:"reviewer"`
+	Workflow     Workflow          `json:"workflow"`
+	Behavioral   behavioral.Config `json:"behavioral"`
+	Permissions  Permissions       `json:"permissions"`
 }
 
 func Default() Config {
@@ -56,6 +59,10 @@ func Default() Config {
 	}
 	c.Reviewer = Agent{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
 	c.Workflow = Workflow{ReviewCycles: 3}
+	// Reporting is opt-in and unscoped by default: filing this repository's
+	// outcomes against a guessed project or domain would corrupt somebody
+	// else's principles.
+	c.Behavioral = behavioral.Config{Enabled: false, Domain: "sensei_code"}
 	c.Permissions = Permissions{
 		ReadRepository:  true,
 		WriteCandidates: true,
