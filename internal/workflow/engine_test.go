@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -124,5 +125,26 @@ func TestNoteQueuesOnlyForARealTask(t *testing.T) {
 	}
 	if got := e.takeNotes("task-1"); len(got) != 0 {
 		t.Fatalf("guidance was delivered twice: %v", got)
+	}
+}
+
+func TestHandoverTellsTheNextWorkerWhatWasLeftBehind(t *testing.T) {
+	note := handoverNote("claude", "REVISE: counts are presented as exact", errors.New("did not converge after 3 review cycles"))
+	for _, want := range []string{
+		"did not converge",     // why it stopped
+		"already present here", // the work is not gone
+		"Continue from them rather than starting over",
+		"counts are presented as exact", // the unresolved finding
+	} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("handover note is missing %q:\n%s", want, note)
+		}
+	}
+}
+
+func TestHandoverEntersTheNextWorkerAsUnansweredFeedback(t *testing.T) {
+	got := implementationPrompt(testContext(), "plan", "the previous worker left this unresolved", 1, nil)
+	if !strings.Contains(got, "the previous worker left this unresolved") {
+		t.Fatal("a handover did not reach the next worker's first cycle")
 	}
 }

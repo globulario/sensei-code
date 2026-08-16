@@ -278,23 +278,31 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		return
 	}
 
-	var failures []string
-	for _, worker := range e.Config.Implementors {
-		workspace, err := e.Repo.CreateWorktree(ctx, taskID, worker.Name)
-		if err != nil {
-			failures = append(failures, worker.Name+": "+err.Error())
-			continue
-		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"worker": worker.Name, "workspace": workspace}))
+	// One candidate for the whole task. A worker that runs out of review cycles
+	// hands the work on rather than taking it with it, so the next worker
+	// continues from the same checkout and keeps every fix the reviewer has
+	// already extracted.
+	workspace, err := e.Repo.CreateWorktree(ctx, taskID)
+	if err != nil {
+		fail(fmt.Errorf("create the candidate worktree: %w", err))
+		return
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"workspace": workspace}))
 
-		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, &tc, plan, worker, workspace)
+	var failures []string
+	carried := ""
+	for _, worker := range e.Config.Implementors {
+		if carried != "" {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
+		}
+		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, &tc, plan, worker, workspace, carried)
 		if err != nil {
 			failures = append(failures, worker.Name+": "+err.Error())
-			// A worktree for a candidate that never converged is debris. Left
-			// behind it accumulates one abandoned checkout and one branch per
-			// attempt, and the next run has to guess which are still live.
-			e.discardWorktree(ctx, taskID, workspace, worker.Name)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" candidate did not converge; trying next bounded worker", map[string]string{"error": err.Error()}))
+			// The candidate stays: it holds real work, and the reviewer's
+			// unresolved findings travel with it to whoever picks it up next.
+			carried = handoverNote(worker.Name, review, err)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" did not converge; handing the candidate to the next bounded worker", map[string]string{"error": err.Error()}))
 			continue
 		}
 		plan = finalPlan
@@ -315,6 +323,11 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 	}
 
+	// Nothing converged, but the candidate is not thrown away. It carries the
+	// accumulated work and the reviewer's outstanding findings, which is what a
+	// person needs to finish it or to judge whether it was worth starting.
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+		"candidate kept so the work is not lost: "+workspace, nil))
 	e.reportUndeliveredNotes(taskID)
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
 }
@@ -368,7 +381,7 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 	}
 	url, err := publish.Open(ctx, publish.Request{
 		Workspace: workspace,
-		Branch:    e.Repo.WorktreeBranch(taskID, worker),
+		Branch:    e.Repo.WorktreeBranch(taskID),
 		Base:      e.Config.Workflow.PublishBase,
 		Title:     tc.Task,
 		Report:    tc.Report,
@@ -382,6 +395,22 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		"pull request opened, not merged and not admitted: "+url, map[string]string{"url": url}))
 }
 
+// handoverNote tells the next worker what the last one left behind. Without it
+// the successor inherits the files but not the reason they are unfinished, and
+// re-earns the same review findings.
+func handoverNote(worker, lastReview string, cause error) string {
+	var b strings.Builder
+	b.WriteString("The previous worker (" + config.DisplayName(worker) + ") worked in this candidate and did not converge.\n")
+	b.WriteString("Its changes are already present here. Continue from them rather than starting over.\n")
+	if r := strings.TrimSpace(lastReview); r != "" {
+		b.WriteString("\nThe last review of that work said:\n" + r + "\n")
+	}
+	if cause != nil {
+		b.WriteString("\nIt stopped because: " + cause.Error() + "\n")
+	}
+	return b.String()
+}
+
 // reportUndeliveredNotes says so when the human typed guidance that no worker
 // cycle ever read. Silently discarding it would leave the architect believing
 // they had steered a run they did not touch.
@@ -393,22 +422,6 @@ func (e *Engine) reportUndeliveredNotes(taskID string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		fmt.Sprintf("the task finished before your guidance was read, so it was not delivered: %s",
 			strings.Join(notes, " / ")), nil))
-}
-
-// discardWorktree removes a candidate that will not be used. An accepted
-// candidate is deliberately kept: it is the deliverable, and the human needs it
-// to inspect or apply the work. Only abandoned attempts are cleaned up, and a
-// failure to clean up is reported rather than hidden, because a worktree that
-// is still on disk while Sensei Code believes it is gone is worse than one
-// everybody knows about.
-func (e *Engine) discardWorktree(ctx context.Context, taskID, workspace, worker string) {
-	if err := e.Repo.RemoveWorktree(ctx, workspace); err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-			"could not remove the abandoned candidate worktree "+workspace+": "+err.Error(), nil))
-		return
-	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-		"removed the abandoned "+worker+" candidate worktree", nil))
 }
 
 // emitChangeReport tells the architect what the candidate actually changed.
@@ -532,10 +545,12 @@ func planSummary(d architectureDecision) string {
 // tc is a pointer because the change report is produced here and read by the
 // caller when it offers publication. Taking it by value silently dropped the
 // report, and the pull request body went out with the evidence missing.
-func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, initialPlan string, worker config.Agent, workspace string) (bool, string, string, string, error) {
+func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, initialPlan string, worker config.Agent, workspace, carried string) (bool, string, string, string, error) {
 	task := tc.Task
 	plan := initialPlan
-	feedback := ""
+	// A handover from the previous worker is review feedback that has not been
+	// answered yet, so it enters this worker's first cycle as exactly that.
+	feedback := carried
 	var lastReview, lastAudit string
 
 	// Publication is human-owned, so a worker's git is pointed at a hook that

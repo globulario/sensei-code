@@ -54,26 +54,36 @@ func (r Repo) IsClean(ctx context.Context) (bool, error) {
 // Worktrees deliberately live next to the repository, not inside it. A Git
 // worktree is an execution boundary and must never be confused with local
 // Sensei Code session state under <repo>/.sensei-code.
-func (r Repo) WorktreePath(taskID, worker string) string {
+//
+// A candidate belongs to the task, not to the worker that happens to be
+// carrying it. One worktree per worker meant a worker that ran out of review
+// cycles took its work with it and the next one started from an empty
+// checkout, discarding every fix the reviewer had already extracted.
+func (r Repo) WorktreePath(taskID string) string {
 	// "<repo>" not "<repo>.sensei-code": the suffix already names the tool, so
 	// repeating the repository name produced ".sensei-code.sensei-code-worktrees".
 	base := "." + filepath.Base(r.Root) + "-worktrees"
-	return filepath.Join(filepath.Dir(r.Root), base, clean(taskID), clean(worker))
+	return filepath.Join(filepath.Dir(r.Root), base, clean(taskID))
 }
 
 // WorktreeBranch names the branch a candidate is built on. Publication needs
 // the same name the worktree was created with, so it is derived once here
 // rather than reconstructed by each caller.
-func (r Repo) WorktreeBranch(taskID, worker string) string {
-	return "sensei-code/" + clean(taskID) + "/" + clean(worker)
+func (r Repo) WorktreeBranch(taskID string) string {
+	return "sensei-code/" + clean(taskID)
 }
 
-func (r Repo) CreateWorktree(ctx context.Context, taskID, worker string) (string, error) {
-	path := r.WorktreePath(taskID, worker)
+// CreateWorktree returns the task's candidate worktree, creating it on first
+// use and reusing it afterwards so a second worker continues the same work.
+func (r Repo) CreateWorktree(ctx context.Context, taskID string) (string, error) {
+	path := r.WorktreePath(taskID)
+	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
+		return path, nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	branch := r.WorktreeBranch(taskID, worker)
+	branch := r.WorktreeBranch(taskID)
 	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, "HEAD")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git worktree add: %w: %s", err, strings.TrimSpace(string(b)))

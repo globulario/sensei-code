@@ -11,7 +11,7 @@ import (
 
 func TestWorktreeLivesOutsideRepository(t *testing.T) {
 	repo := Repo{Root: filepath.Join(string(filepath.Separator), "work", "sensei")}
-	got := repo.WorktreePath("task/1", "claude")
+	got := repo.WorktreePath("task/1")
 	if strings.HasPrefix(got, repo.Root+string(filepath.Separator)) {
 		t.Fatalf("candidate worktree must not be nested in canonical repository: %s", got)
 	}
@@ -22,8 +22,8 @@ func TestWorktreeLivesOutsideRepository(t *testing.T) {
 
 func TestWorktreePathIsASiblingNamedOnce(t *testing.T) {
 	r := Repo{Root: "/home/dave/src/sensei-code"}
-	got := r.WorktreePath("task-1", "claude")
-	want := "/home/dave/src/.sensei-code-worktrees/task-1/claude"
+	got := r.WorktreePath("task-1")
+	want := "/home/dave/src/.sensei-code-worktrees/task-1"
 	if got != want {
 		t.Fatalf("WorktreePath() = %q, want %q", got, want)
 	}
@@ -73,5 +73,45 @@ func TestCandidateDiffIncludesFilesTheWorkerCreated(t *testing.T) {
 	}
 	if !strings.Contains(candidate, "func A()") {
 		t.Fatal("the candidate diff lost the edit to the tracked file")
+	}
+}
+
+func TestCreateWorktreeReusesTheTaskCandidate(t *testing.T) {
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	run("init", "-q")
+	run("config", "user.email", "t@example.invalid")
+	run("config", "user.name", "T")
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "main.go")
+	run("commit", "-q", "-m", "init")
+
+	repo := Repo{Root: dir}
+	first, err := repo.CreateWorktree(context.Background(), "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A worker leaves work behind when it runs out of review cycles.
+	if err := os.WriteFile(filepath.Join(first, "progress.txt"), []byte("half done\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := repo.CreateWorktree(context.Background(), "task-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second != first {
+		t.Fatalf("second worker got a different worktree (%s vs %s), so the work was abandoned", second, first)
+	}
+	if _, err := os.Stat(filepath.Join(second, "progress.txt")); err != nil {
+		t.Fatal("the previous worker's progress was not carried over")
 	}
 }
