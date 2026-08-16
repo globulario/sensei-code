@@ -38,6 +38,8 @@ const (
 	ChangeReported Kind = "change.reported"
 	// PullRequestOpened reports a published candidate. It is never a merge.
 	PullRequestOpened Kind = "pull_request.opened"
+	// GuidanceDelivered reports that a worker cycle read the human's guidance.
+	GuidanceDelivered Kind = "guidance.delivered"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
 	AgentStarted      Kind = "agent.started"

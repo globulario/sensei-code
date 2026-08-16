@@ -76,6 +76,7 @@ type Model struct {
 	loginMenu     bool
 	mcpMenu       bool
 	pendingTask   string
+	currentTask   string
 	pending       *authority.Decision
 	mode          mode
 	frame         int
@@ -310,16 +311,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, tea.Batch(cmds...)
 			}
-			if text != "" && !m.busy {
-				m.busy = true
-				m.startedAt = time.Now()
-				m.frame = 0
-				m.wordIdx++
-				m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+text, "")
-				m.input.Reset()
-				m.engine.Submit(m.ctx, text)
-				cmds = append(cmds, tea.ClearScreen)
+			if text == "" {
+				return m, tea.Batch(cmds...)
 			}
+			if m.busy {
+				// Work already running: the message becomes guidance rather
+				// than being swallowed. A worker mid-cycle cannot be
+				// interrupted, so it is queued for the next one and the line
+				// says so instead of implying it landed immediately.
+				if m.engine.Note(m.currentTask, text) {
+					m.input.Reset()
+					m.lines = append(m.lines, "", userStyle.Render("You")+dimStyle.Render("  · queued for the next worker cycle"),
+						promptGlyphStyle.Render("› ")+text, "")
+					cmds = append(cmds, tea.ClearScreen)
+				}
+				return m, tea.Batch(cmds...)
+			}
+			m.busy = true
+			m.startedAt = time.Now()
+			m.frame = 0
+			m.wordIdx++
+			m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+text, "")
+			m.input.Reset()
+			m.currentTask = m.engine.Submit(m.ctx, text)
+			cmds = append(cmds, tea.ClearScreen)
 			return m, tea.Batch(cmds...)
 		}
 	}
@@ -378,6 +393,10 @@ func renderEvent(e event.Event) string {
 	case event.SourceUser:
 		prefix = userStyle.Render("⚑ YOU")
 	}
+	if e.Kind == event.GuidanceDelivered {
+		prefix = userStyle.Render("⚑ YOUR GUIDANCE") + dimStyle.Render("  · read by the worker")
+		indent = "  "
+	}
 	if e.Kind == event.DecisionRecorded {
 		prefix = senseiStyle.Render("◆ DECISION")
 		indent = "  "
@@ -427,7 +446,7 @@ func (m Model) statusLine() string {
 		if m.activity != "" {
 			line += hintStyle.Render("  " + m.activity)
 		}
-		return line
+		return line + hintStyle.Render("  · type to steer")
 	default:
 		return hintStyle.Render("● ready — describe a task · /login · /mcp · /clear")
 	}
@@ -533,6 +552,8 @@ func max(a, b int) int {
 func isConversation(e event.Event) bool {
 	switch e.Kind {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+		return true
+	case event.GuidanceDelivered:
 		return true
 	case event.DecisionRecorded:
 		// Whether the reason for this work reached Sensei is the architect's

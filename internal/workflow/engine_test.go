@@ -59,7 +59,7 @@ func testContext() taskContext {
 }
 
 func TestImplementationPromptCarriesContextWithoutWideningScope(t *testing.T) {
-	got := implementationPrompt(testContext(), "edit main.go", "", 1)
+	got := implementationPrompt(testContext(), "edit main.go", "", 1, nil)
 	for _, want := range []string{
 		"can we version this?",             // the conversation
 		"conventional flag, no governance", // the architect's reasoning
@@ -91,5 +91,38 @@ func TestReviewPromptCarriesContextWithoutLoweringTheBar(t *testing.T) {
 func TestTaskContextIntentIsExplicitWhenEmpty(t *testing.T) {
 	if got := (taskContext{}).intent(); !strings.Contains(got, "no additional rationale") {
 		t.Fatalf("empty intent = %q, want an explicit statement of absence", got)
+	}
+}
+
+func TestGuidanceReachesTheWorkerWithoutEnlargingThePlan(t *testing.T) {
+	got := implementationPrompt(testContext(), "edit main.go", "", 2,
+		[]string{"use the existing version constant, do not add a package"})
+	if !strings.Contains(got, "use the existing version constant") {
+		t.Fatal("the human's guidance did not reach the worker")
+	}
+	if !strings.Contains(got, "takes precedence over your own") {
+		t.Fatal("guidance must outrank the worker's own judgement about how to implement")
+	}
+	if !strings.Contains(got, "does not silently enlarge the") {
+		t.Fatal("guidance must not become a way to grow the approved plan unnoticed")
+	}
+}
+
+func TestNoteQueuesOnlyForARealTask(t *testing.T) {
+	e := &Engine{}
+	if e.Note("", "hello") {
+		t.Fatal("guidance was accepted for no task, so nothing would ever read it")
+	}
+	if e.Note("task-1", "   ") {
+		t.Fatal("empty guidance was accepted")
+	}
+	if !e.Note("task-1", "prefer the simpler shape") {
+		t.Fatal("guidance for a running task was refused")
+	}
+	if got := e.takeNotes("task-1"); len(got) != 1 || got[0] != "prefer the simpler shape" {
+		t.Fatalf("takeNotes = %v, want the queued guidance", got)
+	}
+	if got := e.takeNotes("task-1"); len(got) != 0 {
+		t.Fatalf("guidance was delivered twice: %v", got)
 	}
 }

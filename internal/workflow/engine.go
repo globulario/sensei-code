@@ -34,6 +34,11 @@ type Engine struct {
 
 	mu      sync.Mutex
 	pending map[string]chan string
+	// notes holds guidance the human typed while a task was running, keyed by
+	// task. It is a queue rather than an interrupt: a worker mid-cycle cannot be
+	// spoken to, so the guidance waits for the next boundary where it can
+	// actually be read.
+	notes map[string][]string
 }
 
 func New(repo gitx.Repo, cfg config.Config, bus *event.Bus, store *session.Store, sessionID string) *Engine {
@@ -69,6 +74,32 @@ func (e *Engine) Submit(ctx context.Context, task string) string {
 	taskID := fmt.Sprintf("task-%d", time.Now().UTC().UnixNano())
 	go e.run(ctx, taskID, strings.TrimSpace(task))
 	return taskID
+}
+
+// Note queues guidance for a running task. It reports whether the task could
+// accept it, so the caller never tells the human their message was taken when
+// nothing will read it.
+func (e *Engine) Note(taskID, text string) bool {
+	text = strings.TrimSpace(text)
+	if text == "" || strings.TrimSpace(taskID) == "" {
+		return false
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.notes == nil {
+		e.notes = map[string][]string{}
+	}
+	e.notes[taskID] = append(e.notes[taskID], text)
+	return true
+}
+
+// takeNotes removes and returns the queued guidance for a task.
+func (e *Engine) takeNotes(taskID string) []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	notes := e.notes[taskID]
+	delete(e.notes, taskID)
+	return notes
 }
 
 // ResolveHuman resumes an exact task waiting at a Level-3 authority boundary.
@@ -268,6 +299,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 		plan = finalPlan
 		if accepted {
+			e.reportUndeliveredNotes(taskID)
 			e.offerPullRequest(ctx, taskID, &tc, workspace, worker.Name)
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
 			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
@@ -283,6 +315,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 	}
 
+	e.reportUndeliveredNotes(taskID)
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
 }
 
@@ -347,6 +380,19 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.PullRequestOpened,
 		"pull request opened, not merged and not admitted: "+url, map[string]string{"url": url}))
+}
+
+// reportUndeliveredNotes says so when the human typed guidance that no worker
+// cycle ever read. Silently discarding it would leave the architect believing
+// they had steered a run they did not touch.
+func (e *Engine) reportUndeliveredNotes(taskID string) {
+	notes := e.takeNotes(taskID)
+	if len(notes) == 0 {
+		return
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		fmt.Sprintf("the task finished before your guidance was read, so it was not delivered: %s",
+			strings.Join(notes, " / ")), nil))
 }
 
 // discardWorktree removes a candidate that will not be used. An accepted
@@ -507,7 +553,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 	}
 
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
-		prompt := implementationPrompt(*tc, plan, feedback, cycle)
+		guidance := e.takeNotes(taskID)
+		if len(guidance) != 0 {
+			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
+				strings.Join(guidance, "\n"), nil))
+		}
+		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance)
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
 		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
@@ -849,10 +900,19 @@ SENSEI PREFLIGHT:
 %s`, architectName, repoRoot, domain, conversationOrNone(conversation), task, workspaceStatus, preflight)
 }
 
-func implementationPrompt(tc taskContext, plan, feedback string, cycle int) string {
+func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guidance []string) string {
 	extra := ""
 	if strings.TrimSpace(feedback) != "" {
 		extra = "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback
+	}
+	if len(guidance) != 0 {
+		extra += "\n\nGUIDANCE FROM THE HUMAN ARCHITECT, sent while you were working:\n- " +
+			strings.Join(guidance, "\n- ") +
+			"\n\nThis is the human speaking directly and it takes precedence over your own" +
+			"\njudgement about how to implement the plan. It does not silently enlarge the" +
+			"\nplan: if following it requires work the approved plan does not cover, do the" +
+			"\npart that is in scope, and say plainly in your output what you did not do and" +
+			"\nwhy, so a new plan can be approved for the rest."
 	}
 	return fmt.Sprintf(`You are a bounded implementation worker operating in an isolated Git worktree.
 Implement only the architect's bounded plan. You may inspect, edit, build, and test inside this candidate worktree. Work autonomously: do not ask the user for routine permissions.
