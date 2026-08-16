@@ -14,3 +14,27 @@ func TestDefaultAuthorityEnvelope(t *testing.T) {
 		t.Fatal("external/destructive authority must not be granted by default")
 	}
 }
+
+func TestClaudeWorkerRequestsVerboseWithStreamJSON(t *testing.T) {
+	// claude refuses --output-format=stream-json under --print without
+	// --verbose, and exits 1 before doing any work.
+	for _, agent := range Default().Implementors {
+		if agent.Name != "claude" {
+			continue
+		}
+		var stream, verbose bool
+		for _, arg := range agent.Args {
+			switch arg {
+			case "stream-json":
+				stream = true
+			case "--verbose":
+				verbose = true
+			}
+		}
+		if stream && !verbose {
+			t.Fatal("claude worker asks for stream-json without --verbose, which it refuses")
+		}
+		return
+	}
+	t.Fatal("no claude implementor in the default configuration")
+}

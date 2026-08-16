@@ -17,6 +17,7 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitguard"
 	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
@@ -454,7 +455,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
 		prompt := implementationPrompt(tc, plan, feedback, cycle)
-		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv}
+		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
 		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
@@ -530,7 +531,7 @@ type reviewDecision struct {
 }
 
 func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string) (architectureDecision, error) {
-	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID}
+	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt
@@ -583,7 +584,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string)
 }
 
 func (e *Engine) resolveReview(ctx context.Context, taskID, prompt string) (reviewDecision, error) {
-	reviewer := agent.CLI{Name: e.Config.Reviewer.Name, Label: config.DisplayName(e.Config.Reviewer.Name), Command: e.Config.Reviewer.Command, Args: e.Config.Reviewer.Args, Source: event.SourceReviewer, SessionID: e.SessionID}
+	reviewer := agent.CLI{Name: e.Config.Reviewer.Name, Label: config.DisplayName(e.Config.Reviewer.Name), Command: e.Config.Reviewer.Command, Args: e.Config.Reviewer.Args, Source: event.SourceReviewer, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt

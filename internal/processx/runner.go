@@ -7,25 +7,46 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 )
 
 type Line struct{ Stream, Text string }
 
+// Environ returns the process environment with the named variables removed.
+func Environ(unset []string) []string {
+	if len(unset) == 0 {
+		return os.Environ()
+	}
+	drop := make(map[string]struct{}, len(unset))
+	for _, name := range unset {
+		drop[name] = struct{}{}
+	}
+	out := make([]string, 0, len(os.Environ()))
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if _, ok := drop[name]; ok {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 type Result struct{ ExitCode int }
 
 func Run(ctx context.Context, dir, name string, args []string, stdin io.Reader, onLine func(Line)) (Result, error) {
-	return RunWithEnv(ctx, dir, name, args, nil, stdin, onLine)
+	return RunWithEnv(ctx, dir, name, args, nil, nil, stdin, onLine)
 }
 
 // RunWithEnv runs a command with extra environment entries appended to the
-// inherited environment.
-func RunWithEnv(ctx context.Context, dir, name string, args, extraEnv []string, stdin io.Reader, onLine func(Line)) (Result, error) {
+// inherited environment, and with unsetEnv variables removed from it.
+func RunWithEnv(ctx context.Context, dir, name string, args, extraEnv, unsetEnv []string, stdin io.Reader, onLine func(Line)) (Result, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	cmd.Stdin = stdin
-	if len(extraEnv) != 0 {
-		cmd.Env = append(os.Environ(), extraEnv...)
+	if len(extraEnv) != 0 || len(unsetEnv) != 0 {
+		cmd.Env = append(Environ(unsetEnv), extraEnv...)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

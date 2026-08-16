@@ -114,6 +114,7 @@ func StatusFor(ctx context.Context, id ID) Status {
 			APIProvider      string `json:"apiProvider"`
 			SubscriptionType string `json:"subscriptionType"`
 			Email            string `json:"email"`
+			APIKeySource     string `json:"apiKeySource"`
 		}
 		if json.Unmarshal(stdout.Bytes(), &payload) == nil {
 			status.AuthKnown = true
@@ -126,6 +127,15 @@ func StatusFor(ctx context.Context, id ID) Status {
 			}
 			if !payload.LoggedIn {
 				status.Detail = "not logged in"
+				return status
+			}
+			// A key from the environment overrides the subscription login that
+			// this status describes, so the account reported here is not the one
+			// a worker will authenticate with. Saying only "connected" would
+			// describe a session the work never uses.
+			if source := envKeySource(payload.APIKeySource); source != "" {
+				status.Detail = "authenticating with " + source +
+					" from the environment, which overrides this login; unset it to use the subscription"
 			}
 			return status
 		}
@@ -216,4 +226,35 @@ func nonempty(value, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envKeySource reports the environment variable an agent's credential is coming
+// from, when it is coming from one rather than from the stored login.
+func envKeySource(apiKeySource string) string {
+	source := strings.TrimSpace(apiKeySource)
+	switch source {
+	case "", "none", "login", "claude.ai":
+		return ""
+	}
+	// Values that name an environment variable are upper snake case.
+	if source == strings.ToUpper(source) && strings.Contains(source, "_") {
+		return source
+	}
+	return ""
+}
+
+// SessionOnlyEnv lists credential variables that override an agent's own stored
+// login. Sensei Code strips them from agent processes so every agent
+// authenticates with the session that /login established and that doctor
+// reports. Without this an ambient key silently takes precedence, doctor
+// describes a subscription the work never uses, and the worker fails
+// authentication against a credential nobody chose for it.
+//
+// The cost is deliberate: a user who wants API-key authentication must
+// configure it on the agent rather than rely on an inherited variable, because
+// an inherited variable is invisible to every check in this tool.
+var SessionOnlyEnv = []string{
+	"ANTHROPIC_API_KEY",
+	"ANTHROPIC_AUTH_TOKEN",
+	"CLAUDE_CODE_OAUTH_TOKEN",
 }

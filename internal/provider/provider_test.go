@@ -150,3 +150,17 @@ func TestAwaitAccountStateFailsClosedWhenStateNeverSettles(t *testing.T) {
 		t.Fatal("awaitAccountState hid a logout that never took effect")
 	}
 }
+
+func TestEnvironmentKeyOverrideIsReported(t *testing.T) {
+	// doctor reported "connected" from the stored login while the worker
+	// authenticated with an environment key and failed 401. The override has to
+	// be visible, or the check describes a session the work never uses.
+	if got := envKeySource("ANTHROPIC_API_KEY"); got != "ANTHROPIC_API_KEY" {
+		t.Fatalf("envKeySource = %q, want the overriding variable", got)
+	}
+	for _, benign := range []string{"", "none", "login", "claude.ai"} {
+		if got := envKeySource(benign); got != "" {
+			t.Fatalf("envKeySource(%q) = %q, want no override", benign, got)
+		}
+	}
+}

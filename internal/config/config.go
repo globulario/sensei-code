@@ -54,7 +54,9 @@ func Default() Config {
 	// account it speaks as rather than for the binary that carries it.
 	c.Architect = Agent{Name: "chatgpt", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
 	c.Implementors = []Agent{
-		{Name: "claude", Command: "claude", Args: []string{"-p", "--output-format", "stream-json", "--permission-mode", "bypassPermissions"}},
+		// --verbose is required: claude refuses --output-format=stream-json
+		// without it under --print, so the worker exited 1 before doing any work.
+		{Name: "claude", Command: "claude", Args: []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "bypassPermissions"}},
 		{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "workspace-write", "-"}},
 	}
 	c.Reviewer = Agent{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
