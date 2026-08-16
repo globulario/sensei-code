@@ -23,6 +23,7 @@ import (
 	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
+	"github.com/globulario/sensei-code/internal/taskstate"
 )
 
 type Engine struct {
@@ -177,6 +178,9 @@ type taskContext struct {
 	Report string
 	// Identity binds this task to the exact base it governs.
 	Identity candidate.Identity
+	// EvidenceSnapshot is what the candidate contained at the last audit, kept
+	// so a handover states the position rather than describing it.
+	EvidenceSnapshot taskstate.Evidence
 }
 
 // intent renders the architect's stated reasoning for the roles downstream.
@@ -370,22 +374,6 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.PullRequestOpened,
 		"pull request opened, not merged and not admitted: "+url, map[string]string{"url": url}))
-}
-
-// handoverNote tells the next worker what the last one left behind. Without it
-// the successor inherits the files but not the reason they are unfinished, and
-// re-earns the same review findings.
-func handoverNote(worker, lastReview string, cause error) string {
-	var b strings.Builder
-	b.WriteString("The previous worker (" + config.DisplayName(worker) + ") worked in this candidate and did not converge.\n")
-	b.WriteString("Its changes are already present here. Continue from them rather than starting over.\n")
-	if r := strings.TrimSpace(lastReview); r != "" {
-		b.WriteString("\nThe last review of that work said:\n" + r + "\n")
-	}
-	if cause != nil {
-		b.WriteString("\nIt stopped because: " + cause.Error() + "\n")
-	}
-	return b.String()
 }
 
 // reportUndeliveredNotes says so when the human typed guidance that no worker
@@ -635,6 +623,15 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, audit.Structured))
+		}
+		// Snapshot the position so a handover states what the candidate holds
+		// rather than describing it in prose the next worker has to re-derive.
+		tc.EvidenceSnapshot = taskstate.Evidence{
+			DiffBytes:     len(diff),
+			ChangedPaths:  changedPaths(diff),
+			AuditVerdict:  string(verdict.Decision),
+			AuditDetail:   verdict.Diagnostic(),
+			RequiredTests: tc.EvidenceSnapshot.RequiredTests,
 		}
 
 		review, err := e.resolveReview(ctx, taskID, reviewPrompt(*tc, plan, diff, lastAudit))
@@ -1289,10 +1286,19 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, identity.Summary(), identity))
 
+	// The semantic position of the task, kept so a change of worker does not
+	// restart the thinking. It is rebuilt from what is known now rather than
+	// trusted from disk, and it carries no authority: a lost state file must
+	// mean re-certifying, never proceeding on a remembered yes.
+	state := e.taskState(taskID, tc, identity, start)
+
 	// carried arrives non-empty on a resume, so the first worker starts from the
 	// findings the interrupted run had already earned.
 	var failures []string
 	for _, worker := range e.Config.Implementors {
+		state.RecordWorker(worker.Name)
+		state.Phase = taskstate.Implementing
+		_ = state.Save(e.Repo.Root)
 		if carried != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
@@ -1302,12 +1308,20 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			failures = append(failures, worker.Name+": "+err.Error())
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
-			carried = handoverNote(worker.Name, review, err)
+			state.Phase = taskstate.Revising
+			state.Evidence = tc.EvidenceSnapshot
+			state.OpenFindings(openFindings(review, audit, err))
+			_ = state.Save(e.Repo.Root)
+			carried = state.Handover(config.DisplayName(worker.Name), start.GraphBuildCommit())
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" did not converge; handing the candidate to the next bounded worker", map[string]string{"error": err.Error()}))
 			continue
 		}
 		plan = finalPlan
 		if accepted {
+			state.Phase = taskstate.Accepted
+			state.Evidence = tc.EvidenceSnapshot
+			state.OpenFindings(nil)
+			_ = state.Save(e.Repo.Root)
 			e.reportUndeliveredNotes(taskID)
 			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
@@ -1430,4 +1444,78 @@ func (p senseiProposer) CallTool(name string, args map[string]any) (authority.To
 		return authority.ToolResult{}, err
 	}
 	return authority.ToolResult{Structured: result.Structured, Text: firstText(result), IsError: result.IsError}, nil
+}
+
+// taskState assembles the semantic position of a task from what is currently
+// known. It is deliberately a projection of live facts rather than a record
+// loaded from disk: the file exists so a later process can read the position,
+// not so this one can skip establishing it.
+func (e *Engine) taskState(taskID string, tc *taskContext, id candidate.Identity, start certifiedStart) taskstate.State {
+	required := make([]string, 0, len(start.RequiredActions()))
+	required = append(required, start.RequiredActions()...)
+	return taskstate.State{
+		TaskID: taskID, SessionID: e.SessionID, Task: tc.Task, Domain: id.Domain,
+		BaseSHA: id.BaseSHA, Worktree: id.Worktree, Branch: id.Branch,
+		Contract: taskstate.Contract{
+			Rationale:    tc.Rationale,
+			Steps:        tc.Steps,
+			Consequences: tc.Consequences,
+			Invariants:   tc.Invariants,
+		},
+		Authority:        e.authorityDecisions(taskID),
+		Evidence:         taskstate.Evidence{RequiredTests: required},
+		Phase:            taskstate.Planning,
+		GraphBuildCommit: start.GraphBuildCommit(),
+		ObservedAt:       time.Now().UTC(),
+	}
+}
+
+// authorityDecisions reads the human decisions already made for this task out
+// of the session record, so a worker never reopens a settled question.
+//
+// It reads the event log rather than a decisions file, because the event log is
+// the record that already exists and a second one would need reconciling.
+func (e *Engine) authorityDecisions(taskID string) []taskstate.AuthorityDecision {
+	if e.Store == nil {
+		return nil
+	}
+	events, err := e.Store.Load()
+	if err != nil {
+		return nil
+	}
+	var out []taskstate.AuthorityDecision
+	for _, ev := range events {
+		if ev.TaskID != taskID || ev.Kind != event.AuthorityResolved {
+			continue
+		}
+		var res authority.Resolution
+		if json.Unmarshal(ev.Payload, &res) != nil || strings.TrimSpace(res.Question) == "" {
+			continue
+		}
+		out = append(out, taskstate.AuthorityDecision{
+			Question:  res.Question,
+			Condition: res.Condition,
+			Chosen:    res.OptionLabel,
+			Durable:   res.Durable(),
+			DecidedAt: res.DecidedAt,
+		})
+	}
+	return out
+}
+
+// openFindings turns what the last cycle produced into the list the next worker
+// has to clear. An empty list is left empty rather than padded: inventing a
+// finding to look thorough would send the next worker after nothing.
+func openFindings(review, audit string, cause error) []taskstate.Finding {
+	var out []taskstate.Finding
+	if r := strings.TrimSpace(review); r != "" {
+		out = append(out, taskstate.Finding{Source: "reviewer", Detail: r})
+	}
+	if a := strings.TrimSpace(audit); a != "" {
+		out = append(out, taskstate.Finding{Source: "sensei audit", Detail: a})
+	}
+	if cause != nil {
+		out = append(out, taskstate.Finding{Source: "previous worker stopped", Detail: cause.Error()})
+	}
+	return out
 }

@@ -190,10 +190,13 @@ func funcBody(t *testing.T, rel, name string) string {
 		}
 		var b strings.Builder
 		ast.Inspect(fn.Body, func(inner ast.Node) bool {
-			if sel, ok := inner.(*ast.SelectorExpr); ok {
-				if x, ok := sel.X.(*ast.Ident); ok {
-					b.WriteString(x.Name + "." + sel.Sel.Name + "( ")
-				}
+			switch n := inner.(type) {
+			case *ast.SelectorExpr:
+				// Nested selectors such as e.Store.Load are rendered whole, so
+				// an assertion can name the path it actually cares about.
+				b.WriteString(exprPath(n) + "( ")
+			case *ast.Ident:
+				b.WriteString(n.Name + " ")
 			}
 			return true
 		})
@@ -257,5 +260,50 @@ func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 		if strings.Contains(router, forbidden) {
 			t.Errorf("the router reads %q; replay avoidance must come from the graph, not from a local cache", forbidden)
 		}
+	}
+}
+
+// TestWorkerSwitchCarriesSemanticStateNotJustProse is the integration-level
+// guarantee for cross-agent continuity: what the second worker receives is
+// assembled from the task's recorded position, not from a summary paragraph.
+func TestWorkerSwitchCarriesSemanticStateNotJustProse(t *testing.T) {
+	body := fileText(t, "internal/workflow/engine.go")
+	if strings.Contains(body, "handoverNote") {
+		t.Error("the prose handover note is still in use; semantic state should supersede it")
+	}
+	for _, required := range []string{"state.Handover", "state.OpenFindings", "state.RecordWorker", "taskstate.Revising"} {
+		if !strings.Contains(body, required) {
+			t.Errorf("the worker switch does not use %s, so state does not survive the change", required)
+		}
+	}
+}
+
+// TestAuthorityDecisionsAreReadFromTheRecordNotReinvented keeps continuity
+// sourced from the event log that already exists. A second store of past human
+// decisions would need reconciling with the first, and the two would disagree
+// exactly when it mattered.
+func TestAuthorityDecisionsAreReadFromTheRecordNotReinvented(t *testing.T) {
+	fn := funcBody(t, "internal/workflow/engine.go", "authorityDecisions")
+	if !strings.Contains(fn, "e.Store.Load") {
+		t.Fatal("prior human decisions are not read from the session record")
+	}
+	if strings.Contains(fn, "os.ReadFile") {
+		t.Fatal("prior human decisions are read from a separate file, creating a second source of truth")
+	}
+}
+
+// exprPath renders a possibly nested selector as a dotted path, so a test can
+// assert on "e.Store.Load" rather than on whichever fragment the walker
+// happened to reach first.
+func exprPath(e ast.Expr) string {
+	switch n := e.(type) {
+	case *ast.Ident:
+		return n.Name
+	case *ast.SelectorExpr:
+		return exprPath(n.X) + "." + n.Sel.Name
+	case *ast.CallExpr:
+		return exprPath(n.Fun)
+	default:
+		return ""
 	}
 }

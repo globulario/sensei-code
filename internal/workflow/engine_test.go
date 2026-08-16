@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"errors"
+	"github.com/globulario/sensei-code/internal/taskstate"
 	"strings"
 	"testing"
 
@@ -128,16 +129,31 @@ func TestNoteQueuesOnlyForARealTask(t *testing.T) {
 	}
 }
 
+// TestHandoverTellsTheNextWorkerWhatWasLeftBehind carries forward the
+// guarantees the old prose handover note made, now that the handover is
+// assembled from semantic state instead of written as a paragraph. The
+// properties are the same; what changed is that they are now facts with a
+// shape rather than sentences the next worker has to parse.
 func TestHandoverTellsTheNextWorkerWhatWasLeftBehind(t *testing.T) {
-	note := handoverNote("claude", "REVISE: counts are presented as exact", errors.New("did not converge after 3 review cycles"))
+	state := taskstate.State{
+		TaskID: "task-1", Task: "make the counts honest", Phase: taskstate.Revising,
+		GraphBuildCommit: "gen-1",
+	}
+	state.OpenFindings(openFindings(
+		"REVISE: counts are presented as exact",
+		"",
+		errors.New("did not converge after 3 review cycles"),
+	))
+	note := state.Handover("claude", "gen-1")
+
 	for _, want := range []string{
-		"did not converge",     // why it stopped
-		"already present here", // the work is not gone
-		"Continue from them rather than starting over",
+		"did not converge",              // why it stopped
+		"changes are present",           // the work is not gone
+		"Do not start over",             // continue rather than restart
 		"counts are presented as exact", // the unresolved finding
 	} {
 		if !strings.Contains(note, want) {
-			t.Fatalf("handover note is missing %q:\n%s", want, note)
+			t.Fatalf("handover is missing %q:\n%s", want, note)
 		}
 	}
 }
