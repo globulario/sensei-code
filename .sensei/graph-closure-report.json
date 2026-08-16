@@ -6,7 +6,7 @@
   "expected_to_project": 161,
   "identities_projected": 161,
   "identities_missing": 0,
-  "identities_explicitly_excluded": 2,
+  "identities_explicitly_excluded": 3,
   "unexpected_foreign_provenance": 0,
   "unresolved_attribution": 0,
   "class_emits_no_provenance": 2,
