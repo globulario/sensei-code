@@ -48,3 +48,21 @@ func TestArgsSkipEmptyLinks(t *testing.T) {
 		t.Fatal("blank source file was passed to sensei")
 	}
 }
+
+func TestGraphClassPrefixesAreStrippedFromLinks(t *testing.T) {
+	// awareness_query returns "invariant:x"; the corpus uses the bare id.
+	// Writing the prefixed form produces a link that resolves to nothing, which
+	// validation reports as dangling: provenance that points nowhere.
+	r := Record{
+		Title: "t", Rationale: "r",
+		Invariants: []string{"invariant:sensei_code.provider.credentials_remain_provider_owned"},
+		Failures:   []string{"failure:sensei_code.some_failure"},
+	}
+	args := strings.Join(r.Args(), " ")
+	if strings.Contains(args, "invariant:sensei_code") || strings.Contains(args, "failure:sensei_code") {
+		t.Fatalf("a graph-prefixed id was written verbatim: %s", args)
+	}
+	if !strings.Contains(args, "--related-invariant sensei_code.provider.credentials_remain_provider_owned") {
+		t.Fatalf("the normalised invariant id is missing: %s", args)
+	}
+}

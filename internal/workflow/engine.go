@@ -168,6 +168,8 @@ type taskContext struct {
 	Rationale       string
 	Steps           []string
 	Domain          string
+	Consequences    string
+	Invariants      []string
 	// Report is the rendered change report, set once the candidate is judged so
 	// the pull request body carries the same evidence the architect saw.
 	Report string
@@ -257,7 +259,6 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
 		return
 	}
-	e.recordDecision(ctx, taskID, task, decision, sensei.RepositoryDomain(workspaceStatus))
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -267,6 +268,8 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		Rationale:       decision.Summary,
 		Steps:           decision.Steps,
 		Domain:          sensei.RepositoryDomain(workspaceStatus),
+		Consequences:    decision.Consequences,
+		Invariants:      decision.Invariants,
 	}
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
@@ -443,20 +446,20 @@ func (e *Engine) reportOutcome(ctx context.Context, status, task, note string) {
 // decision, so the reason this work was authorized outlives the session and any
 // agent can read it later. A decision Sensei would refuse is reported, never
 // padded with invented links to make it pass.
-func (e *Engine) recordDecision(ctx context.Context, taskID, task string, d architectureDecision, domain string) {
+func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskContext, changed []string) {
 	record := decision.Record{
-		Title:        strings.TrimSpace(d.Summary),
-		Rationale:    task,
+		Title:        strings.TrimSpace(tc.Rationale),
+		Rationale:    tc.Task,
 		Context:      "Accepted by the human in an interactive Sensei Code session.",
-		Consequences: d.Consequences,
-		SourceFiles:  d.Files,
-		Invariants:   d.Invariants,
-		Repo:         domain,
-		Domain:       domain,
+		Consequences: tc.Consequences,
+		SourceFiles:  changed,
+		Invariants:   tc.Invariants,
+		Repo:         tc.Domain,
+		Domain:       tc.Domain,
 		RepoRoot:     e.Repo.Root,
 	}
 	if strings.TrimSpace(record.Title) == "" {
-		record.Title = task
+		record.Title = tc.Task
 	}
 	err := decision.Write(ctx, record)
 	if err == nil {
@@ -468,6 +471,18 @@ func (e *Engine) recordDecision(ctx context.Context, taskID, task string, d arch
 	// rather than swallowed.
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
 		"decision not recorded: "+err.Error(), nil))
+}
+
+// changedPaths lists the files a candidate actually touched, so a decision
+// references work that exists rather than work that was intended.
+func changedPaths(diff string) []string {
+	var out []string
+	for _, change := range report.FromDiff(diff).Files {
+		if change.Status != report.Deleted {
+			out = append(out, change.Path)
+		}
+	}
+	return out
 }
 
 // planSummary renders the plan as something an architect can read and judge:
@@ -553,6 +568,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		switch review.Decision {
 		case "accept":
 			tc.Report = e.emitChangeReport(ctx, sc, taskID, tc, diff, lastAudit)
+			// The decision is recorded now rather than at approval. At approval
+			// the architect can only name files it intends to create, and a
+			// decision that references a file the task never produced is a
+			// reference to nothing.
+			e.recordDecision(ctx, taskID, tc, changedPaths(diff))
 			return true, plan, lastReview, lastAudit, nil
 		case "revise":
 			feedback = review.Instructions

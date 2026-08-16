@@ -80,12 +80,12 @@ func (r Record) Args() []string {
 		}
 	}
 	for _, inv := range r.Invariants {
-		if i := strings.TrimSpace(inv); i != "" {
+		if i := normaliseID(inv); i != "" {
 			args = append(args, "--related-invariant", i)
 		}
 	}
 	for _, failure := range r.Failures {
-		if f := strings.TrimSpace(failure); f != "" {
+		if f := normaliseID(failure); f != "" {
 			args = append(args, "--related-failure", f)
 		}
 	}
@@ -100,6 +100,18 @@ func (r Record) Args() []string {
 }
 
 // Write appends the decision through Sensei's own propose surface.
+// normaliseID strips the class prefix Sensei's graph queries return. An id read
+// back as "invariant:x" and written as-is produces a decision that references
+// nothing, which validation reports as a dangling reference: a link that looks
+// like provenance and resolves to nowhere.
+func normaliseID(id string) string {
+	id = strings.TrimSpace(id)
+	for _, prefix := range []string{"invariant:", "failure_mode:", "failure:", "forbidden_fix:"} {
+		id = strings.TrimPrefix(id, prefix)
+	}
+	return strings.TrimSpace(id)
+}
+
 func Write(ctx context.Context, r Record) error {
 	if err := r.Validate(); err != nil {
 		return err

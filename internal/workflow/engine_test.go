@@ -148,3 +148,22 @@ func TestHandoverEntersTheNextWorkerAsUnansweredFeedback(t *testing.T) {
 		t.Fatal("a handover did not reach the next worker's first cycle")
 	}
 }
+
+func TestDecisionReferencesFilesTheCandidateActuallyChanged(t *testing.T) {
+	// At approval the architect can only name files it intends to create, and a
+	// decision referencing a file the task never produced references nothing.
+	diff := `diff --git a/cmd/main.go b/cmd/main.go
+--- a/cmd/main.go
++++ b/cmd/main.go
+@@ -1 +1,2 @@
++added
+diff --git a/internal/gone.go b/internal/gone.go
+deleted file mode 100644
+--- a/internal/gone.go
++++ /dev/null
+`
+	got := changedPaths(diff)
+	if len(got) != 1 || got[0] != "cmd/main.go" {
+		t.Fatalf("changedPaths = %v, want only the file that exists afterwards", got)
+	}
+}

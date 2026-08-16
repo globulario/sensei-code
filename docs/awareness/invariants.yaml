@@ -51,7 +51,7 @@ invariants:
     status: active
     repo: github.com/globulario/sensei-code
     domain: repo
-    description: When Sensei refuses a tool call or its server cannot be reached, Sensei Code must propagate the reason Sensei gave. Discarding the tool result text or the server stderr turns a governed refusal into an indistinguishable transport fault and defeats law 8.
+    description: "When Sensei refuses a tool call or its server cannot be reached, Sensei Code must propagate the reason Sensei gave. Discarding the tool result text or the server stderr turns a governed refusal into an indistinguishable transport fault and defeats law 8."
     protects:
       files:
         - internal/sensei/mcp.go
@@ -92,3 +92,186 @@ invariants:
     required_tests:
       - internal/provider/provider_test.go:TestFormatStatusPreservesUnknownAuth
       - internal/doctor/doctor_test.go:TestWarningsDoNotMasqueradeAsPassButDoNotBlockReadiness
+
+  - id: sensei_code.workflow.plan_is_approved_before_work_starts
+    title: A change is planned and accepted by the human before any worker touches a candidate
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "The architect may settle ordinary architectural questions alone, but committing the repository to a body of work is the human's to start. A proceed decision is presented as a plan and the workflow waits at a rendezvous; declining implements nothing."
+    protects:
+      files:
+        - internal/workflow/
+        - internal/workflow/engine.go
+    required_tests:
+      - internal/workflow/engine_test.go:TestImplementationPromptCarriesContextWithoutWideningScope
+
+  - id: sensei_code.workflow.context_never_widens_worker_scope
+    title: Shared context explains why a change was asked for and never enlarges what may be changed
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Workers and the reviewer receive the conversation, the architect's intent and Sensei's evidence. That context must not become a side channel around the approved plan: a worker asked for work the plan does not cover reports it and leaves it undone, and the reviewer's standard of proof is unchanged by it."
+    protects:
+      files:
+        - internal/workflow/
+        - internal/workflow/engine.go
+    required_tests:
+      - internal/workflow/engine_test.go:TestImplementationPromptCarriesContextWithoutWideningScope
+      - internal/workflow/engine_test.go:TestReviewPromptCarriesContextWithoutLoweringTheBar
+      - internal/workflow/engine_test.go:TestGuidanceReachesTheWorkerWithoutEnlargingThePlan
+
+  - id: sensei_code.publication.never_merges
+    title: Sensei Code may open a pull request and may never merge one
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Publication is human-owned. Sensei's own merge-check verifies that a pull request is merge-authorized and never merges it, and Sensei Code holds the same line. Publication is gated twice, by the configured capability and by the human at the moment, and a pull request is never an admission."
+    protects:
+      files:
+        - internal/publish/
+        - internal/publish/publish.go
+    required_tests:
+      - internal/publish/publish_test.go:TestPullRequestArgsNeverMerge
+      - internal/publish/publish_test.go:TestPublicationRefusedWithoutTheCapability
+      - internal/publish/publish_test.go:TestBodyCarriesTheReportAndRefusesToClaimAdmission
+
+  - id: sensei_code.capability.declared_push_refusal_is_enforced
+    title: A capability the configuration withholds is enforced, not merely requested of the worker
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Capability flags read as guarantees. When push is not granted a pre-push hook is installed and the worker's git is pointed at it, so git refuses the push rather than the worker being asked not to. The guard lives outside the candidate so it cannot be committed into the change it protects."
+    protects:
+      files:
+        - internal/gitguard/
+        - internal/gitguard/gitguard.go
+    required_tests:
+      - internal/gitguard/gitguard_test.go:TestGuardActuallyRefusesAPush
+      - internal/gitguard/gitguard_test.go:TestGuardDoesNotLiveInTheDirectoryItProtects
+
+  - id: sensei_code.evidence.counts_carry_their_provenance
+    title: A reported figure states whether it is an exact total, a lower bound, or unpublished
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Sensei publishes exact totals for some classes and none for others, and a bounded query returns at most what it asked for. Presenting those alike is how a report starts lying, as when 144 invariants read as authored governance while 138 were an installed pack. Absence is reported as unmeasured, never as a reassuring zero."
+    protects:
+      files:
+        - internal/architect/
+        - internal/architect/report.go
+    required_tests:
+      - internal/architect/report_test.go:TestInstalledPackIsNotCreditedAsAuthoredGovernance
+      - internal/architect/report_test.go:TestClassesWithNoPublishedTotalAreNotShownAsZero
+      - internal/architect/report_test.go:TestReportRefusesToPresentCountsAsAnAssessment
+
+  - id: sensei_code.report.states_what_it_does_not_establish
+    title: Every report ends with the claims it is not entitled to make
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "A change summary reads as a completion claim unless it says otherwise. Reports state that admission was not requested, that reviewer acceptance and passing tests are not proof, and that a class Sensei holds nothing for is knowledge it was never given."
+    protects:
+      files:
+        - internal/report/
+        - internal/report/report.go
+    required_tests:
+      - internal/report/report_test.go:TestReportNeverClaimsAdmissionOrCorrectness
+      - internal/report/report_test.go:TestReportFlagsMissingTestsAndAbsentAudit
+
+  - id: sensei_code.learning.never_promotes_its_own_lessons
+    title: Recorded knowledge enters a review queue and never the live graph
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "A tool that could promote its own lessons into governance would let one bad afternoon become a permanent rule. Decisions and scars are appended for human review, a decision Sensei would refuse is reported rather than padded to pass, and recording never republishes the graph."
+    protects:
+      files:
+        - internal/decision/
+        - internal/decision/record.go
+    required_tests:
+      - internal/decision/record_test.go:TestUnlinkedDecisionIsRefusedRatherThanPadded
+      - internal/decision/record_test.go:TestSourceFilesAloneDoNotSatisfyContractFirst
+      - internal/decision/record_test.go:TestArgsNeverRebuildTheGraph
+
+  - id: sensei_code.candidate.reviewer_sees_every_changed_file
+    title: The reviewer judges the whole candidate, including files the worker created
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "git diff reports tracked modifications only, so a created file was absent from the candidate diff and the reviewer judged a change with its new files invisible. It rejected real work six times for omitting a test that was on disk. Candidates diff with intent-to-add so created files are visible."
+    protects:
+      files:
+        - internal/gitx/
+        - internal/gitx/git.go
+    required_tests:
+      - internal/gitx/git_test.go:TestCandidateDiffIncludesFilesTheWorkerCreated
+
+  - id: sensei_code.mcp.configuration_only_adds_what_is_missing
+    title: Repairing an agent's Sensei access never rewrites configuration the user wrote
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Silently rewriting an agent's own configuration replaces a deliberate choice with a guess. Missing entries are added and existing ones are left exactly as written. A registered server whose tools the agent cannot call is reported as partial, because an unverified route to Sensei is not a route to Sensei."
+    protects:
+      files:
+        - internal/mcpconfig/
+        - internal/mcpconfig/mcpconfig.go
+    required_tests:
+      - internal/mcpconfig/mcpconfig_test.go:TestConfigureLeavesAnExistingEntryAlone
+      - internal/mcpconfig/mcpconfig_test.go:TestMissingCodexToolsFindsBlockedEvidenceTools
+
+  - id: sensei_code.outcome.reporting_never_alters_the_result
+    title: Recording what happened never changes what happened
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "A task that succeeded did succeed whether or not the fact could be filed, so a reporting failure is surfaced and never converts a successful task into a failed one. A refused record is surfaced rather than counted as recorded, and reporting stays off until a project and domain are named so this repository's outcomes are never filed against another's principles."
+    protects:
+      files:
+        - internal/behavioral/
+        - internal/behavioral/behavioral.go
+    required_tests:
+      - internal/behavioral/behavioral_test.go:TestRecordIsSkippedUntilScopedDeliberately
+      - internal/behavioral/behavioral_test.go:TestRecordSurfacesARefusalInsteadOfReportingSuccess
+
+  - id: sensei_code.resume.never_skips_a_human_decision
+    title: A task still awaiting approval is never resumed
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Resuming re-enters implementation only, so a task whose plan was never approved has no candidate to continue and resuming it would skip a decision the human never made. Sensei evidence is re-read on resume rather than restored from the log, because the graph may have moved while the process was gone."
+    protects:
+      files:
+        - internal/session/
+        - internal/session/store.go
+    required_tests:
+      - internal/session/interrupted_test.go:TestUnapprovedTaskIsNotResumable
+      - internal/session/interrupted_test.go:TestFinishedTasksAreNotResumable
+
+  - id: sensei_code.command.unknown_input_is_never_run_as_a_task
+    title: An unrecognised command is answered, never handed to the architect as work
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "A mistyped command passed through as task text reaches the architect as a feature request. Unknown commands are named as unknown with the closest suggestion, and the command catalogue generates its own help so the listed surface cannot drift from the dispatched one."
+    protects:
+      files:
+        - internal/command/
+        - internal/command/command.go
+    required_tests:
+      - internal/command/command_test.go:TestUnknownCommandIsNotTreatedAsATask
+      - internal/command/command_test.go:TestGroupsCoverEveryCommand
+
