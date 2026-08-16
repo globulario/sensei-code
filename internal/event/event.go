@@ -30,7 +30,10 @@ const (
 	// conversation, not activity, and is always shown.
 	ArchitectSpoke Kind = "architect.spoke"
 	// PlanProposed carries a bounded plan awaiting the human's go-ahead.
-	PlanProposed      Kind = "plan.proposed"
+	PlanProposed Kind = "plan.proposed"
+	// DecisionRecorded reports whether the accepted plan reached Sensei's
+	// decisions surface, including when it did not.
+	DecisionRecorded  Kind = "decision.recorded"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
 	AgentStarted      Kind = "agent.started"

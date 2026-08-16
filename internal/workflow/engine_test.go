@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/authority"
@@ -43,5 +44,52 @@ func TestIsStopOption(t *testing.T) {
 	}
 	if isStopOption("Preserve the contract") {
 		t.Fatal("normal authority option must not stop the task")
+	}
+}
+
+func testContext() taskContext {
+	return taskContext{
+		Task:            "add a --version flag",
+		Conversation:    "HUMAN: can we version this?\nYOU: yes, a conventional flag",
+		WorkspaceStatus: "composition_state: complete",
+		Preflight:       "risk_class: UNKNOWN_IMPACT",
+		Rationale:       "conventional flag, no governance change",
+		Steps:           []string{"locate the CLI construction", "print and exit"},
+	}
+}
+
+func TestImplementationPromptCarriesContextWithoutWideningScope(t *testing.T) {
+	got := implementationPrompt(testContext(), "edit main.go", "", 1)
+	for _, want := range []string{
+		"can we version this?",             // the conversation
+		"conventional flag, no governance", // the architect's reasoning
+		"1. locate the CLI construction",   // the plan steps
+		"composition_state: complete",      // Sensei evidence
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("implementation prompt is missing %q", want)
+		}
+	}
+	// Context explains why; it must never read as permission to do more.
+	if !strings.Contains(got, "They do NOT widen your scope") {
+		t.Fatal("implementation prompt dropped the scope boundary")
+	}
+}
+
+func TestReviewPromptCarriesContextWithoutLoweringTheBar(t *testing.T) {
+	got := reviewPrompt(testContext(), "edit main.go", "diff --git a b", "audit says fine")
+	for _, want := range []string{"can we version this?", "conventional flag, no governance", "audit says fine"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("review prompt is missing %q", want)
+		}
+	}
+	if !strings.Contains(got, "Context does not\nlower the bar") {
+		t.Fatal("review prompt dropped the standard-of-proof guard")
+	}
+}
+
+func TestTaskContextIntentIsExplicitWhenEmpty(t *testing.T) {
+	if got := (taskContext{}).intent(); !strings.Contains(got, "no additional rationale") {
+		t.Fatalf("empty intent = %q, want an explicit statement of absence", got)
 	}
 }

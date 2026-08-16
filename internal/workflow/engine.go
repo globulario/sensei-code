@@ -12,6 +12,7 @@ import (
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/sensei"
@@ -118,6 +119,35 @@ func (e *Engine) conversationSoFar(current string, limit int) string {
 	return strings.Join(turns, "\n")
 }
 
+// taskContext is everything the architect knew when it decided. It is carried
+// to every other role so a worker and a reviewer judge the same request the
+// architect judged, instead of receiving a plan stripped of the reasoning that
+// produced it.
+type taskContext struct {
+	Task            string
+	Conversation    string
+	WorkspaceStatus string
+	Preflight       string
+	Rationale       string
+	Steps           []string
+}
+
+// intent renders the architect's stated reasoning for the roles downstream.
+func (c taskContext) intent() string {
+	var b strings.Builder
+	if r := strings.TrimSpace(c.Rationale); r != "" {
+		b.WriteString(r)
+		b.WriteString("\n")
+	}
+	for i, step := range c.Steps {
+		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, strings.TrimSpace(step)))
+	}
+	if b.Len() == 0 {
+		return "(the architect recorded no additional rationale)"
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 func (e *Engine) run(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	fail := func(err error) {
@@ -161,7 +191,8 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
 
-	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, e.conversationSoFar(task, 40), firstText(workspaceStatus), firstText(preflight)))
+	conversation := e.conversationSoFar(task, 40)
+	decision, err := e.resolveArchitecture(ctx, taskID, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, conversation, firstText(workspaceStatus), firstText(preflight)))
 	if err != nil {
 		fail(err)
 		return
@@ -183,7 +214,16 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
 		return
 	}
+	e.recordDecision(ctx, taskID, task, decision, sensei.RepositoryDomain(workspaceStatus))
 	plan := decision.Plan
+	tc := taskContext{
+		Task:            task,
+		Conversation:    conversation,
+		WorkspaceStatus: firstText(workspaceStatus),
+		Preflight:       firstText(preflight),
+		Rationale:       decision.Summary,
+		Steps:           decision.Steps,
+	}
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
 		fail(errors.New("candidate worktree capability is not granted"))
@@ -203,7 +243,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"worker": worker.Name, "workspace": workspace}))
 
-		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, task, plan, worker, workspace)
+		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, tc, plan, worker, workspace)
 		if err != nil {
 			failures = append(failures, worker.Name+": "+err.Error())
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" candidate did not converge; trying next bounded worker", map[string]string{"error": err.Error()}))
@@ -248,6 +288,37 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 	return strings.HasPrefix(choice, "1:"), nil
 }
 
+// recordDecision writes the accepted plan into Sensei as an architectural
+// decision, so the reason this work was authorized outlives the session and any
+// agent can read it later. A decision Sensei would refuse is reported, never
+// padded with invented links to make it pass.
+func (e *Engine) recordDecision(ctx context.Context, taskID, task string, d architectureDecision, domain string) {
+	record := decision.Record{
+		Title:        strings.TrimSpace(d.Summary),
+		Rationale:    task,
+		Context:      "Accepted by the human in an interactive Sensei Code session.",
+		Consequences: d.Consequences,
+		SourceFiles:  d.Files,
+		Invariants:   d.Invariants,
+		Repo:         domain,
+		Domain:       domain,
+		RepoRoot:     e.Repo.Root,
+	}
+	if strings.TrimSpace(record.Title) == "" {
+		record.Title = task
+	}
+	err := decision.Write(ctx, record)
+	if err == nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
+			"architectural decision recorded for review: "+record.Title, nil))
+		return
+	}
+	// Not recording is a gap in the shared memory, so it is said out loud
+	// rather than swallowed.
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
+		"decision not recorded: "+err.Error(), nil))
+}
+
 // planSummary renders the plan as something an architect can read and judge:
 // the decision, then the concrete work it commits to.
 func planSummary(d architectureDecision) string {
@@ -269,13 +340,14 @@ func planSummary(d architectureDecision) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID, task, initialPlan string, worker config.Agent, workspace string) (bool, string, string, string, error) {
+func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID string, tc taskContext, initialPlan string, worker config.Agent, workspace string) (bool, string, string, string, error) {
+	task := tc.Task
 	plan := initialPlan
 	feedback := ""
 	var lastReview, lastAudit string
 
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
-		prompt := implementationPrompt(task, plan, feedback, cycle)
+		prompt := implementationPrompt(tc, plan, feedback, cycle)
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID}
 		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
@@ -298,7 +370,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID, ta
 		lastAudit = firstText(audit)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit, audit.Structured))
 
-		review, err := e.resolveReview(ctx, taskID, reviewPrompt(task, plan, diff, lastAudit))
+		review, err := e.resolveReview(ctx, taskID, reviewPrompt(tc, plan, diff, lastAudit))
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
@@ -334,6 +406,9 @@ type architectureDecision struct {
 	Summary        string             `json:"summary"`
 	Message        string             `json:"message,omitempty"`
 	Steps          []string           `json:"steps,omitempty"`
+	Consequences   string             `json:"consequences,omitempty"`
+	Files          []string           `json:"files,omitempty"`
+	Invariants     []string           `json:"related_invariants,omitempty"`
 	Plan           string             `json:"plan"`
 	HumanQuestion  string             `json:"human_question,omitempty"`
 	Recommendation string             `json:"recommendation,omitempty"`
@@ -560,7 +635,11 @@ Choose ONE decision:
   bounded implementation contract in "plan", and break it into "steps": the concrete pieces
   of work, in order, each one a short line an architect can accept or reject on sight. The
   human reads the steps and decides whether the work starts, so write them as commitments,
-  not as a description of the request.
+  not as a description of the request. Also give "consequences", the "files" the work touches,
+  and "related_invariants": real Sensei invariant ids that govern those files, which you can
+  look up with your Sensei tools. Those three are recorded as an architectural decision when
+  the human accepts, so that the reason for this work outlives the session. Do not invent an
+  invariant id; leave the list empty if you did not verify one.
 - "escalate" when a human-owned authority boundary is genuinely in play.
 
 Return ONLY JSON in this exact shape:
@@ -570,6 +649,9 @@ Return ONLY JSON in this exact shape:
   "summary": "concise architectural decision, when proceeding or escalating",
   "plan": "bounded implementation contract, only when proceeding",
   "steps": ["concrete piece of work", "..."],
+  "consequences": "what changes for this repository once the plan lands, when proceeding",
+  "files": ["path/the/work/touches.go"],
+  "related_invariants": ["existing Sensei invariant id this work is governed by"],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}]
@@ -595,7 +677,7 @@ SENSEI PREFLIGHT:
 %s`, architectName, repoRoot, domain, conversationOrNone(conversation), task, workspaceStatus, preflight)
 }
 
-func implementationPrompt(task, plan, feedback string, cycle int) string {
+func implementationPrompt(tc taskContext, plan, feedback string, cycle int) string {
 	extra := ""
 	if strings.TrimSpace(feedback) != "" {
 		extra = "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback
@@ -604,22 +686,57 @@ func implementationPrompt(task, plan, feedback string, cycle int) string {
 Implement only the architect's bounded plan. You may inspect, edit, build, and test inside this candidate worktree. Work autonomously: do not ask the user for routine permissions.
 Never push, merge, deploy, weaken governance artifacts, rewrite human-owned intent, or claim admission. Sensei Code owns orchestration and Sensei owns governance.
 
+The conversation, architect intent, and Sensei evidence below are given so you
+understand WHY this work was asked for and can make the small judgement calls an
+implementation always needs. They do NOT widen your scope. Implement the plan and
+nothing else. If the conversation implies work the plan does not contain, say so
+in your output and leave it undone rather than deciding for the architect.
+
+CONVERSATION WITH THE ARCHITECT:
+%s
+
+ARCHITECT INTENT:
+%s
+
+SENSEI WORKSPACE AUTHORITY:
+%s
+
+SENSEI PREFLIGHT:
+%s
+
 TASK:
 %s
 
 ARCHITECTURAL PLAN:
 %s
 
-CYCLE: %d%s`, task, plan, cycle, extra)
+CYCLE: %d%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, cycle, extra)
 }
 
-func reviewPrompt(task, plan, diff, audit string) string {
+func reviewPrompt(tc taskContext, plan, diff, audit string) string {
 	return fmt.Sprintf(`You are the architectural reviewer for a Sensei-governed candidate. Do not edit files.
 Decide whether the exact candidate satisfies the architectural plan and the supplied Sensei evidence. Passing tests alone is not architectural proof.
 Return ESCALATE only when a genuine architectural-authority question exists; ordinary defects are REVISE.
 
+The conversation and architect intent below tell you what the human actually
+asked for, so you can judge whether the candidate serves it. Context does not
+lower the bar: a candidate that matches the conversation but violates the plan or
+Sensei's evidence is still a REVISE.
+
 Return ONLY JSON:
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate"}
+
+CONVERSATION WITH THE ARCHITECT:
+%s
+
+ARCHITECT INTENT:
+%s
+
+SENSEI WORKSPACE AUTHORITY:
+%s
+
+SENSEI PREFLIGHT:
+%s
 
 TASK:
 %s
@@ -631,7 +748,7 @@ SENSEI DIFF AUDIT:
 %s
 
 CANDIDATE DIFF:
-%s`, task, plan, audit, diff)
+%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, audit, diff)
 }
 
 func escalationPrompt(task, plan, audit string, review reviewDecision) string {
