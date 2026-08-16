@@ -96,6 +96,22 @@ func TestMissingCorpusOffersInit(t *testing.T) {
 	}
 }
 
+func TestRenderNeverPromisesToRunAnything(t *testing.T) {
+	// The same renderer serves a read-only report and the apply path. Labelling
+	// a repair "will run" is false in the first, and the reviewer caught exactly
+	// that when this text reached a read-only /setup.
+	out := Report{Checks: []Check{{
+		Name: "x", State: Broken, Detail: "d", Fix: "run that",
+		Repair: func(context.Context) error { return nil },
+	}}}.Render()
+	if strings.Contains(out, "will run") {
+		t.Fatalf("a read-only report promised to run a repair:\n%s", out)
+	}
+	if !strings.Contains(out, "--apply can do this") {
+		t.Fatalf("the report did not say a repair is available:\n%s", out)
+	}
+}
+
 func TestRenderShowsSymptomAndFixForFailures(t *testing.T) {
 	out := Report{Checks: []Check{{
 		Name: "x", State: Broken, Detail: "d", Symptom: "you see this", Fix: "run that",
@@ -140,5 +156,54 @@ func TestNoRemoteSaysSoRatherThanRepeatingInit(t *testing.T) {
 	}
 	if !strings.Contains(c.Detail, "no git remote") {
 		t.Fatalf("the actual cause was not named: %q", c.Detail)
+	}
+}
+
+func TestAbandonedWorktreesRemoveEmptyAndKeepWorkInProgress(t *testing.T) {
+	// An abandoned candidate can still hold unreviewed work. Tidying up must
+	// never be a reason to delete it.
+	root := t.TempDir()
+	repo := filepath.Join(root, "repo")
+	worktrees := filepath.Join(root, ".repo-worktrees")
+	for _, d := range []string{repo, filepath.Join(worktrees, "empty"), filepath.Join(worktrees, "holding")} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(worktrees, "holding", "work.go"), []byte("package x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := checkAbandonedWorktrees(context.Background(), Options{RepoRoot: repo})
+	if c.State != Degraded {
+		t.Fatalf("state = %q, want degraded", c.State)
+	}
+	if !strings.Contains(c.Fix, "holding") {
+		t.Fatalf("the candidate holding files was not named: %q", c.Fix)
+	}
+	if c.Repair == nil {
+		t.Fatal("the empty directory should still be removable")
+	}
+	if err := c.Repair(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(worktrees, "empty")); !os.IsNotExist(err) {
+		t.Fatal("the empty directory was not removed")
+	}
+	if _, err := os.Stat(filepath.Join(worktrees, "holding", "work.go")); err != nil {
+		t.Fatal("work in an abandoned candidate was deleted")
+	}
+}
+
+func TestRemoveAllRefusesADirectoryThatGainedContent(t *testing.T) {
+	dir := t.TempDir()
+	target := filepath.Join(dir, "candidate")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "f"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeAll([]string{target}); err == nil {
+		t.Fatal("a non-empty directory was deleted")
 	}
 }

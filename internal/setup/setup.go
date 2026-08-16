@@ -105,11 +105,15 @@ func (r Report) Render() string {
 			b.WriteString("         what you would see: " + c.Symptom + "\n")
 		}
 		if c.Fix != "" {
-			verb := "fix"
+			// Always "fix", never "will run". This renderer is used by a
+			// read-only report as well as by the apply path, and a label that
+			// promises to run something is false in the first. Whether a repair
+			// is actually about to happen is said by the caller that is going to
+			// do it.
+			b.WriteString("         fix: " + c.Fix + "\n")
 			if c.Repair != nil {
-				verb = "will run"
+				b.WriteString("              (sensei-code setup --apply can do this)\n")
 			}
-			b.WriteString("         " + verb + ": " + c.Fix + "\n")
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")

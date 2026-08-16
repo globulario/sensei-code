@@ -49,6 +49,7 @@ func Inspect(ctx context.Context, o Options) Report {
 		checkGraphFreshness(ctx, o),
 		checkDomainRegistered(ctx, o),
 		checkCorpus(ctx, o),
+		checkAbandonedWorktrees(ctx, o),
 	)
 	return r
 }
@@ -409,6 +410,96 @@ func checkCorpus(ctx context.Context, o Options) Check {
 	c.State = OK
 	c.Detail = fmt.Sprintf("%d source files", count)
 	return c
+}
+
+// checkAbandonedWorktrees finds candidate checkouts git no longer tracks.
+//
+// They sit beside the repository, which is deliberate, but it also means a user
+// finds unexplained directories next to their work and cannot tell which are
+// live. Empty ones are removed. A non-empty one is named and left alone: an
+// abandoned candidate can still hold unreviewed work, and deleting that to tidy
+// up would throw away the very thing worth keeping.
+func checkAbandonedWorktrees(ctx context.Context, o Options) Check {
+	c := Check{Name: "candidate worktrees"}
+	root := worktreeRoot(o.RepoRoot)
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		c.State = OK
+		c.Detail = "none"
+		return c
+	}
+	live := liveWorktrees(ctx, o.RepoRoot)
+	var empty, holding []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(root, entry.Name())
+		if live[path] {
+			continue
+		}
+		if isEmptyDir(path) {
+			empty = append(empty, path)
+			continue
+		}
+		holding = append(holding, path)
+	}
+	switch {
+	case len(empty) == 0 && len(holding) == 0:
+		c.State = OK
+		c.Detail = fmt.Sprintf("%d live", len(live))
+	case len(holding) != 0:
+		c.State = Degraded
+		c.Detail = fmt.Sprintf("%d abandoned candidate(s) still holding files, %d empty", len(holding), len(empty))
+		c.Symptom = "unexplained directories beside your repository"
+		c.Fix = "inspect and remove by hand: " + strings.Join(holding, ", ")
+		if len(empty) != 0 {
+			c.Repair = func(ctx context.Context) error { return removeAll(empty) }
+			c.Fix = "remove the empty ones; the rest hold files: " + strings.Join(holding, ", ")
+		}
+	default:
+		c.State = Degraded
+		c.Detail = fmt.Sprintf("%d empty leftover director%s", len(empty), plural(len(empty)))
+		c.Symptom = "unexplained empty directories beside your repository"
+		c.Fix = "remove them"
+		c.Repair = func(ctx context.Context) error { return removeAll(empty) }
+	}
+	return c
+}
+
+func worktreeRoot(repoRoot string) string {
+	return filepath.Join(filepath.Dir(repoRoot), "."+filepath.Base(repoRoot)+"-worktrees")
+}
+
+// liveWorktrees are the checkouts git still tracks, which must never be removed.
+func liveWorktrees(ctx context.Context, repoRoot string) map[string]bool {
+	live := map[string]bool{}
+	for _, line := range strings.Split(run(ctx, repoRoot, "git", "worktree", "list", "--porcelain"), "\n") {
+		if path, ok := strings.CutPrefix(strings.TrimSpace(line), "worktree "); ok {
+			live[strings.TrimSpace(path)] = true
+		}
+	}
+	return live
+}
+
+func isEmptyDir(path string) bool {
+	entries, err := os.ReadDir(path)
+	return err == nil && len(entries) == 0
+}
+
+func removeAll(paths []string) error {
+	for _, p := range paths {
+		if !isEmptyDir(p) {
+			// Refuse anything that gained content between the check and the
+			// repair: this deletes directories, and the check is the only thing
+			// that established they were empty.
+			return fmt.Errorf("%s is no longer empty; left alone", p)
+		}
+		if err := os.Remove(p); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func run(ctx context.Context, dir, name string, args ...string) string {
