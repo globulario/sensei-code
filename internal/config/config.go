@@ -30,6 +30,9 @@ type Agent struct {
 
 type Workflow struct {
 	ReviewCycles int `json:"review_cycles"`
+	// PublishBase is the branch a pull request targets. Empty lets the host
+	// choose its own default rather than Sensei Code guessing one.
+	PublishBase string `json:"publish_base,omitempty"`
 }
 
 type Config struct {

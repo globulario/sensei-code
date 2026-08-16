@@ -19,6 +19,7 @@ import (
 	"github.com/globulario/sensei-code/internal/gitguard"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/provider"
+	"github.com/globulario/sensei-code/internal/publish"
 	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
@@ -136,6 +137,9 @@ type taskContext struct {
 	Rationale       string
 	Steps           []string
 	Domain          string
+	// Report is the rendered change report, set once the candidate is judged so
+	// the pull request body carries the same evidence the architect saw.
+	Report string
 }
 
 // intent renders the architect's stated reasoning for the roles downstream.
@@ -264,6 +268,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 		plan = finalPlan
 		if accepted {
+			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
 			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 				"candidate kept for inspection at "+workspace, nil))
@@ -304,6 +309,46 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 	return strings.HasPrefix(choice, "1:"), nil
 }
 
+// offerPullRequest asks whether to publish an accepted candidate. Publication
+// is human-owned, so it is gated twice: the configuration must grant push at
+// all, and the human must say yes to this particular change. Sensei Code opens
+// the pull request and stops there; merging is never its decision.
+func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc taskContext, workspace, worker string) {
+	if !e.Config.Permissions.Push {
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			"no pull request offered: "+publish.ErrPushNotGranted.Error(), nil))
+		return
+	}
+	options := []authority.Option{
+		{ID: "1", Label: "Open a pull request", Description: "pushes the candidate branch; it is not merged"},
+		{ID: "2", Label: "Leave it local", Description: "the candidate stays in its worktree"},
+	}
+	choice, err := e.awaitChoice(ctx, taskID, authority.Decision{
+		Level:          authority.Human,
+		Subject:        "Open a pull request for this candidate?",
+		Reason:         "Sensei Code can publish the branch. It cannot merge it, and a pull request is not an admission.",
+		Recommendation: "1",
+		Options:        options,
+	}, options)
+	if err != nil || !strings.HasPrefix(choice, "1:") {
+		return
+	}
+	url, err := publish.Open(ctx, publish.Request{
+		Workspace: workspace,
+		Branch:    e.Repo.WorktreeBranch(taskID, worker),
+		Base:      e.Config.Workflow.PublishBase,
+		Title:     tc.Task,
+		Report:    tc.Report,
+	}, e.Config.Permissions.Push, e.Config.Permissions.LocalCommit)
+	if err != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.WorkflowFailed,
+			"pull request not opened: "+err.Error(), nil))
+		return
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.PullRequestOpened,
+		"pull request opened, not merged and not admitted: "+url, map[string]string{"url": url}))
+}
+
 // discardWorktree removes a candidate that will not be used. An accepted
 // candidate is deliberately kept: it is the deliverable, and the human needs it
 // to inspect or apply the work. Only abandoned attempts are cleaned up, and a
@@ -323,7 +368,7 @@ func (e *Engine) discardWorktree(ctx context.Context, taskID, workspace, worker 
 // emitChangeReport tells the architect what the candidate actually changed.
 // Every figure is counted from the diff or quoted from Sensei; nothing is the
 // worker's account of its own work.
-func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc taskContext, diff, audit string) {
+func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc taskContext, diff, audit string) string {
 	change := report.FromDiff(diff)
 	change.Audit = audit
 
@@ -347,6 +392,7 @@ func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID
 		}
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.ChangeReported, change.Render(tc.Task), change))
+	return change.Render(tc.Task)
 }
 
 // governingInvariants pulls invariant titles out of preflight's required
@@ -488,7 +534,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		lastReview = review.Summary
 		switch review.Decision {
 		case "accept":
-			e.emitChangeReport(ctx, sc, taskID, tc, diff, lastAudit)
+			tc.Report = e.emitChangeReport(ctx, sc, taskID, tc, diff, lastAudit)
 			return true, plan, lastReview, lastAudit, nil
 		case "revise":
 			feedback = review.Instructions

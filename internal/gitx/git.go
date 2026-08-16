@@ -61,12 +61,19 @@ func (r Repo) WorktreePath(taskID, worker string) string {
 	return filepath.Join(filepath.Dir(r.Root), base, clean(taskID), clean(worker))
 }
 
+// WorktreeBranch names the branch a candidate is built on. Publication needs
+// the same name the worktree was created with, so it is derived once here
+// rather than reconstructed by each caller.
+func (r Repo) WorktreeBranch(taskID, worker string) string {
+	return "sensei-code/" + clean(taskID) + "/" + clean(worker)
+}
+
 func (r Repo) CreateWorktree(ctx context.Context, taskID, worker string) (string, error) {
 	path := r.WorktreePath(taskID, worker)
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
-	branch := "sensei-code/" + clean(taskID) + "/" + clean(worker)
+	branch := r.WorktreeBranch(taskID, worker)
 	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, "HEAD")
 	if b, err := cmd.CombinedOutput(); err != nil {
 		return "", fmt.Errorf("git worktree add: %w: %s", err, strings.TrimSpace(string(b)))

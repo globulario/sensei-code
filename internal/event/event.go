@@ -35,7 +35,9 @@ const (
 	// decisions surface, including when it did not.
 	DecisionRecorded Kind = "decision.recorded"
 	// ChangeReported carries the architectural change report for a candidate.
-	ChangeReported    Kind = "change.reported"
+	ChangeReported Kind = "change.reported"
+	// PullRequestOpened reports a published candidate. It is never a merge.
+	PullRequestOpened Kind = "pull_request.opened"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
 	AgentStarted      Kind = "agent.started"
