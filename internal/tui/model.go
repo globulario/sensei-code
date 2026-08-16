@@ -270,7 +270,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			for _, option := range m.pending.Options {
 				if key == option.ID {
 					if m.engine.ResolveHuman(m.pendingTask, option.ID) {
-						m.lines = append(m.lines, userStyle.Render("⚑ YOU")+"\n  "+option.ID+". "+option.Label)
+						// The engine records the resolved choice and it renders
+						// from that event; echoing it here printed it twice.
 						m.pending = nil
 						m.pendingTask = ""
 						m.busy = true

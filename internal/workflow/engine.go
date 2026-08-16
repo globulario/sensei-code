@@ -465,6 +465,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 			if strings.TrimSpace(revised.Plan) == "" {
 				return false, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
 			}
+			e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
 			plan = revised.Plan
 			feedback = "The architect resolved the review escalation. Reconcile the current candidate with the revised plan."
 		default:
@@ -528,7 +529,9 @@ func (e *Engine) resolveArchitecture(ctx context.Context, taskID, prompt string)
 				lastErr = errors.New("architect returned PROCEED without a plan")
 				continue
 			}
-			e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, d.Summary, d))
+			// No status line here: the caller renders this decision, either as a
+			// plan awaiting approval or as a revised plan during review. Emitting
+			// the summary as well printed it twice.
 			return d, nil
 		case "escalate":
 			choice, err := e.awaitHuman(ctx, taskID, d)
@@ -690,6 +693,14 @@ speak to the human directly: you direct them and you report what they did.
 Your identity: %s, acting as architect.
 Repository: %s
 Repository domain: %s
+
+You have Sensei's own MCP tools available in this session: awareness_briefing,
+awareness_preflight, awareness_impact, awareness_query, awareness_resolve, awareness_metadata,
+awareness_edit_check, awareness_audit_diff, sensei_workspace_status, task_briefing and
+task_status. Use them to check what actually governs a file before you advise on it. Your
+shell is sandboxed and cannot reach the network, so do not try to run the sensei CLI or curl
+the graph: a shell failure means your shell is sandboxed, never that Sensei is unavailable.
+If a tool itself returns an error, report that exact error rather than inferring a cause.
 
 Sensei is the governance authority for architectural truth, invariants, contracts, evidence,
 and admission. Do not edit files, do not weaken or reinterpret Sensei's contracts, and do not
