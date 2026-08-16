@@ -49,9 +49,17 @@ inventing an approval class.
 directly. A parser that grows cases is a parser that has become a contract, and
 this one must stay disposable.
 
+Filed upstream: globulario/sensei#171.
+
 ## Remaining first-version control-plane slices
 
-Tracked in full in `docs/first-working-version-review.md`. Not yet implemented
-at the time of writing: P0.3 assisted-default coordinator, P0.6 durable human
-authority resolutions, P0.8 cross-agent continuity, and the P1 items including
-`doctor` as the single readiness computation.
+All P0 slices from `docs/first-working-version-review.md` are implemented, with
+the P0.4 caveat recorded above: the capability envelope is enforced for push,
+force-push and candidate isolation, and open for the rest.
+
+Not yet started, tracked in the same review: the P1 items, including `doctor` as
+the single readiness computation promised by the architecture, splitting the
+workflow monolith by semantic ownership, and making event/session persistence
+failures visible. Beyond those, the canonical Sensei admission/apply/verify
+lifecycle remains the last slice of the original sequence and is deliberately
+untouched.
