@@ -321,10 +321,18 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		{ID: "1", Label: "Open a pull request", Description: "pushes the candidate branch; it is not merged"},
 		{ID: "2", Label: "Leave it local", Description: "the candidate stays in its worktree"},
 	}
+	reason := "Sensei Code can publish the branch. It cannot merge it, and a pull request is not an admission."
+	// The behavioral gate informs this decision; it never replaces it. Its
+	// answer is shown to the human rather than acted on, because an ungoverned
+	// "allowed" means no principle covered the action, and a tool that read only
+	// the status would turn the absence of a rule into a permission.
+	if verdict := e.behavioralVerdict(ctx, "open a pull request from an AI-generated candidate", tc.Domain); verdict != "" {
+		reason += "\n\n" + verdict
+	}
 	choice, err := e.awaitChoice(ctx, taskID, authority.Decision{
 		Level:          authority.Human,
 		Subject:        "Open a pull request for this candidate?",
-		Reason:         "Sensei Code can publish the branch. It cannot merge it, and a pull request is not an admission.",
+		Reason:         reason,
 		Recommendation: "1",
 		Options:        options,
 	}, options)
@@ -423,6 +431,21 @@ func governingInvariants(structured map[string]any) []string {
 func structuredString(structured map[string]any, key string) string {
 	value, _ := structured[key].(string)
 	return value
+}
+
+// behavioralVerdict asks the behavioral gate about an action and returns the
+// line a human should read before deciding. It returns "" when no gate is
+// configured, and reports a gate that could not answer rather than treating
+// silence as approval.
+func (e *Engine) behavioralVerdict(ctx context.Context, action, target string) string {
+	decision, err := behavioral.New(e.Config.Behavioral).CheckAction(ctx, action, target)
+	switch {
+	case errors.Is(err, behavioral.ErrNotConfigured):
+		return ""
+	case err != nil:
+		return "behavioral gate: could not be reached, so it gave no answer (" + err.Error() + ")"
+	}
+	return decision.Summary()
 }
 
 // reportOutcome files what became of a task with the behavioral service, so

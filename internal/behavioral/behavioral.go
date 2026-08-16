@@ -40,6 +40,122 @@ func (c Config) ready() bool {
 		strings.TrimSpace(c.Domain) != ""
 }
 
+// Decision is the behavioral gate's answer about a proposed action.
+type Decision struct {
+	// Status is allowed, blocked, needs_evidence, needs_authority or
+	// needs_human_approval.
+	Status string
+	// Governed reports whether any promoted principle actually covered the
+	// action. When false the gate default-allows, which is the absence of a
+	// rule and not a safety endorsement.
+	Governed    bool
+	Explanation string
+	Violated    []string
+}
+
+// Permits reports whether the gate affirmatively allowed the action.
+//
+// An ungoverned "allowed" is not a yes. Asked whether an agent may merge a pull
+// request it opened, the gate answers allowed with governed=false because no
+// principle covers it — a green light for the one action this tool exists never
+// to take. Reading only the status field is how a safety gate becomes a rubber
+// stamp, so absence of a rule is treated here the same way absence of evidence
+// is treated everywhere else in this system: as an unanswered question.
+func (d Decision) Permits() bool { return d.Status == "allowed" && d.Governed }
+
+// Summary is the line a human reads before deciding.
+func (d Decision) Summary() string {
+	switch {
+	case d.Status == "":
+		return ""
+	case !d.Governed:
+		return "behavioral gate: no promoted principle covers this, so it gave no answer"
+	case d.Status == "allowed":
+		return "behavioral gate: allowed by promoted principles"
+	default:
+		line := "behavioral gate: " + d.Status
+		if len(d.Violated) != 0 {
+			line += " · " + strings.Join(d.Violated, ", ")
+		}
+		if d.Explanation != "" {
+			line += " · " + d.Explanation
+		}
+		return line
+	}
+}
+
+// CheckAction asks the behavioral gate about a proposed action. It never
+// executes anything and never promotes a principle.
+func (c *Client) CheckAction(ctx context.Context, action, target string) (Decision, error) {
+	if c == nil || !c.cfg.ready() {
+		return Decision{}, ErrNotConfigured
+	}
+	session, err := c.initialize(ctx)
+	if err != nil {
+		return Decision{}, err
+	}
+	args := map[string]any{
+		"project":     c.cfg.Project,
+		"domain":      c.cfg.Domain,
+		"action_type": action,
+		"agent_id":    "sensei-code",
+	}
+	if strings.TrimSpace(target) != "" {
+		args["target_ref"] = target
+	}
+	body, err := c.call(ctx, session, "tools/call", map[string]any{
+		"name": "behavioral_check_action", "arguments": args,
+	})
+	if err != nil {
+		return Decision{}, err
+	}
+	return decodeDecision(body)
+}
+
+// decodeDecision reads the gate's answer out of the MCP envelope. A reply it
+// cannot parse is an error, never a permissive default.
+func decodeDecision(body []byte) (Decision, error) {
+	var envelope struct {
+		Result struct {
+			StructuredContent map[string]any `json:"structuredContent"`
+			Content           []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return Decision{}, err
+	}
+	payload := envelope.Result.StructuredContent
+	if len(payload) == 0 {
+		for _, item := range envelope.Result.Content {
+			var parsed map[string]any
+			if json.Unmarshal([]byte(item.Text), &parsed) == nil && len(parsed) != 0 {
+				payload = parsed
+				break
+			}
+		}
+	}
+	if len(payload) == 0 {
+		return Decision{}, errors.New("the behavioral gate returned no decision")
+	}
+	d := Decision{}
+	d.Status, _ = payload["status"].(string)
+	d.Governed, _ = payload["governed"].(bool)
+	d.Explanation, _ = payload["explanation"].(string)
+	if raw, ok := payload["violated_principles"].([]any); ok {
+		for _, item := range raw {
+			if text, ok := item.(string); ok {
+				d.Violated = append(d.Violated, text)
+			}
+		}
+	}
+	if d.Status == "" {
+		return Decision{}, errors.New("the behavioral gate returned no status")
+	}
+	return d, nil
+}
+
 // Outcome is what became of one task.
 type Outcome struct {
 	// Status is one of success, failure, blocked, reverted.
