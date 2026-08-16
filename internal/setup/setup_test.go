@@ -123,6 +123,33 @@ func TestRenderShowsSymptomAndFixForFailures(t *testing.T) {
 	}
 }
 
+func TestReportingNeverRunsARepair(t *testing.T) {
+	// Apply is the only thing allowed to repair, so nothing a reader calls may.
+	// TestInspectRepositoryObservesAndChangesNothing proves that for the whole
+	// inspection; this pins it on the Report methods themselves, which is where
+	// a convenience like "Render fixes what it can" would be added.
+	repaired := false
+	r := Report{Checks: []Check{{
+		Name: "x", State: Broken, Detail: "d", Symptom: "you see this", Fix: "run that",
+		Repair: func(ctx context.Context) error { repaired = true; return nil },
+	}}}
+	r.Render()
+	r.Ready()
+	r.Blocking()
+	if got := r.Repairable(); len(got) != 1 {
+		t.Fatalf("Repairable listed %d checks, want the one that can fix itself", len(got))
+	}
+	if repaired {
+		t.Fatal("reading the report ran a repair")
+	}
+	// The flag is only meaningful if something does flip it: Apply is that
+	// something, and it is the only caller allowed to be.
+	Apply(context.Background(), r)
+	if !repaired {
+		t.Fatal("Apply did not run the repair, so this test proves nothing")
+	}
+}
+
 func TestDomainDerivedFromEitherRemoteForm(t *testing.T) {
 	// Sensei's domain validator requires host/path, so a derived value must
 	// never be a bare alias.

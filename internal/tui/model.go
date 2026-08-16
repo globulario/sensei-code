@@ -23,6 +23,7 @@ import (
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
+	"github.com/globulario/sensei-code/internal/setup"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
 
@@ -850,6 +851,13 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		case "/debt":
 			text, err := architect.RunDebt(engine.Repo.Root, 12)
 			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/setup":
+			// Report only. The checks carry their repairs so `sensei-code setup
+			// --apply` can act on the same report, but none is invoked here: a
+			// session that quietly rewrote a shared graph, the domain registry or
+			// an agent's MCP configuration because somebody asked what was wrong
+			// would be exactly the silent rearrangement the CLI refuses to do.
+			return commandResultMsg{name: c.Name, text: setup.InspectRepository(ctx, engine.Repo.Root, engine.Config).Render()}
 		}
 
 		client, err := sensei.Start(ctx, engine.Repo.Root, engine.Config.Sensei.Command, engine.Config.Sensei.Args)

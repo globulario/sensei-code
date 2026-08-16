@@ -201,7 +201,9 @@ cannot describe a command that does not exist.
 |---|---|
 | `/learn <what broke>` | queue a scar so the next agent cannot repeat it |
 
-**Session**: `/resume`, `/login`, `/mcp`, `/clear`, `/help`.
+**Session**: `/resume`, `/setup`, `/login`, `/mcp`, `/clear`, `/help`. `/setup`
+reports the same readiness checks as `sensei-code setup` and repairs nothing;
+repair stays with the CLI's `--apply`, because it reaches outside the repository.
 
 Two habits are worth forming. `/focus` before editing a file tells you what it is
 bound by; on a governed path it will say `SECURITY_RISK · human_approval_required`

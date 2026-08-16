@@ -102,6 +102,12 @@ var Registry = []Command{
 		Detail:  "A registered MCP server whose tools an agent cannot call is not access to Sensei, and is reported as partial rather than configured.",
 	},
 	{
+		Name: "/setup", Kind: Session, NeedsIdle: true,
+		Summary: "readiness report: what this machine and checkout still need",
+		Detail: "Reports every readiness check — what is broken, what you would see when it bites, and the command that fixes it. It repairs nothing: " +
+			"setup reaches a shared graph, a registry outside this repository and each agent's own MCP configuration, so changing any of it stays with `sensei-code setup --apply`.",
+	},
+	{
 		Name: "/clear", Kind: Session, NeedsIdle: true,
 		Summary: "start a fresh conversation",
 		Detail:  "Begins a new session. The previous record is kept, not deleted.",

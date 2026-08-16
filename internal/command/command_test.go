@@ -21,6 +21,28 @@ func TestEveryCommandIsDocumented(t *testing.T) {
 	}
 }
 
+func TestSetupIsDiscoverableAndPromisesNoRepair(t *testing.T) {
+	// A readiness command nobody can find leaves the user guessing at a broken
+	// session, and one whose help implies it fixes things is worse than missing:
+	// the repairs reach outside this repository and stay with the CLI.
+	c, arg, ok := Lookup("/setup")
+	if !ok {
+		t.Fatal("/setup is not in the catalogue, so no one can find it")
+	}
+	if arg != "" {
+		t.Fatalf("/setup takes no argument, got %q", arg)
+	}
+	if !c.NeedsIdle {
+		t.Fatal("/setup queries a running Sensei and must not run beside a task")
+	}
+	if !strings.Contains(c.Detail, "repairs nothing") {
+		t.Fatalf("help does not say the command is read-only: %q", c.Detail)
+	}
+	if !strings.Contains(c.Detail, "--apply") {
+		t.Fatalf("help does not name where repair actually lives: %q", c.Detail)
+	}
+}
+
 func TestLookupSeparatesArguments(t *testing.T) {
 	c, arg, ok := Lookup("/focus internal/tui/model.go")
 	if !ok || c.Name != "/focus" || arg != "internal/tui/model.go" {
