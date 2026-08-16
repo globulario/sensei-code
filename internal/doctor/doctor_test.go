@@ -29,6 +29,9 @@ func TestConfiguredCommandsAreUnique(t *testing.T) {
 func TestConfiguredProvidersAreUnique(t *testing.T) {
 	cfg := config.Default()
 	got := configuredProviders(cfg)
+	if len(got) != 3 {
+		t.Fatalf("configuredProviders(default)=%v want three providers", got)
+	}
 	seen := map[provider.ID]bool{}
 	for _, id := range got {
 		if seen[id] {
@@ -36,9 +39,9 @@ func TestConfiguredProvidersAreUnique(t *testing.T) {
 		}
 		seen[id] = true
 	}
-	// The architect authenticates as ChatGPT through the codex CLI, and the two
-	// bounded workers are Claude and Codex, so all three are configured login
-	// surfaces that doctor must report on.
+	// The architect authenticates as ChatGPT through the codex app-server, and
+	// the two bounded workers are Claude and Codex, so all three are configured
+	// login surfaces that doctor must report on.
 	for _, want := range []provider.ID{provider.ChatGPT, provider.Codex, provider.Claude} {
 		if !seen[want] {
 			t.Fatalf("configuredProviders(default)=%v is missing %q", got, want)

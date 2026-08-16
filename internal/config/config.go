@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/behavioral"
@@ -52,10 +53,11 @@ func Default() Config {
 	var c Config
 	c.Sensei.Command = "awareness-mcp"
 	c.Sensei.Args = []string{"--awareness-addr", "localhost:10120"}
-	// The architect is the agent the human talks to. It runs through the codex
-	// CLI, which authenticates with a ChatGPT subscription, so it is named for the
-	// account it speaks as rather than for the binary that carries it.
-	c.Architect = Agent{Name: "chatgpt", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
+	// ChatGPT is the first-version architectural authority, and it is the agent
+	// the human talks to. The codex binary is retained only because its
+	// app-server is the authenticated ChatGPT transport; agent.CLI does not
+	// invoke a one-shot codex exec for this role.
+	c.Architect = Agent{Name: "chatgpt", Command: "codex"}
 	c.Implementors = []Agent{
 		// --verbose is required: claude refuses --output-format=stream-json
 		// without it under --print, so the worker exited 1 before doing any work.
@@ -94,10 +96,21 @@ func Load(repo string) (Config, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return Config{}, err
 	}
+	// Migrate only the exact old built-in architect. A deliberately customized
+	// architect remains user-owned configuration and is never rewritten.
+	if isLegacyDefaultArchitect(c.Architect) {
+		c.Architect = Default().Architect
+	}
 	if c.Workflow.ReviewCycles < 1 {
 		c.Workflow.ReviewCycles = 1
 	}
 	return c, nil
+}
+
+func isLegacyDefaultArchitect(a Agent) bool {
+	return a.Name == "codex" &&
+		a.Command == "codex" &&
+		reflect.DeepEqual(a.Args, []string{"exec", "--sandbox", "read-only", "-"})
 }
 
 func Save(repo string, c Config) error {
