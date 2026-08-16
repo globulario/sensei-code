@@ -18,6 +18,7 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/mcpconfig"
 	"github.com/globulario/sensei-code/internal/provider"
+	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
 
@@ -77,6 +78,7 @@ type Model struct {
 	mcpMenu       bool
 	pendingTask   string
 	currentTask   string
+	resumable     []session.Interrupted
 	pending       *authority.Decision
 	mode          mode
 	frame         int
@@ -93,14 +95,25 @@ func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event
 	ta.SetWidth(80)
 	ta.ShowLineNumbers = false
 	focusCmd := ta.Focus()
-	return Model{
+	m := Model{
 		ctx:     ctx,
 		engine:  engine,
 		events:  events,
 		input:   ta,
 		initCmd: focusCmd,
 		lines:   append(banner(len(history) > 0), replayConversation(history)...),
+		// A task that was approved and then interrupted still has its candidate
+		// on disk. Offering it is the difference between resuming work and
+		// silently abandoning it.
+		resumable: session.FindInterrupted(history),
 	}
+	if n := len(m.resumable); n > 0 {
+		m.lines = append(m.lines,
+			authorityStyle.Render("⚑ INTERRUPTED"),
+			"  "+m.resumable[n-1].Task,
+			dimStyle.Render("  its candidate is still on disk · /resume to continue it"), "")
+	}
+	return m
 }
 
 func banner(resumed bool) []string {
@@ -302,10 +315,27 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.mcpMenu = true
 				return m, tea.Batch(cmds...)
 			}
+			if text == "/resume" && !m.busy {
+				m.input.Reset()
+				if len(m.resumable) == 0 {
+					m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was interrupted after its plan was approved"), "")
+					return m, tea.Batch(cmds...)
+				}
+				task := m.resumable[len(m.resumable)-1]
+				m.resumable = nil
+				m.busy = true
+				m.startedAt = time.Now()
+				m.frame = 0
+				m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+"/resume "+task.Task, "")
+				m.currentTask = m.engine.Resume(m.ctx, task)
+				cmds = append(cmds, tea.ClearScreen)
+				return m, tea.Batch(cmds...)
+			}
 			if text == "/clear" && !m.busy {
 				m.input.Reset()
 				m.lines = banner(false)
 				m.activity = ""
+				m.resumable = nil
 				if err := m.engine.RotateSession(); err != nil {
 					m.lines = append(m.lines, errorStyle.Render("✗ SESSION"), "  "+err.Error(), "")
 				}
@@ -448,7 +478,7 @@ func (m Model) statusLine() string {
 		}
 		return line + hintStyle.Render("  · type to steer")
 	default:
-		return hintStyle.Render("● ready — describe a task · /login · /mcp · /clear")
+		return hintStyle.Render("● ready — describe a task · /report · /login · /mcp · /resume · /clear")
 	}
 }
 

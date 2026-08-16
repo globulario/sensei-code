@@ -278,58 +278,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		return
 	}
 
-	// One candidate for the whole task. A worker that runs out of review cycles
-	// hands the work on rather than taking it with it, so the next worker
-	// continues from the same checkout and keeps every fix the reviewer has
-	// already extracted.
-	workspace, err := e.Repo.CreateWorktree(ctx, taskID)
-	if err != nil {
-		fail(fmt.Errorf("create the candidate worktree: %w", err))
-		return
-	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"workspace": workspace}))
-
-	var failures []string
-	carried := ""
-	for _, worker := range e.Config.Implementors {
-		if carried != "" {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
-		}
-		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, &tc, plan, worker, workspace, carried)
-		if err != nil {
-			failures = append(failures, worker.Name+": "+err.Error())
-			// The candidate stays: it holds real work, and the reviewer's
-			// unresolved findings travel with it to whoever picks it up next.
-			carried = handoverNote(worker.Name, review, err)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" did not converge; handing the candidate to the next bounded worker", map[string]string{"error": err.Error()}))
-			continue
-		}
-		plan = finalPlan
-		if accepted {
-			e.reportUndeliveredNotes(taskID)
-			e.offerPullRequest(ctx, taskID, &tc, workspace, worker.Name)
-			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-				"candidate kept for inspection at "+workspace, nil))
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "candidate ready for governed admission", map[string]any{
-				"workspace":   workspace,
-				"implementor": worker.Name,
-				"plan":        plan,
-				"review":      review,
-				"audit":       audit,
-			}))
-			return
-		}
-	}
-
-	// Nothing converged, but the candidate is not thrown away. It carries the
-	// accumulated work and the reviewer's outstanding findings, which is what a
-	// person needs to finish it or to judge whether it was worth starting.
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-		"candidate kept so the work is not lost: "+workspace, nil))
-	e.reportUndeliveredNotes(taskID)
-	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
+	e.implement(ctx, sc, taskID, &tc, plan, "", fail)
 }
 
 // approvePlan shows the architect's bounded plan and waits for the human to
@@ -1036,4 +985,109 @@ func conversationOrNone(conversation string) string {
 		return "(nothing yet - this is the first thing they have said to you)"
 	}
 	return conversation
+}
+
+// implement drives the candidate from an approved plan to an accepted change.
+// It is separate from run so a resumed task can enter here: the architect has
+// already decided and the human has already approved, and asking either of them
+// again would be inventing a decision that was made before the restart.
+func (e *Engine) implement(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, plan, carried string, fail func(error)) {
+	task := tc.Task
+	// One candidate for the whole task. A worker that runs out of review cycles
+	// hands the work on rather than taking it with it, so the next worker
+	// continues from the same checkout and keeps every fix the reviewer has
+	// already extracted.
+	workspace, createErr := e.Repo.CreateWorktree(ctx, taskID)
+	if createErr != nil {
+		fail(fmt.Errorf("create the candidate worktree: %w", createErr))
+		return
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"workspace": workspace}))
+
+	// carried arrives non-empty on a resume, so the first worker starts from the
+	// findings the interrupted run had already earned.
+	var failures []string
+	for _, worker := range e.Config.Implementors {
+		if carried != "" {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
+		}
+		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, tc, plan, worker, workspace, carried)
+		if err != nil {
+			failures = append(failures, worker.Name+": "+err.Error())
+			// The candidate stays: it holds real work, and the reviewer's
+			// unresolved findings travel with it to whoever picks it up next.
+			carried = handoverNote(worker.Name, review, err)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" did not converge; handing the candidate to the next bounded worker", map[string]string{"error": err.Error()}))
+			continue
+		}
+		plan = finalPlan
+		if accepted {
+			e.reportUndeliveredNotes(taskID)
+			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
+			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+				"candidate kept for inspection at "+workspace, nil))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "candidate ready for governed admission", map[string]any{
+				"workspace":   workspace,
+				"implementor": worker.Name,
+				"plan":        plan,
+				"review":      review,
+				"audit":       audit,
+			}))
+			return
+		}
+	}
+
+	// Nothing converged, but the candidate is not thrown away. It carries the
+	// accumulated work and the reviewer's outstanding findings, which is what a
+	// person needs to finish it or to judge whether it was worth starting.
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+		"candidate kept so the work is not lost: "+workspace, nil))
+	e.reportUndeliveredNotes(taskID)
+	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
+}
+
+// Resume continues a task that was interrupted after its plan was approved. The
+// candidate worktree still holds the work, so this re-enters the implementation
+// stage with the reviewer's last findings rather than re-deciding the plan.
+func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
+	go func() {
+		fail := func(err error) {
+			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+			e.reportOutcome(ctx, "failure", task.Task, err.Error())
+		}
+		sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
+		if err != nil {
+			fail(fmt.Errorf("start Sensei: %w", err))
+			return
+		}
+		defer sc.Close()
+
+		// Evidence is re-read rather than restored from the log. The graph may
+		// have moved while the process was gone, and a resumed task must be
+		// governed by what Sensei says now.
+		workspaceStatus, err := sc.CallTool("sensei_workspace_status", map[string]any{"repo": e.Repo.Root})
+		if err != nil {
+			fail(fmt.Errorf("Sensei workspace status: %w", err))
+			return
+		}
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
+
+		tc := taskContext{
+			Task:            task.Task,
+			Conversation:    e.conversationSoFar(task.Task, 40),
+			WorkspaceStatus: firstText(workspaceStatus),
+			Rationale:       task.Plan,
+			Domain:          sensei.RepositoryDomain(workspaceStatus),
+		}
+		carried := ""
+		if r := strings.TrimSpace(task.Review); r != "" {
+			carried = "This candidate was interrupted before it converged. Its changes are already present.\n\nThe last review said:\n" + r
+		}
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+			"resuming the interrupted candidate rather than starting over", nil))
+		e.implement(ctx, sc, task.TaskID, &tc, task.Plan, carried, fail)
+	}()
+	return task.TaskID
 }

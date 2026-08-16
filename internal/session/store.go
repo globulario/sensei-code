@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -83,4 +84,69 @@ func Latest(repo string) (string, bool) {
 	}
 	sort.Strings(ids)
 	return ids[len(ids)-1], true
+}
+
+// Interrupted is a task that was approved and started but never reached a
+// terminal event, because the process died or was killed while a worker was
+// running.
+type Interrupted struct {
+	TaskID string
+	Task   string
+	Plan   string
+	// Review is the last thing the reviewer said, which is the most useful
+	// thing to hand whoever picks the work up.
+	Review string
+}
+
+// FindInterrupted recovers tasks that were left mid-flight, from the session
+// record rather than from a second bookkeeping file. The log is already the
+// account of what happened; a parallel state file could disagree with it, and
+// then neither could be trusted.
+func FindInterrupted(events []event.Event) []Interrupted {
+	type partial struct {
+		Interrupted
+		approved bool
+		done     bool
+	}
+	order := []string{}
+	byTask := map[string]*partial{}
+	get := func(id string) *partial {
+		if id == "" {
+			return nil
+		}
+		if _, ok := byTask[id]; !ok {
+			byTask[id] = &partial{Interrupted: Interrupted{TaskID: id}}
+			order = append(order, id)
+		}
+		return byTask[id]
+	}
+	for _, e := range events {
+		p := get(e.TaskID)
+		if p == nil {
+			continue
+		}
+		switch e.Kind {
+		case event.TaskCreated:
+			p.Task = e.Summary
+		case event.PlanProposed:
+			p.Plan = e.Summary
+		case event.AuthorityResolved:
+			// Only an approved plan is worth resuming; a task still waiting on
+			// a human decision has produced no work to continue.
+			p.approved = true
+		case event.WorkflowCompleted, event.WorkflowFailed:
+			p.done = true
+		}
+		if e.Source == event.SourceReviewer && e.Kind == event.Status && strings.TrimSpace(e.Summary) != "" {
+			p.Review = e.Summary
+		}
+	}
+	var out []Interrupted
+	for _, id := range order {
+		p := byTask[id]
+		if p.approved && !p.done && strings.TrimSpace(p.Task) != "" {
+			out = append(out, p.Interrupted)
+		}
+	}
+	return out
 }
