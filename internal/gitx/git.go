@@ -40,7 +40,9 @@ func (r Repo) IsClean(ctx context.Context) (bool, error) {
 // worktree is an execution boundary and must never be confused with local
 // Sensei Code session state under <repo>/.sensei-code.
 func (r Repo) WorktreePath(taskID, worker string) string {
-	base := "." + filepath.Base(r.Root) + ".sensei-code-worktrees"
+	// "<repo>" not "<repo>.sensei-code": the suffix already names the tool, so
+	// repeating the repository name produced ".sensei-code.sensei-code-worktrees".
+	base := "." + filepath.Base(r.Root) + "-worktrees"
 	return filepath.Join(filepath.Dir(r.Root), base, clean(taskID), clean(worker))
 }
 

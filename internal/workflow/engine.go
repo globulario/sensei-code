@@ -16,6 +16,7 @@ import (
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
 )
@@ -131,6 +132,7 @@ type taskContext struct {
 	Preflight       string
 	Rationale       string
 	Steps           []string
+	Domain          string
 }
 
 // intent renders the architect's stated reasoning for the roles downstream.
@@ -226,6 +228,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		Preflight:       firstText(preflight),
 		Rationale:       decision.Summary,
 		Steps:           decision.Steps,
+		Domain:          sensei.RepositoryDomain(workspaceStatus),
 	}
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
@@ -290,6 +293,54 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 		return false, err
 	}
 	return strings.HasPrefix(choice, "1:"), nil
+}
+
+// emitChangeReport tells the architect what the candidate actually changed.
+// Every figure is counted from the diff or quoted from Sensei; nothing is the
+// worker's account of its own work.
+func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc taskContext, diff, audit string) {
+	change := report.FromDiff(diff)
+	change.Audit = audit
+
+	// Ask Sensei what governs the files the candidate actually touched, rather
+	// than reusing the preflight taken before anyone knew which files those
+	// would be.
+	paths := make([]string, 0, len(change.Files))
+	for _, f := range change.Files {
+		if f.Status != report.Deleted {
+			paths = append(paths, f.Path)
+		}
+	}
+	if len(paths) != 0 {
+		args := map[string]any{"task": tc.Task, "files": paths, "mode": "compact"}
+		if tc.Domain != "" {
+			args["domain"] = tc.Domain
+		}
+		if result, err := sc.CallTool("awareness_preflight", args); err == nil {
+			change.Risk = structuredString(result.Structured, "risk_class")
+			change.Governing = governingInvariants(result.Structured)
+		}
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.ChangeReported, change.Render(tc.Task), change))
+}
+
+// governingInvariants pulls invariant titles out of preflight's required
+// actions. Sensei states them; they are not derived here.
+func governingInvariants(structured map[string]any) []string {
+	actions, _ := structured["required_actions"].([]any)
+	var out []string
+	for _, action := range actions {
+		text, _ := action.(string)
+		if rest, ok := strings.CutPrefix(text, "Verify invariant still holds: "); ok {
+			out = append(out, rest)
+		}
+	}
+	return out
+}
+
+func structuredString(structured map[string]any, key string) string {
+	value, _ := structured[key].(string)
+	return value
 }
 
 // reportOutcome files what became of a task with the behavioral service, so
@@ -398,6 +449,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		lastReview = review.Summary
 		switch review.Decision {
 		case "accept":
+			e.emitChangeReport(ctx, sc, taskID, tc, diff, lastAudit)
 			return true, plan, lastReview, lastAudit, nil
 		case "revise":
 			feedback = review.Instructions

@@ -376,6 +376,10 @@ func renderEvent(e event.Event) string {
 	case event.SourceUser:
 		prefix = userStyle.Render("⚑ YOU")
 	}
+	if e.Kind == event.ChangeReported {
+		prefix = senseiStyle.Render("◆ CHANGE REPORT")
+		indent = "  "
+	}
 	if e.Kind == event.PlanProposed {
 		prefix = architectStyle.Render("◈ ARCHITECT · PLAN")
 		indent = "  "
@@ -522,7 +526,7 @@ func max(a, b int) int {
 // few lines the human actually needs to read.
 func isConversation(e event.Event) bool {
 	switch e.Kind {
-	case event.ArchitectSpoke, event.PlanProposed, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
 		return true
 	case event.TaskCreated, event.Output, event.SenseiResult:
 		return false

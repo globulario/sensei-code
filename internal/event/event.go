@@ -33,7 +33,9 @@ const (
 	PlanProposed Kind = "plan.proposed"
 	// DecisionRecorded reports whether the accepted plan reached Sensei's
 	// decisions surface, including when it did not.
-	DecisionRecorded  Kind = "decision.recorded"
+	DecisionRecorded Kind = "decision.recorded"
+	// ChangeReported carries the architectural change report for a candidate.
+	ChangeReported    Kind = "change.reported"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
 	AgentStarted      Kind = "agent.started"

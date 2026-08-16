@@ -16,3 +16,12 @@ func TestWorktreeLivesOutsideRepository(t *testing.T) {
 		t.Fatalf("task id was not sanitized: %s", got)
 	}
 }
+
+func TestWorktreePathIsASiblingNamedOnce(t *testing.T) {
+	r := Repo{Root: "/home/dave/src/sensei-code"}
+	got := r.WorktreePath("task-1", "claude")
+	want := "/home/dave/src/.sensei-code-worktrees/task-1/claude"
+	if got != want {
+		t.Fatalf("WorktreePath() = %q, want %q", got, want)
+	}
+}
