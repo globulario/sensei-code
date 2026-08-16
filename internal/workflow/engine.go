@@ -465,7 +465,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		}
 
 		candidate := gitx.Repo{Root: workspace}
-		diff, err := candidate.Diff(ctx)
+		diff, err := candidate.CandidateDiff(ctx)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}

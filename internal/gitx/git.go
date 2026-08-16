@@ -31,6 +31,21 @@ func (r Repo) Branch(ctx context.Context) (string, error) {
 func (r Repo) Diff(ctx context.Context) (string, error) {
 	return r.output(ctx, "diff", "--no-ext-diff", "--binary")
 }
+
+// CandidateDiff is the whole of a candidate's work, including files it created.
+//
+// Plain `git diff` reports tracked modifications only, so a worker that added a
+// file produced a diff that did not contain it. The reviewer then judged a
+// candidate with its new files invisible -- rejecting real work for omitting a
+// test that was sitting untracked on disk -- and no candidate could ever
+// converge. Intent-to-add records the new paths so they appear in the diff,
+// without staging their content; .gitignore is still honoured.
+func (r Repo) CandidateDiff(ctx context.Context) (string, error) {
+	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
+		return "", err
+	}
+	return r.Diff(ctx)
+}
 func (r Repo) IsClean(ctx context.Context) (bool, error) {
 	s, err := r.output(ctx, "status", "--porcelain")
 	return s == "", err
