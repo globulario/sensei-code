@@ -23,6 +23,7 @@ type Record struct {
 	Consequences string
 	SourceFiles  []string
 	Invariants   []string
+	Failures     []string
 	Repo         string
 	Domain       string
 	RepoRoot     string
@@ -32,7 +33,7 @@ type Record struct {
 // contract-first: a decision must connect to something real. Rather than invent
 // a link to satisfy the check, an unlinked decision is left unrecorded and the
 // caller says so.
-var ErrNotLinked = errors.New("decision is not linked to an invariant or a source file")
+var ErrNotLinked = errors.New("no governing invariant to link the decision to, so it was not recorded; govern these files first")
 
 // ErrUnavailable reports that the sensei CLI is not installed. Decisions are
 // the only Sensei surface with no awareness-mcp equivalent, so recording them
@@ -44,7 +45,11 @@ func (r Record) Validate() error {
 	if strings.TrimSpace(r.Title) == "" || strings.TrimSpace(r.Rationale) == "" {
 		return errors.New("decision needs a title and a rationale")
 	}
-	if len(r.Invariants) == 0 && len(r.SourceFiles) == 0 {
+	// Sensei's contract-first rule for decisions accepts a related invariant or
+	// failure mode; source files alone do not satisfy it. Matching that rule
+	// here means an unlinkable decision is reported as such instead of being
+	// sent to be refused, and the message says what would fix it.
+	if len(r.Invariants) == 0 && len(r.Failures) == 0 {
 		return ErrNotLinked
 	}
 	return nil
@@ -77,6 +82,11 @@ func (r Record) Args() []string {
 	for _, inv := range r.Invariants {
 		if i := strings.TrimSpace(inv); i != "" {
 			args = append(args, "--related-invariant", i)
+		}
+	}
+	for _, failure := range r.Failures {
+		if f := strings.TrimSpace(failure); f != "" {
+			args = append(args, "--related-failure", f)
 		}
 	}
 	if r.Repo != "" {

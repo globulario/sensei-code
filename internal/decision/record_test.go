@@ -13,8 +13,17 @@ func TestUnlinkedDecisionIsRefusedRatherThanPadded(t *testing.T) {
 	}
 }
 
+func TestSourceFilesAloneDoNotSatisfyContractFirst(t *testing.T) {
+	// Sensei refuses a decision linked only to files, so accepting it here
+	// would mean sending a request that is certain to be rejected.
+	r := Record{Title: "t", Rationale: "r", SourceFiles: []string{"main.go"}}
+	if err := r.Validate(); !errors.Is(err, ErrNotLinked) {
+		t.Fatalf("Validate() = %v, want ErrNotLinked", err)
+	}
+}
+
 func TestLinkedDecisionIsAccepted(t *testing.T) {
-	r := Record{Title: "do a thing", Rationale: "because", SourceFiles: []string{"main.go"}}
+	r := Record{Title: "do a thing", Rationale: "because", Invariants: []string{"inv.one"}}
 	if err := r.Validate(); err != nil {
 		t.Fatal(err)
 	}
