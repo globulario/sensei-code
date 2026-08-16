@@ -167,3 +167,27 @@ deleted file mode 100644
 		t.Fatalf("changedPaths = %v, want only the file that exists afterwards", got)
 	}
 }
+
+func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
+	// Convergence depends on all three roles consulting one source. Only the
+	// architect used to be told the tools existed; a worker that does not know
+	// it can ask forms its own view of the code instead.
+	prompts := map[string]string{
+		"architect": architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf"),
+		"worker":    implementationPrompt(testContext(), "plan", "", 1, nil),
+		"reviewer":  reviewPrompt(testContext(), "plan", "diff", "audit"),
+	}
+	for role, prompt := range prompts {
+		if !strings.Contains(prompt, "awareness_briefing") {
+			t.Fatalf("the %s is never told it can read the graph", role)
+		}
+		if !strings.Contains(prompt, "sensei_workspace_status") {
+			t.Fatalf("the %s is not told which workspace it is in", role)
+		}
+	}
+	for _, role := range []string{"worker", "reviewer"} {
+		if !strings.Contains(prompts[role], "same graph") {
+			t.Fatalf("the %s is not told the other roles read the same graph", role)
+		}
+	}
+}

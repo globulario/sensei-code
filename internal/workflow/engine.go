@@ -904,6 +904,15 @@ func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guid
 Implement only the architect's bounded plan. You may inspect, edit, build, and test inside this candidate worktree. Work autonomously: do not ask the user for routine permissions.
 Never push, merge, deploy, weaken governance artifacts, rewrite human-owned intent, or claim admission. Sensei Code owns orchestration and Sensei owns governance.
 
+You have Sensei's own MCP tools in this session: awareness_briefing,
+awareness_preflight, awareness_impact, awareness_query, awareness_resolve,
+awareness_metadata, awareness_edit_check and sensei_workspace_status. Consult
+them for any file you are about to change: they hold the invariants that protect
+it, the failure modes recorded against it and the fixes forbidden there, none of
+which are visible in the code. Every role on this task reads the same graph, so
+what you learn there is what the architect and the reviewer are working from too.
+If a tool returns an error, report that exact error rather than inferring a cause.
+
 The conversation, architect intent, and Sensei evidence below are given so you
 understand WHY this work was asked for and can make the small judgement calls an
 implementation always needs. They do NOT widen your scope. Implement the plan and
@@ -935,6 +944,14 @@ func reviewPrompt(tc taskContext, plan, diff, audit string) string {
 	return fmt.Sprintf(`You are the architectural reviewer for a Sensei-governed candidate. Do not edit files.
 Decide whether the exact candidate satisfies the architectural plan and the supplied Sensei evidence. Passing tests alone is not architectural proof.
 Return ESCALATE only when a genuine architectural-authority question exists; ordinary defects are REVISE.
+
+You have Sensei's own MCP tools in this session: awareness_briefing,
+awareness_preflight, awareness_impact, awareness_query, awareness_resolve,
+awareness_metadata, awareness_audit_diff and sensei_workspace_status. Check the
+candidate against what Sensei actually holds for the files it touches rather than
+against your own reading of them, and quote what Sensei said. You, the architect
+and the worker all read the same graph, so a disagreement between you is a real
+finding rather than a difference of opinion.
 
 The conversation and architect intent below tell you what the human actually
 asked for, so you can judge whether the candidate serves it. Context does not
