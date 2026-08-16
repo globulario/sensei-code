@@ -208,12 +208,18 @@ func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
 	}
 }
 
+// TestArchitectConversationPromptIsHumanFacing keeps #8's guarantees for the
+// assisted turn after the two conversation implementations were reconciled into
+// one. The prompt builder changed; what it must promise the human did not.
 func TestArchitectConversationPromptIsHumanFacing(t *testing.T) {
-	got := architectConversationPrompt("Should this boundary move?", "workspace evidence", "preflight evidence")
+	got := assistedPrompt("/repo", "example.com/x", "ChatGPT", "Should this boundary move?", "",
+		nil, "workspace evidence", "preflight evidence")
 	for _, want := range []string{
-		"speaking directly with the human owner",
-		"precise, concrete, and technically rich",
+		"speaking directly with the human",
+		"precise,\nconcrete, technically rich",
 		"LIVE SENSEI WORKSPACE AUTHORITY",
+		"workspace evidence",
+		"preflight evidence",
 		"/run",
 	} {
 		if !strings.Contains(got, want) {
@@ -222,5 +228,11 @@ func TestArchitectConversationPromptIsHumanFacing(t *testing.T) {
 	}
 	if strings.Contains(got, "Return ONLY JSON") {
 		t.Fatal("human-facing architect conversation must not be compressed into the machine JSON contract")
+	}
+	// Routine judgement stays with the architect: an assistant that asks
+	// permission for ordinary choices is a worse collaborator than one that
+	// decides and explains.
+	if !strings.Contains(strings.Join(strings.Fields(got), " "), "Routine architectural judgment is yours to make") {
+		t.Fatal("the architect is not told that routine judgement is its own")
 	}
 }
