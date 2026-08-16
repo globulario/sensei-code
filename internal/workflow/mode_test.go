@@ -346,3 +346,27 @@ func TestRememberingAnAnswerIsNotMakingItCanonical(t *testing.T) {
 		t.Error("the router consults past answers; it must route on Sensei evidence alone and let the caller apply the answer")
 	}
 }
+
+// TestAStalledCandidateStopsInsteadOfBurningCycles pins the third loop the
+// acceptance runs found.
+//
+// A worker asked to revise produced a byte-identical diff three times: same
+// size, same audit digest. The remaining cycles could only produce it again,
+// and the run ended in a timeout rather than a diagnosis. The guard belongs
+// inside one worker's cycle loop rather than across the whole task, so a
+// stalled worker still hands the candidate on to the next one.
+func TestAStalledCandidateStopsInsteadOfBurningCycles(t *testing.T) {
+	fn := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	if !strings.Contains(fn, "verdict.InputDiffDigest") {
+		t.Fatal("the review loop does not compare candidate digests, so a stalled worker runs every cycle")
+	}
+	body := fileText(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "did not change between review cycles") {
+		t.Error("a stalled candidate produces no diagnosis naming what happened")
+	}
+	// The message must carry the review the worker failed to act on, or the
+	// next reader learns only that it stopped.
+	if !strings.Contains(body, "The last review asked for") {
+		t.Error("the stall diagnosis does not say what was being asked of the worker")
+	}
+}

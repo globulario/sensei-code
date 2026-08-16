@@ -544,6 +544,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	// answered yet, so it enters this worker's first cycle as exactly that.
 	feedback := carried
 	var lastReview, lastAudit string
+	// previousDiffDigest detects a worker that is not responding to feedback.
+	var previousDiffDigest string
 
 	// Candidate isolation is the blast-radius boundary, so it is checked rather
 	// than assumed: the workspace is a string threaded through several call
@@ -624,6 +626,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, audit.Structured))
 		}
+		// A candidate that is byte-identical to the previous cycle means the
+		// worker read the feedback and produced the same thing again. Running
+		// the remaining cycles will produce it a third and fourth time: one
+		// real run did exactly that, three times, before timing out with no
+		// diagnosis. Stop and say so, so the next worker gets the candidate
+		// while there is still budget to do something with it.
+		if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
+			if digest == previousDiffDigest {
+				return false, plan, lastReview, lastAudit, fmt.Errorf(
+					"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
+						"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
+			}
+			previousDiffDigest = digest
+		}
+
 		// Snapshot the position so a handover states what the candidate holds
 		// rather than describing it in prose the next worker has to re-derive.
 		tc.EvidenceSnapshot = taskstate.Evidence{
@@ -1598,4 +1615,13 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 func (e *Engine) applyAnsweredCondition(taskID, condition string) (authorized, asked bool) {
 	answer, ok := e.answeredConditions(taskID)[strings.TrimSpace(condition)]
 	return answer, ok
+}
+
+// oneLine flattens a multi-line review into something readable inside an error.
+func oneLine(s string) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " · "))
+	if len(s) > 300 {
+		return s[:300] + "…"
+	}
+	return s
 }
