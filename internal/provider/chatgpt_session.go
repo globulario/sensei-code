@@ -38,6 +38,10 @@ type ChatGPTSession struct {
 	effort   string
 	server   *appServer
 	threadID string
+	// hasHistory records whether the base thread has taken a turn. A thread
+	// with no rollout cannot be forked.
+	hasHistory  bool
+	personality bool
 }
 
 var (
@@ -75,7 +79,13 @@ func (s *ChatGPTSession) Ask(ctx context.Context, prompt string) (string, error)
 	if err := s.ensureStarted(ctx); err != nil {
 		return "", err
 	}
-	return s.runTurn(s.threadID, prompt)
+	text, err := s.runTurn(s.threadID, prompt)
+	if err == nil {
+		// The base thread now has a rollout, so later machine turns can fork it
+		// and inherit the human conversation.
+		s.hasHistory = true
+	}
+	return text, err
 }
 
 // AskFork asks the same architect with all conversation history, but on an
@@ -94,6 +104,23 @@ func (s *ChatGPTSession) AskFork(ctx context.Context, prompt string) (string, er
 		Thread struct {
 			ID string `json:"id"`
 		} `json:"thread"`
+	}
+	// A thread that has never taken a turn has no rollout on disk, and the
+	// app-server refuses to fork one: "no rollout found for thread id ...".
+	// That is every first machine turn, because machine turns always fork and
+	// therefore never write to the base thread themselves — so without this the
+	// architect could never answer at all.
+	//
+	// When there is no history there is also nothing to inherit, so a fresh
+	// ephemeral thread is the same answer with none of the failure. The base
+	// thread stays clean either way, which is the point of forking: a JSON
+	// contract must not land in the human's conversation.
+	if !s.hasHistory {
+		id, err := startThread(s.server, s.model, s.cwd, s.personality)
+		if err != nil {
+			return "", fmt.Errorf("start an ephemeral ChatGPT architect thread: %w", err)
+		}
+		return s.runTurn(id, prompt)
 	}
 	if err := s.server.call("thread/fork", map[string]any{
 		"threadId":  s.threadID,
@@ -134,6 +161,21 @@ func (s *ChatGPTSession) ensureStarted(ctx context.Context) error {
 		return fail(err)
 	}
 
+	id, err := startThread(c, model, s.cwd, personality)
+	if err != nil {
+		return fail(err)
+	}
+
+	s.server = c
+	s.threadID = id
+	s.model = model
+	s.effort = effort
+	s.personality = personality
+	return nil
+}
+
+// startThread opens one app-server thread and returns its id.
+func startThread(c *appServer, model, cwd string, personality bool) (string, error) {
 	var started struct {
 		Thread struct {
 			ID string `json:"id"`
@@ -141,7 +183,7 @@ func (s *ChatGPTSession) ensureStarted(ctx context.Context) error {
 	}
 	params := map[string]any{
 		"model":          model,
-		"cwd":            s.cwd,
+		"cwd":            cwd,
 		"approvalPolicy": "never",
 		"sandbox":        sandboxReadOnly,
 		"serviceName":    "sensei_code",
@@ -150,17 +192,12 @@ func (s *ChatGPTSession) ensureStarted(ctx context.Context) error {
 		params["personality"] = "friendly"
 	}
 	if err := c.call("thread/start", params, &started); err != nil {
-		return fail(fmt.Errorf("start ChatGPT architect thread: %w", err))
+		return "", fmt.Errorf("start ChatGPT architect thread: %w", err)
 	}
 	if strings.TrimSpace(started.Thread.ID) == "" {
-		return fail(errors.New("ChatGPT app-server returned an empty thread id"))
+		return "", errors.New("ChatGPT app-server returned an empty thread id")
 	}
-
-	s.server = c
-	s.threadID = started.Thread.ID
-	s.model = model
-	s.effort = effort
-	return nil
+	return started.Thread.ID, nil
 }
 
 type appServerModel struct {
