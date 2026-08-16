@@ -28,15 +28,15 @@ func TestConfiguredCommandsAreUnique(t *testing.T) {
 func TestConfiguredProvidersAreUnique(t *testing.T) {
 	cfg := config.Default()
 	got := configuredProviders(cfg)
-	if len(got) != 2 {
-		t.Fatalf("configuredProviders(default)=%v want two providers", got)
+	if len(got) != 3 {
+		t.Fatalf("configuredProviders(default)=%v want three providers", got)
 	}
 	seen := map[provider.ID]bool{}
 	for _, id := range got {
 		seen[id] = true
 	}
-	if !seen[provider.Codex] || !seen[provider.Claude] {
-		t.Fatalf("configuredProviders(default)=%v want codex+claude", got)
+	if !seen[provider.ChatGPT] || !seen[provider.Codex] || !seen[provider.Claude] {
+		t.Fatalf("configuredProviders(default)=%v want chatgpt+codex+claude", got)
 	}
 }
 

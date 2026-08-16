@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/authority"
@@ -43,5 +44,22 @@ func TestIsStopOption(t *testing.T) {
 	}
 	if isStopOption("Preserve the contract") {
 		t.Fatal("normal authority option must not stop the task")
+	}
+}
+
+func TestArchitectConversationPromptIsHumanFacing(t *testing.T) {
+	got := architectConversationPrompt("Should this boundary move?", "workspace evidence", "preflight evidence")
+	for _, want := range []string{
+		"speaking directly with the human owner",
+		"precise, concrete, and technically rich",
+		"LIVE SENSEI WORKSPACE AUTHORITY",
+		"/run",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation prompt missing %q", want)
+		}
+	}
+	if strings.Contains(got, "Return ONLY JSON") {
+		t.Fatal("human-facing architect conversation must not be compressed into the machine JSON contract")
 	}
 }
