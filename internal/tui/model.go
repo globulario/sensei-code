@@ -95,13 +95,19 @@ type Model struct {
 	resumable     []session.Interrupted
 	// running names the architect command awaiting its result, so the status
 	// bar can say which one rather than only that something is happening.
-	running   string
-	pending   *authority.Decision
-	mode      mode
-	frame     int
-	startedAt time.Time
-	wordIdx   int
-	activity  string
+	running string
+	pending *authority.Decision
+	mode    mode
+	// taskMode and taskModeWhy are the mode of the task actually running, taken
+	// from the engine's mode.selected event. They are never derived from
+	// configuration: the bar must report what is happening, not what a setting
+	// implies.
+	taskMode    string
+	taskModeWhy string
+	frame       int
+	startedAt   time.Time
+	wordIdx     int
+	activity    string
 	// scrollUp is how many rows above the newest the transcript is scrolled,
 	// zero meaning it follows new output.
 	//
@@ -241,6 +247,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pending = nil
 			m.pendingTask = ""
 			m.busy = true
+		}
+		if e.Kind == event.ModeSelected {
+			// The mode shown is the one the engine reports for the task that is
+			// actually running, with the reason it gives. Nothing here consults
+			// configuration, so no local flag can make the bar claim a posture
+			// the workflow is not in.
+			var payload struct {
+				Mode       string `json:"mode"`
+				Provenance string `json:"provenance"`
+			}
+			if json.Unmarshal(e.Payload, &payload) == nil && payload.Mode != "" {
+				m.taskMode = payload.Mode
+				m.taskModeWhy = payload.Provenance
+			}
 		}
 		// The transcript is the conversation with the architect. Sensei
 		// receipts, worker output, git and retries are activity: they feed the
@@ -392,7 +412,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.wordIdx++
 			m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+text, "")
 			m.input.Reset()
-			m.currentTask = m.engine.Submit(m.ctx, text)
+			m.currentTask = m.engine.SubmitAssisted(m.ctx, text)
 			m.scrollUp = 0
 			cmds = append(cmds, tea.ClearScreen)
 			return m, tea.Batch(cmds...)
@@ -516,9 +536,24 @@ func (m Model) statusLine() string {
 }
 
 // modeLine is the bar under the composer.
+//
+// It names the task mode first because that is the consequential one: assisted
+// changes nothing, governed cuts a candidate and asks for approval. The
+// display posture (streaming or not) comes second, since it only affects how
+// much scrolls past.
 func (m Model) modeLine() string {
-	return modeStyle.Render("»  "+m.mode.label()) +
-		hintStyle.Render(" (shift+tab to cycle)")
+	task := m.taskMode
+	if task == "" {
+		task = "assisted"
+	}
+	line := modeStyle.Render("»  " + task)
+	if m.taskModeWhy != "" {
+		line += hintStyle.Render(" · " + m.taskModeWhy)
+	}
+	if task == "assisted" {
+		line += hintStyle.Render("  — /run to carry work out")
+	}
+	return line + hintStyle.Render("  ·  "+m.mode.label()+" (shift+tab to cycle)")
 }
 
 func (m Model) View() tea.View {
@@ -649,7 +684,7 @@ func isConversation(e event.Event) bool {
 		// business. Filed as activity it was never shown, so a decision that
 		// went unrecorded looked exactly like one that was captured.
 		return true
-	case event.TaskCreated, event.Output, event.SenseiResult:
+	case event.TaskCreated, event.Output, event.SenseiResult, event.ModeSelected:
 		return false
 	case event.WorkflowCompleted:
 		// A bare completion after a conversational reply has nothing to add.
@@ -859,6 +894,16 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		m.frame = 0
 		m.currentTask = m.engine.Resume(m.ctx, task)
 		return m, tea.ClearScreen
+	case "/run":
+		if strings.TrimSpace(arg) == "" {
+			m.lines = append(m.lines, dimStyle.Render("/run needs the work to carry out: /run add a --json flag to the report command"), "")
+			return m, tea.ClearScreen
+		}
+		m.busy = true
+		m.startedAt = time.Now()
+		m.frame = 0
+		m.currentTask = m.engine.SubmitGoverned(m.ctx, strings.TrimSpace(arg))
+		return m, tea.ClearScreen
 	case "/refactor":
 		if strings.TrimSpace(arg) == "" {
 			m.lines = append(m.lines, dimStyle.Render("/refactor needs a target: /refactor internal/tui"), "")
@@ -869,7 +914,7 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		m.busy = true
 		m.startedAt = time.Now()
 		m.frame = 0
-		m.currentTask = m.engine.Submit(m.ctx, "Propose a governed refactor of "+arg+
+		m.currentTask = m.engine.SubmitGoverned(m.ctx, "Propose a governed refactor of "+arg+
 			". Read Sensei's evidence for it first, and keep the plan bounded.")
 		return m, tea.ClearScreen
 	}

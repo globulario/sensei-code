@@ -70,11 +70,13 @@ func (e *Engine) emit(ev event.Event) {
 	}
 }
 
-func (e *Engine) Submit(ctx context.Context, task string) string {
-	taskID := fmt.Sprintf("task-%d", time.Now().UTC().UnixNano())
-	go e.run(ctx, taskID, strings.TrimSpace(task))
-	return taskID
-}
+// Errors shared by both workflows, named so the two state machines refuse in
+// the same words rather than drifting apart.
+var (
+	errEmptyTask        = errors.New("task is empty")
+	errNoReadCapability = errors.New("repository read capability is not granted")
+	errArchitectSilent  = errors.New("the architect returned nothing")
+)
 
 // Note queues guidance for a running task. It reports whether the task could
 // accept it, so the caller never tells the human their message was taken when
@@ -195,16 +197,17 @@ func (c taskContext) intent() string {
 
 func (e *Engine) run(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
+	e.announceMode(taskID, governedMode(RequestedByHuman))
 	fail := func(err error) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
 		e.reportOutcome(ctx, "failure", task, err.Error())
 	}
 	if task == "" {
-		fail(errors.New("task is empty"))
+		fail(errEmptyTask)
 		return
 	}
 	if !e.Config.Permissions.ReadRepository {
-		fail(errors.New("repository read capability is not granted"))
+		fail(errNoReadCapability)
 		return
 	}
 
@@ -1307,6 +1310,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 // stage with the reviewer's last findings rather than re-deciding the plan.
 func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 	go func() {
+		// A resumed task keeps the mode it was running in. Resumption is not a
+		// new entry point a person chose, so its provenance says so.
+		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
 		fail := func(err error) {
 			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
 			e.reportOutcome(ctx, "failure", task.Task, err.Error())
