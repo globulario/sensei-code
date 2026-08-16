@@ -24,10 +24,15 @@ type providerLoginFinishedMsg struct {
 	id  provider.ID
 	err error
 }
+type architectReplyMsg struct {
+	text string
+	err  error
+}
 
 type Model struct {
 	ctx           context.Context
 	engine        *workflow.Engine
+	architect     *provider.ChatGPTSession
 	events        <-chan event.Event
 	input         textarea.Model
 	initCmd       tea.Cmd
@@ -42,13 +47,26 @@ type Model struct {
 
 func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Describe a task for Sensei Code..."
+	ta.Placeholder = "Talk to the ChatGPT architect…  /run <task> executes"
 	ta.Prompt = "> "
 	ta.SetHeight(3)
 	ta.SetWidth(80)
 	ta.ShowLineNumbers = false
 	focusCmd := ta.Focus()
-	return Model{ctx: ctx, engine: engine, events: events, input: ta, initCmd: focusCmd, lines: []string{"◆ SENSEI CODE", "  autonomous, governed development", ""}}
+	return Model{
+		ctx:       ctx,
+		engine:    engine,
+		architect: provider.ChatGPTForWorkspace(engine.Repo.Root),
+		events:    events,
+		input:     ta,
+		initCmd:   focusCmd,
+		lines: []string{
+			"◆ SENSEI CODE",
+			"  ChatGPT architect · assisted conversation by default",
+			"  /run <task> crosses into governed implementation",
+			"",
+		},
+	}
 }
 
 func (m Model) Init() tea.Cmd { return tea.Batch(m.initCmd, waitEvent(m.events)) }
@@ -63,12 +81,30 @@ func waitEvent(ch <-chan event.Event) tea.Cmd {
 	}
 }
 
+func askArchitect(ctx context.Context, engine *workflow.Engine, architect *provider.ChatGPTSession, text string) tea.Cmd {
+	return func() tea.Msg {
+		prompt, err := engine.PrepareArchitectConversation(ctx, text)
+		if err != nil {
+			return architectReplyMsg{err: err}
+		}
+		answer, err := architect.Ask(ctx, prompt)
+		return architectReplyMsg{text: answer, err: err}
+	}
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.SetWidth(max(20, msg.Width-4))
+	case architectReplyMsg:
+		m.busy = false
+		if msg.err != nil {
+			m.lines = append(m.lines, errorStyle.Render("✗ ARCHITECT"), "  "+strings.ReplaceAll(msg.err.Error(), "\n", "\n  "))
+		} else {
+			m.lines = append(m.lines, renderArchitectAnswer(msg.text))
+		}
 	case providerLoginFinishedMsg:
 		if msg.err != nil {
 			m.lines = append(m.lines, errorStyle.Render("✗ PROVIDER"), "  "+provider.Label(msg.id)+": "+msg.err.Error())
@@ -167,11 +203,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.loginMenu = true
 				return m, tea.Batch(cmds...)
 			}
+			if text == "/run" && !m.busy {
+				m.input.Reset()
+				m.lines = append(m.lines, dimStyle.Render("usage: /run <task>"))
+				return m, tea.Batch(cmds...)
+			}
+			if strings.HasPrefix(text, "/run ") && !m.busy {
+				task := strings.TrimSpace(strings.TrimPrefix(text, "/run"))
+				m.input.Reset()
+				if task == "" {
+					m.lines = append(m.lines, dimStyle.Render("usage: /run <task>"))
+					return m, tea.Batch(cmds...)
+				}
+				m.busy = true
+				m.lines = append(m.lines, "", userStyle.Render("You · governed run"), "> "+task)
+				m.engine.Submit(m.ctx, task)
+				return m, tea.Batch(cmds...)
+			}
+			if strings.HasPrefix(text, "/") && text != "" && !m.busy {
+				m.input.Reset()
+				m.lines = append(m.lines, errorStyle.Render("unknown command "+text), dimStyle.Render("  available: /login · /run <task>"))
+				return m, tea.Batch(cmds...)
+			}
 			if text != "" && !m.busy {
 				m.busy = true
 				m.lines = append(m.lines, "", userStyle.Render("You"), "> "+text)
 				m.input.Reset()
-				m.engine.Submit(m.ctx, text)
+				cmds = append(cmds, askArchitect(m.ctx, m.engine, m.architect, text))
+				return m, tea.Batch(cmds...)
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -191,6 +250,14 @@ var (
 	errorStyle     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#F7768E"))
 	authorityStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#FF9E64"))
 )
+
+func renderArchitectAnswer(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		text = "ChatGPT architect completed without visible text."
+	}
+	return architectStyle.Render("◈ CHATGPT · ARCHITECT") + "\n  " + strings.ReplaceAll(text, "\n", "\n  ")
+}
 
 func renderEvent(e event.Event) string {
 	prefix := dimStyle.Render("•")
@@ -228,7 +295,7 @@ func renderEvent(e event.Event) string {
 }
 
 func (m Model) View() tea.View {
-	available := max(3, m.height-7)
+	available := max(3, m.height-8)
 	start := max(0, len(m.lines)-available)
 	body := strings.Join(m.lines[start:], "\n")
 
@@ -241,13 +308,13 @@ func (m Model) View() tea.View {
 		composer = m.input.View()
 	}
 
-	status := "ready"
+	status := "architect chat ready · /run <task> to execute"
 	if m.pending != nil {
 		status = "human authority required · choose 1/2/3"
 	} else if m.loginMenu {
 		status = "provider login · choose 1/2/3/4 · Esc cancel"
 	} else if m.busy {
-		status = "working autonomously"
+		status = "ChatGPT architect / governed workflow working"
 	}
 	activity := "collapsed"
 	if m.verbose {
