@@ -9,6 +9,7 @@ import (
 
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/processx"
+	"github.com/globulario/sensei-code/internal/provider"
 )
 
 type Role string
@@ -45,6 +46,27 @@ type CLI struct {
 
 func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Result, error) {
 	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentStarted, c.Name+" started", nil))
+
+	// ChatGPT is a first-class architectural provider, not a synonym for a
+	// one-shot `codex exec`. Codex app-server is only the transport to the
+	// authenticated ChatGPT subscription. Architectural/review machine turns
+	// use an ephemeral fork of the human conversation so they inherit context
+	// without filling the visible chat with JSON contracts.
+	if strings.EqualFold(strings.TrimSpace(c.Name), string(provider.ChatGPT)) {
+		if req.Role != Architect && req.Role != Reviewer {
+			return Result{}, fmt.Errorf("ChatGPT provider is read-only architectural authority, not an implementation worker")
+		}
+		text, err := provider.ChatGPTForWorkspace(req.Workspace).AskFork(ctx, req.Prompt)
+		if err != nil {
+			return Result{}, err
+		}
+		for _, line := range strings.Split(text, "\n") {
+			emit(event.New(c.SessionID, req.TaskID, c.Source, event.Output, line, map[string]string{"stream": "assistant"}))
+		}
+		emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.Name+" finished", nil))
+		return Result{Text: text}, nil
+	}
+
 	var out strings.Builder
 	_, err := processx.Run(ctx, req.Workspace, c.Command, c.Args, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
 		if line.Stream == "stdout" {
