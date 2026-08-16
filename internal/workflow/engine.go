@@ -256,7 +256,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, "isolated candidate worktree: "+workspace, map[string]string{"worker": worker.Name, "workspace": workspace}))
 
-		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, tc, plan, worker, workspace)
+		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, taskID, &tc, plan, worker, workspace)
 		if err != nil {
 			failures = append(failures, worker.Name+": "+err.Error())
 			// A worktree for a candidate that never converged is debris. Left
@@ -268,7 +268,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		}
 		plan = finalPlan
 		if accepted {
-			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
+			e.offerPullRequest(ctx, taskID, &tc, workspace, worker.Name)
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
 			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 				"candidate kept for inspection at "+workspace, nil))
@@ -313,7 +313,7 @@ func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureD
 // is human-owned, so it is gated twice: the configuration must grant push at
 // all, and the human must say yes to this particular change. Sensei Code opens
 // the pull request and stops there; merging is never its decision.
-func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc taskContext, workspace, worker string) {
+func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskContext, workspace, worker string) {
 	if !e.Config.Permissions.Push {
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 			"no pull request offered: "+publish.ErrPushNotGranted.Error(), nil))
@@ -368,7 +368,7 @@ func (e *Engine) discardWorktree(ctx context.Context, taskID, workspace, worker 
 // emitChangeReport tells the architect what the candidate actually changed.
 // Every figure is counted from the diff or quoted from Sensei; nothing is the
 // worker's account of its own work.
-func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc taskContext, diff, audit string) string {
+func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, diff, audit string) string {
 	change := report.FromDiff(diff)
 	change.Audit = audit
 
@@ -483,7 +483,10 @@ func planSummary(d architectureDecision) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID string, tc taskContext, initialPlan string, worker config.Agent, workspace string) (bool, string, string, string, error) {
+// tc is a pointer because the change report is produced here and read by the
+// caller when it offers publication. Taking it by value silently dropped the
+// report, and the pull request body went out with the evidence missing.
+func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, initialPlan string, worker config.Agent, workspace string) (bool, string, string, string, error) {
 	task := tc.Task
 	plan := initialPlan
 	feedback := ""
@@ -504,7 +507,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 	}
 
 	for cycle := 1; cycle <= e.Config.Workflow.ReviewCycles; cycle++ {
-		prompt := implementationPrompt(tc, plan, feedback, cycle)
+		prompt := implementationPrompt(*tc, plan, feedback, cycle)
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
 		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
@@ -527,7 +530,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 		lastAudit = firstText(audit)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit, audit.Structured))
 
-		review, err := e.resolveReview(ctx, taskID, reviewPrompt(tc, plan, diff, lastAudit))
+		review, err := e.resolveReview(ctx, taskID, reviewPrompt(*tc, plan, diff, lastAudit))
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}

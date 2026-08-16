@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/mcpconfig"
@@ -198,7 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activity = phase
 			}
 			if m.verbose && e.Kind != event.TaskCreated {
-				if line := renderEvent(e); line != "" {
+				if line := renderActivity(e); line != "" {
 					m.lines = append(m.lines, line)
 					cmds = append(cmds, tea.ClearScreen)
 				}
@@ -552,6 +553,25 @@ func isConversation(e event.Event) bool {
 	// but only when it actually said something.
 	return e.Source == event.SourceArchitect && e.Kind == event.Status &&
 		strings.TrimSpace(e.Summary) != ""
+}
+
+// renderActivity shows streamed agent work as a readable trace rather than the
+// raw protocol it arrives in, so an architect watching a run can see a worker
+// reading the wrong file or running the wrong command while there is still time
+// to say so.
+func renderActivity(e event.Event) string {
+	if e.Kind != event.Output {
+		return renderEvent(e)
+	}
+	name := "codex"
+	if e.Source == event.SourceClaude {
+		name = "claude"
+	}
+	text := agent.Activity(name, e.Summary)
+	if strings.TrimSpace(text) == "" {
+		return ""
+	}
+	return "    " + dimStyle.Render("· "+text)
 }
 
 // currentPhase names what the system is doing, for the bar above the prompt.
