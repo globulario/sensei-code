@@ -1,0 +1,28 @@
+id: sensei_code.sensei_is_the_authority
+level: contract
+title: Sensei owns architectural truth; Sensei Code orchestrates and never re-decides it
+intent: |
+  Sensei Code is an orchestration and interface layer. Sensei owns architectural truth,
+  invariants, contracts, evidence, admission, verification and closure. Sensei Code owns
+  provider lifecycle, Git and worktrees, local session state, events, authority routing and
+  the terminal surface.
+  Where Sensei states a value — a risk class, a coverage state, a composition state, an audit
+  decision — Sensei Code renders that value as Sensei gave it. It computes no summary state of
+  its own and keeps no second copy that could disagree. A local event or session record is
+  orchestration history and is never a Sensei receipt.
+agent_guidance: |
+  Before adding a check, ask whether Sensei already answers it. If it does, call it and quote
+  the answer. Reimplementing a governance judgement produces a second answer that will
+  eventually contradict the first, and the reader has no way to tell which is authoritative.
+  Reword nothing: use Sensei's own vocabulary so one fact has one spelling.
+bad_smells:
+  - a governance rule evaluated locally that Sensei already evaluates
+  - a Sensei verdict paraphrased, rounded, or restated in different words
+  - a local record presented as evidence of admission or closure
+  - a cached copy of graph state that can drift from the graph
+activation_triggers:
+  - admission
+  - governance decision
+  - risk class
+  - coverage state
+status: active

@@ -1,0 +1,25 @@
+id: sensei_code.learning_is_reviewed_before_it_governs
+level: contract
+title: Knowledge this tool records is a candidate for review, never governance on its own
+intent: |
+  Scars, decisions and outcomes are recorded so a mistake stops being repeated. They enter a
+  review queue and a human promotes what survives. Sensei Code cannot promote its own lessons,
+  because a tool that could would let one bad afternoon become a permanent rule.
+  Recorded knowledge references things that exist. A link that resolves to nothing looks like
+  provenance and provides none, so a record that cannot be linked honestly is reported as
+  unrecorded rather than padded until it passes.
+agent_guidance: |
+  Record what actually happened, after it happened, referencing the files that exist. Never
+  invent an identifier to satisfy a contract-first check, and never republish the graph as a
+  side effect of recording something.
+bad_smells:
+  - a lesson written directly into the live graph
+  - a record citing files or identifiers that do not exist
+  - a refused record reported as recorded
+  - recording that rebuilds or republishes the graph
+activation_triggers:
+  - propose
+  - decision
+  - learn
+  - scar
+status: active

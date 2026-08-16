@@ -1,0 +1,23 @@
+id: sensei_code.candidates_are_isolated
+level: contract
+title: Workers change an isolated candidate, never the human's checkout
+intent: |
+  Implementation happens in a Git worktree that belongs to the task, outside the canonical
+  repository. The candidate is the unit of work: a worker that cannot converge hands the same
+  candidate to the next one rather than taking the progress with it, and an interrupted task
+  keeps its candidate so the work can be resumed or inspected.
+  The reviewer judges the whole candidate, including files the worker created.
+agent_guidance: |
+  Never write to the human's checkout on a worker's behalf. When you add anything to a
+  candidate for the tool's own purposes, put it outside the worktree so it cannot be committed
+  into the change it was meant to support.
+bad_smells:
+  - a worker writing outside its candidate worktree
+  - tooling artefacts appearing in the candidate's own diff
+  - a candidate discarded while it still held unreviewed work
+  - a diff that omits files the worker created
+activation_triggers:
+  - worktree
+  - candidate
+  - implementor
+status: active

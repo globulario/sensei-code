@@ -1,0 +1,25 @@
+id: sensei_code.fails_closed_on_missing_evidence
+level: contract
+title: Missing, stale or uncertifiable Sensei evidence stops the work rather than being assumed
+intent: |
+  When required Sensei evidence is unavailable, stale, refused, malformed or uncertifiable,
+  Sensei Code stops and says which one it was. A transport success is not evidence: a call that
+  returns without error but carries no content is recorded as absent, not present.
+  A refusal keeps the reason Sensei gave for it. Discarding that reason makes a governed
+  refusal indistinguishable from a transport fault, and the operator cannot tell whether the
+  system was denied or merely broken.
+agent_guidance: |
+  Never substitute a default, a cached value or a plausible guess for evidence you did not get.
+  Report the exact missing tool, dependency or refusal text. An acknowledged call is not an
+  accomplished state change: confirm the resulting state with its owner before reporting it.
+bad_smells:
+  - a successful transport treated as a successful answer
+  - an error swallowed and replaced with a default value
+  - a refusal reported without the reason the owner gave
+  - a state change reported from the acknowledgement of the request for it
+activation_triggers:
+  - evidence unavailable
+  - fail closed
+  - refusal
+  - stale
+status: active

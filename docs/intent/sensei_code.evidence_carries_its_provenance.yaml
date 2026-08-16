@@ -1,0 +1,27 @@
+id: sensei_code.evidence_carries_its_provenance
+level: contract
+title: Every reported figure states the standing of the evidence behind it
+intent: |
+  Sensei publishes exact totals for some classes, no total for others, and a bounded query
+  returns at most what it asked for. These are different kinds of fact and are never rendered
+  alike.
+  An exact total is shown plainly. A bounded result is shown as a lower bound. A class Sensei
+  publishes nothing for is named as unmeasured. Absence is never rendered as a reassuring
+  zero, because a class the graph holds nothing for is knowledge Sensei was never given rather
+  than evidence the repository lacks it.
+agent_guidance: |
+  When you add a figure to any surface, say where it came from and what it does not cover. If
+  you cannot establish which kind of fact you have, report the uncertainty rather than picking
+  the flattering reading. An invariant count that silently includes an installed portable pack
+  credits the repository with governance nobody wrote.
+bad_smells:
+  - a row count from a limited query displayed as a total
+  - an unmeasured class displayed as zero
+  - counts from two Sensei surfaces mixed without saying which supplied which
+  - a figure whose provenance the reader cannot determine from the output
+activation_triggers:
+  - report
+  - count
+  - coverage
+  - metadata
+status: active

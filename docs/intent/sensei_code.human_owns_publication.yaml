@@ -1,0 +1,27 @@
+id: sensei_code.human_owns_publication
+level: contract
+title: Sensei Code may propose and publish a change; landing it is the human's decision
+intent: |
+  Work is planned and accepted by the human before any worker touches a candidate. The
+  architect may settle ordinary architectural questions alone, but committing the repository to
+  a body of work is the human's to start.
+  Sensei Code may open a pull request. It never merges one, and a pull request is never an
+  admission. Publication is gated twice: the configuration must grant the capability, and the
+  human must approve the specific change. A standing capability is not consent for a particular
+  act.
+agent_guidance: |
+  Do not add a path that reaches the repository's shared history without a human decision in
+  front of it. If a capability is declared but not enforced, either enforce it or state plainly
+  that it is an instruction rather than a boundary.
+bad_smells:
+  - a merge, push or deploy performed without an explicit human decision
+  - a capability flag that reads as a guarantee while only appearing in a prompt
+  - reviewer acceptance described as admission
+  - a plan implemented before it was accepted
+activation_triggers:
+  - merge
+  - push
+  - publish
+  - pull request
+  - approval
+status: active
