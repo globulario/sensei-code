@@ -120,9 +120,24 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	}, nil
 }
 
-// observed classifies what Sensei actually returned. A transport success is not
-// itself evidence: a result carrying neither text nor structured content is
-// recorded as absent, never as a present observation.
+// observed classifies what Sensei actually returned.
+//
+// A transport success is not itself evidence. The four outcomes below are
+// genuinely different pieces of information and were, until this function
+// distinguished them, all reported as Present:
+//
+//   - Absent: Sensei said nothing. No evidence either way.
+//   - Stale: Sensei answered, and told us its own graph is not current. The
+//     content is readable but must not be relied on. This is the dangerous one,
+//     because a stale graph answers fluently and specifically; nothing about
+//     the text looks wrong.
+//   - EmptyProven: Sensei answered, its graph is sound, and the answer is that
+//     there is nothing here. This is a real finding — the region is uncovered —
+//     and must not be confused with Absent, which is the absence of a finding.
+//   - Present: Sensei answered with content, from a graph that vouches for it.
+//
+// Staleness is checked before emptiness, because "nothing here" from a graph
+// that cannot vouch for itself is not proof of anything.
 func observed(source string, result sensei.ToolResult) Observation {
 	text := firstText(result)
 	if strings.TrimSpace(text) == "" && len(result.Structured) == 0 {
@@ -130,6 +145,24 @@ func observed(source string, result sensei.ToolResult) Observation {
 			State:  Absent,
 			Source: source,
 			Reason: "Sensei returned neither text nor structured content",
+		}
+	}
+	if authority, ok := sensei.AuthorityOf(result); ok && !authority.Certifiable() {
+		return Observation{
+			State:      Stale,
+			Source:     source,
+			Reason:     authority.Diagnostic(),
+			Text:       text,
+			Structured: result.Structured,
+		}
+	}
+	if reason, ok := sensei.ProvenEmpty(result); ok {
+		return Observation{
+			State:      EmptyProven,
+			Source:     source,
+			Reason:     reason,
+			Text:       text,
+			Structured: result.Structured,
 		}
 	}
 	return Observation{
@@ -144,7 +177,19 @@ func observed(source string, result sensei.ToolResult) Observation {
 // certifiable. Without it an empty answer would be carried forward as though
 // Sensei had supplied context.
 func requireEvidence(label string, o Observation) error {
-	if o.State == Present {
+	switch o.State {
+	case Present:
+		return nil
+	case EmptyProven:
+		// A proven empty is an answer, not a missing one. Sensei's graph
+		// vouched for itself and reported that this scope has no coverage,
+		// which is a fact the packet should carry rather than a failure that
+		// should stop the work — the agent needs to know the region is
+		// uncovered, and refusing here would tell it nothing at all.
+		//
+		// The distinction is load-bearing in both directions: Absent and Stale
+		// still fail, because "nobody answered" and "the answer cannot be
+		// trusted" are not findings about the repository.
 		return nil
 	}
 	return fmt.Errorf("Sensei %s is %s: %s", label, o.State, o.Reason)
