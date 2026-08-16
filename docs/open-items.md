@@ -57,6 +57,11 @@ All P0 slices from `docs/first-working-version-review.md` are implemented, with
 the P0.4 caveat recorded above: the capability envelope is enforced for push,
 force-push and candidate isolation, and open for the rest.
 
+Specified but not yet implemented: `docs/p1-repair-knowledge.md`, which lets the
+project learn the repair that actually held rather than the one a reviewer
+accepted. Blocked on globulario/sensei#172, which adds the positive counterpart
+to `forbidden_fix`.
+
 Specified but not yet implemented: `docs/p1-level-1-routine.md`, which makes
 ceremony proportional to measured risk without reducing verification. It is
 sequenced after the P0 merge and after the governed acceptance run passes,
