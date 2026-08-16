@@ -32,3 +32,16 @@ func TestSelectEffortFallsBackToCatalogDefault(t *testing.T) {
 		t.Fatalf("selectEffort()=%q want medium", got)
 	}
 }
+
+// TestSandboxModeUsesTheAppServerSpelling pins the hyphenated form.
+//
+// A unit test cannot prove the app-server accepts it — only the governed
+// acceptance run can do that, and it is what found the bug. What this can do is
+// stop someone from "tidying" it back into Go-style camelCase, which is exactly
+// how it was written the first time and which silently disabled the ChatGPT
+// architect on every turn.
+func TestSandboxModeUsesTheAppServerSpelling(t *testing.T) {
+	if sandboxReadOnly != "read-only" {
+		t.Fatalf("sandbox mode is %q; the codex app-server accepts read-only, workspace-write and danger-full-access", sandboxReadOnly)
+	}
+}

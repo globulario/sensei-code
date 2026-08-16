@@ -11,6 +11,18 @@ import (
 	"sync"
 )
 
+// sandboxReadOnly is the codex app-server's spelling for a read-only sandbox.
+//
+// It is hyphenated. The app-server rejects "readOnly" outright -- "unknown
+// variant `readOnly`, expected one of `read-only`, `workspace-write`,
+// `danger-full-access`" -- and it rejected it on every architect turn, which
+// meant the ChatGPT architect could not start a thread at all. Unit tests did
+// not catch it because none of them speak to a real app-server; the governed
+// acceptance run found it on its first execution.
+//
+// Both call sites use this constant so the two cannot drift apart again.
+const sandboxReadOnly = "read-only"
+
 const (
 	// ChatGPTArchitectModel is deliberately pinned for the first Sensei Code
 	// architect. Codex app-server is the transport; ChatGPT is the authority.
@@ -131,7 +143,7 @@ func (s *ChatGPTSession) ensureStarted(ctx context.Context) error {
 		"model":          model,
 		"cwd":            s.cwd,
 		"approvalPolicy": "never",
-		"sandbox":        "readOnly",
+		"sandbox":        sandboxReadOnly,
 		"serviceName":    "sensei_code",
 	}
 	if personality {
@@ -222,7 +234,7 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 		"input":          []map[string]string{{"type": "text", "text": prompt}},
 		"cwd":            s.cwd,
 		"approvalPolicy": "never",
-		"sandboxPolicy":  map[string]any{"type": "readOnly"},
+		"sandboxPolicy":  map[string]any{"type": sandboxReadOnly},
 		"model":          s.model,
 		"effort":         s.effort,
 		"personality":    "friendly",
