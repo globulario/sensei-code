@@ -2,6 +2,14 @@
 
 This file distinguishes implemented behavior from planned Sensei Code architecture. It exists to prevent future agents from turning roadmap prose into claims about code that does not yet exist.
 
+## Whole-project review baseline
+
+The first working Go version was reviewed against the governing architecture at `main` commit `d1342aa3eeaf94bfa9d80fa6a321abf62ed66922`.
+
+See [`first-working-version-review.md`](first-working-version-review.md) for the required control-plane corrections and redesign sequence.
+
+The important distinction is that several architectural laws already exist in documentation and prompts but are **not yet mechanical enforcement boundaries**. In particular, certifiability-driven authority routing, typed Sensei semantic gates, assisted-as-default interactive mode, mechanical capability enforcement, durable Level-3 governance writes, and runtime-integrated cross-agent continuity remain work to do. The implemented items below should therefore be read as foundation capabilities, not as proof that the full product contract is already enforced.
+
 ## Implemented in the Go foundation
 
 - Go module and CLI entrypoint

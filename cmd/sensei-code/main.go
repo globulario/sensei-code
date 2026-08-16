@@ -20,6 +20,9 @@ import (
 )
 
 func main() {
+	if runVersion(os.Args[1:], os.Stdout) {
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cwd, err := os.Getwd()
@@ -122,7 +125,7 @@ func printUsage() {
 	fmt.Println(`Sensei Code
 
 Usage:
-  sensei-code             launch the interactive workspace
+  sensei-code             launch the ChatGPT architect workspace
   sensei-code init        create the local capability/provider configuration
   sensei-code doctor      verify Git, providers, and the Sensei MCP surface
   sensei-code providers   show provider installation/authentication state
@@ -131,6 +134,12 @@ Usage:
   sensei-code context     build an assisted context packet from live Sensei evidence
   sensei-code handoff     bind agent continuity to an exact context packet
   sensei-code help        show this help
+  sensei-code --version   print the Sensei Code version
 
-Inside the TUI, use /login to connect ChatGPT, Codex, Claude, or Antigravity.`)
+Inside the TUI:
+  normal text             talk to the persistent ChatGPT architect
+  /run <task>             cross into governed implementation/review
+  /login                  connect ChatGPT, Codex, Claude, or Antigravity
+
+The first-version architect is ChatGPT (GPT-5.6 Sol). Codex app-server is used as the authenticated ChatGPT transport; Codex and Claude remain bounded implementation/review providers.`)
 }
