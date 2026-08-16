@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -14,10 +15,13 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/architect"
 	"github.com/globulario/sensei-code/internal/authority"
+	"github.com/globulario/sensei-code/internal/command"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/mcpconfig"
 	"github.com/globulario/sensei-code/internal/provider"
+	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -25,6 +29,15 @@ import (
 type eventMsg event.Event
 type closedMsg struct{}
 type tickMsg time.Time
+
+// commandResultMsg carries the finished output of an architect command. They
+// query Sensei and can take seconds, so they run off the update loop and the
+// composer stays usable while they do.
+type commandResultMsg struct {
+	name string
+	text string
+	err  error
+}
 type providerLoginFinishedMsg struct {
 	id  provider.ID
 	err error
@@ -79,12 +92,15 @@ type Model struct {
 	pendingTask   string
 	currentTask   string
 	resumable     []session.Interrupted
-	pending       *authority.Decision
-	mode          mode
-	frame         int
-	startedAt     time.Time
-	wordIdx       int
-	activity      string
+	// running names the architect command awaiting its result, so the status
+	// bar can say which one rather than only that something is happening.
+	running   string
+	pending   *authority.Decision
+	mode      mode
+	frame     int
+	startedAt time.Time
+	wordIdx   int
+	activity  string
 }
 
 func New(ctx context.Context, engine *workflow.Engine, events <-chan event.Event, history []event.Event) Model {
@@ -167,7 +183,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		m.input.SetWidth(max(20, msg.Width-6))
 	case tickMsg:
-		if m.busy {
+		if m.busy || m.running != "" {
 			m.frame++
 			// Change the word every ~5s so it reads as progress, not noise.
 			if m.frame%(int(5*time.Second/tickInterval)) == 0 {
@@ -175,6 +191,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, tick()
+	case commandResultMsg:
+		m.running = ""
+		if msg.err != nil {
+			m.lines = append(m.lines, errorStyle.Render("✗ "+strings.ToUpper(strings.TrimPrefix(msg.name, "/"))),
+				"  "+msg.err.Error(), "")
+		} else {
+			m.lines = append(m.lines, senseiStyle.Render("◆ "+strings.ToUpper(strings.TrimPrefix(msg.name, "/"))),
+				indentBlock(msg.text, "  "), "")
+		}
+		cmds = append(cmds, tea.ClearScreen)
 	case providerLoginFinishedMsg:
 		if msg.err != nil {
 			m.lines = append(m.lines, errorStyle.Render("✗ PROVIDER"), "  "+provider.Label(msg.id)+": "+msg.err.Error())
@@ -305,43 +331,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		case "enter":
 			text := strings.TrimSpace(m.input.Value())
-			if text == "/login" && !m.busy {
-				m.input.Reset()
-				m.loginMenu = true
-				return m, tea.Batch(cmds...)
-			}
-			if text == "/mcp" && !m.busy {
-				m.input.Reset()
-				m.mcpMenu = true
-				return m, tea.Batch(cmds...)
-			}
-			if text == "/resume" && !m.busy {
-				m.input.Reset()
-				if len(m.resumable) == 0 {
-					m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was interrupted after its plan was approved"), "")
-					return m, tea.Batch(cmds...)
-				}
-				task := m.resumable[len(m.resumable)-1]
-				m.resumable = nil
-				m.busy = true
-				m.startedAt = time.Now()
-				m.frame = 0
-				m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+"/resume "+task.Task, "")
-				m.currentTask = m.engine.Resume(m.ctx, task)
-				cmds = append(cmds, tea.ClearScreen)
-				return m, tea.Batch(cmds...)
-			}
-			if text == "/clear" && !m.busy {
-				m.input.Reset()
-				m.lines = banner(false)
-				m.activity = ""
-				m.resumable = nil
-				if err := m.engine.RotateSession(); err != nil {
-					m.lines = append(m.lines, errorStyle.Render("✗ SESSION"), "  "+err.Error(), "")
-				}
-				return m, tea.Batch(cmds...)
-			}
 			if text == "" {
+				return m, tea.Batch(cmds...)
+			}
+			if cmd, arg, ok := command.Lookup(text); ok {
+				m.input.Reset()
+				model, c := m.runCommand(cmd, arg)
+				return model, tea.Batch(append(cmds, c)...)
+			}
+			if command.IsUnknown(text) {
+				// A mistyped command handed to the architect arrives as a
+				// feature request, which is worse than saying it is unknown.
+				m.input.Reset()
+				line := "unknown command " + strings.Fields(text)[0]
+				if guess := command.Suggest(text); guess != "" {
+					line += " · did you mean " + guess + "?"
+				}
+				m.lines = append(m.lines, dimStyle.Render(line+"  ·  /help lists them all"), "")
+				cmds = append(cmds, tea.ClearScreen)
 				return m, tea.Batch(cmds...)
 			}
 			if m.busy {
@@ -467,6 +474,9 @@ func (m Model) statusLine() string {
 		return workingStyle.Render("● Sensei MCP access — choose an agent to configure, Esc to cancel")
 	case m.loginMenu:
 		return workingStyle.Render("● provider login — choose 1-4, Esc to cancel")
+	case m.running != "":
+		spin := spinnerFrames[m.frame%len(spinnerFrames)]
+		return workingStyle.Render(spin+" "+m.running) + hintStyle.Render("  asking Sensei…")
 	case m.busy:
 		word := workingWords[m.wordIdx%len(workingWords)]
 		spin := spinnerFrames[m.frame%len(spinnerFrames)]
@@ -478,7 +488,7 @@ func (m Model) statusLine() string {
 		}
 		return line + hintStyle.Render("  · type to steer")
 	default:
-		return hintStyle.Render("● ready — describe a task · /report · /login · /mcp · /resume · /clear")
+		return hintStyle.Render("● ready — describe a task, or /help for commands")
 	}
 }
 
@@ -758,4 +768,150 @@ func renderMCP(repoRoot string, width int) string {
 	}
 	b.WriteString("\n\nChoose a number to configure it. Esc. Cancel")
 	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(1, 2).Width(max(30, width)).Render(b.String())
+}
+
+// runCommand dispatches one architect command. Commands that need Sensei run
+// off the update loop, so a query taking seconds never freezes the composer.
+func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
+	if c.NeedsIdle && m.busy {
+		m.lines = append(m.lines,
+			dimStyle.Render(c.Name+" needs an idle session; a task is running. Type to steer it, or wait."), "")
+		return m, tea.ClearScreen
+	}
+	m.lines = append(m.lines, "", userStyle.Render("You"), promptGlyphStyle.Render("› ")+c.Name+argSuffix(arg), "")
+
+	switch c.Name {
+	case "/help":
+		m.lines = append(m.lines, renderHelp(), "")
+		return m, tea.ClearScreen
+	case "/login":
+		m.loginMenu = true
+		return m, nil
+	case "/mcp":
+		m.mcpMenu = true
+		return m, nil
+	case "/clear":
+		m.lines = banner(false)
+		m.activity = ""
+		m.resumable = nil
+		if err := m.engine.RotateSession(); err != nil {
+			m.lines = append(m.lines, errorStyle.Render("✗ SESSION"), "  "+err.Error(), "")
+		}
+		return m, tea.ClearScreen
+	case "/resume":
+		if len(m.resumable) == 0 {
+			m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was interrupted after its plan was approved"), "")
+			return m, tea.ClearScreen
+		}
+		task := m.resumable[len(m.resumable)-1]
+		m.resumable = nil
+		m.busy = true
+		m.startedAt = time.Now()
+		m.frame = 0
+		m.currentTask = m.engine.Resume(m.ctx, task)
+		return m, tea.ClearScreen
+	case "/refactor":
+		if strings.TrimSpace(arg) == "" {
+			m.lines = append(m.lines, dimStyle.Render("/refactor needs a target: /refactor internal/tui"), "")
+			return m, tea.ClearScreen
+		}
+		// A refactor is a change, so it goes through the same plan-and-approve
+		// path as any other task rather than round the side of it.
+		m.busy = true
+		m.startedAt = time.Now()
+		m.frame = 0
+		m.currentTask = m.engine.Submit(m.ctx, "Propose a governed refactor of "+arg+
+			". Read Sensei's evidence for it first, and keep the plan bounded.")
+		return m, tea.ClearScreen
+	}
+
+	m.running = c.Name
+	return m, tea.Batch(tea.ClearScreen, m.senseiCommand(c, arg))
+}
+
+func argSuffix(arg string) string {
+	if strings.TrimSpace(arg) == "" {
+		return ""
+	}
+	return " " + arg
+}
+
+// senseiCommand runs a read-only Sensei query in the background.
+func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
+	ctx, engine, width := m.ctx, m.engine, max(60, m.width)
+	return func() tea.Msg {
+		switch c.Name {
+		case "/gate":
+			text, err := architect.RunGate(ctx, engine.Repo.Root, senseiDomain(ctx, engine))
+			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/audit":
+			text, err := architect.RunAudit(ctx, engine.Repo.Root)
+			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/debt":
+			text, err := architect.RunDebt(engine.Repo.Root, 12)
+			return commandResultMsg{name: c.Name, text: text, err: err}
+		}
+
+		client, err := sensei.Start(ctx, engine.Repo.Root, engine.Config.Sensei.Command, engine.Config.Sensei.Args)
+		if err != nil {
+			return commandResultMsg{name: c.Name, err: err}
+		}
+		defer client.Close()
+		domain := domainFrom(client, engine.Repo.Root)
+		switch c.Name {
+		case "/report":
+			text, err := architect.RunReport(client, domain, width)
+			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/focus":
+			text, err := architect.RunFocus(client, domain, arg)
+			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/learn":
+			text, err := architect.RunLearn(client, domain, arg)
+			return commandResultMsg{name: c.Name, text: text, err: err}
+		}
+		return commandResultMsg{name: c.Name, err: errors.New("this command has no implementation yet")}
+	}
+}
+
+// senseiDomain resolves the repository domain for CLI-backed commands, which
+// need it to scope a graph that hosts more than one repository.
+func senseiDomain(ctx context.Context, engine *workflow.Engine) string {
+	client, err := sensei.Start(ctx, engine.Repo.Root, engine.Config.Sensei.Command, engine.Config.Sensei.Args)
+	if err != nil {
+		return ""
+	}
+	defer client.Close()
+	return domainFrom(client, engine.Repo.Root)
+}
+
+func domainFrom(client *sensei.Client, repoRoot string) string {
+	status, err := client.CallTool("sensei_workspace_status", map[string]any{"repo": repoRoot})
+	if err != nil {
+		return ""
+	}
+	return sensei.RepositoryDomain(status)
+}
+
+// renderHelp is generated from the registry so it cannot describe a command
+// that does not exist, or omit one that does.
+func renderHelp() string {
+	var b strings.Builder
+	b.WriteString(architectStyle.Render("Commands"))
+	for _, group := range command.Groups() {
+		b.WriteString("\n\n  " + group.Title + "\n")
+		for _, c := range group.Commands {
+			name := c.Name
+			if c.Arg != "" {
+				name += " " + c.Arg
+			}
+			b.WriteString(fmt.Sprintf("    %-28s %s\n", name, c.Summary))
+		}
+	}
+	b.WriteString("\n  Anything that is not a command is a task: describe it and the architect plans it.")
+	return b.String()
+}
+
+// indentBlock shifts a rendered command result under its heading.
+func indentBlock(text, prefix string) string {
+	return prefix + strings.ReplaceAll(strings.TrimRight(text, "\n"), "\n", "\n"+prefix)
 }
