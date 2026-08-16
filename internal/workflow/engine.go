@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -446,7 +447,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, taskID str
 	// refuses pushes. Without this the capability flags were prompt text only.
 	var guardEnv []string
 	if !e.Config.Permissions.Push {
-		env, err := gitguard.Install(workspace)
+		// Outside the worktree: a guard installed inside the candidate shows up
+		// in the worker's own working tree and can be committed into the change
+		// it is supposed to be protecting.
+		env, err := gitguard.Install(filepath.Join(filepath.Dir(workspace), ".guard"))
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("install the push guard: %w", err)
 		}

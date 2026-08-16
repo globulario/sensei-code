@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/config"
@@ -66,5 +67,17 @@ func TestToolNames(t *testing.T) {
 	}
 	if len(names) != 2 || names[0] != "awareness_preflight" {
 		t.Fatalf("unexpected names %v", names)
+	}
+}
+
+func TestMissingWorkspaceToolsNameTheirRemedy(t *testing.T) {
+	// Released sensei packages lag these tools. A check that only says
+	// "missing" makes every reader rediscover that on their own.
+	got := remediation("sensei_workspace_status")
+	if !strings.Contains(got, "build awareness-mcp") {
+		t.Fatalf("remediation = %q, want the action that fixes it", got)
+	}
+	if remediation("awareness_preflight") == "" {
+		t.Fatal("every missing tool should say what to check")
 	}
 }

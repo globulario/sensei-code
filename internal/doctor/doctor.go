@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/mcpconfig"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
@@ -101,11 +102,39 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 		detail := "available"
 		if !have[name] {
 			status = Fail
-			detail = "required tool missing"
+			detail = "required tool missing · " + remediation(name)
 		}
 		report.Checks = append(report.Checks, Check{Name: "sensei:" + name, Status: status, Detail: detail})
 	}
+
+	// A registered MCP server whose tools an agent cannot call is not access to
+	// Sensei, so it is reported here rather than only in `sensei-code mcp`.
+	for _, access := range mcpconfig.Describe(repo) {
+		check := Check{Name: "mcp:" + string(access.Agent), Detail: string(access.State)}
+		switch access.State {
+		case mcpconfig.Configured:
+			check.Status = Pass
+		case mcpconfig.Unknown:
+			check.Status = Warn
+		default:
+			check.Status = Warn
+			check.Detail += " · " + access.Detail + " · fix with: sensei-code mcp " + string(access.Agent)
+		}
+		report.Checks = append(report.Checks, check)
+	}
 	return report
+}
+
+// remediation names the action that makes a missing Sensei surface appear. A
+// check that only says something is absent leaves the reader to rediscover what
+// this tool already knows.
+func remediation(tool string) string {
+	switch tool {
+	case "sensei_workspace_status", "sensei_workspace_admit_change", "sensei_workspace_verify_admission":
+		return "absent from released sensei packages; build awareness-mcp from a current Sensei checkout and put it ahead on PATH"
+	default:
+		return "check that awareness-mcp is current: `awareness-mcp` should expose this tool"
+	}
 }
 
 var requiredSenseiTools = []string{

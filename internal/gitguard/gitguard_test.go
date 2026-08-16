@@ -75,3 +75,20 @@ func TestGuardActuallyRefusesAPush(t *testing.T) {
 		t.Fatalf("push failed for the wrong reason: %s", out)
 	}
 }
+
+func TestGuardDoesNotLiveInTheDirectoryItProtects(t *testing.T) {
+	// Installed inside a candidate worktree the hook appears in the worker's
+	// own status and can be committed into the change it protects.
+	candidate := t.TempDir()
+	guard := filepath.Join(filepath.Dir(candidate), ".guard")
+	if _, err := Install(guard); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := os.ReadDir(candidate)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("the guard wrote %d entries into the protected directory", len(entries))
+	}
+}
