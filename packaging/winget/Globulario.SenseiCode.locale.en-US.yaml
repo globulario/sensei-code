@@ -1,0 +1,25 @@
+PackageIdentifier: Globulario.SenseiCode
+PackageVersion: 0.1.0
+PackageLocale: en-US
+Publisher: Globulario
+PublisherUrl: https://github.com/globulario
+PackageName: Sensei Code
+PackageUrl: https://github.com/globulario/sensei-code
+License: AGPL-3.0-only
+ShortDescription: Terminal workspace for governed AI software development with Sensei
+Description: |-
+  Sensei Code is the terminal surface for building software with AI agents under
+  architectural governance. It carries Sensei's evidence into whichever agent is
+  doing the work, plans a change before any worker starts, and reports what a
+  change did not establish as plainly as what it did.
+
+  Sensei Code reads Sensei's graph, so install Globulario.Sensei as well. After
+  installing, run `sensei-code setup --apply` in a repository: it checks
+  everything a session needs and repairs what it can.
+Tags:
+  - ai
+  - architecture
+  - governance
+  - developer-tools
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

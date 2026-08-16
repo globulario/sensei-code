@@ -1,0 +1,16 @@
+PackageIdentifier: Globulario.SenseiCode
+PackageVersion: 0.1.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: sensei-code.exe
+    PortableCommandAlias: sensei-code
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/globulario/sensei-code/releases/download/v0.1.0/sensei-code-windows-amd64.zip
+    InstallerSha256: REPLACE_WITH_RELEASE_SHA256
+Dependencies:
+  PackageDependencies:
+    - PackageIdentifier: Globulario.Sensei
+ManifestType: installer
+ManifestVersion: 1.6.0

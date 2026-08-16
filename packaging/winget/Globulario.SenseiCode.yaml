@@ -1,0 +1,7 @@
+# winget manifest for Sensei Code. Mirrors the layout Sensei already uses so a
+# release updates both the same way.
+PackageIdentifier: Globulario.SenseiCode
+PackageVersion: 0.1.0
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.6.0

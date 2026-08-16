@@ -1,0 +1,128 @@
+name: Release
+
+# Builds the artefacts the installers expect. The Homebrew formula, the winget
+# manifest and packaging/install.sh all resolve
+# sensei-code-<os>-<arch>.(tar.gz|zip) from a release, so a tag that does not
+# produce exactly those names leaves every install path broken.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build, for a dry run without tagging
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    name: Verify before publishing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Format
+        run: |
+          unformatted=$(gofmt -l cmd internal)
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would change: $unformatted"
+            exit 1
+          fi
+      - name: Vet
+        run: go vet ./...
+      - name: Test
+        run: go test ./...
+
+  build:
+    name: Build ${{ matrix.goos }}-${{ matrix.goarch }}
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+          - goos: darwin
+            goarch: arm64
+          - goos: windows
+            goarch: amd64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+        run: |
+          set -eu
+          name=sensei-code
+          if [ "$GOOS" = windows ]; then name=sensei-code.exe; fi
+          go build -trimpath -ldflags "-s -w" -o "dist/$name" ./cmd/sensei-code
+      - name: Package
+        run: |
+          set -eu
+          base="sensei-code-${{ matrix.goos }}-${{ matrix.goarch }}"
+          cd dist
+          if [ "${{ matrix.goos }}" = windows ]; then
+            zip -q "../$base.zip" sensei-code.exe
+          else
+            tar -czf "../$base.tar.gz" sensei-code
+          fi
+          cd ..
+          # The installers verify what they download, so the checksums ship
+          # with the artefacts rather than being computed after the fact.
+          sha256sum "$base".* > "$base.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sensei-code-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            sensei-code-*.tar.gz
+            sensei-code-*.zip
+            sensei-code-*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: dist
+      - name: Collect checksums
+        run: cat dist/*.sha256 > dist/SHA256SUMS
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/sensei-code-*.tar.gz
+            dist/sensei-code-*.zip
+            dist/SHA256SUMS
+          generate_release_notes: true
+          body: |
+            Install:
+
+                brew install globulario/tap/sensei-code
+
+            or, without Homebrew:
+
+                curl -fsSL https://raw.githubusercontent.com/globulario/sensei-code/main/packaging/install.sh | sh
+
+            Then, in a repository:
+
+                sensei-code setup --apply
+
+            Sensei Code reads Sensei's graph. The formula depends on Sensei, and
+            the script installs it when it is missing.

@@ -328,35 +328,54 @@ A repository with no graph is the normal first run, not an error. Sensei Code gu
 
 See [`docs/architecture.md`](docs/architecture.md) section 5, including the operational hazards the product is expected to absorb so that users never meet them.
 
-## Install and build
+## Install
 
-The shipped artifact is expected to cover the whole runtime — the Sensei Code binary, the Sensei binaries, and the store — so that installing it does not require knowing that a triple store is involved. Provider CLIs are detected, never installed silently.
-
-Sensei Code targets Go 1.25+ because the current Charm v2 packages require that toolchain.
-
-```bash
-go build ./cmd/sensei-code
+```sh
+brew install globulario/tap/sensei-code
 ```
 
-Initialize a repository-local configuration:
+or, without Homebrew:
 
-```bash
-sensei-code init
+```sh
+curl -fsSL https://raw.githubusercontent.com/globulario/sensei-code/main/packaging/install.sh | sh
 ```
 
-Check the execution surface before the first task:
+On Windows: `winget install Globulario.SenseiCode`.
 
-```bash
-sensei-code doctor
-```
+Sensei Code reads Sensei's graph, so it needs Sensei too. The formula depends on
+it and the script installs it when it is missing; you should not have to install
+two things by hand.
 
-The doctor checks Git, configured model-provider executables, Sensei MCP startup, and the canonical Sensei tools required by the workflow.
+Then, in any repository:
 
-Then launch the interactive application from a governed repository:
-
-```bash
+```sh
+sensei-code setup --apply
 sensei-code
 ```
+
+`setup` is the whole onboarding. It checks everything a session needs — the
+Sensei CLI, which `awareness-mcp` wins on PATH and whether it is recent enough
+to expose the workspace tools, the graph server, graph freshness, the domain
+registration that lives outside the repository, the awareness corpus, and each
+agent's MCP access — and for anything wrong it reports **what you would see when
+it breaks** alongside the command that fixes it. With `--apply` it repairs what
+it can and re-checks rather than assuming the repair worked, looping until
+nothing further can be fixed, because some repairs unlock others.
+
+Run it again any time something behaves oddly. Most of what goes wrong here
+presents as an unrelated symptom: a stale graph marker fails every task closed
+with a digest that appears nowhere, and an agent whose MCP tools are blocked
+reports that Sensei is unavailable when Sensei is fine.
+
+### Building from source
+
+```sh
+git clone https://github.com/globulario/sensei-code
+cd sensei-code
+go build -o bin/sensei-code ./cmd/sensei-code
+```
+
+Requires Go 1.25 or later.
 
 ## Local configuration
 

@@ -56,6 +56,9 @@ func main() {
 		case "logout":
 			fatalIf(runLogout(ctx, os.Args[2:]))
 			return
+		case "setup":
+			fatalIf(runSetup(ctx, repo, cfg, os.Args[2:]))
+			return
 		case "mcp":
 			fatalIf(runMCP(repo, cfg, os.Args[2:]))
 			return
