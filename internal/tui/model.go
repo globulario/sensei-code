@@ -377,6 +377,10 @@ func renderEvent(e event.Event) string {
 	case event.SourceUser:
 		prefix = userStyle.Render("⚑ YOU")
 	}
+	if e.Kind == event.DecisionRecorded {
+		prefix = senseiStyle.Render("◆ DECISION")
+		indent = "  "
+	}
 	if e.Kind == event.ChangeReported {
 		prefix = senseiStyle.Render("◆ CHANGE REPORT")
 		indent = "  "
@@ -528,6 +532,11 @@ func max(a, b int) int {
 func isConversation(e event.Event) bool {
 	switch e.Kind {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+		return true
+	case event.DecisionRecorded:
+		// Whether the reason for this work reached Sensei is the architect's
+		// business. Filed as activity it was never shown, so a decision that
+		// went unrecorded looked exactly like one that was captured.
 		return true
 	case event.TaskCreated, event.Output, event.SenseiResult:
 		return false
