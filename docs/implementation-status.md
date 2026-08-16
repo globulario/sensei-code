@@ -49,6 +49,26 @@ green. Provider **end-to-end orchestration is still not claimed**: the smoke tes
 deliberately stopped short of submitting a task, so no provider was actually driven through
 a workflow.
 
+### Onboarding
+
+`sensei-code setup` checks everything a session needs and, with `--apply`,
+repairs what it can and re-checks rather than assuming the repair worked. It
+loops because repairs unlock each other: `sensei init` creates the domain that
+then has to be registered. Verified against a brand new repository, which it
+takes to ready in two passes.
+
+Launching in a repository that cannot work now fails immediately with the
+report and the fix, instead of starting and failing the first task with a
+symptom that names none of the cause. The launch check is the quick one, which
+omits the checks needing a Sensei round trip rather than reporting them as
+passing.
+
+Installation is `brew install globulario/tap/sensei-code`, `winget install
+Globulario.SenseiCode`, or `packaging/install.sh`. Sensei is a dependency of the
+formula rather than a suggestion. `.github/workflows/release.yml` builds the
+artefacts all three resolve; the formula and winget manifests in `packaging/`
+carry placeholder checksums until a release is cut.
+
 ### Capability enforcement
 
 `.sensei-code/config.json` declares nine capabilities. They are not all enforced, and the
