@@ -105,9 +105,13 @@ func (r Report) Render() string {
 			b.WriteString("         what you would see: " + c.Symptom + "\n")
 		}
 		if c.Fix != "" {
+			// "can run", not "will run": the same report is rendered by a
+			// read-only reader and by `setup --apply`, and only the second one
+			// runs anything. Wording that promised the repair would happen would
+			// be a lie in the reader that never calls Apply.
 			verb := "fix"
 			if c.Repair != nil {
-				verb = "will run"
+				verb = "can run"
 			}
 			b.WriteString("         " + verb + ": " + c.Fix + "\n")
 		}
