@@ -20,6 +20,9 @@ import (
 )
 
 func main() {
+	if runVersion(os.Args[1:], os.Stdout) {
+		return
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cwd, err := os.Getwd()
@@ -119,6 +122,7 @@ Usage:
   sensei-code context     build an assisted context packet from live Sensei evidence
   sensei-code handoff     bind agent continuity to an exact context packet
   sensei-code help        show this help
+  sensei-code --version   print the Sensei Code version
 
 Inside the TUI, use /login to connect ChatGPT, Codex, Claude, or Antigravity.`)
 }
