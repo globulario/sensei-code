@@ -79,6 +79,15 @@ func main() {
 	}
 	// Continue the most recent conversation, the way a returning shell session
 	// would. /clear starts a fresh one without deleting the old record.
+	// A session that cannot work should say so now, with the fix, rather than
+	// launching and failing the first task with a symptom that names none of
+	// this. Broken means every task would fail; degraded is only a warning.
+	if report := inspectQuick(ctx, repo, cfg); !report.Ready() {
+		fmt.Fprintln(os.Stderr, report.Render())
+		fmt.Fprint(os.Stderr, "\nThis repository is not ready. Run:\n\n    sensei-code setup --apply\n\n")
+		os.Exit(1)
+	}
+
 	sessionID, resumed := session.Latest(repo.Root)
 	if !resumed {
 		sessionID = session.ID(time.Now())

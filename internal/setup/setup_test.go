@@ -207,3 +207,17 @@ func TestRemoveAllRefusesADirectoryThatGainedContent(t *testing.T) {
 		t.Fatal("a non-empty directory was deleted")
 	}
 }
+
+func TestQuickInspectionOmitsChecksItCannotAffordRatherThanPassingThem(t *testing.T) {
+	// The launch-time check must not report a Sensei question as passing when it
+	// never asked one.
+	r := InspectQuick(context.Background(), Options{RepoRoot: t.TempDir()})
+	for _, c := range r.Checks {
+		if c.Name == "required Sensei tools" || c.Name == "graph freshness" {
+			t.Fatalf("%q needs a Sensei round trip and must be left to the full inspection", c.Name)
+		}
+	}
+	if len(r.Checks) == 0 {
+		t.Fatal("the quick inspection checked nothing")
+	}
+}

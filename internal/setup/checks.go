@@ -38,6 +38,24 @@ type Options struct {
 	GraphAddr string
 }
 
+// InspectQuick runs only the checks that can be decided from the filesystem and
+// PATH.
+//
+// The full inspection starts an MCP server and asks Sensei several questions,
+// which costs seconds. That is right for `setup` and wrong on every launch of an
+// interactive tool, so this reports the failures that make a session impossible
+// and omits the rest rather than guessing at them. Omitting a check is honest;
+// reporting it as passing would not be.
+func InspectQuick(ctx context.Context, o Options) Report {
+	var r Report
+	r.Checks = append(r.Checks,
+		checkSensei(ctx),
+		checkMCPBinary(ctx, o),
+		checkCorpus(ctx, o),
+	)
+	return r
+}
+
 // Inspect runs every readiness check.
 func Inspect(ctx context.Context, o Options) Report {
 	var r Report

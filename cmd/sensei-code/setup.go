@@ -104,6 +104,15 @@ Checks everything a working session needs and reports what is wrong, what you
 would see when it breaks, and the command that fixes it. With --apply it repairs
 what it can and re-checks.`
 
+// inspectQuick is the launch-time check: only what can be decided without
+// asking Sensei anything, so starting the tool stays instant.
+func inspectQuick(ctx context.Context, repo gitx.Repo, cfg config.Config) setup.Report {
+	return setup.InspectQuick(ctx, setup.Options{
+		RepoRoot:  repo.Root,
+		GraphAddr: graphAddr(cfg),
+	})
+}
+
 // inspect gathers the machine and repository state the checks need.
 func inspect(ctx context.Context, repo gitx.Repo, cfg config.Config) setup.Report {
 	options := setup.Options{
