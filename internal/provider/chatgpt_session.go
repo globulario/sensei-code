@@ -11,17 +11,27 @@ import (
 	"sync"
 )
 
-// sandboxReadOnly is the codex app-server's spelling for a read-only sandbox.
+// The codex app-server spells its read-only sandbox differently on the two
+// endpoints this file calls, and rejects the other spelling outright.
 //
-// It is hyphenated. The app-server rejects "readOnly" outright -- "unknown
-// variant `readOnly`, expected one of `read-only`, `workspace-write`,
-// `danger-full-access`" -- and it rejected it on every architect turn, which
-// meant the ChatGPT architect could not start a thread at all. Unit tests did
-// not catch it because none of them speak to a real app-server; the governed
-// acceptance run found it on its first execution.
+//	thread/start  sandbox            wants "read-only"
+//	turn/start    sandboxPolicy.type wants "readOnly"
 //
-// Both call sites use this constant so the two cannot drift apart again.
-const sandboxReadOnly = "read-only"
+// That is not a guess. Each server error names the variants it will accept:
+// thread/start says `read-only`, `workspace-write`, `danger-full-access`;
+// turn/start says `dangerFullAccess`, `readOnly`, `externalSandbox`,
+// `workspaceWrite`. They are two different enums that happen to mean the same
+// thing.
+//
+// So these are deliberately two constants rather than one. An earlier attempt
+// to unify them looked like removing duplication and was simply wrong: it fixed
+// thread/start and broke turn/start, which had been correct all along. If a
+// future reader is tempted to merge them again, the acceptance run is what will
+// tell them not to, and it will take two round trips to find out.
+const (
+	threadSandboxReadOnly = "read-only"
+	turnSandboxReadOnly   = "readOnly"
+)
 
 const (
 	// ChatGPTArchitectModel is deliberately pinned for the first Sensei Code
@@ -185,7 +195,7 @@ func startThread(c *appServer, model, cwd string, personality bool) (string, err
 		"model":          model,
 		"cwd":            cwd,
 		"approvalPolicy": "never",
-		"sandbox":        sandboxReadOnly,
+		"sandbox":        threadSandboxReadOnly,
 		"serviceName":    "sensei_code",
 	}
 	if personality {
@@ -271,7 +281,7 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 		"input":          []map[string]string{{"type": "text", "text": prompt}},
 		"cwd":            s.cwd,
 		"approvalPolicy": "never",
-		"sandboxPolicy":  map[string]any{"type": sandboxReadOnly},
+		"sandboxPolicy":  map[string]any{"type": turnSandboxReadOnly},
 		"model":          s.model,
 		"effort":         s.effort,
 		"personality":    "friendly",

@@ -33,15 +33,22 @@ func TestSelectEffortFallsBackToCatalogDefault(t *testing.T) {
 	}
 }
 
-// TestSandboxModeUsesTheAppServerSpelling pins the hyphenated form.
+// TestSandboxSpellingsAreNotUnified pins both spellings and the fact that they
+// differ.
 //
-// A unit test cannot prove the app-server accepts it — only the governed
-// acceptance run can do that, and it is what found the bug. What this can do is
-// stop someone from "tidying" it back into Go-style camelCase, which is exactly
-// how it was written the first time and which silently disabled the ChatGPT
-// architect on every turn.
-func TestSandboxModeUsesTheAppServerSpelling(t *testing.T) {
-	if sandboxReadOnly != "read-only" {
-		t.Fatalf("sandbox mode is %q; the codex app-server accepts read-only, workspace-write and danger-full-access", sandboxReadOnly)
+// A unit test cannot prove the app-server accepts either — only the governed
+// acceptance run can, and it is what found both. What this can do is stop the
+// next reader from "removing the duplication", which is exactly what happened
+// once: unifying them fixed thread/start and broke turn/start, which had been
+// right from the start.
+func TestSandboxSpellingsAreNotUnified(t *testing.T) {
+	if threadSandboxReadOnly != "read-only" {
+		t.Errorf("thread/start sandbox is %q; the app-server accepts read-only, workspace-write, danger-full-access", threadSandboxReadOnly)
+	}
+	if turnSandboxReadOnly != "readOnly" {
+		t.Errorf("turn/start sandboxPolicy.type is %q; the app-server accepts dangerFullAccess, readOnly, externalSandbox, workspaceWrite", turnSandboxReadOnly)
+	}
+	if threadSandboxReadOnly == turnSandboxReadOnly {
+		t.Fatal("the two spellings have been unified; the app-server rejects that on one endpoint or the other")
 	}
 }
