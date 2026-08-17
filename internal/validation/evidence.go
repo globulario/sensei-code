@@ -59,9 +59,20 @@ type Outcome string
 const (
 	// Passed means the command ran and exited zero.
 	Passed Outcome = "passed"
-	// Failed means the command ran and exited non-zero. This is a real result
-	// and useful evidence: it tells the reviewer exactly what is wrong.
-	Failed Outcome = "failed"
+	// Failed means the command ran, exited non-zero, and the candidate is
+	// responsible: the same check passes against the base it was cut from.
+	Failed Outcome = "candidate-failure"
+	// Infrastructure means the command exited non-zero for a reason the
+	// candidate cannot affect, established by the same check failing against a
+	// clean checkout of the base.
+	//
+	// The distinction is not bookkeeping. A mandatory check must test a
+	// property the candidate can influence, and one that cannot manufactures an
+	// impossible revision loop: the reviewer asks for a fix, the worker cannot
+	// produce one, and every governance component behaves perfectly while the
+	// system goes nowhere. A real run spent its cycles being told to repair
+	// "error obtaining VCS status", which no edit to the candidate could reach.
+	Infrastructure Outcome = "infrastructure-failure"
 	// NotPermitted means the capability envelope does not grant this check. It
 	// is not a pass and must never be read as one.
 	NotPermitted Outcome = "not-permitted"
@@ -98,8 +109,41 @@ type Evidence struct {
 	OutputDigest string  `json:"output_digest,omitempty"`
 	Outcome      Outcome `json:"outcome"`
 
-	// Detail explains a NotPermitted or Errored outcome.
+	// Detail explains a NotPermitted, Errored or Infrastructure outcome.
 	Detail string `json:"detail,omitempty"`
+	// Attribution records how a non-zero exit was assigned: "candidate" when
+	// the base passed, "pre-existing" when the base failed the same way, and
+	// "unattributed" when no baseline was available to compare against.
+	// Unattributed is reported rather than guessed, because guessing in either
+	// direction is worse than saying which question was not asked.
+	Attribution string `json:"attribution,omitempty"`
+}
+
+// CandidateFailures lists only the failures the worker can actually act on.
+//
+// This is what a revision instruction may be built from. Handing a worker an
+// infrastructure failure produces a request it cannot satisfy.
+func (b Bundle) CandidateFailures() []Evidence {
+	var out []Evidence
+	for _, c := range b.Checks {
+		if c.Outcome == Failed {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// Unactionable lists results that block acceptance but are not the candidate's
+// fault, so a caller can escalate them instead of demanding a revision.
+func (b Bundle) Unactionable() []Evidence {
+	var out []Evidence
+	for _, c := range b.Checks {
+		switch c.Outcome {
+		case Infrastructure, NotPermitted, Errored:
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // Certifies reports whether this evidence speaks about the given candidate
@@ -194,6 +238,14 @@ func (b Bundle) Render() string {
 	if !b.Passed() {
 		sb.WriteString("\nNot every check passed. This candidate is not proven.\n")
 	}
+	if u := b.Unactionable(); len(u) != 0 {
+		sb.WriteString("\nSome results are NOT the candidate's fault and cannot be fixed by editing it:\n")
+		for _, c := range u {
+			fmt.Fprintf(&sb, "  %s %s — %s\n", string(c.Outcome), c.Command, c.Detail)
+		}
+		sb.WriteString("Do not ask the worker to revise code for these. They are an environment or\n")
+		sb.WriteString("capability problem and need a human or a configuration change.\n")
+	}
 	return strings.TrimRight(sb.String(), "\n")
 }
 
@@ -232,6 +284,14 @@ type Runner struct {
 	Permits func(CheckKind) (bool, string)
 	// Now is injectable so evidence timestamps are testable.
 	Now func() time.Time
+	// Baseline returns a clean checkout of the candidate's base, used only to
+	// attribute a failure. It is called at most once, lazily, and only when a
+	// check has already failed -- attribution costs a second execution and is
+	// worth paying only for a result that is going to be acted on.
+	//
+	// When nil, failures are reported as unattributed rather than assumed to be
+	// the candidate's fault.
+	Baseline func() (string, error)
 }
 
 // Run executes the checks and returns evidence bound to the candidate content
@@ -293,7 +353,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		if ok := asExitError(err, &exitErr); ok {
 			e.ExitStatus = exitErr.ExitCode()
 			e.Outcome = Failed
-			return e
+			return r.attribute(ctx, check, e)
 		}
 		// Could not run at all: missing binary, deadline, permission. Not a
 		// failure of the candidate and definitely not a pass.
@@ -310,4 +370,40 @@ func asExitError(err error, target **exec.ExitError) bool {
 		return true
 	}
 	return false
+}
+
+// attribute decides whether a failing check is the candidate's fault by running
+// the same command against a clean checkout of the base.
+//
+// This makes the judgement empirical rather than a guess about which error
+// messages look environmental. A check that fails identically on the base was
+// not broken by this candidate, whatever the output says.
+func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence {
+	if r.Baseline == nil {
+		e.Attribution = "unattributed"
+		e.Detail = "no baseline was available, so this failure was not attributed to the candidate or to the environment"
+		return e
+	}
+	base, err := r.Baseline()
+	if err != nil || strings.TrimSpace(base) == "" {
+		e.Attribution = "unattributed"
+		e.Detail = "baseline checkout unavailable, so this failure could not be attributed"
+		if err != nil {
+			e.Detail += ": " + err.Error()
+		}
+		return e
+	}
+
+	cmd := exec.CommandContext(ctx, check.Command, check.Args...)
+	cmd.Dir = base
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	if baseErr := cmd.Run(); baseErr != nil {
+		e.Outcome = Infrastructure
+		e.Attribution = "pre-existing"
+		e.Detail = "this check fails the same way against the base commit, so the candidate did not cause it and no edit to the candidate can fix it"
+		return e
+	}
+	e.Attribution = "candidate"
+	return e
 }

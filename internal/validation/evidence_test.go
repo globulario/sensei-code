@@ -2,6 +2,8 @@ package validation
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -166,7 +168,9 @@ func TestRenderGivesTheReviewerWhatItAskedFor(t *testing.T) {
 		short(Digest("diff")), // which bytes
 		"not reported by the worker",
 		"passed",
-		"failed",
+		// The outcome names the attribution, so a reviewer reading the render
+		// can tell a defect in the candidate from a broken environment.
+		"candidate-failure",
 		"engine.go:12: unreachable code", // the actionable detail
 		"not proven",
 	} {
@@ -209,4 +213,89 @@ func TestFailuresAreListedForTheCaller(t *testing.T) {
 	if len(f) != 1 || f[0].Kind != Test {
 		t.Fatalf("failures were not reported accurately: %+v", f)
 	}
+}
+
+// TestAFailureTheCandidateCannotAffectIsNotACandidateFailure is the invariant a
+// real run established: a mandatory check must test a property the candidate
+// can influence, and one that cannot manufactures an impossible revision loop.
+//
+// Attribution is empirical rather than a guess about which error text looks
+// environmental: the same command is run against a clean checkout of the base,
+// and a check that fails identically there was not broken by this candidate.
+func TestAFailureTheCandidateCannotAffectIsNotACandidateFailure(t *testing.T) {
+	base := t.TempDir()
+	r := runner(t, nil)
+	r.Baseline = func() (string, error) { return base, nil }
+
+	// Fails everywhere, base included: an environment problem.
+	b := r.Run(context.Background(), "task-1", "sha256:abc", []Check{
+		{Kind: Build, Command: "sh", Args: []string{"-c", "echo 'error obtaining VCS status' >&2; exit 1"}},
+	})
+	got := b.Checks[0]
+	if got.Outcome != Infrastructure {
+		t.Fatalf("a failure reproducible on the base was recorded as %q", got.Outcome)
+	}
+	if got.Attribution != "pre-existing" {
+		t.Fatalf("attribution is %q", got.Attribution)
+	}
+	if len(b.CandidateFailures()) != 0 {
+		t.Fatal("an infrastructure failure was offered as something the worker can fix")
+	}
+	if len(b.Unactionable()) != 1 {
+		t.Fatal("the infrastructure failure was not reported as unactionable")
+	}
+	// It still blocks acceptance: nothing was proven about the candidate.
+	if b.Passed() {
+		t.Fatal("an infrastructure failure was treated as a pass")
+	}
+	if !strings.Contains(b.Render(), "Do not ask the worker to revise code for these") {
+		t.Fatalf("the reviewer is not told this is unactionable:\n%s", b.Render())
+	}
+}
+
+// TestARealCandidateFailureIsStillAttributedToTheCandidate keeps attribution
+// from becoming a blanket excuse.
+func TestARealCandidateFailureIsStillAttributedToTheCandidate(t *testing.T) {
+	base := t.TempDir()
+	r := runner(t, nil)
+	r.Baseline = func() (string, error) { return base, nil }
+
+	// Fails only in the candidate workspace, because the marker file is there.
+	marker := "candidate-only"
+	if err := writeFile(r.Workspace, marker); err != nil {
+		t.Fatal(err)
+	}
+	b := r.Run(context.Background(), "task-1", "sha256:abc", []Check{
+		{Kind: Test, Command: "sh", Args: []string{"-c", "test ! -f " + marker}},
+	})
+	got := b.Checks[0]
+	if got.Outcome != Failed {
+		t.Fatalf("a failure unique to the candidate was recorded as %q", got.Outcome)
+	}
+	if got.Attribution != "candidate" {
+		t.Fatalf("attribution is %q", got.Attribution)
+	}
+	if len(b.CandidateFailures()) != 1 {
+		t.Fatal("a genuine candidate failure was not offered as actionable")
+	}
+}
+
+// TestUnattributedIsSaidRatherThanGuessed keeps the honest third answer. With no
+// baseline the question was not asked, and reporting either verdict would be
+// inventing one.
+func TestUnattributedIsSaidRatherThanGuessed(t *testing.T) {
+	r := runner(t, nil) // no Baseline
+	b := r.Run(context.Background(), "task-1", "sha256:abc", []Check{
+		{Kind: Build, Command: "sh", Args: []string{"-c", "exit 1"}},
+	})
+	if got := b.Checks[0].Attribution; got != "unattributed" {
+		t.Fatalf("attribution without a baseline is %q, want unattributed", got)
+	}
+	if !strings.Contains(b.Checks[0].Detail, "not attributed") {
+		t.Fatalf("the detail does not say the question was unanswered: %q", b.Checks[0].Detail)
+	}
+}
+
+func writeFile(dir, name string) error {
+	return os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644)
 }

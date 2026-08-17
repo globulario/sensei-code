@@ -693,6 +693,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// than drive it. An audit that could not run objects to the
 				// environment, not to the candidate, so sending it back produces
 				// a byte-identical diff and consumes the next cycle for nothing.
+				if unactionable := evidence.Unactionable(); len(unactionable) != 0 && len(evidence.CandidateFailures()) == 0 {
+					// The only thing blocking acceptance is something no edit to
+					// the candidate can reach. Asking for a revision would be
+					// asking for the impossible, politely, until the cycles run
+					// out.
+					names := make([]string, 0, len(unactionable))
+					for _, u := range unactionable {
+						names = append(names, string(u.Outcome)+" "+u.Command+": "+u.Detail)
+					}
+					return false, plan, lastReview, lastAudit, fmt.Errorf(
+						"validation could not be completed for reasons outside the candidate, so no revision would help: %s",
+						strings.Join(names, "; "))
+				}
 				if !verdict.Actionable() {
 					return false, plan, lastReview, lastAudit, fmt.Errorf(
 						"Sensei could not verify this candidate and no edit to it would change that: %s", judged.Refusal)
@@ -1686,7 +1699,33 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 		}
 		return true, ""
 	}
-	runner := validation.Runner{Workspace: repo.Root, Permits: permits}
+	// The baseline is created lazily and only when a check has already failed:
+	// attribution costs a second checkout and a second execution, and is worth
+	// paying only for a result something is about to act on.
+	var baselinePath string
+	runner := validation.Runner{
+		Workspace: repo.Root,
+		Permits:   permits,
+		Baseline: func() (string, error) {
+			if baselinePath != "" {
+				return baselinePath, nil
+			}
+			if strings.TrimSpace(base) == "" {
+				return "", errors.New("no recorded base commit to compare against")
+			}
+			path, err := e.Repo.CreateWorktreeAt(ctx, taskID+"-baseline", base)
+			if err != nil {
+				return "", err
+			}
+			baselinePath = path
+			return path, nil
+		},
+	}
+	defer func() {
+		if baselinePath != "" {
+			_ = e.Repo.RemoveWorktree(ctx, baselinePath)
+		}
+	}()
 
 	// Formatting first, and its evidence is deliberately discarded from the
 	// certifying bundle: it describes the candidate before the rewrite.
