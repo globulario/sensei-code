@@ -98,6 +98,22 @@ missing until a rebuild was finally required.
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
 
+## Candidate worktrees have no terminal lifecycle
+
+`globulario/sensei-code#12`.
+
+Every governed task creates a worktree and a branch and nothing ever resolves
+them; seven accumulated in one day of acceptance runs. The problem is not disk
+but meaning: recovery reads candidate and task state from disk, so
+undifferentiated leftovers turn "resume the interrupted task" into archaeology,
+and a candidate stops meaning anything specific.
+
+Deleting on exit is the wrong fix — it would have destroyed the accepted
+candidate, whose work is unpublished and human-owned. What is needed is
+disposition: retain an accepted-but-unpublished candidate, clean up an adopted
+or rejected one, retain a failed one only while resumable state references it,
+and reference the evidence before removing anything.
+
 ## Capability envelope is only partly enforced (P0.4)
 
 **Done.** `internal/broker` mechanically enforces three capabilities for a
