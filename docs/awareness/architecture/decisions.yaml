@@ -1,4 +1,4 @@
-decisions: []
+decisions:
   - id: decision.sensei_code.add_a_read_only_tui_readiness_report_command_keep_all_repair
     title: Add a read-only TUI readiness report command; keep all repair/apply behavior exclusive to the existing CLI setup flow.
     status: accepted
