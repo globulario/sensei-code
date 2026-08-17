@@ -97,9 +97,29 @@ follow-up is mismatch *rejection*, not registry-based routing — making Propose
 resolve domains would turn one server into a multi-repository write router,
 which is a different architecture adopted to fix a bug.
 
-**Closes when** a sensei-code Level-3 proposal against the corrected deployment
-resolves physically under this repository's corpus with the services corpus
-untouched. Blocks merge of PR #11 until then.
+**Resolved by deployment isolation**, not by a workaround: the topology below is
+what Sensei's single-write-root design already implies.
+
+```text
+services      :10120   -awareness-dir services/docs/awareness      (untouched)
+sensei-code   :10121   -awareness-dir sensei-code/docs/awareness
+                       -repo-domain / -repo-root: sensei-code
+Oxigraph      :7878    shared, read-only from both servers
+```
+
+Verified by `internal/acceptance/authority_root_test.go`, which is executable
+rather than a one-off: it digests the services corpus, proposes through the
+configured endpoint, resolves the returned relative path against this
+repository's awareness directory, requires the file to declare the sensei-code
+domain, requires the services corpus to be byte-for-byte identical afterwards,
+and requires the server to remain authoritative. That last check matters on its
+own: writing to the right corpus while going non-authoritative would be correct
+custody and an unusable graph.
+
+**Operational gap, deliberately not blocking.** The `:10121` server is not yet
+durable across reboot. After a restart sensei-code points at a dead port and
+fails closed, which is inconvenient and does not violate the authority
+boundary.
 
 ## Upstream (Sensei): two defects found while commissioning
 
