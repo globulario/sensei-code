@@ -89,3 +89,33 @@ func TestLoadMigratesOnlyLegacyBuiltInArchitect(t *testing.T) {
 		t.Fatalf("custom architect configuration must remain user-owned: %#v", got.Architect)
 	}
 }
+
+// TestBuildCheckWorksInsideACandidateWorktree pins a default that a real run
+// proved wrong.
+//
+// A candidate is a git worktree, and `go build` stamps VCS metadata from it.
+// That fails with "error obtaining VCS status: exit status 128" for reasons
+// unrelated to whether the code compiles, so the build check reported a failure
+// no worker could fix and the review loop could not converge. Stamping is
+// irrelevant to the question the check asks.
+func TestBuildCheckWorksInsideACandidateWorktree(t *testing.T) {
+	var found bool
+	for _, c := range Default().Validation.Build {
+		if c.Command != "go" {
+			continue
+		}
+		found = true
+		var disabled bool
+		for _, a := range c.Args {
+			if a == "-buildvcs=false" {
+				disabled = true
+			}
+		}
+		if !disabled {
+			t.Fatalf("the default build check is %v; without -buildvcs=false it fails inside a candidate worktree", c.Args)
+		}
+	}
+	if !found {
+		t.Fatal("no default go build check")
+	}
+}

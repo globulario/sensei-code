@@ -112,8 +112,15 @@ func defaultValidation() Validation {
 	return Validation{
 		Format: []Command{{Command: "gofmt", Args: []string{"-l", "-w", "cmd", "internal"}}},
 		Vet:    []Command{{Command: "go", Args: []string{"vet", "./..."}}},
-		Build:  []Command{{Command: "go", Args: []string{"build", "./..."}}},
-		Test:   []Command{{Command: "go", Args: []string{"test", "./..."}}},
+		// -buildvcs=false because a candidate is a git worktree, and `go build`
+		// tries to stamp VCS metadata into the binary from it. That fails with
+		// "error obtaining VCS status: exit status 128" for reasons that have
+		// nothing to do with whether the code compiles, so without this the
+		// build check reports a failure no worker can fix and the review loop
+		// never converges. Stamping is irrelevant to the question the check is
+		// asking, so disabling it weakens nothing.
+		Build: []Command{{Command: "go", Args: []string{"build", "-buildvcs=false", "./..."}}},
+		Test:  []Command{{Command: "go", Args: []string{"test", "./..."}}},
 	}
 }
 

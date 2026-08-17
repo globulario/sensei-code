@@ -639,6 +639,15 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
+		// Surface why an audit did not pass at the moment it happens, rather
+		// than only if a reviewer later tries to accept over it. The
+		// limitations are where Sensei explains itself, and four acceptance
+		// runs were spent guessing at a cause that was sitting unread in that
+		// field.
+		if !verdict.ReviewerMayAccept() {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+				"Sensei audit did not clear this candidate: "+verdict.Diagnostic(), audit.Structured))
+		}
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, audit.Structured))
 		}
