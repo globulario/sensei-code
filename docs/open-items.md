@@ -152,6 +152,30 @@ missing until a rebuild was finally required.
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
 
+## Governed runs are on hold until globulario/sensei#176
+
+`sensei-code#13`. Two servers sharing one Oxigraph store cannot both hold
+authority: a build of one registered domain recomputes the global marker and
+regenerates the proof set only for that domain, leaving every other domain
+vouching for a publication that no longer exists. Demonstrated in both
+directions.
+
+The fix is upstream and is a property of publication, not of deployment:
+
+> A build of one registered domain must not invalidate the authority proofs of
+> other registered domains in the same graph store.
+
+Separate stores would keep custody and fracture the graph; one shared server
+would keep the graph and reinstate the custody defect proved in
+`sensei-code#10`. Neither trade is worth making, and the second would restore a
+green light by hiding the class of bug that invalidated the earlier acceptance.
+
+**Until #176 lands, do not start a governed run in this repository.** Each one
+takes authority away from the services server that another workstream depends
+on. This is a constraint of the shared substrate, not a policy choice. Assisted
+mode is unaffected: it reads, and says so when the graph cannot vouch for
+itself.
+
 ## Candidate worktrees have no terminal lifecycle
 
 `globulario/sensei-code#12`.
