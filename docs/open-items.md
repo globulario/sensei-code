@@ -1,10 +1,74 @@
 # Open items
 
+## P0 acceptance record
+
+```text
+P0 control-plane slices:        9/9 implemented (P0.1-P0.8, plus P0.9 discovered by the canary)
+unit/structural tests:          green
+integrated governed acceptance: PASS @ 1bc39f29a7a2
+known enforcement gap:          per-provider process sandbox (see below)
+upstream dependencies:          globulario/sensei#171, #172
+```
+
+The accepted run, `task-1786929227938945137`, went the whole distance without
+bypass: certifiable start, authority escalated once and answered, resolution
+proposed to Sensei's review queue, plan approved, candidate cut from an exact
+base, capability guards installed, worker implemented, four validation checks
+executed by the broker and bound to the diff digest, `awareness_diff_audit`
+returning `decision: pass · availability: available`, and a reviewer ACCEPT that
+cited the governing invariant by name. The pull-request rendezvous was declined:
+publication stayed human-owned even on an accepted candidate.
+
+**One precision, so the record is not read as more than it is.** P0.8
+cross-agent handoff was proven in an *earlier* run — Claude exhausted its
+bounded cycles, state transferred, and Codex continued the same candidate rather
+than restarting. The final accepted run converged in a single cycle and
+therefore exercised no handoff. Both facts are true; they come from different
+runs, and the acceptance record should not imply one run demonstrated
+everything.
+
+**What the canary has not yet covered**, and what the next acceptance expansion
+should add: a change that touches production code rather than tests, a candidate
+that legitimately fails its checks, and a candidate the audit blocks. Passing on
+one task shape is evidence about that shape.
+
 Work that is deliberately incomplete, recorded here so a later reader does not
 mistake a partial implementation for a finished one. Each entry says what is
 done, what is not, and what "done" would require.
 
 An item leaves this file when it is closed, not when it is tidy.
+
+## Cross-domain leakage of authority resolutions (blocks merge disposition)
+
+`globulario/sensei-code#10`.
+
+A Level-3 resolution in this repository is proposed through `awareness_propose`
+and the candidate file lands in the **services** corpus, because the awareness
+server runs with `-home-domain github.com/globulario/services` and propose
+writes into the server's `-awareness-dir`. The content is correctly domain-tagged
+as sensei-code; only its custody is wrong.
+
+It is not data loss, but it puts a governance artifact in the wrong review queue:
+services reviewers are asked to promote knowledge about a repository they may
+not own, and this repository's own queue never shows its pending governance.
+
+Not yet established whether the fix belongs in Sensei (honour the domain when
+choosing a candidate path), in deployment (point sensei-code at a server whose
+home domain is sensei-code), or whether it is intended for a shared single-store
+installation. **This is an explicit merge disposition rather than something to
+carry forward quietly.**
+
+## Upstream (Sensei): two defects found while commissioning
+
+`globulario/sensei#173` — `propose --kind decision` corrupts a scaffolded
+`decisions: []` on first append, producing YAML that cannot parse. A governed
+file that cannot be parsed is absent from the graph, and nothing in the propose
+path re-reads what it wrote, so every decision recorded here was silently
+missing until a rebuild was finally required.
+
+`globulario/sensei#174` — `task_status` fails with ENOENT when `.sensei/tasks`
+does not exist, which is the ordinary state of a repository that has not used
+tasks. An empty answer is being reported as a failure to answer.
 
 ## Capability envelope is only partly enforced (P0.4)
 
