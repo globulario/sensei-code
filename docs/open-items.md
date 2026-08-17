@@ -27,6 +27,34 @@ therefore exercised no handoff. Both facts are true; they come from different
 runs, and the acceptance record should not imply one run demonstrated
 everything.
 
+### The accepted candidate
+
+Retained rather than deleted, pending a decision on whether to adopt it.
+
+```text
+branch      sensei-code/task-1786929227938945137
+worktree    ../.sensei-code-worktrees/task-1786929227938945137
+base        1bc39f29a7a2 (clean)
+content     internal/tui/model_test.go, +103, one file added
+diff digest 17b59fda5bc0
+audit       awareness.diff_audit/v1 · decision: pass · availability: available
+            digest 6d3ad6032999da1f408763da949800984df9aabe081e076565d77f6edf16a597
+            changed_files_count 1 · findings_count 0
+evidence    gofmt -l cmd internal   exit 0
+            go vet ./...            exit 0
+            go build -buildvcs=false ./...  exit 0
+            go test ./...           exit 0
+```
+
+The work is uncommitted in its worktree, so deleting the branch would discard
+it. It is a legitimate test — it proves the invariant "An unrecognised command
+is answered, never handed to the architect as work" at the real TUI boundary —
+but adopting it is a publication decision, and the run's own pull-request
+rendezvous was declined precisely because publication is human-owned. Adopting
+it here would take by hand the step the machine correctly refused to take by
+itself. Remove the branch once it is either adopted through review or judged not
+worth keeping.
+
 **What the canary has not yet covered**, and what the next acceptance expansion
 should add: a change that touches production code rather than tests, a candidate
 that legitimately fails its checks, and a candidate the audit blocks. Passing on
