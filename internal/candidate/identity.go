@@ -13,6 +13,29 @@
 // than recomputed. Identity is immutable for the life of a candidate: if HEAD
 // has moved, that is a new generation and must be created deliberately, not
 // inherited by a worker that happened to start later.
+//
+// Two laws, and the second was learned the hard way.
+//
+//	Base identity MUST be established immediately after the clean-workspace
+//	start gate, and before any workflow action capable of mutating the governed
+//	repository. Once established, no later observation of canonical HEAD or
+//	working-tree cleanliness may redefine it.
+//
+//	Resume consumes durable base identity. It never reconstructs candidate
+//	identity from the current canonical checkout.
+//
+// "Establish once" turned out to be an ordering rule as much as an identity
+// rule. The workflow writes to its own repository during a run — a Level-3
+// resolution is persisted into this repository's awareness corpus — so a base
+// taken after that point observes a tree the run itself dirtied, and the
+// dirty-checkout refusal fires on the system's own governance artifact. The
+// last uncontaminated observation is the only honest one.
+//
+// The second law matters more than it looks. Without it, a restart after a
+// resolution was written would quietly promote yesterday's governance side
+// effect into today's candidate baseline: the recorded decision would become
+// part of the base rather than part of the history, and nothing would report
+// that the baseline had moved.
 package candidate
 
 import (

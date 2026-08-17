@@ -26,7 +26,9 @@ package acceptance
 import (
 	"context"
 	"encoding/json"
+	"github.com/globulario/sensei-code/internal/candidate"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -150,6 +152,11 @@ func TestGovernedRunEndToEnd(t *testing.T) {
 	t.Logf("agents: %s", strings.Join(workers, " | "))
 	t.Logf("audits: %s", strings.Join(auditVerdicts, " | "))
 	t.Logf("completed: %s", completion)
+
+	// The candidate must be cut from the recorded base, not merely accompanied
+	// by a recorded base. Those are different claims, and only the first means
+	// the reviewed change is relative to the state that was certified.
+	assertCutFromRecordedBase(t, root, repo.WorktreePath(taskID), taskID)
 
 	// The candidate is left on disk deliberately: it is the artifact a human
 	// inspects, and deleting it would make a passing canary unreviewable.
@@ -296,4 +303,57 @@ func kinds(seen map[event.Kind]bool) []string {
 		out = append(out, string(k))
 	}
 	return out
+}
+
+// assertCutFromRecordedBase proves the worktree actually derives from the
+// commit the identity records, and that the workflow's own governance writes
+// did not leak into the change under review.
+//
+// Recording a base and cutting from it are separate facts. A run could pin one
+// commit and create the worktree from another — from HEAD, say — and every
+// receipt would still name the pinned one. The only way to know is to ask git
+// what the worktree descends from.
+func assertCutFromRecordedBase(t *testing.T, root, worktree, taskID string) {
+	t.Helper()
+	id, ok, err := candidate.Load(root, taskID)
+	if err != nil || !ok {
+		t.Fatalf("no candidate identity recorded for %s: ok=%v err=%v", taskID, ok, err)
+	}
+	if strings.TrimSpace(id.BaseSHA) == "" {
+		t.Fatal("candidate identity records no base commit")
+	}
+
+	head, err := exec.Command("git", "-C", worktree, "rev-parse", "HEAD").Output()
+	if err != nil {
+		t.Fatalf("read candidate HEAD: %v", err)
+	}
+	tip := strings.TrimSpace(string(head))
+
+	// Either the worker committed nothing, in which case the worktree still
+	// sits exactly on the base, or it committed and the base must be an
+	// ancestor. Anything else means the candidate was cut from somewhere else.
+	if tip != id.BaseSHA {
+		if err := exec.Command("git", "-C", worktree, "merge-base", "--is-ancestor", id.BaseSHA, tip).Run(); err != nil {
+			t.Fatalf("candidate was not cut from the recorded base: recorded %s, worktree tip %s", id.BaseSHA, tip)
+		}
+	}
+	t.Logf("candidate cut from recorded base %s (worktree tip %s)", short(id.BaseSHA), short(tip))
+
+	// The resolution this run wrote into the awareness corpus is a governance
+	// side effect, not part of the change being reviewed. If it appears in the
+	// candidate diff, the run is proposing its own paperwork as work.
+	diff, err := exec.Command("git", "-C", worktree, "diff", id.BaseSHA).Output()
+	if err != nil {
+		t.Fatalf("read candidate diff: %v", err)
+	}
+	if strings.Contains(string(diff), "candidates/proposals/") {
+		t.Error("the candidate diff contains this run's own governance proposal; a decision record is a side effect, not part of the change")
+	}
+}
+
+func short(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }
