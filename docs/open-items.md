@@ -66,25 +66,40 @@ done, what is not, and what "done" would require.
 
 An item leaves this file when it is closed, not when it is tidy.
 
-## Cross-domain leakage of authority resolutions (blocks merge disposition)
+## Authority resolutions written into the wrong physical authority root
 
-`globulario/sensei-code#10`.
+`globulario/sensei-code#10`, upstream `globulario/sensei#175`.
 
 A Level-3 resolution in this repository is proposed through `awareness_propose`
-and the candidate file lands in the **services** corpus, because the awareness
-server runs with `-home-domain github.com/globulario/services` and propose
-writes into the server's `-awareness-dir`. The content is correctly domain-tagged
-as sensei-code; only its custody is wrong.
+and the candidate lands in the **services** corpus. Characterised with a
+controlled reproduction; no fix applied during investigation.
 
-It is not data loss, but it puts a governance artifact in the wrong review queue:
-services reviewers are asked to promote knowledge about a repository they may
-not own, and this repository's own queue never shows its pending governance.
+The mechanism is sharper than it first appeared, and the first description of it
+here was wrong. It is not a wrong home domain: `-home-domain` governs untagged
+knowledge nodes, and the server's own flag documentation says `-repo-domain` is
+"NOT home-domain". Custody is decided solely by `-awareness-dir`. So this is
+correct semantic labeling routed into the wrong physical authority root.
 
-Not yet established whether the fix belongs in Sensei (honour the domain when
-choosing a candidate path), in deployment (point sensei-code at a server whose
-home domain is sensei-code), or whether it is intended for a shared single-store
-installation. **This is an explicit merge disposition rather than something to
-carry forward quietly.**
+What makes it durable is that three signals agree while the write location
+disagrees — the request domain, the stored content and the generated id all say
+sensei-code, and only the filesystem says otherwise. `Propose` returns
+`accepted: true` and a relative path, so a caller cannot notice.
+
+Established: `domain` shapes content and the id slug (`domainHint`) but never the
+destination; the server write model is single-repository by design; shared
+multi-domain custody is unsupported; the server never loads `domains.yaml` and so
+cannot route by domain today; per-domain servers can share one Oxigraph for reads,
+with the global graph marker needing resync after any per-domain build.
+
+**Disposition.** Immediate fix is deployment-owned: point sensei-code at an
+awareness server whose `-awareness-dir` is this repository's corpus. Upstream
+follow-up is mismatch *rejection*, not registry-based routing — making Propose
+resolve domains would turn one server into a multi-repository write router,
+which is a different architecture adopted to fix a bug.
+
+**Closes when** a sensei-code Level-3 proposal against the corrected deployment
+resolves physically under this repository's corpus with the services corpus
+untouched. Blocks merge of PR #11 until then.
 
 ## Upstream (Sensei): two defects found while commissioning
 
