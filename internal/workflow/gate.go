@@ -82,24 +82,23 @@ func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repository
 	if !preflight.PermitsStart() {
 		return certifiedStart{}, fmt.Errorf("Sensei will not certify a start for this task: %s", preflight.Diagnostic())
 	}
-	// Two different things are called "current", and only one of them was being
-	// checked. GRAPH_FRESHNESS_STATE_CURRENT means the live store matches its
-	// own validated artifact. It says nothing about whether that artifact was
-	// compiled from the code about to be governed.
+	// repositoryHead is accepted but deliberately not compared against the
+	// graph's SourceRepoCommit.
 	//
-	// The diff audit enforces the second meaning: it refuses to certify a
-	// candidate whose expected_head does not match the commit the graph's
-	// corpus was built from, because the rules would be coming from a different
-	// snapshot than the code. That refusal is correct. What was wrong was
-	// discovering it after a full worker cycle, when it is knowable here.
-	if head := strings.TrimSpace(repositoryHead); head != "" {
-		if graphCommit := strings.TrimSpace(preflight.Authority.SourceRepoCommit); graphCommit != "" && !sameCommit(graphCommit, head) {
-			return certifiedStart{}, fmt.Errorf(
-				"the awareness graph was compiled from commit %s but this repository is at %s, so Sensei cannot certify a candidate cut from here: "+
-					"the rules and the code come from different snapshots. Rebuild the graph for this commit (sensei build, then publish) and run this again",
-				graphCommit, short(head))
-		}
-	}
+	// An earlier version did compare them and was wrong. SourceRepoCommit is the
+	// commit identity of the rule snapshot, which on this installation belongs
+	// to the services repository: the graph server runs with
+	// -home-domain github.com/globulario/services. Comparing it against the
+	// governed repository's HEAD compares commits from two different
+	// repositories, so it can never match, and it produced a refusal telling the
+	// human to rebuild a graph that was already current.
+	//
+	// The parameter is kept because the question -- were these rules compiled
+	// from this code -- is a real one worth asking once a field exists that
+	// answers it. Inventing the answer from the wrong field was the error, not
+	// asking.
+	_ = repositoryHead
+
 	return certifiedStart{workspace: workspace, preflight: preflight}, nil
 }
 

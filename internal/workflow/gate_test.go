@@ -254,16 +254,19 @@ func TestEmptyPreflightStillRefusesOnAnUncertifiableGraph(t *testing.T) {
 	}
 }
 
-// TestGraphCompiledFromADifferentCommitRefusesTheStart is the condition a real
-// run discovered after twelve minutes of work that could never be admitted.
+// TestGraphSourceCommitIsNotComparedToTheGovernedRepository pins a correction.
 //
-// GRAPH_FRESHNESS_STATE_CURRENT means the live store matches its own validated
-// artifact. It says nothing about whether that artifact was compiled from the
-// code being governed. The diff audit enforces the second meaning and refuses,
-// correctly, when they differ -- so the start gate must ask the same question
-// while refusing is still cheap.
-func TestGraphCompiledFromADifferentCommitRefusesTheStart(t *testing.T) {
-	behind := `{
+// An earlier version refused a start when the graph's SourceRepoCommit differed
+// from the governed repository's HEAD. That comparison is meaningless here:
+// SourceRepoCommit is the identity of the rule snapshot, and on this
+// installation the graph server runs with -home-domain
+// github.com/globulario/services, so the value is a services commit. Comparing
+// it to a sensei-code commit can never match, and the refusal told the human to
+// rebuild a graph that was already current.
+func TestGraphSourceCommitIsNotComparedToTheGovernedRepository(t *testing.T) {
+	// A graph whose corpus commit belongs to another repository, which is the
+	// normal case, must still certify a start.
+	otherRepo := `{
 		"status": "PREFLIGHT_STATUS_OK",
 		"authority": {
 			"authoritative": true,
@@ -273,41 +276,8 @@ func TestGraphCompiledFromADifferentCommitRefusesTheStart(t *testing.T) {
 			"source_repo_commit": "da512eb61c82"
 		}
 	}`
-	_, err := certifyStart(result(t, "", okWorkspace), result(t, "", behind), "f3e5ef38b09b22450351771d69371ebcc57d0176")
-	if err == nil {
-		t.Fatal("a graph compiled from a different commit certified a start")
-	}
-	for _, want := range []string{"da512eb61c82", "f3e5ef38b09b", "different snapshots", "sensei build"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("the refusal does not mention %q, so the human cannot act on it: %v", want, err)
-		}
-	}
-}
-
-// TestAbbreviatedCommitsCompareEqual keeps the check from firing on a
-// difference that is only formatting: Sensei publishes twelve characters and
-// git reports forty.
-func TestAbbreviatedCommitsCompareEqual(t *testing.T) {
-	matching := `{
-		"status": "PREFLIGHT_STATUS_OK",
-		"authority": {
-			"authoritative": true,
-			"graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
-			"seed_state": "SEED_STATE_CURRENT",
-			"source_repo_commit": "f3e5ef38b09b"
-		}
-	}`
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", matching), "f3e5ef38b09b22450351771d69371ebcc57d0176"); err != nil {
-		t.Fatalf("an abbreviated commit that does match was refused: %v", err)
-	}
-	if !sameCommit("f3e5ef38b09b", "f3e5ef38b09b22450351771d69371ebcc57d0176") {
-		t.Error("abbreviation comparison is wrong in the prefix direction")
-	}
-	if sameCommit("da512eb61c82", "f3e5ef38b09b22450351771d69371ebcc57d0176") {
-		t.Error("two different commits compared equal")
-	}
-	if sameCommit("", "f3e5ef38b09b") || sameCommit("f3e5ef38b09b", "") {
-		t.Error("an empty commit compared equal to a real one")
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", otherRepo), "f3e5ef38b09b22450351771d69371ebcc57d0176"); err != nil {
+		t.Fatalf("a graph whose corpus commit belongs to another repository was refused: %v", err)
 	}
 }
 

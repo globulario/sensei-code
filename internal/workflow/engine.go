@@ -620,11 +620,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if domain := start.Domain(); domain != "" {
 			auditArgs["domain"] = domain
 		}
-		// Bind the audit to the exact base this candidate was cut from, so its
-		// verdict names the pair it judged rather than an implied HEAD.
-		if base := tc.Identity.BaseSHA; base != "" {
-			auditArgs["expected_head"] = base
-		}
+		// expected_head is deliberately NOT sent.
+		//
+		// It reads like "the commit this candidate is based on" and is not: the
+		// audit compares it against the graph's own authority commit, which is
+		// the identity of the rule snapshot. Here that snapshot belongs to the
+		// services and sensei repositories, so a sensei-code commit can never
+		// equal it, and pinning one guarantees cannot_verify on every audit
+		// forever. That is what it did.
+		//
+		// The candidate/base binding this was meant to provide is real and lives
+		// elsewhere: candidate.Identity records the exact base, and every piece
+		// of validation evidence is bound to the diff digest. Neither needs this
+		// parameter, and neither is weakened by dropping it.
 		audit, err := sc.CallTool("awareness_audit_diff", auditArgs)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("Sensei diff audit: %w", err)
