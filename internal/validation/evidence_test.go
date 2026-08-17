@@ -299,3 +299,33 @@ func TestUnattributedIsSaidRatherThanGuessed(t *testing.T) {
 func writeFile(dir, name string) error {
 	return os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644)
 }
+
+// TestACheckThatReportsByPrintingIsNotASilentPass covers verifiers that exit
+// zero whatever they find.
+//
+// `gofmt -l` lists unformatted files and exits zero either way, so reading only
+// the exit status records a pass for a candidate that is not formatted. This is
+// the shape of a check that looks green and proves nothing.
+func TestACheckThatReportsByPrintingIsNotASilentPass(t *testing.T) {
+	base := t.TempDir()
+	r := runner(t, nil)
+	r.Baseline = func() (string, error) { return base, nil }
+
+	b := r.Run(context.Background(), "task-1", "sha256:abc", []Check{
+		{Kind: Format, Command: "sh", Args: []string{"-c", "echo internal/tui/model.go; exit 0"}, FailIfOutput: true},
+	})
+	if b.Checks[0].Outcome == Passed {
+		t.Fatal("a verifier that printed a problem and exited zero was recorded as passed")
+	}
+	if !strings.Contains(b.Checks[0].Output, "internal/tui/model.go") {
+		t.Fatalf("the reported file did not reach the evidence: %q", b.Checks[0].Output)
+	}
+
+	// Silence from the same check is a genuine pass.
+	quiet := r.Run(context.Background(), "task-1", "sha256:abc", []Check{
+		{Kind: Format, Command: "sh", Args: []string{"-c", "exit 0"}, FailIfOutput: true},
+	})
+	if quiet.Checks[0].Outcome != Passed {
+		t.Fatalf("a verifier that found nothing was recorded as %q", quiet.Checks[0].Outcome)
+	}
+}

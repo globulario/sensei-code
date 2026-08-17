@@ -1747,6 +1747,9 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	}
 
 	var checks []validation.Check
+	// The formatter's own evidence was discarded above; this proves formatting
+	// holds for the bytes about to be reviewed, bound to the final digest.
+	checks = append(checks, checksOf(validation.Format, e.Config.Validation.FormatVerify)...)
 	checks = append(checks, checksOf(validation.Vet, e.Config.Validation.Vet)...)
 	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
 	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
@@ -1759,7 +1762,11 @@ func checksOf(kind validation.CheckKind, commands []config.Command) []validation
 		if strings.TrimSpace(c.Command) == "" {
 			continue
 		}
-		out = append(out, validation.Check{Kind: kind, Command: c.Command, Args: c.Args, Mutates: kind == validation.Format})
+		out = append(out, validation.Check{
+			Kind: kind, Command: c.Command, Args: c.Args,
+			Mutates:      kind == validation.Format && !c.FailIfOutput,
+			FailIfOutput: c.FailIfOutput,
+		})
 	}
 	return out
 }

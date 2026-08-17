@@ -265,6 +265,11 @@ type Check struct {
 	// Mutates marks a check that can rewrite the candidate, which invalidates
 	// evidence gathered before it.
 	Mutates bool
+	// FailIfOutput treats any output as failure even when the command exits
+	// zero. Some verifiers report by printing rather than by exit status --
+	// `gofmt -l` lists unformatted files and exits zero either way -- and
+	// reading only the exit code would record a silent pass.
+	FailIfOutput bool
 }
 
 // maxOutput bounds captured output. Enough to diagnose a failure, not enough to
@@ -346,6 +351,11 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 	e.Output = body
 
 	switch {
+	case err == nil && check.FailIfOutput && strings.TrimSpace(body) != "":
+		// Exited zero but reported a problem on stdout.
+		e.Outcome = Failed
+		e.Detail = "the check exited zero but reported output, which this check treats as failure"
+		return r.attribute(ctx, check, e)
 	case err == nil:
 		e.Outcome = Passed
 	default:

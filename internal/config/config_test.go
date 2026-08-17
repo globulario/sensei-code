@@ -119,3 +119,37 @@ func TestBuildCheckWorksInsideACandidateWorktree(t *testing.T) {
 		t.Fatal("no default go build check")
 	}
 }
+
+// TestFormattingIsProvedOnTheReviewedBytes pins the split a real run forced.
+//
+// The mutating formatter's evidence is discarded because it describes the bytes
+// before the rewrite, which left a reviewer unable to see that a mandated
+// format check had run -- and it refused on exactly those grounds, with no way
+// for any worker to satisfy it. A non-mutating verification bound to the final
+// digest is what the reviewer can actually rely on.
+func TestFormattingIsProvedOnTheReviewedBytes(t *testing.T) {
+	v := Default().Validation
+	if len(v.Format) == 0 {
+		t.Fatal("no formatter is configured")
+	}
+	if len(v.FormatVerify) == 0 {
+		t.Fatal("formatting is applied but never verified on the reviewed bytes")
+	}
+	for _, c := range v.Format {
+		for _, a := range c.Args {
+			if a == "-l" {
+				t.Error("the mutating formatter also lists files; the listing belongs to FormatVerify")
+			}
+		}
+	}
+	for _, c := range v.FormatVerify {
+		if !c.FailIfOutput {
+			t.Errorf("format verification %v does not fail on output, so gofmt -l would pass silently", c.Args)
+		}
+		for _, a := range c.Args {
+			if a == "-w" {
+				t.Error("format verification rewrites the candidate; it must not mutate")
+			}
+		}
+	}
+}
