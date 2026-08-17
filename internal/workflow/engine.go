@@ -589,7 +589,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 
 		candidate := gitx.Repo{Root: workspace}
-		diff, err := candidate.CandidateDiff(ctx)
+		diff, err := candidate.CandidateDiff(ctx, tc.Identity.BaseSHA)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
@@ -607,7 +607,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// everything gathered before a rewrite is evidence about different
 		// bytes. The diff is therefore re-read afterwards and the certifying
 		// checks are bound to the digest of what will actually be reviewed.
-		evidence, diff, err := e.validate(ctx, taskID, envelope, candidate, diff)
+		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
@@ -1657,7 +1657,7 @@ func oneLine(s string) string {
 // candidate, so the diff is re-read after formatting and the certifying checks
 // are bound to that. Returning the new diff rather than mutating in place makes
 // it impossible for a caller to keep using the pre-format bytes by accident.
-func (e *Engine) validate(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
+func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
 	permits := func(kind validation.CheckKind) (bool, string) {
 		var capability broker.Capability
 		switch kind {
@@ -1683,7 +1683,7 @@ func (e *Engine) validate(ctx context.Context, taskID string, envelope broker.En
 	// certifying bundle: it describes the candidate before the rewrite.
 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
 		runner.Run(ctx, taskID, validation.Digest(diff), formats)
-		reread, err := repo.CandidateDiff(ctx)
+		reread, err := repo.CandidateDiff(ctx, base)
 		if err != nil {
 			return validation.Bundle{}, diff, err
 		}
