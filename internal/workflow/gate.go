@@ -40,9 +40,11 @@ func (c certifiedStart) RiskClass() string { return c.preflight.RiskClass }
 // RequiredActions are the actions Sensei says this change requires.
 func (c certifiedStart) RequiredActions() []string { return c.preflight.RequiredActions }
 
-// BaseSHA is the repository commit the graph was certified against, used to
-// bind a human resolution to the state it was decided on.
-func (c certifiedStart) BaseSHA() string { return c.preflight.Authority.SourceRepoCommit }
+// GraphSourceCommit is the repository commit the graph's corpus was compiled
+// from. It is emphatically not the candidate's base: the two differ whenever
+// the graph has not been rebuilt since the last commit, and conflating them
+// records a human decision against a commit nobody was working on.
+func (c certifiedStart) GraphSourceCommit() string { return c.preflight.Authority.SourceRepoCommit }
 
 // GraphBuildCommit is the graph generation that certified this start.
 func (c certifiedStart) GraphBuildCommit() string { return c.preflight.Authority.GraphBuildCommit }
@@ -62,7 +64,7 @@ func (c certifiedStart) Invariants() []sensei.Invariant { return c.preflight.Dir
 // architect handed a stale graph will produce a confident, specific, entirely
 // plausible plan built on invariants that no longer hold, and the plan will
 // read as excellent work.
-func certifyStart(workspaceResult, preflightResult sensei.ToolResult) (certifiedStart, error) {
+func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repositoryHead string) (certifiedStart, error) {
 	workspace, err := sensei.DecodeWorkspaceStatus(workspaceResult)
 	if err != nil {
 		return certifiedStart{}, err
@@ -80,7 +82,45 @@ func certifyStart(workspaceResult, preflightResult sensei.ToolResult) (certified
 	if !preflight.PermitsStart() {
 		return certifiedStart{}, fmt.Errorf("Sensei will not certify a start for this task: %s", preflight.Diagnostic())
 	}
+	// Two different things are called "current", and only one of them was being
+	// checked. GRAPH_FRESHNESS_STATE_CURRENT means the live store matches its
+	// own validated artifact. It says nothing about whether that artifact was
+	// compiled from the code about to be governed.
+	//
+	// The diff audit enforces the second meaning: it refuses to certify a
+	// candidate whose expected_head does not match the commit the graph's
+	// corpus was built from, because the rules would be coming from a different
+	// snapshot than the code. That refusal is correct. What was wrong was
+	// discovering it after a full worker cycle, when it is knowable here.
+	if head := strings.TrimSpace(repositoryHead); head != "" {
+		if graphCommit := strings.TrimSpace(preflight.Authority.SourceRepoCommit); graphCommit != "" && !sameCommit(graphCommit, head) {
+			return certifiedStart{}, fmt.Errorf(
+				"the awareness graph was compiled from commit %s but this repository is at %s, so Sensei cannot certify a candidate cut from here: "+
+					"the rules and the code come from different snapshots. Rebuild the graph for this commit (sensei build, then publish) and run this again",
+				graphCommit, short(head))
+		}
+	}
 	return certifiedStart{workspace: workspace, preflight: preflight}, nil
+}
+
+// sameCommit compares commit identities that may be abbreviated to different
+// lengths. Sensei publishes twelve characters; git reports forty.
+func sameCommit(a, b string) bool {
+	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
+	if a == "" || b == "" {
+		return false
+	}
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	return strings.HasPrefix(b, a)
+}
+
+func short(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }
 
 // acceptance is the outcome of the end-of-candidate gate.

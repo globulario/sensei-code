@@ -129,7 +129,7 @@ func TestStartRefusedOnStaleGraphBeforeAnyWorkerRuns(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`
-	_, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", stale))
+	_, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", stale), "")
 	if err == nil {
 		t.Fatal("a stale graph certified a start")
 	}
@@ -142,10 +142,10 @@ func TestStartRefusedOnStaleGraphBeforeAnyWorkerRuns(t *testing.T) {
 // transcript, no structured payload, and previously a zero-valued verdict
 // carried forward as though Sensei had spoken.
 func TestStartRefusedWhenSenseiSaysNothing(t *testing.T) {
-	if _, err := certifyStart(result(t, "workspace looks good", ""), result(t, "preflight ok", okPreflight)); err == nil {
+	if _, err := certifyStart(result(t, "workspace looks good", ""), result(t, "preflight ok", okPreflight), ""); err == nil {
 		t.Fatal("an empty workspace status certified a start")
 	}
-	if _, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", "")); err == nil {
+	if _, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", ""), ""); err == nil {
 		t.Fatal("an empty preflight certified a start")
 	}
 }
@@ -158,7 +158,7 @@ func TestStartRefusedOnPartialWorkspaceComposition(t *testing.T) {
 		"composition_state": "partial",
 		"limitations": [{"code": "domain_unregistered", "detail": "no domain entry for this repository"}]
 	}`
-	_, err := certifyStart(result(t, "", partial), result(t, "", okPreflight))
+	_, err := certifyStart(result(t, "", partial), result(t, "", okPreflight), "")
 	if err == nil {
 		t.Fatal("a partially composed workspace certified a start")
 	}
@@ -171,7 +171,7 @@ func TestStartRefusedOnPartialWorkspaceComposition(t *testing.T) {
 // veto: it is where the typed facts enter the workflow, so downstream code
 // stops re-deriving them from prose.
 func TestCertifiedStartCarriesSenseiFactsForward(t *testing.T) {
-	start, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight))
+	start, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight), "")
 	if err != nil {
 		t.Fatalf("a fully certifiable pair was refused: %v", err)
 	}
@@ -211,7 +211,7 @@ func TestUnscopedStartPreflightDoesNotBlockEveryTask(t *testing.T) {
 			"build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED"
 		}
 	}`
-	start, err := certifyStart(result(t, "", okWorkspace), result(t, "preflight empty", live))
+	start, err := certifyStart(result(t, "", okWorkspace), result(t, "preflight empty", live), "")
 	if err != nil {
 		t.Fatalf("the engine's own start-of-task preflight was refused, which would block every task: %v", err)
 	}
@@ -232,7 +232,7 @@ func TestDegradedPreflightStillRefusesStart(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", degraded)); err == nil {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", degraded), ""); err == nil {
 		t.Fatal("a degraded preflight certified a start")
 	}
 }
@@ -249,7 +249,72 @@ func TestEmptyPreflightStillRefusesOnAnUncertifiableGraph(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", staleAndEmpty)); err == nil {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", staleAndEmpty), ""); err == nil {
 		t.Fatal("an empty preflight on a stale graph certified a start")
+	}
+}
+
+// TestGraphCompiledFromADifferentCommitRefusesTheStart is the condition a real
+// run discovered after twelve minutes of work that could never be admitted.
+//
+// GRAPH_FRESHNESS_STATE_CURRENT means the live store matches its own validated
+// artifact. It says nothing about whether that artifact was compiled from the
+// code being governed. The diff audit enforces the second meaning and refuses,
+// correctly, when they differ -- so the start gate must ask the same question
+// while refusing is still cheap.
+func TestGraphCompiledFromADifferentCommitRefusesTheStart(t *testing.T) {
+	behind := `{
+		"status": "PREFLIGHT_STATUS_OK",
+		"authority": {
+			"authoritative": true,
+			"verdict": "authoritative",
+			"graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+			"seed_state": "SEED_STATE_CURRENT",
+			"source_repo_commit": "da512eb61c82"
+		}
+	}`
+	_, err := certifyStart(result(t, "", okWorkspace), result(t, "", behind), "f3e5ef38b09b22450351771d69371ebcc57d0176")
+	if err == nil {
+		t.Fatal("a graph compiled from a different commit certified a start")
+	}
+	for _, want := range []string{"da512eb61c82", "f3e5ef38b09b", "different snapshots", "sensei build"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not mention %q, so the human cannot act on it: %v", want, err)
+		}
+	}
+}
+
+// TestAbbreviatedCommitsCompareEqual keeps the check from firing on a
+// difference that is only formatting: Sensei publishes twelve characters and
+// git reports forty.
+func TestAbbreviatedCommitsCompareEqual(t *testing.T) {
+	matching := `{
+		"status": "PREFLIGHT_STATUS_OK",
+		"authority": {
+			"authoritative": true,
+			"graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+			"seed_state": "SEED_STATE_CURRENT",
+			"source_repo_commit": "f3e5ef38b09b"
+		}
+	}`
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", matching), "f3e5ef38b09b22450351771d69371ebcc57d0176"); err != nil {
+		t.Fatalf("an abbreviated commit that does match was refused: %v", err)
+	}
+	if !sameCommit("f3e5ef38b09b", "f3e5ef38b09b22450351771d69371ebcc57d0176") {
+		t.Error("abbreviation comparison is wrong in the prefix direction")
+	}
+	if sameCommit("da512eb61c82", "f3e5ef38b09b22450351771d69371ebcc57d0176") {
+		t.Error("two different commits compared equal")
+	}
+	if sameCommit("", "f3e5ef38b09b") || sameCommit("f3e5ef38b09b", "") {
+		t.Error("an empty commit compared equal to a real one")
+	}
+}
+
+// TestAnUnreadableHeadDoesNotBlockTheOtherChecks keeps the new comparison from
+// becoming a hard dependency on git being readable.
+func TestAnUnreadableHeadDoesNotBlockTheOtherChecks(t *testing.T) {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight), ""); err != nil {
+		t.Fatalf("an unknown repository head refused an otherwise certifiable start: %v", err)
 	}
 }

@@ -249,7 +249,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	// overridable by the architect's decision, because an architect handed a
 	// stale or uncertifiable graph produces a confident, specific plan built on
 	// invariants that no longer hold — which reads as excellent work.
-	start, err := certifyStart(workspaceStatus, preflight)
+	start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
 	if err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 		e.reportOutcome(ctx, "blocked", task, err.Error())
@@ -971,7 +971,7 @@ func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certif
 	if condition = strings.TrimSpace(condition); condition != "" {
 		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
-	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), start.BaseSHA(), decision, options)
+	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), start.GraphSourceCommit(), decision, options)
 }
 
 // awaitChoice presents a numbered decision to the human and blocks until they
@@ -1486,7 +1486,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
 
-		start, err := certifyStart(workspaceStatus, preflight)
+		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
 		if err != nil {
 			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 			e.reportOutcome(ctx, "blocked", task.Task, err.Error())
@@ -1754,4 +1754,15 @@ func checksOf(kind validation.CheckKind, commands []config.Command) []validation
 		out = append(out, validation.Check{Kind: kind, Command: c.Command, Args: c.Args, Mutates: kind == validation.Format})
 	}
 	return out
+}
+
+// repositoryHead reads HEAD for the start gate, returning empty rather than
+// failing: the gate's other checks are still worth running when git is
+// unreadable, and an empty head simply skips the snapshot comparison.
+func repositoryHead(ctx context.Context, repo gitx.Repo) string {
+	head, err := repo.Head(ctx)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(head)
 }
