@@ -370,3 +370,35 @@ func TestAStalledCandidateStopsInsteadOfBurningCycles(t *testing.T) {
 		t.Error("the stall diagnosis does not say what was being asked of the worker")
 	}
 }
+
+// TestTheBaseIsPinnedBeforeTheWorkflowWritesToItsOwnRepository is the ordering
+// bug the corrected deployment exposed.
+//
+// Once authority resolutions began landing in this repository's corpus rather
+// than another's, the workflow started dirtying its own tree between the start
+// gate and candidate creation — and then refused the run for uncommitted
+// changes it had itself produced. The gate was right; the ordering was wrong.
+func TestTheBaseIsPinnedBeforeTheWorkflowWritesToItsOwnRepository(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "run")
+	establish := strings.Index(body, "candidate.Establish")
+	architect := strings.Index(body, "e.resolveArchitecture")
+	if establish < 0 {
+		t.Fatal("run no longer establishes a candidate base")
+	}
+	if architect < 0 {
+		t.Fatal("run no longer consults the architect")
+	}
+	if establish > architect {
+		t.Fatal("the base is established after the architect runs; a Level-3 resolution persisted in between dirties the tree and the base can no longer be taken")
+	}
+
+	// implement must consume the established identity rather than re-deriving
+	// one, or the ordering fix is undone by the second observation.
+	impl := funcBody(t, "internal/workflow/engine.go", "implement")
+	if strings.Contains(impl, "candidate.Establish") {
+		t.Error("implement re-establishes the base, re-observing a tree this run has already written to")
+	}
+	if !strings.Contains(impl, "tc.Identity") {
+		t.Error("implement does not use the identity established at the start gate")
+	}
+}

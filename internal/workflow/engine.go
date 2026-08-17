@@ -257,6 +257,33 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		return
 	}
 
+	// The candidate base is pinned here, immediately after the start gate, and
+	// not later when the worktree is created.
+	//
+	// The workflow writes to its own repository between those two points: a
+	// Level-3 resolution is persisted into this repository's awareness corpus,
+	// which makes the tree dirty. Establishing the base afterwards then refused
+	// the run for uncommitted changes the run had itself produced. The gate was
+	// right and the ordering was wrong.
+	//
+	// Pinning it here is also what P0.5 actually meant. The earliest honest
+	// moment is the one where Sensei has just certified the workspace and the
+	// tree has just been observed clean; every later moment is a moment the
+	// system may have perturbed itself.
+	identity, err := candidate.Establish(
+		e.Repo.Root, taskID, start.Domain(),
+		e.Repo.WorktreePath(taskID), e.Repo.WorktreeBranch(taskID),
+		repoHead{ctx: ctx, repo: e.Repo}, time.Now(),
+	)
+	if err != nil {
+		e.reportOutcome(ctx, "blocked", task, err.Error())
+		fail(err)
+		return
+	}
+	if bound, bindErr := identity.BindGraph(e.Repo.Root, start.GraphBuildCommit(), start.SourceRepoCommit()); bindErr == nil {
+		identity = bound
+	}
+
 	conversation := e.conversationSoFar(task, 40)
 	decision, err := e.resolveArchitecture(ctx, sc, start, taskID, task, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, conversation, firstText(workspaceStatus), firstText(preflight)))
 	if err != nil {
@@ -292,6 +319,7 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		Domain:          sensei.RepositoryDomain(workspaceStatus),
 		Consequences:    decision.Consequences,
 		Invariants:      decision.Invariants,
+		Identity:        identity,
 	}
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
@@ -1366,19 +1394,14 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// The base is established before the worktree exists and is never
 	// recomputed afterwards, so a resumed task continues from the state its
 	// plan was approved against rather than from wherever HEAD has moved to.
-	identity, idErr := candidate.Establish(
-		e.Repo.Root, taskID, start.Domain(),
-		e.Repo.WorktreePath(taskID), e.Repo.WorktreeBranch(taskID),
-		repoHead{ctx: ctx, repo: e.Repo}, time.Now(),
-	)
-	if idErr != nil {
-		fail(idErr)
+	// The base was established at the start gate, before the workflow could
+	// perturb its own repository. Re-establishing here would re-observe a tree
+	// this run has already written to.
+	identity := tc.Identity
+	if strings.TrimSpace(identity.BaseSHA) == "" {
+		fail(errors.New("no candidate identity was established for this task"))
 		return
 	}
-	if bound, err := identity.BindGraph(e.Repo.Root, start.GraphBuildCommit(), start.SourceRepoCommit()); err == nil {
-		identity = bound
-	}
-	tc.Identity = identity
 
 	workspace, createErr := e.Repo.CreateWorktreeAt(ctx, taskID, identity.BaseSHA)
 	if createErr != nil {
@@ -1502,8 +1525,23 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			return
 		}
 
+		// A resumed task already has a base recorded. Establish loads it rather
+		// than re-deriving one, which is what keeps the base immutable across a
+		// restart -- and it must not re-check cleanliness, because the tree may
+		// legitimately hold this task's own earlier governance writes.
+		identity, ok, idErr := candidate.Load(e.Repo.Root, task.TaskID)
+		if idErr != nil {
+			fail(idErr)
+			return
+		}
+		if !ok {
+			fail(fmt.Errorf("cannot resume %s: no candidate identity was recorded for it", task.TaskID))
+			return
+		}
+
 		tc := taskContext{
 			Task:            task.Task,
+			Identity:        identity,
 			Conversation:    e.conversationSoFar(task.Task, 40),
 			WorkspaceStatus: firstText(workspaceStatus),
 			Preflight:       firstText(preflight),
