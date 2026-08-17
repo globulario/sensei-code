@@ -184,15 +184,63 @@ func requireEvidence(label string, o Observation) error {
 		// A proven empty is an answer, not a missing one. Sensei's graph
 		// vouched for itself and reported that this scope has no coverage,
 		// which is a fact the packet should carry rather than a failure that
-		// should stop the work — the agent needs to know the region is
-		// uncovered, and refusing here would tell it nothing at all.
+		// should stop the work.
+		return nil
+	case Stale:
+		// A stale answer is also an answer, and this packet type was built to
+		// say so: validateObservation accepts Stale provided it explains why.
+		// Refusing here made the packet unable to express the one state it has
+		// a name for, and turned an honest degradation into a hard failure --
+		// which is what broke advisory CI, where a freshly built graph is
+		// routinely not yet authoritative.
 		//
-		// The distinction is load-bearing in both directions: Absent and Stale
-		// still fail, because "nobody answered" and "the answer cannot be
-		// trusted" are not findings about the repository.
+		// The refusal belongs in the governed path, and lives there:
+		// certifyStart requires Authority.Certifiable() before any worker runs.
+		// Assisted context has different authority and therefore a different
+		// obligation. It must never claim to be graph-backed when it is not,
+		// and it must not withhold what Sensei did say. Carrying the state and
+		// the reason satisfies both; refusing satisfies only the first, by
+		// saying nothing at all.
 		return nil
 	}
 	return fmt.Errorf("Sensei %s is %s: %s", label, o.State, o.Reason)
+}
+
+// GraphBacked reports whether every required observation came from a graph that
+// vouched for itself. A packet that is not graph-backed is still useful; it is
+// simply not evidence, and a consumer must not present it as such.
+func (p ContextPacket) GraphBacked() bool {
+	for _, o := range []Observation{p.WorkspaceStatus, p.Preflight} {
+		if o.State != Present && o.State != EmptyProven {
+			return false
+		}
+	}
+	return true
+}
+
+// Caveats names every way this packet falls short of graph-backed evidence, in
+// the words a reader needs. Empty when there are none.
+//
+// This exists because the packet is handed to a reviewer under a heading that
+// calls it governed evidence. When it is not, something has to say so in a
+// place the reader cannot skip.
+func (p ContextPacket) Caveats() []string {
+	var out []string
+	for _, o := range []struct {
+		label string
+		obs   Observation
+	}{{"workspace status", p.WorkspaceStatus}, {"preflight", p.Preflight}} {
+		switch o.obs.State {
+		case Present, EmptyProven:
+		default:
+			reason := o.obs.Reason
+			if strings.TrimSpace(reason) == "" {
+				reason = "no reason given"
+			}
+			out = append(out, fmt.Sprintf("%s is %s: %s", o.label, o.obs.State, reason))
+		}
+	}
+	return out
 }
 
 func UnavailableObservation(source, reason string) Observation {

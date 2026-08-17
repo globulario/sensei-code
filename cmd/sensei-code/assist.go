@@ -59,6 +59,16 @@ func runContext(ctx context.Context, repo gitx.Repo, cfg config.Config, args []s
 		return err
 	}
 	fmt.Printf("context packet: %s · %s\n", *out, digest)
+	// A packet that is not graph-backed is still worth producing, and must never
+	// be read as evidence. The consumer of this file is a reviewer prompt that
+	// introduces it as governed evidence, so the shortfall is stated here where
+	// a build log will carry it rather than left for someone to notice in JSON.
+	if caveats := packet.Caveats(); len(caveats) != 0 {
+		fmt.Fprintf(os.Stderr, "warning: this context packet is NOT graph-backed and must not be treated as governed evidence\n")
+		for _, c := range caveats {
+			fmt.Fprintf(os.Stderr, "  %s\n", c)
+		}
+	}
 	return nil
 }
 

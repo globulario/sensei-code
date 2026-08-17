@@ -253,8 +253,13 @@ func TestObservedDistinguishesStaleFromPresent(t *testing.T) {
 	if !strings.Contains(got.Reason, "stale") {
 		t.Fatalf("stale observation does not explain itself: %q", got.Reason)
 	}
-	if err := requireEvidence("preflight", got); err == nil {
-		t.Fatal("stale evidence satisfied a required surface")
+	// A stale answer is still an answer, and this type has a state for it.
+	// Refusing to build the packet made it unable to express the one situation
+	// it was designed to describe, and turned honest degradation into a hard
+	// failure in advisory CI. The refusal belongs in the governed path, where
+	// certifyStart enforces it before any worker runs.
+	if err := requireEvidence("preflight", got); err != nil {
+		t.Fatalf("a stale observation could not be carried by a packet built to carry it: %v", err)
 	}
 }
 
@@ -332,5 +337,56 @@ func TestEverySurfaceStateIsReachable(t *testing.T) {
 		if !seen[want] {
 			t.Errorf("no input produces the %q state, so it is declared but unreachable", want)
 		}
+	}
+}
+
+// TestAStalePacketIsCarriedButNeverCalledEvidence is the distinction that broke
+// advisory CI when it was collapsed.
+//
+// Assisted context and governed execution have different authority and
+// therefore different obligations. Governed work must refuse a graph that
+// cannot vouch for itself, and does, in certifyStart. Assisted context must not
+// withhold what Sensei said, and must not let anyone mistake it for evidence.
+// Refusing to build the packet satisfied only the second, by saying nothing.
+func TestAStalePacketIsCarriedButNeverCalledEvidence(t *testing.T) {
+	stale := Observation{
+		State: Stale, Source: "sensei:sensei_workspace_status",
+		Reason: "authority not authoritative",
+	}
+	p := ContextPacket{
+		Version: PacketVersion, TaskID: "t", Task: "review", Repository: "/repo", BaseSHA: "abc",
+		WorkspaceStatus: stale,
+		Preflight:       Observation{State: Present, Source: "sensei:awareness_preflight", Text: "ok"},
+		Authority:       Authority{Mode: "assisted", Admission: "not-requested"},
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("a packet carrying a stale observation failed validation: %v", err)
+	}
+	if p.GraphBacked() {
+		t.Fatal("a packet with a stale observation reported itself as graph-backed")
+	}
+	caveats := p.Caveats()
+	if len(caveats) != 1 {
+		t.Fatalf("expected exactly one caveat, got %v", caveats)
+	}
+	if !strings.Contains(caveats[0], "authority not authoritative") {
+		t.Fatalf("the caveat does not carry Sensei's reason: %q", caveats[0])
+	}
+
+	// And a fully answered packet is quiet, so a caveat means something.
+	sound := p
+	sound.WorkspaceStatus = Observation{State: Present, Source: "s", Text: "ok"}
+	if !sound.GraphBacked() {
+		t.Fatal("a fully present packet did not report itself graph-backed")
+	}
+	if len(sound.Caveats()) != 0 {
+		t.Fatalf("a sound packet produced caveats: %v", sound.Caveats())
+	}
+
+	// A proven empty is an answer and must not read as a shortfall.
+	empty := p
+	empty.WorkspaceStatus = Observation{State: EmptyProven, Source: "s", Reason: "no coverage"}
+	if !empty.GraphBacked() {
+		t.Fatal("a proven empty was treated as not graph-backed")
 	}
 }
