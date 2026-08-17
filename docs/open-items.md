@@ -5,10 +5,29 @@
 ```text
 P0 control-plane slices:        9/9 implemented (P0.1-P0.8, plus P0.9 discovered by the canary)
 unit/structural tests:          green
-integrated governed acceptance: PASS @ 1bc39f29a7a2
+integrated governed acceptance: SUPERSEDED — see below
+blocked on:                     sensei-code#13, which prevents a governed run today
 known enforcement gap:          per-provider process sandbox (see below)
-upstream dependencies:          globulario/sensei#171, #172
+upstream dependencies:          globulario/sensei#171, #172, #173, #174, #175
 ```
+
+**The acceptance is superseded, not merely stale.** The PASS at `1bc39f29a7a2`
+happened and is described faithfully below, but it was obtained under a
+deployment later shown to be wrong about custody — and that same
+misconfiguration was masking an ordering defect, by writing this repository's
+governance into another repository and so keeping this tree artificially clean.
+The run passed partly *because* of the fault it failed to reveal.
+
+Three things changed afterwards and none has been re-established end to end:
+custody was corrected (`sensei-code#10`), the candidate base was pinned before
+the workflow mutates its own repository, and mutual authority exclusion between
+two servers sharing one store was discovered (`sensei-code#13`).
+
+So the mechanisms are proven and the composition is not. Anyone reading this
+record should treat P0 as implemented and unaccepted until a governed run
+reaches ACCEPT under the topology actually in use. Recording it as PASS would be
+the same overstated receipt this system exists to refuse, written by the system
+about itself.
 
 The accepted run, `task-1786929227938945137`, went the whole distance without
 bypass: certifiable start, authority escalated once and answered, resolution
