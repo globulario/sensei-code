@@ -45,6 +45,7 @@ const (
 	ReadRepository   Capability = "read_repository"
 	WriteCandidates  Capability = "write_candidates"
 	CreateWorktrees  Capability = "create_worktrees"
+	RunFormatters    Capability = "run_formatters"
 	RunBuilds        Capability = "run_builds"
 	RunTests         Capability = "run_tests"
 	LocalCommit      Capability = "local_commit"
@@ -69,6 +70,8 @@ func (e Envelope) Grants(c Capability) bool {
 		return e.perms.WriteCandidates
 	case CreateWorktrees:
 		return e.perms.CreateWorktrees
+	case RunFormatters:
+		return e.perms.RunFormatters
 	case RunBuilds:
 		return e.perms.RunBuilds
 	case RunTests:
@@ -97,11 +100,22 @@ func (e Envelope) Require(c Capability) error {
 	return fmt.Errorf("%s capability is not granted", c)
 }
 
-// mechanicallyEnforced is the set this package can actually make impossible.
+// mechanicallyEnforced is the set this package makes real.
+//
+// Push, force-push and candidate confinement are made *impossible* when denied.
+// The three validation capabilities are real in the other direction: the broker
+// is what executes them, so denying one means the check does not run and its
+// evidence records not-permitted. That is enforcement too -- the capability
+// decides whether authoritative evidence exists at all, which is what a
+// governed reviewer actually needs from it. Permission without an observable
+// outcome would be only half a capability.
 var mechanicallyEnforced = map[Capability]bool{
 	Push:            true,
 	ForcePush:       true,
 	WriteCandidates: true,
+	RunFormatters:   true,
+	RunBuilds:       true,
+	RunTests:        true,
 }
 
 // Unenforceable lists capabilities that are denied in configuration but that
@@ -116,7 +130,7 @@ var mechanicallyEnforced = map[Capability]bool{
 // unstated one they discover after it mattered.
 func (e Envelope) Unenforceable() []Capability {
 	var out []Capability
-	for _, c := range []Capability{RunBuilds, RunTests, LocalCommit, ProductionDeploy} {
+	for _, c := range []Capability{LocalCommit, ProductionDeploy} {
 		if !e.Grants(c) && !mechanicallyEnforced[c] {
 			out = append(out, c)
 		}

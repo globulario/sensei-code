@@ -49,6 +49,8 @@ const (
 	AgentFinished     Kind = "agent.finished"
 	CandidateChanged  Kind = "candidate.changed"
 	CandidateAudited  Kind = "candidate.audited"
+	// ValidationRun records checks the broker executed against a candidate.
+	ValidationRun     Kind = "validation.run"
 	AuthorityRequired Kind = "authority.required"
 	AuthorityResolved Kind = "authority.resolved"
 	WorkflowFailed    Kind = "workflow.failed"

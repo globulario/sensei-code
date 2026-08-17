@@ -79,7 +79,7 @@ func TestImplementationPromptCarriesContextWithoutWideningScope(t *testing.T) {
 }
 
 func TestReviewPromptCarriesContextWithoutLoweringTheBar(t *testing.T) {
-	got := reviewPrompt(testContext(), "edit main.go", "diff --git a b", "audit says fine")
+	got := reviewPrompt(testContext(), "edit main.go", "diff --git a b", "audit says fine", "passed go test ./...")
 	for _, want := range []string{"can we version this?", "conventional flag, no governance", "audit says fine"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("review prompt is missing %q", want)
@@ -191,7 +191,7 @@ func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
 	prompts := map[string]string{
 		"architect": architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf"),
 		"worker":    implementationPrompt(testContext(), "plan", "", 1, nil),
-		"reviewer":  reviewPrompt(testContext(), "plan", "diff", "audit"),
+		"reviewer":  reviewPrompt(testContext(), "plan", "diff", "audit", "evidence"),
 	}
 	for role, prompt := range prompts {
 		if !strings.Contains(prompt, "awareness_briefing") {
@@ -234,5 +234,30 @@ func TestArchitectConversationPromptIsHumanFacing(t *testing.T) {
 	// decides and explains.
 	if !strings.Contains(strings.Join(strings.Fields(got), " "), "Routine architectural judgment is yours to make") {
 		t.Fatal("the architect is not told that routine judgement is its own")
+	}
+}
+
+// TestReviewerSeesExecutedEvidenceNotAWorkerReport closes the gap the canary
+// found. Three review cycles refused the same candidate for want of gofmt, vet
+// and test results, and the workflow had no way to carry them, so the worker
+// re-emitted a byte-identical diff until the run timed out.
+func TestReviewerSeesExecutedEvidenceNotAWorkerReport(t *testing.T) {
+	got := reviewPrompt(testContext(), "plan", "diff", "audit", "passed  go test ./...\n  exit 0")
+	if !strings.Contains(got, "VALIDATION EVIDENCE") {
+		t.Fatal("the reviewer is never shown the validation evidence")
+	}
+	if !strings.Contains(got, "go test ./...") {
+		t.Fatal("the evidence itself did not reach the reviewer")
+	}
+	// The reviewer must be told why it can rely on this, or it will treat it as
+	// one more thing an agent asserted.
+	if !strings.Contains(got, "not by the worker reporting") {
+		t.Error("the prompt does not distinguish executed evidence from a worker's claim")
+	}
+	// And must not read an unrun check as satisfied. Matched on normalised
+	// whitespace: the prompt is hard-wrapped and a reflow must not silently
+	// drop the guarantee.
+	if !strings.Contains(strings.Join(strings.Fields(got), " "), "did not run and proves nothing") {
+		t.Error("the prompt does not tell the reviewer that a not-permitted check proves nothing")
 	}
 }

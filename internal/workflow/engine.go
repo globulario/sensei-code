@@ -24,6 +24,7 @@ import (
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/taskstate"
+	"github.com/globulario/sensei-code/internal/validation"
 )
 
 type Engine struct {
@@ -597,6 +598,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), nil))
 
+		// The missing edge: worker → change → validation → typed evidence →
+		// reviewer. Without it the reviewer correctly refuses to accept on
+		// unproven work and the worker has no way to supply the proof, which
+		// deadlocks the loop rather than failing it.
+		//
+		// Formatters run first because they can rewrite the candidate, and
+		// everything gathered before a rewrite is evidence about different
+		// bytes. The diff is therefore re-read afterwards and the certifying
+		// checks are bound to the digest of what will actually be reviewed.
+		evidence, diff, err := e.validate(ctx, taskID, envelope, candidate, diff)
+		if err != nil {
+			return false, plan, lastReview, lastAudit, err
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+
 		auditArgs := map[string]any{"diff": diff, "task": task}
 		// Scope the audit to the domain the start gate certified, so the audit
 		// evaluates this candidate against this repository's rules rather than
@@ -651,7 +667,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			RequiredTests: tc.EvidenceSnapshot.RequiredTests,
 		}
 
-		review, err := e.resolveReview(ctx, taskID, reviewPrompt(*tc, plan, diff, lastAudit))
+		review, err := e.resolveReview(ctx, taskID, reviewPrompt(*tc, plan, diff, lastAudit, evidence.Render()))
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
@@ -1186,7 +1202,7 @@ ARCHITECTURAL PLAN:
 CYCLE: %d%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, cycle, extra)
 }
 
-func reviewPrompt(tc taskContext, plan, diff, audit string) string {
+func reviewPrompt(tc taskContext, plan, diff, audit, evidence string) string {
 	return fmt.Sprintf(`You are the architectural reviewer for a Sensei-governed candidate. Do not edit files.
 Decide whether the exact candidate satisfies the architectural plan and the supplied Sensei evidence. Passing tests alone is not architectural proof.
 Return ESCALATE only when a genuine architectural-authority question exists; ordinary defects are REVISE.
@@ -1228,8 +1244,16 @@ ARCHITECTURAL PLAN:
 SENSEI DIFF AUDIT:
 %s
 
+VALIDATION EVIDENCE:
+This is the record of checks the execution broker actually ran against this
+exact candidate, with exit statuses. It is produced by executing the commands,
+not by the worker reporting that it ran them, so you may rely on it as evidence
+rather than as a claim. A check recorded as not-permitted or errored did not run
+and proves nothing.
+%s
+
 CANDIDATE DIFF:
-%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, audit, diff)
+%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, audit, evidence, diff)
 }
 
 func escalationPrompt(task, plan, audit string, review reviewDecision) string {
@@ -1624,4 +1648,62 @@ func oneLine(s string) string {
 		return s[:300] + "…"
 	}
 	return s
+}
+
+// validate runs the required checks and returns evidence bound to the candidate
+// content the reviewer will actually see.
+//
+// The returned diff may differ from the one passed in: a formatter rewrites the
+// candidate, so the diff is re-read after formatting and the certifying checks
+// are bound to that. Returning the new diff rather than mutating in place makes
+// it impossible for a caller to keep using the pre-format bytes by accident.
+func (e *Engine) validate(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
+	permits := func(kind validation.CheckKind) (bool, string) {
+		var capability broker.Capability
+		switch kind {
+		case validation.Format:
+			capability = broker.RunFormatters
+		case validation.Build:
+			capability = broker.RunBuilds
+		case validation.Vet:
+			capability = broker.RunBuilds
+		case validation.Test:
+			capability = broker.RunTests
+		default:
+			return false, "unknown check kind " + string(kind)
+		}
+		if err := envelope.Require(capability); err != nil {
+			return false, err.Error()
+		}
+		return true, ""
+	}
+	runner := validation.Runner{Workspace: repo.Root, Permits: permits}
+
+	// Formatting first, and its evidence is deliberately discarded from the
+	// certifying bundle: it describes the candidate before the rewrite.
+	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
+		runner.Run(ctx, taskID, validation.Digest(diff), formats)
+		reread, err := repo.CandidateDiff(ctx)
+		if err != nil {
+			return validation.Bundle{}, diff, err
+		}
+		diff = reread
+	}
+
+	var checks []validation.Check
+	checks = append(checks, checksOf(validation.Vet, e.Config.Validation.Vet)...)
+	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
+	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
+	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+}
+
+func checksOf(kind validation.CheckKind, commands []config.Command) []validation.Check {
+	out := make([]validation.Check, 0, len(commands))
+	for _, c := range commands {
+		if strings.TrimSpace(c.Command) == "" {
+			continue
+		}
+		out = append(out, validation.Check{Kind: kind, Command: c.Command, Args: c.Args, Mutates: kind == validation.Format})
+	}
+	return out
 }
