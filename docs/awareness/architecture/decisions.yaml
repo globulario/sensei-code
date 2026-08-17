@@ -1,4 +1,4 @@
-decisions: []
+decisions:
   - id: decision.sensei_code.add_a_read_only_tui_readiness_report_command_keep_all_repair
     title: Add a read-only TUI readiness report command; keep all repair/apply behavior exclusive to the existing CLI setup flow.
     status: accepted
@@ -20,3 +20,14 @@ decisions: []
       - internal/setup/setup_test.go
       - internal/tui/model.go
       - internal/tui/setup_command_test.go
+  - id: decision.sensei_code.add_test_only_coverage_at_the_tui_input_boundary_proving_unk
+    title: Add test-only coverage at the TUI input boundary proving unknown slash commands remain informational and start no task.
+    status: accepted
+    architectural_plane: intended
+    rationale: Add a table-driven unit test proving that an unknown TUI slash command cannot start governed execution. Do not change product behaviour.
+    context: Accepted by the human in an interactive Sensei Code session.
+    consequences: The repository gains deterministic regression proof at the real TUI boundary that unrecognised slash commands cannot become assisted or governed work; runtime behavior is unchanged.
+    related_invariants:
+      - sensei_code.command.unknown_input_is_never_run_as_a_task
+    source_files:
+      - internal/tui/model_test.go

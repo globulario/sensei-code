@@ -89,3 +89,67 @@ func TestLoadMigratesOnlyLegacyBuiltInArchitect(t *testing.T) {
 		t.Fatalf("custom architect configuration must remain user-owned: %#v", got.Architect)
 	}
 }
+
+// TestBuildCheckWorksInsideACandidateWorktree pins a default that a real run
+// proved wrong.
+//
+// A candidate is a git worktree, and `go build` stamps VCS metadata from it.
+// That fails with "error obtaining VCS status: exit status 128" for reasons
+// unrelated to whether the code compiles, so the build check reported a failure
+// no worker could fix and the review loop could not converge. Stamping is
+// irrelevant to the question the check asks.
+func TestBuildCheckWorksInsideACandidateWorktree(t *testing.T) {
+	var found bool
+	for _, c := range Default().Validation.Build {
+		if c.Command != "go" {
+			continue
+		}
+		found = true
+		var disabled bool
+		for _, a := range c.Args {
+			if a == "-buildvcs=false" {
+				disabled = true
+			}
+		}
+		if !disabled {
+			t.Fatalf("the default build check is %v; without -buildvcs=false it fails inside a candidate worktree", c.Args)
+		}
+	}
+	if !found {
+		t.Fatal("no default go build check")
+	}
+}
+
+// TestFormattingIsProvedOnTheReviewedBytes pins the split a real run forced.
+//
+// The mutating formatter's evidence is discarded because it describes the bytes
+// before the rewrite, which left a reviewer unable to see that a mandated
+// format check had run -- and it refused on exactly those grounds, with no way
+// for any worker to satisfy it. A non-mutating verification bound to the final
+// digest is what the reviewer can actually rely on.
+func TestFormattingIsProvedOnTheReviewedBytes(t *testing.T) {
+	v := Default().Validation
+	if len(v.Format) == 0 {
+		t.Fatal("no formatter is configured")
+	}
+	if len(v.FormatVerify) == 0 {
+		t.Fatal("formatting is applied but never verified on the reviewed bytes")
+	}
+	for _, c := range v.Format {
+		for _, a := range c.Args {
+			if a == "-l" {
+				t.Error("the mutating formatter also lists files; the listing belongs to FormatVerify")
+			}
+		}
+	}
+	for _, c := range v.FormatVerify {
+		if !c.FailIfOutput {
+			t.Errorf("format verification %v does not fail on output, so gofmt -l would pass silently", c.Args)
+		}
+		for _, a := range c.Args {
+			if a == "-w" {
+				t.Error("format verification rewrites the candidate; it must not mutate")
+			}
+		}
+	}
+}

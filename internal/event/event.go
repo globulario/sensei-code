@@ -25,7 +25,10 @@ type Kind string
 
 const (
 	TaskCreated Kind = "task.created"
-	Status      Kind = "status"
+	// ModeSelected records the mode a task runs in and why, so the UI reports
+	// what a task actually is rather than what configuration might imply.
+	ModeSelected Kind = "mode.selected"
+	Status       Kind = "status"
 	// ArchitectSpoke carries the architect's own words to the human. It is
 	// conversation, not activity, and is always shown.
 	ArchitectSpoke Kind = "architect.spoke"
@@ -46,6 +49,8 @@ const (
 	AgentFinished     Kind = "agent.finished"
 	CandidateChanged  Kind = "candidate.changed"
 	CandidateAudited  Kind = "candidate.audited"
+	// ValidationRun records checks the broker executed against a candidate.
+	ValidationRun     Kind = "validation.run"
 	AuthorityRequired Kind = "authority.required"
 	AuthorityResolved Kind = "authority.resolved"
 	WorkflowFailed    Kind = "workflow.failed"

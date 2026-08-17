@@ -67,6 +67,11 @@ var Registry = []Command{
 		Detail:  "Ranks the surfaces carrying code that no invariant protects. This is the debt an agent accumulates fastest, because ungoverned code is where nothing can refuse a bad change.",
 	},
 	{
+		Name: "/run", Arg: "<what to build>", Kind: Control, NeedsIdle: true,
+		Summary: "carry the work out under governed execution",
+		Detail:  "Enters governed mode for this one task: candidate worktree cut from an exact base, bounded plan you approve, worker, reviewer and a Sensei diff audit that a reviewer cannot accept over. Ordinary messages stay conversational and change nothing; this is how work actually gets done.",
+	},
+	{
 		Name: "/audit", Kind: Control, NeedsIdle: true,
 		Summary: "Sensei's evidence-based evaluation of the repository",
 		Detail:  "Runs Sensei's own repository evaluation and corpus validation, and reports its verdict verbatim, including what that verdict does not verify.",

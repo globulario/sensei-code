@@ -41,3 +41,9 @@ go.work.sum
 # revision, so they are authority evidence and stay tracked, as in
 # globulario/services.
 /.sensei/data/
+# The live-store graph identity, rewritten by every `sensei build`. It is a
+# machine-local runtime fact, not source: tracking it produced a diff on every
+# build, would conflict on any branch, and dirtied the canonical checkout badly
+# enough to trip the governed dirty-tree gate. The sibling services repository
+# does not track it either.
+/.sensei/graph-authority.json

@@ -12,9 +12,14 @@ import (
 )
 
 type Permissions struct {
-	ReadRepository   bool `json:"read_repository"`
-	WriteCandidates  bool `json:"write_candidates"`
-	CreateWorktrees  bool `json:"create_worktrees"`
+	ReadRepository  bool `json:"read_repository"`
+	WriteCandidates bool `json:"write_candidates"`
+	CreateWorktrees bool `json:"create_worktrees"`
+	// RunFormatters is separate from builds and tests because a formatter can
+	// rewrite the candidate. A check that mutates invalidates every piece of
+	// evidence gathered before it, so it cannot be lumped in with the checks
+	// that only certify.
+	RunFormatters    bool `json:"run_formatters"`
 	RunBuilds        bool `json:"run_builds"`
 	RunTests         bool `json:"run_tests"`
 	LocalCommit      bool `json:"local_commit"`
@@ -47,6 +52,7 @@ type Config struct {
 	Workflow     Workflow          `json:"workflow"`
 	Behavioral   behavioral.Config `json:"behavioral"`
 	Permissions  Permissions       `json:"permissions"`
+	Validation   Validation        `json:"validation"`
 }
 
 func Default() Config {
@@ -74,11 +80,64 @@ func Default() Config {
 		ReadRepository:  true,
 		WriteCandidates: true,
 		CreateWorktrees: true,
+		RunFormatters:   true,
 		RunBuilds:       true,
 		RunTests:        true,
 		LocalCommit:     true,
 	}
+	c.Validation = defaultValidation()
 	return c
+}
+
+// Validation is the set of checks a candidate must pass before a reviewer can
+// accept it. They are configuration rather than hard-coded, because what proves
+// a change in one repository proves nothing in another -- but they default to
+// this project's own, which are the ones AGENTS.md already requires.
+type Validation struct {
+	// Format may rewrite the candidate and therefore runs first. Its own
+	// evidence is discarded, because it describes the bytes before the rewrite.
+	Format []Command `json:"format"`
+	// FormatVerify proves formatting holds for the bytes that will actually be
+	// reviewed. It must not mutate.
+	//
+	// This exists because discarding the formatter's evidence left the reviewer
+	// unable to see that a mandated format check had run at all, and it refused
+	// on those grounds -- correctly, and with no way for any worker to satisfy
+	// it. A passing non-mutating verification bound to the final digest is also
+	// simply better evidence than a record of a rewrite: it states that the
+	// reviewed candidate is formatted, rather than that something once
+	// reformatted something.
+	FormatVerify []Command `json:"format_verify"`
+	// Vet, Build and Test certify without mutating.
+	Vet   []Command `json:"vet"`
+	Build []Command `json:"build"`
+	Test  []Command `json:"test"`
+}
+
+// Command is one executable check.
+type Command struct {
+	Command string   `json:"command"`
+	Args    []string `json:"args,omitempty"`
+	// FailIfOutput treats any output as failure even on a zero exit, for
+	// verifiers that report by printing rather than by exit status.
+	FailIfOutput bool `json:"fail_if_output,omitempty"`
+}
+
+func defaultValidation() Validation {
+	return Validation{
+		Format:       []Command{{Command: "gofmt", Args: []string{"-w", "cmd", "internal"}}},
+		FormatVerify: []Command{{Command: "gofmt", Args: []string{"-l", "cmd", "internal"}, FailIfOutput: true}},
+		Vet:          []Command{{Command: "go", Args: []string{"vet", "./..."}}},
+		// -buildvcs=false because a candidate is a git worktree, and `go build`
+		// tries to stamp VCS metadata into the binary from it. That fails with
+		// "error obtaining VCS status: exit status 128" for reasons that have
+		// nothing to do with whether the code compiles, so without this the
+		// build check reports a failure no worker can fix and the review loop
+		// never converges. Stamping is irrelevant to the question the check is
+		// asking, so disabling it weakens nothing.
+		Build: []Command{{Command: "go", Args: []string{"build", "-buildvcs=false", "./..."}}},
+		Test:  []Command{{Command: "go", Args: []string{"test", "./..."}}},
+	}
 }
 
 func Path(repo string) string { return filepath.Join(repo, ".sensei-code", "config.json") }

@@ -226,3 +226,167 @@ func TestContextPacketRequiresATaskID(t *testing.T) {
 		t.Fatal("a context packet with no task id was accepted, so two tasks would be indistinguishable")
 	}
 }
+
+// TestObservedDistinguishesStaleFromPresent covers the state that was declared
+// in the Presence enum from the start and never once constructed.
+//
+// A stale graph is the worst case for an assisted packet: it answers, and its
+// answer is fluent, specific and wrong. Recording it as Present hands an agent
+// confident architectural context derived from a graph that no longer describes
+// the repository.
+func TestObservedDistinguishesStaleFromPresent(t *testing.T) {
+	stale := sensei.ToolResult{
+		Structured: map[string]any{
+			"status": "PREFLIGHT_STATUS_OK",
+			"authority": map[string]any{
+				"authoritative":          true,
+				"graph_freshness_state":  "GRAPH_FRESHNESS_STATE_STALE",
+				"graph_freshness_detail": "live store does not match the validated artifact",
+				"seed_state":             "SEED_STATE_CURRENT",
+			},
+		},
+	}
+	got := observed("awareness_preflight", stale)
+	if got.State != Stale {
+		t.Fatalf("a stale graph was classified %q, not stale", got.State)
+	}
+	if !strings.Contains(got.Reason, "stale") {
+		t.Fatalf("stale observation does not explain itself: %q", got.Reason)
+	}
+	// A stale answer is still an answer, and this type has a state for it.
+	// Refusing to build the packet made it unable to express the one situation
+	// it was designed to describe, and turned honest degradation into a hard
+	// failure in advisory CI. The refusal belongs in the governed path, where
+	// certifyStart enforces it before any worker runs.
+	if err := requireEvidence("preflight", got); err != nil {
+		t.Fatalf("a stale observation could not be carried by a packet built to carry it: %v", err)
+	}
+}
+
+// TestObservedDistinguishesProvenEmptyFromAbsent covers the other never-built
+// state. "Sensei has no coverage here" is a finding; "Sensei did not answer" is
+// not, and collapsing them lets an unanswered question read as a clean report.
+func TestObservedDistinguishesProvenEmptyFromAbsent(t *testing.T) {
+	empty := sensei.ToolResult{
+		Structured: map[string]any{
+			"status": "PREFLIGHT_STATUS_EMPTY",
+			"authority": map[string]any{
+				"authoritative":         true,
+				"graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+				"seed_state":            "SEED_STATE_CURRENT",
+			},
+		},
+	}
+	got := observed("awareness_preflight", empty)
+	if got.State != EmptyProven {
+		t.Fatalf("a certified empty answer was classified %q", got.State)
+	}
+	// It is an answer, so it does not fail a required surface.
+	if err := requireEvidence("preflight", got); err != nil {
+		t.Fatalf("a proven empty was treated as missing evidence: %v", err)
+	}
+
+	// And it remains distinct from silence.
+	silent := observed("awareness_preflight", sensei.ToolResult{})
+	if silent.State != Absent {
+		t.Fatalf("silence was classified %q, not absent", silent.State)
+	}
+	if err := requireEvidence("preflight", silent); err == nil {
+		t.Fatal("silence satisfied a required surface")
+	}
+}
+
+// TestStalenessBeatsEmptiness pins the ordering. "Nothing here" from a graph
+// that cannot vouch for itself proves nothing, so it must not be recorded as a
+// proven empty.
+func TestStalenessBeatsEmptiness(t *testing.T) {
+	both := sensei.ToolResult{
+		Structured: map[string]any{
+			"status": "PREFLIGHT_STATUS_EMPTY",
+			"authority": map[string]any{
+				"authoritative":         true,
+				"graph_freshness_state": "GRAPH_FRESHNESS_STATE_STALE",
+				"seed_state":            "SEED_STATE_CURRENT",
+			},
+		},
+	}
+	if got := observed("awareness_preflight", both); got.State != Stale {
+		t.Fatalf("an empty answer from a stale graph was recorded as %q", got.State)
+	}
+}
+
+// TestEverySurfaceStateIsReachable is the regression guard for the whole class
+// of bug: a typed state that exists only in the enum is a state the system
+// cannot express, and the type checker will never say so.
+func TestEverySurfaceStateIsReachable(t *testing.T) {
+	healthy := map[string]any{
+		"authoritative":         true,
+		"graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+		"seed_state":            "SEED_STATE_CURRENT",
+	}
+	seen := map[Presence]bool{
+		observed("s", sensei.ToolResult{}).State: true,
+		observed("s", sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_OK", "authority": healthy}}).State:    true,
+		observed("s", sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_EMPTY", "authority": healthy}}).State: true,
+		observed("s", sensei.ToolResult{Structured: map[string]any{"authority": map[string]any{
+			"authoritative": true, "graph_freshness_state": "GRAPH_FRESHNESS_STATE_STALE", "seed_state": "SEED_STATE_CURRENT",
+		}}}).State: true,
+		UnavailableObservation("s", "no sensei").State: true,
+	}
+	for _, want := range []Presence{Present, EmptyProven, Absent, Stale, Unavailable} {
+		if !seen[want] {
+			t.Errorf("no input produces the %q state, so it is declared but unreachable", want)
+		}
+	}
+}
+
+// TestAStalePacketIsCarriedButNeverCalledEvidence is the distinction that broke
+// advisory CI when it was collapsed.
+//
+// Assisted context and governed execution have different authority and
+// therefore different obligations. Governed work must refuse a graph that
+// cannot vouch for itself, and does, in certifyStart. Assisted context must not
+// withhold what Sensei said, and must not let anyone mistake it for evidence.
+// Refusing to build the packet satisfied only the second, by saying nothing.
+func TestAStalePacketIsCarriedButNeverCalledEvidence(t *testing.T) {
+	stale := Observation{
+		State: Stale, Source: "sensei:sensei_workspace_status",
+		Reason: "authority not authoritative",
+	}
+	p := ContextPacket{
+		Version: PacketVersion, TaskID: "t", Task: "review", Repository: "/repo", BaseSHA: "abc",
+		WorkspaceStatus: stale,
+		Preflight:       Observation{State: Present, Source: "sensei:awareness_preflight", Text: "ok"},
+		Authority:       Authority{Mode: "assisted", Admission: "not-requested"},
+	}
+	if err := p.Validate(); err != nil {
+		t.Fatalf("a packet carrying a stale observation failed validation: %v", err)
+	}
+	if p.GraphBacked() {
+		t.Fatal("a packet with a stale observation reported itself as graph-backed")
+	}
+	caveats := p.Caveats()
+	if len(caveats) != 1 {
+		t.Fatalf("expected exactly one caveat, got %v", caveats)
+	}
+	if !strings.Contains(caveats[0], "authority not authoritative") {
+		t.Fatalf("the caveat does not carry Sensei's reason: %q", caveats[0])
+	}
+
+	// And a fully answered packet is quiet, so a caveat means something.
+	sound := p
+	sound.WorkspaceStatus = Observation{State: Present, Source: "s", Text: "ok"}
+	if !sound.GraphBacked() {
+		t.Fatal("a fully present packet did not report itself graph-backed")
+	}
+	if len(sound.Caveats()) != 0 {
+		t.Fatalf("a sound packet produced caveats: %v", sound.Caveats())
+	}
+
+	// A proven empty is an answer and must not read as a shortfall.
+	empty := p
+	empty.WorkspaceStatus = Observation{State: EmptyProven, Source: "s", Reason: "no coverage"}
+	if !empty.GraphBacked() {
+		t.Fatal("a proven empty was treated as not graph-backed")
+	}
+}

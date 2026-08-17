@@ -28,8 +28,23 @@ func (r Repo) Head(ctx context.Context) (string, error) { return r.output(ctx, "
 func (r Repo) Branch(ctx context.Context) (string, error) {
 	return r.output(ctx, "branch", "--show-current")
 }
-func (r Repo) Diff(ctx context.Context) (string, error) {
-	return r.output(ctx, "diff", "--no-ext-diff", "--binary")
+
+// Diff returns the working-tree diff verbatim.
+//
+// It uses raw() rather than output() because a diff must not be trimmed. Every
+// other git call here is a short single value where stripping whitespace is
+// convenient; a unified diff is a format, and its trailing newline is part of
+// it. Trimming the end of a patch whose final added lines are blank leaves a
+// hunk header promising more lines than the body contains, and Sensei rejects
+// the result as malformed_diff -- which is what made every audit in a real run
+// come back cannot_verify, for weeks of apparent graph trouble that was
+// actually two missing newlines.
+func (r Repo) Diff(ctx context.Context, base string) (string, error) {
+	args := []string{"diff", "--no-ext-diff", "--binary"}
+	if b := strings.TrimSpace(base); b != "" {
+		args = append(args, b)
+	}
+	return r.raw(ctx, args...)
 }
 
 // CandidateDiff is the whole of a candidate's work, including files it created.
@@ -40,11 +55,23 @@ func (r Repo) Diff(ctx context.Context) (string, error) {
 // test that was sitting untracked on disk -- and no candidate could ever
 // converge. Intent-to-add records the new paths so they appear in the diff,
 // without staging their content; .gitignore is still honoured.
-func (r Repo) CandidateDiff(ctx context.Context) (string, error) {
+// CandidateDiff is everything the candidate changed relative to the base it was
+// cut from, whether the worker committed it or not.
+//
+// Diffing the working tree alone was wrong in a way that only appeared once a
+// worker used a capability it had been granted: local_commit is permitted, and
+// a worker that commits its work leaves a clean tree, so the candidate diff
+// came back empty and the run reported that the implementor had produced
+// nothing. It had produced everything and then tidied up.
+//
+// Diffing against the recorded base makes committed and uncommitted work look
+// the same to the reviewer, which is the only reading that matches what the
+// candidate actually contains.
+func (r Repo) CandidateDiff(ctx context.Context, base string) (string, error) {
 	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
 		return "", err
 	}
-	return r.Diff(ctx)
+	return r.Diff(ctx, base)
 }
 func (r Repo) IsClean(ctx context.Context) (bool, error) {
 	s, err := r.output(ctx, "status", "--porcelain")
@@ -84,11 +111,36 @@ func (r Repo) CreateWorktree(ctx context.Context, taskID string) (string, error)
 		return "", err
 	}
 	branch := r.WorktreeBranch(taskID)
-	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, "HEAD")
-	if b, err := cmd.CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git worktree add: %w: %s", err, strings.TrimSpace(string(b)))
+	return path, r.addWorktree(ctx, path, branch, "HEAD")
+}
+
+// CreateWorktreeAt cuts a candidate from an exact commit rather than from
+// whatever HEAD happens to mean at this instant.
+//
+// The distinction matters on re-entry: a task interrupted and resumed later
+// must continue from the base its plan was approved against, and "HEAD" is not
+// that base once anything else has been committed.
+func (r Repo) CreateWorktreeAt(ctx context.Context, taskID, baseSHA string) (string, error) {
+	base := strings.TrimSpace(baseSHA)
+	if base == "" {
+		return "", fmt.Errorf("refusing to create a candidate worktree without an explicit base commit")
 	}
-	return path, nil
+	path := r.WorktreePath(taskID)
+	if _, err := os.Stat(filepath.Join(path, ".git")); err == nil {
+		return path, nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	return path, r.addWorktree(ctx, path, r.WorktreeBranch(taskID), base)
+}
+
+func (r Repo) addWorktree(ctx context.Context, path, branch, base string) error {
+	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, base)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git worktree add: %w: %s", err, strings.TrimSpace(string(b)))
+	}
+	return nil
 }
 
 func (r Repo) RemoveWorktree(ctx context.Context, path string) error {
@@ -97,6 +149,19 @@ func (r Repo) RemoveWorktree(ctx context.Context, path string) error {
 		return fmt.Errorf("git worktree remove: %w: %s", err, strings.TrimSpace(string(b)))
 	}
 	return nil
+}
+
+// raw runs git and returns stdout exactly as produced. Use it for anything
+// whose format matters; output() is for short values where trimming helps.
+func (r Repo) raw(ctx context.Context, args ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Root}, args...)...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return stdout.String(), nil
 }
 
 func (r Repo) output(ctx context.Context, args ...string) (string, error) {
