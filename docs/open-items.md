@@ -214,10 +214,11 @@ reported as unresolved, which is exactly what they are. Disposing of them is a
 human decision about unpublished work, and making it automatically here would be
 the same mistake in a new coat.
 
-## Architect conversation parity is started, not finished
+## Architect conversation parity is implemented except its governed-run acceptance
 
-`globulario/sensei-code#9`. **Partially implemented, and the parts that are not
-done are listed here so the rest is not read as complete.**
+`globulario/sensei-code#9`. **Sections A, C, D, E, F and G are implemented.**
+What is not done is the acceptance that needs a governed run, listed at the end
+so the rest is not read as complete.
 
 Landed:
 
@@ -254,15 +255,25 @@ Also landed:
   is disclosed with the targets it dropped, because a turn that consulted four
   sources out of nine reads exactly like complete coverage.
 
-Not done, and each is a real piece of the issue:
-- **Project semantic continuity (§D).** No bounded project-level summary of
-  settled decisions, rejected alternatives and open hypotheses yet.
-- **Read-only investigation loop (§E).** The architect is told it may read; it
-  has no structured investigation surface over git, task state and Sensei.
-- **Context budget and compaction (§F).** Conversation replay is still a fixed
-  window rather than a layered packet.
+- **Standing project context, derived (§D).** `internal/project` assembles
+  recent task outcomes, unanswered authority questions and recorded decisions
+  from the session record, every turn. Nothing is stored: a maintained summary
+  is a second store of architectural claims, and it wins by being convenient the
+  moment it disagrees with Sensei. It carries references and says so, in case a
+  reference is otherwise read as a finding.
+- **Read-only investigation (§E).** `internal/investigate` is a closed allowlist
+  of git subcommands that refuses everything else by type, rather than a prompt
+  asking the architect to behave. What it cannot read it states, because a blank
+  field reads as nothing-to-report. Its paths are the ones the graph retrieval
+  selected, so repository and graph evidence are about the same subject.
+
+Not done:
+
 - **Acceptance tests 1, 4-9, 11-12** from the issue remain unwritten; several
   need a governed run, which is on hold for `#13`.
+- Remote ChatGPT-thread resume stays opportunistic, as the issue allows: the
+  architect surface reports no resumable handle today, which is exactly the case
+  the continuity record reconstructs from.
 
 ## Capability envelope is only partly enforced (P0.4)
 
