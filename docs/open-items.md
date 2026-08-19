@@ -172,27 +172,69 @@ itself. Each provider must declare what it can enforce, and a provider that
 cannot honour a required boundary must fail closed for that role rather than
 silently widening the envelope.
 
-## Upstream (Sensei): publish blast radius and approval gate structurally
+## Change risk is read structurally, and the parser is gone
 
-Sensei composes change risk as a single formatted line into
-`required_actions` — `"Change risk: blast=local, approval=none"` — in
-`golang/server/blast_radius.go:139`. The values exist as struct fields
-(`BlastRadius`, `ApprovalGate`) but are not published as structured fields on
-the preflight result, so there is no non-textual way for a consumer to obtain
-them.
+`globulario/sensei#171` published blast radius and approval gate as structured
+fields on the preflight result, which was the stated condition for deleting
+`approvalGate` in `internal/workflow/authority.go`. It is deleted. The router
+reads `change_risk.approval_gate` and `change_risk.blast_radius`, and no
+governance transition in this repository now depends on recognising a sentence.
 
-That forces the one string-reading corner of this repository's governance path:
-`approvalGate` in `internal/workflow/authority.go`. It is kept deliberately
-narrow — it matches a fixed machine-emitted token, never prose, and returns
-`"unreadable"` when it cannot find one so the caller escalates rather than
-inventing an approval class.
+Two things surfaced while doing it, and both are worth keeping.
 
-**Do not extend that parser.** When Sensei publishes `blast_radius` and
-`approval_gate` as structured fields, delete `approvalGate` and read them
-directly. A parser that grows cases is a parser that has become a contract, and
-this one must stay disposable.
+**#171 landed on the RPC and not on the surface this repository reads.** Sensei
+Code reaches Sensei only over MCP, and `structPreflight` in
+`cmd/awareness-mcp/main.go` projected the string lists while dropping
+`change_risk` entirely. Deleting the parser on the strength of the closed issue
+alone would have left the router with no verdict at all, escalating every plan
+forever with nothing to say why. Fixed upstream on `fix/mcp-publish-change-risk`
+with the same verdict published on both surfaces, and verified over the real
+wire from this repository: a scoped request decodes as `blast=local,
+gate=none`, and a fileless one as explicitly unclassified. **This repository now
+requires an `awareness-mcp` built from a Sensei carrying that fix.**
 
-Filed upstream: globulario/sensei#171.
+**The old parser failed open, not closed.** With no `Change risk:` line present
+it returned `""`, and the caller's guard read that as permission and granted
+architectural authority — while the function's own comment claimed it failed
+closed. Sensei's proto is explicit that an unspecified gate means unclassified
+and never `none`, so the structured reader escalates on an absent verdict, an
+explicitly unspecified one, and on a member this build has never seen.
+
+`internal/acceptance/change_risk_test.go` asks the deployment whether it
+publishes the fields, and skips rather than passes when the endpoint cannot
+scope this repository, so it cannot report a verdict nobody gave.
+
+## The configured Sensei endpoint is serving another repository's graph
+
+Found while verifying the above, not yet fixed. `.sensei-code/config.json`
+points this repository at `localhost:10121`, which the `sensei-code#10`
+disposition established as the sensei-code authority server. The process
+currently listening there is not that server:
+
+```text
+:10120  awareness-graph -oxigraph-url 127.0.0.1:7878 -home-domain globular
+        domains [github.com/globulario/services globular], 120243 triples
+:10121  awareness-graph -oxigraph-url 127.0.0.1:7880
+        -home-domain github.com/globulario/sensei
+        domain [github.com/globulario/sensei], 8304 triples, no -awareness-dir
+```
+
+So every preflight this repository issues is answered by the *Sensei*
+repository's graph, on a different Oxigraph store than the one the topology
+above describes. It does not error. It answers `coverage_insufficient`, which
+reads as "this region is thinly covered" rather than "you are asking a graph
+about a repository it has never seen" — the `sensei-code#10` failure class
+again, in read form: the request, the content and the id all say sensei-code,
+and only the deployment disagrees.
+
+Nothing here is proof of a defect in Sensei; it is a local deployment that
+drifted. It is recorded because it is invisible from the answers themselves,
+because it would have been read as evidence by any governed run started today,
+and because a proposal written through that endpoint has no `-awareness-dir` at
+all and would land wherever that server's default write root is.
+
+Restore the documented topology before the next governed run, and re-read
+`internal/acceptance/authority_root_test.go`'s result as the check that it took.
 
 ## Remaining first-version control-plane slices
 
@@ -202,8 +244,9 @@ force-push and candidate isolation, and open for the rest.
 
 Specified but not yet implemented: `docs/p1-repair-knowledge.md`, which lets the
 project learn the repair that actually held rather than the one a reviewer
-accepted. Blocked on globulario/sensei#172, which adds the positive counterpart
-to `forbidden_fix`.
+accepted. It was blocked on globulario/sensei#172, which has since landed
+`applied_repair` as the positive counterpart to `forbidden_fix`, so the design
+is implementable and only unimplemented.
 
 Specified but not yet implemented: `docs/p1-level-1-routine.md`, which makes
 ceremony proportional to measured risk without reducing verification. It is

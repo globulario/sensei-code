@@ -114,6 +114,14 @@ binary `doctor` fails on those three checks and `sensei-code context` fails clos
 checkout until a release carries these tools. This is a Sensei packaging lag, not a Sensei
 Code defect: no Sensei Code change can or should paper over a missing governance surface.
 
+The same build must also publish `change_risk` on the preflight tool's structured payload.
+globulario/sensei#171 added those fields to the Preflight RPC, but `structPreflight` in
+`cmd/awareness-mcp/main.go` dropped them, so an `awareness-mcp` predating the fix on
+`fix/mcp-publish-change-risk` reports no approval gate at all. The router reads an absent
+gate as unclassified and escalates, which is the correct direction to fail in and is
+nonetheless an unusable governed path. `internal/acceptance/change_risk_test.go` asks the
+deployment for it directly.
+
 ## Intentionally not yet claimed
 
 The current workflow stops at:
