@@ -36,14 +36,17 @@ go.work.sum
 # Sensei Code local, non-authoritative state
 /.sensei-code/
 
-# Sensei local Oxigraph store data. The graph-authority marker and transaction
-# files are deliberately NOT ignored: they bind a published graph identity to a
-# revision, so they are authority evidence and stay tracked, as in
-# globulario/services.
+# Sensei local Oxigraph store data.
 /.sensei/data/
-# The live-store graph identity, rewritten by every `sensei build`. It is a
-# machine-local runtime fact, not source: tracking it produced a diff on every
+# Per-checkout runtime proof artifacts, rewritten by every `sensei build` and by
+# some reads. They describe the state of one machine's live store — the closure
+# report even records an absolute source root — so they are runtime truth about
+# a process, not source about a revision. Tracking them produced a diff on every
 # build, would conflict on any branch, and dirtied the canonical checkout badly
-# enough to trip the governed dirty-tree gate. The sibling services repository
-# does not track it either.
+# enough to trip the governed dirty-tree gate. Worse, a branch checkout could
+# resurrect a stale proof and present it as current. The authored corpus is
+# docs/awareness/; .sensei/config.yaml, .sensei/project/ and .sensei/skills/
+# stay tracked. The sibling services repository ignores the same three files.
 /.sensei/graph-authority.json
+/.sensei/graph-authority.transaction.tsv
+/.sensei/graph-closure-report.json
