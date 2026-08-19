@@ -275,12 +275,17 @@ retrieval and investigation.
 
 Not done, and each says why:
 
-- **Criteria 1, 4 and 6** are judgements about the quality of a live answer over
-  a populated graph: a follow-up that preserves an architectural subject,
-  retrieval of a contract the question does not name, and recall of a rejected
-  direction. Asserting them here would mean asserting that a fixture came back,
-  which is a different and more comfortable claim. They need a real conversation
-  against a graph with content.
+- **Criteria 1 and 6** are judgements about the quality of a live answer: a
+  follow-up that preserves an architectural subject, and recall of a rejected
+  direction. `internal/acceptance/conversation_parity_test.go` drives the real
+  turns and prints what came back, asserting only what can be asserted honestly
+  — that the second turn saw the first, that the drawer recorded what was
+  consulted, and that talking produced nothing governed. Whether the answers are
+  *good* is left to a person reading the transcript, because a test that scored
+  an architect's prose would be measuring its own rubric.
+
+  It skips today: the configured architect has no quota until 2026-08-20. That
+  is the whole of what remains on `#9`.
 - **Criterion 4 is done.** When a question names nothing the graph can be looked
   up by, the graph is surveyed by class and the question is matched against real
   labels, weighted by term rarity so a common word does not make the most

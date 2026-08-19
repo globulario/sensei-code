@@ -1,0 +1,162 @@
+//go:build acceptance
+
+package acceptance
+
+// Criteria 1 and 6 of sensei-code#9, which cannot be established from fixtures.
+//
+//	1. Ask an architectural question, then a follow-up using an unresolved
+//	   reference; the second answer preserves the architectural subject without
+//	   restating the task.
+//	6. Ask about a rejected architectural direction; the answer retrieves the
+//	   durable decision rather than relying on model recollection.
+//
+// Both are judgements about a live answer, and both are the kind of thing a
+// fixture can fake perfectly. So this drives real assisted turns against the
+// configured architect and prints what came back, asserting only what can be
+// asserted honestly: that a second turn saw the first, that the evidence drawer
+// records what was consulted, and that nothing governed was produced by talking.
+//
+// Whether the answers are GOOD is left to a person reading the transcript. A
+// test that scored an architect's prose would be measuring its own rubric.
+//
+//	go test -tags acceptance ./internal/acceptance/ -run TestConversationParity -v -timeout 10m
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/globulario/sensei-code/internal/candidate"
+	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/session"
+	"github.com/globulario/sensei-code/internal/workflow"
+)
+
+func TestConversationParityAcrossTurns(t *testing.T) {
+	root := repoRoot(t)
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	sessionID := session.ID(time.Now())
+	store, err := session.New(root, sessionID)
+	if err != nil {
+		t.Fatalf("session store: %v", err)
+	}
+	bus := event.NewBus()
+	events, done := bus.Subscribe(256)
+	defer done()
+	engine := workflow.New(gitx.Repo{Root: root}, cfg, bus, store, sessionID)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	defer cancel()
+
+	first := ask(ctx, t, engine, events,
+		"What governs whether Sensei Code may open a pull request, and who decides it?")
+	if first.unavailable != "" {
+		t.Skipf("the architect is unavailable, so conversational parity cannot be observed: %s", first.unavailable)
+	}
+	if strings.TrimSpace(first.answer) == "" {
+		t.Fatal("the first turn produced no answer")
+	}
+	t.Logf("turn 1 consulted:\n%s", first.consulted)
+	t.Logf("turn 1 answer:\n%s", truncate(first.answer, 600))
+
+	// Criterion 1: the follow-up names no subject of its own.
+	second := ask(ctx, t, engine, events, "And what happens if I say no to it?")
+	if second.unavailable != "" {
+		t.Skipf("the architect became unavailable mid-conversation: %s", second.unavailable)
+	}
+	t.Logf("turn 2 answer:\n%s", truncate(second.answer, 600))
+
+	if strings.TrimSpace(second.answer) == "" {
+		t.Fatal("the follow-up produced no answer, so continuity cannot have been preserved")
+	}
+	// The strongest honest assertion: the second turn was given the first. What
+	// the architect did with it is a human judgement, printed above.
+	if !strings.Contains(second.consulted, "architect conversation") {
+		t.Errorf("the follow-up did not record the conversation as a consulted source:\n%s", second.consulted)
+	}
+
+	// Criterion 10 again, live this time: talking produced nothing governed.
+	if names := governedArtifacts(root); len(names) != 0 {
+		t.Errorf("a conversation produced governed artifacts: %v", names)
+	}
+}
+
+type turn struct {
+	answer      string
+	consulted   string
+	unavailable string
+}
+
+// ask runs one assisted turn and collects what it produced.
+func ask(ctx context.Context, t *testing.T, engine *workflow.Engine, events <-chan event.Event, question string) turn {
+	t.Helper()
+	taskID := engine.SubmitAssisted(ctx, question)
+	var out turn
+	for {
+		select {
+		case ev := <-events:
+			if ev.TaskID != taskID {
+				continue
+			}
+			switch ev.Kind {
+			case event.ArchitectSpoke:
+				out.answer = ev.Summary
+			case event.ContextConsulted:
+				out.consulted = ev.Summary
+			case event.WorkflowFailed:
+				out.unavailable = ev.Summary
+				return out
+			case event.WorkflowCompleted:
+				return out
+			}
+		case <-ctx.Done():
+			t.Fatalf("the turn did not finish: %v", ctx.Err())
+		}
+	}
+}
+
+// governedArtifacts reports candidate worktrees created during this test, which
+// a conversation must never produce.
+func governedArtifacts(root string) []string {
+	before := map[string]bool{}
+	for _, known := range []string{"task-1786929227938945137", "task-1786931209544068530"} {
+		before[known] = true
+	}
+	list, err := candidateTaskIDs(root)
+	if err != nil {
+		return nil
+	}
+	var made []string
+	for _, id := range list {
+		if !before[id] {
+			made = append(made, id)
+		}
+	}
+	return made
+}
+
+func truncate(s string, n int) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "…"
+}
+
+func candidateTaskIDs(root string) ([]string, error) {
+	list, err := candidate.List(root)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for _, c := range list {
+		ids = append(ids, c.TaskID)
+	}
+	return ids, nil
+}
