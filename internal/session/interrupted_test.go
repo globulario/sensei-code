@@ -82,3 +82,39 @@ func TestEachTaskIsJudgedSeparately(t *testing.T) {
 		t.Fatalf("got %+v, want only the interrupted task", got)
 	}
 }
+
+// A deferred Level-3 question is resumable even though no plan exists: the
+// router reaches it during architecture, before any plan is proposed. What
+// resume restores is the question, carried verbatim.
+func TestDeferredAuthorityIsResumableAndCarriesItsQuestion(t *testing.T) {
+	payload := `{"condition":"graph coverage is absent for the planned files","decision":{"subject":"Authorize?"}}`
+	got := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "widen the boundary"),
+		{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
+			Summary: "authority decision deferred", Payload: []byte(payload)},
+	})
+	if len(got) != 1 {
+		t.Fatalf("a deferred authority decision was not offered for resume: %+v", got)
+	}
+	if string(got[0].AwaitingAuthority) != payload {
+		t.Fatalf("the question was not carried verbatim:\n got %s\nwant %s", got[0].AwaitingAuthority, payload)
+	}
+}
+
+// Once answered, the task resumes as work rather than as the question it has
+// already settled.
+func TestAnsweredAuthorityIsNoLongerPending(t *testing.T) {
+	got := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "widen the boundary"),
+		{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
+			Summary: "deferred", Payload: []byte(`{"condition":"c"}`)},
+		ev("t1", event.SourceUser, event.AuthorityResolved, "Authorize the architectural change"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+	})
+	if len(got) != 1 {
+		t.Fatalf("the answered task is no longer resumable at all: %+v", got)
+	}
+	if len(got[0].AwaitingAuthority) != 0 {
+		t.Errorf("an answered question is still pending, so resume would ask it again: %s", got[0].AwaitingAuthority)
+	}
+}

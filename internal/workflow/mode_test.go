@@ -379,14 +379,14 @@ func TestAStalledCandidateStopsInsteadOfBurningCycles(t *testing.T) {
 // gate and candidate creation — and then refused the run for uncommitted
 // changes it had itself produced. The gate was right; the ordering was wrong.
 func TestTheBaseIsPinnedBeforeTheWorkflowWritesToItsOwnRepository(t *testing.T) {
-	body := funcBody(t, "internal/workflow/engine.go", "run")
+	body := funcBody(t, "internal/workflow/engine.go", "execute")
 	establish := strings.Index(body, "candidate.Establish")
 	architect := strings.Index(body, "e.resolveArchitecture")
 	if establish < 0 {
-		t.Fatal("run no longer establishes a candidate base")
+		t.Fatal("the governed run no longer establishes a candidate base")
 	}
 	if architect < 0 {
-		t.Fatal("run no longer consults the architect")
+		t.Fatal("the governed run no longer consults the architect")
 	}
 	if establish > architect {
 		t.Fatal("the base is established after the architect runs; a Level-3 resolution persisted in between dirties the tree and the base can no longer be taken")

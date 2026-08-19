@@ -112,6 +112,25 @@ invariants:
       - internal/workflow/authority_test.go:TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt
       - internal/session/interrupted_test.go:TestStoppedTaskRemainsResumable
 
+  - id: sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
+    title: The human may stop computation at any time, but only an explicit authority decision can satisfy an authority boundary
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Esc during ordinary execution stops the run. Esc at a Level-3 rendezvous defers the question instead: once the router has established that a decision is a person's, there is no architect-authorized continuation left, so a keystroke must not be able to mean no. A deferred question is recorded whole and resumed by asking it again verbatim — never by re-running the router, which could produce a different question from a graph that moved and satisfy a boundary nobody was asked about. Ctrl+C stays an operating-system escape hatch and is not part of the governance protocol."
+    protects:
+      files:
+        - internal/workflow/
+        - internal/workflow/engine.go
+        - internal/session/store.go
+    required_tests:
+      - internal/workflow/engine_test.go:TestDeferredAuthorityIsItsOwnTransition
+      - internal/workflow/engine_test.go:TestDeferralCallsNoOneAfterwards
+      - internal/workflow/engine_test.go:TestResumeRestoresTheDeferredQuestionWithoutRerouting
+      - internal/workflow/engine_test.go:TestOnlyAChosenOptionSatisfiesAnAuthorityBoundary
+      - internal/session/interrupted_test.go:TestDeferredAuthorityIsResumableAndCarriesItsQuestion
+
   - id: sensei_code.workflow.context_never_widens_worker_scope
     title: Shared context explains why a change was asked for and never enlarges what may be changed
     severity: critical

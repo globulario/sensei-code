@@ -2,12 +2,14 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/decision"
@@ -277,7 +279,13 @@ func TestReviewerSeesExecutedEvidenceNotAWorkerReport(t *testing.T) {
 // property is about what the code cannot do: the governed run has exactly two
 // paths that put a decision to a person, and neither of them sits here.
 func TestRunDoesNotAskForRoutinePlanApproval(t *testing.T) {
-	body := funcBody(t, "internal/workflow/engine.go", "run")
+	// The governed run is entered through run and carried out by execute; the
+	// property is about the path, so both are read.
+	entry := funcBody(t, "internal/workflow/engine.go", "run")
+	if !strings.Contains(entry, "execute") {
+		t.Fatal("run no longer delegates to execute; this test would be reading the wrong function")
+	}
+	body := entry + " " + funcBody(t, "internal/workflow/engine.go", "execute")
 
 	// The plan is still shown. Removing the ceremony must not remove the
 	// information: a human who cannot see the plan cannot decide to stop.
@@ -449,4 +457,213 @@ func functionsIn(t *testing.T, rel string) []string {
 		}
 	}
 	return out
+}
+
+// The four properties of a deferred Level-3 decision.
+//
+// Once the router establishes an authority condition there is no
+// architect-authorized continuation left. The human may decline to answer now —
+// that is theirs — but declining must not become a third answer, and the
+// question they eventually answer must be the one they were asked.
+
+// 1. Esc at an authority boundary produces the deferral transition, not a
+// failure and not a stop.
+func TestDeferredAuthorityIsItsOwnTransition(t *testing.T) {
+	bus := event.NewBus()
+	events, done := bus.Subscribe(16)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+
+	decided := make(chan error, 1)
+	go func() {
+		_, err := e.awaitChoice(context.Background(), nil, "task-1",
+			"graph coverage is absent for the planned files", "dom", "base",
+			authority.Decision{Level: authority.Human, Subject: "Authorize?", Options: level3Options()},
+			level3Options())
+		decided <- err
+	}()
+
+	waitForPending(t, e, "task-1")
+	if !e.DeferAuthority("task-1") {
+		t.Fatal("a task waiting at an authority boundary refused the deferral")
+	}
+	if err := <-decided; !errors.Is(err, errAuthorityDeferred) {
+		t.Fatalf("deferral produced %v, want errAuthorityDeferred", err)
+	}
+
+	kinds := drain(events)
+	if !hasKind(kinds, event.WorkflowAwaitingAuthority) {
+		t.Errorf("no awaiting-authority transition was recorded: %v", kinds)
+	}
+	for _, wrong := range []event.Kind{event.WorkflowFailed, event.WorkflowStopped, event.AuthorityResolved} {
+		if hasKind(kinds, wrong) {
+			t.Errorf("deferring emitted %s, which claims something the human did not do: %v", wrong, kinds)
+		}
+	}
+}
+
+// 2. Nothing is consulted after the deferral. The run ends where it stood.
+func TestDeferralCallsNoOneAfterwards(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "awaitChoice")
+	defer_ := strings.Index(body, "errAuthorityDeferred")
+	if defer_ < 0 {
+		t.Fatal("awaitChoice no longer returns the deferral")
+	}
+	// The deferral branch must return before the resolution machinery: no
+	// proposal to Sensei, no persisted resolution, no stop-option handling.
+	prefix := body[:defer_]
+	for _, forbidden := range []string{"authority.Persist", "senseiProposer", "isStopOption"} {
+		if strings.Contains(prefix, forbidden) {
+			t.Errorf("the deferral path reaches %s; deferring must resolve nothing", forbidden)
+		}
+	}
+	// And the run must not report it as an outcome: reportOutcome is how a task
+	// tells the behavioural record what happened, and nothing happened.
+	fail := funcBody(t, "internal/workflow/engine.go", "execute")
+	if i := strings.Index(fail, "errAuthorityDeferred"); i < 0 {
+		t.Error("the governed run does not recognise a deferred decision")
+	}
+}
+
+// 3. Resuming asks the same question, and does not re-derive it.
+func TestResumeRestoresTheDeferredQuestionWithoutRerouting(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "resumeAuthority")
+	for _, forbidden := range []string{"routeAuthority", "routePlan", "certifyStart", "resolveArchitecture", "awareness_preflight"} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("resuming a deferred decision reaches %s; the question must be restored, not re-derived", forbidden)
+		}
+	}
+	if !strings.Contains(body, "awaitChoice") {
+		t.Error("resuming a deferred decision does not ask it again")
+	}
+
+	// The recorded question survives a round trip through the session record
+	// with its condition and options intact.
+	original := DeferredAuthority{
+		Condition: "graph coverage is absent for the planned files",
+		Domain:    "github.com/globulario/sensei-code",
+		BaseSHA:   "1bc39f29a7a2",
+		Decision: authority.Decision{
+			Level: authority.Human, Subject: "Authorize this architectural change?",
+			Options: level3Options(),
+		},
+	}
+	raw, err := json.Marshal(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restored DeferredAuthority
+	if err := json.Unmarshal(raw, &restored); err != nil {
+		t.Fatal(err)
+	}
+	if restored.Condition != original.Condition || restored.BaseSHA != original.BaseSHA {
+		t.Fatalf("the restored question is not the one asked: %+v", restored)
+	}
+	if len(restored.Decision.Options) != len(original.Decision.Options) {
+		t.Fatalf("options were lost in the record: %+v", restored.Decision.Options)
+	}
+	for i, opt := range restored.Decision.Options {
+		if opt.ID != original.Decision.Options[i].ID || opt.Label != original.Decision.Options[i].Label {
+			t.Errorf("option %d changed across the record: %+v", i, opt)
+		}
+	}
+}
+
+// 4. Only an explicit chosen option moves the workflow past the boundary.
+func TestOnlyAChosenOptionSatisfiesAnAuthorityBoundary(t *testing.T) {
+	e := &Engine{Bus: event.NewBus(), SessionID: "s1", pending: map[string]chan string{}}
+
+	type outcome struct {
+		choice string
+		err    error
+	}
+	results := make(chan outcome, 1)
+	go func() {
+		choice, err := e.awaitChoice(context.Background(), nil, "task-1", "a condition", "dom", "base",
+			authority.Decision{Level: authority.Human, Subject: "Authorize?", Options: level3Options()},
+			level3Options())
+		results <- outcome{choice, err}
+	}()
+	waitForPending(t, e, "task-1")
+
+	// Deferring does not satisfy it.
+	if !e.DeferAuthority("task-1") {
+		t.Fatal("the deferral was refused")
+	}
+	got := <-results
+	if got.choice != "" {
+		t.Fatalf("deferring produced a choice %q, so the boundary was satisfied without an answer", got.choice)
+	}
+
+	// Neither does an option nobody offered.
+	go func() {
+		choice, err := e.awaitChoice(context.Background(), nil, "task-2", "a condition", "dom", "base",
+			authority.Decision{Level: authority.Human, Subject: "Authorize?", Options: level3Options()},
+			level3Options())
+		results <- outcome{choice, err}
+	}()
+	waitForPending(t, e, "task-2")
+	if !e.ResolveHuman("task-2", "7") {
+		t.Fatal("the answer was not delivered")
+	}
+	if got := <-results; got.err == nil || got.choice != "" {
+		t.Fatalf("an option that was never offered satisfied the boundary: %+v", got)
+	}
+
+	// An offered option does.
+	go func() {
+		choice, err := e.awaitChoice(context.Background(), nil, "task-3", "", "dom", "base",
+			authority.Decision{Level: authority.Human, Subject: "Authorize?", Options: level3Options()},
+			level3Options())
+		results <- outcome{choice, err}
+	}()
+	waitForPending(t, e, "task-3")
+	if !e.ResolveHuman("task-3", "2") {
+		t.Fatal("the answer was not delivered")
+	}
+	if got := <-results; got.err != nil || !strings.HasPrefix(got.choice, "2:") {
+		t.Fatalf("an explicit answer did not move the workflow past the boundary: %+v", got)
+	}
+}
+
+func level3Options() []authority.Option {
+	return []authority.Option{
+		{ID: "1", Label: "Preserve current human-owned intent and require another design"},
+		{ID: "2", Label: "Authorize the architectural change described above"},
+	}
+}
+
+func waitForPending(t *testing.T, e *Engine, taskID string) {
+	t.Helper()
+	for i := 0; i < 200; i++ {
+		e.mu.Lock()
+		_, ok := e.pending[taskID]
+		e.mu.Unlock()
+		if ok {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("%s never reached the authority rendezvous", taskID)
+}
+
+func drain(events <-chan event.Event) []event.Kind {
+	var kinds []event.Kind
+	for {
+		select {
+		case ev := <-events:
+			kinds = append(kinds, ev.Kind)
+		default:
+			return kinds
+		}
+	}
+}
+
+func hasKind(kinds []event.Kind, want event.Kind) bool {
+	for _, k := range kinds {
+		if k == want {
+			return true
+		}
+	}
+	return false
 }
