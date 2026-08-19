@@ -112,6 +112,24 @@ invariants:
       - internal/workflow/authority_test.go:TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt
       - internal/session/interrupted_test.go:TestStoppedTaskRemainsResumable
 
+  - id: sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal
+    title: A candidate is kept or removed by decision, and its evidence is recorded before anything is removed
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Every governed task creates a worktree and a branch, and a candidate nobody resolved means nothing in particular — which turns recovery from disk into archaeology and erodes the value of an exact persisted base. So each candidate reaches a stated disposition from a closed vocabulary, retention carries the reason that kept it, and nothing is removed before its base, diff and audit evidence are written down. Automatic removal is reached only by a candidate whose own recorded evidence says it holds no work: deleting on exit would perform the deletion half of a publication decision the system correctly refuses to make."
+    protects:
+      files:
+        - internal/candidate/
+        - internal/candidate/disposition.go
+        - internal/workflow/engine.go
+    required_tests:
+      - internal/candidate/disposition_test.go:TestRemovalRequiresEvidenceThatOutlivesTheCandidate
+      - internal/candidate/disposition_test.go:TestRetentionStatesItsReason
+      - internal/candidate/disposition_test.go:TestDispositionVocabularyIsClosed
+      - internal/workflow/engine_test.go:TestOnlyAnEmptyCandidateIsRemovedAutomatically
+
   - id: sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
     title: The human may stop computation at any time, but only an explicit authority decision can satisfy an authority boundary
     severity: critical

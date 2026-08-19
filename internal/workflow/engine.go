@@ -1554,8 +1554,13 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			e.reportUndeliveredNotes(taskID)
 			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
-			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-				"candidate kept for inspection at "+workspace, nil))
+			// Accepted and unpublished. Retention here is a decision with a
+			// reason, not the absence of a cleanup: this candidate holds work
+			// nobody has agreed to land, and publication is human-owned.
+			e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+				Disposition: candidate.Retained,
+				Reason:      "accepted by review and unpublished; landing it is the human's decision",
+			})
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "candidate ready for governed admission", map[string]any{
 				"workspace":   workspace,
 				"implementor": worker.Name,
@@ -1567,13 +1572,100 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		}
 	}
 
-	// Nothing converged, but the candidate is not thrown away. It carries the
-	// accumulated work and the reviewer's outstanding findings, which is what a
-	// person needs to finish it or to judge whether it was worth starting.
-	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-		"candidate kept so the work is not lost: "+workspace, nil))
+	// Nothing converged. Whether the candidate survives that is decided by what
+	// it contains, not by how the run ended: a candidate holding work is kept
+	// because deleting it would destroy something recoverable, and one holding
+	// nothing is removed because keeping it would leave a directory of things
+	// that mean nothing in particular. Neither branch is a default.
 	e.reportUndeliveredNotes(taskID)
+	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
+		"no bounded implementor converged and the candidate holds no work")
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
+}
+
+// candidateEvidence is what survives a candidate, assembled from what the run
+// actually observed rather than from what it intended.
+func candidateEvidence(identity candidate.Identity, tc *taskContext) candidate.Evidence {
+	snapshot := tc.EvidenceSnapshot
+	return candidate.Evidence{
+		BaseSHA:        identity.BaseSHA,
+		DiffBytes:      snapshot.DiffBytes,
+		ChangedPaths:   snapshot.ChangedPaths,
+		AuditVerdict:   snapshot.AuditVerdict,
+		AuditDetail:    snapshot.AuditDetail,
+		ProducedNoWork: snapshot.DiffBytes == 0 && len(snapshot.ChangedPaths) == 0,
+	}
+}
+
+// resolveCandidate records a terminal disposition and says so out loud.
+//
+// A disposition that fails to record is reported rather than swallowed: the
+// whole point is that a candidate can say why it is still here, and a silent
+// failure returns it to meaning nothing.
+func (e *Engine) resolveCandidate(taskID string, identity candidate.Identity, tc *taskContext, r candidate.Resolution) (candidate.Identity, bool) {
+	r.Evidence = candidateEvidence(identity, tc)
+	resolved, err := identity.Resolve(e.Repo.Root, r)
+	if err != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"candidate disposition not recorded: "+err.Error(), nil))
+		return identity, false
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateResolved, resolved.Resolution.Summary(), resolved.Resolution))
+	return resolved, true
+}
+
+// disposeIfEmpty removes a candidate that produced nothing, and keeps one that
+// produced something.
+//
+// The asymmetry is deliberate and is the safety property: automatic removal is
+// only ever reached by a candidate whose own recorded evidence says it holds no
+// work. Anything else is retained as resumable, with the reason attached, for a
+// person or a later run to dispose of deliberately.
+//
+// Evidence is written before git is touched. If the removal then fails, the
+// record says the disposition was disposed and the worktree is still present,
+// which is a fact somebody can act on — where deleting first and recording
+// second loses precisely the case that needs explaining.
+func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity candidate.Identity, tc *taskContext, workspace, reason string) {
+	evidence := candidateEvidence(identity, tc)
+	if !evidence.ProducedNoWork {
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			"candidate kept so the work is not lost: "+workspace, nil))
+		e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+			Disposition: candidate.Resumable,
+			Reason:      "the run did not converge and the candidate holds work that resumable state references",
+		})
+		return
+	}
+
+	resolved, ok := e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+		Disposition: candidate.Disposed,
+		Reason:      reason,
+	})
+	if !ok {
+		// The record refused, so nothing is removed. An unrecorded disposal is
+		// the gap this mechanism exists to prevent.
+		return
+	}
+	r := *resolved.Resolution
+	if err := e.Repo.RemoveWorktree(ctx, workspace); err != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+			"candidate worktree not removed: "+err.Error(), nil))
+	} else {
+		r.WorktreeRemoved = true
+	}
+	if branch := strings.TrimSpace(identity.Branch); branch != "" && r.WorktreeRemoved {
+		if err := e.Repo.DeleteBranch(ctx, branch); err != nil {
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+				"candidate branch not deleted: "+err.Error(), nil))
+		} else {
+			r.BranchRemoved = true
+		}
+	}
+	if _, err := resolved.Resolve(e.Repo.Root, r); err != nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"candidate disposition not updated after removal: "+err.Error(), nil))
+	}
 }
 
 // resumeAuthority re-asks a Level-3 question that was deferred, exactly as it

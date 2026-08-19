@@ -87,6 +87,11 @@ var Registry = []Command{
 		Detail:  "The architect reads Sensei's evidence for the target and proposes a bounded plan, then carries it out under the same governed execution /run authorizes. Nothing is published without your decision.",
 	},
 	{
+		Name: "/candidates", Kind: Understand, NeedsIdle: true,
+		Summary: "what candidates exist, and why each one is still here",
+		Detail:  "Lists every recorded candidate with its terminal disposition and the reason for it. A candidate reported as unresolved is one nobody decided anything about, which is different from one deliberately retained.",
+	},
+	{
 		Name: "/learn", Arg: "<what broke>", Kind: Record, NeedsIdle: true,
 		Summary: "record a scar so the next agent cannot repeat it",
 		Detail:  "Queues a typed failure mode for Sensei's review queue. This is how a mistake stops being repeated instead of being fixed again.",

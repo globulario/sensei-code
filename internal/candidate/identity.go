@@ -67,6 +67,10 @@ type Identity struct {
 	Worktree         string    `json:"worktree"`
 	Branch           string    `json:"branch"`
 	CreatedAt        time.Time `json:"created_at"`
+	// Resolution is what became of this candidate. It is absent while the task
+	// is live, and absent afterwards is the defect it exists to remove: a
+	// worktree nobody resolved means nothing in particular.
+	Resolution *Resolution `json:"resolution,omitempty"`
 }
 
 // Summary is the one-line form for a transcript or a pull request body.
