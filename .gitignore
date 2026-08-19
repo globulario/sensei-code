@@ -50,3 +50,14 @@ go.work.sum
 /.sensei/graph-authority.json
 /.sensei/graph-authority.transaction.tsv
 /.sensei/graph-closure-report.json
+
+# Derived project inference, and the one file in .sensei/project/ that cannot be
+# tracked honestly. Its binding names an exact revision, so committing it makes
+# it wrong the moment anything else is committed: the artifact would claim to
+# describe a commit that no longer exists in the branch's tip, and every
+# receipt built from it would inherit that claim. Keeping it current in git
+# would mean regenerating 13 MB on every commit. It is regenerable from the
+# revision it names, and must be regenerated from a CLEAN tree — generating it
+# from a dirty one binds working-tree facts to HEAD and reports them as
+# resolved (globulario/sensei#216).
+/.sensei/project/claims.yaml
