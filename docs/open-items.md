@@ -467,6 +467,37 @@ It clears with a republication of the affected domain from its own corpus:
 cd <services checkout> && sensei build --repo github.com/globulario/services
 ```
 
+## Executing the admission chain needs a claims corpus, not only a provider
+
+`globulario/sensei-code#22`. The chain itself is composed and tested
+(`internal/admission`): argv, wiring between steps, and Sensei's exit-code
+vocabulary. What has never run is the chain.
+
+Two prerequisites, discovered by attempting it rather than by reasoning about
+it, and they are independent:
+
+**Project inference has not been run here.** Sensei's producer path refuses at
+its first step:
+
+```text
+sensei prepare-change: task input incomplete: inference not run;
+expected .sensei/project/claims.yaml
+```
+
+Neither `.sensei/project/claims.yaml` nor `.sensei/gate-policy.yaml` exists. The
+convergence bundle admission evaluates is built from an architecture claims
+document, and that document comes from onboarding inference over this codebase.
+
+It must not be fabricated to make the chain run. A claims corpus invented to
+satisfy `prepare-change` would produce a convergence session about a project
+that does not exist, and every receipt after it would be valid and meaningless —
+the same failure as composing a bundle by hand, moved one step earlier.
+
+**The architect has no quota.** Sensei Code's own governed path stops at the
+first agent: `You've hit your usage limit … try again at Aug 20th, 2026 9:58 AM`.
+The run before that point is healthy — workspace composition complete, domain
+resolved, preflight authoritative — which is itself new.
+
 ## Remaining first-version control-plane slices
 
 All P0 slices from `docs/first-working-version-review.md` are implemented, with
