@@ -48,6 +48,10 @@ const (
 	AgentStarted      Kind = "agent.started"
 	AgentFinished     Kind = "agent.finished"
 	CandidateChanged  Kind = "candidate.changed"
+	// CandidateResolved records a candidate's terminal disposition: what became
+	// of the worktree and branch, and why. A candidate with no such event is
+	// one nobody resolved.
+	CandidateResolved Kind = "candidate.resolved"
 	CandidateAudited  Kind = "candidate.audited"
 	// ValidationRun records checks the broker executed against a candidate.
 	ValidationRun     Kind = "validation.run"

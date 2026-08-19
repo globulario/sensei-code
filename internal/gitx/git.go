@@ -143,6 +143,22 @@ func (r Repo) addWorktree(ctx context.Context, path, branch, base string) error 
 	return nil
 }
 
+// DeleteBranch removes a candidate branch. It is deliberately the forceful
+// form: a candidate branch is never merged anywhere by this program, so git's
+// "not fully merged" refusal would block every legitimate disposal. What makes
+// that safe is not the flag but the caller — a branch is only ever deleted
+// after its evidence has been recorded.
+func (r Repo) DeleteBranch(ctx context.Context, name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("no branch named to delete")
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "branch", "-D", name)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("git branch -D %s: %w: %s", name, err, strings.TrimSpace(string(b)))
+	}
+	return nil
+}
+
 func (r Repo) RemoveWorktree(ctx context.Context, path string) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "remove", "--force", path)
 	if b, err := cmd.CombinedOutput(); err != nil {

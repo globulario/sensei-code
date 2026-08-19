@@ -133,21 +133,43 @@ missing until a rebuild was finally required.
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
 
-## Candidate worktrees have no terminal lifecycle
+## Candidate worktrees reach a stated disposition
 
-`globulario/sensei-code#12`.
+`globulario/sensei-code#12`. **Implemented.**
 
-Every governed task creates a worktree and a branch and nothing ever resolves
-them; seven accumulated in one day of acceptance runs. The problem is not disk
-but meaning: recovery reads candidate and task state from disk, so
-undifferentiated leftovers turn "resume the interrupted task" into archaeology,
-and a candidate stops meaning anything specific.
+Every governed task created a worktree and a branch and nothing ever resolved
+them; seven accumulated in one day of acceptance runs, six dead and one holding
+real unpublished work, with nothing telling them apart. The cost was never disk.
+Recovery reads candidate and task state from disk, so undifferentiated leftovers
+turned "resume the interrupted task" into archaeology.
 
-Deleting on exit is the wrong fix — it would have destroyed the accepted
-candidate, whose work is unpublished and human-owned. What is needed is
-disposition: retain an accepted-but-unpublished candidate, clean up an adopted
-or rejected one, retain a failed one only while resumable state references it,
-and reference the evidence before removing anything.
+A candidate now carries a terminal `Resolution` in the same durable record as
+its base: a disposition from a closed vocabulary — `retained`, `adopted`,
+`rejected`, `superseded`, `resumable`, `disposed` — with the reason for it and
+the evidence that survives it. Two properties are enforced rather than intended:
+
+- **Evidence is recorded before anything is removed.** Base, changed paths, diff
+  size and audit verdict are written first, so a cleaned-up candidate leaves a
+  record rather than a gap. A disposal whose git step then fails records that
+  the worktree is still present, which is a fact somebody can act on.
+- **Retention is a decision with a reason.** An accepted, unpublished candidate
+  is `retained` because landing it is the human's decision — not because nobody
+  deleted it.
+
+Automatic removal is reached only by a candidate whose own recorded evidence
+says it produced no work. Anything holding work is `resumable`, with the reason
+attached, for a person to dispose of deliberately. Deleting on exit would have
+performed the deletion half of the publication decision the system correctly
+refuses to make.
+
+`/candidates` lists what exists and why, and reports a candidate nobody decided
+about as **unresolved** rather than describing it as retained.
+
+**The existing backlog is deliberately untouched.** The eight candidates from
+before this landed — including the accepted `task-1786929227938945137` — are
+reported as unresolved, which is exactly what they are. Disposing of them is a
+human decision about unpublished work, and making it automatically here would be
+the same mistake in a new coat.
 
 ## Capability envelope is only partly enforced (P0.4)
 

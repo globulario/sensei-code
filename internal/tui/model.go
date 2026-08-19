@@ -17,6 +17,7 @@ import (
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/architect"
 	"github.com/globulario/sensei-code/internal/authority"
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/command"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/mcpconfig"
@@ -993,6 +994,12 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		case "/debt":
 			text, err := architect.RunDebt(engine.Repo.Root, 12)
 			return commandResultMsg{name: c.Name, text: text, err: err}
+		case "/candidates":
+			list, err := candidate.List(engine.Repo.Root)
+			if err != nil {
+				return commandResultMsg{name: c.Name, err: err}
+			}
+			return commandResultMsg{name: c.Name, text: candidate.Render(list)}
 		case "/setup":
 			// Report only. The checks carry their repairs so `sensei-code setup
 			// --apply` can act on the same report, but none is invoked here: a
