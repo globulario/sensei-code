@@ -281,11 +281,21 @@ Not done, and each says why:
   direction. Asserting them here would mean asserting that a fixture came back,
   which is a different and more comfortable claim. They need a real conversation
   against a graph with content.
-- **Criterion 4 is also an implementation gap, not only a test gap.** Retrieval
-  routes on what the question names structurally — a path or a governed id. A
-  question that describes a contract without naming it retrieves nothing today,
-  and the turn correctly reports that nothing was retrieved rather than
-  inventing an answer. Semantic selection is the next slice.
+- **Criterion 4 is done.** When a question names nothing the graph can be looked
+  up by, the graph is surveyed by class and the question is matched against real
+  labels, weighted by term rarity so a common word does not make the most
+  generic node win. Verified live in
+  `internal/acceptance/semantic_retrieval_test.go`: "what stops a worker from
+  widening the scope it was given?" reaches
+  `context_never_widens_worker_scope`, and "can this thing merge my pull
+  request by itself?" reaches `publication.never_merges`.
+
+  What it does not do is understand the question. Lexical selection finds nodes
+  sharing distinctive words, which is not the same as ranking by which one
+  answers — "who decides" is a strong signal for a node about deciding even when
+  the question is about candidates. Retrieval hands the architect real governed
+  knowledge to read and says which terms selected it; it does not pretend to
+  have understood.
 - Remote ChatGPT-thread resume stays opportunistic, as the issue allows: the
   architect surface reports no resumable handle today, which is exactly the case
   the continuity record reconstructs from.

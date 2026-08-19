@@ -143,6 +143,30 @@ func renderRetrieved(outcomes []retrieval.Outcome) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// surveyPlan asks the graph what it holds and matches the question against it.
+//
+// This is the fallback, not the default: a question that names a path or an id
+// gets that exact lookup, and only a question that names nothing reaches here.
+// The survey is bounded per class for the same reason every other bound exists
+// — an unbounded one would spend a conversational turn reading the whole graph.
+func surveyPlan(reader retrieval.Caller, domain, question string) (retrieval.Plan, retrieval.SurveyOutcome) {
+	var nodes []retrieval.Node
+	for _, class := range retrieval.SurveyClasses {
+		name, args := retrieval.SurveyQuery(class, surveyLimit)
+		if d := strings.TrimSpace(domain); d != "" {
+			args["domain"] = d
+		}
+		res, err := reader.CallTool(name, args)
+		if err != nil {
+			continue
+		}
+		nodes = append(nodes, retrieval.NodesFrom(res.Structured)...)
+	}
+	matches := retrieval.Select(question, nodes, semanticBudget)
+	return retrieval.Plan{Queries: retrieval.Queries(matches), Budget: semanticBudget},
+		retrieval.SurveyOutcome{Surveyed: len(nodes), Matched: len(matches)}
+}
+
 // retrievedTargets is the file targets the graph retrieval selected, reused so
 // repository evidence is about the same subject.
 func retrievedTargets(outcomes []retrieval.Outcome) []string {
@@ -187,6 +211,14 @@ func (e *Engine) sessionEvents() []event.Event {
 // dropped.
 const retrievalBudget = 4
 
+// surveyLimit bounds one class survey, and semanticBudget bounds how many of
+// its matches become lookups. Both are small: the survey exists to find the two
+// or three nodes a question is actually about, not to read the graph aloud.
+const (
+	surveyLimit    = 40
+	semanticBudget = 2
+)
+
 // senseiReader adapts the Sensei client to retrieval's read-only surface.
 //
 // The adapter exists so the retrieval package cannot reach a writing tool even
@@ -227,6 +259,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	var observations []string
 	var consulted assist.Consulted
 	var retrieved []retrieval.Outcome
+	var surveyed retrieval.SurveyOutcome
 	domain := ""
 	workspaceEvidence, preflightEvidence := "(unavailable)", "(unavailable)"
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
@@ -281,6 +314,17 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		// "what governs the thing being asked about", which is a different
 		// question and the one the human actually asked.
 		plan := retrieval.PlanFor(task, retrievalBudget)
+		if len(plan.Queries) == 0 {
+			// The question named nothing the graph can be looked up by. Ask it
+			// what it holds and match the question against real labels, rather
+			// than reporting silence about a region the graph may cover under
+			// words the human did not happen to use.
+			plan, surveyed = surveyPlan(senseiReader{sc}, domain, task)
+			if surveyed.Surveyed >= 0 && len(plan.Queries) == 0 {
+				observations = append(observations, surveyed.Describe())
+				consulted.Add(assist.Observation{Source: "graph survey", State: assist.EmptyProven, Reason: surveyed.Describe()})
+			}
+		}
 		if len(plan.Queries) != 0 {
 			retrieved = retrieval.Execute(senseiReader{sc}, domain, plan)
 			for _, o := range retrieved {
