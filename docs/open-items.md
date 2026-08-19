@@ -171,6 +171,47 @@ reported as unresolved, which is exactly what they are. Disposing of them is a
 human decision about unpublished work, and making it automatically here would be
 the same mistake in a new coat.
 
+## Architect conversation parity is started, not finished
+
+`globulario/sensei-code#9`. **Partially implemented, and the parts that are not
+done are listed here so the rest is not read as complete.**
+
+Landed:
+
+- **Durable conversation identity** (`internal/continuity`). The architect
+  process starts fresh every turn, so continuity is recorded — but what is
+  recorded is identity, not content: which architect, which provider handle,
+  which repository base, how many turns. There is deliberately no field that
+  could hold a decision. A local file that could carry one would be a second,
+  weaker governance store, and the first time it disagreed with Sensei the
+  disagreement would be invisible.
+- **Stated reconstruction.** A thread that cannot be resumed — a different
+  architect, or a provider that issued no handle — produces a specific reason,
+  and the turn tells the architect it is reconstructing from the session record
+  and Sensei rather than from remembered dialogue. A repository that moved under
+  a continuing conversation is reported as well; that is not a loss of
+  continuity but it is a fact the architect must have.
+- **The evidence drawer** (`assist.Consulted`). Every assisted turn emits which
+  sources it consulted and what state each was in, using the same typed
+  vocabulary as the context packet. It is emitted on healthy turns too: a
+  provenance surface that only appears when something is wrong is one nobody
+  learns to read. A source that failed appears as a source that failed, because
+  a retrieval failure that silently drops out is model memory wearing the
+  graph's clothes.
+
+Not done, and each is a real piece of the issue:
+
+- **Relevance-driven retrieval (§C).** The turn still injects workspace status
+  and a broad preflight rather than selecting evidence from the question.
+- **Project semantic continuity (§D).** No bounded project-level summary of
+  settled decisions, rejected alternatives and open hypotheses yet.
+- **Read-only investigation loop (§E).** The architect is told it may read; it
+  has no structured investigation surface over git, task state and Sensei.
+- **Context budget and compaction (§F).** Conversation replay is still a fixed
+  window rather than a layered packet.
+- **Acceptance tests 1, 4-9, 11-12** from the issue remain unwritten; several
+  need a governed run, which is on hold for `#13`.
+
 ## Capability envelope is only partly enforced (P0.4)
 
 **Done.** `internal/broker` mechanically enforces three capabilities for a

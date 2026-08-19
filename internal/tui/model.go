@@ -519,6 +519,12 @@ func renderEvent(e event.Event) string {
 		prefix = senseiStyle.Render("◆ DECISION")
 		indent = "  "
 	}
+	if e.Kind == event.ContextConsulted {
+		// Collapsed with the rest of the activity by default. It is there to be
+		// checked when an answer looks wrong, not to be read every turn.
+		prefix = dimStyle.Render("· CONTEXT")
+		indent = "  "
+	}
 	if e.Kind == event.ChangeReported {
 		prefix = senseiStyle.Render("◆ CHANGE REPORT")
 		indent = "  "

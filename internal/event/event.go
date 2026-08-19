@@ -45,9 +45,14 @@ const (
 	GuidanceDelivered Kind = "guidance.delivered"
 	Output            Kind = "output"
 	SenseiResult      Kind = "sensei.result"
-	AgentStarted      Kind = "agent.started"
-	AgentFinished     Kind = "agent.finished"
-	CandidateChanged  Kind = "candidate.changed"
+	// ContextConsulted is the evidence drawer for one turn: which sources were
+	// consulted and what state each was in. It is emitted even when everything
+	// was fine, because a provenance surface that only appears on failure is
+	// one nobody learns to read.
+	ContextConsulted Kind = "context.consulted"
+	AgentStarted     Kind = "agent.started"
+	AgentFinished    Kind = "agent.finished"
+	CandidateChanged Kind = "candidate.changed"
 	// CandidateResolved records a candidate's terminal disposition: what became
 	// of the worktree and branch, and why. A candidate with no such event is
 	// one nobody resolved.

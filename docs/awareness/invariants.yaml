@@ -112,6 +112,23 @@ invariants:
       - internal/workflow/authority_test.go:TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt
       - internal/session/interrupted_test.go:TestStoppedTaskRemainsResumable
 
+  - id: sensei_code.conversation.continuity_is_identity_never_memory
+    title: A conversation that cannot be resumed says so, and remembered dialogue never becomes evidence
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "The architect process starts fresh every turn, so continuity has to be recorded — but what is recorded is identity, not content. A stored provider handle is a continuity hint and never an authority claim, and the local record carries no field that could hold a decision, because a second weaker governance store disagrees with Sensei invisibly. When the thread cannot be resumed the turn states the loss specifically and reconstructs from the session record and Sensei, rather than answering as though the conversation survived. Every turn can show which sources it consulted and in what state, and a source that failed appears as a source that failed."
+    protects:
+      files:
+        - internal/continuity/
+        - internal/assist/
+        - internal/workflow/assisted.go
+    required_tests:
+      - internal/continuity/continuity_test.go:TestALostThreadIsStatedAndSpecific
+      - internal/continuity/continuity_test.go:TestTheRecordCannotCarryGovernanceContent
+      - internal/assist/packet_test.go:TestTheDrawerShowsFailedSourcesRatherThanOmittingThem
+
   - id: sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal
     title: A candidate is kept or removed by decision, and its evidence is recorded before anything is removed
     severity: critical
