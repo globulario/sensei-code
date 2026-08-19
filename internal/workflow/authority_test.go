@@ -308,3 +308,36 @@ func TestArchitectDecisionCarriesClaims(t *testing.T) {
 		t.Fatalf("claim fields did not decode: %+v", d.Claims[0])
 	}
 }
+
+// TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt states the rule
+// that keeps discovery from becoming a question.
+//
+// A worker that learns something mid-task should let the architect revise the
+// plan, and a revision that stays inside the region Sensei already certified is
+// the architect's to make. Only a revision that reaches outside it becomes an
+// authority question — and then the interruption names the region, not the
+// revision.
+func TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt(t *testing.T) {
+	// The revised plan drops a step and touches the same certified region.
+	inside := scopedPreflight(t, `{
+		"status": "PREFLIGHT_STATUS_OK",
+		"direct_invariants": [{"id":"invariant:covered.region","label":"covered","severity":"critical","status":"active"}],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
+		`+healthyAuthority+`
+	}`)
+	revised := []Claim{{Statement: "step C is unnecessary", About: "internal/workflow", Source: "graph"}}
+	if got := routeAuthority(inside, revised); got.Route != RouteArchitectural {
+		t.Fatalf("a revision inside the certified envelope interrupted a human: %+v", got)
+	}
+
+	// The revision now reaches a region the graph does not cover. Sensei was
+	// asked about the new file set and answered; that answer is what escalates.
+	outside := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
+	got := routeAuthority(outside, revised)
+	if got.Route != RouteHuman {
+		t.Fatalf("a revision reaching outside the certified region did not ask: %+v", got)
+	}
+	if !strings.Contains(got.Condition, "coverage") {
+		t.Errorf("the interruption does not name the region that caused it: %q", got.Condition)
+	}
+}

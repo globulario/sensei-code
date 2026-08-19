@@ -105,8 +105,8 @@ type Interrupted struct {
 func FindInterrupted(events []event.Event) []Interrupted {
 	type partial struct {
 		Interrupted
-		approved bool
-		done     bool
+		planned bool
+		done    bool
 	}
 	order := []string{}
 	byTask := map[string]*partial{}
@@ -129,13 +129,25 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		case event.TaskCreated:
 			p.Task = e.Summary
 		case event.PlanProposed:
+			// A bounded plan is what makes a task resumable: /resume re-enters
+			// implementation with it, and a task that never got one has nothing
+			// to continue.
+			//
+			// This used to key off AuthorityResolved, from the approval prompt
+			// that stood between the plan and the worker. Removing that prompt
+			// removed the event, and with it every governed task's claim to be
+			// resumable — a stopped run would have been unrecoverable, which is
+			// exactly what a stop must not be. The signal is the plan, not the
+			// human's yes to it.
 			p.Plan = e.Summary
-		case event.AuthorityResolved:
-			// Only an approved plan is worth resuming; a task still waiting on
-			// a human decision has produced no work to continue.
-			p.approved = true
+			p.planned = true
 		case event.WorkflowCompleted, event.WorkflowFailed:
 			p.done = true
+		case event.WorkflowStopped:
+			// Deliberately not terminal. A stop is the human withdrawing
+			// attention, and the whole point of leaving the candidate as it
+			// stands is that it can be picked back up.
+
 		}
 		if e.Source == event.SourceReviewer && e.Kind == event.Status && strings.TrimSpace(e.Summary) != "" {
 			p.Review = e.Summary
@@ -144,7 +156,7 @@ func FindInterrupted(events []event.Event) []Interrupted {
 	var out []Interrupted
 	for _, id := range order {
 		p := byTask[id]
-		if p.approved && !p.done && strings.TrimSpace(p.Task) != "" {
+		if p.planned && !p.done && strings.TrimSpace(p.Task) != "" {
 			out = append(out, p.Interrupted)
 		}
 	}

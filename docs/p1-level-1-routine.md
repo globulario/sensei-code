@@ -3,7 +3,7 @@
 ## The problem
 
 A one-file test change currently travels the whole governed path: architect →
-claims → authority router → Level-3 escalation → plan approval → candidate →
+claims → authority router → Level-3 escalation → candidate →
 worker → diff audit → reviewer. That is correct for architecture-sensitive work
 and disproportionate for a typo, and disproportionate ceremony is not a
 cosmetic complaint. It trains a person to approve without reading, which
@@ -23,10 +23,18 @@ isolation, diff audit, reviewer — is cheap, and all of it still runs on a
 routine change. Human attention is expensive, and it should be spent only where
 authority is genuinely needed.
 
-A Level-1 change therefore skips the *plan-approval prompt* and the *Level-3
-escalation*. It skips nothing else. A typo is still isolated in a candidate,
-still audited by Sensei, still reviewed, and still cannot be accepted over a
-refusal. What changes is that nobody is woken up about it.
+A Level-1 change therefore skips the *Level-3 escalation*. It skips nothing
+else. A typo is still isolated in a candidate, still audited by Sensei, still
+reviewed, and still cannot be accepted over a refusal. What changes is that
+nobody is woken up about it.
+
+**Half of this landed ahead of the slice.** The plan-approval prompt this
+document also proposed skipping has since been removed for *all* work, not only
+routine work: `/run` is the authorization, and the prompt produced no evidence,
+made no decision the router had not already made, and recorded nothing durable
+(`sensei_code.workflow.execution_is_authorized_once_at_run`). What remains for
+Level-1 is the escalation — the harder and more valuable half, because it is the
+one that requires telling a routine change from an architectural one.
 
 Anything that reduces verification is out of scope for this slice and should be
 refused if proposed as part of it.
@@ -51,7 +59,7 @@ All must hold. Any one absent means the change is not routine.
 | 5 | `blind_spots` empty | Sensei is not reporting that it cannot see |
 | 6 | `blast=local` and `approval=none` | Sensei's own risk classification, not ours |
 | 7 | `awareness_edit_check` returns no forbidden-fix match | the shape is not a known-broken repair |
-| 8 | every changed path is one the approved plan named | scope did not widen after the decision |
+| 8 | every changed path is one the plan named | scope did not widen after the decision |
 | 9 | no claim carries `source: "inference"` | the architect itself reported an unverified premise |
 
 Conditions 1–7 are read from Sensei. Condition 8 is read from the candidate
@@ -131,8 +139,8 @@ real runs rather than intuition. If nothing qualifies for a month, the answer is
 to invest in graph coverage, not to loosen the conditions.
 
 **Stage 2 — act.** Only after stage 1 shows the classifier firing on changes a
-human agrees were routine, and only then, does `RouteRoutine` skip the approval
-prompt.
+human agrees were routine, and only then, does `RouteRoutine` skip the Level-3
+escalation.
 
 Shipping stage 2 without stage 1 would mean granting a privilege before knowing
 how often it fires or on what.
@@ -141,7 +149,7 @@ how often it fires or on what.
 
 **Auditable.** Every routine-classified change records the exact conditions that
 qualified it. `/report` must be able to answer "show me everything that skipped
-approval, and why." A privilege that cannot be enumerated afterwards is not
+escalation, and why." A privilege that cannot be enumerated afterwards is not
 governed.
 
 **Not a configuration flag.** There must be no setting that enables Level-1
@@ -207,7 +215,7 @@ Written to fail first, as with the P0 slices.
 
 **Dark run**
 
-- stage 1 emits the classification without skipping the approval prompt;
+- stage 1 emits the classification without skipping any interruption;
 - the emitted decision names every qualifying condition and, when blocked, the
   first condition that failed;
 - `/report` reports the counts and the blocking-condition breakdown.
