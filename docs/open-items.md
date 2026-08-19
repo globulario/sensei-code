@@ -152,6 +152,50 @@ missing until a rebuild was finally required.
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
 
+## `infer-claims` binds a working tree to a commit that does not contain it
+
+`globulario/sensei#216`, found while clearing `sensei-code#22`'s first
+prerequisite on 2026-08-19. Recorded because the document it produces is
+self-certifying and wrong in a way nothing downstream can detect.
+
+`sensei infer-claims` scans the **working tree** and binds every claim and every
+fact receipt to `git rev-parse HEAD`, with `revision_status: resolved`. On a
+dirty checkout the two disagree, and the document says so with confidence:
+
+```text
+run against this repository with 26 modified/untracked files:
+  binding.revision        ed56eb10c647   revision_status: resolved
+  claims                  2982
+  fact receipts           7978
+  ...of which citing internal/roles/   146 claims, 283 receipts
+  git ls-tree ed56eb10c647 -- internal/roles   ->   0 files
+```
+
+So 283 receipts carry a `source_digest`, a `source_file`, a line range and
+`revision_status: resolved` for bytes that do not exist at the revision they are
+bound to. The same run against a clean checkout of the same commit produces
+2724 claims and 7317 receipts, none of them naming those files, and the binding
+becomes true.
+
+**This is the same shape as `sensei-code#10` and the `-store-url` case, a fourth
+time.** Several signals agree — the revision resolves, the digests are real, the
+files are really there on disk — and one silent decider disagrees with all of
+them. A caller cannot notice, because every field it would check says
+`resolved`.
+
+The fix is upstream and it is a choice, not a bug with one answer: either scan
+the committed revision, or keep scanning the working tree and report the revision
+as `dirty` rather than `resolved`. Reporting is enough — an unbound corpus that
+says it is unbound is usable, and a bound one that is wrong is not. The second
+repair is also the smaller one, and it matches what `infer-claims` already does
+for an unresolved graph digest, which it reports as a *blocking* limitation
+rather than pretending.
+
+**Worked around here, not fixed:** `.sensei/project/claims.yaml` was generated
+from a throwaway `git worktree` at `ed56eb10c647`, so its binding is true. It
+must be regenerated from a clean tree whenever HEAD moves, and regenerating it
+from a dirty one silently reintroduces the defect.
+
 ## Governed runs are on hold until globulario/sensei#176
 
 `sensei-code#13`. Two servers sharing one Oxigraph store cannot both hold
@@ -570,22 +614,51 @@ vocabulary. What has never run is the chain.
 Two prerequisites, discovered by attempting it rather than by reasoning about
 it, and they are independent:
 
-**Project inference has not been run here.** Sensei's producer path refuses at
-its first step:
+**Project inference has now been run, and the first prerequisite is cleared.**
+It was reached without a provider and without fabricating anything: `sensei
+infer-claims` is offline and deterministic, and derives claims from repository
+evidence rather than authoring them.
 
 ```text
-sensei prepare-change: task input incomplete: inference not run;
-expected .sensei/project/claims.yaml
+.sensei/project/claims.yaml
+  2724 claims from 7317 fact receipts, each carrying source file, line range,
+  source digest and an extractor
+  binding: revision ed56eb10c647 (resolved) · graph digest 7918a04b1909 (resolved)
+  limitations: 1, non-blocking — governed direction bridge inactive (--graph-nt
+  not supplied)
 ```
 
-Neither `.sensei/project/claims.yaml` nor `.sensei/gate-policy.yaml` exists. The
-convergence bundle admission evaluates is built from an architecture claims
-document, and that document comes from onboarding inference over this codebase.
+The blocking limitation the first run reported — `graph digest is not resolved`
+— cleared once this repository's own authoritative server was up and its live
+digest was supplied. That is not a formality: an unbound claims corpus would
+have produced a convergence session that could not say which rules it was
+judged under.
 
-It must not be fabricated to make the chain run. A claims corpus invented to
-satisfy `prepare-change` would produce a convergence session about a project
-that does not exist, and every receipt after it would be valid and meaningless —
-the same failure as composing a bundle by hand, moved one step earlier.
+Two things about this document that a later reader should not have to rediscover:
+
+- **It describes `ed56eb10c647`, not the working tree.** It was generated from a
+  clean throwaway worktree, for the reason recorded above, and it is stale the
+  moment HEAD moves.
+- **It is 13 MB and derived.** Whether it belongs in git is an open question and
+  deliberately not decided here: it is regenerable from the commit it names, and
+  a large regenerable artifact in history is a cost somebody should choose on
+  purpose.
+
+`prepare-change` no longer refuses for want of inference. It now asks for the
+next inputs:
+
+```text
+sensei prepare-change: --graph-nt is required; at least one --file
+operation:path scope anchor is required
+```
+
+**The `--graph-nt` snapshot is the next prerequisite, and reaching it has a
+hazard.** `sensei rebuild` generates `awareness.nt`, and by default it writes
+into the paired awareness-graph repository's `embeddata/` and PUTs to
+`http://localhost:7878/store?default` — which is the services store. Producing
+this repository's snapshot with it, without `-no-runtime-reload` and an explicit
+output path, would repeat the custody mistake recorded three times in this file.
+Not attempted.
 
 **The architect has no quota.** Sensei Code's own governed path stops at the
 first agent: `You've hit your usage limit … try again at Aug 20th, 2026 9:58 AM`.
