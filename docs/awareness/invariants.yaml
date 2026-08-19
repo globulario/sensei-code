@@ -112,6 +112,23 @@ invariants:
       - internal/workflow/authority_test.go:TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt
       - internal/session/interrupted_test.go:TestStoppedTaskRemainsResumable
 
+  - id: sensei_code.retrieval.selection_routes_a_query_and_never_creates_a_claim
+    title: Retrieval is selected by the question, bounded out loud, and an empty answer is reported rather than widened
+    severity: high
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "A conversational turn selects evidence from what the question names rather than injecting the same broad reads every time. Reading the question routes a lookup and decides nothing: if the graph has never heard of the target, the turn reports that it was asked and had nothing, and does not widen the query until something comes back or fall through to inference. Only Sensei's typed read surfaces are reachable, never a free-form query and never a writing tool. Every bound is stated, because a turn that consulted four sources out of nine reads exactly like complete coverage to whoever trusts the answer."
+    protects:
+      files:
+        - internal/retrieval/
+        - internal/workflow/assisted.go
+    required_tests:
+      - internal/retrieval/retrieval_test.go:TestSelectionRoutesLookupsFromWhatTheQuestionNames
+      - internal/retrieval/retrieval_test.go:TestAnEmptyAnswerIsReportedRatherThanWidened
+      - internal/retrieval/retrieval_test.go:TestTheBudgetIsBoundedAndSaysWhatItDropped
+      - internal/retrieval/retrieval_test.go:TestOnlyTypedReadSurfacesAreReachable
+
   - id: sensei_code.conversation.continuity_is_identity_never_memory
     title: A conversation that cannot be resumed says so, and remembered dialogue never becomes evidence
     severity: high

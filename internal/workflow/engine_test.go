@@ -221,7 +221,7 @@ func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
 // one. The prompt builder changed; what it must promise the human did not.
 func TestArchitectConversationPromptIsHumanFacing(t *testing.T) {
 	got := assistedPrompt("/repo", "example.com/x", "ChatGPT", "Should this boundary move?", "",
-		nil, "workspace evidence", "preflight evidence")
+		nil, "workspace evidence", "preflight evidence", "(none)")
 	for _, want := range []string{
 		"speaking directly with the human",
 		"precise,\nconcrete, technically rich",
