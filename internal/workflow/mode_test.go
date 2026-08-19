@@ -210,17 +210,17 @@ func funcBody(t *testing.T, rel, name string) string {
 }
 
 // TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge guards the boundary
-// P0.6 could easily blur. Approving a plan and agreeing to open a pull request
-// are product confirmations, not answers to questions the graph could not
-// settle, and proposing them as contracts would fill Sensei's review queue with
-// restatements of the user interface.
+// P0.6 could easily blur. Agreeing to open a pull request is a product
+// confirmation, not an answer to a question the graph could not settle, and
+// proposing it as a contract would fill Sensei's review queue with restatements
+// of the user interface.
 func TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge(t *testing.T) {
 	body := fileText(t, "internal/workflow/engine.go")
 	// The persistence call must be reached only under a condition check.
 	if !strings.Contains(body, "authority.Persist") {
 		t.Fatal("resolutions are no longer submitted to Sensei at all")
 	}
-	for _, caller := range []string{"approvePlan", "offerPullRequest"} {
+	for _, caller := range []string{"offerPullRequest"} {
 		fn := funcBody(t, "internal/workflow/engine.go", caller)
 		if strings.Contains(fn, "authority.Persist") {
 			t.Errorf("%s proposes a governance contract for an ordinary confirmation", caller)
@@ -379,14 +379,14 @@ func TestAStalledCandidateStopsInsteadOfBurningCycles(t *testing.T) {
 // gate and candidate creation — and then refused the run for uncommitted
 // changes it had itself produced. The gate was right; the ordering was wrong.
 func TestTheBaseIsPinnedBeforeTheWorkflowWritesToItsOwnRepository(t *testing.T) {
-	body := funcBody(t, "internal/workflow/engine.go", "run")
+	body := funcBody(t, "internal/workflow/engine.go", "execute")
 	establish := strings.Index(body, "candidate.Establish")
 	architect := strings.Index(body, "e.resolveArchitecture")
 	if establish < 0 {
-		t.Fatal("run no longer establishes a candidate base")
+		t.Fatal("the governed run no longer establishes a candidate base")
 	}
 	if architect < 0 {
-		t.Fatal("run no longer consults the architect")
+		t.Fatal("the governed run no longer consults the architect")
 	}
 	if establish > architect {
 		t.Fatal("the base is established after the architect runs; a Level-3 resolution persisted in between dirties the tree and the base can no longer be taken")

@@ -284,7 +284,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed {
+		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed ||
+			e.Kind == event.WorkflowStopped || e.Kind == event.WorkflowAwaitingAuthority {
 			m.busy = false
 			m.pending = nil
 			m.pendingTask = ""
@@ -350,6 +351,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key == "ctrl+c" {
 				return m, tea.Quit
 			}
+			if key == "esc" {
+				// Esc at an authority boundary defers the question; it does not
+				// answer it. Once Sensei has established that this decision is
+				// a person's, there is no architect-authorized continuation
+				// left, so a keystroke must not be able to mean "no" — that
+				// would be a third answer nobody gave. The question is kept
+				// whole and /resume asks it again.
+				if !m.engine.DeferAuthority(m.pendingTask) {
+					return m, tea.Batch(cmds...)
+				}
+				m.pending = nil
+				m.pendingTask = ""
+				m.busy = false
+				m.lines = append(m.lines, dimStyle.Render("deferred · the question stands, /resume asks it again"), "")
+				cmds = append(cmds, tea.ClearScreen)
+				return m, tea.Batch(cmds...)
+			}
 			for _, option := range m.pending.Options {
 				if key == option.ID {
 					if m.engine.ResolveHuman(m.pendingTask, option.ID) {
@@ -367,6 +385,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "esc":
+			// The human's "no" during a governed run. There is no approval
+			// prompt to decline any more, so this is where withdrawing
+			// attention happens — and it has to reach the worker process
+			// rather than merely stop drawing, or the interface would be
+			// lying about what it just did.
+			//
+			// Nothing is cleaned up: the candidate stays as it stands, so the
+			// work can be resumed. Esc on an assisted turn does nothing, and
+			// says so, because a conversation has nothing to withdraw.
+			if !m.busy || m.currentTask == "" {
+				return m, tea.Batch(cmds...)
+			}
+			if !m.engine.Stop(m.currentTask) {
+				return m, tea.Batch(cmds...)
+			}
+			m.lines = append(m.lines, dimStyle.Render("stopped · the candidate is left as it stands, /resume picks it up"), "")
+			cmds = append(cmds, tea.ClearScreen)
+			return m, tea.Batch(cmds...)
 		case "shift+tab", "ctrl+o":
 			m.mode = (m.mode + 1) % 2
 			m.verbose = m.mode == modeAutoStreaming
@@ -495,6 +532,17 @@ func renderEvent(e event.Event) string {
 	}
 	if e.Kind == event.WorkflowFailed {
 		prefix = errorStyle.Render("✗ FAILED")
+		indent = "  "
+	}
+	if e.Kind == event.WorkflowAwaitingAuthority {
+		prefix = dimStyle.Render("◇ DEFERRED")
+		indent = "  "
+	}
+	if e.Kind == event.WorkflowStopped {
+		// Not styled as an error. Nothing went wrong; the human changed their
+		// mind, and rendering that in red would teach them that stopping is a
+		// fault rather than a normal use of their own authority.
+		prefix = dimStyle.Render("■ STOPPED")
 		indent = "  "
 	}
 	if e.Kind == event.WorkflowCompleted {
@@ -675,7 +723,8 @@ func max(a, b int) int {
 // few lines the human actually needs to read.
 func isConversation(e event.Event) bool {
 	switch e.Kind {
-	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed:
+	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
+		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority:
 		return true
 	case event.GuidanceDelivered:
 		return true
@@ -884,7 +933,7 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		return m, tea.ClearScreen
 	case "/resume":
 		if len(m.resumable) == 0 {
-			m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was interrupted after its plan was approved"), "")
+			m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was left mid-flight or holding a deferred decision"), "")
 			return m, tea.ClearScreen
 		}
 		task := m.resumable[len(m.resumable)-1]
@@ -909,8 +958,8 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 			m.lines = append(m.lines, dimStyle.Render("/refactor needs a target: /refactor internal/tui"), "")
 			return m, tea.ClearScreen
 		}
-		// A refactor is a change, so it goes through the same plan-and-approve
-		// path as any other task rather than round the side of it.
+		// A refactor is a change, so it goes through the same governed path as
+		// any other task rather than round the side of it.
 		m.busy = true
 		m.startedAt = time.Now()
 		m.frame = 0

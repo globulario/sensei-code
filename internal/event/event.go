@@ -55,6 +55,22 @@ const (
 	AuthorityResolved Kind = "authority.resolved"
 	WorkflowFailed    Kind = "workflow.failed"
 	WorkflowCompleted Kind = "workflow.completed"
+	// WorkflowStopped is the human withdrawing from a running task. It is its
+	// own transition rather than a flavour of failure: a stop proves nothing
+	// about the work, and the candidate it leaves behind is resumable, where a
+	// failed one is not.
+	WorkflowStopped Kind = "workflow.stopped"
+	// WorkflowAwaitingAuthority is a Level-3 question the human declined to
+	// answer now. It is not a stop and not an answer.
+	//
+	// Once the router establishes a genuine authority condition there is no
+	// architect-authorized continuation left, so deferring cannot mean "no" —
+	// that would let a keystroke manufacture a third answer the human never
+	// gave. What it means is that the question stands, unchanged, until they
+	// choose one of its options. The payload carries the question verbatim so
+	// resuming asks the same one rather than re-deriving it from a graph that
+	// may have moved.
+	WorkflowAwaitingAuthority Kind = "workflow.awaiting_authority"
 )
 
 type Event struct {

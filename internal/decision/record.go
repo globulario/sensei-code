@@ -15,11 +15,71 @@ import (
 	"strings"
 )
 
+// Owner is who authorized the work a decision records. It is a closed
+// vocabulary of two, because there are exactly two authorities in this system:
+// the architect deciding inside a region Sensei certified, and the human
+// answering a question Sensei could not settle.
+type Owner string
+
+const (
+	// Architectural means the authority router granted the plan and no human
+	// was asked. The human's contribution was authorizing the task itself.
+	Architectural Owner = "architectural"
+	// Human means a Level-3 condition reached a person and they answered it.
+	Human Owner = "human"
+)
+
+// Authority is the provenance of a decision: who decided, on what basis, and
+// what the human actually authorized.
+//
+// It is a type rather than a sentence because the sentence was wrong. The
+// engine used to send the fixed string "Accepted by the human in an interactive
+// Sensei Code session" with every decision, which was true while a rendezvous
+// stood between the plan and the worker and became false the moment Level-2
+// work began flowing without one. A record that overstates who approved
+// something is worse than no record: it makes a human look like they personally
+// signed off on every implementation detail, and a later agent reads that as
+// precedent.
+type Authority struct {
+	Owner Owner
+	// CertifiedBy identifies the graph that certified the region, so a reader
+	// can tell which body of knowledge the grant rested on.
+	CertifiedBy string
+	// DecidedBy names the agent that decided, when the owner is architectural.
+	DecidedBy string
+	// HumanGrant is what the human actually authorized. For an architectural
+	// decision that is the task itself, not the plan.
+	HumanGrant string
+	// Condition is the certifiability condition a human was asked about, and
+	// Resolution is the option they chose. Both are empty unless Owner is
+	// Human.
+	Condition  string
+	Resolution string
+}
+
+// Describe renders the provenance as the context Sensei stores. Keys are fixed
+// and machine-readable, because the next reader of this line is as likely to be
+// an agent as a person.
+func (a Authority) Describe() string {
+	parts := []string{"decision_authority: " + string(a.Owner)}
+	add := func(key, value string) {
+		if v := strings.TrimSpace(value); v != "" {
+			parts = append(parts, key+": "+v)
+		}
+	}
+	add("certified_by", a.CertifiedBy)
+	add("decided_by", a.DecidedBy)
+	add("human_authorization", a.HumanGrant)
+	add("condition", a.Condition)
+	add("resolution", a.Resolution)
+	return strings.Join(parts, "; ")
+}
+
 // Record is one accepted architectural decision, in the shape Sensei requires.
 type Record struct {
 	Title        string
 	Rationale    string
-	Context      string
+	Authority    Authority
 	Consequences string
 	SourceFiles  []string
 	Invariants   []string
@@ -52,6 +112,15 @@ func (r Record) Validate() error {
 	if len(r.Invariants) == 0 && len(r.Failures) == 0 {
 		return ErrNotLinked
 	}
+	// An unattributed decision is not a smaller record, it is a misleading one:
+	// every reader has to guess who authorized the work, and the safe guess is
+	// the wrong one.
+	switch r.Authority.Owner {
+	case Architectural, Human:
+	default:
+		return fmt.Errorf("decision needs an authority owner (%s or %s), got %q",
+			Architectural, Human, r.Authority.Owner)
+	}
 	return nil
 }
 
@@ -68,7 +137,7 @@ func (r Record) Args() []string {
 		// shares the store; promotion stays a deliberate human step.
 		"--no-rebuild",
 	}
-	if c := strings.TrimSpace(r.Context); c != "" {
+	if c := strings.TrimSpace(r.Authority.Describe()); c != "" {
 		args = append(args, "--context", c)
 	}
 	if c := strings.TrimSpace(r.Consequences); c != "" {
