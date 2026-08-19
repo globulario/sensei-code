@@ -390,3 +390,33 @@ func TestAStalePacketIsCarriedButNeverCalledEvidence(t *testing.T) {
 		t.Fatal("a proven empty was treated as not graph-backed")
 	}
 }
+
+// A source that failed must appear as a source that failed. Retrieval failure
+// that silently drops out of the drawer becomes model memory wearing the
+// graph's clothes: the answer looks equally well-founded either way.
+func TestTheDrawerShowsFailedSourcesRatherThanOmittingThem(t *testing.T) {
+	var c Consulted
+	c.Add(Observation{Source: "workspace status", State: Present, Reason: "github.com/globulario/sensei-code"})
+	c.Add(Observation{Source: "preflight", State: Unavailable, Reason: "connection refused"})
+
+	if !c.Degraded() {
+		t.Error("a turn missing its preflight did not report as degraded")
+	}
+	out := c.Render()
+	for _, want := range []string{"workspace status", "preflight", "unavailable", "connection refused"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the drawer does not show %q:\n%s", want, out)
+		}
+	}
+
+	// A turn where everything held is still rendered, so the surface is one a
+	// person has seen before the day it matters.
+	var fine Consulted
+	fine.Add(Observation{Source: "preflight", State: EmptyProven, Reason: "the graph answered and found nothing"})
+	if fine.Degraded() {
+		t.Error("a proven-empty answer was reported as degradation; absence of governance is not absence of evidence")
+	}
+	if !strings.Contains(fine.Render(), "empty-proven") {
+		t.Errorf("a healthy turn renders no state:\n%s", fine.Render())
+	}
+}

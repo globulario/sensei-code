@@ -21,7 +21,9 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/assist"
 	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/continuity"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/sensei"
@@ -138,16 +140,19 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	// the opposite of the governed path and correct for the same reason:
 	// authority differs, so what an unavailable answer costs differs too.
 	var observations []string
+	var consulted assist.Consulted
 	domain := ""
 	workspaceEvidence, preflightEvidence := "(unavailable)", "(unavailable)"
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
 	if err != nil {
 		observations = append(observations, "Sensei is unavailable for this turn ("+err.Error()+"), so nothing below is graph-backed.")
+		consulted.Add(assist.Observation{Source: "sensei", State: assist.Unavailable, Reason: err.Error()})
 	} else {
 		defer sc.Close()
 		workspaceStatus, wsErr := sc.CallTool("sensei_workspace_status", map[string]any{"repo": e.Repo.Root})
 		if wsErr != nil {
 			observations = append(observations, "Sensei workspace status is unavailable: "+wsErr.Error())
+			consulted.Add(assist.Observation{Source: "workspace status", State: assist.Unavailable, Reason: wsErr.Error()})
 		} else {
 			workspaceEvidence = firstText(workspaceStatus)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, workspaceEvidence, workspaceStatus.Structured))
@@ -155,9 +160,13 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 				domain = status.Binding.RepositoryDomain
 				if !status.Permits() {
 					observations = append(observations, "workspace identity is incomplete: "+status.Diagnostic())
+					consulted.Add(assist.Observation{Source: "workspace status", State: assist.Stale, Reason: status.Diagnostic()})
+				} else {
+					consulted.Add(assist.Observation{Source: "workspace status", State: assist.Present, Reason: domain})
 				}
 			} else {
 				observations = append(observations, "workspace status could not be read as a verdict: "+decodeErr.Error())
+				consulted.Add(assist.Observation{Source: "workspace status", State: assist.Unavailable, Reason: decodeErr.Error()})
 			}
 		}
 
@@ -169,6 +178,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 			preflightEvidence = firstText(preflight)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence, preflight.Structured))
 			if decision, decodeErr := sensei.DecodePreflight(preflight); decodeErr == nil {
+				consulted.Add(preflightSource(decision))
 				if !decision.Authority.Certifiable() {
 					// The one thing an assisted turn must never do quietly.
 					observations = append(observations, "Sensei cannot vouch for its own graph right now ("+
@@ -177,7 +187,23 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 			}
 		} else {
 			observations = append(observations, "Sensei preflight is unavailable: "+pfErr.Error())
+			consulted.Add(assist.Observation{Source: "preflight", State: assist.Unavailable, Reason: pfErr.Error()})
 		}
+	}
+
+	// Continuity is established before the architect speaks, and its verdict is
+	// carried into the prompt. An architect that has silently lost the thread
+	// answers exactly like one that still has it, so the loss has to be said.
+	thread := continuity.Load(e.Repo.Root)
+	base := repositoryHead(ctx, e.Repo)
+	resumption := thread.Continues(e.Config.Architect.Name, base)
+	consulted.Add(assist.Observation{
+		Source: "architect conversation",
+		State:  continuityPresence(resumption),
+		Reason: resumption.Describe(),
+	})
+	if resumption.State != continuity.Continued {
+		observations = append(observations, resumption.Describe())
 	}
 
 	conversation := e.conversationSoFar(task, 40)
@@ -202,7 +228,51 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		return
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, answer, nil))
+	// The evidence drawer is emitted for every turn, including the turns where
+	// everything was fine. A provenance surface that only appears when
+	// something is wrong is one nobody learns to read.
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
+	if err := thread.Record(e.Config.Architect.Name, result.SessionID, base, time.Now().UTC()).Save(e.Repo.Root); err != nil {
+		// Losing the record costs continuity on the next turn and nothing else,
+		// so it is reported rather than raised.
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"architect conversation identity not recorded: "+err.Error(), nil))
+	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
+}
+
+// continuityPresence maps a resumption onto the typed availability vocabulary
+// the rest of the packet uses, so the drawer reads in one language.
+func continuityPresence(r continuity.Resumption) assist.Presence {
+	switch r.State {
+	case continuity.Continued:
+		if r.BaseMoved {
+			return assist.Stale
+		}
+		return assist.Present
+	case continuity.Reconstructed:
+		// Not "unavailable": the conversation was rebuilt and the turn is
+		// answerable. Absent is the honest word — what is missing is the prior
+		// dialogue, not the ability to answer.
+		return assist.Absent
+	default:
+		return assist.EmptyProven
+	}
+}
+
+// preflightSource states what the graph could actually vouch for, rather than
+// recording that a call returned.
+func preflightSource(d sensei.PreflightDecision) assist.Observation {
+	switch {
+	case !d.Authority.Certifiable():
+		return assist.Observation{Source: "preflight", State: assist.Stale, Reason: d.Authority.Diagnostic()}
+	case d.Status == sensei.PreflightOK:
+		return assist.Observation{Source: "preflight", State: assist.Present, Reason: string(d.Status)}
+	case d.Status == sensei.PreflightEmpty:
+		return assist.Observation{Source: "preflight", State: assist.EmptyProven, Reason: "the graph answered and found nothing governing this question"}
+	default:
+		return assist.Observation{Source: "preflight", State: assist.Absent, Reason: d.Diagnostic()}
+	}
 }
 
 // assistedPrompt asks for an answer, not a plan.
