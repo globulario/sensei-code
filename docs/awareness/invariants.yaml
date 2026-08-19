@@ -165,6 +165,22 @@ invariants:
       - internal/continuity/continuity_test.go:TestTheRecordCannotCarryGovernanceContent
       - internal/assist/packet_test.go:TestTheDrawerShowsFailedSourcesRatherThanOmittingThem
 
+  - id: sensei_code.admission.the_chain_is_senseis_and_only_it_establishes_admission
+    title: Sensei Code composes the canonical admission chain and never decides admission itself
+    severity: critical
+    status: active
+    repo: github.com/globulario/sensei-code
+    domain: repo
+    description: "Admission evaluates a convergence bundle, which is Sensei's synthesis output; composing something bundle-shaped locally would produce records that satisfy the schema and mean nothing. So Sensei Code builds argv for synthesis-admit, admit-change, synthesis-apply and verify-admission, wires each step to what the previous one wrote, and reads exit codes — it decides nothing. Only admit-change establishes admission: reviewer acceptance does not, a passing diff audit does not, and a chain that ran without error does not. Admission is permission to attempt rather than proof of correctness, and scope compliance is not correctness certification. A refusal is distinguished from a broken toolchain, and an exit code this build does not recognise is reported as unrecognised rather than mapped onto an existing meaning."
+    protects:
+      files:
+        - internal/admission/
+    required_tests:
+      - internal/admission/admission_test.go:TestTheChainWiresEachStepToWhatThePreviousOneWrote
+      - internal/admission/admission_test.go:TestOnlyTheDecidingStepEstablishesAdmission
+      - internal/admission/admission_test.go:TestRefusalAndBreakageAreDistinguished
+      - internal/admission/admission_test.go:TestMissingInputsAreRefusedRatherThanGuessed
+
   - id: sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal
     title: A candidate is kept or removed by decision, and its evidence is recorded before anything is removed
     severity: critical

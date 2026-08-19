@@ -134,9 +134,14 @@ It does **not** yet claim:
 
 - canonical Sensei convergence bundle creation/binding for the candidate
 - sealed Sensei candidate artifact lifecycle
-- `sensei_workspace_admit_change` invocation with the exact canonical request artifacts
+- **invocation** of the chain: `internal/admission` composes the exact argv for
+  `synthesis-admit` -> `admit-change` -> `synthesis-apply` -> `verify-admission`,
+  wires each step to what the previous one wrote, and reads Sensei's exit
+  vocabulary, but nothing has yet run it end to end (see `sensei-code#22`).
+  Composing the chain is not admission: only `admit-change` establishes that, and
+  this repository must never compute it
 - application of the exact admitted artifact into the governed target
-- `sensei_workspace_verify_admission` on the observed result
+- proof that the applied result stayed inside the admitted envelope
 - proof/runtime evidence completion
 - `complete_task` terminal completion
 - Git commit/push/PR from the interactive workflow
