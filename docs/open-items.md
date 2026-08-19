@@ -5,10 +5,29 @@
 ```text
 P0 control-plane slices:        9/9 implemented (P0.1-P0.8, plus P0.9 discovered by the canary)
 unit/structural tests:          green
-integrated governed acceptance: PASS @ 1bc39f29a7a2
+integrated governed acceptance: SUPERSEDED — see below
+blocked on:                     sensei-code#13, which prevents a governed run today
 known enforcement gap:          per-provider process sandbox (see below)
-upstream dependencies:          globulario/sensei#171, #172
+upstream dependencies:          globulario/sensei#171, #172, #173, #174, #175
 ```
+
+**The acceptance is superseded, not merely stale.** The PASS at `1bc39f29a7a2`
+happened and is described faithfully below, but it was obtained under a
+deployment later shown to be wrong about custody — and that same
+misconfiguration was masking an ordering defect, by writing this repository's
+governance into another repository and so keeping this tree artificially clean.
+The run passed partly *because* of the fault it failed to reveal.
+
+Three things changed afterwards and none has been re-established end to end:
+custody was corrected (`sensei-code#10`), the candidate base was pinned before
+the workflow mutates its own repository, and mutual authority exclusion between
+two servers sharing one store was discovered (`sensei-code#13`).
+
+So the mechanisms are proven and the composition is not. Anyone reading this
+record should treat P0 as implemented and unaccepted until a governed run
+reaches ACCEPT under the topology actually in use. Recording it as PASS would be
+the same overstated receipt this system exists to refuse, written by the system
+about itself.
 
 The accepted run, `task-1786929227938945137`, went the whole distance without
 bypass: certifiable start, authority escalated once and answered, resolution
@@ -132,6 +151,30 @@ missing until a rebuild was finally required.
 `globulario/sensei#174` — `task_status` fails with ENOENT when `.sensei/tasks`
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
+
+## Governed runs are on hold until globulario/sensei#176
+
+`sensei-code#13`. Two servers sharing one Oxigraph store cannot both hold
+authority: a build of one registered domain recomputes the global marker and
+regenerates the proof set only for that domain, leaving every other domain
+vouching for a publication that no longer exists. Demonstrated in both
+directions.
+
+The fix is upstream and is a property of publication, not of deployment:
+
+> A build of one registered domain must not invalidate the authority proofs of
+> other registered domains in the same graph store.
+
+Separate stores would keep custody and fracture the graph; one shared server
+would keep the graph and reinstate the custody defect proved in
+`sensei-code#10`. Neither trade is worth making, and the second would restore a
+green light by hiding the class of bug that invalidated the earlier acceptance.
+
+**Until #176 lands, do not start a governed run in this repository.** Each one
+takes authority away from the services server that another workstream depends
+on. This is a constraint of the shared substrate, not a policy choice. Assisted
+mode is unaffected: it reads, and says so when the graph cannot vouch for
+itself.
 
 ## Candidate worktrees have no terminal lifecycle
 
