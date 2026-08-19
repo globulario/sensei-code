@@ -246,7 +246,7 @@ func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 	// After promotion the same question is covered, and no human is asked.
 	covered := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
-		"required_actions": ["Change risk: blast=local, approval=none"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		"direct_invariants": [{"id":"invariant:promoted.from.resolution","label":"the human decided this","severity":"critical","status":"active"}],
 		`+healthyAuthority+`
 	}`)
