@@ -25,6 +25,8 @@ import (
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/continuity"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/investigate"
+	"github.com/globulario/sensei-code/internal/project"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/retrieval"
 	"github.com/globulario/sensei-code/internal/sensei"
@@ -139,6 +141,39 @@ func renderRetrieved(outcomes []retrieval.Outcome) string {
 		}
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// retrievedTargets is the file targets the graph retrieval selected, reused so
+// repository evidence is about the same subject.
+func retrievedTargets(outcomes []retrieval.Outcome) []string {
+	var out []string
+	for _, o := range outcomes {
+		if o.Query.Kind == retrieval.ByFile {
+			out = append(out, o.Query.Target)
+		}
+	}
+	return out
+}
+
+func repositoryPresence(ev investigate.Evidence) assist.Presence {
+	if len(ev.Unavailable) != 0 {
+		return assist.Stale
+	}
+	return assist.Present
+}
+
+// sessionEvents reads this session's record for the standing summary. A record
+// that cannot be read yields no summary rather than a partial one presented as
+// whole.
+func (e *Engine) sessionEvents() []event.Event {
+	if e.Store == nil {
+		return nil
+	}
+	events, err := e.Store.Load()
+	if err != nil {
+		return nil
+	}
+	return events
 }
 
 // retrievalBudget bounds how many targeted lookups one conversational turn may
@@ -264,6 +299,26 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		}
 	}
 
+	// Repository evidence, scoped to the same targets the graph retrieval used
+	// so the two are about the same subject rather than being two differently
+	// scoped dumps. This surface can only read: it is an allowlist of git
+	// subcommands, not a prompt asking the architect to behave.
+	repoEvidence := investigate.Repository{Root: e.Repo.Root}.Gather(ctx, retrievedTargets(retrieved), 5)
+	consulted.Add(assist.Observation{
+		Source: "repository",
+		State:  repositoryPresence(repoEvidence),
+		Reason: strings.Join(repoEvidence.Unavailable, "; "),
+	})
+
+	// Standing project context, derived rather than stored. Every entry is a
+	// reference into something durable; nothing here is a claim this turn is
+	// making, and none of it can make an unpromoted proposal canonical.
+	//
+	// Candidates are deliberately not summarised here. They are governed
+	// artifacts, and an assisted turn must not so much as reach for that
+	// machinery — `/candidates` is where that question is answered.
+	standing := project.Summarize(e.sessionEvents(), nil, project.DefaultBounds())
+
 	// Continuity is established before the architect speaks, and its verdict is
 	// carried into the prompt. An architect that has silently lost the thread
 	// answers exactly like one that still has it, so the loss has to be said.
@@ -288,7 +343,8 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	result, err := architect.Run(ctx, agent.Request{
 		Role: agent.Architect, TaskID: taskID, Workspace: e.Repo.Root,
 		Prompt: assistedPrompt(e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
-			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved)),
+			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved),
+			repoEvidence.Render(), standing.Render()),
 	}, e.emit)
 	if err != nil {
 		fail(err)
@@ -362,7 +418,7 @@ func preflightSource(d sensei.PreflightDecision) assist.Observation {
 // because an assisted answer has no reviewer, no audit and no candidate behind
 // it — nothing downstream will catch an overstated claim, which is precisely
 // why overstating is more costly here than in governed work, not less.
-func assistedPrompt(repoRoot, domain, architectName, task, conversation string, observations []string, workspaceEvidence, preflightEvidence, retrievedEvidence string) string {
+func assistedPrompt(repoRoot, domain, architectName, task, conversation string, observations []string, workspaceEvidence, preflightEvidence, retrievedEvidence, repositoryEvidence, standingContext string) string {
 	notes := "(none)"
 	if len(observations) != 0 {
 		notes = "- " + strings.Join(observations, "\n- ")
@@ -421,9 +477,16 @@ it means the graph was asked and had nothing, which is not the same as the
 target being safe, and not a reason to answer from memory instead.
 %s
 
+REPOSITORY EVIDENCE (read-only):
+%s
+
+STANDING PROJECT CONTEXT:
+%s
+
 CONVERSATION SO FAR:
 %s
 
 THE HUMAN SAID:
-%s`, architectName, repoRoot, scope, notes, workspaceEvidence, preflightEvidence, retrievedEvidence, conversationOrNone(conversation), task)
+%s`, architectName, repoRoot, scope, notes, workspaceEvidence, preflightEvidence, retrievedEvidence,
+		repositoryEvidence, standingContext, conversationOrNone(conversation), task)
 }
