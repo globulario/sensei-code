@@ -667,3 +667,42 @@ func hasKind(kinds []event.Kind, want event.Kind) bool {
 	}
 	return false
 }
+
+// TestOnlyAnEmptyCandidateIsRemovedAutomatically is the safety property of the
+// terminal lifecycle. Automatic cleanup exists so a directory of undifferentiated
+// leftovers stops being the normal state, and it must never be the mechanism
+// that destroys unpublished work — which is exactly what "delete on exit" would
+// have done to the one accepted candidate that mattered.
+func TestOnlyAnEmptyCandidateIsRemovedAutomatically(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "disposeIfEmpty")
+
+	produced := strings.Index(body, "ProducedNoWork")
+	removal := strings.Index(body, "RemoveWorktree")
+	if produced < 0 {
+		t.Fatal("disposal no longer consults whether the candidate holds work")
+	}
+	if removal < 0 {
+		t.Fatal("disposal no longer removes anything")
+	}
+	if produced > removal {
+		t.Fatal("the worktree is removed before its contents are considered")
+	}
+	// Evidence is recorded before git is touched: a disposal that deletes first
+	// and records second loses the case it needs to explain.
+	record := strings.Index(body, "resolveCandidate")
+	if record < 0 || record > removal {
+		t.Fatal("the candidate is removed before its disposition is recorded")
+	}
+	if !strings.Contains(body, "Resumable") {
+		t.Error("a candidate holding work has no retention branch, so it would fall through to removal")
+	}
+
+	// The accepted path retains deliberately rather than by omission.
+	impl := funcBody(t, "internal/workflow/engine.go", "implement")
+	if !strings.Contains(impl, "Retained") {
+		t.Error("an accepted candidate records no disposition, so it means nothing in particular afterwards")
+	}
+	if strings.Contains(impl, "RemoveWorktree") {
+		t.Error("the run removes a worktree directly, bypassing the evidence-before-removal rule")
+	}
+}
