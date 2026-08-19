@@ -269,10 +269,23 @@ Also landed:
   field reads as nothing-to-report. Its paths are the ones the graph retrieval
   selected, so repository and graph evidence are about the same subject.
 
-Not done:
+Acceptance: criteria 2, 5, 7, 8, 9, 10, 11, 12, 13 and 14 are mechanical, in
+`internal/workflow/parity_test.go` and the package tests for continuity,
+retrieval and investigation.
 
-- **Acceptance tests 1, 4-9, 11-12** from the issue remain unwritten; several
-  need a governed run, which is on hold for `#13`.
+Not done, and each says why:
+
+- **Criteria 1, 4 and 6** are judgements about the quality of a live answer over
+  a populated graph: a follow-up that preserves an architectural subject,
+  retrieval of a contract the question does not name, and recall of a rejected
+  direction. Asserting them here would mean asserting that a fixture came back,
+  which is a different and more comfortable claim. They need a real conversation
+  against a graph with content.
+- **Criterion 4 is also an implementation gap, not only a test gap.** Retrieval
+  routes on what the question names structurally — a path or a governed id. A
+  question that describes a contract without naming it retrieves nothing today,
+  and the turn correctly reports that nothing was retrieved rather than
+  inventing an answer. Semantic selection is the next slice.
 - Remote ChatGPT-thread resume stays opportunistic, as the issue allows: the
   architect surface reports no resumable handle today, which is exactly the case
   the continuity record reconstructs from.

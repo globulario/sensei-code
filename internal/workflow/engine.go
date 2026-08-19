@@ -189,6 +189,13 @@ func (e *Engine) conversationSoFar(current string, limit int) string {
 	if err != nil {
 		return ""
 	}
+	return e.windowFrom(events, current, limit)
+}
+
+// windowFrom builds the bounded conversation window from a recorded session. It
+// is separated from reading the store so the bound itself can be tested, which
+// is the part with a rule attached.
+func (e *Engine) windowFrom(events []event.Event, current string, limit int) string {
 	var turns []string
 	for _, ev := range events {
 		text := strings.TrimSpace(ev.Summary)
@@ -209,7 +216,12 @@ func (e *Engine) conversationSoFar(current string, limit int) string {
 		turns = turns[:n-1]
 	}
 	if len(turns) > limit {
-		turns = turns[len(turns)-limit:]
+		// Bounded, and it says so. A conversation that silently starts at turn
+		// 41 reads to the architect as a conversation that began there, and it
+		// will answer confidently about a beginning it never saw.
+		dropped := len(turns) - limit
+		turns = append([]string{fmt.Sprintf("(%d earlier turns are not shown; this conversation did not start here)", dropped)},
+			turns[dropped:]...)
 	}
 	return strings.Join(turns, "\n")
 }
