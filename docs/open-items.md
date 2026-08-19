@@ -214,10 +214,11 @@ reported as unresolved, which is exactly what they are. Disposing of them is a
 human decision about unpublished work, and making it automatically here would be
 the same mistake in a new coat.
 
-## Architect conversation parity is started, not finished
+## Architect conversation parity is implemented except its governed-run acceptance
 
-`globulario/sensei-code#9`. **Partially implemented, and the parts that are not
-done are listed here so the rest is not read as complete.**
+`globulario/sensei-code#9`. **Sections A, C, D, E, F and G are implemented.**
+What is not done is the acceptance that needs a governed run, listed at the end
+so the rest is not read as complete.
 
 Landed:
 
@@ -254,15 +255,72 @@ Also landed:
   is disclosed with the targets it dropped, because a turn that consulted four
   sources out of nine reads exactly like complete coverage.
 
-Not done, and each is a real piece of the issue:
-- **Project semantic continuity (§D).** No bounded project-level summary of
-  settled decisions, rejected alternatives and open hypotheses yet.
-- **Read-only investigation loop (§E).** The architect is told it may read; it
-  has no structured investigation surface over git, task state and Sensei.
-- **Context budget and compaction (§F).** Conversation replay is still a fixed
-  window rather than a layered packet.
+- **Standing project context, derived (§D).** `internal/project` assembles
+  recent task outcomes, unanswered authority questions and recorded decisions
+  from the session record, every turn. Nothing is stored: a maintained summary
+  is a second store of architectural claims, and it wins by being convenient the
+  moment it disagrees with Sensei. It carries references and says so, in case a
+  reference is otherwise read as a finding.
+- **Read-only investigation (§E).** `internal/investigate` is a closed allowlist
+  of git subcommands that refuses everything else by type, rather than a prompt
+  asking the architect to behave. What it cannot read it states, because a blank
+  field reads as nothing-to-report. Its paths are the ones the graph retrieval
+  selected, so repository and graph evidence are about the same subject.
+
+Not done:
+
 - **Acceptance tests 1, 4-9, 11-12** from the issue remain unwritten; several
   need a governed run, which is on hold for `#13`.
+- Remote ChatGPT-thread resume stays opportunistic, as the issue allows: the
+  architect surface reports no resumable handle today, which is exactly the case
+  the continuity record reconstructs from.
+
+## `sensei build` publishes to a flag, not to the project's configured store
+
+Found the expensive way on 2026-08-19, and recorded because the surface is
+plausible enough to catch the next person.
+
+`.sensei/config.yaml` names a store:
+
+```yaml
+store:
+    query_url: http://localhost:7878/query
+    store_url: http://localhost:7878/store?default
+```
+
+`sensei build` does not load through it. The endpoint comes from the
+`-store-url` flag, whose default is `http://localhost:7878/store?default`, so
+editing the project config changes nothing and the build silently publishes
+wherever the flag points. A build intended for an isolated store on another port
+went into the shared services store instead, added seven `aw:repo` tags onto
+subjects services also owns — `sensei init`'s scaffold generates the same
+canonical guardrail IRIs for every repository — rotated the global marker, and
+left services UNPROVEN in the new proof set, which the build itself reported:
+
+```text
+UNPROVEN github.com/globulario/services — the slice for
+"github.com/globulario/services" changed during a publication of "example.com/a"
+```
+
+**This is `sensei-code#10`'s shape a third time.** Custody is decided by a flag
+while the operator is reading a config file, exactly as write custody is decided
+by `-awareness-dir` regardless of the domain a proposal requests. Three signals
+agree — the project config, the working directory, the domain on the command
+line — and only the flag decides. A configuration file that names a store the
+build ignores is not an inert field; it is a statement the system does not
+honour.
+
+The repair for the specific pollution is to republish the affected domain from
+its own corpus, which recomputes its slice and regenerates its proof:
+
+```bash
+cd <services checkout> && sensei build --repo github.com/globulario/services
+```
+
+Worth raising upstream: either the build should read the project's configured
+store, or `-store-url` should refuse to differ from it silently. Publishing to
+somewhere other than where the operator believes is the failure class this
+repository has now met three times in three different surfaces.
 
 ## Capability envelope is only partly enforced (P0.4)
 
