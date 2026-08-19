@@ -69,7 +69,7 @@ var Registry = []Command{
 	{
 		Name: "/run", Arg: "<what to build>", Kind: Control, NeedsIdle: true,
 		Summary: "carry the work out under governed execution",
-		Detail:  "Enters governed mode for this one task: candidate worktree cut from an exact base, bounded plan you approve, worker, reviewer and a Sensei diff audit that a reviewer cannot accept over. Ordinary messages stay conversational and change nothing; this is how work actually gets done.",
+		Detail:  "Enters governed mode for this one task, and authorizes it: candidate worktree cut from an exact base, bounded plan shown to you, worker, reviewer and a Sensei diff audit that a reviewer cannot accept over. You are asked again only when Sensei cannot certify a decision, or before anything is published. Esc stops a running task. Ordinary messages stay conversational and change nothing; this is how work actually gets done.",
 	},
 	{
 		Name: "/audit", Kind: Control, NeedsIdle: true,
@@ -84,7 +84,7 @@ var Registry = []Command{
 	{
 		Name: "/refactor", Arg: "<path or description>", Kind: Control, NeedsIdle: true,
 		Summary: "ask the architect for a governed refactor plan",
-		Detail:  "The architect reads Sensei's evidence for the target and proposes a bounded plan. Nothing is implemented until you accept it.",
+		Detail:  "The architect reads Sensei's evidence for the target and proposes a bounded plan, then carries it out under the same governed execution /run authorizes. Nothing is published without your decision.",
 	},
 	{
 		Name: "/learn", Arg: "<what broke>", Kind: Record, NeedsIdle: true,

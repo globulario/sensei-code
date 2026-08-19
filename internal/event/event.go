@@ -55,6 +55,11 @@ const (
 	AuthorityResolved Kind = "authority.resolved"
 	WorkflowFailed    Kind = "workflow.failed"
 	WorkflowCompleted Kind = "workflow.completed"
+	// WorkflowStopped is the human withdrawing from a running task. It is its
+	// own transition rather than a flavour of failure: a stop proves nothing
+	// about the work, and the candidate it leaves behind is resumable, where a
+	// failed one is not.
+	WorkflowStopped Kind = "workflow.stopped"
 )
 
 type Event struct {

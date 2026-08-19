@@ -93,19 +93,24 @@ invariants:
       - internal/provider/provider_test.go:TestFormatStatusPreservesUnknownAuth
       - internal/doctor/doctor_test.go:TestWarningsDoNotMasqueradeAsPassButDoNotBlockReadiness
 
-  - id: sensei_code.workflow.plan_is_approved_before_work_starts
-    title: A change is planned and accepted by the human before any worker touches a candidate
+  - id: sensei_code.workflow.execution_is_authorized_once_at_run
+    title: /run authorizes the task, and the authority router owns every later interruption
     severity: critical
     status: active
     repo: github.com/globulario/sensei-code
     domain: repo
-    description: "The architect may settle ordinary architectural questions alone, but committing the repository to a body of work is the human's to start. A proceed decision is presented as a plan and the workflow waits at a rendezvous; declining implements nothing."
+    description: "Typing /run authorizes Sensei Code to undertake that task within its configured capabilities. The bounded plan is shown as information, never as a gate. After that point only two things may interrupt the human: a Level-3 authority condition the router itself produced, and the publication decision. A mandatory step that interrupts without producing an authority decision is ceremony, and must not exist. This replaces sensei_code.workflow.plan_is_approved_before_work_starts, whose second approval produced no evidence, made no decision the router had not already made, and recorded nothing durable."
     protects:
       files:
         - internal/workflow/
         - internal/workflow/engine.go
     required_tests:
-      - internal/workflow/engine_test.go:TestImplementationPromptCarriesContextWithoutWideningScope
+      - internal/workflow/engine_test.go:TestRunDoesNotAskForRoutinePlanApproval
+      - internal/workflow/engine_test.go:TestOnlyTheAuthorityRouterCreatesALevel3Stop
+      - internal/workflow/engine_test.go:TestAGovernedRunCanBeStopped
+      - internal/workflow/engine_test.go:TestDecisionRecordNamesTheRealAuthorityOwner
+      - internal/workflow/authority_test.go:TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt
+      - internal/session/interrupted_test.go:TestStoppedTaskRemainsResumable
 
   - id: sensei_code.workflow.context_never_widens_worker_scope
     title: Shared context explains why a change was asked for and never enlarges what may be changed

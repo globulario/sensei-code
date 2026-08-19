@@ -35,11 +35,66 @@ func (e *Engine) SubmitAssisted(ctx context.Context, task string) string {
 	return taskID
 }
 
-// SubmitGoverned starts governed execution of a task. This is /run.
+// SubmitGoverned starts governed execution of a task. This is /run, and typing
+// it is the authorization: the workflow does not ask again except when the
+// authority router names a Level-3 condition, or before publication.
+//
+// Because there is no approval rendezvous to decline at, the run is started
+// under a cancellable context whose cancel is held against the task. That is
+// what makes Stop possible, and Stop is what keeps removing the rendezvous
+// honest rather than merely quieter.
 func (e *Engine) SubmitGoverned(ctx context.Context, task string) string {
 	taskID := fmt.Sprintf("task-%d", time.Now().UTC().UnixNano())
-	go e.run(ctx, taskID, strings.TrimSpace(task))
+	ctx, cancel := context.WithCancel(ctx)
+	e.mu.Lock()
+	if e.stops == nil {
+		e.stops = make(map[string]context.CancelFunc)
+	}
+	e.stops[taskID] = cancel
+	e.mu.Unlock()
+	go func() {
+		defer e.clearStop(taskID)
+		e.run(ctx, taskID, strings.TrimSpace(task))
+	}()
 	return taskID
+}
+
+// Stop ends a governed task the human no longer wants running.
+//
+// It reports whether there was anything to stop, so a caller can say "nothing
+// is running" rather than implying it killed something. Cancelling the context
+// reaches the worker process itself — every agent runs under exec.CommandContext
+// — so this is a real stop and not a flag the loop checks when convenient.
+//
+// What it deliberately does not do is clean up. The candidate worktree and
+// whatever the worker had written stay exactly where they are, and the run
+// reports itself stopped rather than failed, so the work remains resumable.
+// A stop is the human withdrawing attention from a task, not a judgement that
+// the work was worthless.
+func (e *Engine) Stop(taskID string) bool {
+	e.mu.Lock()
+	cancel, ok := e.stops[taskID]
+	delete(e.stops, taskID)
+	e.mu.Unlock()
+	if !ok {
+		return false
+	}
+	cancel()
+	return true
+}
+
+// Stoppable reports whether this task is a governed run that Stop can reach.
+func (e *Engine) Stoppable(taskID string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	_, ok := e.stops[taskID]
+	return ok
+}
+
+func (e *Engine) clearStop(taskID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	delete(e.stops, taskID)
 }
 
 // Submit is the default entry point and is assisted.

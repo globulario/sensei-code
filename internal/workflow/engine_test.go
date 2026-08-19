@@ -1,12 +1,18 @@
 package workflow
 
 import (
+	"context"
 	"errors"
-	"github.com/globulario/sensei-code/internal/taskstate"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/authority"
+	"github.com/globulario/sensei-code/internal/decision"
+	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/taskstate"
 )
 
 func TestDecodeModelJSON(t *testing.T) {
@@ -260,4 +266,187 @@ func TestReviewerSeesExecutedEvidenceNotAWorkerReport(t *testing.T) {
 	if !strings.Contains(strings.Join(strings.Fields(got), " "), "did not run and proves nothing") {
 		t.Error("the prompt does not tell the reviewer that a not-permitted check proves nothing")
 	}
+}
+
+// TestRunDoesNotAskForRoutinePlanApproval is the executable half of
+// sensei_code.workflow.execution_is_authorized_once_at_run.
+//
+// Typing /run authorizes the task. The plan that follows is published as
+// information, and nothing between it and the worker may ask the human to
+// authorize what they already authorized. The check is structural because the
+// property is about what the code cannot do: the governed run has exactly two
+// paths that put a decision to a person, and neither of them sits here.
+func TestRunDoesNotAskForRoutinePlanApproval(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "run")
+
+	// The plan is still shown. Removing the ceremony must not remove the
+	// information: a human who cannot see the plan cannot decide to stop.
+	if !strings.Contains(body, "event.PlanProposed") {
+		t.Error("the run no longer publishes the plan, so the human cannot see what was authorized")
+	}
+	if strings.Contains(body, "approvePlan") {
+		t.Error("the plan-approval rendezvous is back in run()")
+	}
+	file := fileText(t, "internal/workflow/engine.go")
+	for _, gone := range []string{`"Implement this plan"`, `"the human declined the proposed plan"`} {
+		if strings.Contains(file, gone) {
+			t.Errorf("the approval prompt survives somewhere in the engine: %s", gone)
+		}
+	}
+	// awaitChoice is how a decision is put to a human. In the governed run it
+	// must be reachable only through the router's escalation and through
+	// publication, both of which live in their own functions.
+	if strings.Contains(body, "awaitChoice") || strings.Contains(body, "awaitHuman") {
+		t.Error("run() blocks on a human decision directly; only the authority router and publication may")
+	}
+}
+
+// TestOnlyTheAuthorityRouterCreatesALevel3Stop states the boundary that keeps
+// autonomy structural rather than cultural: a Level-3 interruption is produced
+// by evidence, not by anyone's discretion.
+//
+// Publication is the one deliberate exception, and it is a different decision —
+// it authorizes reaching the repository's shared history, which no
+// certification grants.
+func TestOnlyTheAuthorityRouterCreatesALevel3Stop(t *testing.T) {
+	allowed := map[string]bool{
+		"awaitHuman":       true, // the router's escalation
+		"offerPullRequest": true, // publication, which is human-owned by contract
+	}
+	for _, fn := range functionsIn(t, "internal/workflow/engine.go") {
+		body := funcBody(t, "internal/workflow/engine.go", fn)
+		if strings.Contains(body, "authority.Human") && !allowed[fn] {
+			t.Errorf("%s constructs a Level-3 decision; only the authority router and publication may", fn)
+		}
+		// Naming the allowed constructors is not enough on its own: what makes
+		// the escalation evidence-driven is that it is only ever reached from a
+		// routing verdict. A function that asks the human without having asked
+		// Sensei first is discretion wearing the router's clothes.
+		if fn != "awaitHuman" && strings.Contains(body, "awaitHuman") && !strings.Contains(body, "routePlan") {
+			t.Errorf("%s escalates to a human without routing the question first", fn)
+		}
+	}
+	// And the router itself must reach it only from a routing verdict.
+	router := fileText(t, "internal/workflow/authority.go")
+	if !strings.Contains(router, "RouteHuman") {
+		t.Fatal("the router no longer produces a human route at all")
+	}
+}
+
+// TestAGovernedRunCanBeStopped is the other half of removing the approval
+// prompt. The prompt was also the only place a human could say no; taking it
+// away without an interrupt would have removed their control while claiming to
+// remove their burden.
+func TestAGovernedRunCanBeStopped(t *testing.T) {
+	e := &Engine{}
+	stopped := false
+	e.mu.Lock()
+	e.stops = map[string]context.CancelFunc{"task-1": func() { stopped = true }}
+	e.mu.Unlock()
+
+	if !e.Stoppable("task-1") {
+		t.Fatal("a running governed task reports as unstoppable")
+	}
+	if !e.Stop("task-1") {
+		t.Fatal("Stop refused a running task")
+	}
+	if !stopped {
+		t.Fatal("Stop reported success without cancelling the run")
+	}
+	if e.Stop("task-1") {
+		t.Error("stopping an already-stopped task reported success, so the UI would claim it killed something twice")
+	}
+	if e.Stoppable("task-1") {
+		t.Error("a stopped task still reports as stoppable")
+	}
+	if e.Stop("never-existed") {
+		t.Error("Stop claimed to stop a task that was never running")
+	}
+}
+
+// TestAStoppedRunIsReportedAsStoppedNotFailed keeps the distinction the
+// behavioural record depends on. A stop proves nothing about the work; filing
+// it as a failure would teach the project that this task shape breaks, and
+// would make the candidate unresumable.
+func TestAStoppedRunIsReportedAsStoppedNotFailed(t *testing.T) {
+	bus := event.NewBus()
+	events, done := bus.Subscribe(16)
+	defer done()
+
+	e := &Engine{Bus: bus, SessionID: "s1"}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// ReadRepository is not granted, so the run refuses immediately and takes
+	// the failure path with an already-cancelled context — which is exactly the
+	// shape a stop produces, without needing a live Sensei or a worker.
+	e.run(ctx, "task-1", "do something")
+
+	var kinds []event.Kind
+	for {
+		select {
+		case ev := <-events:
+			kinds = append(kinds, ev.Kind)
+			continue
+		default:
+		}
+		break
+	}
+	var sawStopped, sawFailed bool
+	for _, k := range kinds {
+		switch k {
+		case event.WorkflowStopped:
+			sawStopped = true
+		case event.WorkflowFailed:
+			sawFailed = true
+		}
+	}
+	if !sawStopped {
+		t.Errorf("a stopped run emitted no stop transition: %v", kinds)
+	}
+	if sawFailed {
+		t.Errorf("a stopped run was also reported as failed: %v", kinds)
+	}
+}
+
+// TestDecisionRecordNamesTheRealAuthorityOwner pins the provenance the durable
+// record carries. With Level-2 work flowing without a human rendezvous, a
+// record claiming human acceptance would be false about the one thing a future
+// agent reads it for.
+func TestDecisionRecordNamesTheRealAuthorityOwner(t *testing.T) {
+	e := &Engine{}
+	e.Config.Architect.Name = "chatgpt"
+
+	// No Level-3 condition was answered during this task.
+	got := e.decisionAuthority("task-1", certifiedStart{})
+	if got.Owner != decision.Architectural {
+		t.Fatalf("an uninterrupted run recorded owner %q, want architectural", got.Owner)
+	}
+	if !strings.Contains(got.HumanGrant, "/run") {
+		t.Errorf("the record does not say what the human actually authorized: %+v", got)
+	}
+	if got.Condition != "" || got.Resolution != "" {
+		t.Errorf("an architectural decision claims a human answered something: %+v", got)
+	}
+	if strings.Contains(strings.ToLower(got.Describe()), "accepted by the human") {
+		t.Errorf("the old unconditional claim is back: %s", got.Describe())
+	}
+}
+
+// functionsIn lists the top-level function and method names declared in a file,
+// so a test can assert a property over every one of them rather than over the
+// handful someone remembered to name.
+func functionsIn(t *testing.T, rel string) []string {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "../../"+rel, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", rel, err)
+	}
+	var out []string
+	for _, d := range f.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && fn.Body != nil {
+			out = append(out, fn.Name.Name)
+		}
+	}
+	return out
 }

@@ -160,10 +160,11 @@ The first Go foundation is being built around these boundaries:
 - `sensei-code doctor` readiness checks, naming the fix for each failure
 - an architect command set over Sensei: `/report`, `/focus`, `/why`, `/debt`,
   `/audit`, `/gate`, `/refactor`, `/learn`
-- plan proposed and accepted by the human before any worker starts
+- `/run` authorizes the task; the plan is shown, never voted on
+- Esc stops a running task, leaving the candidate as it stands
 - guidance typed during a run, delivered at the next worker cycle
 - one candidate per task, handed between workers instead of restarted
-- `/resume` for a task interrupted after approval
+- `/resume` for a task interrupted after it was planned
 - pull request creation from an accepted candidate, never a merge
 
 The foundation deliberately stops short of pretending that reviewer acceptance is Sensei admission. The next governed slice binds candidate output to Sensei's canonical admission/apply/verification contracts.

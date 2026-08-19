@@ -41,6 +41,10 @@ type Engine struct {
 	// spoken to, so the guidance waits for the next boundary where it can
 	// actually be read.
 	notes map[string][]string
+	// stops holds one cancel per running governed task, so the human can end a
+	// run they no longer want. Assisted turns are not registered: a
+	// conversation has nothing to withdraw.
+	stops map[string]context.CancelFunc
 }
 
 func New(repo gitx.Repo, cfg config.Config, bus *event.Bus, store *session.Store, sessionID string) *Engine {
@@ -204,6 +208,17 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	e.announceMode(taskID, governedMode(RequestedByHuman))
 	fail := func(err error) {
+		// A stopped run is not a failed one, and recording it as failure would
+		// teach the behavioural record that this task shape breaks. The human
+		// withdrew; nothing was proved about the work. The outcome is still
+		// reported, on a context the cancellation cannot reach, because a run
+		// that goes silent when stopped leaves no account of why it ended.
+		if ctx.Err() != nil {
+			const note = "stopped by the human; the candidate is left as it stands"
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowStopped, note, nil))
+			e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
+			return
+		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
 		e.reportOutcome(ctx, "failure", task, err.Error())
 	}
@@ -295,19 +310,20 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
 		return
 	}
+	// The plan is published as information, not as a gate.
+	//
+	// There used to be a rendezvous here: "Implement this plan? 1/2". It asked
+	// the human to authorize what they had already authorized by typing /run,
+	// about a plan the authority router had already ruled on. It produced no
+	// evidence, made no decision the router had not made, and recorded nothing
+	// durable — the definition of ceremony. Every remaining interruption in a
+	// governed run comes from the router naming a Level-3 condition, or from
+	// the publication rendezvous, which is a genuinely different decision.
+	//
+	// The human's "no" did not disappear with it: a running task can be stopped
+	// (see Stop), which costs nothing when unused, where a mandatory prompt
+	// taxed every run.
 	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.PlanProposed, planSummary(decision), decision))
-	approved, err := e.approvePlan(ctx, taskID, decision)
-	if err != nil {
-		fail(err)
-		return
-	}
-	if !approved {
-		e.reportOutcome(ctx, "blocked", task, "the human declined the proposed plan")
-		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
-			"Holding off. Nothing has been implemented -- tell me what to change about the plan.", nil))
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
-		return
-	}
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -332,29 +348,6 @@ func (e *Engine) run(ctx context.Context, taskID, task string) {
 	}
 
 	e.implement(ctx, sc, start, taskID, &tc, plan, "", fail)
-}
-
-// approvePlan shows the architect's bounded plan and waits for the human to
-// accept it before any worker touches a candidate. The architect may decide
-// ordinary architectural questions on its own, but committing the human's
-// repository to a body of work is theirs to start.
-func (e *Engine) approvePlan(ctx context.Context, taskID string, d architectureDecision) (bool, error) {
-	options := []authority.Option{
-		{ID: "1", Label: "Implement this plan", Description: "hand it to the bounded workers"},
-		{ID: "2", Label: "Not yet, let us talk about it", Description: "nothing is implemented"},
-	}
-	decision := authority.Decision{
-		Level:          authority.Human,
-		Subject:        "Implement this plan?",
-		Reason:         d.Summary,
-		Recommendation: "1",
-		Options:        options,
-	}
-	choice, err := e.awaitChoice(ctx, nil, taskID, "", "", "", decision, options)
-	if err != nil {
-		return false, err
-	}
-	return strings.HasPrefix(choice, "1:"), nil
 }
 
 // offerPullRequest asks whether to publish an accepted candidate. Publication
@@ -499,15 +492,49 @@ func (e *Engine) reportOutcome(ctx context.Context, status, task, note string) {
 	}
 }
 
+// decisionAuthority reports who actually authorized this work.
+//
+// The answer is read from what happened, not asserted. If a Level-3 condition
+// reached the human during this task, the record says so and names the
+// condition and the option they chose. If none did, the work was decided
+// architecturally by the architect inside a region Sensei certified, and the
+// human's contribution was authorizing the task — which is what /run is. Saying
+// "accepted by the human" for that case, as this once did unconditionally,
+// attributes to a person a judgement they never made.
+func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision.Authority {
+	certified := strings.TrimSpace(start.Domain())
+	if commit := strings.TrimSpace(start.GraphBuildCommit()); commit != "" {
+		certified = strings.TrimSpace(certified + " @ " + commit)
+	}
+	if answered := e.authorityDecisions(taskID); len(answered) != 0 {
+		// The last answer is the one the plan finally rested on: an earlier
+		// condition that was answered and then superseded did not authorize
+		// the work that shipped.
+		last := answered[len(answered)-1]
+		return decision.Authority{
+			Owner:       decision.Human,
+			CertifiedBy: certified,
+			Condition:   last.Condition,
+			Resolution:  last.Chosen,
+		}
+	}
+	return decision.Authority{
+		Owner:       decision.Architectural,
+		CertifiedBy: certified,
+		DecidedBy:   config.DisplayName(e.Config.Architect.Name),
+		HumanGrant:  "task execution via /run",
+	}
+}
+
 // recordDecision writes the accepted plan into Sensei as an architectural
 // decision, so the reason this work was authorized outlives the session and any
 // agent can read it later. A decision Sensei would refuse is reported, never
 // padded with invented links to make it pass.
-func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskContext, changed []string) {
+func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskContext, start certifiedStart, changed []string) {
 	record := decision.Record{
 		Title:        strings.TrimSpace(tc.Rationale),
 		Rationale:    tc.Task,
-		Context:      "Accepted by the human in an interactive Sensei Code session.",
+		Authority:    e.decisionAuthority(taskID, start),
 		Consequences: tc.Consequences,
 		SourceFiles:  changed,
 		Invariants:   tc.Invariants,
@@ -754,7 +781,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// the architect can only name files it intends to create, and a
 			// decision that references a file the task never produced is a
 			// reference to nothing.
-			e.recordDecision(ctx, taskID, tc, changedPaths(diff))
+			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
 			return true, plan, lastReview, lastAudit, nil
 		case "revise":
 			feedback = review.Instructions

@@ -23,14 +23,58 @@ func TestSourceFilesAloneDoNotSatisfyContractFirst(t *testing.T) {
 }
 
 func TestLinkedDecisionIsAccepted(t *testing.T) {
-	r := Record{Title: "do a thing", Rationale: "because", Invariants: []string{"inv.one"}}
+	r := Record{Title: "do a thing", Rationale: "because", Invariants: []string{"inv.one"},
+		Authority: Authority{Owner: Architectural}}
 	if err := r.Validate(); err != nil {
 		t.Fatal(err)
 	}
 }
 
+// A decision with no stated authority is refused rather than filed with an
+// assumed one. The assumption that used to be made here was "the human accepted
+// this", which is the single most misleading thing the record could say once
+// architectural decisions flow without a human in the loop.
+func TestUnattributedDecisionIsRefused(t *testing.T) {
+	r := Record{Title: "do a thing", Rationale: "because", Invariants: []string{"inv.one"}}
+	if err := r.Validate(); err == nil {
+		t.Fatal("a decision with no authority owner was accepted")
+	}
+}
+
+// The provenance a future reader gets must distinguish the two authorities, and
+// must never describe an architectural decision as a human acceptance.
+func TestAuthorityProvenanceNamesTheRealOwner(t *testing.T) {
+	arch := Authority{
+		Owner:       Architectural,
+		CertifiedBy: "github.com/globulario/sensei-code @ abc123",
+		DecidedBy:   "ChatGPT",
+		HumanGrant:  "task execution via /run",
+	}.Describe()
+	for _, want := range []string{"decision_authority: architectural", "decided_by: ChatGPT", "human_authorization: task execution via /run"} {
+		if !strings.Contains(arch, want) {
+			t.Errorf("architectural provenance missing %q: %s", want, arch)
+		}
+	}
+	if strings.Contains(strings.ToLower(arch), "accepted by the human") {
+		t.Errorf("an architectural decision claims human acceptance: %s", arch)
+	}
+
+	human := Authority{
+		Owner:       Human,
+		CertifiedBy: "github.com/globulario/sensei-code @ abc123",
+		Condition:   "graph coverage is absent for the planned files",
+		Resolution:  "Authorize the architectural change described above",
+	}.Describe()
+	for _, want := range []string{"decision_authority: human", "condition: graph coverage is absent", "resolution: Authorize"} {
+		if !strings.Contains(human, want) {
+			t.Errorf("human provenance missing %q: %s", want, human)
+		}
+	}
+}
+
 func TestArgsNeverRebuildTheGraph(t *testing.T) {
-	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, RepoRoot: "/repo"}
+	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, RepoRoot: "/repo",
+		Authority: Authority{Owner: Architectural}}
 	args := strings.Join(r.Args(), " ")
 	if !strings.Contains(args, "--no-rebuild") {
 		t.Fatal("decision recording must not republish the graph")
