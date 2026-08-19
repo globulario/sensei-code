@@ -35,6 +35,51 @@ type Observation struct {
 	Reason     string         `json:"reason,omitempty"`
 }
 
+// Consulted is what one turn actually looked at, with each source's state
+// attached.
+//
+// It exists so an answer can be checked rather than trusted. Assisted turns
+// have no reviewer, no audit and no candidate behind them, so the only defence
+// against a confident answer built on nothing is being able to see what it was
+// built on — and a source that failed must appear as a source that failed
+// rather than quietly vanishing, which is how retrieval failure turns into
+// model memory wearing the graph's clothes.
+type Consulted struct {
+	Sources []Observation `json:"sources"`
+}
+
+// Add records one consulted source.
+func (c *Consulted) Add(o Observation) { c.Sources = append(c.Sources, o) }
+
+// Degraded reports whether anything the turn relied on was missing or stale.
+func (c Consulted) Degraded() bool {
+	for _, s := range c.Sources {
+		switch s.State {
+		case Unavailable, Stale, Absent:
+			return true
+		}
+	}
+	return false
+}
+
+// Render is the evidence drawer: one line per source, its state, and the reason
+// when it has one.
+func (c Consulted) Render() string {
+	if len(c.Sources) == 0 {
+		return "Context used: nothing was consulted for this turn."
+	}
+	var b strings.Builder
+	b.WriteString("Context used\n")
+	for _, s := range c.Sources {
+		fmt.Fprintf(&b, "  %-22s %s", s.Source, s.State)
+		if reason := strings.TrimSpace(s.Reason); reason != "" {
+			b.WriteString(" — " + reason)
+		}
+		b.WriteString("\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
 type Authority struct {
 	Mode      string `json:"mode"`
 	Admission string `json:"admission"`
