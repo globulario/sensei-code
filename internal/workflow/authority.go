@@ -126,45 +126,25 @@ func routeAuthority(scoped sensei.PreflightDecision, claims []Claim) Routing {
 		}
 	}
 
-	if gate := approvalGate(scoped.RequiredActions); gate != "" && gate != "none" {
+	// Change risk is Sensei's verdict, read structurally. An unclassified gate
+	// is not a permissive one: the server reaching no verdict about this region
+	// tells us nobody has judged what the change costs, which is a question for
+	// a human and not a default to proceed on.
+	if !scoped.ChangeRisk.Classified() {
 		return Routing{
 			Route:     RouteHuman,
-			Condition: "Sensei requires approval for this change class: " + gate,
+			Condition: "Sensei classified no approval gate for the planned region",
+		}
+	}
+	if gate := scoped.ChangeRisk.Gate(); gate != "none" {
+		return Routing{
+			Route: RouteHuman,
+			Condition: "Sensei requires approval for this change class: " + gate +
+				" (blast radius " + scoped.ChangeRisk.Blast() + ")",
 		}
 	}
 
 	return Routing{Route: RouteArchitectural}
-}
-
-// approvalGate reads the approval class out of Sensei's change-risk action.
-//
-// Sensei composes this as a single formatted line — "Change risk: blast=local,
-// approval=none" — and does not currently publish blast radius or approval as
-// structured fields, so there is no non-textual way to obtain it. That makes
-// this the one place in the governance path that reads a string, and it is kept
-// narrow deliberately: it matches a fixed machine-emitted token, never prose,
-// and returns "" when it cannot find one so the caller fails closed rather than
-// inventing an approval class. If Sensei later publishes these structurally,
-// this function should be deleted rather than extended.
-func approvalGate(actions []string) string {
-	const prefix = "approval="
-	for _, action := range actions {
-		if !strings.HasPrefix(strings.TrimSpace(action), "Change risk:") {
-			continue
-		}
-		idx := strings.Index(action, prefix)
-		if idx < 0 {
-			// The line Sensei guarantees is present but shaped differently than
-			// this build understands. Unknown is not none.
-			return "unreadable"
-		}
-		gate := action[idx+len(prefix):]
-		if cut := strings.IndexAny(gate, ", "); cut >= 0 {
-			gate = gate[:cut]
-		}
-		return strings.TrimSpace(gate)
-	}
-	return ""
 }
 
 // escalationCondition renders a routing for a human, so a Level-3 interruption

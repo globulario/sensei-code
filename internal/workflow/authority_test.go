@@ -50,7 +50,7 @@ func TestBlindSpotRequiresHuman(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
 		"blind_spots": ["anchor with severity=critical"],
-		"required_actions": ["Change risk: blast=local, approval=none"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
 	got := routeAuthority(scoped, nil)
@@ -67,7 +67,7 @@ func TestBlindSpotRequiresHuman(t *testing.T) {
 func TestUnverifiedPremiseCannotAcquireArchitecturalAuthority(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
-		"required_actions": ["Change risk: blast=local, approval=none"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
 	claims := []Claim{
@@ -93,7 +93,7 @@ func TestCertifiableQuestionIsResolvedWithoutAHumanPrompt(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
 		"risk_class": "ARCHITECTURE_SENSITIVE",
-		"required_actions": ["Change risk: blast=local, approval=none"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
 	got := routeAuthority(scoped, []Claim{{Statement: "engine.go owns the loop", About: "internal/workflow", Source: "graph"}})
@@ -115,7 +115,7 @@ func TestCertifiableQuestionIsResolvedWithoutAHumanPrompt(t *testing.T) {
 func TestModelConfidenceHasNoEffectOnRouting(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
-		"required_actions": ["Change risk: blast=local, approval=none"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
 	base := routeAuthority(scoped, []Claim{{Statement: "certain", About: "x", Source: "graph"}})
@@ -163,8 +163,8 @@ func TestEveryHumanRouteNamesItsCondition(t *testing.T) {
 	}{
 		{"coverage absent", `{"status":"PREFLIGHT_STATUS_EMPTY",` + healthyAuthority + `}`, nil},
 		{"blind spot", `{"status":"PREFLIGHT_STATUS_OK","blind_spots":["x"],` + healthyAuthority + `}`, nil},
-		{"approval required", `{"status":"PREFLIGHT_STATUS_OK","required_actions":["Change risk: blast=cluster, approval=human_approval_required"],` + healthyAuthority + `}`, nil},
-		{"unverified premise", `{"status":"PREFLIGHT_STATUS_OK","required_actions":["Change risk: blast=local, approval=none"],` + healthyAuthority + `}`,
+		{"approval required", `{"status":"PREFLIGHT_STATUS_OK","change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},` + healthyAuthority + `}`, nil},
+		{"unverified premise", `{"status":"PREFLIGHT_STATUS_OK","change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` + healthyAuthority + `}`,
 			[]Claim{{Statement: "nothing else reads this", Source: "inference"}}},
 	}
 	for _, tc := range cases {
@@ -183,46 +183,98 @@ func TestEveryHumanRouteNamesItsCondition(t *testing.T) {
 	}
 }
 
-// TestApprovalGateFailsClosedWhenUnreadable pins the one string-reading corner
-// of the governance path. If Sensei changes the shape of its change-risk line,
-// this must escalate rather than silently read as approval=none.
-func TestApprovalGateFailsClosedWhenUnreadable(t *testing.T) {
-	if got := approvalGate([]string{"Change risk: blast=local, approval=none"}); got != "none" {
-		t.Fatalf("failed to read the documented format: %q", got)
+// TestUnclassifiedChangeRiskFailsClosed pins the direction the approval gate
+// must fail in. Sensei's own contract says an unspecified gate means
+// unclassified and never "none", so a preflight that reaches no verdict — an
+// older server, a region the classifier could not judge, a member this build
+// does not know — must escalate rather than read as permission.
+func TestUnclassifiedChangeRiskFailsClosed(t *testing.T) {
+	cases := []struct {
+		name string
+		risk string
+	}{
+		{"field absent entirely", ""},
+		{"gate explicitly unspecified", `"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_UNSPECIFIED"},`},
+		{"blast classified, gate not", `"change_risk": {"blast_radius":"BLAST_RADIUS_CLUSTER"},`},
 	}
-	if got := approvalGate([]string{"Change risk: blast=cluster, approval=human_approval_required"}); got != "human_approval_required" {
-		t.Fatalf("failed to read an approval class: %q", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			scoped := scopedPreflight(t, `{
+				"status": "PREFLIGHT_STATUS_OK",
+				`+tc.risk+healthyAuthority+`
+			}`)
+			got := routeAuthority(scoped, nil)
+			if got.Route != RouteHuman {
+				t.Fatalf("an unclassified approval gate granted authority: %+v", got)
+			}
+			if !strings.Contains(got.Condition, "approval gate") {
+				t.Fatalf("condition does not name what was missing: %q", got.Condition)
+			}
+		})
 	}
-	if got := approvalGate([]string{"Change risk: something else entirely"}); got != "unreadable" {
-		t.Fatalf("an unparseable change-risk line did not fail closed: %q", got)
-	}
+}
 
-	// A change-risk line this build cannot read must not grant authority.
-	scoped := scopedPreflight(t, `{
+// TestRoutingReadsChangeRiskStructurallyNotAsProse states the property that
+// replaced the old string parser: the change-risk sentence Sensei still renders
+// into required_actions for older consumers has no effect on routing whatsoever.
+// Only the structured verdict decides.
+func TestRoutingReadsChangeRiskStructurallyNotAsProse(t *testing.T) {
+	// The prose says no approval is needed. The structured verdict says a human
+	// must approve. The structured verdict wins.
+	contradicted := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
-		"required_actions": ["Change risk: reformatted by a future Sensei"],
+		"required_actions": ["Change risk: blast=local, approval=none"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_SECURITY","approval_gate":"APPROVAL_GATE_MANUAL_ONLY"},
 		`+healthyAuthority+`
 	}`)
-	if got := routeAuthority(scoped, nil); got.Route != RouteHuman {
-		t.Fatalf("an unreadable approval class granted authority: %+v", got)
+	if got := routeAuthority(contradicted, nil); got.Route != RouteHuman {
+		t.Fatalf("prose overrode the structured verdict: %+v", got)
+	}
+
+	// And a change-risk line this build could never have parsed is simply not
+	// consulted, because the structured verdict is present and says none.
+	reworded := scopedPreflight(t, `{
+		"status": "PREFLIGHT_STATUS_OK",
+		"required_actions": ["Change risk: reformatted by a future Sensei"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
+		`+healthyAuthority+`
+	}`)
+	if got := routeAuthority(reworded, nil); got.Route != RouteArchitectural {
+		t.Fatalf("a reworded prose line still reached the router: %+v", got)
+	}
+
+	// The router must not read the sentence at all.
+	if strings.Contains(fileText(t, "internal/workflow/authority.go"), "Change risk:") {
+		t.Error("the router still recognises the change-risk sentence; the structured fields are the contract")
 	}
 }
 
 // TestApprovalClassesRequiringAHumanAllEscalate walks Sensei's real approval
-// vocabulary rather than a single representative value.
+// vocabulary rather than a single representative value, including a member this
+// build has never seen.
 func TestApprovalClassesRequiringAHumanAllEscalate(t *testing.T) {
-	for _, gate := range []string{"human_approval_required", "manual_only", "multi_step_approval_required", "never"} {
+	for _, gate := range []string{
+		"APPROVAL_GATE_REVIEW_REQUIRED",
+		"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
+		"APPROVAL_GATE_MULTI_STEP_APPROVAL_REQUIRED",
+		"APPROVAL_GATE_MANUAL_ONLY",
+		"APPROVAL_GATE_INVENTED_BY_A_LATER_SENSEI",
+	} {
 		scoped := scopedPreflight(t, `{
 			"status": "PREFLIGHT_STATUS_OK",
-			"required_actions": ["Change risk: blast=service, approval=`+gate+`"],
+			"change_risk": {"blast_radius":"BLAST_RADIUS_SERVICE","approval_gate":"`+gate+`"},
 			`+healthyAuthority+`
 		}`)
 		got := routeAuthority(scoped, nil)
 		if got.Route != RouteHuman {
 			t.Fatalf("approval=%s did not require a human: %+v", gate, got)
 		}
-		if !strings.Contains(got.Condition, gate) {
-			t.Fatalf("condition does not name the approval class %q: %q", gate, got.Condition)
+		human := strings.ToLower(strings.TrimPrefix(gate, "APPROVAL_GATE_"))
+		if !strings.Contains(got.Condition, human) {
+			t.Fatalf("condition does not name the approval class %q: %q", human, got.Condition)
+		}
+		if !strings.Contains(got.Condition, "service") {
+			t.Fatalf("condition does not name the blast radius: %q", got.Condition)
 		}
 	}
 }

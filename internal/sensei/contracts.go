@@ -176,6 +176,56 @@ type Invariant struct {
 	Status   string `json:"status"`
 }
 
+// ChangeRisk is Sensei's change-risk verdict: how far a change reaches, and
+// what approval that reach therefore requires.
+//
+// Sensei still renders the same verdict into required_actions as "Change risk:
+// blast=..., approval=..." for older consumers. This repository reads the
+// structured form only. A governance transition that has to recognise a
+// sentence is one wording change away from silently reading "no approval
+// required", and it would fail in the safe-looking direction.
+//
+// Both fields carry Sensei's enum member names, and both treat an absent or
+// unspecified value as unclassified rather than as the mildest member. That
+// ordering is the contract's, not this client's: the proto says so of each
+// enum's zero value in as many words.
+type ChangeRisk struct {
+	BlastRadius  string   `json:"blast_radius"`
+	ApprovalGate string   `json:"approval_gate"`
+	Reasons      []string `json:"reasons"`
+}
+
+// Classified reports whether Sensei actually reached an approval verdict.
+//
+// The negative case is a real answer and not an error: a preflight that could
+// not classify the region has not said the change is safe to make unattended,
+// so a caller must escalate rather than read the absence as permission.
+func (c ChangeRisk) Classified() bool {
+	gate := strings.TrimSpace(c.ApprovalGate)
+	return gate != "" && gate != "APPROVAL_GATE_UNSPECIFIED"
+}
+
+// Gate is the approval class in the form a human reads, e.g.
+// "human_approval_required". An unclassified gate says so rather than
+// resolving to any member of the vocabulary.
+func (c ChangeRisk) Gate() string {
+	if !c.Classified() {
+		return "unclassified"
+	}
+	return humanState(c.ApprovalGate, "APPROVAL_GATE_")
+}
+
+// Blast is the reach in the form a human reads, e.g. "cluster". An unreported
+// reach is "unclassified", never "local": absence of a classification is not a
+// small blast radius.
+func (c ChangeRisk) Blast() string {
+	radius := strings.TrimSpace(c.BlastRadius)
+	if radius == "" || radius == "BLAST_RADIUS_UNSPECIFIED" {
+		return "unclassified"
+	}
+	return humanState(radius, "BLAST_RADIUS_")
+}
+
 // PreflightDecision is the typed form of awareness_preflight.
 type PreflightDecision struct {
 	Status           PreflightStatus `json:"status"`
@@ -185,6 +235,7 @@ type PreflightDecision struct {
 	DirectInvariants []Invariant     `json:"direct_invariants"`
 	RequiredActions  []string        `json:"required_actions"`
 	BlindSpots       []string        `json:"blind_spots"`
+	ChangeRisk       ChangeRisk      `json:"change_risk"`
 }
 
 // Permits is the strict, file-scoped gate: Sensei affirmatively cleared this
