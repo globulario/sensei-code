@@ -144,6 +144,33 @@ func (s *ChatGPTSession) AskFork(ctx context.Context, prompt string) (string, er
 	return s.runTurn(result.Thread.ID, prompt)
 }
 
+// AskIndependent asks on a thread that inherits nothing.
+//
+// This is not AskFork with a different flag, and the difference is the whole
+// point. A fork carries the architect's conversation — including the argument
+// for why this change is the right one, in the architect's own words — into the
+// session of whoever is supposed to attack it. The attacker then agrees more
+// often, and the transcript cannot tell that agreement apart from a real one.
+//
+// So an adversarial role gets a thread with no history at all. It sees the
+// governing facts and the artifact, and forms its own view of both. The turn is
+// still ephemeral, so the human's conversation stays clean either way.
+func (s *ChatGPTSession) AskIndependent(ctx context.Context, prompt string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if strings.TrimSpace(prompt) == "" {
+		return "", errors.New("ChatGPT prompt is empty")
+	}
+	if err := s.ensureStarted(ctx); err != nil {
+		return "", err
+	}
+	id, err := startThread(s.server, s.model, s.cwd, s.personality)
+	if err != nil {
+		return "", fmt.Errorf("start an independent ChatGPT thread: %w", err)
+	}
+	return s.runTurn(id, prompt)
+}
+
 func (s *ChatGPTSession) ensureStarted(ctx context.Context) error {
 	if s.server != nil && s.threadID != "" {
 		return nil

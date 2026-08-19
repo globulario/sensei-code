@@ -267,7 +267,10 @@ func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 // guarantee for cross-agent continuity: what the second worker receives is
 // assembled from the task's recorded position, not from a summary paragraph.
 func TestWorkerSwitchCarriesSemanticStateNotJustProse(t *testing.T) {
-	body := fileText(t, "internal/workflow/engine.go")
+	// Both files: the handoff is assembled in adversarial.go and consumed in
+	// engine.go. The property is that state survives a change of worker, not
+	// that it is written down in one particular file.
+	body := fileText(t, "internal/workflow/engine.go") + fileText(t, "internal/workflow/adversarial.go")
 	if strings.Contains(body, "handoverNote") {
 		t.Error("the prose handover note is still in use; semantic state should supersede it")
 	}

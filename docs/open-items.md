@@ -467,6 +467,100 @@ It clears with a republication of the affected domain from its own corpus:
 cd <services checkout> && sensei build --repo github.com/globulario/services
 ```
 
+## The reviewer is now genuinely adversarial; the roles behind it are not built
+
+`globulario/sensei-code#15`, sequenced behind `#22`. **What landed hardens the
+one adversarial role that already existed. The roles that would produce new
+verdict classes — counterexample hunter, proof runner — are deliberately not
+built.**
+
+The sequencing recorded on `#15` is that a hunter or proof verdict has nowhere
+authoritative to terminate until an admitted candidate can carry verdicts into
+Sensei, and that building them first produces agents agreeing amongst themselves
+while looking like independent evidence. That still holds and nothing here
+changes it.
+
+What *did* need doing before then is that the reviewer this repository already
+ran was not independent, and nothing said so:
+
+- Machine turns on the ChatGPT provider all went through `AskFork`, which forks
+  the human architectural thread. That is right for the architect and wrong for
+  the reviewer: it carries the architect's entire case for the change into the
+  session of the role whose job is to attack it. An attacker that has already
+  read the argument agrees more often than one that looked at the artifact cold,
+  and the transcript cannot tell the two apart.
+- The reviewer's verdict carried no identity for the bytes it judged, so it
+  could be carried onto a later revision without anything noticing.
+- Nothing stopped the configured reviewer from being the provider that had just
+  implemented the candidate.
+
+None of that adds a verdict class. It makes the existing one mean what it
+already claimed to mean.
+
+Landed:
+
+- **Roles are semantic** (`internal/roles`). A closed vocabulary — architect,
+  implementer, reviewer, counterexample hunter, proof runner — with the session
+  rule attached to the role rather than to the caller. The last two are named
+  and unfilled, and no provider declares them: a declared capability nobody can
+  exercise makes an unassignable role look like an available one.
+- **Independence is unsettable.** `agent.Request.session()` returns `fresh` for
+  an adversarial role whatever the caller passes, and `provider.AskIndependent`
+  opens a thread with no history rather than forking the architect's. A field a
+  caller can set to "continue" is a field that will eventually be set to
+  "continue" by a refactor nobody reviews for this property.
+- **Verdicts are bound to the bytes they judged.** The candidate revision is
+  digested from the diff rather than taken from Sensei's audit, so a review is
+  still bound on a run where the audit could not execute — which is exactly the
+  run where a stale verdict would go unnoticed. A verdict about the previous
+  revision is refused as superseded; one about another task is refused as
+  foreign. The two refusals say different things because they mean different
+  things.
+- **Self-review is impossible rather than discouraged.** The implementer is
+  excluded when the reviewer is assigned, from a read-only reviewer roster kept
+  separate from the implementors — an implementor's argv carries write
+  capability, and a reviewer able to fix what it is attacking can report it
+  clean. A deployment that cannot field an independent reviewer fails the role
+  instead of quietly letting one review itself.
+- **Findings are structured.** Severity is a closed vocabulary, a blocking
+  finding must point at something a worker can open, and a verdict that accepts
+  over its own blocking finding is refused rather than resolved silently in
+  favour of the softer half.
+- **Agreement has no path to authority.** There is no majority function to call.
+  A reconciliation receipt resting on no canonical evidence is refused however
+  many agents concurred, and the refusal says why. Unanimity is reportable and
+  not actionable, which is the whole distinction.
+- **Risk decides rigor, read structurally.** `Routing` carries Sensei's blast
+  radius and approval gate forward instead of consuming them, and a task with no
+  recorded risk reading is judged at the strictest setting — the same fail-closed
+  reading the authority router learned when an absent verdict was taken for
+  permission.
+
+Of section 10's fourteen properties, eleven are mechanically covered: 1, 2, 3, 4,
+5, 6, 7, 8, 10, 12 and 14. **Property 9 (counterexample evidence reopens a
+reviewer-accepted candidate) is not implemented**, because the hunter is not.
+Property 11 is covered for cross-provider review and not for the counterexample
+requirement, for the same reason. Property 13 holds through the existing
+authority router.
+
+Not done, and each says why:
+
+- **The hunter and proof roles wait for `#22`.** A counterexample stage was
+  written and removed rather than shipped: it worked, and every verdict it
+  produced would have terminated in this repository's session log. Removing it
+  was cheaper than explaining later why a local receipt was not evidence.
+- **No live run.** Nothing here has driven a real reviewer. The properties are
+  facts about the code; whether a real Codex reviewer given an independent
+  session returns better findings than a forked one is empirical and unanswered.
+  Quota resets 2026-08-20.
+- **Cross-provider review needs two working providers.** The default roster is
+  codex and claude, so excluding the implementer leaves exactly one reviewer and
+  no alternate to fall back to.
+- **The architect is not excluded from review.** Only the implementer is. An
+  architect reviewing a candidate built to its own plan is the same
+  self-certification one level up, and the default configuration avoids it by
+  accident rather than by construction.
+
 ## Executing the admission chain needs a claims corpus, not only a provider
 
 `globulario/sensei-code#22`. The chain itself is composed and tested

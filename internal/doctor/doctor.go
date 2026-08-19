@@ -162,7 +162,12 @@ func configuredCommands(cfg config.Config) []string {
 	for _, a := range cfg.Implementors {
 		add(a.Command)
 	}
-	add(cfg.Reviewer.Command)
+	// The whole review roster, not only the first reviewer: an alternate whose
+	// executable is missing is a fallback that will fail at the moment it is
+	// needed, which is exactly when nobody is watching for it.
+	for _, a := range cfg.ReviewRoster() {
+		add(a.Command)
+	}
 	sort.Strings(commands)
 	return commands
 }
@@ -193,7 +198,9 @@ func configuredProviders(cfg config.Config) []provider.ID {
 	for _, a := range cfg.Implementors {
 		add(a)
 	}
-	add(cfg.Reviewer)
+	for _, a := range cfg.ReviewRoster() {
+		add(a)
+	}
 	return out
 }
 

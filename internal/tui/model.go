@@ -733,6 +733,11 @@ func isConversation(e event.Event) bool {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
 		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority:
 		return true
+	case event.ArchitectReconciliation:
+		// Why the loop took the branch it took when two agents disagreed. Filed
+		// as activity it would scroll past, and the next thing the human sees is
+		// a run that changed course for no visible reason.
+		return true
 	case event.GuidanceDelivered:
 		return true
 	case event.DecisionRecorded:
@@ -791,6 +796,13 @@ func currentPhase(e event.Event) string {
 		return "Sensei auditing the candidate diff"
 	case event.CandidateChanged:
 		return "candidate diff ready"
+	}
+	// A finding is the only part of a review a worker can act on, so it stays
+	// visible: an adversarial loop whose findings scroll past as unlabelled
+	// agent output is one nobody can follow.
+	switch e.Kind {
+	case event.ReviewStarted, event.ReviewFinding, event.ReviewCompleted:
+		return firstLine(e.Summary)
 	}
 	switch e.Source {
 	case event.SourceArchitect:

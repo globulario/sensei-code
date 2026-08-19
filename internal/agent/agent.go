@@ -10,26 +10,54 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/processx"
 	"github.com/globulario/sensei-code/internal/provider"
+	"github.com/globulario/sensei-code/internal/roles"
 )
 
-type Role string
-
-const (
-	Architect   Role = "architect"
-	Implementor Role = "implementor"
-	Reviewer    Role = "reviewer"
-)
+// Role names the job this request is for. The vocabulary lives in
+// internal/roles because it is semantic: a role is a job with its own context
+// and its own session rule, not a synonym for whichever provider is configured
+// to do it today.
+type Role = roles.Role
 
 type Request struct {
 	Role      Role
 	TaskID    string
 	Workspace string
 	Prompt    string
+	// Session says whether this turn may inherit the architectural
+	// conversation. It defaults to the role's own rule rather than to
+	// "continue", so an adversarial role that nobody remembered to configure
+	// still starts clean.
+	Session roles.Session
+}
+
+// session resolves the mode actually used, so the caller records what happened
+// rather than what it asked for.
+//
+// An adversarial role is Fresh whatever the caller asked for. Independence is
+// the property that makes its verdict worth anything, and a field a caller can
+// set to Continue is a field that will eventually be set to Continue -- by a
+// refactor, by a copied struct literal, by somebody threading a session id
+// through for an unrelated reason. Making it unsettable is cheaper than
+// noticing later that reviews stopped being independent.
+func (r Request) session() roles.Session {
+	if r.Role.Adversarial() {
+		return roles.Fresh
+	}
+	if r.Session == roles.Continue || r.Session == roles.Fresh {
+		return r.Session
+	}
+	return r.Role.SessionMode()
 }
 
 type Result struct {
 	Text      string
 	SessionID string
+	// Session is the mode this turn actually ran in. It is returned rather than
+	// assumed because independence is a claim, and a claim about independence
+	// has to be checkable after the fact -- deriving it from the fact that the
+	// call succeeded would only prove that the call succeeded.
+	Session roles.Session
 }
 
 type Runner interface {
@@ -67,14 +95,26 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 
 	// ChatGPT is a first-class architectural provider, not a synonym for a
 	// one-shot `codex exec`. Codex app-server is only the transport to the
-	// authenticated ChatGPT subscription. Architectural/review machine turns
-	// use an ephemeral fork of the human conversation so they inherit context
-	// without filling the visible chat with JSON contracts.
+	// authenticated ChatGPT subscription. Machine turns are ephemeral either
+	// way, so a JSON contract never lands in the human's conversation; what
+	// differs by role is whether the turn inherits that conversation at all.
 	if strings.EqualFold(strings.TrimSpace(c.Name), string(provider.ChatGPT)) {
-		if req.Role != Architect && req.Role != Reviewer {
+		if req.Role.Mutates() {
 			return Result{}, fmt.Errorf("ChatGPT provider is read-only architectural authority, not an implementation worker")
 		}
-		text, err := provider.ChatGPTForWorkspace(req.Workspace).AskFork(ctx, req.Prompt)
+		if !req.Role.Valid() {
+			return Result{}, fmt.Errorf("unknown role %q", req.Role)
+		}
+		session := provider.ChatGPTForWorkspace(req.Workspace)
+		var text string
+		var err error
+		if mode := req.session(); mode == roles.Fresh {
+			// An adversarial role must not read the case for the work before
+			// judging it. A fork would hand it exactly that.
+			text, err = session.AskIndependent(ctx, req.Prompt)
+		} else {
+			text, err = session.AskFork(ctx, req.Prompt)
+		}
 		if err != nil {
 			return Result{}, err
 		}
@@ -82,7 +122,7 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 			emit(event.New(c.SessionID, req.TaskID, c.Source, event.Output, line, map[string]string{"stream": "assistant"}))
 		}
 		emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.label()+" finished", nil))
-		return Result{Text: text}, nil
+		return Result{Text: text, Session: req.session()}, nil
 	}
 
 	var out strings.Builder
@@ -98,7 +138,11 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 	}
 	text, sid := normalizeOutput(c.Name, out.String())
 	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.label()+" finished", nil))
-	return Result{Text: text, SessionID: sid}, nil
+	// A one-shot CLI turn inherits nothing by construction: the process is new,
+	// and no resume handle is passed to it. That is reported as Fresh rather
+	// than as whatever was requested, because what the caller wanted and what
+	// the transport did are different facts and only the second one is evidence.
+	return Result{Text: text, SessionID: sid, Session: roles.Fresh}, nil
 }
 
 // Activity renders one line of an agent's output as something a human can

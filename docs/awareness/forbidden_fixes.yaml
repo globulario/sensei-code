@@ -17,3 +17,13 @@ forbidden_fixes:
     related_invariants:
       - sensei_code.provider.unknown_auth_is_not_connected
     reason: Treating a successful account/logout or a login-completed notification as proof that the account state changed. The provider acknowledges before it settles. Confirm the resulting state by reading it back from the owner within a bounded wait, and report what was actually observed.
+  - id: sensei_code.give_an_adversarial_role_the_architects_thread_for_context
+    title: Fork the architect's thread into a reviewer or hunter so it has context
+    summary: 'It reads as an improvement: the reviewer understands the change better, its findings are more relevant, and the review looks stronger. What it actually does is remove the independence that made the verdict worth recording, and it does so invisibly — the reviewer still returns findings, still sometimes refuses, and nothing in the transcript says it was reading the author''s argument. Governing facts and the artifact go in the packet; the conversation that argued for the change does not. The same applies to giving a reviewer the worker''s reasoning, and to letting a caller set the session mode on an adversarial request.'
+    protects:
+      files:
+        - internal/agent/agent.go
+    related_invariants:
+      - sensei_code.roles.adversarial_roles_inherit_nothing_and_bind_to_a_revision
+    reason: an independent review is independent of the session, the author, and the revision it did not read
+    contract: an independent review is independent of the session, the author, and the revision it did not read

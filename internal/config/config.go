@@ -46,13 +46,22 @@ type Config struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	} `json:"sensei"`
-	Architect    Agent             `json:"architect"`
-	Implementors []Agent           `json:"implementors"`
-	Reviewer     Agent             `json:"reviewer"`
-	Workflow     Workflow          `json:"workflow"`
-	Behavioral   behavioral.Config `json:"behavioral"`
-	Permissions  Permissions       `json:"permissions"`
-	Validation   Validation        `json:"validation"`
+	Architect    Agent   `json:"architect"`
+	Implementors []Agent `json:"implementors"`
+	// Reviewer is the first independent reviewer, and Reviewers is the bounded
+	// set to fall back through when it cannot do the job.
+	//
+	// They are a separate roster from Implementors rather than the same list
+	// reused, and the difference is not cosmetic: an implementor is configured
+	// with write capability, so reviewing with an implementor's argv would hand
+	// the reviewer a sandbox it can edit in. A read-only reviewer that is asked
+	// to attack a candidate must not be able to fix it and report it clean.
+	Reviewer    Agent             `json:"reviewer"`
+	Reviewers   []Agent           `json:"reviewers,omitempty"`
+	Workflow    Workflow          `json:"workflow"`
+	Behavioral  behavioral.Config `json:"behavioral"`
+	Permissions Permissions       `json:"permissions"`
+	Validation  Validation        `json:"validation"`
 }
 
 func Default() Config {
@@ -71,6 +80,14 @@ func Default() Config {
 		{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "workspace-write", "-"}},
 	}
 	c.Reviewer = Agent{Name: "codex", Command: "codex", Args: []string{"exec", "--sandbox", "read-only", "-"}}
+	// The alternates exist so a reviewer that is out of quota, unreachable or
+	// returning unparseable output costs a fallback rather than a person's
+	// attention. Both are read-only: claude reviews in plan mode, which refuses
+	// edits, for the same reason codex reviews in a read-only sandbox.
+	c.Reviewers = []Agent{
+		c.Reviewer,
+		{Name: "claude", Command: "claude", Args: []string{"-p", "--output-format", "stream-json", "--verbose", "--permission-mode", "plan"}},
+	}
 	c.Workflow = Workflow{ReviewCycles: 3}
 	// Reporting is opt-in and unscoped by default: filing this repository's
 	// outcomes against a guessed project or domain would corrupt somebody
@@ -112,6 +129,22 @@ type Validation struct {
 	Vet   []Command `json:"vet"`
 	Build []Command `json:"build"`
 	Test  []Command `json:"test"`
+}
+
+// ReviewRoster is the bounded set of independent reviewers, in fallback order.
+//
+// A configuration that names only the single Reviewer still gets a roster of
+// one rather than an empty one: a deployment with no alternate is a real and
+// supportable state, and it should fail by exhausting a bounded set rather than
+// by finding no set at all.
+func (c Config) ReviewRoster() []Agent {
+	if len(c.Reviewers) != 0 {
+		return c.Reviewers
+	}
+	if strings.TrimSpace(c.Reviewer.Name) == "" {
+		return nil
+	}
+	return []Agent{c.Reviewer}
 }
 
 // Command is one executable check.

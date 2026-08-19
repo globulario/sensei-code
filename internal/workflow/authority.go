@@ -55,6 +55,18 @@ type Routing struct {
 	Route Route
 	// Condition is the exact certifiability condition that produced the route.
 	Condition string
+	// Blast and Gate are Sensei's structured change-risk verdict, carried
+	// forward rather than consumed here.
+	//
+	// The router only asks one question of them — may this proceed without a
+	// person — and answering it discards how expensive the change is. That
+	// second fact decides something else: how adversarially the candidate must
+	// be judged. A local change reviewed by whoever is free and a system-wide
+	// one reviewed by the provider that wrote it are not the same risk, and
+	// without these fields the second is indistinguishable from the first by the
+	// time the reviewer is assigned.
+	Blast string
+	Gate  string
 }
 
 // RequiresHuman reports whether this routing interrupts a person.
@@ -76,6 +88,17 @@ func (r Routing) Granted() bool { return r.Route == RouteArchitectural }
 // investigation, but it cannot by itself manufacture a human interruption when
 // Sensei can certify the question.
 func routeAuthority(scoped sensei.PreflightDecision, claims []Claim) Routing {
+	// The risk reading is attached to whatever route the decision reaches. It is
+	// not the route's justification; it is a fact about the change that outlives
+	// this decision, and a caller that has to re-derive it will re-derive it
+	// from a preflight taken at a different moment.
+	r := decideRoute(scoped, claims)
+	r.Blast = scoped.ChangeRisk.Blast()
+	r.Gate = scoped.ChangeRisk.Gate()
+	return r
+}
+
+func decideRoute(scoped sensei.PreflightDecision, claims []Claim) Routing {
 	// Sensei vouching for itself comes first. Every judgement below reads a
 	// field of this same result, so if the graph is stale or unauthoritative
 	// then the coverage and risk answers are not evidence either — they are a

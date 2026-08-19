@@ -29,6 +29,7 @@ import (
 	"github.com/globulario/sensei-code/internal/project"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/retrieval"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -385,7 +386,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv,
 	}
 	result, err := architect.Run(ctx, agent.Request{
-		Role: agent.Architect, TaskID: taskID, Workspace: e.Repo.Root,
+		Role: roles.Architect, TaskID: taskID, Workspace: e.Repo.Root,
 		Prompt: assistedPrompt(e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
 			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved),
 			repoEvidence.Render(), standing.Render()),

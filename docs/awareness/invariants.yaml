@@ -386,3 +386,20 @@ invariants:
       - internal/command/command_test.go:TestUnknownCommandIsNotTreatedAsATask
       - internal/command/command_test.go:TestGroupsCoverEveryCommand
 
+  - id: sensei_code.roles.adversarial_roles_inherit_nothing_and_bind_to_a_revision
+    title: An adversarial role inherits nothing from the work it judges, and its verdict is bound to the revision it read
+    severity: critical
+    status: active
+    description: Asking a second model whether a change is correct produces a second opinion only if it did not already read the case for the change. The reviewer here was reached through AskFork, which hands it the architect's whole conversation, and its verdict carried no identity for the bytes it read. So a review was correlated with what it judged and could be carried onto a later revision, and neither fact was visible in the transcript. An adversarial role therefore opens a provider session that inherits nothing, cannot be the provider that implemented the candidate, and produces a verdict bound to the exact candidate revision, refused as superseded when the worker edits it.
+    protects:
+      files:
+        - internal/roles/roles.go
+        - internal/roles/verdict.go
+        - internal/agent/agent.go
+        - internal/workflow/adversarial.go
+    required_tests:
+      - internal/agent/agent_session_test.go:TestAnAdversarialRoleAlwaysStartsFresh
+      - internal/roles/roles_test.go:TestARevisionInvalidatesTheVerdictBoundToThePreviousOne
+      - internal/roles/roles_test.go:TestAWorkerCannotReviewItsOwnCandidate
+      - internal/workflow/adversarial_test.go:TestAReviewRunsInAnIndependentSession
+    contract: an independent review is independent of the session, the author, and the revision it did not read

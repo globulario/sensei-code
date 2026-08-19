@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/globulario/sensei-code/internal/roles"
 )
 
 // ID identifies a login surface, not a model. Provider credentials remain
@@ -23,6 +25,41 @@ const (
 )
 
 var Ordered = []ID{ChatGPT, Codex, Claude, Antigravity}
+
+// Roles is what this adapter declares it can satisfy.
+//
+// Declared rather than inferred, because the answer is a property of the
+// transport and not of how capable the model is. ChatGPT reaches this project
+// through the Codex app-server as a read-only architectural authority: it can
+// architect and it can review, and it cannot implement — which says nothing
+// about whether it could write the code.
+//
+// A provider that declares nothing cannot be assigned a role. That is the
+// correct default for an adapter nobody has wired up: the alternative is
+// discovering what it cannot do by giving it a job.
+//
+// counterexample_hunter and proof_runner are absent from every list on purpose.
+// Neither has a driver yet, and declaring a capability nobody can exercise makes
+// an unassignable role look like an available one.
+func Roles(id ID) []roles.Role {
+	switch id {
+	case ChatGPT:
+		return []roles.Role{roles.Architect, roles.Reviewer}
+	case Codex, Claude:
+		return []roles.Role{roles.Architect, roles.Implementer, roles.Reviewer}
+	default:
+		return nil
+	}
+}
+
+// Capability is this adapter's declaration, in the form the role assigner reads.
+func Capability(name string) roles.Capability {
+	id, err := Parse(name)
+	if err != nil {
+		return roles.Capability{Provider: name}
+	}
+	return roles.Capability{Provider: name, Roles: Roles(id)}
+}
 
 type Status struct {
 	ID            ID     `json:"id"`
