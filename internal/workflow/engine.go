@@ -127,6 +127,56 @@ func (e *Engine) ResolveHuman(taskID, optionID string) bool {
 	}
 }
 
+// deferToken is what DeferAuthority puts on the pending channel. It is not an
+// option ID and cannot collide with one: options are normalised to "1", "2",
+// "3" before the question is ever shown.
+const deferToken = "\x00defer"
+
+// errAuthorityDeferred reports a Level-3 question the human left standing.
+//
+// It is an error only in the sense that the run cannot continue — nothing
+// failed, nothing was decided, and nothing is cleaned up.
+var errAuthorityDeferred = errors.New("the human deferred a Level-3 authority decision")
+
+// DeferAuthority leaves a Level-3 question unanswered without answering it.
+//
+// The human may always stop computation. What they cannot do with a keystroke
+// is satisfy an authority boundary: the router established a condition, and
+// only choosing one of its options can move the workflow past it. Deferring
+// says "not now" and preserves the question exactly as asked.
+//
+// It reports whether the task was actually waiting on a decision, so a caller
+// never tells a person it paused something that was not asking them anything.
+func (e *Engine) DeferAuthority(taskID string) bool {
+	e.mu.Lock()
+	ch, ok := e.pending[taskID]
+	e.mu.Unlock()
+	if !ok {
+		return false
+	}
+	select {
+	case ch <- deferToken:
+		return true
+	default:
+		return false
+	}
+}
+
+// DeferredAuthority is the settled history of a deferred Level-3 question:
+// everything needed to ask exactly it again, and nothing that would let it be
+// re-derived.
+//
+// Re-running the router on resume would look equivalent and is not. The graph,
+// the model and the environment may all have moved, so a replay can produce a
+// different question — and answering a different question would quietly satisfy
+// a boundary nobody was asked about.
+type DeferredAuthority struct {
+	Condition string             `json:"condition"`
+	Domain    string             `json:"domain"`
+	BaseSHA   string             `json:"base_sha"`
+	Decision  authority.Decision `json:"decision"`
+}
+
 // conversationSoFar reconstructs the dialogue with the architect from the
 // session record. The architect process is started fresh for every turn, so
 // without this it has no memory and reintroduces itself on every message.
@@ -207,7 +257,24 @@ func (c taskContext) intent() string {
 func (e *Engine) run(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	e.announceMode(taskID, governedMode(RequestedByHuman))
+	e.execute(ctx, taskID, task)
+}
+
+// execute is the governed run itself, separated from how it was entered.
+//
+// A task resumed after a deferred authority decision re-enters here rather than
+// through run: it was created and announced once already, and announcing it a
+// second time as a fresh human request would overwrite its real provenance.
+func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	fail := func(err error) {
+		// A deferred authority decision has already recorded itself, with the
+		// question attached. Reporting it again as a failure or a stop would
+		// describe the same moment three ways, and two of them would be wrong:
+		// nothing failed, and the human did not withdraw from the work — they
+		// declined to answer one question about it.
+		if errors.Is(err, errAuthorityDeferred) {
+			return
+		}
 		// A stopped run is not a failed one, and recording it as failure would
 		// teach the behavioural record that this task shape breaks. The human
 		// withdrew; nothing was proved about the work. The outcome is still
@@ -1056,6 +1123,17 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case choice := <-ch:
+		if choice == deferToken {
+			// Deliberately not an AuthorityResolved event: nothing was
+			// resolved. The question is recorded whole, and the run ends
+			// without touching the candidate, calling a provider, or asking
+			// Sensei anything further.
+			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.WorkflowAwaitingAuthority,
+				"authority decision deferred; the question stands", DeferredAuthority{
+					Condition: condition, Domain: domain, BaseSHA: baseSHA, Decision: decision,
+				}))
+			return "", errAuthorityDeferred
+		}
 		for _, option := range options {
 			if option.ID == choice {
 				// The answer is authoritative for this run the moment it is
@@ -1498,6 +1576,55 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
 }
 
+// resumeAuthority re-asks a Level-3 question that was deferred, exactly as it
+// was asked.
+//
+// Nothing is re-derived on the way in: no preflight, no start gate, no router.
+// That is the whole point. The router already exercised authority
+// classification and produced this condition; re-running it against a graph
+// that may have moved could produce a different question, and answering a
+// different question would satisfy a boundary nobody was asked about. The
+// question is settled history. What happens after it is answered is not: the
+// work re-derives from current evidence, and the recorded answer is honoured
+// there by the same mechanism that stops the router asking twice in one task.
+func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) {
+	var deferred DeferredAuthority
+	if err := json.Unmarshal(task.AwaitingAuthority, &deferred); err != nil {
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed,
+			"the deferred authority question could not be read back, so it cannot be asked again: "+err.Error(), nil))
+		return
+	}
+	if len(deferred.Decision.Options) == 0 {
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed,
+			"the deferred authority question carried no options, so there is nothing to answer", nil))
+		return
+	}
+
+	// Sensei is started only to persist the answer if one is given. It is not
+	// consulted about the question.
+	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
+	if err != nil {
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed,
+			fmt.Errorf("start Sensei: %w", err).Error(), nil))
+		return
+	}
+	defer sc.Close()
+
+	choice, err := e.awaitChoice(ctx, sc, task.TaskID, deferred.Condition, deferred.Domain, deferred.BaseSHA,
+		deferred.Decision, deferred.Decision.Options)
+	if err != nil {
+		// Deferred again, or stopped at the boundary. Either way the question
+		// stands and the workflow does not move past it.
+		if !errors.Is(err, errAuthorityDeferred) {
+			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+		}
+		return
+	}
+	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+		"authority decision answered on resume; continuing the task: "+choice, nil))
+	e.execute(ctx, task.TaskID, task.Task)
+}
+
 // Resume continues a task that was interrupted after its plan was approved. The
 // candidate worktree still holds the work, so this re-enters the implementation
 // stage with the reviewer's last findings rather than re-deciding the plan.
@@ -1506,6 +1633,10 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
+		if len(task.AwaitingAuthority) != 0 {
+			e.resumeAuthority(ctx, task)
+			return
+		}
 		fail := func(err error) {
 			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
 			e.reportOutcome(ctx, "failure", task.Task, err.Error())

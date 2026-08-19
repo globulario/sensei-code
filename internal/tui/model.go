@@ -284,7 +284,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed || e.Kind == event.WorkflowStopped {
+		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed ||
+			e.Kind == event.WorkflowStopped || e.Kind == event.WorkflowAwaitingAuthority {
 			m.busy = false
 			m.pending = nil
 			m.pendingTask = ""
@@ -349,6 +350,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			key := msg.String()
 			if key == "ctrl+c" {
 				return m, tea.Quit
+			}
+			if key == "esc" {
+				// Esc at an authority boundary defers the question; it does not
+				// answer it. Once Sensei has established that this decision is
+				// a person's, there is no architect-authorized continuation
+				// left, so a keystroke must not be able to mean "no" — that
+				// would be a third answer nobody gave. The question is kept
+				// whole and /resume asks it again.
+				if !m.engine.DeferAuthority(m.pendingTask) {
+					return m, tea.Batch(cmds...)
+				}
+				m.pending = nil
+				m.pendingTask = ""
+				m.busy = false
+				m.lines = append(m.lines, dimStyle.Render("deferred · the question stands, /resume asks it again"), "")
+				cmds = append(cmds, tea.ClearScreen)
+				return m, tea.Batch(cmds...)
 			}
 			for _, option := range m.pending.Options {
 				if key == option.ID {
@@ -514,6 +532,10 @@ func renderEvent(e event.Event) string {
 	}
 	if e.Kind == event.WorkflowFailed {
 		prefix = errorStyle.Render("✗ FAILED")
+		indent = "  "
+	}
+	if e.Kind == event.WorkflowAwaitingAuthority {
+		prefix = dimStyle.Render("◇ DEFERRED")
 		indent = "  "
 	}
 	if e.Kind == event.WorkflowStopped {
@@ -701,7 +723,8 @@ func max(a, b int) int {
 // few lines the human actually needs to read.
 func isConversation(e event.Event) bool {
 	switch e.Kind {
-	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed, event.WorkflowStopped:
+	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
+		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority:
 		return true
 	case event.GuidanceDelivered:
 		return true
@@ -910,7 +933,7 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 		return m, tea.ClearScreen
 	case "/resume":
 		if len(m.resumable) == 0 {
-			m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was interrupted after its plan was approved"), "")
+			m.lines = append(m.lines, dimStyle.Render("nothing to resume: no task was left mid-flight or holding a deferred decision"), "")
 			return m, tea.ClearScreen
 		}
 		task := m.resumable[len(m.resumable)-1]

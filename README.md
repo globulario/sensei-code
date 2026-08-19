@@ -162,6 +162,7 @@ The first Go foundation is being built around these boundaries:
   `/audit`, `/gate`, `/refactor`, `/learn`
 - `/run` authorizes the task; the plan is shown, never voted on
 - Esc stops a running task, leaving the candidate as it stands
+- Esc at a Level-3 decision defers the question; only a chosen option answers it
 - guidance typed during a run, delivered at the next worker cycle
 - one candidate per task, handed between workers instead of restarted
 - `/resume` for a task interrupted after it was planned
