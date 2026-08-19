@@ -170,7 +170,9 @@ would keep the graph and reinstate the custody defect proved in
 `sensei-code#10`. Neither trade is worth making, and the second would restore a
 green light by hiding the class of bug that invalidated the earlier acceptance.
 
-**Until #176 lands, do not start a governed run in this repository.** Each one
+**Superseded.** The hold below described the state before 2026-08-19; the
+two-domain property is now verified and this repository has its own authority
+server. See "The two-domain authority property is verified" further down. Each one
 takes authority away from the services server that another workstream depends
 on. This is a constraint of the shared substrate, not a policy choice. Assisted
 mode is unaffected: it reads, and says so when the graph cannot vouch for
@@ -377,37 +379,65 @@ explicitly unspecified one, and on a member this build has never seen.
 publishes the fields, and skips rather than passes when the endpoint cannot
 scope this repository, so it cannot report a verdict nobody gave.
 
-## The configured Sensei endpoint is serving another repository's graph
+## The two-domain authority property is verified; the services leg is not
 
-Found while verifying the above, not yet fixed. `.sensei-code/config.json`
-points this repository at `localhost:10121`, which the `sensei-code#10`
-disposition established as the sensei-code authority server. The process
-currently listening there is not that server:
+`globulario/sensei-code#13`, upstream `globulario/sensei#176`. **Repaired and
+verified on 2026-08-19, in a dedicated store, without touching the services one.**
+
+The endpoint drift recorded here previously — `:10121` serving the Sensei
+repository's own graph while this repository was configured to trust it — is
+gone. This repository now has its own deployment:
 
 ```text
-:10120  awareness-graph -oxigraph-url 127.0.0.1:7878 -home-domain globular
-        domains [github.com/globulario/services globular], 120243 triples
-:10121  awareness-graph -oxigraph-url 127.0.0.1:7880
-        -home-domain github.com/globulario/sensei
-        domain [github.com/globulario/sensei], 8304 triples, no -awareness-dir
+sensei-code   :10122   -awareness-dir sensei-code/docs/awareness
+                       -home-domain / -repo-domain github.com/globulario/sensei-code
+Oxigraph      :7881    dedicated, not the services store
 ```
 
-So every preflight this repository issues is answered by the *Sensei*
-repository's graph, on a different Oxigraph store than the one the topology
-above describes. It does not error. It answers `coverage_insufficient`, which
-reads as "this region is thinly covered" rather than "you are asking a graph
-about a repository it has never seen" — the `sensei-code#10` failure class
-again, in read form: the request, the content and the id all say sensei-code,
-and only the deployment disagrees.
+`TestAuthorityRootOwnsItsOwnProposals` and `TestChangeRiskIsPublishedStructurally`
+both pass against it: a proposal lands in this corpus, the services corpus is
+byte-for-byte unchanged, the server stays authoritative through a reconnect, and
+change risk arrives as structured fields.
 
-Nothing here is proof of a defect in Sensei; it is a local deployment that
-drifted. It is recorded because it is invisible from the answers themselves,
-because it would have been read as evidence by any governed run started today,
-and because a proposal written through that endpoint has no `-awareness-dir` at
-all and would land wherever that server's default write root is.
+**The property this issue asked for holds.** With `sensei-code` and `sensei`
+published into one store and served by two servers, the proof set carries both
+domains, and publishing either one leaves the other authoritative — verified in
+both directions by `TestDomainAuthorityMatrix`. The issue's central claim,
+"there is no state in which both domains are authoritative", is no longer true.
 
-Restore the documented topology before the next governed run, and re-read
-`internal/acceptance/authority_root_test.go`'s result as the check that it took.
+**Two things are not proven, and neither should be read as covered.** The
+three-domain matrix including `services` is untested; it needs the services
+corpus reconciliation. And the failure still reproduces when a domain's slice
+*changes* during another's publication:
+
+```text
+UNPROVEN github.com/globulario/sensei-code — the slice for
+"github.com/globulario/sensei-code" changed during a publication of
+"github.com/globulario/sensei", so its proof cannot be carried forward
+```
+
+That is the residual sharp edge. Domains share subjects — every `sensei init`
+repository declares the same scaffold guardrails and meta-principle projections
+— so a publication can move another domain's slice and knock it out until it is
+rebuilt. The all-or-nothing publication shape `#176` asks for would cover it;
+carry-forward alone does not.
+
+## A test domain was published into the services store, and is still there
+
+Recorded because it is somebody else's repository state and it was my error.
+
+While attempting to verify the above, `sensei build --repo example.com/a` was run
+believing it would reach an isolated store. It did not, for the reason recorded
+above: the endpoint is a flag, not the project config. Seven
+`aw:repo "example.com/a"` triples landed on subjects the services domain also
+owns, the global marker rotated, and services was left UNPROVEN in the resulting
+proof set — which it had already been before, for unrelated reasons.
+
+It clears with a republication of the affected domain from its own corpus:
+
+```bash
+cd <services checkout> && sensei build --repo github.com/globulario/services
+```
 
 ## Remaining first-version control-plane slices
 

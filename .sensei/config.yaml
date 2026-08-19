@@ -18,7 +18,7 @@ store:
     store_url: http://localhost:7878/store?default
 # gRPC server configuration.
 server:
-    addr: localhost:10120
+    addr: localhost:10122
 # The portable meta-principle pack (8 categories, 134 principles —
 # authority/signal/lifecycle/dependency for backend truth, perception/
 # composition for screens, structure for code shape, evolution for safe
