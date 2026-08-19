@@ -242,10 +242,19 @@ Landed:
   a retrieval failure that silently drops out is model memory wearing the
   graph's clothes.
 
-Not done, and each is a real piece of the issue:
+Also landed:
 
-- **Relevance-driven retrieval (§C).** The turn still injects workspace status
-  and a broad preflight rather than selecting evidence from the question.
+- **Relevance-driven retrieval and a stated budget (§C, §F).**
+  `internal/retrieval` selects lookups from what the question names — paths go
+  to `awareness_briefing`, governed ids to `awareness_query` in `by_id` mode —
+  and nothing else. Reading the question routes a lookup and decides nothing:
+  a target the graph has never heard of is reported as asked-and-empty, never
+  widened until something comes back. Only typed read surfaces are reachable,
+  through an adapter that cannot name a writing tool. The budget is small and
+  is disclosed with the targets it dropped, because a turn that consulted four
+  sources out of nine reads exactly like complete coverage.
+
+Not done, and each is a real piece of the issue:
 - **Project semantic continuity (§D).** No bounded project-level summary of
   settled decisions, rejected alternatives and open hypotheses yet.
 - **Read-only investigation loop (§E).** The architect is told it may read; it

@@ -62,7 +62,7 @@ func TestAssistedWorkflowCreatesNoGovernedArtifacts(t *testing.T) {
 // that produces no candidate and no audit, because that is unreviewed change
 // with none of the machinery that would catch it.
 func TestAssistedPromptForbidsActingAndPointsAtRun(t *testing.T) {
-	prompt := assistedPrompt("/repo", "example.com/x", "ChatGPT", "why is this here", "", nil, "ws", "pf")
+	prompt := assistedPrompt("/repo", "example.com/x", "ChatGPT", "why is this here", "", nil, "ws", "pf", "(none)")
 	for _, required := range []string{"ASSISTED", "/run", "Do not produce JSON"} {
 		if !strings.Contains(prompt, required) {
 			t.Errorf("assisted prompt does not contain %q", required)
@@ -81,12 +81,12 @@ func TestAssistedPromptForbidsActingAndPointsAtRun(t *testing.T) {
 // overstated assisted claim.
 func TestAssistedTurnStatesItsCaveats(t *testing.T) {
 	prompt := assistedPrompt("/repo", "example.com/x", "ChatGPT", "q", "",
-		[]string{"Sensei cannot vouch for its own graph right now (graph stale)"}, "ws", "pf")
+		[]string{"Sensei cannot vouch for its own graph right now (graph stale)"}, "ws", "pf", "(none)")
 	if !strings.Contains(prompt, "graph stale") {
 		t.Fatalf("caveats did not reach the architect:\n%s", prompt)
 	}
 
-	clean := assistedPrompt("/repo", "example.com/x", "ChatGPT", "q", "", nil, "ws", "pf")
+	clean := assistedPrompt("/repo", "example.com/x", "ChatGPT", "q", "", nil, "ws", "pf", "(none)")
 	if !strings.Contains(clean, "(none)") {
 		t.Fatal("a turn with no caveats did not say so explicitly, which reads as truncation")
 	}

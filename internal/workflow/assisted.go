@@ -26,6 +26,7 @@ import (
 	"github.com/globulario/sensei-code/internal/continuity"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/provider"
+	"github.com/globulario/sensei-code/internal/retrieval"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -117,6 +118,55 @@ func (e *Engine) announceMode(taskID string, m TaskMode) {
 	}))
 }
 
+// renderRetrieved lays out what targeted retrieval produced, including the
+// targets that produced nothing.
+//
+// The empty answers are the ones worth keeping. An architect shown only what
+// was found will fill the gaps from memory and sound identical doing it; shown
+// that the graph was asked about a target and had nothing, it can say so.
+func renderRetrieved(outcomes []retrieval.Outcome) string {
+	if len(outcomes) == 0 {
+		return "(nothing in the question named a file or a governed id, so no targeted retrieval ran)"
+	}
+	var b strings.Builder
+	for _, o := range outcomes {
+		fmt.Fprintf(&b, "\n--- %s %s [%s] ---\n", o.Query.Kind, o.Query.Target, o.State)
+		switch o.State {
+		case retrieval.StatePresent:
+			b.WriteString(o.Text + "\n")
+		default:
+			b.WriteString(o.Detail + "\n")
+		}
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// retrievalBudget bounds how many targeted lookups one conversational turn may
+// make.
+//
+// The bound exists for the reason §F of sensei-code#9 gives: a turn must not
+// replay the whole graph, and a long conversation must not grow its own cost
+// per question. Four is small on purpose — the alternative to a small bound is
+// not a complete answer, it is a slow one built mostly of context nobody read.
+// What the bound must never be is silent, which is why Plan carries what it
+// dropped.
+const retrievalBudget = 4
+
+// senseiReader adapts the Sensei client to retrieval's read-only surface.
+//
+// The adapter exists so the retrieval package cannot reach a writing tool even
+// by mistake: it is handed an interface whose only method takes the typed read
+// surfaces, not a client that could propose, admit or advance a task.
+type senseiReader struct{ sc *sensei.Client }
+
+func (r senseiReader) CallTool(name string, args map[string]any) (retrieval.Result, error) {
+	res, err := r.sc.CallTool(name, args)
+	if err != nil {
+		return retrieval.Result{}, err
+	}
+	return retrieval.Result{Text: firstText(res), Structured: res.Structured}, nil
+}
+
 func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	e.announceMode(taskID, assistedMode())
@@ -141,6 +191,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	// authority differs, so what an unavailable answer costs differs too.
 	var observations []string
 	var consulted assist.Consulted
+	var retrieved []retrieval.Outcome
 	domain := ""
 	workspaceEvidence, preflightEvidence := "(unavailable)", "(unavailable)"
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
@@ -189,6 +240,28 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 			observations = append(observations, "Sensei preflight is unavailable: "+pfErr.Error())
 			consulted.Add(assist.Observation{Source: "preflight", State: assist.Unavailable, Reason: pfErr.Error()})
 		}
+
+		// Retrieval is driven by the question rather than by habit. The two
+		// broad reads above answer "can Sensei vouch for itself"; these answer
+		// "what governs the thing being asked about", which is a different
+		// question and the one the human actually asked.
+		plan := retrieval.PlanFor(task, retrievalBudget)
+		if len(plan.Queries) != 0 {
+			retrieved = retrieval.Execute(senseiReader{sc}, domain, plan)
+			for _, o := range retrieved {
+				consulted.Add(assist.Observation{
+					Source: string(o.Query.Kind) + " " + o.Query.Target,
+					State:  assist.Presence(o.State),
+					Reason: o.Detail,
+				})
+			}
+		}
+		if plan.Bounded() {
+			// Never a silent cap: a turn that consulted four of nine sources
+			// reads exactly like complete coverage unless it says otherwise.
+			observations = append(observations, plan.Describe())
+			consulted.Add(assist.Observation{Source: "retrieval budget", State: assist.Absent, Reason: plan.Describe()})
+		}
 	}
 
 	// Continuity is established before the architect speaks, and its verdict is
@@ -215,7 +288,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	result, err := architect.Run(ctx, agent.Request{
 		Role: agent.Architect, TaskID: taskID, Workspace: e.Repo.Root,
 		Prompt: assistedPrompt(e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
-			observations, workspaceEvidence, preflightEvidence),
+			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved)),
 	}, e.emit)
 	if err != nil {
 		fail(err)
@@ -289,7 +362,7 @@ func preflightSource(d sensei.PreflightDecision) assist.Observation {
 // because an assisted answer has no reviewer, no audit and no candidate behind
 // it — nothing downstream will catch an overstated claim, which is precisely
 // why overstating is more costly here than in governed work, not less.
-func assistedPrompt(repoRoot, domain, architectName, task, conversation string, observations []string, workspaceEvidence, preflightEvidence string) string {
+func assistedPrompt(repoRoot, domain, architectName, task, conversation string, observations []string, workspaceEvidence, preflightEvidence, retrievedEvidence string) string {
 	notes := "(none)"
 	if len(observations) != 0 {
 		notes = "- " + strings.Join(observations, "\n- ")
@@ -341,9 +414,16 @@ LIVE SENSEI WORKSPACE AUTHORITY:
 LIVE SENSEI PREFLIGHT:
 %s
 
+SENSEI EVIDENCE RETRIEVED FOR THIS QUESTION:
+This was selected by what the question named, not injected on every turn. An
+entry reporting that the graph found nothing is a real answer about that target:
+it means the graph was asked and had nothing, which is not the same as the
+target being safe, and not a reason to answer from memory instead.
+%s
+
 CONVERSATION SO FAR:
 %s
 
 THE HUMAN SAID:
-%s`, architectName, repoRoot, scope, notes, workspaceEvidence, preflightEvidence, conversationOrNone(conversation), task)
+%s`, architectName, repoRoot, scope, notes, workspaceEvidence, preflightEvidence, retrievedEvidence, conversationOrNone(conversation), task)
 }
