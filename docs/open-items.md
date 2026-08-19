@@ -232,6 +232,53 @@ Not done:
   architect surface reports no resumable handle today, which is exactly the case
   the continuity record reconstructs from.
 
+## `sensei build` publishes to a flag, not to the project's configured store
+
+Found the expensive way on 2026-08-19, and recorded because the surface is
+plausible enough to catch the next person.
+
+`.sensei/config.yaml` names a store:
+
+```yaml
+store:
+    query_url: http://localhost:7878/query
+    store_url: http://localhost:7878/store?default
+```
+
+`sensei build` does not load through it. The endpoint comes from the
+`-store-url` flag, whose default is `http://localhost:7878/store?default`, so
+editing the project config changes nothing and the build silently publishes
+wherever the flag points. A build intended for an isolated store on another port
+went into the shared services store instead, added seven `aw:repo` tags onto
+subjects services also owns — `sensei init`'s scaffold generates the same
+canonical guardrail IRIs for every repository — rotated the global marker, and
+left services UNPROVEN in the new proof set, which the build itself reported:
+
+```text
+UNPROVEN github.com/globulario/services — the slice for
+"github.com/globulario/services" changed during a publication of "example.com/a"
+```
+
+**This is `sensei-code#10`'s shape a third time.** Custody is decided by a flag
+while the operator is reading a config file, exactly as write custody is decided
+by `-awareness-dir` regardless of the domain a proposal requests. Three signals
+agree — the project config, the working directory, the domain on the command
+line — and only the flag decides. A configuration file that names a store the
+build ignores is not an inert field; it is a statement the system does not
+honour.
+
+The repair for the specific pollution is to republish the affected domain from
+its own corpus, which recomputes its slice and regenerates its proof:
+
+```bash
+cd <services checkout> && sensei build --repo github.com/globulario/services
+```
+
+Worth raising upstream: either the build should read the project's configured
+store, or `-store-url` should refuse to differ from it silently. Publishing to
+somewhere other than where the operator believes is the failure class this
+repository has now met three times in three different surfaces.
+
 ## Capability envelope is only partly enforced (P0.4)
 
 **Done.** `internal/broker` mechanically enforces three capabilities for a
