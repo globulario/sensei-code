@@ -870,22 +870,62 @@ found nothing governing. Under the current upstream coverage model *covered* and
 defined as having an anchor. The intended population is not rare here. It is
 **not currently representable**.
 
-That is an upstream question about the coverage model rather than a downstream
-question about the conditions, and it should be raised as one. The Stage 1
-conditions stay frozen: measuring a boundary and moving it are different
-activities, and doing both at once produces a boundary that fits whatever was
-measured.
+**Filed as `globulario/sensei#220`**, framed as a coverage-model expressiveness
+defect rather than an implementation bug, and deliberately as one issue rather
+than two. The unreachable branch is the implementation witness; the
+indistinguishability of `EmptyProven` from `Absent` is its semantic consequence.
+Split apart, somebody could reasonably close the first by deleting the dead
+branch — making the implementation self-consistent while destroying the
+semantics it was written for.
+
+The witness is hermetic and slightly unusual: the branch *works* when
+`computePreflightCoverage` is called directly with `indexed=1` and no anchors,
+producing `sufficient=true` and the note "1/1 file(s) indexed in graph (no rules
+apply)". Only its caller can never produce those arguments. The function can say
+`EmptyProven`; nothing can ask it to.
+
+The issue pins the invariant rather than the repair — *graph coverage must be
+independently representable from the presence of governance anchors* — and
+requires an acceptance case for a file that is examined with nothing governing
+it, **constructible without inventing a low-severity invariant**. An artificial
+non-critical anchor would produce "governed by something minor", which is a
+different population, and would let the test pass while the missing state stayed
+missing.
+
+The Stage 1 conditions stay frozen: measuring a boundary and moving it are
+different activities, and doing both at once produces a boundary that fits
+whatever was measured.
 
 **Still to measure:** an ordinary application repository, where mundane edits
 should exist — needs a Sensei endpoint serving that domain, and `:10120` is not
-running. And a synthetic positive control, which requires publishing a
-low-severity anchor into a governed corpus; not done, because manufacturing
-governance to make a feature demonstrate itself is the exact move Stage 1 exists
-to refuse.
+running.
 
-**Stage 2B — the authority grant — remains unstarted**, and now for a sharper
-reason than "nothing has qualified": on this graph nothing *can* qualify, and
-granting a skip that cannot fire would be shipping an inert privilege.
+**The synthetic positive control is not merely deferred; in the form first
+proposed it would have been the wrong experiment.** Publishing a low-severity
+anchor yields *governed by something non-critical*, which is a different
+population from *examined and governed by nothing*. It would have demonstrated
+that the classifier can find an artificially constructed qualifying case while
+sidestepping the state Level-1 exists to detect. A useful control needs a file
+that is indexed with an empty anchor set, and that is exactly what `#220` says
+cannot currently be encoded. **Being unable to write the test is part of the
+evidence rather than a gap in it.**
+
+**Status.**
+
+```text
+Stage 2A   complete — the classifier is measured counterfactually, outside the
+                      governed loop, granting nothing
+Stage 2B   blocked upstream — the EmptyProven coverage state the grant depends on
+                      is not representable by Sensei's current coverage model
+                      (globulario/sensei#220)
+```
+
+Shipping the grant now would be worse than shipping nothing. It would be an inert
+privilege, and its presence would make an architectural claim the system cannot
+support: that routine work may bypass ceremony once Sensei has proven nothing
+governs it. Sensei cannot presently prove that proposition about any file.
+
+No condition relaxation, no synthetic governance, no dormant authority grant.
 
 ## Executing the admission chain needs a claims corpus, not only a provider
 
