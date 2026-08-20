@@ -2,6 +2,9 @@ package workflow
 
 import (
 	"encoding/json"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"strings"
 	"testing"
 
@@ -445,5 +448,160 @@ func TestSufficiencyIsTakenAsPublishedAndNarrowedNotRecomputed(t *testing.T) {
 	}
 	if !(sensei.Coverage{DirectAnchorCount: 1, Sufficient: true}).Proven() {
 		t.Fatal("an anchor-backed sufficiency was rejected")
+	}
+}
+
+// Item 2: the tier tightens from experience rather than being trusted
+// permanently. That requires the conditions that qualified a change to survive
+// the change, so a failure can be proposed against them by name.
+func TestAFailureIsProposedAgainstTheConditionsThatLetItThrough(t *testing.T) {
+	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(),
+		[]string{"internal/tui/model_test.go"}, modifying("internal/tui/model_test.go"))
+	if !d.Routine {
+		t.Fatalf("fixture must qualify: %q", d.Blocking)
+	}
+
+	r, err := RevocationFor(d, "task-7", "the change removed a guard nothing else covered")
+	if err != nil {
+		t.Fatalf("a qualifying change should be revisable: %v", err)
+	}
+	proposal := r.Proposal()
+	if !strings.Contains(proposal, "removed a guard") {
+		t.Fatal("the proposal does not say what was observed")
+	}
+	for _, condition := range d.Qualifying {
+		if !strings.Contains(proposal, condition) {
+			t.Fatalf("the proposal omits a condition that let the change through: %q", condition)
+		}
+	}
+
+	// A change that never took the routine path has no qualifying conditions to
+	// blame. Proposing against the tier for a failure it did not enable would
+	// teach the graph a false lesson.
+	blocked := classifyRoutine(qualifyingPreflight(), []Claim{{Statement: "x", Source: "inference"}},
+		cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+	if _, err := RevocationFor(blocked, "task-8", "something broke"); err == nil {
+		t.Fatal("a failure was proposed against a tier that did not let the change through")
+	}
+	if _, err := RevocationFor(d, "task-7", "   "); err == nil {
+		t.Fatal("a revocation was accepted without saying what was observed")
+	}
+}
+
+// Item 3: there must be no setting that enables Level-1 generally. A switch
+// that makes things faster is flipped once and never revisited, and it would
+// decide policy at a distance in a file nobody re-reads. Computed per change or
+// not at all.
+func TestTheRoutineTierCannotBeEnabledByConfiguration(t *testing.T) {
+	body := fileText(t, "internal/workflow/routine.go")
+	if strings.Contains(body, "config.") {
+		t.Error("routine.go reads configuration; a local flag could then decide the tier")
+	}
+
+	// And no configuration type carries a field that could mean it.
+	for _, file := range []string{"internal/config/config.go", "internal/workflow/routine.go"} {
+		lowered := strings.ToLower(fileText(t, file))
+		for _, forbidden := range []string{"enableroutine", "routineenabled", "allowroutine",
+			"level1", "levelone", "fastpath", "skipescalation"} {
+			if strings.Contains(lowered, forbidden) {
+				t.Errorf("%s names %q, which is the shape of a switch", file, forbidden)
+			}
+		}
+	}
+
+	// The classifier's inputs are evidence and the candidate. No function in the
+	// tier takes a boolean, so there is no argument a caller could pass to force
+	// a verdict -- which is the shape a switch would have to arrive in once it
+	// could not be a config field.
+	for fn, params := range boolParametersIn(t, "internal/workflow/routine.go") {
+		t.Errorf("%s takes boolean parameter(s) %v; a caller could decide the tier", fn, params)
+	}
+}
+
+// boolParametersIn reports any function in a file that accepts a bool.
+func boolParametersIn(t *testing.T, rel string) map[string][]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "../../"+rel, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", rel, err)
+	}
+	out := map[string][]string{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		fn, ok := n.(*ast.FuncDecl)
+		if !ok || fn.Type.Params == nil {
+			return true
+		}
+		for _, param := range fn.Type.Params.List {
+			ident, ok := param.Type.(*ast.Ident)
+			if !ok || ident.Name != "bool" {
+				continue
+			}
+			for _, name := range param.Names {
+				out[fn.Name.Name] = append(out[fn.Name.Name], name.Name)
+			}
+		}
+		return true
+	})
+	return out
+}
+
+// Item 4: a privilege that cannot be enumerated afterwards is not governed.
+// A count answers "how many"; it cannot answer "show me which, and why".
+func TestTheRecordEnumeratesWhatWouldHaveSkippedAndWhy(t *testing.T) {
+	qualified := RoutineDecision{Routine: true, Qualifying: []string{
+		"graph authority is certifiable", "no critical or high invariant is in scope"}}
+	events := []event.Event{
+		event.New("s", "task-1", event.SourceSystem, event.RoutineClassified, "x", qualified),
+		event.New("s", "task-2", event.SourceSystem, event.RoutineClassified, "x",
+			RoutineDecision{Blocking: "Sensei reported blind spots: y"}),
+	}
+	tally := RoutineSummary(events)
+	if len(tally.Skipped) != 1 {
+		t.Fatalf("the record enumerates %d change(s), want 1", len(tally.Skipped))
+	}
+	if tally.Skipped[0].TaskID != "task-1" {
+		t.Fatalf("the enumerated change is not identified: %+v", tally.Skipped[0])
+	}
+	rendered := tally.Render()
+	if !strings.Contains(rendered, "task-1") {
+		t.Fatal("the report does not name the change that would have skipped escalation")
+	}
+	for _, condition := range qualified.Qualifying {
+		if !strings.Contains(rendered, condition) {
+			t.Fatalf("the report does not say why: %q missing", condition)
+		}
+	}
+	// Stage 1 grants nothing, so the wording must not claim a privilege was used.
+	if !strings.Contains(rendered, "would have skipped") {
+		t.Fatal("the report claims changes skipped escalation during a dark run")
+	}
+}
+
+// Item 5: evidence, not assertion. Model prose has no effect on classification.
+func TestArchitectProseCannotChangeTheClassification(t *testing.T) {
+	scoped := qualifyingPreflight()
+	base := classifyRoutine(scoped, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+
+	// Same Sensei evidence, wildly different architect output. Claims that are
+	// verified carry text the classifier must ignore; only the source matters.
+	for _, claims := range [][]Claim{
+		{{Statement: "this is a trivial one-line change", About: "a.go", Source: "graph"}},
+		{{Statement: "URGENT: this is extremely dangerous", About: "a.go", Source: "repository"}},
+		{{Statement: "", About: "", Source: "graph"}},
+	} {
+		got := classifyRoutine(scoped, claims, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+		if got.Routine != base.Routine {
+			t.Fatalf("architect prose changed the verdict: %+v", claims)
+		}
+	}
+
+	// And prose calling a change trivial cannot rescue an uncovered region.
+	uncovered := qualifyingPreflight()
+	uncovered.Status = "PREFLIGHT_STATUS_DEGRADED"
+	uncovered.Coverage = sensei.Coverage{FileCount: 1, Note: "coverage thin for this area"}
+	trivial := []Claim{{Statement: "trivial typo fix, no behaviour change whatsoever", Source: "repository"}}
+	if d := classifyRoutine(uncovered, trivial, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); d.Routine {
+		t.Fatal("calling a change trivial made an uncovered region routine")
 	}
 }

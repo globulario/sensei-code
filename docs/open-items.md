@@ -793,8 +793,38 @@ of `high_risk_files.yaml` would have got wrong — it would have found nothing t
 exclude and reported a clean pass — which is why the exclusion is delegated to
 Sensei's own derivation rather than reimplemented from one of its inputs.
 
-**Stage 2 is deliberately not started.** It grants the skip, and granting it on a
-tier that has never once qualified would be granting it on no evidence at all.
+**The four safeguards are now enforced rather than intended.**
+
+*Auditable.* The record enumerates what would have skipped escalation and why —
+each change identified, with the conditions that qualified it — because a count
+answers "how many" and cannot answer "show me which". During Stage 1 the wording
+says *would have skipped*, since claiming a privilege was exercised that never
+was is the same overstatement in miniature.
+
+*Not a configuration flag.* `routine.go` reads no configuration, no type carries
+a field shaped like a switch, and no function in the tier accepts a boolean —
+asserted over the syntax tree, because once a switch cannot be a config field the
+next shape it takes is a parameter.
+
+*Revocable by evidence.* A routine change later implicated in a failure produces
+a proposal against the conditions that let it through, naming each one. It
+produces the proposal and never records it: a tier that could rewrite its own
+qualifying conditions in response to its own failures would be deciding its own
+scope. A change that never took the routine path is refused rather than blamed,
+because proposing against the tier for a failure it did not enable teaches the
+graph a false lesson.
+
+*Promoted knowledge only.* Enforced at condition 3, as described above.
+
+**Evidence, not assertion, is tested rather than assumed.** Identical Sensei
+evidence with wildly different architect prose produces an identical
+classification, and calling a change trivial cannot rescue an uncovered region.
+The classifier never sees prose — only a claim's `source` — but a property that
+holds by construction is worth a test that fails if the construction changes.
+
+**Stage 2 is the only Stage 1 item left, and it is deliberately not started.** It
+grants the skip, and granting it on a tier that has never once qualified would be
+granting it on no evidence at all.
 
 ## Executing the admission chain needs a claims corpus, not only a provider
 

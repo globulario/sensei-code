@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -363,6 +364,61 @@ func (e *Engine) editCheck(sc *sensei.Client, start certifiedStart, changed []st
 	return sensei.DecodeEditCheck(result)
 }
 
+// Revocation turns a routine change that later went wrong into a proposal
+// against the conditions that let it through.
+//
+// The tier tightens from experience instead of being trusted permanently. That
+// only works if the conditions that qualified a change survive the change: a
+// privilege granted on reasoning nobody kept cannot be revised, only revoked
+// wholesale or defended on faith.
+//
+// This produces the proposal and does not make it. Recording knowledge is
+// Sensei's, and a tier that could quietly rewrite its own qualifying conditions
+// in response to its own failures would be deciding its own scope.
+type Revocation struct {
+	// Qualified is what let the change through, verbatim from the decision.
+	Qualified []string `json:"qualified"`
+	// Candidate identifies the change now implicated.
+	Candidate string `json:"candidate,omitempty"`
+	// Failure is what was observed.
+	Failure string `json:"failure"`
+}
+
+// RevocationFor builds the proposal, or reports that there is nothing to revise.
+//
+// A change that never took the routine path has no qualifying conditions to
+// blame, and proposing against the tier for a failure it did not enable would
+// teach the graph a false lesson. That is the one case this refuses.
+func RevocationFor(d RoutineDecision, candidate, failure string) (Revocation, error) {
+	if !d.Routine {
+		return Revocation{}, fmt.Errorf("this change did not take the routine path, so the tier did not enable the failure")
+	}
+	if strings.TrimSpace(failure) == "" {
+		return Revocation{}, errors.New("a revocation must say what was observed")
+	}
+	if len(d.Qualifying) == 0 {
+		return Revocation{}, errors.New("the decision recorded no qualifying conditions, so there is nothing to revise")
+	}
+	return Revocation{Qualified: d.Qualifying, Candidate: candidate, Failure: strings.TrimSpace(failure)}, nil
+}
+
+// Proposal renders the failure_mode a human reviews before it is recorded.
+func (r Revocation) Proposal() string {
+	var b strings.Builder
+	b.WriteString("A change classified routine was implicated in a failure.\n\n")
+	b.WriteString("OBSERVED: " + r.Failure + "\n")
+	if r.Candidate != "" {
+		b.WriteString("CANDIDATE: " + r.Candidate + "\n")
+	}
+	b.WriteString("\nTHE CONDITIONS THAT LET IT THROUGH, and which this proposal is against:\n")
+	for i, c := range r.Qualified {
+		b.WriteString(fmt.Sprintf("  %d. %s\n", i+1, c))
+	}
+	b.WriteString("\nOne of these is weaker than it reads. Revising the tier means naming which,\n")
+	b.WriteString("and what evidence it should have required instead.")
+	return b.String()
+}
+
 // RoutineTally summarises the dark run for a human.
 //
 // It answers the question that decides whether the tier is worth building:
@@ -375,6 +431,22 @@ type RoutineTally struct {
 	Qualified  int            `json:"qualified"`
 	Unmeasured int            `json:"unmeasured"`
 	Blocking   map[string]int `json:"blocking,omitempty"`
+	// Skipped enumerates the changes that qualified, each with the conditions
+	// that qualified it. A privilege that cannot be enumerated afterwards is not
+	// governed, and a count cannot answer "show me everything that skipped
+	// escalation, and why".
+	//
+	// During stage 1 nothing skips, so these are the changes that would have.
+	// The distinction is stated wherever this is rendered, because a list of
+	// changes under the heading "skipped" would claim a privilege was exercised
+	// that never was.
+	Skipped []SkippedChange `json:"skipped,omitempty"`
+}
+
+// SkippedChange is one change the tier let through, and why.
+type SkippedChange struct {
+	TaskID     string   `json:"task_id,omitempty"`
+	Qualifying []string `json:"qualifying"`
 }
 
 // RoutineSummary reads the session record and tallies what the dark run saw.
@@ -395,6 +467,7 @@ func RoutineSummary(events []event.Event) RoutineTally {
 		}
 		if d.Routine {
 			tally.Qualified++
+			tally.Skipped = append(tally.Skipped, SkippedChange{TaskID: ev.TaskID, Qualifying: d.Qualifying})
 			continue
 		}
 		tally.Blocking[generalise(d.Blocking)]++
@@ -417,6 +490,12 @@ func (t RoutineTally) Render() string {
 	b.WriteString("\n")
 	for _, reason := range sortedByCount(t.Blocking) {
 		b.WriteString(fmt.Sprintf("  %3d × %s\n", t.Blocking[reason], reason))
+	}
+	for _, s := range t.Skipped {
+		b.WriteString("  would have skipped escalation: " + taskOrUnnamed(s.TaskID) + "\n")
+		for _, c := range s.Qualifying {
+			b.WriteString("      because " + c + "\n")
+		}
 	}
 	if t.Qualified == 0 && t.Classified > 0 {
 		b.WriteString("  Nothing qualified. If one condition accounts for all of it, the answer is\n")
@@ -446,6 +525,13 @@ func generalise(reason string) string {
 		}
 	}
 	return reason
+}
+
+func taskOrUnnamed(id string) string {
+	if strings.TrimSpace(id) == "" {
+		return "(a change the record did not name)"
+	}
+	return id
 }
 
 func sortedByCount(counts map[string]int) []string {
