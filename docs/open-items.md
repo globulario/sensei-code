@@ -628,6 +628,75 @@ Not done, and each says why:
   self-certification one level up, and the default configuration avoids it by
   accident rather than by construction.
 
+## Level-1 routine is measuring, and nothing qualifies yet
+
+`docs/p1-level-1-routine.md` **Stage 1 implemented.** The classification is
+computed on every governed run, emitted with its qualifying and blocking
+conditions, and tallied on `/report`. It grants nothing, skips nothing, and no
+branch of the workflow consults it — enforced by a test that fails if
+`RouteRoutine` is ever read outside the classifier.
+
+The nine conditions are a pure function over Sensei's structured evidence with
+no model input, and the one place a model's own statement is consulted — a claim
+marked `inference` — restricts rather than grants. Categorical exclusions run
+first and short-circuit before any condition is credited, because a routine tier
+able to fast-path an edit to its own qualifying conditions is a tier that can
+widen itself.
+
+**Two corrections to the specification, found by building it.**
+
+The document says condition 3 is served by types P0.7 already provided:
+`EmptyProven` versus `Absent`. Those types do not exist anywhere in
+`internal/sensei`. They also turned out not to be needed. Asked about a real
+file it holds no facts about, the deployment answers `PREFLIGHT_STATUS_DEGRADED`
+and says so in as many words — *"this is NOT proof of safety — the graph has no
+facts about this file"* — while a path it has never heard of answers
+`PREFLIGHT_STATUS_EMPTY`. Ignorance never reaches `OK`, so condition 2 already
+excludes it. Condition 3 is asserted again anyway, against the `coverage_insufficient`
+blind spot, because the day that stops being true is the day the fast path starts
+firing on precisely the code nobody has analysed.
+
+Condition 7 is currently vacuous, and that is worth saying rather than counting
+it as a guard. None of this repository's forbidden fixes carries a matchable
+pattern, so `awareness_edit_check` returns clean for every input. It proves that
+nothing matched in a corpus where nothing can match. What the surface does get
+right is the distinction its own refusal text insists on — *"this is not an
+empty/no-guidance result"* — so `EditCheckResult` separates *answered* from
+*found nothing*, and its zero value is not clean. A check nobody ran cannot
+clear a change.
+
+**What the live run says.** `internal/workflow/routine_live_test.go` classifies
+real files against this repository's own authoritative graph:
+
+```text
+internal/workflow/engine.go   OK        3 invariants  → blocked at 4: a critical invariant governs it
+internal/agent/agent.go       DEGRADED  0 invariants  → blocked at 2: preflight is degraded
+internal/tui/model_test.go    EMPTY     0 invariants  → blocked at 2: preflight is empty
+internal/roles/roles.go       DEGRADED  0 invariants  → blocked at 2: preflight is degraded
+docs/p1-level-1-routine.md    EMPTY     0 invariants  → blocked at 2: preflight is empty
+```
+
+Nothing qualifies, and one condition accounts for almost all of it: **coverage**.
+Only the governed file reached `OK`, and it is governed, so condition 4 correctly
+stops it. That is exactly the outcome the specification predicted — *"Level-1
+becomes available as the graph earns it, which puts the incentive where it
+belongs"* — now measured rather than anticipated.
+
+One result deserves attention on its own: **the shape the P0 canary used does not
+qualify.** `internal/tui/model_test.go` — a test file, the accepted candidate's
+task shape — returns `EMPTY`. The graph holds no facts about test files, so the
+cheapest and most obviously routine change in the repository is the one the tier
+cannot yet recognise.
+
+**Not established:** whether condition 5 is satisfiable here. Every file probed
+carries at least one blind spot, and `engine.go` carries two — but conditions 2
+and 4 block first in every case, so condition 5 has never been reached. It is
+unreached, not disproven, and Stage 2 must not be designed on the assumption that
+it can hold.
+
+**Stage 2 is deliberately not started.** It grants the skip, and granting it on a
+tier that has never once qualified would be granting it on no evidence at all.
+
 ## Executing the admission chain needs a claims corpus, not only a provider
 
 `globulario/sensei-code#22`. The chain itself is composed and tested

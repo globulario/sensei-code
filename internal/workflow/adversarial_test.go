@@ -157,7 +157,7 @@ func TestAnUnrecordedRiskReadingFailsClosed(t *testing.T) {
 		t.Fatalf("a task with no recorded risk reading was judged cheaply: %+v", p)
 	}
 
-	e.setPolicy("task-1", roles.PolicyFor("local", "none"))
+	e.setRouting("task-1", roles.PolicyFor("local", "none"), sensei.PreflightDecision{}, nil, nil)
 	if got := e.policyFor("task-1"); got.CrossProviderReview {
 		t.Fatal("a local change was forced through cross-provider review")
 	}

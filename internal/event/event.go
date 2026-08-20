@@ -81,6 +81,11 @@ const (
 	// one nobody resolved.
 	CandidateResolved Kind = "candidate.resolved"
 	CandidateAudited  Kind = "candidate.audited"
+	// RoutineClassified is the Level-1 dark run: whether this change would have
+	// qualified as routine, and which condition stopped it if not. During
+	// stage 1 it grants nothing and skips nothing — it is a measurement,
+	// emitted so the tier can be judged from real runs rather than intuition.
+	RoutineClassified Kind = "routine.classified"
 	// ValidationRun records checks the broker executed against a candidate.
 	ValidationRun     Kind = "validation.run"
 	AuthorityRequired Kind = "authority.required"

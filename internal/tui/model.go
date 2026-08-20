@@ -1036,6 +1036,13 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		switch c.Name {
 		case "/report":
 			text, err := architect.RunReport(client, domain, width)
+			// The Level-1 dark run is appended rather than merged: it is this
+			// session's own measurement of its own runs, not something the
+			// graph holds, and printing it under Sensei's report would attribute
+			// it to Sensei.
+			if line := routineDarkRun(engine); line != "" {
+				text = strings.TrimRight(text, "\n") + "\n\n" + line + "\n"
+			}
 			return commandResultMsg{name: c.Name, text: text, err: err}
 		case "/focus":
 			text, err := architect.RunFocus(client, domain, arg)
@@ -1049,6 +1056,21 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		}
 		return commandResultMsg{name: c.Name, err: errors.New("this command has no implementation yet")}
 	}
+}
+
+// routineDarkRun renders what the Level-1 classification has observed so far,
+// or "" when it has observed nothing. A session that has run no governed task
+// prints no line at all, because a tally of zero out of zero reads like a
+// finding and is not one.
+func routineDarkRun(engine *workflow.Engine) string {
+	if engine == nil || engine.Store == nil {
+		return ""
+	}
+	events, err := engine.Store.Load()
+	if err != nil {
+		return ""
+	}
+	return workflow.RoutineSummary(events).Render()
 }
 
 // senseiDomain resolves the repository domain for CLI-backed commands, which

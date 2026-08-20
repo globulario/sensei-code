@@ -46,24 +46,43 @@ type Engine struct {
 	// run they no longer want. Assisted turns are not registered: a
 	// conversation has nothing to withdraw.
 	stops map[string]context.CancelFunc
-	// policies holds how adversarially each task must be judged, derived from
-	// Sensei's structured change risk at the moment the plan was routed.
+	// routings holds what the authority router read when it decided each task,
+	// kept because two later decisions ask different questions of the same
+	// evidence: how adversarially the candidate must be judged, and whether the
+	// change is routine at all.
 	//
-	// It is recorded there rather than re-derived at review time because the two
-	// readings would come from preflights taken at different moments, and the
-	// one that decides how hard to attack the candidate must be the one that was
-	// true when the plan was authorised.
-	policies map[string]roles.Policy
+	// It is recorded at routing time rather than re-derived, because a second
+	// preflight would describe a possibly-moved graph while appearing to
+	// describe the moment the plan was authorised.
+	routings map[string]routingRecord
 }
 
-// setPolicy records the risk reading that governs this task's role assignment.
-func (e *Engine) setPolicy(taskID string, p roles.Policy) {
+// routingRecord is the evidence one plan was routed on.
+type routingRecord struct {
+	Policy roles.Policy
+	Scoped sensei.PreflightDecision
+	Claims []Claim
+	// Planned is what the approved plan named, so a later widening is
+	// detectable against the decision rather than against the diff.
+	Planned []string
+}
+
+// setRouting records what the router read when it decided this task.
+func (e *Engine) setRouting(taskID string, p roles.Policy, scoped sensei.PreflightDecision, claims []Claim, planned []string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.policies == nil {
-		e.policies = map[string]roles.Policy{}
+	if e.routings == nil {
+		e.routings = map[string]routingRecord{}
 	}
-	e.policies[taskID] = p
+	e.routings[taskID] = routingRecord{Policy: p, Scoped: scoped, Claims: claims, Planned: planned}
+}
+
+// routingFor returns what was recorded, and whether anything was.
+func (e *Engine) routingFor(taskID string) (routingRecord, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	r, ok := e.routings[taskID]
+	return r, ok
 }
 
 // policyFor returns the recorded reading, or the fail-closed one.
@@ -73,10 +92,8 @@ func (e *Engine) setPolicy(taskID string, p roles.Policy) {
 // low risk — and reading it as low risk is the same mistake the old change-risk
 // parser made when it returned "" and the caller took it for permission.
 func (e *Engine) policyFor(taskID string) roles.Policy {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if p, ok := e.policies[taskID]; ok {
-		return p
+	if r, ok := e.routingFor(taskID); ok {
+		return r.Policy
 	}
 	return roles.PolicyFor("", "")
 }
@@ -892,6 +909,15 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return false, plan, lastReview, lastAudit, err
 		}
 
+		// Stage 1 of the Level-1 routine tier: classify, report, grant nothing.
+		//
+		// The classification is computed on every governed run and skips no
+		// step, because the question it answers -- would this have qualified,
+		// and if not which condition stopped it -- can only be settled from
+		// real runs. Deciding it from intuition is how a fast path acquires
+		// conditions that were never true.
+		e.classifyForDarkRun(sc, start, taskID, tc, diff)
+
 		review, err := e.resolveReview(ctx, taskID, assignment,
 			reviewPacket(*tc, binding, start, plan, diff, lastAudit, evidence.Render()), worker.Name)
 		if err != nil {
@@ -1042,15 +1068,15 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
-			routing, err := e.routePlan(sc, start, task, d)
+			routing, scoped, err := e.routePlan(sc, start, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
 			// How expensive this change is decides how adversarially it is
-			// judged later. Recording it here binds that reading to the moment
-			// the plan was authorised, rather than to a preflight taken again
-			// when the reviewer is assigned.
-			e.setPolicy(taskID, roles.PolicyFor(routing.Blast, routing.Gate))
+			// judged later, and whether it is routine at all. Recording both
+			// here binds them to the moment the plan was authorised, rather
+			// than to a preflight taken again further down the loop.
+			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			switch {
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
@@ -1088,11 +1114,11 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, err := e.routePlan(sc, start, task, d)
+			routing, scoped, err := e.routePlan(sc, start, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
-			e.setPolicy(taskID, roles.PolicyFor(routing.Blast, routing.Gate))
+			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			if routing.Granted() {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
@@ -1284,20 +1310,25 @@ func shortDigest(d string) string {
 // This is the first preflight in the workflow that can name files: the start
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
-func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string, d architectureDecision) (Routing, error) {
+func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
 	}
 	result, err := sc.CallTool("awareness_preflight", args)
 	if err != nil {
-		return Routing{}, fmt.Errorf("Sensei scoped preflight: %w", err)
+		return Routing{}, sensei.PreflightDecision{}, fmt.Errorf("Sensei scoped preflight: %w", err)
 	}
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
-		return Routing{}, err
+		return Routing{}, sensei.PreflightDecision{}, err
 	}
-	return routeAuthority(scoped, d.Claims), nil
+	// The scoped decision is returned as well as the route. The router reduces
+	// it to one question -- who owns this plan -- and the Level-1 classifier
+	// asks a different one of the same evidence. Re-querying instead would ask
+	// a graph that may have moved between the two questions, and the answers
+	// would then describe different moments while appearing to describe one.
+	return routeAuthority(scoped, d.Claims), scoped, nil
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
