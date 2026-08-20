@@ -734,6 +734,22 @@ skill-ingest`, and the server's `inScopePatterns` selects them by domain without
 regard to promotion. So a pattern-only sufficiency is exactly the unpromoted
 grant the safeguard forbids.
 
+**Filed upstream as `globulario/sensei#218`**, with a hermetic counterexample
+rather than a code-reading: the test calls `computePreflightCoverage` directly
+with the shape a review-only pattern arrives in — no graph, no store, no fixture
+— and it reports `sufficient=true` on `direct_anchor_count=0`,
+`indexed_file_count=0`. The root cause turned out to be narrower and worse than a
+missing filter: `MatchedImplementationPattern` carries no status, promotion state
+or provenance at all, so the coverage computation could not make the distinction
+even if it tried.
+
+The blast radius there is contained, and the issue says so: patterns raise
+`coverage.sufficient` and suppress the `EMPTY` downgrade, but the honest-DEGRADED
+gate runs first and is not overwritten, so a consumer keying on `status` is
+unaffected. A consumer keying on `sufficient` is not — and separating "the graph
+looked and found nothing" from "the graph never looked" is that field's entire
+purpose.
+
 It cannot happen here today, and that was checked rather than assumed. The store
 holds only promoted classes for this domain — `Invariant`, `FailureMode`,
 `ForbiddenFix`, `Decision`, `Guardrail`, `Test`, `SourceFile`, 26 of them
