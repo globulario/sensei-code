@@ -766,11 +766,32 @@ pattern is a reasonable basis for advice and a poor one for silence — it says
 code like this usually looks like that, which is not the graph having examined
 these files and found nothing governing them.
 
-**Not established:** whether condition 5 is satisfiable here.**Not established:** whether condition 5 is satisfiable here. Every file probed
-carries at least one blind spot, and `engine.go` carries two — but conditions 2
-and 4 block first in every case, so condition 5 has never been reached. It is
-unreached, not disproven, and Stage 2 must not be designed on the assumption that
-it can hold.
+**Not established:** whether condition 5 is satisfiable here.**Condition 5 is reachable, load-bearing, and was nearly recorded as neither.**
+An earlier note here said it had never been reached, because conditions 2 and 4
+blocked first in every file probed. Testing the delegated high-risk exclusion
+found the case that reaches it:
+
+```text
+docs/awareness/invariants.yaml   status OK · 0 invariants · coverage proven
+  → not routine: Sensei reported blind spots: file path under high-risk directory
+    (4 conditions held first)
+```
+
+That file passes conditions 1 through 4. Without condition 5 the repository's own
+governance corpus would have been classified routine and skipped escalation.
+
+**The delegated exclusion is tested, and it holds.**
+`internal/workflow/protection_live_test.go` reads the effective protection set
+Sensei published and asserts that the tier refuses every file in it. All nine
+files in the current snapshot are refused, by three different conditions — a
+critical invariant for two of them, degraded coverage for six, and the high-risk
+blind spot for the governance corpus.
+
+The registry that the specification names is empty: `manual_count: 0`, every
+protected path arrives by derivation. That is precisely the case a local re-read
+of `high_risk_files.yaml` would have got wrong — it would have found nothing to
+exclude and reported a clean pass — which is why the exclusion is delegated to
+Sensei's own derivation rather than reimplemented from one of its inputs.
 
 **Stage 2 is deliberately not started.** It grants the skip, and granting it on a
 tier that has never once qualified would be granting it on no evidence at all.
