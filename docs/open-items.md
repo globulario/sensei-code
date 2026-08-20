@@ -152,7 +152,7 @@ missing until a rebuild was finally required.
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
 
-## `infer-claims` binds a working tree to a commit that does not contain it
+## `infer-claims` bound a working tree to a commit that did not contain it
 
 `globulario/sensei#216`, found while clearing `sensei-code#22`'s first
 prerequisite on 2026-08-19. Recorded because the document it produces is
@@ -183,18 +183,41 @@ files are really there on disk — and one silent decider disagrees with all of
 them. A caller cannot notice, because every field it would check says
 `resolved`.
 
-The fix is upstream and it is a choice, not a bug with one answer: either scan
-the committed revision, or keep scanning the working tree and report the revision
-as `dirty` rather than `resolved`. Reporting is enough — an unbound corpus that
-says it is unbound is usable, and a bound one that is wrong is not. The second
-repair is also the smaller one, and it matches what `infer-claims` already does
-for an unresolved graph digest, which it reports as a *blocking* limitation
-rather than pretending.
+**Fixed upstream in `globulario/sensei#217` and verified here on 2026-08-19**,
+by the checkout that reported it and against the same reproduction.
 
-**Worked around here, not fixed:** `.sensei/project/claims.yaml` was generated
-from a throwaway `git worktree` at `ed56eb10c647`, so its binding is true. It
-must be regenerated from a clean tree whenever HEAD moves, and regenerating it
-from a dirty one silently reintroduces the defect.
+The repair is the second of the two offered: keep scanning the working tree, and
+when it diverges, name no revision at all. A new
+`architecture.UncommittedSourceFiles` answers the question the producer was
+assuming — are these files' working-tree bytes the bytes at this revision — and
+divergence produces `revision_status: unavailable` with a blocking
+`git_revision` limitation naming the commit and the offending files.
+
+It carries a refinement worth recording, because it is the part that makes the
+fix usable rather than merely correct: **divergence is judged over cited files
+only.** An unrelated edit or a leftover artifact would otherwise make every scan
+permanently unbindable, which would have replaced a silent wrong answer with a
+loud useless one.
+
+Verified in three states, with the rebuilt binary:
+
+```text
+clean tree            revision 2fb53d9a2700 · resolved · 2982 claims
+uncommitted .go file  revision absent · unavailable · blocking git_revision
+                      limitation naming internal/probe217/probe.go
+                      fact receipts claiming a resolved revision: 0 of 7979
+uncited stray file    revision 2fb53d9a2700 · resolved   (cited-files-only holds)
+```
+
+The middle row is the defect: before the fix that same tree produced 283
+receipts asserting `resolved` for files the named commit did not contain. Now
+nothing in the document claims a revision, including the receipts.
+
+**The workaround is retired.** `.sensei/project/claims.yaml` no longer needs a
+throwaway worktree: it is generated from the clean checkout and binds to
+`2fb53d9a2700`. It still must be regenerated whenever HEAD moves — that was
+never the defect — but generating it from a dirty tree now refuses to bind
+instead of binding wrongly, which is the difference between a trap and a chore.
 
 ## Governed runs are on hold until globulario/sensei#176
 
@@ -645,12 +668,16 @@ Two things about this document that a later reader should not have to rediscover
   purpose.
 
 `prepare-change` no longer refuses for want of inference. It now asks for the
-next inputs:
+next inputs, and supplying a scope anchor narrows the frontier to one thing:
 
 ```text
-sensei prepare-change: --graph-nt is required; at least one --file
-operation:path scope anchor is required
+$ sensei prepare-change ... --file inspect:internal/doctor/doctor.go
+sensei prepare-change: --graph-nt is required; file operation must be read or modify
 ```
+
+So the scope anchor is a matter of using the right operation verb (`read` or
+`modify`, not `inspect`), and the one genuine input still missing is the graph
+snapshot.
 
 **The `--graph-nt` snapshot is the next prerequisite, and reaching it has a
 hazard.** `sensei rebuild` generates `awareness.nt`, and by default it writes
