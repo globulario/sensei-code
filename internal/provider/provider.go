@@ -199,13 +199,26 @@ func StatusFor(ctx context.Context, id ID) Status {
 				status.Detail = "not logged in"
 				return status
 			}
-			// A key from the environment overrides the subscription login that
-			// this status describes, so the account reported here is not the one
-			// a worker will authenticate with. Saying only "connected" would
-			// describe a session the work never uses.
+			// An ambient key would override this subscription login for a bare
+			// `claude` invocation, and does not override it for Sensei Code:
+			// SessionOnlyEnv strips exactly these variables from every agent
+			// process, so the account reported here IS the one a worker
+			// authenticates with.
+			//
+			// The earlier wording said the opposite -- that the key overrides
+			// this login and the work would not use the subscription -- which
+			// contradicted the stripping it sits ten lines above. Reporting a
+			// credential the work does not use is the same defect as reporting a
+			// readiness the provider never claimed, and this file now carries
+			// both halves of that lesson.
+			//
+			// The key is still worth naming. It is what a shell running `claude`
+			// outside this tool will use, and somebody comparing the two needs to
+			// know why they differ.
 			if source := envKeySource(payload.APIKeySource); source != "" {
-				status.Detail = "authenticating with " + source +
-					" from the environment, which overrides this login; unset it to use the subscription"
+				status.Detail = "using this subscription login; " + source +
+					" is present in the environment and is stripped from agent processes," +
+					" so it applies only to " + string(id) + " run outside Sensei Code"
 			}
 			return status
 		}
