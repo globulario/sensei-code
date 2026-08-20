@@ -822,9 +822,70 @@ classification, and calling a change trivial cannot rescue an uncovered region.
 The classifier never sees prose — only a claim's `source` — but a property that
 holds by construction is worth a test that fails if the construction changes.
 
-**Stage 2 is the only Stage 1 item left, and it is deliberately not started.** It
-grants the skip, and granting it on a tier that has never once qualified would be
-granting it on no evidence at all.
+**Stage 2A: counterfactual measurement, and what it found.**
+
+Stage 1's instrument only ran inside the governed candidate loop, which made it
+incapable of measuring the population it was meant to describe — a telescope
+inside the box. `sensei-code routine-scan` classifies any change, historical or
+otherwise, grants nothing, and records which conditions it could not evaluate
+rather than silently crediting them: a replayed commit has no plan and no claims,
+so conditions 8 and 9 are marked *assumed* instead of counted as satisfied.
+
+Replaying this repository's last 39 commits:
+
+```text
+sensei-code history: 39 change(s), 0 qualified (0%)
+    19 × preflight is not ok            e.g. 1cbb8e3e1c29
+    10 × touches the governance path    e.g. f150c5028866
+     6 × a critical invariant governs   e.g. 35051658b8c6
+     3 × a high invariant governs       e.g. be424a5f9a20
+     1 × Sensei reported blind spots    e.g. 2dfad9c0c2d8
+```
+
+**The zero is structural, and it is not a matter of the conditions being too
+strict.** Reading the server settles it. `indexed` increments only for a file
+that already has a direct anchor:
+
+```go
+if len(DirectInvariants)+len(DirectFailureModes)+len(DirectIntents) > 0 { indexed++ }
+```
+
+So `indexed > 0` implies `directCount > 0`, which means the first branch of the
+coverage switch always matches first and the second is **unreachable**. Its note
+— `"%d/%d file(s) indexed in graph (no rules apply)"` — describes a state the
+code cannot produce.
+
+Both reachable paths to `sufficient` therefore require an anchor, and condition 4
+refuses critical and high invariants. The qualifying region is exactly *a file the
+graph has an anchor for, none of whose anchors is a critical or high invariant*.
+In this domain that set is empty: 14 critical invariants, 10 high, none lower,
+plus 3 failure modes attached to them.
+
+**The consequence is worth stating precisely, because it is not "loosen
+condition 4".** The population this tier was designed for is
+`docs/p1-level-1-routine.md`'s load-bearing distinction — coverage that is
+`EmptyProven` rather than `Absent`, the graph having looked and affirmatively
+found nothing governing. Under the current upstream coverage model *covered* and
+*reports nothing governing* are mutually exclusive, because being covered is
+defined as having an anchor. The intended population is not rare here. It is
+**not currently representable**.
+
+That is an upstream question about the coverage model rather than a downstream
+question about the conditions, and it should be raised as one. The Stage 1
+conditions stay frozen: measuring a boundary and moving it are different
+activities, and doing both at once produces a boundary that fits whatever was
+measured.
+
+**Still to measure:** an ordinary application repository, where mundane edits
+should exist — needs a Sensei endpoint serving that domain, and `:10120` is not
+running. And a synthetic positive control, which requires publishing a
+low-severity anchor into a governed corpus; not done, because manufacturing
+governance to make a feature demonstrate itself is the exact move Stage 1 exists
+to refuse.
+
+**Stage 2B — the authority grant — remains unstarted**, and now for a sharper
+reason than "nothing has qualified": on this graph nothing *can* qualify, and
+granting a skip that cannot fire would be shipping an inert privilege.
 
 ## Executing the admission chain needs a claims corpus, not only a provider
 
