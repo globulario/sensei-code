@@ -15,7 +15,7 @@ import (
 // through Sensei Code, so what the agent sees is what Sensei actually said.
 func runMCP(repo gitx.Repo, cfg config.Config, args []string) error {
 	if len(args) == 0 {
-		printMCPStatus(repo.Root)
+		printMCPStatus(repo.Root, cfg.Sensei.Args)
 		return nil
 	}
 	target := strings.ToLower(strings.TrimSpace(args[0]))
@@ -26,7 +26,7 @@ func runMCP(repo gitx.Repo, cfg config.Config, args []string) error {
 				failures = append(failures, err.Error())
 			}
 		}
-		printMCPStatus(repo.Root)
+		printMCPStatus(repo.Root, cfg.Sensei.Args)
 		if len(failures) != 0 {
 			return fmt.Errorf("%s", strings.Join(failures, "; "))
 		}
@@ -56,9 +56,9 @@ func parseAgent(value string) (mcpconfig.Agent, error) {
 	return "", fmt.Errorf("unknown agent %q; use codex, claude, antigravity, or all", value)
 }
 
-func printMCPStatus(repoRoot string) {
+func printMCPStatus(repoRoot string, want []string) {
 	fmt.Fprintln(os.Stdout, "Sensei MCP access per agent")
-	for i, status := range mcpconfig.Describe(repoRoot) {
+	for i, status := range mcpconfig.Describe(repoRoot, want) {
 		fmt.Printf("  %d. %-22s %s\n", i+1, mcpconfig.Label(status.Agent), formatMCP(status))
 		if status.Path != "" {
 			fmt.Printf("     %s\n", status.Path)

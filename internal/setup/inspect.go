@@ -43,7 +43,7 @@ func InspectRepository(ctx context.Context, repoRoot string, cfg config.Config) 
 	report := Inspect(ctx, options)
 	// Agent access is part of readiness: a registered server whose tools an
 	// agent cannot call is not access to Sensei.
-	for _, access := range mcpconfig.Describe(repoRoot) {
+	for _, access := range mcpconfig.Describe(repoRoot, cfg.Sensei.Args) {
 		report.Checks = append(report.Checks, mcpCheck(repoRoot, cfg, access))
 	}
 	return report

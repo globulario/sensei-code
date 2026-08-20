@@ -3,7 +3,7 @@
     "sensei": {
       "args": [
         "--awareness-addr",
-        "localhost:10120"
+        "localhost:10122"
       ],
       "command": "awareness-mcp"
     }
