@@ -23,6 +23,7 @@ package acceptance
 
 import (
 	"context"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -50,6 +51,14 @@ func TestConversationParityAcrossTurns(t *testing.T) {
 	events, done := bus.Subscribe(256)
 	defer done()
 	engine := workflow.New(gitx.Repo{Root: root}, cfg, bus, store, sessionID)
+
+	// What governed artifacts exist before a word is said. Criterion 10 is that
+	// talking adds none, and that can only be measured against the state this
+	// conversation actually started from -- a repository in use accumulates
+	// candidates from governed runs, and a list frozen when the test was
+	// written reports every later run as something a conversation produced.
+	before := governedArtifacts(t, root)
+	t.Logf("governed artifacts before the conversation: %d", len(before))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
@@ -82,8 +91,8 @@ func TestConversationParityAcrossTurns(t *testing.T) {
 	}
 
 	// Criterion 10 again, live this time: talking produced nothing governed.
-	if names := governedArtifacts(root); len(names) != 0 {
-		t.Errorf("a conversation produced governed artifacts: %v", names)
+	if added := addedSince(before, governedArtifacts(t, root)); len(added) != 0 {
+		t.Errorf("a conversation produced governed artifacts: %v", added)
 	}
 }
 
@@ -123,22 +132,34 @@ func ask(ctx context.Context, t *testing.T, engine *workflow.Engine, events <-ch
 
 // governedArtifacts reports candidate worktrees created during this test, which
 // a conversation must never produce.
-func governedArtifacts(root string) []string {
-	before := map[string]bool{}
-	for _, known := range []string{"task-1786929227938945137", "task-1786931209544068530"} {
-		before[known] = true
-	}
+// governedArtifacts is the set of candidate task ids present right now.
+//
+// A failure to read them is reported rather than returned as an empty set: an
+// unreadable candidate directory would otherwise make the criterion pass by
+// looking like a repository that has never governed anything.
+func governedArtifacts(t *testing.T, root string) map[string]bool {
+	t.Helper()
 	list, err := candidateTaskIDs(root)
 	if err != nil {
-		return nil
+		t.Fatalf("read candidate task ids: %v", err)
 	}
-	var made []string
+	out := make(map[string]bool, len(list))
 	for _, id := range list {
+		out[id] = true
+	}
+	return out
+}
+
+// addedSince returns what appeared between two snapshots.
+func addedSince(before, after map[string]bool) []string {
+	var added []string
+	for id := range after {
 		if !before[id] {
-			made = append(made, id)
+			added = append(added, id)
 		}
 	}
-	return made
+	sort.Strings(added)
+	return added
 }
 
 func truncate(s string, n int) string {

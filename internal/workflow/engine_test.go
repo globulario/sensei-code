@@ -784,3 +784,31 @@ func TestTheDecisionSurfaceIsCompleteWithoutAnyArchitectOptions(t *testing.T) {
 		t.Fatalf("a blank proposal was rendered as a choice: %+v", got)
 	}
 }
+
+// A governance receipt must cite a commit this repository contains.
+//
+// The escalation path passed the graph's SourceRepoCommit as the resolution's
+// base. That field is the rule snapshot's identity and on this installation it
+// belongs to the services repository — gate.go says so, having already been
+// bitten by comparing the two — so a real Level-3 resolution was filed citing
+// "base commit e0f49fca0357", a commit sensei-code does not contain.
+func TestAResolutionCitesThisRepositorysBaseNotTheGraphsSourceCommit(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "awaitHuman")
+	if strings.Contains(body, "start.GraphSourceCommit(") || strings.Contains(body, "start.SourceRepoCommit(") {
+		t.Fatal("the escalation still cites the rule snapshot's commit as the resolution's base")
+	}
+	if !strings.Contains(body, "e.governedBase(") {
+		t.Fatal("the escalation no longer sources the base from this repository's candidate identity")
+	}
+	// And an unestablished identity yields nothing rather than a substitute: a
+	// resolution with no stated base is honest, one with somebody else's is not.
+	fn := funcBody(t, "internal/workflow/engine.go", "governedBase")
+	if !strings.Contains(fn, "candidate.Load") {
+		t.Fatal("the base is not read from the candidate identity")
+	}
+	for _, forbidden := range []string{"SourceRepoCommit", "GraphBuildCommit"} {
+		if strings.Contains(fn, forbidden) {
+			t.Fatalf("governedBase falls back to %s; another repository's commit is not a substitute", forbidden)
+		}
+	}
+}

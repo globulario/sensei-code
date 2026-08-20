@@ -976,7 +976,7 @@ governs it. Sensei cannot presently prove that proposition about any file.
 
 No condition relaxation, no synthetic governance, no dormant authority grant.
 
-## An authority resolution recorded another repository's commit as its base
+## An authority resolution recorded another repository's commit as its base — fixed
 
 Found on 2026-08-20, in the first governed run against production code. The
 proposal is committed with the error intact rather than corrected, because it is
@@ -1000,14 +1000,29 @@ source_repo_commit: e0f49fca0357   ← services HEAD
 sensei-code HEAD:   9742f754b815
 ```
 
-The likely cause is this session's own doing: a `sensei build --repo
-github.com/globulario/services` was run at 09:41 to stand up a measurement
-endpoint, and per-domain builds appear to rotate a stamp the other domain's
-server then reports. That is the `#176` family again — one domain's publication
-perturbing another domain's authority metadata — and it is recorded as
-*suspected* rather than filed, because the alternative explanation is that this
-repository's own graph has been stale since its last build and nobody looked at
-that field.
+**The first diagnosis was wrong and is corrected here.** It was suspected that a
+services build had rotated a shared stamp — the `#176` family. It had not.
+Republishing this repository's own domain advanced `graph_build_commit` and left
+`source_repo_commit` exactly where it was, the value is nowhere in the store, and
+the field is behaving precisely as documented.
+
+`gate.go` already says what it means, having been bitten once:
+
+> SourceRepoCommit is the commit identity of the rule snapshot, which on this
+> installation belongs to the services repository … Comparing it against the
+> governed repository's HEAD compares commits from two different repositories.
+
+So Sensei reported a true fact and this repository mislabeled it. `awaitHuman`
+passed `start.GraphSourceCommit()` as the resolution's `baseSHA`, which
+`authority.Persist` then emits as `base commit …`. The rule snapshot's identity
+was being filed as the candidate's base — the exact confusion `gate.go` warns
+about, made in a different function.
+
+Fixed: the escalation now reads the base from this repository's own candidate
+identity, which `candidate.Establish` pins before any architect turn. An
+unestablished identity yields no base rather than a substitute, because a
+resolution with no stated base is honest and one carrying another repository's
+commit is not.
 
 **Do not read this as the resolution being wrong.** The human decision it
 records happened and is accurate. What is wrong is one line of provenance

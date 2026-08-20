@@ -1352,12 +1352,32 @@ func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certif
 	if condition = strings.TrimSpace(condition); condition != "" {
 		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
-	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), start.GraphSourceCommit(), decision, options)
+	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), e.governedBase(taskID), decision, options)
 }
 
 // awaitChoice presents a numbered decision to the human and blocks until they
 // answer. It is the single place a task waits on a person, so every gate --
 // architectural authority and plan approval alike -- looks the same in the UI.
+// governedBase is the commit this repository's candidate was pinned to.
+//
+// It is deliberately not the graph's SourceRepoCommit, which an earlier version
+// of this call passed. That field is the commit identity of the rule snapshot,
+// and on this installation it belongs to the services repository -- gate.go
+// says so in as many words, having already been bitten by comparing the two.
+// Passing it here labelled another repository's commit as this resolution's
+// base, and a governance receipt that cites a commit the repository does not
+// contain is evidence about nothing.
+//
+// An unestablished identity yields "" rather than a substitute. A resolution
+// with no stated base is honest; one with somebody else's base is not.
+func (e *Engine) governedBase(taskID string) string {
+	identity, ok, err := candidate.Load(e.Repo.Root, taskID)
+	if err != nil || !ok {
+		return ""
+	}
+	return identity.BaseSHA
+}
+
 func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option) (string, error) {
 	ch := make(chan string, 1)
 	e.mu.Lock()
