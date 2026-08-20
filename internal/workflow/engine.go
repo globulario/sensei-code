@@ -1332,23 +1332,10 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string,
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
-	options := d.Options
-	if len(options) == 0 {
-		options = []authority.Option{
-			{ID: "1", Label: "Preserve current human-owned intent and require another design"},
-			{ID: "2", Label: "Authorize the architectural change described above"},
-			{ID: "3", Label: "Stop this task"},
-		}
-	}
-	if len(options) > 3 {
-		options = options[:3]
-	}
 	// Human authority is deliberately presented as a tiny numbered decision
-	// surface. Model-supplied option IDs are not authority; normalize them so
-	// the TUI is always an unambiguous 1/2/3 rendezvous.
-	for i := range options {
-		options[i].ID = fmt.Sprint(i + 1)
-	}
+	// surface. Model-supplied option IDs and labels are not authority: compose
+	// normalizes the IDs and assigns every outcome itself.
+	options := composeAuthorityOptions(d.Options)
 	decision := authority.Decision{
 		Level:          authority.Human,
 		Subject:        d.HumanQuestion,
@@ -1416,8 +1403,9 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 						DecidedAt: time.Now().UTC(),
 						Question:  decision.Subject, Condition: condition,
 						OptionID: option.ID, OptionLabel: option.Label,
+						Outcome: option.Outcome,
 					}
-					if isStopOption(option.Label) {
+					if option.Outcome == authority.Stop {
 						// Stopping is not a governing decision about the
 						// architecture, so there is nothing to propose.
 						resolution.State = authority.Unsupported
@@ -1429,7 +1417,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
 				}
 
-				if isStopOption(option.Label) {
+				if option.Outcome == authority.Stop {
 					return "", errors.New("task stopped by human authority")
 				}
 				return option.ID + ": " + option.Label, nil
@@ -1439,9 +1427,47 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 	}
 }
 
-func isStopOption(label string) bool {
-	label = strings.ToLower(strings.TrimSpace(label))
-	return strings.Contains(label, "stop") || strings.Contains(label, "cancel") || strings.Contains(label, "abort")
+// composeAuthorityOptions builds the human's decision surface.
+//
+// The architect may propose alternatives; it may not decide what choosing one
+// means. Every option it supplies is stamped as an authorization of that
+// alternative by this repository, and the two refusals are always our own words
+// and always present. A model can therefore widen what a human may say yes to,
+// and can never remove, reword, or crowd out the way to say no.
+//
+// This exists as its own function because the property is worth testing
+// directly: the previous arrangement decided the meaning of an answer by
+// matching substrings in labels the architect wrote.
+func composeAuthorityOptions(proposed []authority.Option) []authority.Option {
+	const maxProposed = 2
+	options := make([]authority.Option, 0, maxProposed+2)
+	for _, option := range proposed {
+		if len(options) == maxProposed {
+			break
+		}
+		if strings.TrimSpace(option.Label) == "" {
+			continue
+		}
+		option.Outcome = authority.Authorize
+		options = append(options, option)
+	}
+	if len(options) == 0 {
+		options = append(options, authority.Option{
+			Label:   "Authorize the architectural change described above",
+			Outcome: authority.Authorize,
+		})
+	}
+	options = append(options,
+		authority.Option{
+			Label:   "Require another design (this change may still be right; this plan is not)",
+			Outcome: authority.Revise,
+		},
+		authority.Option{Label: "Stop this task", Outcome: authority.Stop},
+	)
+	for i := range options {
+		options[i].ID = fmt.Sprint(i + 1)
+	}
+	return options
 }
 
 func sourceFor(name string) event.Source {
@@ -2243,8 +2269,16 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 		if json.Unmarshal(ev.Payload, &res) != nil {
 			continue
 		}
+		// A revise answer refuses this plan and leaves the condition open, so
+		// the next plan is routed on its own merits. Recording it here would
+		// make "require another design" unsatisfiable against a condition that
+		// is a property of the region: every redesign reaches it again and is
+		// refused by the human's own request for a redesign.
+		if !res.Outcome.Settles() {
+			continue
+		}
 		if c := strings.TrimSpace(res.Condition); c != "" {
-			out[c] = authority.Authorizes(res.OptionLabel)
+			out[c] = res.Outcome.Permits()
 		}
 	}
 	return out

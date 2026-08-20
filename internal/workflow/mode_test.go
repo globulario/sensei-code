@@ -326,8 +326,21 @@ func TestAnAnsweredConditionIsNotAskedTwice(t *testing.T) {
 	if !strings.Contains(fn, "e.Store.Load") {
 		t.Error("answered conditions are not read from the session record")
 	}
-	if !strings.Contains(fn, "authority.Authorizes") {
+	if !strings.Contains(fn, "res.Outcome.Permits(") {
 		t.Error("an answer is not classified, so a refusal would read the same as an authorization")
+	}
+	// And it is classified by the outcome carried on the option, never by the
+	// option's wording. The wording can be supplied by the architect, so a
+	// label-matching classifier would let the party the boundary constrains
+	// write the words that decide whether a human authorized anything.
+	if strings.Contains(fn, "OptionLabel") {
+		t.Error("an answer is classified from its label; outcomes must come from the option, not its prose")
+	}
+	// Revise leaves the condition open rather than settling it, so a redesign
+	// is routed on its own merits instead of being refused by the human's own
+	// request for a redesign.
+	if !strings.Contains(fn, "res.Outcome.Settles(") {
+		t.Error("every answer settles the condition; revise must leave it open")
 	}
 }
 
