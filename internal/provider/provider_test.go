@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -162,5 +163,38 @@ func TestEnvironmentKeyOverrideIsReported(t *testing.T) {
 		if got := envKeySource(benign); got != "" {
 			t.Fatalf("envKeySource(%q) = %q, want no override", benign, got)
 		}
+	}
+}
+
+// The credential a status reports must be the credential the work uses.
+//
+// SessionOnlyEnv strips ANTHROPIC_API_KEY and its siblings from every agent
+// process, so an ambient key does not override the subscription login for any
+// work this tool drives. The status previously said the opposite -- that the
+// key overrode the login and the reported account was not the one a worker
+// would authenticate with -- which contradicted the stripping declared in the
+// same file.
+func TestAnAmbientKeyIsReportedAsStrippedNotAsOverriding(t *testing.T) {
+	for _, name := range []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"} {
+		var stripped bool
+		for _, v := range SessionOnlyEnv {
+			if v == name {
+				stripped = true
+			}
+		}
+		if !stripped {
+			t.Errorf("%s is not stripped from agent processes, so it would override the subscription", name)
+		}
+	}
+	// And the wording must not tell a reader the opposite of what the code does.
+	body, err := os.ReadFile("provider.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(body), "which overrides this login") {
+		t.Error("the status claims an ambient key overrides the login it reports; agent processes strip it")
+	}
+	if !strings.Contains(string(body), "stripped from agent processes") {
+		t.Error("the status no longer explains why the ambient key does not apply")
 	}
 }
