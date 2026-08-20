@@ -20,6 +20,27 @@ const (
 	Pass Status = "PASS"
 	Warn Status = "WARN"
 	Fail Status = "FAIL"
+	// Unproven is a check that verified what it could and cannot demonstrate
+	// the rest without a cost it should not pay.
+	//
+	// It exists because PASS was claiming more than it knew. An authenticated
+	// provider was reported PASS whether or not it could serve a turn: the same
+	// line appeared on a day Codex was out of quota and on a day it was not, so
+	// the check carried no information about the thing that decides whether a
+	// run can start.
+	//
+	// The architect's accepted intent for this task states the boundary
+	// (question.20de26bd75eab654, answer.70ebacb875a8a1c5): providers own
+	// whether they are configured, authenticated and able to serve turns, and
+	// doctor only projects that confirmed state; unknown capability must remain
+	// explicitly non-PASS; and the diagnostic must stay quota-safe, because a
+	// readiness check that spends a weekly-budgeted turn to answer itself is a
+	// check people learn to skip.
+	//
+	// So it is not a failure and not a pass. It does not fail the report,
+	// because nothing is known to be broken, and it is visibly not green,
+	// because nothing is known to work either.
+	Unproven Status = "UNPROVEN"
 )
 
 type Check struct {
@@ -66,7 +87,11 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 		case !status.AuthKnown:
 			check.Status = Warn
 		default:
-			check.Status = Pass
+			// Authenticated. That is a fact about credentials, not about
+			// capability, and the two were being reported as one.
+			check.Status = Unproven
+			check.Detail += " · authenticated; turn-serving capability not demonstrated" +
+				" — doctor does not spend provider quota to establish it"
 		}
 		report.Checks = append(report.Checks, check)
 	}
