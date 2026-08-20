@@ -976,6 +976,43 @@ governs it. Sensei cannot presently prove that proposition about any file.
 
 No condition relaxation, no synthetic governance, no dormant authority grant.
 
+## An authority resolution recorded another repository's commit as its base
+
+Found on 2026-08-20, in the first governed run against production code. The
+proposal is committed with the error intact rather than corrected, because it is
+`awaiting_review` and a wrong fact caught at review is working as intended, while
+one quietly patched by the agent that noticed it is evidence nobody can trust.
+
+`docs/awareness/candidates/proposals/contract_unknown.…human_authority_resolution….yaml`
+records:
+
+```text
+evidence:
+  - base commit e0f49fca0357
+```
+
+`e0f49fca0357` is not a commit in this repository. It is `globulario/services`
+HEAD. The sensei-code endpoint reports it as its own source:
+
+```text
+graph_build_commit: 6a4e837a6a6f
+source_repo_commit: e0f49fca0357   ← services HEAD
+sensei-code HEAD:   9742f754b815
+```
+
+The likely cause is this session's own doing: a `sensei build --repo
+github.com/globulario/services` was run at 09:41 to stand up a measurement
+endpoint, and per-domain builds appear to rotate a stamp the other domain's
+server then reports. That is the `#176` family again — one domain's publication
+perturbing another domain's authority metadata — and it is recorded as
+*suspected* rather than filed, because the alternative explanation is that this
+repository's own graph has been stale since its last build and nobody looked at
+that field.
+
+**Do not read this as the resolution being wrong.** The human decision it
+records happened and is accurate. What is wrong is one line of provenance
+attached to it.
+
 ## Executing the admission chain needs a claims corpus, not only a provider
 
 `globulario/sensei-code#22`. The chain itself is composed and tested
