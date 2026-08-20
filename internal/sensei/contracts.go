@@ -236,6 +236,38 @@ type PreflightDecision struct {
 	RequiredActions  []string        `json:"required_actions"`
 	BlindSpots       []string        `json:"blind_spots"`
 	ChangeRisk       ChangeRisk      `json:"change_risk"`
+	Coverage         Coverage        `json:"coverage"`
+}
+
+// Coverage is how much the graph actually knows about the files asked about.
+//
+// It answers the question that separates evidence from ignorance: "no invariant
+// applies" means one thing when the graph has indexed the region and found
+// nothing governing it, and the opposite thing when the graph has never looked.
+// Both render as an empty invariant list, and only the first is evidence.
+//
+// Sufficient is the published verdict rather than a count to be interpreted
+// here. Deriving it from the counts would be this repository re-deciding a
+// question Sensei has already answered, and the two would disagree the moment
+// either side changed what "enough" means.
+type Coverage struct {
+	DirectAnchorCount int    `json:"direct_anchor_count"`
+	FileCount         int    `json:"file_count"`
+	IndexedFileCount  int    `json:"indexed_file_count"`
+	Sufficient        bool   `json:"sufficient"`
+	Note              string `json:"note"`
+}
+
+// Proven reports that the graph covered this region well enough for its silence
+// to mean something.
+func (c Coverage) Proven() bool { return c.Sufficient }
+
+// Diagnostic explains thin coverage in Sensei's own words where it gave any.
+func (c Coverage) Diagnostic() string {
+	if note := strings.TrimSpace(c.Note); note != "" {
+		return note
+	}
+	return fmt.Sprintf("%d direct anchor(s) over %d indexed file(s)", c.DirectAnchorCount, c.IndexedFileCount)
 }
 
 // Permits is the strict, file-scoped gate: Sensei affirmatively cleared this

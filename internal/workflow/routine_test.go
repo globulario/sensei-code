@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -27,11 +28,22 @@ func qualifyingPreflight() sensei.PreflightDecision {
 	return sensei.PreflightDecision{
 		Status:    sensei.PreflightOK,
 		Authority: certifiableAuthority(),
+		Coverage:  sensei.Coverage{DirectAnchorCount: 1, FileCount: 1, IndexedFileCount: 1, Sufficient: true},
 		ChangeRisk: sensei.ChangeRisk{
 			BlastRadius:  "BLAST_RADIUS_LOCAL",
 			ApprovalGate: "APPROVAL_GATE_NONE",
 		},
 	}
+}
+
+// modifying is a candidate that edits the given paths and does nothing else:
+// no deletion, no test shrinking.
+func modifying(paths ...string) CandidateShape {
+	shape := CandidateShape{TestLineDelta: map[string]int{}}
+	for _, p := range paths {
+		shape.Files = append(shape.Files, report.FileChange{Path: p, Status: report.Modified})
+	}
+	return shape
 }
 
 func cleanEditCheck() sensei.EditCheckResult {
@@ -40,7 +52,7 @@ func cleanEditCheck() sensei.EditCheckResult {
 
 func TestARoutineChangeQualifiesOnEvidenceAlone(t *testing.T) {
 	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(),
-		[]string{"internal/tui/model_test.go"}, []string{"internal/tui/model_test.go"})
+		[]string{"internal/tui/model_test.go"}, modifying("internal/tui/model_test.go"))
 	if !d.Routine {
 		t.Fatalf("this change should qualify; blocked by %q", d.Blocking)
 	}
@@ -78,7 +90,7 @@ func TestEveryConditionCanBlockOnItsOwn(t *testing.T) {
 		{
 			name: "3 coverage is absent rather than proven",
 			scoped: func(p sensei.PreflightDecision) sensei.PreflightDecision {
-				p.BlindSpots = []string{"coverage_insufficient: no direct anchors and no strong-tier pattern match"}
+				p.Coverage = sensei.Coverage{FileCount: 1, Note: "no anchors fired, no files indexed — coverage thin for this area"}
 				return p
 			},
 			want: "ignorance rather than evidence",
@@ -149,7 +161,7 @@ func TestEveryConditionCanBlockOnItsOwn(t *testing.T) {
 			if changed == nil {
 				changed = planned
 			}
-			d := classifyRoutine(scoped, tc.claims, edit, planned, changed)
+			d := classifyRoutine(scoped, tc.claims, edit, planned, modifying(changed...))
 			if d.Routine {
 				t.Fatalf("this change must not qualify")
 			}
@@ -172,7 +184,7 @@ func TestTheRoutineTierCannotFastPathItsOwnGovernance(t *testing.T) {
 		"internal/candidate/identity.go",
 		"internal/authority/authority.go",
 	} {
-		d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, []string{path})
+		d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, modifying(path))
 		if d.Routine {
 			t.Fatalf("%s was classified routine; the tier can widen itself", path)
 		}
@@ -186,7 +198,7 @@ func TestTheRoutineTierCannotFastPathItsOwnGovernance(t *testing.T) {
 // overrides it — including a plan that named the file.
 func TestCleanEvidenceDoesNotOverrideACategoricalExclusion(t *testing.T) {
 	path := "internal/broker/broker.go"
-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, []string{path})
+	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, modifying(path))
 	if d.Routine {
 		t.Fatal("a categorical exclusion was overridden by clean evidence")
 	}
@@ -272,5 +284,118 @@ func TestTheDecisionSurvivesTheEventRecord(t *testing.T) {
 	}
 	if back.Blocking != d.Blocking || len(back.Qualifying) != 2 {
 		t.Fatalf("round trip lost detail: %+v", back)
+	}
+}
+
+// A change that removes the proof of a behaviour must never be the change
+// nobody is told about. This is the exclusion a path list cannot express, which
+// is why the classifier takes the candidate's shape instead.
+func TestDeletingATestIsNeverRoutine(t *testing.T) {
+	path := "internal/tui/model_test.go"
+	shape := CandidateShape{
+		Files:         []report.FileChange{{Path: path, Status: report.Deleted}},
+		TestLineDelta: map[string]int{},
+	}
+	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, shape)
+	if d.Routine {
+		t.Fatal("a candidate that deletes a test was classified routine")
+	}
+	if !strings.Contains(d.Blocking, "deletes a test") {
+		t.Fatalf("blocked for the wrong reason: %q", d.Blocking)
+	}
+	if len(d.Qualifying) != 0 {
+		t.Fatalf("an exclusion must short-circuit before any condition is credited: %v", d.Qualifying)
+	}
+}
+
+// Weakening is deletion's quieter form: the file survives and the assertions do
+// not. Detected as a test that lost more lines than it gained.
+func TestWeakeningATestIsNeverRoutine(t *testing.T) {
+	path := "internal/tui/model_test.go"
+	shrunk := CandidateShape{
+		Files:         []report.FileChange{{Path: path, Status: report.Modified}},
+		TestLineDelta: map[string]int{path: -12},
+	}
+	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, shrunk)
+	if d.Routine {
+		t.Fatal("a candidate that shrank a test was classified routine")
+	}
+	if !strings.Contains(d.Blocking, "weakens a test") {
+		t.Fatalf("blocked for the wrong reason: %q", d.Blocking)
+	}
+
+	// A test that grew is not weakened, and must still be able to qualify.
+	grown := CandidateShape{
+		Files:         []report.FileChange{{Path: path, Status: report.Modified}},
+		TestLineDelta: map[string]int{path: 30},
+	}
+	if d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, grown); !d.Routine {
+		t.Fatalf("adding to a test should not disqualify it: %q", d.Blocking)
+	}
+}
+
+// The shape is read from the diff, not from what anybody said about it.
+func TestTheCandidateShapeIsReadFromTheDiff(t *testing.T) {
+	diff := `diff --git a/internal/x/x_test.go b/internal/x/x_test.go
+--- a/internal/x/x_test.go
++++ b/internal/x/x_test.go
+@@ -1,8 +1,4 @@
+ package x
+-func TestOldGuard(t *testing.T) {
+-	t.Fatal("removed")
+-}
++func TestKept(t *testing.T) {}
+`
+	shape := shapeOf(diff)
+	if got := shape.TestLineDelta["internal/x/x_test.go"]; got >= 0 {
+		t.Fatalf("a test that lost three lines and gained one should read negative, got %d", got)
+	}
+	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{"internal/x/x_test.go"}, shape)
+	if d.Routine {
+		t.Fatal("a diff that shrinks a test qualified as routine")
+	}
+}
+
+// Test detection is exact for Go and deliberately over-inclusive elsewhere: a
+// false positive costs a change its fast path, a false negative lets a deleted
+// test through unremarked.
+func TestTestDetectionErrsTowardCallingSomethingATest(t *testing.T) {
+	for _, path := range []string{
+		"internal/tui/model_test.go",
+		"pkg/api/api_test.go",
+		"web/src/login.test.ts",
+		"api/tests/smoke.py",
+		"service/spec/contract_spec.rb",
+	} {
+		if !isTestPath(path) {
+			t.Errorf("%s was not recognised as a test", path)
+		}
+	}
+	for _, path := range []string{
+		"internal/workflow/engine.go",
+		"docs/open-items.md",
+		"internal/latest/protocol.go",
+	} {
+		if isTestPath(path) {
+			t.Errorf("%s was misread as a test", path)
+		}
+	}
+}
+
+// Condition 3 reads the published verdict rather than recognising a sentence.
+// The change-risk parser this repository deleted failed exactly that way.
+func TestCoverageIsReadStructurallyNotParsed(t *testing.T) {
+	body := funcBody(t, "internal/workflow/routine.go", "classifyRoutine")
+	if strings.Contains(body, "coverage_insufficient") {
+		t.Fatal("coverage is being recognised from a human-readable note again")
+	}
+	if !strings.Contains(body, "Coverage.Proven(") && !strings.Contains(body, "Proven") {
+		t.Fatal("condition 3 no longer consults the published coverage verdict")
+	}
+	// And a note wording change must not flip the verdict.
+	scoped := qualifyingPreflight()
+	scoped.Coverage.Note = "some entirely different wording"
+	if d := classifyRoutine(scoped, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
+		t.Fatalf("rewording the coverage note changed the classification: %q", d.Blocking)
 	}
 }

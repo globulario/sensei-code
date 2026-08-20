@@ -643,18 +643,35 @@ first and short-circuit before any condition is credited, because a routine tier
 able to fast-path an edit to its own qualifying conditions is a tier that can
 widen itself.
 
+Two of those exclusions cannot be expressed over a list of paths: deletion and
+weakening of an existing test. The classifier therefore takes the candidate's
+*shape* — parsed from the diff, never from what the worker said it did — where a
+deleted test is a file status and a weakened one is a test file that lost more
+lines than it gained. Weakening is a mechanical proxy for a semantic property and
+is documented as one. Test detection is exact for Go and deliberately
+over-inclusive elsewhere: a false positive costs a change its fast path, while a
+false negative would let a removed proof through unremarked.
+
 **Two corrections to the specification, found by building it.**
 
 The document says condition 3 is served by types P0.7 already provided:
 `EmptyProven` versus `Absent`. Those types do not exist anywhere in
-`internal/sensei`. They also turned out not to be needed. Asked about a real
-file it holds no facts about, the deployment answers `PREFLIGHT_STATUS_DEGRADED`
-and says so in as many words — *"this is NOT proof of safety — the graph has no
-facts about this file"* — while a path it has never heard of answers
-`PREFLIGHT_STATUS_EMPTY`. Ignorance never reaches `OK`, so condition 2 already
-excludes it. Condition 3 is asserted again anyway, against the `coverage_insufficient`
-blind spot, because the day that stops being true is the day the fast path starts
-firing on precisely the code nobody has analysed.
+`internal/sensei` — but the verdict does, and it is published structurally.
+`awareness_preflight` returns a `coverage` object that no client here decoded:
+
+```text
+internal/workflow/engine.go  direct_anchor_count 4 · indexed_file_count 1 · sufficient true
+internal/agent/agent.go      no anchors fired, no files indexed — coverage thin for this area
+```
+
+Condition 3 now reads `coverage.sufficient`. **The first implementation of it did
+not, and that was the same mistake this repository has already paid for once:**
+it searched the blind spots for the substring `coverage_insufficient`, which is a
+governance decision resting on recognising a sentence, failing open the day the
+sentence is reworded. That is exactly why `approvalGate` was deleted after
+`globulario/sensei#171` published blast radius and approval gate as fields. The
+parser was replaced with the structured read before this landed, and a test now
+fails if the substring reappears or if rewording the note changes the verdict.
 
 Condition 7 is currently vacuous, and that is worth saying rather than counting
 it as a guard. None of this repository's forbidden fixes carries a matchable
@@ -687,6 +704,22 @@ qualify.** `internal/tui/model_test.go` — a test file, the accepted candidate'
 task shape — returns `EMPTY`. The graph holds no facts about test files, so the
 cheapest and most obviously routine change in the repository is the one the tier
 cannot yet recognise.
+
+**The safeguard that is still unverified.** The specification requires that the
+classifier read *promoted* graph knowledge and never the candidates queue,
+because otherwise an agent could propose knowledge that makes its own
+change look routine. The concern is real and it lands on condition 3 rather than
+on the invariant conditions: a proposed invariant can only ever make a change
+look *less* routine, but an anchor that flips `coverage.sufficient` from false to
+true would turn ignorance into apparent evidence, which is the one direction that
+grants rather than restricts.
+
+This could not be observed here — `docs/awareness/candidates/proposals/` is
+empty, so there is nothing to influence a preflight with. What is known is that
+each returned invariant carries `status: active`, so a status filter is available
+if it turns out to be needed. Whether candidate-derived anchors count toward
+`coverage.sufficient` is a question for the deployment and possibly for upstream,
+and Stage 2 must not be granted until it is answered.
 
 **Not established:** whether condition 5 is satisfiable here. Every file probed
 carries at least one blind spot, and `engine.go` carries two — but conditions 2

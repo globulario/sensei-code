@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -85,23 +86,103 @@ var governancePath = []string{
 // through the preflight instead — as a direct invariant, or as a blind spot
 // naming the high-risk directory.
 
+// CandidateShape is what the diff did, as distinct from which paths it named.
+//
+// The specification sketches classifyRoutine as taking changed []string, and a
+// list of paths cannot express one of the rules the specification itself
+// requires: deletion or weakening of an existing test is never routine, and
+// neither is visible in a path. So the classifier takes the shape instead,
+// which subsumes the path list.
+type CandidateShape struct {
+	Files []report.FileChange
+	// TestLineDelta is net added-minus-removed lines per test file. A test that
+	// shrank is the mechanical trace of weakening; a test that grew is not.
+	TestLineDelta map[string]int
+}
+
+// shapeOf reads the diff rather than asking the worker what it did.
+func shapeOf(diff string) CandidateShape {
+	shape := CandidateShape{Files: report.FromDiff(diff).Files, TestLineDelta: map[string]int{}}
+	var current string
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+++ b/"):
+			current = strings.TrimPrefix(line, "+++ b/")
+		case strings.HasPrefix(line, "--- a/") && current == "":
+			current = strings.TrimPrefix(line, "--- a/")
+		case !isTestPath(current):
+			// nothing to count
+		case strings.HasPrefix(line, "+++") || strings.HasPrefix(line, "---"):
+			// headers, not content
+		case strings.HasPrefix(line, "+"):
+			shape.TestLineDelta[current]++
+		case strings.HasPrefix(line, "-"):
+			shape.TestLineDelta[current]--
+		}
+	}
+	return shape
+}
+
+// Paths is every path the candidate touched.
+func (c CandidateShape) Paths() []string {
+	out := make([]string, 0, len(c.Files))
+	for _, f := range c.Files {
+		out = append(out, f.Path)
+	}
+	return out
+}
+
+// isTestPath reports whether a path holds tests.
+//
+// Exact for Go, which is this repository's implementation language, and
+// heuristic elsewhere. The heuristic errs toward calling something a test,
+// which is the safe direction: a false positive costs a change its fast path
+// and nothing else, while a false negative would let a deleted test through.
+func isTestPath(path string) bool {
+	clean := strings.ToLower(strings.TrimSpace(path))
+	if clean == "" {
+		return false
+	}
+	if strings.HasSuffix(clean, "_test.go") {
+		return true
+	}
+	for _, marker := range []string{"_test.", ".test.", "test_", "/tests/", "/test/", "/spec/", "_spec."} {
+		if strings.Contains(clean, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // classifyRoutine decides whether a change is routine, from evidence only.
 //
 // scoped is a file-scoped preflight for the planned files. claims are the
 // architect's stated premises. edit is the edit-check result for the candidate.
 // planned is what the approved plan named; changed is what the candidate
 // actually touched.
-func classifyRoutine(scoped sensei.PreflightDecision, claims []Claim, edit sensei.EditCheckResult, planned, changed []string) RoutineDecision {
+func classifyRoutine(scoped sensei.PreflightDecision, claims []Claim, edit sensei.EditCheckResult, planned []string, shape CandidateShape) RoutineDecision {
 	var held []string
+	changed := shape.Paths()
 	block := func(reason string) RoutineDecision {
 		return RoutineDecision{Routine: false, Qualifying: held, Blocking: reason}
 	}
 
 	// Categorical exclusions first. They are not measurements and no amount of
 	// clean evidence overrides them.
-	for _, path := range changed {
-		if excluded, why := categoricallyExcluded(path); excluded {
+	for _, f := range shape.Files {
+		if excluded, why := categoricallyExcluded(f.Path); excluded {
 			return block(why)
+		}
+		// A deleted test is the one exclusion a path list cannot express, and
+		// the one most worth having: a change that removes the proof of a
+		// behaviour must never be the change nobody is told about.
+		if f.Status == report.Deleted && isTestPath(f.Path) {
+			return block("the candidate deletes a test: " + f.Path)
+		}
+	}
+	for path, delta := range shape.TestLineDelta {
+		if delta < 0 {
+			return block(fmt.Sprintf("the candidate weakens a test: %s lost %d line(s)", path, -delta))
 		}
 	}
 
@@ -121,15 +202,18 @@ func classifyRoutine(scoped sensei.PreflightDecision, claims []Claim, edit sense
 
 	// 3. Coverage is proven-empty rather than absent.
 	//
-	// The specification treats this as a separate condition, and in this
-	// deployment it is carried by condition 2: Sensei answers a file it holds no
-	// facts about with DEGRADED and says so in as many words — "this is NOT
-	// proof of safety — the graph has no facts about this file". It is asserted
-	// again here rather than assumed, because the day that stops being true is
-	// the day a fast path starts firing on precisely the code nobody has ever
-	// analysed.
-	if absent, why := coverageIsAbsent(scoped); absent {
-		return block(why)
+	// Read from the published coverage verdict, not inferred from the shape of
+	// the answer and not matched out of a human-readable note. An earlier draft
+	// of this condition searched the blind spots for the substring
+	// "coverage_insufficient", which is the same mistake as the change-risk
+	// parser this repository deleted: a governance decision resting on
+	// recognising a sentence, failing open the day the sentence is reworded.
+	//
+	// The distinction is the load-bearing one in the whole tier. A fast path
+	// that fired on absent coverage would fast-path precisely the code nobody
+	// has ever analysed.
+	if !scoped.Coverage.Proven() {
+		return block("coverage is not proven for these files, which is ignorance rather than evidence: " + scoped.Coverage.Diagnostic())
 	}
 	held = append(held, "coverage is proven rather than absent")
 
@@ -202,17 +286,6 @@ func categoricallyExcluded(path string) (bool, string) {
 	return false, ""
 }
 
-// coverageIsAbsent distinguishes a graph that covers this region and reports
-// nothing governing it from a graph that has never heard of it.
-func coverageIsAbsent(scoped sensei.PreflightDecision) (bool, string) {
-	for _, spot := range scoped.BlindSpots {
-		if strings.Contains(strings.ToLower(spot), "coverage_insufficient") {
-			return true, "the graph has no facts about these files, which is ignorance rather than evidence"
-		}
-	}
-	return false, ""
-}
-
 // notPlanned returns changed paths the plan never named.
 func notPlanned(planned, changed []string) []string {
 	named := make(map[string]bool, len(planned))
@@ -249,8 +322,8 @@ func (e *Engine) classifyForDarkRun(sc *sensei.Client, start certifiedStart, tas
 		return
 	}
 
-	changed := changedPaths(diff)
-	edit, err := e.editCheck(sc, start, changed, diff)
+	shape := shapeOf(diff)
+	edit, err := e.editCheck(sc, start, shape.Paths(), diff)
 	if err != nil {
 		// Reported, not swallowed, and not treated as a clean check. The
 		// surface's own refusal text is emphatic that an unreachable check is
@@ -260,7 +333,7 @@ func (e *Engine) classifyForDarkRun(sc *sensei.Client, start certifiedStart, tas
 			"edit check could not run for the routine classification: "+err.Error(), nil))
 	}
 
-	decision := classifyRoutine(record.Scoped, record.Claims, edit, record.Planned, changed)
+	decision := classifyRoutine(record.Scoped, record.Claims, edit, record.Planned, shape)
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoutineClassified,
 		"level-1 dark run — "+decision.Describe()+" (nothing was skipped)", decision))
 }

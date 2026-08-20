@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/config"
+	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -77,9 +78,10 @@ func TestRoutineClassificationAgainstTheLiveGraph(t *testing.T) {
 				t.Logf("edit check undecodable: %v", err)
 			}
 
-			d := classifyRoutine(scoped, nil, edit, []string{file}, []string{file})
-			t.Logf("status=%s invariants=%d blind_spots=%d blast=%s gate=%s edit_answered=%v",
-				scoped.Status, len(scoped.DirectInvariants), len(scoped.BlindSpots),
+			d := classifyRoutine(scoped, nil, edit, []string{file},
+				CandidateShape{Files: []report.FileChange{{Path: file, Status: report.Modified}}, TestLineDelta: map[string]int{}})
+			t.Logf("status=%s invariants=%d coverage_sufficient=%v blind_spots=%d blast=%s gate=%s edit_answered=%v",
+				scoped.Status, len(scoped.DirectInvariants), scoped.Coverage.Proven(), len(scoped.BlindSpots),
 				scoped.ChangeRisk.Blast(), scoped.ChangeRisk.Gate(), edit.Answered)
 			t.Logf("  → %s", d.Describe())
 			for _, held := range d.Qualifying {
