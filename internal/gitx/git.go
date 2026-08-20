@@ -73,6 +73,33 @@ func (r Repo) CandidateDiff(ctx context.Context, base string) (string, error) {
 	}
 	return r.Diff(ctx, base)
 }
+
+// RevList returns commit ids in a range, newest first, bounded by limit.
+//
+// Used only by the counterfactual scanner, which replays history through the
+// routine classifier. It reads history and never rewrites it.
+func (r Repo) RevList(ctx context.Context, spec string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	out, err := r.output(ctx, "rev-list", fmt.Sprintf("--max-count=%d", limit), spec)
+	if err != nil {
+		return nil, err
+	}
+	var commits []string
+	for _, line := range strings.Split(out, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			commits = append(commits, line)
+		}
+	}
+	return commits, nil
+}
+
+// CommitDiff is the patch one commit introduced, against its first parent.
+func (r Repo) CommitDiff(ctx context.Context, commit string) (string, error) {
+	return r.output(ctx, "diff", commit+"^!", "--")
+}
+
 func (r Repo) IsClean(ctx context.Context) (bool, error) {
 	s, err := r.output(ctx, "status", "--porcelain")
 	return s == "", err

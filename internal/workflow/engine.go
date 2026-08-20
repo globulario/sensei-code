@@ -21,6 +21,7 @@ import (
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/publish"
 	"github.com/globulario/sensei-code/internal/report"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/taskstate"
@@ -45,6 +46,78 @@ type Engine struct {
 	// run they no longer want. Assisted turns are not registered: a
 	// conversation has nothing to withdraw.
 	stops map[string]context.CancelFunc
+	// routings holds what the authority router read when it decided each task,
+	// kept because two later decisions ask different questions of the same
+	// evidence: how adversarially the candidate must be judged, and whether the
+	// change is routine at all.
+	//
+	// It is recorded at routing time rather than re-derived, because a second
+	// preflight would describe a possibly-moved graph while appearing to
+	// describe the moment the plan was authorised.
+	routings map[string]routingRecord
+}
+
+// routingRecord is the evidence one plan was routed on.
+type routingRecord struct {
+	Policy roles.Policy
+	Scoped sensei.PreflightDecision
+	Claims []Claim
+	// Planned is what the approved plan named, so a later widening is
+	// detectable against the decision rather than against the diff.
+	Planned []string
+}
+
+// setRouting records what the router read when it decided this task.
+func (e *Engine) setRouting(taskID string, p roles.Policy, scoped sensei.PreflightDecision, claims []Claim, planned []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.routings == nil {
+		e.routings = map[string]routingRecord{}
+	}
+	e.routings[taskID] = routingRecord{Policy: p, Scoped: scoped, Claims: claims, Planned: planned}
+}
+
+// routingFor returns what was recorded, and whether anything was.
+func (e *Engine) routingFor(taskID string) (routingRecord, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	r, ok := e.routings[taskID]
+	return r, ok
+}
+
+// policyFor returns the recorded reading, or the fail-closed one.
+//
+// An absent policy is the case that matters. It means no routing recorded a
+// risk verdict for this task, which is not the same as a task that was judged
+// low risk — and reading it as low risk is the same mistake the old change-risk
+// parser made when it returned "" and the caller took it for permission.
+func (e *Engine) policyFor(taskID string) roles.Policy {
+	if r, ok := e.routingFor(taskID); ok {
+		return r.Policy
+	}
+	return roles.PolicyFor("", "")
+}
+
+// reviewCapabilities is the bounded set of providers that may take an
+// adversarial role, built from the read-only review roster rather than from
+// every configured agent. An implementor's argv carries write capability, and a
+// reviewer able to fix what it is attacking can report it clean.
+func (e *Engine) reviewCapabilities() roles.Capabilities {
+	var caps roles.Capabilities
+	for _, a := range e.Config.ReviewRoster() {
+		caps = append(caps, provider.Capability(a.Name))
+	}
+	return caps
+}
+
+// reviewAgent resolves an assigned provider back to the argv it runs under.
+func (e *Engine) reviewAgent(name string) (config.Agent, bool) {
+	for _, a := range e.Config.ReviewRoster() {
+		if strings.EqualFold(a.Name, name) {
+			return a, true
+		}
+	}
+	return config.Agent{}, false
 }
 
 func New(repo gitx.Repo, cfg config.Config, bus *event.Bus, store *session.Store, sessionID string) *Engine {
@@ -718,7 +791,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance)
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
-		if _, err := impl.Run(ctx, agent.Request{Role: agent.Implementor, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
+		if _, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
 
@@ -818,17 +891,45 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			RequiredTests: tc.EvidenceSnapshot.RequiredTests,
 		}
 
-		review, err := e.resolveReview(ctx, taskID, reviewPrompt(*tc, plan, diff, lastAudit, evidence.Render()))
+		// The candidate revision is the identity every cross-agent artifact from
+		// here on is about. It is computed from the diff rather than taken from
+		// the audit, so a review is still bound to what it read on a run where
+		// Sensei could not audit at all.
+		binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: candidateRevision(diff)}
+		policy := e.policyFor(taskID)
+
+		// The implementer is excluded by construction, not by instruction. An
+		// author reviewing its own work has already decided the question, and
+		// its agreement carries no information about whether the work is right.
+		assignment, err := roles.Assign(roles.Reviewer, e.reviewCapabilities(), worker.Name)
+		if err != nil {
+			return false, plan, lastReview, lastAudit, fmt.Errorf("%w: %v", roles.ErrNoIndependentReviewer, err)
+		}
+		if err := policy.Check(worker.Name, assignment); err != nil {
+			return false, plan, lastReview, lastAudit, err
+		}
+
+		// Stage 1 of the Level-1 routine tier: classify, report, grant nothing.
+		//
+		// The classification is computed on every governed run and skips no
+		// step, because the question it answers -- would this have qualified,
+		// and if not which condition stopped it -- can only be settled from
+		// real runs. Deciding it from intuition is how a fast path acquires
+		// conditions that were never true.
+		e.classifyForDarkRun(sc, start, taskID, tc, diff)
+
+		review, err := e.resolveReview(ctx, taskID, assignment,
+			reviewPacket(*tc, binding, start, plan, diff, lastAudit, evidence.Render()), worker.Name)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
 		lastReview = review.Summary
 		switch review.Decision {
-		case "accept":
+		case roles.Accept:
 			// Sensei owns this transition. A reviewer that accepts over a
 			// refusal does not conclude the candidate; the refusal becomes the
 			// next revision instruction instead.
-			if judged := judgeCandidate(review.Decision, verdict); !judged.Accepted {
+			if judged := judgeCandidate(string(review.Decision), verdict); !judged.Accepted {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"reviewer accepted but Sensei refused; the refusal governs: "+judged.Refusal, audit.Structured))
 				// A refusal the worker cannot act on must stop the loop rather
@@ -862,13 +963,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// reference to nothing.
 			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
 			return true, plan, lastReview, lastAudit, nil
-		case "revise":
-			feedback = review.Instructions
-			if strings.TrimSpace(feedback) == "" {
-				feedback = review.Summary
-			}
+		case roles.Revise:
+			feedback = review.Instruction()
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
-		case "escalate":
+		case roles.Escalate:
+			// The reviewer reaches the architect, never the human. A reviewer
+			// that could interrupt a person directly would let one nervous
+			// model manufacture a Level-3 event, which is the mirror image of
+			// letting a confident one skip past it.
 			revised, err := e.resolveArchitecture(ctx, sc, start, taskID, task, escalationPrompt(task, plan, lastAudit, review))
 			if err != nil {
 				return false, plan, lastReview, lastAudit, err
@@ -876,6 +978,17 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			if strings.TrimSpace(revised.Plan) == "" {
 				return false, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
 			}
+			e.recordReconciliation(taskID, binding, roles.Reconciliation{
+				Disputed: "the reviewer raised an architectural boundary: " + review.Summary,
+				Inputs: []roles.Claim{
+					{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
+					{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+				},
+				Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
+				Decision:  revised.Plan,
+				Authority: roles.ArchitectAuthority,
+				Remaining: revised.Consequences,
+			})
 			e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
 			plan = revised.Plan
 			feedback = "The architect resolved the review escalation. Reconcile the current candidate with the revised plan."
@@ -904,10 +1017,16 @@ type architectureDecision struct {
 	Claims []Claim `json:"claims,omitempty"`
 }
 
+// reviewDecision is the reviewer's wire contract. It is deliberately separate
+// from roles.ReviewVerdict: this is what a model returned, and the verdict is
+// what the workflow is willing to treat as a review. Provenance is attached
+// here rather than asked for, because an artifact that states its own identity
+// can state a convenient one.
 type reviewDecision struct {
-	Decision     string `json:"decision"`
-	Summary      string `json:"summary"`
-	Instructions string `json:"instructions,omitempty"`
+	Decision     string          `json:"decision"`
+	Summary      string          `json:"summary"`
+	Instructions string          `json:"instructions,omitempty"`
+	Findings     []roles.Finding `json:"findings,omitempty"`
 }
 
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
@@ -918,7 +1037,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 		if attempt > 1 {
 			p += "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
 		}
-		result, err := architect.Run(ctx, agent.Request{Role: agent.Architect, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p}, e.emit)
+		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p}, e.emit)
 		if err != nil {
 			lastErr = err
 			continue
@@ -949,10 +1068,15 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
-			routing, err := e.routePlan(sc, start, task, d)
+			routing, scoped, err := e.routePlan(sc, start, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
+			// How expensive this change is decides how adversarially it is
+			// judged later, and whether it is routine at all. Recording both
+			// here binds them to the moment the plan was authorised, rather
+			// than to a preflight taken again further down the loop.
+			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			switch {
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
@@ -990,10 +1114,11 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, err := e.routePlan(sc, start, task, d)
+			routing, scoped, err := e.routePlan(sc, start, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
+			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			if routing.Granted() {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
@@ -1028,33 +1153,155 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 	return architectureDecision{}, fmt.Errorf("architect could not produce a bounded decision: %w", lastErr)
 }
 
-func (e *Engine) resolveReview(ctx context.Context, taskID, prompt string) (reviewDecision, error) {
-	reviewer := agent.CLI{Name: e.Config.Reviewer.Name, Label: config.DisplayName(e.Config.Reviewer.Name), Command: e.Config.Reviewer.Command, Args: e.Config.Reviewer.Args, Source: event.SourceReviewer, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
+// resolveReview runs one independent review of an exact candidate revision.
+//
+// Three things make it a review rather than a second opinion. The reviewer is
+// not the provider that wrote the candidate, and cannot be. Its provider session
+// inherits nothing, so it has not read the case for the work before judging it.
+// And its verdict is bound to the revision it actually read, so a later edit
+// invalidates it instead of silently carrying it forward.
+//
+// A provider that cannot produce a bounded verdict costs a fallback, not a
+// person's attention: being out of quota is not an architectural finding.
+func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment roles.Assignment, packet roles.IndependentReviewPacket, implementer string) (roles.ReviewVerdict, error) {
+	binding := packet.Provenance.Binding()
+	var lastErr error
+	for current, ok := assignment, true; ok; current, ok = current.Fallback(current.Provider) {
+		cfg, found := e.reviewAgent(current.Provider)
+		if !found {
+			lastErr = fmt.Errorf("no configured reviewer named %q", current.Provider)
+			continue
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
+			fmt.Sprintf("%s takes the reviewer role in a session that inherits nothing", config.DisplayName(cfg.Name)),
+			map[string]any{
+				"role": roles.Reviewer, "provider": cfg.Name, "session": roles.Fresh,
+				"excluded": implementer, "candidate": packet.Provenance.CandidateDigest,
+			}))
+		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewStarted,
+			"independent review of candidate "+shortDigest(packet.Provenance.CandidateDigest), nil))
+
+		verdict, err := e.askReviewer(ctx, taskID, cfg, packet, binding, implementer)
+		if err == nil {
+			e.reportReview(taskID, verdict)
+			return verdict, nil
+		}
+		lastErr = err
+		if errors.Is(err, errReviewRefused) {
+			// The verdict was structurally inadmissible -- self-review, or a
+			// review of another revision. Another provider would not fix that,
+			// and retrying would only produce it again.
+			return roles.ReviewVerdict{}, err
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			config.DisplayName(cfg.Name)+" could not produce a bounded review; trying the next independent reviewer",
+			map[string]string{"error": err.Error()}))
+	}
+	return roles.ReviewVerdict{}, fmt.Errorf("no independent reviewer produced a bounded decision: %w", lastErr)
+}
+
+// errReviewRefused marks a verdict the workflow will not accept from any
+// provider, as opposed to one this provider simply failed to produce.
+var errReviewRefused = errors.New("review refused")
+
+func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agent, packet roles.IndependentReviewPacket, binding roles.Binding, implementer string) (roles.ReviewVerdict, error) {
+	reviewer := agent.CLI{Name: cfg.Name, Label: config.DisplayName(cfg.Name), Command: cfg.Command, Args: cfg.Args, Source: event.SourceReviewer, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
+	prompt := reviewPrompt(packet)
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt
 		if attempt > 1 {
 			p += "\n\nReturn ONLY the required JSON object."
 		}
-		result, err := reviewer.Run(ctx, agent.Request{Role: agent.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p}, e.emit)
+		result, err := reviewer.Run(ctx, agent.Request{
+			Role: roles.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p,
+			Session: roles.Fresh,
+		}, e.emit)
 		if err != nil {
-			lastErr = err
-			continue
+			return roles.ReviewVerdict{}, err
 		}
 		var d reviewDecision
 		if err := decodeModelJSON(result.Text, &d); err != nil {
 			lastErr = err
 			continue
 		}
-		d.Decision = strings.ToLower(strings.TrimSpace(d.Decision))
-		if d.Decision != "accept" && d.Decision != "revise" && d.Decision != "escalate" {
-			lastErr = fmt.Errorf("review decision must be accept, revise, or escalate, got %q", d.Decision)
+		verdict := roles.ReviewVerdict{
+			Provenance: roles.Provenance{
+				TaskID: taskID, Role: roles.Reviewer, Provider: cfg.Name,
+				SessionID: e.SessionID, SessionMode: result.Session,
+				BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+				GraphBuildCommit: packet.Provenance.GraphBuildCommit,
+				At:               time.Now().UTC(),
+			},
+			Decision:     roles.Decision(strings.ToLower(strings.TrimSpace(d.Decision))),
+			Summary:      strings.TrimSpace(d.Summary),
+			Instructions: d.Instructions,
+			Findings:     numberFindings(d.Findings),
+		}
+		if err := verdict.Validate(binding, implementer); err != nil {
+			if reviewIsInadmissible(verdict, binding, implementer) {
+				return roles.ReviewVerdict{}, fmt.Errorf("%w: %v", errReviewRefused, err)
+			}
+			lastErr = err
 			continue
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.Status, strings.ToUpper(d.Decision)+": "+d.Summary, d))
-		return d, nil
+		return verdict, nil
 	}
-	return reviewDecision{}, fmt.Errorf("reviewer could not produce a bounded decision: %w", lastErr)
+	return roles.ReviewVerdict{}, lastErr
+}
+
+// reviewIsInadmissible separates a verdict no provider may give from one this
+// provider merely got wrong. The first must stop the review; the second is
+// worth asking again for.
+func reviewIsInadmissible(v roles.ReviewVerdict, b roles.Binding, implementer string) bool {
+	if b.Mismatch(v.Provenance) != "" {
+		return true
+	}
+	if implementer != "" && strings.EqualFold(implementer, v.Provenance.Provider) {
+		return true
+	}
+	return !v.Provenance.Independent()
+}
+
+// reportReview writes the review into the record as findings rather than as one
+// line. A review compressed to a sentence loses the only part a worker can act
+// on, and the compression is invisible afterwards.
+func (e *Engine) reportReview(taskID string, v roles.ReviewVerdict) {
+	for _, f := range v.Findings {
+		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewFinding, f.Line(), f))
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewCompleted,
+		strings.ToUpper(string(v.Decision))+": "+v.Summary+"  ("+v.Provenance.Describe()+")", v))
+}
+
+// numberFindings gives every finding an id, because a finding referred to as
+// "the second one" cannot be tracked across a revision.
+func numberFindings(findings []roles.Finding) []roles.Finding {
+	out := make([]roles.Finding, 0, len(findings))
+	for i, f := range findings {
+		if strings.TrimSpace(f.ID) == "" {
+			f.ID = fmt.Sprintf("f%d", i+1)
+		}
+		if strings.TrimSpace(string(f.Severity)) == "" {
+			// An unrated finding is reported as major rather than dropped or
+			// promoted: dropping it loses a real objection, and promoting it to
+			// blocking would let a missing field refuse a candidate.
+			f.Severity = roles.Major
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+func shortDigest(d string) string {
+	d = strings.TrimSpace(d)
+	if d == "" {
+		return "(unbound)"
+	}
+	if len(d) > 12 {
+		return d[:12]
+	}
+	return d
 }
 
 // routePlan asks Sensei whether the region this plan intends to touch is one it
@@ -1063,40 +1310,32 @@ func (e *Engine) resolveReview(ctx context.Context, taskID, prompt string) (revi
 // This is the first preflight in the workflow that can name files: the start
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
-func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string, d architectureDecision) (Routing, error) {
+func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
 	}
 	result, err := sc.CallTool("awareness_preflight", args)
 	if err != nil {
-		return Routing{}, fmt.Errorf("Sensei scoped preflight: %w", err)
+		return Routing{}, sensei.PreflightDecision{}, fmt.Errorf("Sensei scoped preflight: %w", err)
 	}
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
-		return Routing{}, err
+		return Routing{}, sensei.PreflightDecision{}, err
 	}
-	return routeAuthority(scoped, d.Claims), nil
+	// The scoped decision is returned as well as the route. The router reduces
+	// it to one question -- who owns this plan -- and the Level-1 classifier
+	// asks a different one of the same evidence. Re-querying instead would ask
+	// a graph that may have moved between the two questions, and the answers
+	// would then describe different moments while appearing to describe one.
+	return routeAuthority(scoped, d.Claims), scoped, nil
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
-	options := d.Options
-	if len(options) == 0 {
-		options = []authority.Option{
-			{ID: "1", Label: "Preserve current human-owned intent and require another design"},
-			{ID: "2", Label: "Authorize the architectural change described above"},
-			{ID: "3", Label: "Stop this task"},
-		}
-	}
-	if len(options) > 3 {
-		options = options[:3]
-	}
 	// Human authority is deliberately presented as a tiny numbered decision
-	// surface. Model-supplied option IDs are not authority; normalize them so
-	// the TUI is always an unambiguous 1/2/3 rendezvous.
-	for i := range options {
-		options[i].ID = fmt.Sprint(i + 1)
-	}
+	// surface. Model-supplied option IDs and labels are not authority: compose
+	// normalizes the IDs and assigns every outcome itself.
+	options := composeAuthorityOptions(d.Options)
 	decision := authority.Decision{
 		Level:          authority.Human,
 		Subject:        d.HumanQuestion,
@@ -1113,12 +1352,32 @@ func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certif
 	if condition = strings.TrimSpace(condition); condition != "" {
 		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
-	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), start.GraphSourceCommit(), decision, options)
+	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), e.governedBase(taskID), decision, options)
 }
 
 // awaitChoice presents a numbered decision to the human and blocks until they
 // answer. It is the single place a task waits on a person, so every gate --
 // architectural authority and plan approval alike -- looks the same in the UI.
+// governedBase is the commit this repository's candidate was pinned to.
+//
+// It is deliberately not the graph's SourceRepoCommit, which an earlier version
+// of this call passed. That field is the commit identity of the rule snapshot,
+// and on this installation it belongs to the services repository -- gate.go
+// says so in as many words, having already been bitten by comparing the two.
+// Passing it here labelled another repository's commit as this resolution's
+// base, and a governance receipt that cites a commit the repository does not
+// contain is evidence about nothing.
+//
+// An unestablished identity yields "" rather than a substitute. A resolution
+// with no stated base is honest; one with somebody else's base is not.
+func (e *Engine) governedBase(taskID string) string {
+	identity, ok, err := candidate.Load(e.Repo.Root, taskID)
+	if err != nil || !ok {
+		return ""
+	}
+	return identity.BaseSHA
+}
+
 func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option) (string, error) {
 	ch := make(chan string, 1)
 	e.mu.Lock()
@@ -1164,8 +1423,9 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 						DecidedAt: time.Now().UTC(),
 						Question:  decision.Subject, Condition: condition,
 						OptionID: option.ID, OptionLabel: option.Label,
+						Outcome: option.Outcome,
 					}
-					if isStopOption(option.Label) {
+					if option.Outcome == authority.Stop {
 						// Stopping is not a governing decision about the
 						// architecture, so there is nothing to propose.
 						resolution.State = authority.Unsupported
@@ -1177,7 +1437,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
 				}
 
-				if isStopOption(option.Label) {
+				if option.Outcome == authority.Stop {
 					return "", errors.New("task stopped by human authority")
 				}
 				return option.ID + ": " + option.Label, nil
@@ -1187,9 +1447,47 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 	}
 }
 
-func isStopOption(label string) bool {
-	label = strings.ToLower(strings.TrimSpace(label))
-	return strings.Contains(label, "stop") || strings.Contains(label, "cancel") || strings.Contains(label, "abort")
+// composeAuthorityOptions builds the human's decision surface.
+//
+// The architect may propose alternatives; it may not decide what choosing one
+// means. Every option it supplies is stamped as an authorization of that
+// alternative by this repository, and the two refusals are always our own words
+// and always present. A model can therefore widen what a human may say yes to,
+// and can never remove, reword, or crowd out the way to say no.
+//
+// This exists as its own function because the property is worth testing
+// directly: the previous arrangement decided the meaning of an answer by
+// matching substrings in labels the architect wrote.
+func composeAuthorityOptions(proposed []authority.Option) []authority.Option {
+	const maxProposed = 2
+	options := make([]authority.Option, 0, maxProposed+2)
+	for _, option := range proposed {
+		if len(options) == maxProposed {
+			break
+		}
+		if strings.TrimSpace(option.Label) == "" {
+			continue
+		}
+		option.Outcome = authority.Authorize
+		options = append(options, option)
+	}
+	if len(options) == 0 {
+		options = append(options, authority.Option{
+			Label:   "Authorize the architectural change described above",
+			Outcome: authority.Authorize,
+		})
+	}
+	options = append(options,
+		authority.Option{
+			Label:   "Require another design (this change may still be right; this plan is not)",
+			Outcome: authority.Revise,
+		},
+		authority.Option{Label: "Stop this task", Outcome: authority.Stop},
+	)
+	for i := range options {
+		options[i].ID = fmt.Sprint(i + 1)
+	}
+	return options
 }
 
 func sourceFor(name string) event.Source {
@@ -1377,10 +1675,17 @@ ARCHITECTURAL PLAN:
 CYCLE: %d%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, cycle, extra)
 }
 
-func reviewPrompt(tc taskContext, plan, diff, audit, evidence string) string {
+func reviewPrompt(p roles.IndependentReviewPacket) string {
 	return fmt.Sprintf(`You are the architectural reviewer for a Sensei-governed candidate. Do not edit files.
 Decide whether the exact candidate satisfies the architectural plan and the supplied Sensei evidence. Passing tests alone is not architectural proof.
 Return ESCALATE only when a genuine architectural-authority question exists; ordinary defects are REVISE.
+
+You are reviewing independently. You did not write this change, you have not
+been told why its author believes it is right, and you are not being asked to
+agree with anybody. Assume the candidate may be wrong even when the tests are
+green, and attack the diff and its proof: stale evidence, authority bypasses,
+unbound identity, hidden scope expansion, and PASS states that prove less than
+they appear to.
 
 You have Sensei's own MCP tools in this session: awareness_briefing,
 awareness_preflight, awareness_impact, awareness_query, awareness_resolve,
@@ -1396,7 +1701,17 @@ lower the bar: a candidate that matches the conversation but violates the plan o
 Sensei's evidence is still a REVISE.
 
 Return ONLY JSON:
-{"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate"}
+{"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+
+Every blocking finding must name something a worker can open. A finding with
+nowhere to point cannot be acted on, and a cycle spent on one produces an
+identical diff and consumes the budget for nothing. Do not return ACCEPT while
+recording a blocking finding.
+
+CANDIDATE REVISION: %s
+This verdict is bound to that revision. If the worker changes the candidate,
+your verdict no longer applies to it and will not be carried forward.
 
 CONVERSATION WITH THE ARCHITECT:
 %s
@@ -1428,10 +1743,20 @@ and proves nothing.
 %s
 
 CANDIDATE DIFF:
-%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, audit, evidence, diff)
+%s`, shortDigest(p.Provenance.CandidateDigest), conversationOrNone(p.Conversation), intentOrNone(p.ArchitectIntent),
+		p.WorkspaceAuthority, p.Preflight, p.Task, p.Plan, p.Audit, p.Validation, p.Diff)
 }
 
-func escalationPrompt(task, plan, audit string, review reviewDecision) string {
+// intentOrNone keeps the reviewer's packet unambiguous the same way the
+// architect's conversation is: a blank section reads as truncation.
+func intentOrNone(intent string) string {
+	if strings.TrimSpace(intent) == "" {
+		return "(the architect recorded no additional rationale)"
+	}
+	return intent
+}
+
+func escalationPrompt(task, plan, audit string, review roles.ReviewVerdict) string {
 	return fmt.Sprintf(`A bounded implementation reviewer found a possible architectural boundary. Resolve it using your architectural authority. Escalate to the human only if the decision changes human-owned intent/policy/contract/trust authority. Otherwise issue a revised bounded plan.
 
 TASK:
@@ -1447,7 +1772,7 @@ REVIEWER:
 %s
 %s
 
-Return ONLY the same architecture JSON contract as before.`, task, plan, audit, review.Summary, review.Instructions)
+Return ONLY the same architecture JSON contract as before.`, task, plan, audit, review.Summary, review.Instruction())
 }
 
 func humanResolutionPrompt(original string, d architectureDecision, choice string) string {
@@ -1553,8 +1878,19 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
-			carried = state.Handover(config.DisplayName(worker.Name), start.GraphBuildCommit())
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, worker.Name+" did not converge; handing the candidate to the next bounded worker", map[string]string{"error": err.Error()}))
+			handoff := handoffPacket(state, roles.Binding{TaskID: taskID, BaseSHA: identity.BaseSHA},
+				config.DisplayName(worker.Name), start.GraphBuildCommit(), e.Config.Workflow.ReviewCycles, e.Config.Workflow.ReviewCycles)
+			if err := handoff.Continuity(roles.Binding{TaskID: taskID, BaseSHA: identity.BaseSHA}); err != nil {
+				// A handoff that does not continue this task would start the
+				// next worker over on the same branch, which looks like progress
+				// and is not.
+				fail(fmt.Errorf("the candidate could not be handed on: %w", err))
+				return
+			}
+			carried = handoff.Render()
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.HandoffCreated,
+				config.DisplayName(worker.Name)+" did not converge; the candidate and its unanswered findings pass to the next bounded worker",
+				handoff))
 			continue
 		}
 		plan = finalPlan
@@ -1953,8 +2289,16 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 		if json.Unmarshal(ev.Payload, &res) != nil {
 			continue
 		}
+		// A revise answer refuses this plan and leaves the condition open, so
+		// the next plan is routed on its own merits. Recording it here would
+		// make "require another design" unsatisfiable against a condition that
+		// is a property of the region: every redesign reaches it again and is
+		// refused by the human's own request for a redesign.
+		if !res.Outcome.Settles() {
+			continue
+		}
 		if c := strings.TrimSpace(res.Condition); c != "" {
-			out[c] = authority.Authorizes(res.OptionLabel)
+			out[c] = res.Outcome.Permits()
 		}
 	}
 	return out

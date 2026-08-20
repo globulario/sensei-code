@@ -71,6 +71,9 @@ func main() {
 		case "handoff":
 			fatalIf(runHandoff(os.Args[2:]))
 			return
+		case "routine-scan":
+			fatalIf(runRoutineScan(ctx, repo, cfg, os.Args[2:]))
+			return
 		case "help", "--help", "-h":
 			printUsage()
 			return

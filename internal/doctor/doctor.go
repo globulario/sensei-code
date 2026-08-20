@@ -109,11 +109,19 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 
 	// A registered MCP server whose tools an agent cannot call is not access to
 	// Sensei, so it is reported here rather than only in `sensei-code mcp`.
-	for _, access := range mcpconfig.Describe(repo) {
+	for _, access := range mcpconfig.Describe(repo, cfg.Sensei.Args) {
 		check := Check{Name: "mcp:" + string(access.Agent), Detail: string(access.State)}
 		switch access.State {
 		case mcpconfig.Configured:
 			check.Status = Pass
+		case mcpconfig.Stale:
+			// Fail, not warn. A stale address does not degrade an agent's
+			// access, it removes it: every awareness call comes back a
+			// transport error, and the agent reasons from the repository while
+			// reporting Sensei unavailable. A run started on a warning here
+			// produces a plan built without the graph, which is what happened.
+			check.Status = Fail
+			check.Detail += " · " + access.Detail + " · fix with: sensei-code mcp " + string(access.Agent)
 		case mcpconfig.Unknown:
 			check.Status = Warn
 		default:
@@ -162,7 +170,12 @@ func configuredCommands(cfg config.Config) []string {
 	for _, a := range cfg.Implementors {
 		add(a.Command)
 	}
-	add(cfg.Reviewer.Command)
+	// The whole review roster, not only the first reviewer: an alternate whose
+	// executable is missing is a fallback that will fail at the moment it is
+	// needed, which is exactly when nobody is watching for it.
+	for _, a := range cfg.ReviewRoster() {
+		add(a.Command)
+	}
 	sort.Strings(commands)
 	return commands
 }
@@ -193,7 +206,9 @@ func configuredProviders(cfg config.Config) []provider.ID {
 	for _, a := range cfg.Implementors {
 		add(a)
 	}
-	add(cfg.Reviewer)
+	for _, a := range cfg.ReviewRoster() {
+		add(a)
+	}
 	return out
 }
 

@@ -52,12 +52,40 @@ const (
 	ContextConsulted Kind = "context.consulted"
 	AgentStarted     Kind = "agent.started"
 	AgentFinished    Kind = "agent.finished"
-	CandidateChanged Kind = "candidate.changed"
+	// RoleAssigned records which provider took which semantic role, and whether
+	// its provider session inherited anything.
+	//
+	// It is a separate event from agent.started because it answers a different
+	// question. agent.started says a process ran; this says a job was given to
+	// somebody, under a stated independence rule, chosen from a bounded set. A
+	// run whose reviewer silently became the same provider that implemented the
+	// candidate is invisible in the first and unmissable in the second.
+	RoleAssigned Kind = "agent.role.assigned"
+	// HandoffCreated records a typed WorkerHandoffPacket passing between
+	// implementers. The candidate does not restart, and this is where that is
+	// written down.
+	HandoffCreated Kind = "handoff.created"
+	// ReviewStarted, ReviewFinding and ReviewCompleted reconstruct one
+	// independent review. Findings are emitted individually because a review
+	// summarised into a single line loses the one thing a worker can act on.
+	ReviewStarted   Kind = "review.started"
+	ReviewFinding   Kind = "review.finding"
+	ReviewCompleted Kind = "review.completed"
+	// ArchitectReconciliation is the orchestration receipt for a disagreement:
+	// what was disputed, what evidence decided it, and what is still open. It
+	// explains why the loop branched. It is never a governance receipt.
+	ArchitectReconciliation Kind = "architect.reconciliation"
+	CandidateChanged        Kind = "candidate.changed"
 	// CandidateResolved records a candidate's terminal disposition: what became
 	// of the worktree and branch, and why. A candidate with no such event is
 	// one nobody resolved.
 	CandidateResolved Kind = "candidate.resolved"
 	CandidateAudited  Kind = "candidate.audited"
+	// RoutineClassified is the Level-1 dark run: whether this change would have
+	// qualified as routine, and which condition stopped it if not. During
+	// stage 1 it grants nothing and skips nothing — it is a measurement,
+	// emitted so the tier can be judged from real runs rather than intuition.
+	RoutineClassified Kind = "routine.classified"
 	// ValidationRun records checks the broker executed against a candidate.
 	ValidationRun     Kind = "validation.run"
 	AuthorityRequired Kind = "authority.required"

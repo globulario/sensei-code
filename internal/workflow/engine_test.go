@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -46,14 +47,27 @@ func TestArchitectureOptionsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestIsStopOption(t *testing.T) {
-	for _, label := range []string{"Stop this task", "Cancel", "Abort operation"} {
-		if !isStopOption(label) {
-			t.Fatalf("expected %q to stop", label)
-		}
+// What an option does is carried on the option, not read out of its wording.
+// The label may say anything at all; only the outcome decides.
+func TestAnOptionsEffectComesFromItsOutcomeNotItsWording(t *testing.T) {
+	stopping := authority.Option{Label: "Continue happily forever", Outcome: authority.Stop}
+	if stopping.Outcome != authority.Stop {
+		t.Fatal("an option's outcome is its own")
 	}
-	if isStopOption("Preserve the contract") {
-		t.Fatal("normal authority option must not stop the task")
+	if stopping.Outcome.Permits() || stopping.Outcome.Settles() != true {
+		t.Fatalf("stop settles the condition and permits nothing: %+v", stopping.Outcome)
+	}
+	authorizing := authority.Option{Label: "stop cancel abort", Outcome: authority.Authorize}
+	if !authorizing.Outcome.Permits() {
+		t.Fatal("wording that reads like a refusal must not override an authorize outcome")
+	}
+	// Revise is the one outcome that leaves the condition open, so a redesign
+	// is routed on its own merits rather than refused from the record.
+	if authority.Revise.Settles() {
+		t.Fatal("revise must not settle the condition")
+	}
+	if authority.Revise.Permits() {
+		t.Fatal("revise must not permit the change either")
 	}
 }
 
@@ -87,7 +101,7 @@ func TestImplementationPromptCarriesContextWithoutWideningScope(t *testing.T) {
 }
 
 func TestReviewPromptCarriesContextWithoutLoweringTheBar(t *testing.T) {
-	got := reviewPrompt(testContext(), "edit main.go", "diff --git a b", "audit says fine", "passed go test ./...")
+	got := reviewPrompt(testReviewPacket(testContext(), "edit main.go", "diff --git a b", "audit says fine", "passed go test ./..."))
 	for _, want := range []string{"can we version this?", "conventional flag, no governance", "audit says fine"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("review prompt is missing %q", want)
@@ -199,7 +213,7 @@ func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
 	prompts := map[string]string{
 		"architect": architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf"),
 		"worker":    implementationPrompt(testContext(), "plan", "", 1, nil),
-		"reviewer":  reviewPrompt(testContext(), "plan", "diff", "audit", "evidence"),
+		"reviewer":  reviewPrompt(testReviewPacket(testContext(), "plan", "diff", "audit", "evidence")),
 	}
 	for role, prompt := range prompts {
 		if !strings.Contains(prompt, "awareness_briefing") {
@@ -250,7 +264,7 @@ func TestArchitectConversationPromptIsHumanFacing(t *testing.T) {
 // and test results, and the workflow had no way to carry them, so the worker
 // re-emitted a byte-identical diff until the run timed out.
 func TestReviewerSeesExecutedEvidenceNotAWorkerReport(t *testing.T) {
-	got := reviewPrompt(testContext(), "plan", "diff", "audit", "passed  go test ./...\n  exit 0")
+	got := reviewPrompt(testReviewPacket(testContext(), "plan", "diff", "audit", "passed  go test ./...\n  exit 0"))
 	if !strings.Contains(got, "VALIDATION EVIDENCE") {
 		t.Fatal("the reviewer is never shown the validation evidence")
 	}
@@ -512,7 +526,7 @@ func TestDeferralCallsNoOneAfterwards(t *testing.T) {
 	// The deferral branch must return before the resolution machinery: no
 	// proposal to Sensei, no persisted resolution, no stop-option handling.
 	prefix := body[:defer_]
-	for _, forbidden := range []string{"authority.Persist", "senseiProposer", "isStopOption"} {
+	for _, forbidden := range []string{"authority.Persist", "senseiProposer", "authority.Stop"} {
 		if strings.Contains(prefix, forbidden) {
 			t.Errorf("the deferral path reaches %s; deferring must resolve nothing", forbidden)
 		}
@@ -704,5 +718,97 @@ func TestOnlyAnEmptyCandidateIsRemovedAutomatically(t *testing.T) {
 	}
 	if strings.Contains(impl, "RemoveWorktree") {
 		t.Error("the run removes a worktree directly, bypassing the evidence-before-removal rule")
+	}
+}
+
+// #37: the architect may widen what a human can say yes to, and can never
+// remove or reword the way to say no.
+func TestArchitectOptionsCannotDecideWhatChoosingThemMeans(t *testing.T) {
+	// An architect trying to dress a refusal as an authorization, and to crowd
+	// the real refusals off a three-slot surface.
+	hostile := []authority.Option{
+		{ID: "99", Label: "Stop this task", Outcome: authority.Authorize},
+		{ID: "98", Label: "Abort everything"},
+		{ID: "97", Label: "Cancel"},
+		{ID: "96", Label: "And another"},
+	}
+	got := composeAuthorityOptions(hostile)
+
+	var revise, stop int
+	for _, o := range got {
+		switch o.Outcome {
+		case authority.Revise:
+			revise++
+		case authority.Stop:
+			stop++
+		case authority.Authorize:
+			// fine: choosing an architect alternative authorizes it
+		default:
+			t.Fatalf("option %q carries no outcome", o.Label)
+		}
+	}
+	if revise != 1 || stop != 1 {
+		t.Fatalf("the two refusals must always be present exactly once, got revise=%d stop=%d", revise, stop)
+	}
+	// The architect proposed four; it cannot fill the surface.
+	if len(got) != 4 {
+		t.Fatalf("expected two proposals plus two refusals, got %d", len(got))
+	}
+	// Its option labelled "Stop this task" authorizes an alternative, because
+	// what an option does is ours to decide and its wording is not.
+	if got[0].Outcome != authority.Authorize {
+		t.Fatalf("an architect option was allowed to declare its own outcome: %+v", got[0])
+	}
+	// The refusals are our words, at the end, with our IDs.
+	if got[2].Outcome != authority.Revise || got[3].Outcome != authority.Stop {
+		t.Fatalf("the refusals are not the last two options: %+v", got)
+	}
+	for i, o := range got {
+		if o.ID != fmt.Sprint(i+1) {
+			t.Fatalf("option %d has ID %q; the surface must be an unambiguous 1..n", i, o.ID)
+		}
+	}
+}
+
+// With no architect options at all, the surface is still complete.
+func TestTheDecisionSurfaceIsCompleteWithoutAnyArchitectOptions(t *testing.T) {
+	got := composeAuthorityOptions(nil)
+	if len(got) != 3 {
+		t.Fatalf("expected authorize, revise, stop; got %d", len(got))
+	}
+	if got[0].Outcome != authority.Authorize || got[1].Outcome != authority.Revise || got[2].Outcome != authority.Stop {
+		t.Fatalf("default surface = %+v", got)
+	}
+	// An empty label from a model is dropped rather than shown as a blank row.
+	if got := composeAuthorityOptions([]authority.Option{{Label: "   "}}); len(got) != 3 {
+		t.Fatalf("a blank proposal was rendered as a choice: %+v", got)
+	}
+}
+
+// A governance receipt must cite a commit this repository contains.
+//
+// The escalation path passed the graph's SourceRepoCommit as the resolution's
+// base. That field is the rule snapshot's identity and on this installation it
+// belongs to the services repository — gate.go says so, having already been
+// bitten by comparing the two — so a real Level-3 resolution was filed citing
+// "base commit e0f49fca0357", a commit sensei-code does not contain.
+func TestAResolutionCitesThisRepositorysBaseNotTheGraphsSourceCommit(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "awaitHuman")
+	if strings.Contains(body, "start.GraphSourceCommit(") || strings.Contains(body, "start.SourceRepoCommit(") {
+		t.Fatal("the escalation still cites the rule snapshot's commit as the resolution's base")
+	}
+	if !strings.Contains(body, "e.governedBase(") {
+		t.Fatal("the escalation no longer sources the base from this repository's candidate identity")
+	}
+	// And an unestablished identity yields nothing rather than a substitute: a
+	// resolution with no stated base is honest, one with somebody else's is not.
+	fn := funcBody(t, "internal/workflow/engine.go", "governedBase")
+	if !strings.Contains(fn, "candidate.Load") {
+		t.Fatal("the base is not read from the candidate identity")
+	}
+	for _, forbidden := range []string{"SourceRepoCommit", "GraphBuildCommit"} {
+		if strings.Contains(fn, forbidden) {
+			t.Fatalf("governedBase falls back to %s; another repository's commit is not a substitute", forbidden)
+		}
 	}
 }

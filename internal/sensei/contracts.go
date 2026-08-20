@@ -236,6 +236,76 @@ type PreflightDecision struct {
 	RequiredActions  []string        `json:"required_actions"`
 	BlindSpots       []string        `json:"blind_spots"`
 	ChangeRisk       ChangeRisk      `json:"change_risk"`
+	Coverage         Coverage        `json:"coverage"`
+}
+
+// Coverage is how much the graph actually knows about the files asked about.
+//
+// It answers the question that separates evidence from ignorance: "no invariant
+// applies" means one thing when the graph has indexed the region and found
+// nothing governing it, and the opposite thing when the graph has never looked.
+// Both render as an empty invariant list, and only the first is evidence.
+//
+// Sufficient is the published verdict rather than a count to be interpreted
+// here. Deriving it from the counts would be this repository re-deciding a
+// question Sensei has already answered, and the two would disagree the moment
+// either side changed what "enough" means.
+type Coverage struct {
+	DirectAnchorCount int    `json:"direct_anchor_count"`
+	FileCount         int    `json:"file_count"`
+	IndexedFileCount  int    `json:"indexed_file_count"`
+	Sufficient        bool   `json:"sufficient"`
+	Note              string `json:"note"`
+}
+
+// Proven reports that the graph covered this region well enough for its silence
+// to mean something.
+//
+// Sufficiency is Sensei's published verdict and is taken as given. What is
+// narrowed here is which *basis* for it this repository is willing to treat as
+// coverage of these files. Sensei reaches sufficient three ways: direct anchors
+// matched, the files are indexed and no rule applies, or a strong-tier
+// implementation pattern matched. The first two are analysis of the files in
+// question. The third is a recipe recognising their shape, and it can be
+// sufficient with no anchors and no indexed file at all.
+//
+// A pattern is a reasonable basis for advice and a poor one for silence. It says
+// "code like this usually looks like that", which is not the same as "the graph
+// has examined these files and found nothing governing them" — and only the
+// second is the evidence a fast path needs. Implementation patterns are also
+// generated as review-only candidates by `sensei skill-ingest`, and the server's
+// scope filter selects them by domain without regard to promotion, so a
+// pattern-only sufficiency could rest on knowledge nobody promoted.
+//
+// So coverage counts when it rests on analysis: anchors, or indexed files.
+func (c Coverage) Proven() bool {
+	return c.Sufficient && (c.DirectAnchorCount > 0 || c.IndexedFileCount > 0)
+}
+
+// PatternOnly reports sufficiency that rests on neither anchors nor indexed
+// files. It is separated so the refusal can say what was actually missing
+// rather than reporting thin coverage that Sensei called sufficient.
+func (c Coverage) PatternOnly() bool {
+	return c.Sufficient && c.DirectAnchorCount == 0 && c.IndexedFileCount == 0
+}
+
+// Diagnostic explains thin coverage in Sensei's own words where it gave any.
+func (c Coverage) Diagnostic() string {
+	if c.PatternOnly() {
+		return "coverage rests on an implementation-pattern match rather than on analysis of these files" +
+			noteSuffix(c.Note)
+	}
+	if note := strings.TrimSpace(c.Note); note != "" {
+		return note
+	}
+	return fmt.Sprintf("%d direct anchor(s) over %d indexed file(s)", c.DirectAnchorCount, c.IndexedFileCount)
+}
+
+func noteSuffix(note string) string {
+	if note = strings.TrimSpace(note); note == "" {
+		return ""
+	}
+	return " (" + note + ")"
 }
 
 // Permits is the strict, file-scoped gate: Sensei affirmatively cleared this
@@ -469,6 +539,117 @@ func DecodeDiffAudit(r ToolResult) (DiffAuditDecision, error) {
 		return DiffAuditDecision{}, &ContractError{Surface: "diff audit", Reason: "result carried no decision field"}
 	}
 	return out, nil
+}
+
+// EditCheckResult is the typed form of awareness_edit_check.
+//
+// The surface is warning-only: it never blocks and never edits. What makes it
+// worth a type is the distinction its own error text insists on — "this is not
+// an empty/no-guidance result". A check that could not run and a check that ran
+// and found nothing look identical once either is reduced to "no findings", and
+// only one of them is evidence.
+//
+// So Answered is separate from the findings, and the zero value is not clean.
+// A caller that never ran the check, or ran it and got a transport failure,
+// holds a result that reports itself as unanswered rather than as quiet.
+type EditCheckResult struct {
+	// Answered records that the surface produced a result at all.
+	Answered bool
+	// Reported is what it said, rendered for a human. Empty on a clean check.
+	Reported []string
+	// Raw is the structured payload as received, kept because the finding schema
+	// is not exercised in this repository: no forbidden fix here carries a
+	// matchable shape, so every check observed so far has come back clean. A
+	// decoder that invented field names for findings it has never seen would be
+	// guessing, and the guess would fail silently the first time one matched.
+	Raw map[string]any
+}
+
+// Clean reports that the check ran and found nothing. It is deliberately not
+// the zero value: absence of findings is only evidence when somebody looked.
+func (e EditCheckResult) Clean() bool { return e.Answered && len(e.Reported) == 0 }
+
+// Diagnostic says why this result cannot clear an edit.
+func (e EditCheckResult) Diagnostic() string {
+	if !e.Answered {
+		return "the edit check did not run, so it proves nothing about this content"
+	}
+	if len(e.Reported) == 0 {
+		return "the edit check ran and matched no advisory rule"
+	}
+	return "the edit check matched: " + strings.Join(e.Reported, "; ")
+}
+
+// editCheckTiming are keys that describe the call rather than the content.
+var editCheckTiming = map[string]bool{"generated_in_ms": true, "generated_at": true, "schema_version": true}
+
+// DecodeEditCheck reads an edit-check result, failing closed.
+//
+// A clean result carries only timing, so there is no required field to demand
+// and no way to tell a well-formed empty answer from a malformed one by shape
+// alone. What is demanded instead is that the call did not error: refusal and
+// transport failure arrive as IsError, and those produce an unanswered result
+// rather than a clean one.
+func DecodeEditCheck(r ToolResult) (EditCheckResult, error) {
+	if r.IsError {
+		reason := strings.TrimSpace(refusalReason(r))
+		if reason == "" {
+			reason = "Sensei reported a tool error"
+		}
+		return EditCheckResult{}, &ContractError{Surface: "edit check", Reason: reason}
+	}
+	out := EditCheckResult{Answered: true, Raw: r.Structured}
+	for key, value := range r.Structured {
+		if editCheckTiming[key] {
+			continue
+		}
+		if rendered := renderEditCheckValue(key, value); rendered != "" {
+			out.Reported = append(out.Reported, rendered)
+		}
+	}
+	sort.Strings(out.Reported)
+	return out, nil
+}
+
+// renderEditCheckValue turns an unrecognised payload key into one readable
+// line, or "" when it carries nothing. It reads the payload rather than a
+// schema on purpose: what matters here is whether the surface said anything at
+// all about the content, and that question can be answered without knowing the
+// name of the field it chose to say it in.
+func renderEditCheckValue(key string, value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case bool:
+		if !v {
+			return ""
+		}
+		return key
+	case string:
+		if strings.TrimSpace(v) == "" {
+			return ""
+		}
+		return key + ": " + strings.TrimSpace(v)
+	case []any:
+		if len(v) == 0 {
+			return ""
+		}
+		return fmt.Sprintf("%s: %d entr%s", key, len(v), plural(len(v)))
+	case map[string]any:
+		if len(v) == 0 {
+			return ""
+		}
+		return fmt.Sprintf("%s: %d field(s)", key, len(v))
+	default:
+		return fmt.Sprintf("%s: %v", key, v)
+	}
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return "y"
+	}
+	return "ies"
 }
 
 // DecodeWorkspaceStatus reads a workspace status result, failing closed.

@@ -620,7 +620,7 @@ func (m Model) View() tea.View {
 	case m.pending != nil:
 		composer = renderAuthority(*m.pending, inner)
 	case m.mcpMenu:
-		composer = renderMCP(m.engine.Repo.Root, inner)
+		composer = renderMCP(m.engine.Repo.Root, m.engine.Config.Sensei.Args, inner)
 	case m.loginMenu:
 		composer = renderProviderLogin(inner)
 	default:
@@ -733,6 +733,11 @@ func isConversation(e event.Event) bool {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
 		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority:
 		return true
+	case event.ArchitectReconciliation:
+		// Why the loop took the branch it took when two agents disagreed. Filed
+		// as activity it would scroll past, and the next thing the human sees is
+		// a run that changed course for no visible reason.
+		return true
 	case event.GuidanceDelivered:
 		return true
 	case event.DecisionRecorded:
@@ -791,6 +796,13 @@ func currentPhase(e event.Event) string {
 		return "Sensei auditing the candidate diff"
 	case event.CandidateChanged:
 		return "candidate diff ready"
+	}
+	// A finding is the only part of a review a worker can act on, so it stays
+	// visible: an adversarial loop whose findings scroll past as unlabelled
+	// agent output is one nobody can follow.
+	switch e.Kind {
+	case event.ReviewStarted, event.ReviewFinding, event.ReviewCompleted:
+		return firstLine(e.Summary)
 	}
 	switch e.Source {
 	case event.SourceArchitect:
@@ -889,11 +901,11 @@ func mcpAgentFor(key string) (mcpconfig.Agent, bool) {
 // renderMCP shows where each agent gets Sensei from. An agent whose
 // configuration Sensei Code cannot read is shown as unknown rather than as
 // working, because an unverified route to Sensei is not a route to Sensei.
-func renderMCP(repoRoot string, width int) string {
+func renderMCP(repoRoot string, want []string, width int) string {
 	var b strings.Builder
 	b.WriteString(architectStyle.Render("Sensei MCP access"))
 	b.WriteString("\n\nEach agent reaches Sensei through its own MCP configuration, so what it\nsees is what Sensei said. Sensei Code never answers for Sensei.\n")
-	for i, status := range mcpconfig.Describe(repoRoot) {
+	for i, status := range mcpconfig.Describe(repoRoot, want) {
 		mark := dimStyle.Render("○")
 		switch status.State {
 		case mcpconfig.Configured:
@@ -1024,6 +1036,13 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		switch c.Name {
 		case "/report":
 			text, err := architect.RunReport(client, domain, width)
+			// The Level-1 dark run is appended rather than merged: it is this
+			// session's own measurement of its own runs, not something the
+			// graph holds, and printing it under Sensei's report would attribute
+			// it to Sensei.
+			if line := routineDarkRun(engine); line != "" {
+				text = strings.TrimRight(text, "\n") + "\n\n" + line + "\n"
+			}
 			return commandResultMsg{name: c.Name, text: text, err: err}
 		case "/focus":
 			text, err := architect.RunFocus(client, domain, arg)
@@ -1037,6 +1056,21 @@ func (m Model) senseiCommand(c command.Command, arg string) tea.Cmd {
 		}
 		return commandResultMsg{name: c.Name, err: errors.New("this command has no implementation yet")}
 	}
+}
+
+// routineDarkRun renders what the Level-1 classification has observed so far,
+// or "" when it has observed nothing. A session that has run no governed task
+// prints no line at all, because a tally of zero out of zero reads like a
+// finding and is not one.
+func routineDarkRun(engine *workflow.Engine) string {
+	if engine == nil || engine.Store == nil {
+		return ""
+	}
+	events, err := engine.Store.Load()
+	if err != nil {
+		return ""
+	}
+	return workflow.RoutineSummary(events).Render()
 }
 
 // senseiDomain resolves the repository domain for CLI-backed commands, which

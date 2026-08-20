@@ -50,3 +50,36 @@ go.work.sum
 /.sensei/graph-authority.json
 /.sensei/graph-authority.transaction.tsv
 /.sensei/graph-closure-report.json
+
+# Derived project inference, and the one file in .sensei/project/ that cannot be
+# tracked honestly. Its binding names an exact revision, so committing it makes
+# it wrong the moment anything else is committed: the artifact would claim to
+# describe a commit that no longer exists in the branch's tip, and every
+# receipt built from it would inherit that claim. Keeping it current in git
+# would mean regenerating 13 MB on every commit. It is regenerable from the
+# revision it names, and must be regenerated from a CLEAN tree — generating it
+# from a dirty one binds working-tree facts to HEAD and reports them as
+# resolved (globulario/sensei#216).
+/.sensei/project/claims.yaml
+
+# Sensei task execution state: workspaces, checkpoints, append-only ledgers,
+# candidate history. Durable, and durable under Sensei's own contract rather
+# than under this repository's source history.
+#
+# The two authorities must not be the same one. A governed run writes task
+# evidence into the tree it is governing; if that evidence is repository state,
+# the run dirties its own checkout, and the base a candidate is established from
+# moves because the machinery observed itself. That is the self-reference this
+# project removes everywhere else, and it would arrive here as a convenience.
+#
+# Contents mattering is not the question. A write-ahead log is evidence that
+# something happened and is still not source code, and committing a probe task's
+# ninety-file workspace would make an experiment's operational exhaust part of
+# the product tree because the experiment happened.
+#
+# The rule, if repository-visible provenance is wanted later: records may be
+# durable without being repository state, and promotion into Git must itself be
+# an explicit governance action. Promote a small immutable receipt under a
+# dedicated evidence path — task id, base revision, judged revision,
+# disposition, verification digest, ledger digest — never the workspace.
+/.sensei/tasks/

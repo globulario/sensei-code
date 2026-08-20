@@ -87,3 +87,19 @@ failure_modes:
     evidence:
       - sensei-code logout 2 printed 'logged out' exit 0 while providers still showed connected and ~/.codex/auth.json retained access/refresh/id tokens with last_refresh bumped
       - sensei-code login 1 exited 1 with 'did not produce an authenticated Codex account' while auth.json had been recreated and providers showed connected plus
+  - id: sensei_code.review_forked_the_conversation_it_was_judging
+    title: The reviewer was handed the architect's conversation and agreed with it
+    severity: critical
+    description: 'Machine turns on the ChatGPT provider all went through AskFork, which forks the human architectural thread so a JSON contract does not pollute the visible chat. That is right for the architect and wrong for the reviewer: forking carries the architect''s entire case for the change into the session of the role whose job is to attack it. An attacker that has already read the argument agrees more often than one that looked at the artifact cold, and the transcript cannot tell the two apart, so a correlated opinion was being recorded as an independent review.'
+    protects:
+      files:
+        - internal/agent/agent.go
+        - internal/provider/chatgpt_session.go
+    related_invariants:
+      - sensei_code.roles.adversarial_roles_inherit_nothing_and_bind_to_a_revision
+    required_tests:
+      - internal/agent/agent_session_test.go:TestAnAdversarialRoleAlwaysStartsFresh
+    evidence:
+      - internal/provider/chatgpt_session.go AskFork was reached for req.Role == Reviewer
+      - the reviewer verdict carried no candidate identity, so it could also be carried onto a later revision
+    contract: an independent review is independent of the session, the author, and the revision it did not read

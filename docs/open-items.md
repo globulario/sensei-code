@@ -152,6 +152,73 @@ missing until a rebuild was finally required.
 does not exist, which is the ordinary state of a repository that has not used
 tasks. An empty answer is being reported as a failure to answer.
 
+## `infer-claims` bound a working tree to a commit that did not contain it
+
+`globulario/sensei#216`, found while clearing `sensei-code#22`'s first
+prerequisite on 2026-08-19. Recorded because the document it produces is
+self-certifying and wrong in a way nothing downstream can detect.
+
+`sensei infer-claims` scans the **working tree** and binds every claim and every
+fact receipt to `git rev-parse HEAD`, with `revision_status: resolved`. On a
+dirty checkout the two disagree, and the document says so with confidence:
+
+```text
+run against this repository with 26 modified/untracked files:
+  binding.revision        ed56eb10c647   revision_status: resolved
+  claims                  2982
+  fact receipts           7978
+  ...of which citing internal/roles/   146 claims, 283 receipts
+  git ls-tree ed56eb10c647 -- internal/roles   ->   0 files
+```
+
+So 283 receipts carry a `source_digest`, a `source_file`, a line range and
+`revision_status: resolved` for bytes that do not exist at the revision they are
+bound to. The same run against a clean checkout of the same commit produces
+2724 claims and 7317 receipts, none of them naming those files, and the binding
+becomes true.
+
+**This is the same shape as `sensei-code#10` and the `-store-url` case, a fourth
+time.** Several signals agree — the revision resolves, the digests are real, the
+files are really there on disk — and one silent decider disagrees with all of
+them. A caller cannot notice, because every field it would check says
+`resolved`.
+
+**Fixed upstream in `globulario/sensei#217` and verified here on 2026-08-19**,
+by the checkout that reported it and against the same reproduction.
+
+The repair is the second of the two offered: keep scanning the working tree, and
+when it diverges, name no revision at all. A new
+`architecture.UncommittedSourceFiles` answers the question the producer was
+assuming — are these files' working-tree bytes the bytes at this revision — and
+divergence produces `revision_status: unavailable` with a blocking
+`git_revision` limitation naming the commit and the offending files.
+
+It carries a refinement worth recording, because it is the part that makes the
+fix usable rather than merely correct: **divergence is judged over cited files
+only.** An unrelated edit or a leftover artifact would otherwise make every scan
+permanently unbindable, which would have replaced a silent wrong answer with a
+loud useless one.
+
+Verified in three states, with the rebuilt binary:
+
+```text
+clean tree            revision 2fb53d9a2700 · resolved · 2982 claims
+uncommitted .go file  revision absent · unavailable · blocking git_revision
+                      limitation naming internal/probe217/probe.go
+                      fact receipts claiming a resolved revision: 0 of 7979
+uncited stray file    revision 2fb53d9a2700 · resolved   (cited-files-only holds)
+```
+
+The middle row is the defect: before the fix that same tree produced 283
+receipts asserting `resolved` for files the named commit did not contain. Now
+nothing in the document claims a revision, including the receipts.
+
+**The workaround is retired.** `.sensei/project/claims.yaml` no longer needs a
+throwaway worktree: it is generated from the clean checkout and binds to
+`2fb53d9a2700`. It still must be regenerated whenever HEAD moves — that was
+never the defect — but generating it from a dirty tree now refuses to bind
+instead of binding wrongly, which is the difference between a trap and a chore.
+
 ## Governed runs are on hold until globulario/sensei#176
 
 `sensei-code#13`. Two servers sharing one Oxigraph store cannot both hold
@@ -467,6 +534,500 @@ It clears with a republication of the affected domain from its own corpus:
 cd <services checkout> && sensei build --repo github.com/globulario/services
 ```
 
+## The reviewer is now genuinely adversarial; the roles behind it are not built
+
+`globulario/sensei-code#15`, sequenced behind `#22`. **What landed hardens the
+one adversarial role that already existed. The roles that would produce new
+verdict classes — counterexample hunter, proof runner — are deliberately not
+built.**
+
+The sequencing recorded on `#15` is that a hunter or proof verdict has nowhere
+authoritative to terminate until an admitted candidate can carry verdicts into
+Sensei, and that building them first produces agents agreeing amongst themselves
+while looking like independent evidence. That still holds and nothing here
+changes it.
+
+What *did* need doing before then is that the reviewer this repository already
+ran was not independent, and nothing said so:
+
+- Machine turns on the ChatGPT provider all went through `AskFork`, which forks
+  the human architectural thread. That is right for the architect and wrong for
+  the reviewer: it carries the architect's entire case for the change into the
+  session of the role whose job is to attack it. An attacker that has already
+  read the argument agrees more often than one that looked at the artifact cold,
+  and the transcript cannot tell the two apart.
+- The reviewer's verdict carried no identity for the bytes it judged, so it
+  could be carried onto a later revision without anything noticing.
+- Nothing stopped the configured reviewer from being the provider that had just
+  implemented the candidate.
+
+None of that adds a verdict class. It makes the existing one mean what it
+already claimed to mean.
+
+Landed:
+
+- **Roles are semantic** (`internal/roles`). A closed vocabulary — architect,
+  implementer, reviewer, counterexample hunter, proof runner — with the session
+  rule attached to the role rather than to the caller. The last two are named
+  and unfilled, and no provider declares them: a declared capability nobody can
+  exercise makes an unassignable role look like an available one.
+- **Independence is unsettable.** `agent.Request.session()` returns `fresh` for
+  an adversarial role whatever the caller passes, and `provider.AskIndependent`
+  opens a thread with no history rather than forking the architect's. A field a
+  caller can set to "continue" is a field that will eventually be set to
+  "continue" by a refactor nobody reviews for this property.
+- **Verdicts are bound to the bytes they judged.** The candidate revision is
+  digested from the diff rather than taken from Sensei's audit, so a review is
+  still bound on a run where the audit could not execute — which is exactly the
+  run where a stale verdict would go unnoticed. A verdict about the previous
+  revision is refused as superseded; one about another task is refused as
+  foreign. The two refusals say different things because they mean different
+  things.
+- **Self-review is impossible rather than discouraged.** The implementer is
+  excluded when the reviewer is assigned, from a read-only reviewer roster kept
+  separate from the implementors — an implementor's argv carries write
+  capability, and a reviewer able to fix what it is attacking can report it
+  clean. A deployment that cannot field an independent reviewer fails the role
+  instead of quietly letting one review itself.
+- **Findings are structured.** Severity is a closed vocabulary, a blocking
+  finding must point at something a worker can open, and a verdict that accepts
+  over its own blocking finding is refused rather than resolved silently in
+  favour of the softer half.
+- **Agreement has no path to authority.** There is no majority function to call.
+  A reconciliation receipt resting on no canonical evidence is refused however
+  many agents concurred, and the refusal says why. Unanimity is reportable and
+  not actionable, which is the whole distinction.
+- **Risk decides rigor, read structurally.** `Routing` carries Sensei's blast
+  radius and approval gate forward instead of consuming them, and a task with no
+  recorded risk reading is judged at the strictest setting — the same fail-closed
+  reading the authority router learned when an absent verdict was taken for
+  permission.
+
+Of section 10's fourteen properties, eleven are mechanically covered: 1, 2, 3, 4,
+5, 6, 7, 8, 10, 12 and 14. **Property 9 (counterexample evidence reopens a
+reviewer-accepted candidate) is not implemented**, because the hunter is not.
+Property 11 is covered for cross-provider review and not for the counterexample
+requirement, for the same reason. Property 13 holds through the existing
+authority router.
+
+Not done, and each says why:
+
+- **The hunter and proof roles wait for `#22`.** A counterexample stage was
+  written and removed rather than shipped: it worked, and every verdict it
+  produced would have terminated in this repository's session log. Removing it
+  was cheaper than explaining later why a local receipt was not evidence.
+- **No live run.** Nothing here has driven a real reviewer. The properties are
+  facts about the code; whether a real Codex reviewer given an independent
+  session returns better findings than a forked one is empirical and unanswered.
+  Quota resets 2026-08-20.
+- **Cross-provider review needs two working providers.** The default roster is
+  codex and claude, so excluding the implementer leaves exactly one reviewer and
+  no alternate to fall back to.
+- **The architect is not excluded from review.** Only the implementer is. An
+  architect reviewing a candidate built to its own plan is the same
+  self-certification one level up, and the default configuration avoids it by
+  accident rather than by construction.
+
+## Level-1 routine is measuring, and nothing qualifies yet
+
+`docs/p1-level-1-routine.md` **Stage 1 implemented.** The classification is
+computed on every governed run, emitted with its qualifying and blocking
+conditions, and tallied on `/report`. It grants nothing, skips nothing, and no
+branch of the workflow consults it — enforced by a test that fails if
+`RouteRoutine` is ever read outside the classifier.
+
+The nine conditions are a pure function over Sensei's structured evidence with
+no model input, and the one place a model's own statement is consulted — a claim
+marked `inference` — restricts rather than grants. Categorical exclusions run
+first and short-circuit before any condition is credited, because a routine tier
+able to fast-path an edit to its own qualifying conditions is a tier that can
+widen itself.
+
+Two of those exclusions cannot be expressed over a list of paths: deletion and
+weakening of an existing test. The classifier therefore takes the candidate's
+*shape* — parsed from the diff, never from what the worker said it did — where a
+deleted test is a file status and a weakened one is a test file that lost more
+lines than it gained. Weakening is a mechanical proxy for a semantic property and
+is documented as one. Test detection is exact for Go and deliberately
+over-inclusive elsewhere: a false positive costs a change its fast path, while a
+false negative would let a removed proof through unremarked.
+
+**Two corrections to the specification, found by building it.**
+
+The document says condition 3 is served by types P0.7 already provided:
+`EmptyProven` versus `Absent`. Those types do not exist anywhere in
+`internal/sensei` — but the verdict does, and it is published structurally.
+`awareness_preflight` returns a `coverage` object that no client here decoded:
+
+```text
+internal/workflow/engine.go  direct_anchor_count 4 · indexed_file_count 1 · sufficient true
+internal/agent/agent.go      no anchors fired, no files indexed — coverage thin for this area
+```
+
+Condition 3 now reads `coverage.sufficient`. **The first implementation of it did
+not, and that was the same mistake this repository has already paid for once:**
+it searched the blind spots for the substring `coverage_insufficient`, which is a
+governance decision resting on recognising a sentence, failing open the day the
+sentence is reworded. That is exactly why `approvalGate` was deleted after
+`globulario/sensei#171` published blast radius and approval gate as fields. The
+parser was replaced with the structured read before this landed, and a test now
+fails if the substring reappears or if rewording the note changes the verdict.
+
+Condition 7 is currently vacuous, and that is worth saying rather than counting
+it as a guard. None of this repository's forbidden fixes carries a matchable
+pattern, so `awareness_edit_check` returns clean for every input. It proves that
+nothing matched in a corpus where nothing can match. What the surface does get
+right is the distinction its own refusal text insists on — *"this is not an
+empty/no-guidance result"* — so `EditCheckResult` separates *answered* from
+*found nothing*, and its zero value is not clean. A check nobody ran cannot
+clear a change.
+
+**What the live run says.** `internal/workflow/routine_live_test.go` classifies
+real files against this repository's own authoritative graph:
+
+```text
+internal/workflow/engine.go   OK        3 invariants  → blocked at 4: a critical invariant governs it
+internal/agent/agent.go       DEGRADED  0 invariants  → blocked at 2: preflight is degraded
+internal/tui/model_test.go    EMPTY     0 invariants  → blocked at 2: preflight is empty
+internal/roles/roles.go       DEGRADED  0 invariants  → blocked at 2: preflight is degraded
+docs/p1-level-1-routine.md    EMPTY     0 invariants  → blocked at 2: preflight is empty
+```
+
+Nothing qualifies, and one condition accounts for almost all of it: **coverage**.
+Only the governed file reached `OK`, and it is governed, so condition 4 correctly
+stops it. That is exactly the outcome the specification predicted — *"Level-1
+becomes available as the graph earns it, which puts the incentive where it
+belongs"* — now measured rather than anticipated.
+
+One result deserves attention on its own: **the shape the P0 canary used does not
+qualify.** `internal/tui/model_test.go` — a test file, the accepted candidate's
+task shape — returns `EMPTY`. The graph holds no facts about test files, so the
+cheapest and most obviously routine change in the repository is the one the tier
+cannot yet recognise.
+
+**The "promoted knowledge only" safeguard is now enforced, and the enforcement
+sits somewhere the specification did not anticipate.**
+
+The specification requires the classifier to read promoted knowledge and never
+the candidates queue, because otherwise an agent could propose knowledge that
+makes its own change look routine. The concern does not land where it first
+appears to. A proposed *invariant* can only make a change look less routine —
+more blocking, never less — so the invariant conditions are safe in the
+direction that matters. The exposure is condition 3, where knowledge that
+manufactured coverage would turn ignorance into apparent evidence, which is the
+one direction that grants.
+
+Reading the server settles how. `computePreflightCoverage` reaches `sufficient`
+three ways:
+
+```go
+case directCount > 0:                sufficient = true   // anchors matched
+case len(files) > 0 && indexed > 0:  sufficient = true   // indexed, "no rules apply"
+case hasStrongPattern:               sufficient = true   // a pattern recipe alone
+```
+
+The first two are analysis of the files in question — the second is precisely the
+`EmptyProven` case this tier wants. The third is a recipe recognising the *shape*
+of code, and it is sufficient with **no anchors and no indexed file at all**.
+Implementation patterns are generated as review-only candidates by `sensei
+skill-ingest`, and the server's `inScopePatterns` selects them by domain without
+regard to promotion. So a pattern-only sufficiency is exactly the unpromoted
+grant the safeguard forbids.
+
+**Filed upstream as `globulario/sensei#218`**, with a hermetic counterexample
+rather than a code-reading: the test calls `computePreflightCoverage` directly
+with the shape a review-only pattern arrives in — no graph, no store, no fixture
+— and it reports `sufficient=true` on `direct_anchor_count=0`,
+`indexed_file_count=0`. The root cause turned out to be narrower and worse than a
+missing filter: `MatchedImplementationPattern` carries no status, promotion state
+or provenance at all, so the coverage computation could not make the distinction
+even if it tried.
+
+The blast radius there is contained, and the issue says so: patterns raise
+`coverage.sufficient` and suppress the `EMPTY` downgrade, but the honest-DEGRADED
+gate runs first and is not overwritten, so a consumer keying on `status` is
+unaffected. A consumer keying on `sufficient` is not — and separating "the graph
+looked and found nothing" from "the graph never looked" is that field's entire
+purpose.
+
+It cannot happen here today, and that was checked rather than assumed. The store
+holds only promoted classes for this domain — `Invariant`, `FailureMode`,
+`ForbiddenFix`, `Decision`, `Guardrail`, `Test`, `SourceFile`, 26 of them
+`active` — and no `ImplementationPattern` node at all, so `hasStrongPattern`
+cannot fire. But that is a fact about what nobody has run yet, not a property,
+and it would stop being true the first time `skill-ingest` published into this
+graph.
+
+So `Coverage.Proven()` requires sufficiency to rest on analysis:
+`Sufficient && (DirectAnchorCount > 0 || IndexedFileCount > 0)`. Sensei's verdict
+is taken as published and never recomputed from the counts; what is narrowed is
+which *basis* for it this repository will treat as coverage of these files. A
+pattern is a reasonable basis for advice and a poor one for silence — it says
+code like this usually looks like that, which is not the graph having examined
+these files and found nothing governing them.
+
+**Not established:** whether condition 5 is satisfiable here.**Condition 5 is reachable, load-bearing, and was nearly recorded as neither.**
+An earlier note here said it had never been reached, because conditions 2 and 4
+blocked first in every file probed. Testing the delegated high-risk exclusion
+found the case that reaches it:
+
+```text
+docs/awareness/invariants.yaml   status OK · 0 invariants · coverage proven
+  → not routine: Sensei reported blind spots: file path under high-risk directory
+    (4 conditions held first)
+```
+
+That file passes conditions 1 through 4. Without condition 5 the repository's own
+governance corpus would have been classified routine and skipped escalation.
+
+**The delegated exclusion is tested, and it holds.**
+`internal/workflow/protection_live_test.go` reads the effective protection set
+Sensei published and asserts that the tier refuses every file in it. All nine
+files in the current snapshot are refused, by three different conditions — a
+critical invariant for two of them, degraded coverage for six, and the high-risk
+blind spot for the governance corpus.
+
+The registry that the specification names is empty: `manual_count: 0`, every
+protected path arrives by derivation. That is precisely the case a local re-read
+of `high_risk_files.yaml` would have got wrong — it would have found nothing to
+exclude and reported a clean pass — which is why the exclusion is delegated to
+Sensei's own derivation rather than reimplemented from one of its inputs.
+
+**The four safeguards are now enforced rather than intended.**
+
+*Auditable.* The record enumerates what would have skipped escalation and why —
+each change identified, with the conditions that qualified it — because a count
+answers "how many" and cannot answer "show me which". During Stage 1 the wording
+says *would have skipped*, since claiming a privilege was exercised that never
+was is the same overstatement in miniature.
+
+*Not a configuration flag.* `routine.go` reads no configuration, no type carries
+a field shaped like a switch, and no function in the tier accepts a boolean —
+asserted over the syntax tree, because once a switch cannot be a config field the
+next shape it takes is a parameter.
+
+*Revocable by evidence.* A routine change later implicated in a failure produces
+a proposal against the conditions that let it through, naming each one. It
+produces the proposal and never records it: a tier that could rewrite its own
+qualifying conditions in response to its own failures would be deciding its own
+scope. A change that never took the routine path is refused rather than blamed,
+because proposing against the tier for a failure it did not enable teaches the
+graph a false lesson.
+
+*Promoted knowledge only.* Enforced at condition 3, as described above.
+
+**Evidence, not assertion, is tested rather than assumed.** Identical Sensei
+evidence with wildly different architect prose produces an identical
+classification, and calling a change trivial cannot rescue an uncovered region.
+The classifier never sees prose — only a claim's `source` — but a property that
+holds by construction is worth a test that fails if the construction changes.
+
+**Stage 2A: counterfactual measurement, and what it found.**
+
+Stage 1's instrument only ran inside the governed candidate loop, which made it
+incapable of measuring the population it was meant to describe — a telescope
+inside the box. `sensei-code routine-scan` classifies any change, historical or
+otherwise, grants nothing, and records which conditions it could not evaluate
+rather than silently crediting them: a replayed commit has no plan and no claims,
+so conditions 8 and 9 are marked *assumed* instead of counted as satisfied.
+
+Replaying this repository's last 39 commits:
+
+```text
+sensei-code history: 39 change(s), 0 qualified (0%)
+    19 × preflight is not ok            e.g. 1cbb8e3e1c29
+    10 × touches the governance path    e.g. f150c5028866
+     6 × a critical invariant governs   e.g. 35051658b8c6
+     3 × a high invariant governs       e.g. be424a5f9a20
+     1 × Sensei reported blind spots    e.g. 2dfad9c0c2d8
+```
+
+**The zero is structural, and it is not a matter of the conditions being too
+strict.** Reading the server settles it. `indexed` increments only for a file
+that already has a direct anchor:
+
+```go
+if len(DirectInvariants)+len(DirectFailureModes)+len(DirectIntents) > 0 { indexed++ }
+```
+
+So `indexed > 0` implies `directCount > 0`, which means the first branch of the
+coverage switch always matches first and the second is **unreachable**. Its note
+— `"%d/%d file(s) indexed in graph (no rules apply)"` — describes a state the
+code cannot produce.
+
+Both reachable paths to `sufficient` therefore require an anchor, and condition 4
+refuses critical and high invariants. The qualifying region is exactly *a file the
+graph has an anchor for, none of whose anchors is a critical or high invariant*.
+In this domain that set is empty: 14 critical invariants, 10 high, none lower,
+plus 3 failure modes attached to them.
+
+**The consequence is worth stating precisely, because it is not "loosen
+condition 4".** The population this tier was designed for is
+`docs/p1-level-1-routine.md`'s load-bearing distinction — coverage that is
+`EmptyProven` rather than `Absent`, the graph having looked and affirmatively
+found nothing governing. Under the current upstream coverage model *covered* and
+*reports nothing governing* are mutually exclusive, because being covered is
+defined as having an anchor. The intended population is not rare here. It is
+**not currently representable**.
+
+**Filed as `globulario/sensei#220`**, framed as a coverage-model expressiveness
+defect rather than an implementation bug, and deliberately as one issue rather
+than two. The unreachable branch is the implementation witness; the
+indistinguishability of `EmptyProven` from `Absent` is its semantic consequence.
+Split apart, somebody could reasonably close the first by deleting the dead
+branch — making the implementation self-consistent while destroying the
+semantics it was written for.
+
+The witness is hermetic and slightly unusual: the branch *works* when
+`computePreflightCoverage` is called directly with `indexed=1` and no anchors,
+producing `sufficient=true` and the note "1/1 file(s) indexed in graph (no rules
+apply)". Only its caller can never produce those arguments. The function can say
+`EmptyProven`; nothing can ask it to.
+
+The issue pins the invariant rather than the repair — *graph coverage must be
+independently representable from the presence of governance anchors* — and
+requires an acceptance case for a file that is examined with nothing governing
+it, **constructible without inventing a low-severity invariant**. An artificial
+non-critical anchor would produce "governed by something minor", which is a
+different population, and would let the test pass while the missing state stayed
+missing.
+
+The Stage 1 conditions stay frozen: measuring a boundary and moving it are
+different activities, and doing both at once produces a boundary that fits
+whatever was measured.
+
+**Population 2 was attempted and the result is void, which is not the same as
+zero.**
+
+The services endpoint was stood up on `:10120` — against an isolated store on
+`:7882` rather than the existing one, which held 6 triples. The corpus rebuilt
+cleanly into it: 121,338 triples, closure PROVEN, one domain proven. The server
+reports the graph authoritative, provenance stamped, transaction certified.
+
+Replaying 100 commits:
+
+```text
+globular/services history: 77 change(s), 0 qualified (0%)
+    44 × preflight is degraded
+    32 × preflight is empty
+     1 × the candidate deletes a test
+   + 5 skipped: 3 merge commits, 2 transport failures
+```
+
+**No file resolved a single anchor, including files that graph demonstrably
+protects.** `Makefile`, `.gitignore` and `scripts/check_no_tracked_binaries.sh`
+all return `DEGRADED` with zero direct invariants, while the same store holds
+1,307 `aw:protects` triples across 337 invariants, pointing at
+`sourceFile/github.com%2Fglobulario%2Fservices/Makefile` among others.
+`sensei briefing --file Makefile` likewise returns `BRIEFING_STATUS_EMPTY`.
+
+So every commit blocked at condition 2 for an environmental reason, and the
+population is unmeasured. Reporting this as "services qualified 0%" would be
+reporting a broken deployment as a property of the tier.
+
+**Not filed upstream, deliberately.** The deployment was assembled for this
+measurement and the plausible causes include something it failed to supply — a
+domain registry, a `-repo-root` interaction, an IRI construction that depends on
+how the store was built. Filing a resolution defect against a self-assembled
+deployment would be the weak report that `globulario/sensei#218` and `#220`
+deliberately avoided. Isolating it needs a known-good services deployment to
+compare against, and that repository's own store holds 6 triples — which is
+`globulario/sensei#221` biting immediately.
+
+**What the attempt did establish.** The test-deletion exclusion added this
+morning fired on real history, blocking commit `8d68217f` for removing
+`state_persist_dedup_test.go`. And the services corpus carries the severity
+spread this repository lacks — 175 critical, 137 high, 22 warning, 2 info, 1
+degraded — so if anchor resolution worked there, a qualifying region could exist
+via files anchored only below the critical/high bar. That remains a hypothesis.
+
+**Two instrument defects were found and fixed by running it**, both in the
+measuring code rather than the thing measured. `generalise` collapsed
+`PREFLIGHT_STATUS_DEGRADED` and `PREFLIGHT_STATUS_EMPTY` into one unlabelled
+class, destroying precisely the "graph looked and found nothing" versus "graph
+never heard of it" distinction that `#220` is about; the corrected run splits
+44/32 where the first reported 71. And the first run discarded stderr, hiding
+why 28 commits produced no result.
+
+**The synthetic positive control is not merely deferred; in the form first
+proposed it would have been the wrong experiment.** Publishing a low-severity
+anchor yields *governed by something non-critical*, which is a different
+population from *examined and governed by nothing*. It would have demonstrated
+that the classifier can find an artificially constructed qualifying case while
+sidestepping the state Level-1 exists to detect. A useful control needs a file
+that is indexed with an empty anchor set, and that is exactly what `#220` says
+cannot currently be encoded. **Being unable to write the test is part of the
+evidence rather than a gap in it.**
+
+**Status.**
+
+```text
+Stage 2A   complete — the classifier is measured counterfactually, outside the
+                      governed loop, granting nothing
+Stage 2B   blocked upstream — the EmptyProven coverage state the grant depends on
+                      is not representable by Sensei's current coverage model
+                      (globulario/sensei#220)
+```
+
+Shipping the grant now would be worse than shipping nothing. It would be an inert
+privilege, and its presence would make an architectural claim the system cannot
+support: that routine work may bypass ceremony once Sensei has proven nothing
+governs it. Sensei cannot presently prove that proposition about any file.
+
+No condition relaxation, no synthetic governance, no dormant authority grant.
+
+## An authority resolution recorded another repository's commit as its base — fixed
+
+Found on 2026-08-20, in the first governed run against production code. The
+proposal is committed with the error intact rather than corrected, because it is
+`awaiting_review` and a wrong fact caught at review is working as intended, while
+one quietly patched by the agent that noticed it is evidence nobody can trust.
+
+`docs/awareness/candidates/proposals/contract_unknown.…human_authority_resolution….yaml`
+records:
+
+```text
+evidence:
+  - base commit e0f49fca0357
+```
+
+`e0f49fca0357` is not a commit in this repository. It is `globulario/services`
+HEAD. The sensei-code endpoint reports it as its own source:
+
+```text
+graph_build_commit: 6a4e837a6a6f
+source_repo_commit: e0f49fca0357   ← services HEAD
+sensei-code HEAD:   9742f754b815
+```
+
+**The first diagnosis was wrong and is corrected here.** It was suspected that a
+services build had rotated a shared stamp — the `#176` family. It had not.
+Republishing this repository's own domain advanced `graph_build_commit` and left
+`source_repo_commit` exactly where it was, the value is nowhere in the store, and
+the field is behaving precisely as documented.
+
+`gate.go` already says what it means, having been bitten once:
+
+> SourceRepoCommit is the commit identity of the rule snapshot, which on this
+> installation belongs to the services repository … Comparing it against the
+> governed repository's HEAD compares commits from two different repositories.
+
+So Sensei reported a true fact and this repository mislabeled it. `awaitHuman`
+passed `start.GraphSourceCommit()` as the resolution's `baseSHA`, which
+`authority.Persist` then emits as `base commit …`. The rule snapshot's identity
+was being filed as the candidate's base — the exact confusion `gate.go` warns
+about, made in a different function.
+
+Fixed: the escalation now reads the base from this repository's own candidate
+identity, which `candidate.Establish` pins before any architect turn. An
+unestablished identity yields no base rather than a substitute, because a
+resolution with no stated base is honest and one carrying another repository's
+commit is not.
+
+**Do not read this as the resolution being wrong.** The human decision it
+records happened and is accurate. What is wrong is one line of provenance
+attached to it.
+
 ## Executing the admission chain needs a claims corpus, not only a provider
 
 `globulario/sensei-code#22`. The chain itself is composed and tested
@@ -476,22 +1037,55 @@ vocabulary. What has never run is the chain.
 Two prerequisites, discovered by attempting it rather than by reasoning about
 it, and they are independent:
 
-**Project inference has not been run here.** Sensei's producer path refuses at
-its first step:
+**Project inference has now been run, and the first prerequisite is cleared.**
+It was reached without a provider and without fabricating anything: `sensei
+infer-claims` is offline and deterministic, and derives claims from repository
+evidence rather than authoring them.
 
 ```text
-sensei prepare-change: task input incomplete: inference not run;
-expected .sensei/project/claims.yaml
+.sensei/project/claims.yaml
+  2724 claims from 7317 fact receipts, each carrying source file, line range,
+  source digest and an extractor
+  binding: revision ed56eb10c647 (resolved) · graph digest 7918a04b1909 (resolved)
+  limitations: 1, non-blocking — governed direction bridge inactive (--graph-nt
+  not supplied)
 ```
 
-Neither `.sensei/project/claims.yaml` nor `.sensei/gate-policy.yaml` exists. The
-convergence bundle admission evaluates is built from an architecture claims
-document, and that document comes from onboarding inference over this codebase.
+The blocking limitation the first run reported — `graph digest is not resolved`
+— cleared once this repository's own authoritative server was up and its live
+digest was supplied. That is not a formality: an unbound claims corpus would
+have produced a convergence session that could not say which rules it was
+judged under.
 
-It must not be fabricated to make the chain run. A claims corpus invented to
-satisfy `prepare-change` would produce a convergence session about a project
-that does not exist, and every receipt after it would be valid and meaningless —
-the same failure as composing a bundle by hand, moved one step earlier.
+Two things about this document that a later reader should not have to rediscover:
+
+- **It describes `ed56eb10c647`, not the working tree.** It was generated from a
+  clean throwaway worktree, for the reason recorded above, and it is stale the
+  moment HEAD moves.
+- **It is 13 MB and derived.** Whether it belongs in git is an open question and
+  deliberately not decided here: it is regenerable from the commit it names, and
+  a large regenerable artifact in history is a cost somebody should choose on
+  purpose.
+
+`prepare-change` no longer refuses for want of inference. It now asks for the
+next inputs, and supplying a scope anchor narrows the frontier to one thing:
+
+```text
+$ sensei prepare-change ... --file inspect:internal/doctor/doctor.go
+sensei prepare-change: --graph-nt is required; file operation must be read or modify
+```
+
+So the scope anchor is a matter of using the right operation verb (`read` or
+`modify`, not `inspect`), and the one genuine input still missing is the graph
+snapshot.
+
+**The `--graph-nt` snapshot is the next prerequisite, and reaching it has a
+hazard.** `sensei rebuild` generates `awareness.nt`, and by default it writes
+into the paired awareness-graph repository's `embeddata/` and PUTs to
+`http://localhost:7878/store?default` — which is the services store. Producing
+this repository's snapshot with it, without `-no-runtime-reload` and an explicit
+output path, would repeat the custody mistake recorded three times in this file.
+Not attempted.
 
 **The architect has no quota.** Sensei Code's own governed path stops at the
 first agent: `You've hit your usage limit … try again at Aug 20th, 2026 9:58 AM`.
