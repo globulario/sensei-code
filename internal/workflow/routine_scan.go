@@ -113,6 +113,9 @@ type Distribution struct {
 }
 
 // Measure builds the distribution for a corpus.
+//
+// Classes come from generalise, which groups runs stopped by the same condition
+// rather than by the same file.
 func Measure(corpus string, results []Counterfactual) Distribution {
 	d := Distribution{Corpus: corpus, Blocking: map[string]int{}, Examples: map[string]string{}}
 	for _, r := range results {

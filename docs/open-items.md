@@ -896,9 +896,58 @@ The Stage 1 conditions stay frozen: measuring a boundary and moving it are
 different activities, and doing both at once produces a boundary that fits
 whatever was measured.
 
-**Still to measure:** an ordinary application repository, where mundane edits
-should exist — needs a Sensei endpoint serving that domain, and `:10120` is not
-running.
+**Population 2 was attempted and the result is void, which is not the same as
+zero.**
+
+The services endpoint was stood up on `:10120` — against an isolated store on
+`:7882` rather than the existing one, which held 6 triples. The corpus rebuilt
+cleanly into it: 121,338 triples, closure PROVEN, one domain proven. The server
+reports the graph authoritative, provenance stamped, transaction certified.
+
+Replaying 100 commits:
+
+```text
+globular/services history: 77 change(s), 0 qualified (0%)
+    44 × preflight is degraded
+    32 × preflight is empty
+     1 × the candidate deletes a test
+   + 5 skipped: 3 merge commits, 2 transport failures
+```
+
+**No file resolved a single anchor, including files that graph demonstrably
+protects.** `Makefile`, `.gitignore` and `scripts/check_no_tracked_binaries.sh`
+all return `DEGRADED` with zero direct invariants, while the same store holds
+1,307 `aw:protects` triples across 337 invariants, pointing at
+`sourceFile/github.com%2Fglobulario%2Fservices/Makefile` among others.
+`sensei briefing --file Makefile` likewise returns `BRIEFING_STATUS_EMPTY`.
+
+So every commit blocked at condition 2 for an environmental reason, and the
+population is unmeasured. Reporting this as "services qualified 0%" would be
+reporting a broken deployment as a property of the tier.
+
+**Not filed upstream, deliberately.** The deployment was assembled for this
+measurement and the plausible causes include something it failed to supply — a
+domain registry, a `-repo-root` interaction, an IRI construction that depends on
+how the store was built. Filing a resolution defect against a self-assembled
+deployment would be the weak report that `globulario/sensei#218` and `#220`
+deliberately avoided. Isolating it needs a known-good services deployment to
+compare against, and that repository's own store holds 6 triples — which is
+`globulario/sensei#221` biting immediately.
+
+**What the attempt did establish.** The test-deletion exclusion added this
+morning fired on real history, blocking commit `8d68217f` for removing
+`state_persist_dedup_test.go`. And the services corpus carries the severity
+spread this repository lacks — 175 critical, 137 high, 22 warning, 2 info, 1
+degraded — so if anchor resolution worked there, a qualifying region could exist
+via files anchored only below the critical/high bar. That remains a hypothesis.
+
+**Two instrument defects were found and fixed by running it**, both in the
+measuring code rather than the thing measured. `generalise` collapsed
+`PREFLIGHT_STATUS_DEGRADED` and `PREFLIGHT_STATUS_EMPTY` into one unlabelled
+class, destroying precisely the "graph looked and found nothing" versus "graph
+never heard of it" distinction that `#220` is about; the corrected run splits
+44/32 where the first reported 71. And the first run discarded stderr, hiding
+why 28 commits produced no result.
 
 **The synthetic positive control is not merely deferred; in the form first
 proposed it would have been the wrong experiment.** Publishing a low-severity

@@ -504,21 +504,40 @@ func (t RoutineTally) Render() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-// generalise collapses a blocking reason to its class, so the tally groups runs
+// generalise collapses a blocking reason to its class, so a tally groups runs
 // that were stopped by the same condition rather than by the same file name.
+//
+// Two classes deliberately keep a detail the rest drop. A preflight keeps its
+// status, because "degraded" and "empty" are the difference between a file the
+// graph looked at and found nothing about and a file it has never heard of --
+// which is the whole distinction the routine tier turns on, and collapsing them
+// into "preflight is not ok" throws away the measurement. Coverage keeps its
+// basis for the same reason.
 func generalise(reason string) string {
 	reason = strings.TrimSpace(reason)
+	if rest, ok := strings.CutPrefix(reason, "preflight is "); ok {
+		status, _, _ := strings.Cut(rest, ",")
+		return "preflight is " + strings.TrimSpace(status)
+	}
+	if strings.HasPrefix(reason, "coverage is not proven") {
+		if strings.Contains(reason, "implementation-pattern") {
+			return "coverage rests on a pattern rather than analysis"
+		}
+		return "coverage is not proven for these files"
+	}
 	for _, prefix := range []string{
 		"a critical invariant governs this region",
 		"a high invariant governs this region",
 		"Sensei reported blind spots",
 		"the change touches the governance path itself",
+		"the candidate deletes a test",
+		"the candidate weakens a test",
 		"the candidate touched files the plan did not name",
 		"the plan rests on an unverified premise",
 		"Sensei cannot vouch for its own graph",
 		"change risk is blast=",
-		"preflight is ",
 		"the edit check did not run",
+		"the edit check matched",
 	} {
 		if strings.HasPrefix(reason, prefix) {
 			return strings.TrimSuffix(strings.TrimSpace(prefix), "=")
