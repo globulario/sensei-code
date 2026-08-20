@@ -87,11 +87,12 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 		case !status.AuthKnown:
 			check.Status = Warn
 		default:
-			// Authenticated. That is a fact about credentials, not about
-			// capability, and the two were being reported as one.
-			check.Status = Unproven
-			check.Detail += " · authenticated; turn-serving capability not demonstrated" +
-				" — doctor does not spend provider quota to establish it"
+			// Authenticated. What that means for readiness is the provider's to
+			// say, and doctor projects it rather than concluding it: the
+			// accepted intent for this change is that providers own whether they
+			// are configured, authenticated and able to serve turns, and that
+			// doctor only projects that confirmed state.
+			check.Status, check.Detail = projectCapability(status.Capability, check.Detail)
 		}
 		report.Checks = append(report.Checks, check)
 	}
@@ -203,6 +204,22 @@ func configuredCommands(cfg config.Config) []string {
 	}
 	sort.Strings(commands)
 	return commands
+}
+
+// projectCapability renders a provider's own account of whether it can serve a
+// turn. It concludes nothing: an unknown capability stays unknown here, because
+// the alternative is a diagnostic inventing a readiness the provider never
+// claimed, which is the defect this replaced.
+func projectCapability(capability provider.TurnCapability, detail string) (Status, string) {
+	switch capability {
+	case provider.CapabilityDemonstrated:
+		return Pass, detail + " · a turn was served"
+	case provider.CapabilityRefused:
+		return Fail, detail + " · a turn was attempted and refused"
+	default:
+		return Unproven, detail + " · authenticated; turn-serving capability not demonstrated" +
+			" — doctor does not spend provider quota to establish it"
+	}
 }
 
 func configuredProviders(cfg config.Config) []provider.ID {

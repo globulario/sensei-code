@@ -1,6 +1,7 @@
 package doctor
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
@@ -138,4 +139,39 @@ func sourceOf(t *testing.T, name string) string {
 		t.Fatalf("read %s: %v", name, err)
 	}
 	return string(b)
+}
+
+// doctor projects the provider's account of its own capability and concludes
+// nothing of its own. An unknown capability stays unknown: the alternative is a
+// diagnostic inventing a readiness the provider never claimed.
+func TestDoctorProjectsCapabilityRatherThanConcludingIt(t *testing.T) {
+	for _, tc := range []struct {
+		capability provider.TurnCapability
+		want       Status
+	}{
+		{provider.CapabilityDemonstrated, Pass},
+		{provider.CapabilityRefused, Fail},
+		{provider.CapabilityUnknown, Unproven},
+		{provider.TurnCapability("something new"), Unproven},
+		{"", Unproven},
+	} {
+		got, detail := projectCapability(tc.capability, "base")
+		if got != tc.want {
+			t.Errorf("capability %q projected as %s, want %s", tc.capability, got, tc.want)
+		}
+		if !strings.HasPrefix(detail, "base") {
+			t.Errorf("capability %q lost the existing detail: %q", tc.capability, detail)
+		}
+	}
+}
+
+// A provider that has not been asked never claims capability. StatusFor
+// inspects installation and stored credentials and starts nothing.
+func TestAProviderNeverClaimsCapabilityItHasNotDemonstrated(t *testing.T) {
+	for _, id := range provider.Ordered {
+		status := provider.StatusFor(context.Background(), id)
+		if status.Capability != provider.CapabilityUnknown {
+			t.Errorf("%s claims capability %q without having served a turn", id, status.Capability)
+		}
+	}
 }

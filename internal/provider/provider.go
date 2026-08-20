@@ -61,6 +61,33 @@ func Capability(name string) roles.Capability {
 	return roles.Capability{Provider: name, Roles: Roles(id)}
 }
 
+// TurnCapability is whether a provider can actually serve a turn.
+//
+// It is owned here rather than derived by a diagnostic, because the provider is
+// the only party that knows. doctor used to conclude readiness from
+// authentication, which is a fact about credentials and not about capability,
+// and the two are routinely different: an authenticated subscription with no
+// quota left is authenticated and cannot serve anything.
+//
+// Unknown is the honest default and the only value StatusFor produces today.
+// Establishing capability means spending a turn, and a readiness check that
+// costs a weekly-budgeted turn to answer itself is one people learn to skip.
+// The field exists so a caller that has legitimately demonstrated capability --
+// a probe the operator asked for, or a turn that just succeeded -- can say so
+// without doctor inferring it.
+type TurnCapability string
+
+const (
+	// CapabilityUnknown means nobody has established whether a turn would work.
+	// It is not a failure and it is not readiness.
+	CapabilityUnknown TurnCapability = "unknown"
+	// CapabilityDemonstrated means a turn was served.
+	CapabilityDemonstrated TurnCapability = "demonstrated"
+	// CapabilityRefused means a turn was attempted and refused -- quota,
+	// timeout, malformed output, or an unusable configuration.
+	CapabilityRefused TurnCapability = "refused"
+)
+
 type Status struct {
 	ID            ID     `json:"id"`
 	Label         string `json:"label"`
@@ -71,6 +98,10 @@ type Status struct {
 	Account       string `json:"account,omitempty"`
 	Plan          string `json:"plan,omitempty"`
 	Detail        string `json:"detail,omitempty"`
+	// Capability is what this provider says about its own ability to serve a
+	// turn. StatusFor never claims more than Unknown: it inspects installation
+	// and stored credentials and starts nothing.
+	Capability TurnCapability `json:"capability"`
 }
 
 func Label(id ID) string {
@@ -104,7 +135,9 @@ func Parse(value string) (ID, error) {
 }
 
 func StatusFor(ctx context.Context, id ID) Status {
-	status := Status{ID: id, Label: Label(id)}
+	// Unknown until somebody demonstrates otherwise. Reading a credential file
+	// establishes that credentials exist, which is a different claim.
+	status := Status{ID: id, Label: Label(id), Capability: CapabilityUnknown}
 	switch id {
 	case ChatGPT, Codex:
 		if _, err := exec.LookPath("codex"); err != nil {
