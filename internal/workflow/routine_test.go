@@ -399,3 +399,51 @@ func TestCoverageIsReadStructurallyNotParsed(t *testing.T) {
 		t.Fatalf("rewording the coverage note changed the classification: %q", d.Blocking)
 	}
 }
+
+// Sensei reaches "sufficient" three ways, and only two of them are analysis of
+// the files in question. A pattern recipe recognising the shape of code is not
+// the graph having examined it, and implementation patterns are generated as
+// review-only candidates — so a pattern-only sufficiency could rest on knowledge
+// nobody promoted. This is the safeguard the specification asks for, at the one
+// condition where unpromoted knowledge could grant rather than restrict.
+func TestCoverageFromAPatternAloneIsNotCoverage(t *testing.T) {
+	scoped := qualifyingPreflight()
+	scoped.Coverage = sensei.Coverage{
+		FileCount:  1,
+		Sufficient: true, // Sensei said sufficient...
+		Note:       "strong-tier implementation pattern match — recipe identified",
+	} // ...on no anchors and no indexed file.
+
+	d := classifyRoutine(scoped, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+	if d.Routine {
+		t.Fatal("coverage asserted from a pattern recipe alone was accepted as evidence")
+	}
+	if !strings.Contains(d.Blocking, "implementation-pattern match") {
+		t.Fatalf("the refusal should say what the sufficiency actually rested on: %q", d.Blocking)
+	}
+
+	// The two analysis-backed bases still count.
+	anchored := qualifyingPreflight()
+	anchored.Coverage = sensei.Coverage{DirectAnchorCount: 4, FileCount: 1, IndexedFileCount: 1, Sufficient: true}
+	if d := classifyRoutine(anchored, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
+		t.Fatalf("anchor-backed coverage should qualify: %q", d.Blocking)
+	}
+	indexed := qualifyingPreflight()
+	indexed.Coverage = sensei.Coverage{FileCount: 1, IndexedFileCount: 1, Sufficient: true,
+		Note: "1/1 file(s) indexed in graph (no rules apply)"}
+	if d := classifyRoutine(indexed, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
+		t.Fatalf("indexed-file coverage with no rules applying is the EmptyProven case: %q", d.Blocking)
+	}
+}
+
+// Sufficiency is Sensei's to declare; which basis counts as coverage of these
+// files is this repository's to decide. Neither side re-derives the other.
+func TestSufficiencyIsTakenAsPublishedAndNarrowedNotRecomputed(t *testing.T) {
+	notSufficient := sensei.Coverage{DirectAnchorCount: 9, IndexedFileCount: 9, Sufficient: false}
+	if notSufficient.Proven() {
+		t.Fatal("counts were used to overrule a published not-sufficient verdict")
+	}
+	if !(sensei.Coverage{DirectAnchorCount: 1, Sufficient: true}).Proven() {
+		t.Fatal("an anchor-backed sufficiency was rejected")
+	}
+}

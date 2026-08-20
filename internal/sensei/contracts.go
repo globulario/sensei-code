@@ -260,14 +260,52 @@ type Coverage struct {
 
 // Proven reports that the graph covered this region well enough for its silence
 // to mean something.
-func (c Coverage) Proven() bool { return c.Sufficient }
+//
+// Sufficiency is Sensei's published verdict and is taken as given. What is
+// narrowed here is which *basis* for it this repository is willing to treat as
+// coverage of these files. Sensei reaches sufficient three ways: direct anchors
+// matched, the files are indexed and no rule applies, or a strong-tier
+// implementation pattern matched. The first two are analysis of the files in
+// question. The third is a recipe recognising their shape, and it can be
+// sufficient with no anchors and no indexed file at all.
+//
+// A pattern is a reasonable basis for advice and a poor one for silence. It says
+// "code like this usually looks like that", which is not the same as "the graph
+// has examined these files and found nothing governing them" — and only the
+// second is the evidence a fast path needs. Implementation patterns are also
+// generated as review-only candidates by `sensei skill-ingest`, and the server's
+// scope filter selects them by domain without regard to promotion, so a
+// pattern-only sufficiency could rest on knowledge nobody promoted.
+//
+// So coverage counts when it rests on analysis: anchors, or indexed files.
+func (c Coverage) Proven() bool {
+	return c.Sufficient && (c.DirectAnchorCount > 0 || c.IndexedFileCount > 0)
+}
+
+// PatternOnly reports sufficiency that rests on neither anchors nor indexed
+// files. It is separated so the refusal can say what was actually missing
+// rather than reporting thin coverage that Sensei called sufficient.
+func (c Coverage) PatternOnly() bool {
+	return c.Sufficient && c.DirectAnchorCount == 0 && c.IndexedFileCount == 0
+}
 
 // Diagnostic explains thin coverage in Sensei's own words where it gave any.
 func (c Coverage) Diagnostic() string {
+	if c.PatternOnly() {
+		return "coverage rests on an implementation-pattern match rather than on analysis of these files" +
+			noteSuffix(c.Note)
+	}
 	if note := strings.TrimSpace(c.Note); note != "" {
 		return note
 	}
 	return fmt.Sprintf("%d direct anchor(s) over %d indexed file(s)", c.DirectAnchorCount, c.IndexedFileCount)
+}
+
+func noteSuffix(note string) string {
+	if note = strings.TrimSpace(note); note == "" {
+		return ""
+	}
+	return " (" + note + ")"
 }
 
 // Permits is the strict, file-scoped gate: Sensei affirmatively cleared this

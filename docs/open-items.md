@@ -705,23 +705,52 @@ task shape — returns `EMPTY`. The graph holds no facts about test files, so th
 cheapest and most obviously routine change in the repository is the one the tier
 cannot yet recognise.
 
-**The safeguard that is still unverified.** The specification requires that the
-classifier read *promoted* graph knowledge and never the candidates queue,
-because otherwise an agent could propose knowledge that makes its own
-change look routine. The concern is real and it lands on condition 3 rather than
-on the invariant conditions: a proposed invariant can only ever make a change
-look *less* routine, but an anchor that flips `coverage.sufficient` from false to
-true would turn ignorance into apparent evidence, which is the one direction that
-grants rather than restricts.
+**The "promoted knowledge only" safeguard is now enforced, and the enforcement
+sits somewhere the specification did not anticipate.**
 
-This could not be observed here — `docs/awareness/candidates/proposals/` is
-empty, so there is nothing to influence a preflight with. What is known is that
-each returned invariant carries `status: active`, so a status filter is available
-if it turns out to be needed. Whether candidate-derived anchors count toward
-`coverage.sufficient` is a question for the deployment and possibly for upstream,
-and Stage 2 must not be granted until it is answered.
+The specification requires the classifier to read promoted knowledge and never
+the candidates queue, because otherwise an agent could propose knowledge that
+makes its own change look routine. The concern does not land where it first
+appears to. A proposed *invariant* can only make a change look less routine —
+more blocking, never less — so the invariant conditions are safe in the
+direction that matters. The exposure is condition 3, where knowledge that
+manufactured coverage would turn ignorance into apparent evidence, which is the
+one direction that grants.
 
-**Not established:** whether condition 5 is satisfiable here. Every file probed
+Reading the server settles how. `computePreflightCoverage` reaches `sufficient`
+three ways:
+
+```go
+case directCount > 0:                sufficient = true   // anchors matched
+case len(files) > 0 && indexed > 0:  sufficient = true   // indexed, "no rules apply"
+case hasStrongPattern:               sufficient = true   // a pattern recipe alone
+```
+
+The first two are analysis of the files in question — the second is precisely the
+`EmptyProven` case this tier wants. The third is a recipe recognising the *shape*
+of code, and it is sufficient with **no anchors and no indexed file at all**.
+Implementation patterns are generated as review-only candidates by `sensei
+skill-ingest`, and the server's `inScopePatterns` selects them by domain without
+regard to promotion. So a pattern-only sufficiency is exactly the unpromoted
+grant the safeguard forbids.
+
+It cannot happen here today, and that was checked rather than assumed. The store
+holds only promoted classes for this domain — `Invariant`, `FailureMode`,
+`ForbiddenFix`, `Decision`, `Guardrail`, `Test`, `SourceFile`, 26 of them
+`active` — and no `ImplementationPattern` node at all, so `hasStrongPattern`
+cannot fire. But that is a fact about what nobody has run yet, not a property,
+and it would stop being true the first time `skill-ingest` published into this
+graph.
+
+So `Coverage.Proven()` requires sufficiency to rest on analysis:
+`Sufficient && (DirectAnchorCount > 0 || IndexedFileCount > 0)`. Sensei's verdict
+is taken as published and never recomputed from the counts; what is narrowed is
+which *basis* for it this repository will treat as coverage of these files. A
+pattern is a reasonable basis for advice and a poor one for silence — it says
+code like this usually looks like that, which is not the graph having examined
+these files and found nothing governing them.
+
+**Not established:** whether condition 5 is satisfiable here.**Not established:** whether condition 5 is satisfiable here. Every file probed
 carries at least one blind spot, and `engine.go` carries two — but conditions 2
 and 4 block first in every case, so condition 5 has never been reached. It is
 unreached, not disproven, and Stage 2 must not be designed on the assumption that
