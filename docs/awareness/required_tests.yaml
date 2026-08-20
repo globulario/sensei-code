@@ -1,0 +1,15 @@
+required_tests:
+  - id: internal/doctor/doctor_test.go:TestAuthenticationAloneIsNotReadiness
+    title: Authentication alone is not readiness
+    protects:
+      invariants:
+        - sensei_code.provider.authentication_is_not_readiness
+      files:
+        - internal/doctor/doctor.go
+  - id: internal/doctor/doctor_test.go:TestTheDiagnosticSpendsNoProviderQuota
+    title: The diagnostic spends no provider quota
+    protects:
+      invariants:
+        - sensei_code.provider.authentication_is_not_readiness
+      files:
+        - internal/doctor/doctor.go
