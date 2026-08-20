@@ -1028,6 +1028,59 @@ commit is not.
 records happened and is accurate. What is wrong is one line of provenance
 attached to it.
 
+## The admission chain reaches `Modify: admitted`, and stops for a reason worth keeping
+
+2026-08-20. `globulario/sensei-code#22`. The chain moved four times in one day,
+and each move replaced a vague blocker with a sharper one.
+
+```text
+morning     prerequisites missing        claims corpus and graph snapshot absent
+midday      authority-blocked            a real architect question, unanswered
+afternoon   one upstream rule            closure.agent.required_test_unidentified
+now         admitted, no patch           the change predates its own admission
+```
+
+**The architect boundary was crossed properly.** The question went to the
+configured architect, and its answer was recorded verbatim rather than authored
+here — `answer.fe1cc2e30ac2b8f2`, adjudicated `accepted_for_question` in a
+separate step. It reached the quota-safety constraint independently, and it
+agrees with the human's Level-3 refusal of the always-probe design from the
+earlier run. Two authorities, opposite directions, one boundary.
+
+**The upstream rule was unsatisfiable and is now fixed.** `protects` was being
+dropped entirely when the closure graph index was built, so a request naming a
+source file resolved to that file alone and every rule reading the scope for
+governance saw an ungoverned region. Filed as `globulario/sensei#228`, repaired
+in `globulario/sensei#229`. With it in place the same task reports:
+
+```text
+Closure: closed        Convergence: closed
+Inspect: admitted      Modify: admitted        Blocking: none
+admission_id  admission.42b4b3e9f27c.76229a0b8d55   policy admission.strict.v1
+```
+
+and `verify-obligations` returns **PASS** for both required tests against a real
+`go test -json` stream.
+
+**What stopped it is an ordering mistake, and it is mine.** `verify-admission`
+returns `uncertifiable` with `patch_digest_sha256: ""`. There is no patch,
+because the doctor change was implemented *before* admission was obtained rather
+than after. The admission is real and it governs an envelope nothing was applied
+under. The repair is not to manufacture a diff to satisfy the verifier; it is
+that the next change to that file is admitted first.
+
+So `#22`'s last three items — sealed-candidate binding, an applied patch with
+retained receipts, and `complete_task` — are genuinely unreached, and the reason
+is now demonstrated rather than asserted.
+
+**One observation while attempting it.** A documentation-only change to this very
+file was put through the chain and refused: `Inspect: refused · Modify: refused ·
+Waiting on: architect, governance, mechanical_repair`. Every write demands the
+full apparatus regardless of what it touches, which is precisely the condition
+`docs/p1-level-1-routine.md` exists to make proportional — and Level-1 cannot
+help yet, for the reason recorded above it. This paragraph was therefore written
+outside the chain, which is worth admitting rather than hiding.
+
 ## Executing the admission chain needs a claims corpus, not only a provider
 
 `globulario/sensei-code#22`. The chain itself is composed and tested
