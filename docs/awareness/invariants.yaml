@@ -403,3 +403,15 @@ invariants:
       - internal/roles/roles_test.go:TestAWorkerCannotReviewItsOwnCandidate
       - internal/workflow/adversarial_test.go:TestAReviewRunsInAnIndependentSession
     contract: an independent review is independent of the session, the author, and the revision it did not read
+  - id: sensei_code.provider.authentication_is_not_readiness
+    title: An authenticated provider is not a ready one, and finding out must not cost a turn
+    severity: high
+    status: active
+    description: 'doctor reported a provider PASS on authentication alone. The identical line appeared on a day Codex was out of quota and on a day it was not, so the check carried no information about the thing that decides whether a run can start at all. Providers own whether they are configured, authenticated and able to serve turns; doctor only projects that confirmed state. Unknown turn-serving capability is reported as UNPROVEN rather than PASS: not a failure, because nothing is known to be broken, and not green, because nothing is known to work. The diagnostic stays side-effect-free and quota-safe, because a readiness check that spends a weekly-budgeted turn to answer itself is one people learn to skip.'
+    protects:
+      files:
+        - internal/doctor/doctor.go
+    required_tests:
+      - internal/doctor/doctor_test.go:TestAuthenticationAloneIsNotReadiness
+      - internal/doctor/doctor_test.go:TestTheDiagnosticSpendsNoProviderQuota
+    contract: doctor projects confirmed provider state and never spends provider quota to establish it

@@ -2,6 +2,7 @@ package doctor
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -83,4 +84,58 @@ func TestMissingWorkspaceToolsNameTheirRemedy(t *testing.T) {
 	if remediation("awareness_preflight") == "" {
 		t.Fatal("every missing tool should say what to check")
 	}
+}
+
+// A provider that is authenticated is not thereby a provider that can serve a
+// turn, and doctor reported the two as one thing.
+//
+// The identical line — "provider:codex · connected · plus" — appeared on a day
+// Codex was out of quota and on a day it was not. A readiness check whose output
+// does not change when readiness changes carries no information about it.
+//
+// This is the architect's accepted intent for question.20de26bd75eab654:
+// providers own whether they are configured, authenticated and able to serve
+// turns; doctor only projects that confirmed state; unknown capability stays
+// explicitly non-PASS; and the diagnostic stays quota-safe.
+func TestAuthenticationAloneIsNotReadiness(t *testing.T) {
+	if Unproven == Pass {
+		t.Fatal("unproven collapses into pass, which is the defect this exists to remove")
+	}
+	// Unproven does not fail the report: nothing is known to be broken. It is
+	// simply not green, because nothing is known to work either.
+	report := Report{Checks: []Check{{Name: "provider:codex", Status: Unproven}}}
+	if !report.OK() {
+		t.Fatal("an unproven check fails the report; absence of proof is not a failure")
+	}
+	failing := Report{Checks: []Check{{Name: "provider:codex", Status: Fail}}}
+	if failing.OK() {
+		t.Fatal("a failing check no longer fails the report")
+	}
+}
+
+// Quota-safety is a property of the code path, not a promise in a comment: the
+// diagnostic must not reach a provider's execution surface at all.
+func TestTheDiagnosticSpendsNoProviderQuota(t *testing.T) {
+	body := sourceOf(t, "doctor.go")
+	for _, forbidden := range []string{
+		"exec.Command(", "processx.", "agent.CLI", "AskFork", "AskIndependent", "AskOnce",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("doctor reaches %s; establishing health must not spend a provider turn", forbidden)
+		}
+	}
+	// LookPath is the one exec-adjacent call it may make: it resolves a binary
+	// on disk and starts nothing.
+	if !strings.Contains(body, "exec.LookPath") {
+		t.Error("doctor no longer checks that its executables resolve")
+	}
+}
+
+func sourceOf(t *testing.T, name string) string {
+	t.Helper()
+	b, err := os.ReadFile(name)
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(b)
 }
