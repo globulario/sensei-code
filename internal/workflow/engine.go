@@ -1224,6 +1224,31 @@ type reviewDecision struct {
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
 	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	var lastErr error
+	// rounds bounds the whole resolution, which attempt does not.
+	//
+	// attempt budgets malformed JSON, and four paths legitimately reset it to
+	// start a fresh question: a human answer, and an escalation into a region
+	// Sensei certifies. The certified path needs no person, rebuilds the prompt
+	// by nesting the previous one inside certifiedResolutionPrompt, and comes
+	// straight back here -- so an architect that keeps escalating loops with no
+	// ceiling, spending a provider turn and growing the prompt every round,
+	// until the context is cancelled.
+	//
+	// The limit is generous because a real run resolves in one or two rounds
+	// and the human-answered paths are already bounded by a person's patience.
+	// It exists to end a loop, not to ration ordinary work.
+	rounds := 0
+	const maxRounds = 8
+	newRound := func(reason string) error {
+		rounds++
+		if rounds > maxRounds {
+			return fmt.Errorf(
+				"the architect did not settle after %d resolution rounds; the last was %s. "+
+					"Each round consumes a provider turn and nests the previous prompt, so this is stopped rather than left to run",
+				maxRounds, reason)
+		}
+		return nil
+	}
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt
 		if attempt > 1 {
@@ -1291,6 +1316,9 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 				if err != nil {
 					return architectureDecision{}, err
 				}
+				if err := newRound("a human authority answer"); err != nil {
+					return architectureDecision{}, err
+				}
 				prompt = humanResolutionPrompt(prompt, d, choice)
 				attempt = 0
 				continue
@@ -1314,6 +1342,9 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			if routing.Granted() {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
+				if err := newRound("an escalation into a region Sensei certifies"); err != nil {
+					return architectureDecision{}, err
+				}
 				prompt = certifiedResolutionPrompt(prompt, d)
 				attempt = 0
 				continue
@@ -1326,6 +1357,9 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 					return architectureDecision{}, fmt.Errorf(
 						"the human declined this and the architect returned to it: %s", routing.Condition)
 				}
+				if err := newRound("an answer the human had already given"); err != nil {
+					return architectureDecision{}, err
+				}
 				prompt = certifiedResolutionPrompt(prompt, d)
 				attempt = 0
 				continue
@@ -1333,6 +1367,9 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
 			choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
 			if err != nil {
+				return architectureDecision{}, err
+			}
+			if err := newRound("a human authority answer"); err != nil {
 				return architectureDecision{}, err
 			}
 			prompt = humanResolutionPrompt(prompt, d, choice)
