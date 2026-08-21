@@ -83,3 +83,4 @@ go.work.sum
 # dedicated evidence path — task id, base revision, judged revision,
 # disposition, verification digest, ledger digest — never the workspace.
 /.sensei/tasks/
+index.scip
