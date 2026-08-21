@@ -8,6 +8,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -809,6 +810,93 @@ func TestAResolutionCitesThisRepositorysBaseNotTheGraphsSourceCommit(t *testing.
 	for _, forbidden := range []string{"SourceRepoCommit", "GraphBuildCommit"} {
 		if strings.Contains(fn, forbidden) {
 			t.Fatalf("governedBase falls back to %s; another repository's commit is not a substitute", forbidden)
+		}
+	}
+}
+
+// rawSource reads a file verbatim. funcBody renders the syntax tree, so string
+// literals never appear in it -- an assertion about a message the code emits
+// has to read the bytes.
+func rawSource(t *testing.T, rel string) string {
+	t.Helper()
+	b, err := os.ReadFile("../../" + rel)
+	if err != nil {
+		t.Fatalf("read %s: %v", rel, err)
+	}
+	return string(b)
+}
+
+// "Audit sensei-code" failed with "no bounded implementor produced an
+// acceptable candidate". Both implementors had done exactly what was asked: the
+// architect's own plan said "Conduct a read-only architectural audit", they read
+// and reported, and the loop read their empty diff as a worker that failed to
+// produce a change.
+//
+// A read-only plan's result is findings and no diff. The distinction is declared
+// by the architect rather than inferred, because `files` lists what a plan
+// touches and an audit touches many files while changing none.
+func TestAReadOnlyPlanIsNotAFailedImplementation(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "ModeInspect") {
+		t.Fatal("the candidate loop no longer distinguishes a read-only plan")
+	}
+	// The empty-diff refusal must still exist for work that was meant to change
+	// something: turning every empty diff into success would hide a worker that
+	// failed to implement a change it was asked for.
+	if !strings.Contains(body, "implementor produced no candidate diff") {
+		t.Fatal("an empty diff is now accepted for modify plans too")
+	}
+}
+
+// An unknown or absent mode is modify. Treating it as inspect would let a
+// malformed field turn a change request into a run that accepts producing
+// nothing.
+func TestAnUnknownPlanModeIsModify(t *testing.T) {
+	for _, declared := range []string{"", "  ", "MODIFY", "something-else", "inspect-ish"} {
+		if got := planMode(declared); got != ModeModify {
+			t.Errorf("planMode(%q) = %q, want %q", declared, got, ModeModify)
+		}
+	}
+	for _, declared := range []string{"inspect", "INSPECT", " Inspect "} {
+		if got := planMode(declared); got != ModeInspect {
+			t.Errorf("planMode(%q) = %q, want %q", declared, got, ModeInspect)
+		}
+	}
+}
+
+// A read-only plan that edits the repository is out of scope, and saying which
+// files it touched is more useful than reviewing them.
+func TestAReadOnlyPlanThatChangesFilesIsRefused(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "the plan was read-only and the candidate changed") {
+		t.Fatal("a read-only plan that produced a diff is reviewed rather than refused")
+	}
+}
+
+// Nothing is published or retained for a read-only run: an empty branch offered
+// for publication asks the human to land nothing.
+func TestAReadOnlyRunPublishesAndRetainsNothing(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "implement")
+	inspect := strings.Index(body, "ModeInspect")
+	if inspect < 0 {
+		t.Fatal("implement no longer handles a read-only plan")
+	}
+	offer := strings.Index(body, "offerPullRequest")
+	if offer >= 0 && offer < inspect {
+		t.Fatal("publication is offered before the read-only branch returns")
+	}
+	if !strings.Contains(body, "disposeIfEmpty") {
+		t.Fatal("a read-only run leaves its empty candidate behind")
+	}
+}
+
+// The architect is told the vocabulary, and told that listing files does not
+// make a plan a modifying one.
+func TestTheArchitectIsAskedToDeclareTheMode(t *testing.T) {
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf")
+	for _, want := range []string{`"mode": "modify" | "inspect"`, "MODE IS REQUIRED", "changes nothing", "does not make a plan modify"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("the architect prompt is missing %q", want)
 		}
 	}
 }
