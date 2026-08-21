@@ -78,44 +78,104 @@ func (r Request) PullRequestArgs() []string {
 	return args
 }
 
-// Open commits the candidate, publishes its branch, and opens a pull request,
-// returning the URL. The caller is responsible for having obtained the human's
-// decision; this only enforces the configured capabilities.
-func Open(ctx context.Context, r Request, pushGranted, commitGranted bool) (string, error) {
+// Result is how far publication actually got.
+//
+// It is staged rather than boolean because the stages have different
+// consequences and they fail independently. A push that succeeded before `gh`
+// failed has already put a branch on the remote, and a caller told only "an
+// error occurred" would record the candidate as unpublished while the remote
+// disagrees. Effects that happened are reported whether or not the whole
+// sequence did.
+type Result struct {
+	Committed bool
+	Pushed    bool
+	URL       string
+}
+
+// Opened reports a complete publication.
+func (r Result) Opened() bool { return strings.TrimSpace(r.URL) != "" }
+
+// Effects describes what reached the remote, for a caller recording a partial
+// publication. It is empty when nothing left the candidate worktree.
+func (r Result) Effects() string {
+	switch {
+	case r.Opened():
+		return "pull request opened at " + r.URL
+	case r.Pushed:
+		return "the candidate branch was pushed to origin but no pull request was opened"
+	case r.Committed:
+		return "the candidate was committed locally but nothing was pushed"
+	default:
+		return ""
+	}
+}
+
+// ErrNoPullRequestURL reports that gh returned success without a pull request
+// URL. It is a failure rather than a detail: the caller's next act is to tell a
+// person where their pull request is.
+var ErrNoPullRequestURL = errors.New("gh reported success but printed no pull request URL")
+
+// Open commits the candidate, publishes its branch, and opens a pull request.
+// The caller is responsible for having obtained the human's decision; this only
+// enforces the configured capabilities.
+//
+// The Result is returned on every path, including the error paths, so a partial
+// publication is recoverable by the caller rather than lost with the error.
+func Open(ctx context.Context, r Request, pushGranted, commitGranted bool) (Result, error) {
+	var done Result
 	if !pushGranted {
-		return "", ErrPushNotGranted
+		return done, ErrPushNotGranted
 	}
 	if !commitGranted {
-		return "", ErrCommitNotGranted
+		return done, ErrCommitNotGranted
 	}
 	if strings.TrimSpace(r.Branch) == "" || strings.TrimSpace(r.Workspace) == "" {
-		return "", errors.New("publication needs a candidate branch and workspace")
+		return done, errors.New("publication needs a candidate branch and workspace")
 	}
 	for _, args := range CommitArgs(r.Title) {
 		if out, err := run(ctx, r.Workspace, "git", args); err != nil {
-			return "", fmt.Errorf("git %s: %s", args[0], out)
+			return done, fmt.Errorf("git %s: %s", args[0], out)
 		}
 	}
+	done.Committed = true
 	if out, err := run(ctx, r.Workspace, "git", PushArgs(r.Branch)); err != nil {
-		return "", fmt.Errorf("push the candidate branch: %s", out)
+		return done, fmt.Errorf("push the candidate branch: %s", out)
 	}
+	done.Pushed = true
 	out, err := run(ctx, r.Workspace, "gh", r.PullRequestArgs())
 	if err != nil {
-		return "", fmt.Errorf("open the pull request: %s", out)
+		return done, fmt.Errorf("open the pull request: %s", out)
 	}
-	return prURL(out), nil
+	url := prURL(out)
+	if url == "" {
+		return done, fmt.Errorf("%w: %s", ErrNoPullRequestURL, oneLine(out))
+	}
+	done.URL = url
+	return done, nil
 }
 
-// prURL picks the pull request URL out of gh's output rather than reporting
-// whatever it printed, so a caller never shows a success line that contains no
-// pull request.
+// prURL picks the pull request URL out of gh's output, and returns nothing when
+// there is none.
+//
+// It used to fall back to whatever gh printed, directly contradicting its own
+// purpose: the caller renders this as "pull request opened: "+url, so echoing
+// arbitrary output announced a pull request that may not exist and handed the
+// reader a URL-shaped sentence containing no URL.
 func prURL(out string) string {
 	for _, field := range strings.Fields(out) {
 		if strings.HasPrefix(field, "https://") && strings.Contains(field, "/pull/") {
 			return field
 		}
 	}
-	return strings.TrimSpace(out)
+	return ""
+}
+
+func oneLine(s string) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
+	if len(s) > 200 {
+		return s[:200] + "…"
+	}
+	return s
 }
 
 func run(ctx context.Context, dir, name string, args []string) (string, error) {
