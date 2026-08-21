@@ -249,3 +249,47 @@ func TestATaskLessDecisionStillNamesTheCondition(t *testing.T) {
 		t.Fatalf("title carries an empty identity: %q", got)
 	}
 }
+
+// Finding 6 of the 2026-08-21 audit. answeredConditions keyed the memo on the
+// routing condition alone, and conditions carry no file list: "Sensei requires
+// approval for this change class: human_approval_required (blast radius
+// security)" is a property of the region, not of the work. A yes given for one
+// plan silently authorized every later plan in the same task that reached the
+// same gate -- including one touching entirely different files.
+func TestOneYesDoesNotAuthorizeADifferentPlan(t *testing.T) {
+	const condition = "Sensei requires approval for this change class: human_approval_required (blast radius security)"
+
+	answered := Resolution{Condition: condition, Scope: []string{"internal/provider/provider.go"}}
+	different := Resolution{Condition: condition, Scope: []string{"internal/workflow/engine.go", "internal/publish/publish.go"}}
+
+	if answered.Key() == different.Key() {
+		t.Fatal("a plan touching different files reuses the answer given for another")
+	}
+}
+
+// The same plan asked again is the same question, however the file list is
+// ordered or repeated -- otherwise the human is re-interrogated in a loop and
+// the run never starts, which is what the memo exists to prevent.
+func TestTheSamePlanKeepsItsAnswer(t *testing.T) {
+	const condition = "a condition"
+	a := Resolution{Condition: condition, Scope: []string{"b.go", "a.go"}}
+	b := Resolution{Condition: condition, Scope: []string{"a.go", "b.go", "a.go", "  "}}
+	if a.Key() != b.Key() {
+		t.Fatalf("the same plan produced two keys:\n  %q\n  %q", a.Key(), b.Key())
+	}
+}
+
+// An answer recorded without a scope cannot be shown to be about the current
+// plan. Treating "unknown" as "matches anything" is how the reuse this field
+// exists to stop would come back.
+func TestAnUnscopedAnswerIsNotAWildcard(t *testing.T) {
+	const condition = "a condition"
+	unscoped := Resolution{Condition: condition}
+	scoped := Resolution{Condition: condition, Scope: []string{"a.go"}}
+	if unscoped.Key() == scoped.Key() {
+		t.Fatal("an answer with no recorded scope matches a scoped plan")
+	}
+	if ScopeKey(nil) != ScopeKey([]string{"", "   "}) {
+		t.Error("an empty scope and a blank scope are different keys")
+	}
+}

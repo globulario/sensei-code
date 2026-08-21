@@ -1044,3 +1044,30 @@ func TestAnInspectionEscalationReachesTheArchitect(t *testing.T) {
 		t.Fatalf("only %d escalation path(s) record a reconciliation", n)
 	}
 }
+
+// The scope has to actually reach the recorded answer and the memo lookup, or
+// keying on it changes nothing.
+func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
+	memo := funcBody(t, "internal/workflow/engine.go", "answeredConditions")
+	if !strings.Contains(memo, "res.Key") {
+		t.Fatal("the memo is keyed on the condition alone again")
+	}
+	apply := funcBody(t, "internal/workflow/engine.go", "applyAnsweredCondition")
+	if !strings.Contains(apply, "ScopeKey") {
+		t.Fatal("the lookup does not consider the plan's scope")
+	}
+	// Every caller must supply the scope; one that does not would silently key
+	// on "(no scope recorded)" and never match a real answer.
+	src := rawSource(t, "internal/workflow/engine.go")
+	if n := strings.Count(src, "applyAnsweredCondition(taskID, routing.Condition, d.Files...)"); n != 2 {
+		t.Fatalf("%d of 2 call sites pass the plan's files", n)
+	}
+	if strings.Contains(src, "applyAnsweredCondition(taskID, routing.Condition)") {
+		t.Fatal("a call site still asks without naming the plan")
+	}
+	// And the answer must be recorded with it in the first place.
+	choice := funcBody(t, "internal/workflow/engine.go", "awaitChoice")
+	if !strings.Contains(choice, "Scope") {
+		t.Fatal("the recorded resolution does not carry the scope it was given for")
+	}
+}
