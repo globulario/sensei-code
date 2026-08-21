@@ -1003,3 +1003,35 @@ func TestTheInspectionReviewerJudgesFindingsNotADiff(t *testing.T) {
 		t.Error("a change review lost its diff section")
 	}
 }
+
+// The modify path stops when a worker returns a byte-identical diff after being
+// asked to revise; a read-only run had no such guard and would spend the whole
+// cycle budget on a worker re-asserting the same findings.
+func TestAnUnchangedReportStopsTheLoop(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "the findings did not change between review cycles") {
+		t.Fatal("a read-only run has no stagnation guard")
+	}
+	if !strings.Contains(body, "previousReportRevision") {
+		t.Fatal("nothing remembers the previous report")
+	}
+}
+
+// A reviewer escalation reaches the architect, never the human, and never ends
+// the task on its own. The read-only path failed the run instead, which lets a
+// reviewer close a task by raising a question nobody was asked to answer.
+func TestAnInspectionEscalationReachesTheArchitect(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	inspect := strings.Index(body, "ModeInspect")
+	escalate := strings.Index(body, "roles.Escalate")
+	if inspect < 0 || escalate < 0 {
+		t.Fatal("the inspect branch or its escalation handling is gone")
+	}
+	// Both paths resolve through the architect rather than returning an error.
+	if n := strings.Count(body, "resolveArchitecture"); n < 2 {
+		t.Fatalf("only %d escalation path(s) reach the architect; a change and an inspection both must", n)
+	}
+	if n := strings.Count(body, "recordReconciliation"); n < 2 {
+		t.Fatalf("only %d escalation path(s) record a reconciliation", n)
+	}
+}

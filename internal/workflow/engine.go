@@ -758,6 +758,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	var lastReview, lastAudit string
 	// previousDiffDigest detects a worker that is not responding to feedback.
 	var previousDiffDigest string
+	// previousReportRevision is the same guard for a read-only run, where the
+	// artifact is findings rather than a diff. Without it a worker that returns
+	// the same report every cycle spends the whole budget re-asserting it.
+	var previousReportRevision string
 
 	// Candidate isolation is the blast-radius boundary, so it is checked rather
 	// than assumed: the workspace is a string threaded through several call
@@ -823,7 +827,15 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				}
 				e.emit(event.New(e.SessionID, taskID, sourceFor(worker.Name), event.InspectionReported, report, nil))
 
-				binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: reportRevision(report)}
+				revision := reportRevision(report)
+				if revision == previousReportRevision {
+					return false, plan, lastReview, lastAudit, fmt.Errorf(
+						"the findings did not change between review cycles: %s returned an identical report after being asked to revise. "+
+							"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
+				}
+				previousReportRevision = revision
+
+				binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: revision}
 				assignment, err := roles.Assign(roles.Reviewer, e.reviewCapabilities(), worker.Name)
 				if err != nil {
 					return false, plan, lastReview, lastAudit, fmt.Errorf("%w: %v", roles.ErrNoIndependentReviewer, err)
@@ -848,8 +860,32 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						"read-only plan completed: the findings were reviewed independently and accepted", nil))
 					return true, plan, lastReview, lastAudit, nil
 				case roles.Escalate:
-					return false, plan, lastReview, lastAudit, fmt.Errorf(
-						"the reviewer raised an architectural question about these findings: %s", oneLine(review.Summary))
+					// The same routing as a change: the reviewer reaches the
+					// architect, never the human. Failing the run here instead
+					// would let a reviewer end a task by raising a question
+					// nobody was given the chance to answer.
+					revised, err := e.resolveArchitecture(ctx, sc, start, taskID, task, escalationPrompt(task, plan, report, review))
+					if err != nil {
+						return false, plan, lastReview, lastAudit, err
+					}
+					if strings.TrimSpace(revised.Plan) == "" {
+						return false, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
+					}
+					e.recordReconciliation(taskID, binding, roles.Reconciliation{
+						Disputed: "the reviewer raised an architectural boundary about the findings: " + review.Summary,
+						Inputs: []roles.Claim{
+							{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
+							{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+						},
+						Canonical: reconciliationEvidence("", "", revised),
+						Decision:  revised.Plan,
+						Authority: roles.ArchitectAuthority,
+						Remaining: revised.Consequences,
+					})
+					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					plan = revised.Plan
+					feedback = "The architect resolved the review escalation. Inspect again under the revised plan."
+					continue
 				default:
 					// Send the objections back and inspect again. The findings
 					// are the deliverable, so an unsupported one is revisable
