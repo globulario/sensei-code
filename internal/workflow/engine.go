@@ -2191,6 +2191,62 @@ func candidateEvidence(identity candidate.Identity, tc *taskContext) candidate.E
 	}
 }
 
+// observation is what the candidate itself says it holds, read at the moment a
+// decision about deleting it is made.
+type observation struct {
+	DiffBytes    int
+	ChangedPaths []string
+	// Err is why the candidate could not be read. It is carried rather than
+	// returned separately because "I could not look" is a distinct answer from
+	// "I looked and it was empty", and the disposal path must not collapse the
+	// two.
+	Err error
+}
+
+// HoldsWork answers the only question disposal may act on.
+//
+// An unreadable candidate holds work. That is not a guess about its contents:
+// deletion is irreversible and observation failed, so the branch that destroys
+// something must not be reachable from an answer nobody established.
+func (o observation) HoldsWork() bool {
+	return o.Err != nil || o.DiffBytes > 0 || len(o.ChangedPaths) > 0
+}
+
+// observeCandidate reads the candidate worktree against the base it was cut
+// from.
+//
+// Disposal used to consult tc.EvidenceSnapshot, which is written only after
+// validation and a decodable Sensei audit. Every earlier exit -- a validation
+// error, an audit transport failure, an undecodable audit, a read-only plan
+// that edited -- left that snapshot zeroed while the worktree held real work,
+// and the zero was read as "the candidate holds no work". The worktree and
+// branch were then deleted and that sentence was recorded as the reason.
+//
+// The candidate is therefore asked directly. It is the only source that is
+// correct at every exit, because it is the thing being destroyed.
+func observeCandidate(ctx context.Context, workspace, baseSHA string) observation {
+	if strings.TrimSpace(workspace) == "" || strings.TrimSpace(baseSHA) == "" {
+		return observation{Err: fmt.Errorf("candidate identity is incomplete: workspace %q base %q", workspace, baseSHA)}
+	}
+	// Disposal is reached by the paths that cancel this context -- a stop, a
+	// timeout -- so inheriting the cancellation would make every interrupted
+	// run unreadable, and an unreadable candidate is retained. The leftovers
+	// automatic cleanup exists to prevent would come back through the door
+	// marked safety. Reading a worktree is a local, bounded operation that is
+	// still correct after the work it belonged to was abandoned.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	diff, err := gitx.Repo{Root: workspace}.CandidateDiff(ctx, baseSHA)
+	if err != nil {
+		return observation{Err: err}
+	}
+	diff = strings.TrimSpace(diff)
+	if diff == "" {
+		return observation{}
+	}
+	return observation{DiffBytes: len(diff), ChangedPaths: changedPaths(diff)}
+}
+
 // resolveCandidate records a terminal disposition and says so out loud.
 //
 // A disposition that fails to record is reported rather than swallowed: the
@@ -2221,13 +2277,28 @@ func (e *Engine) resolveCandidate(taskID string, identity candidate.Identity, tc
 // which is a fact somebody can act on — where deleting first and recording
 // second loses precisely the case that needs explaining.
 func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity candidate.Identity, tc *taskContext, workspace, reason string) {
-	evidence := candidateEvidence(identity, tc)
-	if !evidence.ProducedNoWork {
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
-			"candidate kept so the work is not lost: "+workspace, nil))
+	// The candidate is read now, not recalled. See observeCandidate.
+	seen := observeCandidate(ctx, workspace, identity.BaseSHA)
+	if seen.HoldsWork() {
+		kept := "the run did not converge and the candidate holds work that resumable state references"
+		if seen.Err != nil {
+			kept = "the candidate could not be read, so it is kept rather than removed on an unestablished claim: " + seen.Err.Error()
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, kept, nil))
+		} else {
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+				fmt.Sprintf("candidate kept so the work is not lost (%d bytes across %d file(s)): %s",
+					seen.DiffBytes, len(seen.ChangedPaths), workspace), nil))
+			// The snapshot is what gets recorded, so it must agree with what
+			// was just seen. A retained candidate described as holding nothing
+			// is the same false sentence in the other direction.
+			if tc.EvidenceSnapshot.DiffBytes == 0 && len(tc.EvidenceSnapshot.ChangedPaths) == 0 {
+				tc.EvidenceSnapshot.DiffBytes = seen.DiffBytes
+				tc.EvidenceSnapshot.ChangedPaths = seen.ChangedPaths
+			}
+		}
 		e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
 			Disposition: candidate.Resumable,
-			Reason:      "the run did not converge and the candidate holds work that resumable state references",
+			Reason:      kept,
 		})
 		return
 	}
