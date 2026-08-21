@@ -279,7 +279,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// status bar, and reach the transcript only in streaming mode.
 		if isConversation(e) {
 			if line := renderEvent(e); line != "" {
-				if text := strings.TrimSpace(e.Summary); text != "" {
+				// Not everything in the transcript is a response. Guidance is
+				// the human's own words queued for a worker, and handing it
+				// back as "the last response" would be the interface quoting
+				// the reader to themselves.
+				if text := strings.TrimSpace(e.Summary); text != "" && e.Source != event.SourceUser {
 					m.lastResponse = text
 				}
 				m.lines = append(m.lines, line, "")

@@ -9,6 +9,8 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/globulario/sensei-code/internal/event"
+
 	"charm.land/lipgloss/v2"
 )
 
@@ -197,4 +199,24 @@ func collectClipboardWrites(cmd tea.Cmd) []string {
 	}
 	walk(cmd)
 	return out
+}
+
+// isConversation admits GuidanceDelivered, which carries the human's own words
+// queued for a worker. Copying it back as "the last response" would quote the
+// reader to themselves.
+func TestTheHumansOwnWordsAreNotTheLastResponse(t *testing.T) {
+	m := newTestModel("", "")
+	architect := event.Event{Kind: event.ArchitectSpoke, Source: event.SourceArchitect, Summary: "the architect's answer"}
+	guidance := event.Event{Kind: event.GuidanceDelivered, Source: event.SourceUser, Summary: "do it faster please"}
+
+	updated, _ := m.Update(eventMsg(architect))
+	updated, _ = updated.(Model).Update(eventMsg(guidance))
+	got := updated.(Model)
+
+	if got.lastResponse == "do it faster please" {
+		t.Fatal("the human's own guidance became the last response")
+	}
+	if got.lastResponse != "the architect's answer" {
+		t.Fatalf("last response is %q, want the architect's answer", got.lastResponse)
+	}
 }
