@@ -311,8 +311,11 @@ type taskContext struct {
 	Rationale       string
 	Steps           []string
 	Domain          string
-	Consequences    string
-	Invariants      []string
+	// Mode is the architect's declaration of whether this plan changes the
+	// repository. See architectureDecision.Mode.
+	Mode         string
+	Consequences string
+	Invariants   []string
 	// Report is the rendered change report, set once the candidate is judged so
 	// the pull request body carries the same evidence the architect saw.
 	Report string
@@ -485,6 +488,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		Rationale:       decision.Summary,
 		Steps:           decision.Steps,
 		Domain:          sensei.RepositoryDomain(workspaceStatus),
+		Mode:            planMode(decision.Mode),
 		Consequences:    decision.Consequences,
 		Invariants:      decision.Invariants,
 		Identity:        identity,
@@ -801,7 +805,22 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return false, plan, lastReview, lastAudit, err
 		}
 		if strings.TrimSpace(diff) == "" {
+			// For read-only work this is the answer, not a failure. An audit
+			// that changed a file would be the thing worth refusing.
+			if tc.Mode == ModeInspect {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					"read-only plan completed with no change to the repository, which is what it asked for", nil))
+				return true, plan, lastReview, lastAudit, nil
+			}
 			return false, plan, lastReview, lastAudit, errors.New("implementor produced no candidate diff")
+		}
+		// A read-only plan that changed something is out of scope, and saying so
+		// is more useful than reviewing the change: the worker was asked to
+		// report and it edited instead.
+		if tc.Mode == ModeInspect {
+			return false, plan, lastReview, lastAudit, fmt.Errorf(
+				"the plan was read-only and the candidate changed %d file(s): %s",
+				len(changedPaths(diff)), strings.Join(changedPaths(diff), ", "))
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), nil))
 
@@ -999,13 +1018,47 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	return false, plan, lastReview, lastAudit, fmt.Errorf("candidate did not converge after %d review cycles", e.Config.Workflow.ReviewCycles)
 }
 
+// planMode normalises the architect's declaration.
+//
+// An absent or unrecognised value is modify. That is the conservative reading:
+// treating an unknown mode as inspect would let a malformed field turn a
+// change request into a run that accepts producing nothing.
+func planMode(declared string) string {
+	if strings.EqualFold(strings.TrimSpace(declared), ModeInspect) {
+		return ModeInspect
+	}
+	return ModeModify
+}
+
+// ModeInspect is a plan that reads and reports and changes nothing.
+// ModeModify is a plan that edits the repository. Absent means modify, so a
+// provider that has never heard of this field behaves exactly as before.
+const (
+	ModeInspect = "inspect"
+	ModeModify  = "modify"
+)
+
 type architectureDecision struct {
-	Decision       string             `json:"decision"`
-	Summary        string             `json:"summary"`
-	Message        string             `json:"message,omitempty"`
-	Steps          []string           `json:"steps,omitempty"`
-	Consequences   string             `json:"consequences,omitempty"`
-	Files          []string           `json:"files,omitempty"`
+	Decision     string   `json:"decision"`
+	Summary      string   `json:"summary"`
+	Message      string   `json:"message,omitempty"`
+	Steps        []string `json:"steps,omitempty"`
+	Consequences string   `json:"consequences,omitempty"`
+	Files        []string `json:"files,omitempty"`
+	// Mode says whether this plan changes the repository. It borrows Sensei's
+	// own vocabulary -- inspect or modify -- rather than inventing a third.
+	//
+	// It exists because an audit had nowhere to go. "Audit sensei-code" produced
+	// a correct read-only plan, both implementors carried it out correctly, and
+	// the run failed with "no bounded implementor produced an acceptable
+	// candidate" -- because the loop reads an empty diff as a worker that failed
+	// to produce a change. For read-only work an empty diff is the result.
+	//
+	// It is declared rather than inferred. Files lists what a plan touches and an
+	// audit touches many files without changing one, so the file list cannot
+	// answer this, and inferring it from the summary would be a governance
+	// decision resting on prose.
+	Mode           string             `json:"mode,omitempty"`
 	Invariants     []string           `json:"related_invariants,omitempty"`
 	Plan           string             `json:"plan"`
 	HumanQuestion  string             `json:"human_question,omitempty"`
@@ -1580,12 +1633,22 @@ Return ONLY JSON in this exact shape:
   "steps": ["concrete piece of work", "..."],
   "consequences": "what changes for this repository once the plan lands, when proceeding",
   "files": ["path/the/work/touches.go"],
+  "mode": "modify" | "inspect",
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
   "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference"}]
 }
+MODE IS REQUIRED WHENEVER YOU PROCEED.
+  modify   - the plan edits this repository. A worker is expected to produce a diff.
+  inspect  - the plan reads and reports and changes nothing: an audit, an
+             investigation, a review. A worker is expected to produce findings
+             and no diff, and a diff would be out of scope.
+Choose inspect whenever the human asked to be told something rather than to have
+something changed. Listing files under "files" does not make a plan modify: an
+audit reads many files and changes none.
+
 When escalating, provide 2 or 3 concrete options. Do not ask about ordinary implementation details.
 
 CLAIMS ARE REQUIRED WHENEVER YOU PROCEED. List every factual premise your plan
@@ -1900,6 +1963,26 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.OpenFindings(nil)
 			_ = state.Save(e.Repo.Root)
 			e.reportUndeliveredNotes(taskID)
+
+			// A read-only plan produced findings and no candidate. There is
+			// nothing to publish and nothing to retain: offering a pull request
+			// for an empty branch would ask the human to land nothing, and
+			// keeping the worktree would leave a directory that means nothing in
+			// particular -- which is the state candidate dispositions exist to
+			// remove.
+			if tc.Mode == ModeInspect {
+				e.reportOutcome(ctx, "success", task, "read-only plan completed; findings are in the transcript")
+				e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
+					"read-only plan: the candidate was never meant to hold work")
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted,
+					"read-only plan completed with no change to the repository", map[string]any{
+						"implementor": worker.Name,
+						"plan":        plan,
+						"mode":        ModeInspect,
+					}))
+				return
+			}
+
 			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
 			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
 			// Accepted and unpublished. Retention here is a decision with a
