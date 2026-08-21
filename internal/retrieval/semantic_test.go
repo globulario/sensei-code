@@ -98,3 +98,51 @@ func TestSurveyRowsAreReadStructurally(t *testing.T) {
 		t.Errorf("the survey does not use the typed by_class surface: %s %v", name, args)
 	}
 }
+
+// Finding 5 of the 2026-08-21 audit. surveyPlan dropped every per-class query
+// error with a bare continue and returned Surveyed: len(nodes), so a survey
+// where nothing answered was reported as "the graph holds nothing of the
+// surveyed classes for this domain" -- an affirmative claim about the project,
+// produced by transport failure.
+//
+// This is the recorded critical failure mode
+// empty_sensei_tool_response_accepted_as_present_evidence and the forbidden fix
+// derive_observation_presence_from_transport_success.
+func TestATotalSurveyFailureIsNotAnEmptyGraph(t *testing.T) {
+	got := SurveyOutcome{Surveyed: 0, Matched: 0, Failed: 4, Reason: "awareness_query: connection refused"}.Describe()
+
+	if strings.Contains(got, "the graph holds nothing") {
+		t.Fatalf("a failed survey still claims the graph is empty: %q", got)
+	}
+	for _, want := range []string{"could not be surveyed", "connection refused", "nothing is known"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the description does not carry %q: %q", want, got)
+		}
+	}
+	if (SurveyOutcome{Failed: 1}).Complete() {
+		t.Error("a survey with a failed query reports as complete")
+	}
+}
+
+// A partial survey found real nodes, but its count is a floor. Reporting it as
+// the whole picture understates the graph in the other direction.
+func TestAPartialSurveySaysItIsPartial(t *testing.T) {
+	got := SurveyOutcome{Surveyed: 3, Matched: 1, Failed: 2, Reason: "awareness_query: timeout"}.Describe()
+	for _, want := range []string{"incompletely", "floor", "timeout"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("a partial survey does not say so: missing %q in %q", want, got)
+		}
+	}
+}
+
+// The genuine empty case must still be sayable: a graph that answered every
+// query and holds nothing is a real finding about the project.
+func TestAnAnsweredEmptySurveyStillReportsAnEmptyGraph(t *testing.T) {
+	got := SurveyOutcome{Surveyed: 0, Matched: 0}.Describe()
+	if !strings.Contains(got, "the graph holds nothing") {
+		t.Fatalf("a complete survey of an empty graph no longer says so: %q", got)
+	}
+	if !(SurveyOutcome{}).Complete() {
+		t.Error("a survey with no failures reports as incomplete")
+	}
+}
