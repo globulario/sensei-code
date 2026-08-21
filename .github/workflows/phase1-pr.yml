@@ -8,6 +8,32 @@ permissions:
   contents: read
 
 jobs:
+  # Whether a hosted reviewer can run at all.
+  #
+  # This exists so the review job can be SKIPPED rather than pass without
+  # reviewing. secrets are not readable in a job-level `if`, so the question is
+  # answered once here and consumed as an output. A check named "Codex review"
+  # reporting success is a claim that a review happened, and an unrun check
+  # recorded as a pass is the overstated receipt this repository refuses.
+  reviewer:
+    name: Hosted reviewer availability
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.probe.outputs.configured }}
+    steps:
+      - id: probe
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          if [ -n "${OPENAI_API_KEY}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo 'Hosted Codex reviewer is configured; the review job will run.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo 'OPENAI_API_KEY is not configured, so the Codex review job is SKIPPED — not passed. No adversarial review has run on this pull request. Go and Sensei gates still apply.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   go:
     name: Go verification
     runs-on: ubuntu-latest
@@ -67,7 +93,8 @@ jobs:
 
   codex-review:
     name: Codex review with Sensei context
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: reviewer
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && needs.reviewer.outputs.configured == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -108,7 +135,6 @@ jobs:
             --out "$RUNNER_TEMP/sensei-context.json"
 
       - name: Prepare bounded review prompt
-        if: ${{ env.OPENAI_API_KEY != '' }}
         shell: bash
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -132,7 +158,6 @@ jobs:
           } > "$RUNNER_TEMP/codex-review-prompt.md"
 
       - name: Run Codex reviewer
-        if: ${{ env.OPENAI_API_KEY != '' }}
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
@@ -142,12 +167,8 @@ jobs:
           safety-strategy: read-only
 
       - name: Publish Codex review
-        if: ${{ env.OPENAI_API_KEY != '' }}
         shell: bash
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/codex-review.md"
 
-      - name: Record disabled hosted reviewer
-        if: ${{ env.OPENAI_API_KEY == '' }}
-        run: echo 'Codex review skipped because OPENAI_API_KEY is not configured. Go and Sensei gates still run.' >> "$GITHUB_STEP_SUMMARY"
