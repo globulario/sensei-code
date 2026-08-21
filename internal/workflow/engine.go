@@ -2228,6 +2228,14 @@ func observeCandidate(ctx context.Context, workspace, baseSHA string) observatio
 	if strings.TrimSpace(workspace) == "" || strings.TrimSpace(baseSHA) == "" {
 		return observation{Err: fmt.Errorf("candidate identity is incomplete: workspace %q base %q", workspace, baseSHA)}
 	}
+	// Disposal is reached by the paths that cancel this context -- a stop, a
+	// timeout -- so inheriting the cancellation would make every interrupted
+	// run unreadable, and an unreadable candidate is retained. The leftovers
+	// automatic cleanup exists to prevent would come back through the door
+	// marked safety. Reading a worktree is a local, bounded operation that is
+	// still correct after the work it belonged to was abandoned.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
 	diff, err := gitx.Repo{Root: workspace}.CandidateDiff(ctx, baseSHA)
 	if err != nil {
 		return observation{Err: err}

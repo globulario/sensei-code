@@ -152,3 +152,30 @@ func TestDisposalObservesRatherThanRecalls(t *testing.T) {
 		t.Fatal("disposal decides from the recalled snapshot again")
 	}
 }
+
+// Disposal is reached by the very paths that cancel the context -- a stop, a
+// timeout. If observation inherited that cancellation every interrupted run
+// would be unreadable, every unreadable candidate is retained, and the
+// leftovers automatic cleanup exists to prevent would return through the door
+// marked safety.
+func TestObservationSurvivesTheCancellationThatTriggeredIt(t *testing.T) {
+	dir, base := newRepo(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // exactly the state a stopped run reaches disposal in
+
+	seen := observeCandidate(ctx, dir, base)
+	if seen.Err != nil {
+		t.Fatalf("a cancelled context made the candidate unreadable: %v", seen.Err)
+	}
+	if seen.HoldsWork() {
+		t.Fatal("an empty candidate would be retained after a stop, so cleanup never happens")
+	}
+
+	// And it still sees work when there is work.
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("base\nwork\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !observeCandidate(ctx, dir, base).HoldsWork() {
+		t.Fatal("work in a stopped run's candidate is not seen")
+	}
+}
