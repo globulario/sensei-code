@@ -1277,7 +1277,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 				// reach this same condition on the next plan. Ask once per
 				// condition per task and then honour the answer, or the human
 				// is interrogated in a loop and the run never starts.
-				if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition); asked {
+				if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
 					if !authorized {
 						return architectureDecision{}, fmt.Errorf(
 							"the human declined this architectural change and the plan still requires it: %s", routing.Condition)
@@ -1321,7 +1321,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			if routing.Route == RouteCannotEstablish {
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
 			}
-			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition); asked {
+			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
 				if !authorized {
 					return architectureDecision{}, fmt.Errorf(
 						"the human declined this and the architect returned to it: %s", routing.Condition)
@@ -1544,7 +1544,7 @@ func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certif
 	if condition = strings.TrimSpace(condition); condition != "" {
 		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
-	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), e.governedBase(taskID), decision, options)
+	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), e.governedBase(taskID), decision, options, d.Files...)
 }
 
 // awaitChoice presents a numbered decision to the human and blocks until they
@@ -1570,7 +1570,7 @@ func (e *Engine) governedBase(taskID string) string {
 	return identity.BaseSHA
 }
 
-func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option) (string, error) {
+func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option, scope ...string) (string, error) {
 	ch := make(chan string, 1)
 	e.mu.Lock()
 	e.pending[taskID] = ch
@@ -1615,6 +1615,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 						DecidedAt: time.Now().UTC(),
 						Question:  decision.Subject, Condition: condition,
 						OptionID: option.ID, OptionLabel: option.Label,
+						Scope:   scope,
 						Outcome: option.Outcome,
 					}
 					if option.Outcome == authority.Stop {
@@ -2710,8 +2711,8 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 		if !res.Outcome.Settles() {
 			continue
 		}
-		if c := strings.TrimSpace(res.Condition); c != "" {
-			out[c] = res.Outcome.Permits()
+		if strings.TrimSpace(res.Condition) != "" {
+			out[res.Key()] = res.Outcome.Permits()
 		}
 	}
 	return out
@@ -2723,8 +2724,12 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 // authorized reports whether the run may proceed without asking again. asked
 // reports whether the question has been put at all, so a caller can tell "the
 // human said yes" from "the human has not been asked".
-func (e *Engine) applyAnsweredCondition(taskID, condition string) (authorized, asked bool) {
-	answer, ok := e.answeredConditions(taskID)[strings.TrimSpace(condition)]
+func (e *Engine) applyAnsweredCondition(taskID, condition string, scope ...string) (authorized, asked bool) {
+	// Keyed on the plan as well as the question. A condition is a property of
+	// the region, not of the work: reusing an answer across plans let one yes
+	// authorize a later plan touching entirely different files.
+	key := strings.TrimSpace(condition) + "\x00" + authority.ScopeKey(scope)
+	answer, ok := e.answeredConditions(taskID)[key]
 	return answer, ok
 }
 

@@ -26,6 +26,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -67,6 +68,15 @@ type Resolution struct {
 	// OptionID and OptionLabel are what they chose.
 	OptionID    string `json:"option_id"`
 	OptionLabel string `json:"option_label"`
+	// Scope is the set of files the plan the human saw would touch.
+	//
+	// Without it an answer is identified by the condition alone, and conditions
+	// are properties of a region rather than of a plan -- "Sensei requires
+	// approval for this change class: human_approval_required (blast radius
+	// security)" says nothing about what is being changed. A yes given for one
+	// plan then authorized every later plan in the same task that reached the
+	// same gate, including one touching entirely different files.
+	Scope []string `json:"scope,omitempty"`
 	// Outcome is what the choice does, carried from the option rather than read
 	// back out of its label.
 	Outcome Outcome `json:"outcome"`
@@ -284,6 +294,38 @@ func title(r Resolution) string {
 		return "Human authority resolution (" + task + "): " + base
 	}
 	return "Human authority resolution: " + base
+}
+
+// ScopeKey identifies the plan an answer was given about, order-insensitively.
+//
+// An empty scope is its own key rather than a wildcard: a decision recorded
+// without one cannot be shown to be about the current plan, and treating
+// "unknown" as "matches anything" is how the reuse this field exists to stop
+// would return.
+func ScopeKey(scope []string) string {
+	if len(scope) == 0 {
+		return "(no scope recorded)"
+	}
+	seen := make(map[string]bool, len(scope))
+	normalized := make([]string, 0, len(scope))
+	for _, f := range scope {
+		f = strings.TrimSpace(f)
+		if f == "" || seen[f] {
+			continue
+		}
+		seen[f] = true
+		normalized = append(normalized, f)
+	}
+	if len(normalized) == 0 {
+		return "(no scope recorded)"
+	}
+	sort.Strings(normalized)
+	return strings.Join(normalized, "\x00")
+}
+
+// Key is the identity of one answered question: what was asked, about what.
+func (r Resolution) Key() string {
+	return strings.TrimSpace(r.Condition) + "\x00" + ScopeKey(r.Scope)
 }
 
 func firstNonEmpty(values ...string) string {
