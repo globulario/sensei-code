@@ -198,3 +198,43 @@ func TestAnAmbientKeyIsReportedAsStrippedNotAsOverriding(t *testing.T) {
 		t.Error("the status no longer explains why the ambient key does not apply")
 	}
 }
+
+// Finding 7 of the 2026-08-21 audit. SessionOnlyEnv named Anthropic's variables
+// only, while the ChatGPT/Codex branch of StatusFor reports a stored Codex
+// account under the same implicit claim -- that this is the account a worker
+// authenticates with. Nothing removed an ambient OPENAI_API_KEY, so for one
+// provider the claim rested on a mechanism and for the other on nothing.
+func TestEveryReportedProviderHasItsCredentialsStripped(t *testing.T) {
+	stripped := map[string]bool{}
+	for _, v := range SessionOnlyEnv {
+		stripped[v] = true
+	}
+	for _, want := range []string{
+		"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
+		"OPENAI_API_KEY", "CODEX_API_KEY",
+	} {
+		if !stripped[want] {
+			t.Errorf("%s is not stripped, so an ambient value can override the login doctor reports", want)
+		}
+	}
+}
+
+// The guarantee is only worth as much as its uniformity: a provider this tool
+// reports an account for, but whose credentials it does not strip, is a claim
+// with no mechanism behind it.
+func TestTheStrippedListCoversTheProvidersReportedOn(t *testing.T) {
+	byPrefix := map[string]bool{}
+	for _, v := range SessionOnlyEnv {
+		switch {
+		case strings.HasPrefix(v, "ANTHROPIC_"), strings.HasPrefix(v, "CLAUDE_"):
+			byPrefix["anthropic"] = true
+		case strings.HasPrefix(v, "OPENAI_"), strings.HasPrefix(v, "CODEX_"):
+			byPrefix["openai"] = true
+		}
+	}
+	for _, family := range []string{"anthropic", "openai"} {
+		if !byPrefix[family] {
+			t.Errorf("no %s credential is stripped, but StatusFor reports an account for it", family)
+		}
+	}
+}

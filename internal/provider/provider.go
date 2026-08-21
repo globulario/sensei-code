@@ -336,8 +336,24 @@ func envKeySource(apiKeySource string) string {
 // The cost is deliberate: a user who wants API-key authentication must
 // configure it on the agent rather than rely on an inherited variable, because
 // an inherited variable is invisible to every check in this tool.
+//
+// The list covers every provider this tool reports on, because the guarantee is
+// made for all of them. It used to name Anthropic's variables only, while the
+// ChatGPT/Codex branch of StatusFor read stored Codex credentials and reported
+// the account with the same implicit claim -- that this is the account a worker
+// authenticates with -- and nothing removed an ambient OPENAI_API_KEY that
+// might have taken precedence over the stored login.
+//
+// Whether the Codex CLI actually prefers the variable to its stored login is
+// not verified here, and the stripping does not depend on knowing: it forces
+// the login that /login established and that doctor reports, which is the
+// property being claimed. Leaving the variable in place to find out would mean
+// making a claim first and checking it later.
 var SessionOnlyEnv = []string{
 	"ANTHROPIC_API_KEY",
 	"ANTHROPIC_AUTH_TOKEN",
 	"CLAUDE_CODE_OAUTH_TOKEN",
+	"OPENAI_API_KEY",
+	"OPENAI_BASE_URL",
+	"CODEX_API_KEY",
 }
