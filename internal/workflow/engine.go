@@ -510,11 +510,11 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 // is human-owned, so it is gated twice: the configuration must grant push at
 // all, and the human must say yes to this particular change. Sensei Code opens
 // the pull request and stops there; merging is never its decision.
-func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskContext, workspace, worker string) {
+func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskContext, workspace, worker string) publication {
 	if !e.Config.Permissions.Push {
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
 			"no pull request offered: "+publish.ErrPushNotGranted.Error(), nil))
-		return
+		return publication{State: notOffered}
 	}
 	options := []authority.Option{
 		{ID: "1", Label: "Open a pull request", Description: "pushes the candidate branch; it is not merged"},
@@ -535,10 +535,22 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		Recommendation: "1",
 		Options:        options,
 	}, options)
-	if err != nil || !strings.HasPrefix(choice, "1:") {
-		return
+	// The error was discarded here, which is how a deferral became a
+	// completion. Esc emits WorkflowAwaitingAuthority -- "the question stands"
+	// -- and the caller then recorded the run as finished, which
+	// FindInterrupted reads as terminal, so /resume answered "nothing to
+	// resume" to a question the interface had just promised to ask again.
+	switch {
+	case errors.Is(err, errAuthorityDeferred):
+		return publication{State: deferred}
+	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+		return publication{State: stopped, Err: err}
+	case err != nil:
+		return publication{State: failed, Err: err}
+	case !strings.HasPrefix(choice, "1:"):
+		return publication{State: declined}
 	}
-	url, err := publish.Open(ctx, publish.Request{
+	done, err := publish.Open(ctx, publish.Request{
 		Workspace: workspace,
 		Branch:    e.Repo.WorktreeBranch(taskID),
 		Base:      e.Config.Workflow.PublishBase,
@@ -546,12 +558,57 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		Report:    tc.Report,
 	}, e.Config.Permissions.Push, e.Config.Permissions.LocalCommit)
 	if err != nil {
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.WorkflowFailed,
-			"pull request not opened: "+err.Error(), nil))
-		return
+		// What already reached the remote is stated. A failed publication that
+		// pushed a branch has changed the world, and reporting only the error
+		// leaves that change recorded nowhere.
+		detail := "pull request not opened: " + err.Error()
+		if effects := done.Effects(); effects != "" {
+			detail += "\n" + effects
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, detail, map[string]any{
+			"committed": done.Committed, "pushed": done.Pushed,
+		}))
+		return publication{State: failed, Err: err, Result: done}
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.PullRequestOpened,
-		"pull request opened, not merged and not admitted: "+url, map[string]string{"url": url}))
+		"pull request opened, not merged and not admitted: "+done.URL, map[string]string{"url": done.URL}))
+	return publication{State: opened, Result: done}
+}
+
+// publication is how far the publication rendezvous got, and why it stopped.
+//
+// It is returned rather than swallowed because the caller's next three acts --
+// which disposition to record, whether to emit a terminal event, and which one
+// -- all depend on it. When offerPullRequest returned nothing the caller could
+// only assume the one outcome that is wrong in four of the six cases.
+type publication struct {
+	State  publicationState
+	Result publish.Result
+	Err    error
+}
+
+type publicationState string
+
+const (
+	// notOffered: the repository does not grant push, so no question was asked.
+	notOffered publicationState = "not_offered"
+	// declined: the human chose to leave the candidate local.
+	declined publicationState = "declined"
+	// deferred: the human left the question standing. NOT an answer, and not a
+	// finished run.
+	deferred publicationState = "deferred"
+	// stopped: the human withdrew attention while the question was open.
+	stopped publicationState = "stopped"
+	// opened: a pull request exists.
+	opened publicationState = "opened"
+	// failed: publication was attempted and did not complete.
+	failed publicationState = "failed"
+)
+
+// Settled reports whether the run may record a terminal outcome. A question the
+// human left standing has settled nothing, and neither has a run they stopped.
+func (p publication) Settled() bool {
+	return p.State != deferred && p.State != stopped
 }
 
 // reportUndeliveredNotes says so when the human typed guidance that no worker
@@ -2146,21 +2203,60 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				return
 			}
 
-			e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
-			e.reportOutcome(ctx, "success", task, "candidate ready for governed admission")
-			// Accepted and unpublished. Retention here is a decision with a
-			// reason, not the absence of a cleanup: this candidate holds work
-			// nobody has agreed to land, and publication is human-owned.
-			e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+			published := e.offerPullRequest(ctx, taskID, tc, workspace, worker.Name)
+
+			// A question the human left standing, or a run they stopped, has
+			// settled nothing. Emitting a completion here is what stranded the
+			// candidate: FindInterrupted reads WorkflowCompleted as terminal,
+			// so the deferred question was filtered out of /resume immediately
+			// after the interface promised to ask it again.
+			if !published.Settled() {
+				e.resolveCandidate(taskID, identity, tc, candidate.Resolution{
+					Disposition: candidate.Resumable,
+					Reason:      "accepted by review; the publication decision is still open",
+				})
+				if published.State == stopped {
+					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.WorkflowStopped,
+						"stopped while the publication decision was open; the candidate is left as it stands", nil))
+				}
+				return
+			}
+
+			// Retention here is a decision with a reason, not the absence of a
+			// cleanup. Which reason depends on what actually happened, because
+			// recording an opened pull request as unpublished contradicts both
+			// Git and GitHub.
+			disposition := candidate.Resolution{
 				Disposition: candidate.Retained,
 				Reason:      "accepted by review and unpublished; landing it is the human's decision",
-			})
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "candidate ready for governed admission", map[string]any{
+			}
+			outcome, summary := "success", "candidate ready for governed admission"
+			switch published.State {
+			case opened:
+				disposition.Reason = "accepted by review and published for a human to land: " + published.Result.URL
+				summary = "candidate published for a human to land, not merged and not admitted"
+			case failed:
+				disposition.Reason = "accepted by review; publication was attempted and did not complete"
+				if effects := published.Result.Effects(); effects != "" {
+					disposition.Reason += " (" + effects + ")"
+				}
+				outcome, summary = "failure", "publication did not complete: "+published.Err.Error()
+			}
+			e.reportOutcome(ctx, outcome, task, summary)
+			e.resolveCandidate(taskID, identity, tc, disposition)
+			// Exactly one terminal event. A failed publication used to emit
+			// WorkflowFailed and then WorkflowCompleted for the same run.
+			kind := event.WorkflowCompleted
+			if published.State == failed {
+				kind = event.WorkflowFailed
+			}
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, kind, summary, map[string]any{
 				"workspace":   workspace,
 				"implementor": worker.Name,
 				"plan":        plan,
 				"review":      review,
 				"audit":       audit,
+				"publication": string(published.State),
 			}))
 			return
 		}
