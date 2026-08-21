@@ -158,12 +158,36 @@ func Queries(matches []Match) []Query {
 type SurveyOutcome struct {
 	Surveyed int
 	Matched  int
+	// Failed counts class queries that did not answer, and Reason is the first
+	// thing that went wrong.
+	//
+	// They exist because Surveyed==0 has two causes that read identically once
+	// the count is all that survives: a graph that genuinely holds nothing, and
+	// a graph that was never reached. The first is a finding about the project;
+	// the second is a finding about the connection, and reporting it as the
+	// first is the recorded failure mode
+	// empty_sensei_tool_response_accepted_as_present_evidence.
+	Failed int
+	Reason string
 }
+
+// Complete reports whether every surveyed class actually answered. Only a
+// complete survey may make a claim about what the graph holds.
+func (s SurveyOutcome) Complete() bool { return s.Failed == 0 }
 
 // Describe states the survey result in a form that distinguishes a coverage gap
 // from a vocabulary mismatch.
 func (s SurveyOutcome) Describe() string {
 	switch {
+	case s.Failed > 0 && s.Surveyed == 0:
+		// Nothing was learned, so nothing may be asserted. Saying "the graph
+		// holds nothing" here would turn a transport failure into a claim
+		// about the project.
+		return "the graph could not be surveyed: all " + itoa(s.Failed) + " class quer(ies) failed (" + s.Reason +
+			"), so nothing is known about what it holds for this domain"
+	case s.Failed > 0:
+		return "the graph was surveyed incompletely: " + itoa(s.Failed) + " class quer(ies) failed (" + s.Reason +
+			"), so the " + itoa(s.Surveyed) + " node(s) found are a floor and not the whole picture"
 	case s.Surveyed == 0:
 		return "the graph holds nothing of the surveyed classes for this domain, so there was nothing to match the question against"
 	case s.Matched == 0:

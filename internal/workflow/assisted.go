@@ -152,6 +152,8 @@ func renderRetrieved(outcomes []retrieval.Outcome) string {
 // — an unbounded one would spend a conversational turn reading the whole graph.
 func surveyPlan(reader retrieval.Caller, domain, question string) (retrieval.Plan, retrieval.SurveyOutcome) {
 	var nodes []retrieval.Node
+	var failed int
+	var reason string
 	for _, class := range retrieval.SurveyClasses {
 		name, args := retrieval.SurveyQuery(class, surveyLimit)
 		if d := strings.TrimSpace(domain); d != "" {
@@ -159,13 +161,20 @@ func surveyPlan(reader retrieval.Caller, domain, question string) (retrieval.Pla
 		}
 		res, err := reader.CallTool(name, args)
 		if err != nil {
+			// Carried, not swallowed. A bare continue here made every query
+			// failing indistinguishable from a graph holding nothing, and the
+			// caller then said so out loud as a fact about the project.
+			failed++
+			if reason == "" {
+				reason = name + ": " + err.Error()
+			}
 			continue
 		}
 		nodes = append(nodes, retrieval.NodesFrom(res.Structured)...)
 	}
 	matches := retrieval.Select(question, nodes, semanticBudget)
 	return retrieval.Plan{Queries: retrieval.Queries(matches), Budget: semanticBudget},
-		retrieval.SurveyOutcome{Surveyed: len(nodes), Matched: len(matches)}
+		retrieval.SurveyOutcome{Surveyed: len(nodes), Matched: len(matches), Failed: failed, Reason: reason}
 }
 
 // retrievedTargets is the file targets the graph retrieval selected, reused so
