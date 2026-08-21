@@ -1071,3 +1071,43 @@ func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
 		t.Fatal("the recorded resolution does not carry the scope it was given for")
 	}
 }
+
+// Finding 8 of the 2026-08-21 audit. resolveArchitecture budgets malformed JSON
+// with `attempt`, and four paths legitimately reset it to start a fresh
+// question. The certified-escalation path needs no person, nests the previous
+// prompt inside the next one, and comes straight back — so an architect that
+// keeps escalating loops with no ceiling, spending a provider turn and growing
+// the prompt every round, until the context is cancelled.
+func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
+	// Read the bytes, scoped to this function: funcBody collects identifiers
+	// only, so an assignment like `attempt = 0` never appears in it.
+	src := rawSource(t, "internal/workflow/engine.go")
+	start := strings.Index(src, "func (e *Engine) resolveArchitecture")
+	if start < 0 {
+		t.Fatal("resolveArchitecture is gone")
+	}
+	rest := src[start:]
+	if next := strings.Index(rest[1:], "\nfunc "); next > 0 {
+		rest = rest[:next]
+	}
+
+	resets := strings.Count(rest, "attempt = 0")
+	guards := strings.Count(rest, "newRound(")
+	if resets == 0 {
+		t.Fatal("the resolution loop no longer restarts for a new question")
+	}
+	// One guard per reset. A reset that skips the counter is a hole in the
+	// ceiling, which is the whole defect.
+	if guards != resets {
+		t.Fatalf("%d reset(s) but %d guarded: every reset must be counted", resets, guards)
+	}
+	if !strings.Contains(rest, "newRound := func") {
+		t.Fatal("the round counter is gone")
+	}
+	if !strings.Contains(rest, "maxRounds") {
+		t.Fatal("there is no overall ceiling on resolution rounds")
+	}
+	if !strings.Contains(rest, "did not settle after") {
+		t.Fatal("exhausting the rounds does not say what happened")
+	}
+}
