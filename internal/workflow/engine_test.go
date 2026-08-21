@@ -693,10 +693,19 @@ func hasKind(kinds []event.Kind, want event.Kind) bool {
 func TestOnlyAnEmptyCandidateIsRemovedAutomatically(t *testing.T) {
 	body := funcBody(t, "internal/workflow/engine.go", "disposeIfEmpty")
 
-	produced := strings.Index(body, "ProducedNoWork")
+	// This assertion is about ORDER, which is all source structure can settle.
+	// Whether the question is answered correctly is settled behaviourally in
+	// disposal_test.go, against a real repository -- the 2026-08-21 audit found
+	// this test passing while disposal consulted a stale snapshot and deleted
+	// work, because an identifier in the right place says nothing about where
+	// its value came from.
+	produced := strings.Index(body, "HoldsWork")
 	removal := strings.Index(body, "RemoveWorktree")
 	if produced < 0 {
 		t.Fatal("disposal no longer consults whether the candidate holds work")
+	}
+	if !strings.Contains(body, "observeCandidate") {
+		t.Fatal("disposal decides from something other than the candidate itself")
 	}
 	if removal < 0 {
 		t.Fatal("disposal no longer removes anything")
