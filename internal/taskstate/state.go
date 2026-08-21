@@ -68,7 +68,11 @@ type AuthorityDecision struct {
 
 // Evidence is what the candidate currently contains and what was said about it.
 type Evidence struct {
-	DiffBytes     int      `json:"diff_bytes"`
+	DiffBytes int `json:"diff_bytes"`
+	// ReportBytes is the size of a read-only run's findings. It is separate
+	// from DiffBytes because they are different claims: one says work was
+	// produced, the other says the repository was left alone deliberately.
+	ReportBytes   int      `json:"report_bytes,omitempty"`
 	ChangedPaths  []string `json:"changed_paths,omitempty"`
 	AuditVerdict  string   `json:"audit_verdict,omitempty"`
 	AuditDetail   string   `json:"audit_detail,omitempty"`

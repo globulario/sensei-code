@@ -758,6 +758,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	var lastReview, lastAudit string
 	// previousDiffDigest detects a worker that is not responding to feedback.
 	var previousDiffDigest string
+	// previousReportRevision is the same guard for a read-only run, where the
+	// artifact is findings rather than a diff. Without it a worker that returns
+	// the same report every cycle spends the whole budget re-asserting it.
+	var previousReportRevision string
 
 	// Candidate isolation is the blast-radius boundary, so it is checked rather
 	// than assumed: the workspace is a string threaded through several call
@@ -795,9 +799,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance)
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
-		if _, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit); err != nil {
+		// The worker's own text is the artifact of a read-only plan. Discarding
+		// it left an inspection with nothing to show but a transcript nobody
+		// had judged.
+		result, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit)
+		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
+		report := strings.TrimSpace(result.Text)
 
 		candidate := gitx.Repo{Root: workspace}
 		diff, err := candidate.CandidateDiff(ctx, tc.Identity.BaseSHA)
@@ -805,12 +814,85 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return false, plan, lastReview, lastAudit, err
 		}
 		if strings.TrimSpace(diff) == "" {
-			// For read-only work this is the answer, not a failure. An audit
-			// that changed a file would be the thing worth refusing.
+			// For read-only work an empty diff is the expected shape, but it is
+			// not the result. The result is the report, and "the diff was
+			// empty" is a fact about what the worker did not do -- accepting on
+			// it alone made an inspection self-certifying: a worker that
+			// produced nothing, or produced something unsupported, passed on
+			// exactly the same evidence as one that did the work.
 			if tc.Mode == ModeInspect {
-				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-					"read-only plan completed with no change to the repository, which is what it asked for", nil))
-				return true, plan, lastReview, lastAudit, nil
+				if report == "" {
+					return false, plan, lastReview, lastAudit, errors.New(
+						"the read-only plan produced no findings: the worker changed nothing and reported nothing")
+				}
+				e.emit(event.New(e.SessionID, taskID, sourceFor(worker.Name), event.InspectionReported, report, nil))
+
+				revision := reportRevision(report)
+				if revision == previousReportRevision {
+					return false, plan, lastReview, lastAudit, fmt.Errorf(
+						"the findings did not change between review cycles: %s returned an identical report after being asked to revise. "+
+							"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
+				}
+				previousReportRevision = revision
+
+				binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: revision}
+				assignment, err := roles.Assign(roles.Reviewer, e.reviewCapabilities(), worker.Name)
+				if err != nil {
+					return false, plan, lastReview, lastAudit, fmt.Errorf("%w: %v", roles.ErrNoIndependentReviewer, err)
+				}
+				if err := e.policyFor(taskID).Check(worker.Name, assignment); err != nil {
+					return false, plan, lastReview, lastAudit, err
+				}
+				review, err := e.resolveReview(ctx, taskID, assignment,
+					inspectionPacket(*tc, binding, start, plan, report), worker.Name)
+				if err != nil {
+					return false, plan, lastReview, lastAudit, err
+				}
+				lastReview = review.Summary
+				tc.EvidenceSnapshot = taskstate.Evidence{
+					ReportBytes:  len(report),
+					AuditVerdict: string(review.Decision),
+					AuditDetail:  review.Summary,
+				}
+				switch review.Decision {
+				case roles.Accept:
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						"read-only plan completed: the findings were reviewed independently and accepted", nil))
+					return true, plan, lastReview, lastAudit, nil
+				case roles.Escalate:
+					// The same routing as a change: the reviewer reaches the
+					// architect, never the human. Failing the run here instead
+					// would let a reviewer end a task by raising a question
+					// nobody was given the chance to answer.
+					revised, err := e.resolveArchitecture(ctx, sc, start, taskID, task, escalationPrompt(task, plan, report, review))
+					if err != nil {
+						return false, plan, lastReview, lastAudit, err
+					}
+					if strings.TrimSpace(revised.Plan) == "" {
+						return false, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan")
+					}
+					e.recordReconciliation(taskID, binding, roles.Reconciliation{
+						Disputed: "the reviewer raised an architectural boundary about the findings: " + review.Summary,
+						Inputs: []roles.Claim{
+							{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
+							{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+						},
+						Canonical: reconciliationEvidence("", "", revised),
+						Decision:  revised.Plan,
+						Authority: roles.ArchitectAuthority,
+						Remaining: revised.Consequences,
+					})
+					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					plan = revised.Plan
+					feedback = "The architect resolved the review escalation. Inspect again under the revised plan."
+					continue
+				default:
+					// Send the objections back and inspect again. The findings
+					// are the deliverable, so an unsupported one is revisable
+					// in exactly the way an unsound change is.
+					feedback = review.Instruction()
+					continue
+				}
 			}
 			return false, plan, lastReview, lastAudit, errors.New("implementor produced no candidate diff")
 		}
@@ -1698,8 +1780,20 @@ func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guid
 			"\npart that is in scope, and say plainly in your output what you did not do and" +
 			"\nwhy, so a new plan can be approved for the rest."
 	}
+	// The worker is told which kind of work it was given. Without this an
+	// inspection worker read "you may edit" and an audit that edited was caught
+	// only afterwards, by refusing a candidate the worker had been invited to
+	// produce.
+	role := `Implement only the architect's bounded plan. You may inspect, edit, build, and test inside this candidate worktree.`
+	if tc.Mode == ModeInspect {
+		role = `THIS PLAN IS READ-ONLY. Do not edit, create, or delete any file in this worktree, and do not commit.
+Your deliverable is your final message: the findings the plan asked for. Nothing else you produce is kept.
+State the evidence behind each finding -- the file and line, the command you ran and its output, or what Sensei returned -- and mark anything you could not establish as unverified rather than asserting it.
+End with what this inspection did NOT cover, and say plainly if the plan asked for something you could not do. A finding without evidence is an opinion, and an inspection that hides its limits overstates itself.
+An independent reviewer reads these findings and decides whether they are supported, so unsupported claims come back to you rather than standing.`
+	}
 	return fmt.Sprintf(`You are a bounded implementation worker operating in an isolated Git worktree.
-Implement only the architect's bounded plan. You may inspect, edit, build, and test inside this candidate worktree. Work autonomously: do not ask the user for routine permissions.
+%s Work autonomously: do not ask the user for routine permissions.
 Never push, merge, deploy, weaken governance artifacts, rewrite human-owned intent, or claim admission. Sensei Code owns orchestration and Sensei owns governance.
 
 You have Sensei's own MCP tools in this session: awareness_briefing,
@@ -1735,10 +1829,13 @@ TASK:
 ARCHITECTURAL PLAN:
 %s
 
-CYCLE: %d%s`, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, cycle, extra)
+CYCLE: %d%s`, role, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, cycle, extra)
 }
 
 func reviewPrompt(p roles.IndependentReviewPacket) string {
+	if p.Inspection() {
+		return inspectionReviewPrompt(p)
+	}
 	return fmt.Sprintf(`You are the architectural reviewer for a Sensei-governed candidate. Do not edit files.
 Decide whether the exact candidate satisfies the architectural plan and the supplied Sensei evidence. Passing tests alone is not architectural proof.
 Return ESCALATE only when a genuine architectural-authority question exists; ordinary defects are REVISE.
@@ -1808,6 +1905,72 @@ and proves nothing.
 CANDIDATE DIFF:
 %s`, shortDigest(p.Provenance.CandidateDigest), conversationOrNone(p.Conversation), intentOrNone(p.ArchitectIntent),
 		p.WorkspaceAuthority, p.Preflight, p.Task, p.Plan, p.Audit, p.Validation, p.Diff)
+}
+
+// inspectionReviewPrompt judges findings rather than a change.
+//
+// The questions are different ones. A change is asked whether it is safe; a set
+// of findings is asked whether it is supported -- and the characteristic failure
+// is not an unsafe edit but a confident claim with nothing behind it, or an
+// inspection that quietly skipped most of what it was asked to cover and
+// reported only what it happened to look at.
+func inspectionReviewPrompt(p roles.IndependentReviewPacket) string {
+	return fmt.Sprintf(`You are the independent reviewer of a read-only inspection carried out under a Sensei-governed plan. Do not edit files.
+The worker was asked to change nothing and to report findings. It changed nothing. Your job is to decide whether the findings it reported are SUPPORTED, not whether you would have written them.
+
+You are reviewing independently. You did not produce these findings, you have not
+been told why their author believes them, and you are not being asked to agree.
+Assume a finding may be wrong, overstated, or unevidenced even when it is
+plausible and well written.
+
+Judge the report on:
+  - EVIDENCE. Does each finding name something checkable -- a file and line, a
+    command and its output, what Sensei returned? A finding that only reasons
+    about the code is a hypothesis, and must be labelled one.
+  - SCOPE. Did the inspection cover what the plan asked for? Findings about the
+    easy part, silently omitting the rest, is the failure this review exists to
+    catch. Silence about an area the plan named is not a clean bill of health.
+  - LIMITS. Does the report say what it did NOT establish? A report with no
+    stated limitations is usually a report that stopped looking.
+  - OVERSTATEMENT. Is any finding's severity or confidence higher than its
+    evidence carries?
+
+You have Sensei's own MCP tools in this session: awareness_briefing,
+awareness_preflight, awareness_impact, awareness_query, awareness_resolve,
+awareness_metadata and sensei_workspace_status. Check the report's claims about
+governance against what Sensei actually holds, and quote what Sensei said. There
+is no diff audit here because there is no diff.
+
+REVISE when findings lack the evidence to stand, when the plan's scope was not
+covered, or when limits are missing. ACCEPT means: these findings are supported
+and honestly bounded. It does not mean you agree with every judgement in them.
+ESCALATE only for a genuine architectural-authority question.
+
+Return ONLY JSON:
+{"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+
+CONVERSATION WITH THE HUMAN:
+%s
+
+ARCHITECT INTENT:
+%s
+
+SENSEI WORKSPACE AUTHORITY:
+%s
+
+SENSEI PREFLIGHT:
+%s
+
+TASK:
+%s
+
+THE READ-ONLY PLAN THE WORKER WAS BOUND BY:
+%s
+
+THE FINDINGS REPORTED:
+%s`, conversationOrNone(p.Conversation), p.ArchitectIntent,
+		p.WorkspaceAuthority, p.Preflight, p.Task, p.Plan, p.Report)
 }
 
 // intentOrNone keeps the reviewer's packet unambiguous the same way the

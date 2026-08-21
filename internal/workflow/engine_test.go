@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/roles"
+
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/event"
@@ -898,5 +900,138 @@ func TestTheArchitectIsAskedToDeclareTheMode(t *testing.T) {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("the architect prompt is missing %q", want)
 		}
+	}
+}
+
+// Finding 4 of the 2026-08-21 audit: a read-only run's success condition was
+// "the diff was empty", which is a fact about what the worker did NOT do. A
+// worker that reported nothing, and one that did the work, passed on identical
+// evidence.
+func TestAReadOnlyRunThatReportsNothingIsNotSuccess(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "the read-only plan produced no findings") {
+		t.Fatal("an empty inspection report is accepted again")
+	}
+}
+
+// The worker's own text is the deliverable of an inspection. Discarding it left
+// the run with nothing to show but a transcript nobody had judged.
+func TestTheWorkerResultIsKept(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	if strings.Contains(body, "if _, err := impl.Run") {
+		t.Fatal("the implementor's result is discarded again")
+	}
+	if !strings.Contains(body, "report") {
+		t.Fatal("runCandidate no longer keeps the worker's report")
+	}
+}
+
+// Acceptance must rest on an independent verdict about the findings, not on the
+// absence of a diff. Without this an inspection is self-certifying.
+func TestInspectionAcceptanceRestsOnAnIndependentReview(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	inspect := strings.Index(body, "ModeInspect")
+	if inspect < 0 {
+		t.Fatal("the inspect branch is gone")
+	}
+	for _, want := range []string{"inspectionPacket", "resolveReview", "roles.Assign"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("the inspect branch does not reach %s", want)
+		}
+	}
+	// The verdict, not the empty diff, decides. Read the bytes: funcBody
+	// renders the tree, where string literals do not appear.
+	if !strings.Contains(rawSource(t, "internal/workflow/engine.go"), "the findings were reviewed independently and accepted") {
+		t.Fatal("acceptance no longer names the review as its grounds")
+	}
+}
+
+// The reviewer that judged the findings must not be the worker that produced
+// them, exactly as for a change.
+func TestTheInspectionReviewerIsNotTheWorker(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	if !strings.Contains(body, "roles.ErrNoIndependentReviewer") {
+		t.Fatal("an inspection can be reviewed by its own author")
+	}
+}
+
+// A read-only worker was told "you may inspect, edit, build, and test", so an
+// audit that edited was caught only afterwards -- by refusing a candidate the
+// worker had been invited to produce.
+func TestAReadOnlyWorkerIsToldNotToEdit(t *testing.T) {
+	inspect := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil)
+	for _, want := range []string{"THIS PLAN IS READ-ONLY", "Do not edit", "unverified", "did NOT cover", "independent reviewer"} {
+		if !strings.Contains(inspect, want) {
+			t.Errorf("the read-only worker prompt is missing %q", want)
+		}
+	}
+	if strings.Contains(inspect, "You may inspect, edit, build, and test") {
+		t.Error("a read-only worker is still invited to edit")
+	}
+	modify := implementationPrompt(taskContext{Mode: ModeModify, Task: "build"}, "plan", "", 1, nil)
+	if !strings.Contains(modify, "You may inspect, edit, build, and test") {
+		t.Error("a modify worker lost its editing instruction")
+	}
+	if strings.Contains(modify, "THIS PLAN IS READ-ONLY") {
+		t.Error("a modify worker is told the plan is read-only")
+	}
+}
+
+// The reviewer is asked the question that fits the artifact. Judging findings
+// with the diff prompt asks whether an empty change is safe, which it trivially
+// is.
+func TestTheInspectionReviewerJudgesFindingsNotADiff(t *testing.T) {
+	p := roles.IndependentReviewPacket{Report: "finding one", Task: "audit", Plan: "read only"}
+	if !p.Inspection() {
+		t.Fatal("a packet carrying a report and no diff is not recognised as an inspection")
+	}
+	prompt := reviewPrompt(p)
+	for _, want := range []string{"SUPPORTED", "EVIDENCE", "SCOPE", "LIMITS", "OVERSTATEMENT", "finding one"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the inspection review prompt is missing %q", want)
+		}
+	}
+	if strings.Contains(prompt, "CANDIDATE DIFF") {
+		t.Error("the inspection reviewer is being shown a diff section")
+	}
+	// A real change must still get the diff prompt.
+	change := roles.IndependentReviewPacket{Diff: "--- a/x\n+++ b/x", Task: "build"}
+	if change.Inspection() {
+		t.Fatal("a packet carrying a diff is treated as an inspection")
+	}
+	if !strings.Contains(reviewPrompt(change), "CANDIDATE DIFF") {
+		t.Error("a change review lost its diff section")
+	}
+}
+
+// The modify path stops when a worker returns a byte-identical diff after being
+// asked to revise; a read-only run had no such guard and would spend the whole
+// cycle budget on a worker re-asserting the same findings.
+func TestAnUnchangedReportStopsTheLoop(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(body, "the findings did not change between review cycles") {
+		t.Fatal("a read-only run has no stagnation guard")
+	}
+	if !strings.Contains(body, "previousReportRevision") {
+		t.Fatal("nothing remembers the previous report")
+	}
+}
+
+// A reviewer escalation reaches the architect, never the human, and never ends
+// the task on its own. The read-only path failed the run instead, which lets a
+// reviewer close a task by raising a question nobody was asked to answer.
+func TestAnInspectionEscalationReachesTheArchitect(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	inspect := strings.Index(body, "ModeInspect")
+	escalate := strings.Index(body, "roles.Escalate")
+	if inspect < 0 || escalate < 0 {
+		t.Fatal("the inspect branch or its escalation handling is gone")
+	}
+	// Both paths resolve through the architect rather than returning an error.
+	if n := strings.Count(body, "resolveArchitecture"); n < 2 {
+		t.Fatalf("only %d escalation path(s) reach the architect; a change and an inspection both must", n)
+	}
+	if n := strings.Count(body, "recordReconciliation"); n < 2 {
+		t.Fatalf("only %d escalation path(s) record a reconciliation", n)
 	}
 }
