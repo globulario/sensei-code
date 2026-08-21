@@ -249,6 +249,25 @@ func classifyFailure(err error) PersistenceState {
 	}
 }
 
+// title names one decision, not one kind of decision.
+//
+// It used to be a pure function of the condition, and the condition is a
+// recurring sentence -- "Sensei reported blind spots in the planned region:
+// anchor with severity=critical, file path under high-risk directory" fires on
+// every run that touches a protected file. Sensei derives the proposal's
+// filename from this title, so two different answers to the same recurring
+// question produced the same slug and the second replaced the first on disk.
+//
+// That is not a cosmetic collision. It was observed overwriting a decision of
+// "preserve current human-owned intent and require another design" with a later
+// "authorize the architectural change" -- the opposite answer, to a question
+// asked about different work, with nothing left saying the first had ever been
+// given. A record of human authority that keeps only the most recent answer
+// cannot support the one claim it exists to make.
+//
+// The task is what makes a decision unique: it is minted per run, it is already
+// recorded in the description and the evidence, and it is what distinguishes
+// two answers to the same standing question.
 func title(r Resolution) string {
 	base := strings.TrimSpace(r.Condition)
 	if base == "" {
@@ -256,6 +275,13 @@ func title(r Resolution) string {
 	}
 	if len(base) > 90 {
 		base = base[:90]
+	}
+	// A decision with no task cannot be told apart from the next one, so the
+	// condition alone is used and the collision remains possible. That is
+	// preferable to inventing an identity: a fabricated discriminator would
+	// make two records look distinct without either being traceable.
+	if task := strings.TrimSpace(r.TaskID); task != "" {
+		return "Human authority resolution (" + task + "): " + base
 	}
 	return "Human authority resolution: " + base
 }

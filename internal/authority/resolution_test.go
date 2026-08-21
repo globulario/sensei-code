@@ -194,3 +194,58 @@ func TestResolutionWithoutAQuestionIsRefused(t *testing.T) {
 		t.Fatal("an empty resolution was still sent to Sensei")
 	}
 }
+
+// Sensei derives a proposal's filename from its title. The title was a pure
+// function of the condition, and conditions recur -- so two different answers
+// to the same standing question produced the same slug and the second replaced
+// the first on disk.
+//
+// Observed twice in this repository: a recorded decision of "preserve current
+// human-owned intent and require another design" was overwritten by a later
+// "authorize the architectural change" -- the opposite answer, about different
+// work, with nothing left saying the first had ever been given.
+func TestTwoDecisionsOnOneConditionDoNotShareATitle(t *testing.T) {
+	const condition = "Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory"
+
+	first := Resolution{TaskID: "task-1787235334698173142", Condition: condition, OptionLabel: "Preserve current human-owned intent and require another design"}
+	second := Resolution{TaskID: "task-1787270680163801586", Condition: condition, OptionLabel: "Authorize the architectural change described above"}
+
+	if title(first) == title(second) {
+		t.Fatalf("both decisions carry the same title, so one overwrites the other:\n  %s", title(first))
+	}
+	for _, r := range []Resolution{first, second} {
+		if !strings.Contains(title(r), r.TaskID) {
+			t.Errorf("title does not identify the decision: %q", title(r))
+		}
+		if !strings.Contains(title(r), "blind spots") {
+			t.Errorf("title no longer says what was decided: %q", title(r))
+		}
+	}
+}
+
+// The same task answering the same condition is the same decision, and must not
+// mint a second record.
+func TestOneDecisionKeepsOneTitle(t *testing.T) {
+	r := Resolution{TaskID: "task-1", Condition: "a condition", OptionLabel: "an option"}
+	if title(r) != title(r) {
+		t.Fatal("title is not stable for one decision")
+	}
+	again := Resolution{TaskID: "task-1", Condition: "a condition", OptionLabel: "a different label"}
+	if title(r) != title(again) {
+		t.Fatal("the same task and condition produce different titles, so one decision files twice")
+	}
+}
+
+// Without a task there is nothing to distinguish two decisions, and inventing a
+// discriminator would make records look distinct without either being
+// traceable. The collision is left visible rather than papered over.
+func TestATaskLessDecisionStillNamesTheCondition(t *testing.T) {
+	r := Resolution{Condition: "a condition"}
+	got := title(r)
+	if !strings.Contains(got, "a condition") {
+		t.Fatalf("title lost the condition: %q", got)
+	}
+	if strings.Contains(got, "()") {
+		t.Fatalf("title carries an empty identity: %q", got)
+	}
+}
