@@ -118,6 +118,16 @@ var Registry = []Command{
 			"setup reaches a shared graph, a registry outside this repository and each agent's own MCP configuration, so changing any of it stays with `sensei-code setup --apply`.",
 	},
 	{
+		Name: "/copy", Arg: "[all]", Kind: Session,
+		Summary: "put the conversation on your clipboard",
+		Detail:  "Copies the architect's last response, or the whole transcript with 'all', through the terminal's own clipboard escape — so it works over SSH and needs no xclip installed. ctrl+r does the same for the last response, ctrl+y copies the composer and ctrl+x cuts it.",
+	},
+	{
+		Name: "/mouse", Kind: Session,
+		Summary: "hand the mouse back to your terminal, or take it",
+		Detail:  "While Sensei Code tracks the mouse the wheel scrolls the transcript, but your terminal will not let you drag to select text. This releases the mouse so selection and copy work normally; the keyboard keeps scrolling either way. Many terminals also let shift+drag select without releasing anything.",
+	},
+	{
 		Name: "/clear", Kind: Session, NeedsIdle: true,
 		Summary: "start a fresh conversation",
 		Detail:  "Begins a new session. The previous record is kept, not deleted.",

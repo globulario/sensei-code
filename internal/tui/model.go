@@ -94,6 +94,17 @@ type Model struct {
 	pendingTask   string
 	currentTask   string
 	resumable     []session.Interrupted
+	// lastResponse is the most recent thing the architect said, kept as the
+	// plain text the event carried. Recovering it from `lines` would mean
+	// parsing speaker headings back out of rendered styling, which is a guess
+	// about presentation; the event already knows.
+	lastResponse string
+	// mouseOff releases the mouse so the terminal can select text again. See
+	// the View comment: tracking the wheel costs drag-to-select.
+	mouseOff bool
+	// pasteWaiting is set between asking the terminal for the clipboard and
+	// hearing back, so an unanswered read can explain itself once.
+	pasteWaiting bool
 	// running names the architect command awaiting its result, so the status
 	// bar can say which one rather than only that something is happening.
 	running string
@@ -268,6 +279,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// status bar, and reach the transcript only in streaming mode.
 		if isConversation(e) {
 			if line := renderEvent(e); line != "" {
+				// Not everything in the transcript is a response. Guidance is
+				// the human's own words queued for a worker, and handing it
+				// back as "the last response" would be the interface quoting
+				// the reader to themselves.
+				if text := strings.TrimSpace(e.Summary); text != "" && e.Source != event.SourceUser {
+					m.lastResponse = text
+				}
 				m.lines = append(m.lines, line, "")
 				// Scrolling rewrites every row with different text. The diff
 				// renderer does not clear to end of line when a row shrinks, so
@@ -292,6 +310,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingTask = ""
 		}
 		cmds = append(cmds, waitEvent(m.events))
+	case tea.ClipboardMsg:
+		m.pasteWaiting = false
+		text := msg.Content
+		if text == "" {
+			return m, tea.Batch(cmds...)
+		}
+		updated, cmd := m.input.Update(tea.PasteMsg{Content: text})
+		m.input = updated
+		return m, tea.Batch(append(cmds, cmd, tea.ClearScreen)...)
+	case pasteUnansweredMsg:
+		if !m.pasteWaiting {
+			return m, tea.Batch(cmds...)
+		}
+		m.pasteWaiting = false
+		m.lines = append(m.lines, dimStyle.Render(
+			"this terminal did not answer a clipboard read — use its own paste (usually ctrl+shift+v), which arrives here intact"), "")
+		return m, tea.Batch(append(cmds, tea.ClearScreen)...)
 	case closedMsg:
 		return m, tea.Quit
 	case tea.KeyPressMsg:
@@ -386,6 +421,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+y":
+			// Copy the composer. A single-line composer has no selection, so
+			// the whole line is the only thing "copy" can honestly mean.
+			text := m.input.Value()
+			if strings.TrimSpace(text) == "" {
+				m.lines = append(m.lines, dimStyle.Render("nothing to copy: the composer is empty  ·  ctrl+r copies the last response"), "")
+				return m, tea.Batch(append(cmds, tea.ClearScreen)...)
+			}
+			m.lines = append(m.lines, dimStyle.Render("copied the composer"), "")
+			return m, tea.Batch(append(cmds, copyToClipboard(text), tea.ClearScreen)...)
+		case "ctrl+x":
+			text := m.input.Value()
+			if strings.TrimSpace(text) == "" {
+				m.lines = append(m.lines, dimStyle.Render("nothing to cut: the composer is empty"), "")
+				return m, tea.Batch(append(cmds, tea.ClearScreen)...)
+			}
+			m.input.Reset()
+			m.lines = append(m.lines, dimStyle.Render("cut the composer"), "")
+			return m, tea.Batch(append(cmds, copyToClipboard(text), tea.ClearScreen)...)
+		case "ctrl+r":
+			if strings.TrimSpace(m.lastResponse) == "" {
+				m.lines = append(m.lines, dimStyle.Render("nothing to copy: no response yet"), "")
+				return m, tea.Batch(append(cmds, tea.ClearScreen)...)
+			}
+			m.lines = append(m.lines, dimStyle.Render("copied the last response"), "")
+			return m, tea.Batch(append(cmds, copyToClipboard(m.lastResponse), tea.ClearScreen)...)
+		case "ctrl+v":
+			// Ask the terminal for its clipboard. The textarea's own ctrl+v
+			// shells out to xclip and is shadowed here deliberately; see
+			// clipboard.go for why that path is not trustworthy.
+			m.pasteWaiting = true
+			return m, tea.Batch(append(cmds, tea.ReadClipboard, pasteHint())...)
 		case "esc":
 			// The human's "no" during a governed run. There is no approval
 			// prompt to decline any more, so this is where withdrawing
@@ -673,7 +740,16 @@ func (m Model) View() tea.View {
 	// The wheel is what most people try first, and in the alternate screen the
 	// terminal's own scrollback is unavailable, so without this there is no
 	// pointer gesture that works at all.
+	//
+	// It is not free: while the program is tracking the mouse, the terminal
+	// stops treating a drag as a selection, so the wheel is bought with
+	// copy-by-mouse. Neither is obviously worth more than the other, so /mouse
+	// hands the choice back rather than this line deciding for everyone. Many
+	// terminals also let shift+drag select while tracking is on.
 	v.MouseMode = tea.MouseModeCellMotion
+	if m.mouseOff {
+		v.MouseMode = tea.MouseModeNone
+	}
 	v.AltScreen = true
 	v.WindowTitle = "Sensei Code"
 	return v
@@ -942,6 +1018,36 @@ func (m Model) runCommand(c command.Command, arg string) (Model, tea.Cmd) {
 	case "/mcp":
 		m.mcpMenu = true
 		return m, nil
+	case "/copy":
+		what := strings.ToLower(strings.TrimSpace(arg))
+		switch what {
+		case "", "last":
+			if strings.TrimSpace(m.lastResponse) == "" {
+				m.lines = append(m.lines, dimStyle.Render("nothing to copy: no response yet"), "")
+				return m, tea.ClearScreen
+			}
+			m.lines = append(m.lines, dimStyle.Render("copied the last response"), "")
+			return m, tea.Batch(copyToClipboard(m.lastResponse), tea.ClearScreen)
+		case "all":
+			text := plainTranscript(m.lines)
+			if text == "" {
+				m.lines = append(m.lines, dimStyle.Render("nothing to copy: the transcript is empty"), "")
+				return m, tea.ClearScreen
+			}
+			m.lines = append(m.lines, dimStyle.Render("copied the transcript"), "")
+			return m, tea.Batch(copyToClipboard(text), tea.ClearScreen)
+		default:
+			m.lines = append(m.lines, dimStyle.Render("/copy takes nothing (the last response) or 'all' (the transcript)"), "")
+			return m, tea.ClearScreen
+		}
+	case "/mouse":
+		m.mouseOff = !m.mouseOff
+		if m.mouseOff {
+			m.lines = append(m.lines, dimStyle.Render("mouse released · drag to select and copy with your terminal; the wheel no longer scrolls here (arrows, pgup and ctrl+u still do)"), "")
+		} else {
+			m.lines = append(m.lines, dimStyle.Render("mouse captured · the wheel scrolls again, and the terminal will not drag-select"), "")
+		}
+		return m, tea.ClearScreen
 	case "/clear":
 		m.lines = banner(false)
 		m.activity = ""
@@ -1106,6 +1212,15 @@ func renderHelp() string {
 			}
 			b.WriteString(fmt.Sprintf("    %-28s %s\n", name, c.Summary))
 		}
+	}
+	b.WriteString("\n\n  Clipboard\n")
+	for _, k := range [][2]string{
+		{"ctrl+r", "copy the last response"},
+		{"ctrl+y", "copy the composer"},
+		{"ctrl+x", "cut the composer"},
+		{"ctrl+v", "paste (your terminal's own paste always works too)"},
+	} {
+		b.WriteString(fmt.Sprintf("    %-28s %s\n", k[0], k[1]))
 	}
 	b.WriteString("\n  Anything that is not a command is a task: describe it and the architect plans it.")
 	return b.String()
