@@ -56,8 +56,8 @@ type RunResult struct {
 	Complete  bool
 }
 
-// Execute runs the exact chain produced by Chain and stops on the first
-// non-success outcome. Unknown future non-zero exit codes therefore fail closed
+// Execute runs the exact chain produced by Request.Chain and stops on the first
+// non-zero outcome. Unknown future non-zero exit codes therefore fail closed
 // automatically through Interpret instead of falling through to later apply or
 // verification stages.
 func Execute(ctx context.Context, req Request, runner Runner) (RunResult, error) {
@@ -65,7 +65,7 @@ func Execute(ctx context.Context, req Request, runner Runner) (RunResult, error)
 		return RunResult{}, errors.New("admission runner is nil")
 	}
 
-	invocations, err := Chain(req)
+	invocations, err := req.Chain()
 	if err != nil {
 		return RunResult{}, err
 	}
@@ -79,7 +79,7 @@ func Execute(ctx context.Context, req Request, runner Runner) (RunResult, error)
 
 		outcome := Interpret(invocation.Step, exitCode, output)
 		result.Outcomes = append(result.Outcomes, outcome)
-		if !outcome.Success {
+		if outcome.Code != 0 {
 			result.StoppedAt = invocation.Step
 			return result, nil
 		}
