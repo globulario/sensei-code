@@ -81,6 +81,10 @@ const (
 	// one nobody resolved.
 	CandidateResolved Kind = "candidate.resolved"
 	CandidateAudited  Kind = "candidate.audited"
+	// InspectionReported carries the findings of a read-only plan. Such a run
+	// produces no diff, so without this its only result would be whatever a
+	// reader happened to scroll past in the transcript.
+	InspectionReported Kind = "inspection.reported"
 	// RoutineClassified is the Level-1 dark run: whether this change would have
 	// qualified as routine, and which condition stopped it if not. During
 	// stage 1 it grants nothing and skips nothing — it is a measurement,

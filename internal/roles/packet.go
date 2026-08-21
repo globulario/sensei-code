@@ -104,4 +104,18 @@ type IndependentReviewPacket struct {
 	Audit      string `json:"audit,omitempty"`
 	Validation string `json:"validation,omitempty"`
 	Diff       string `json:"diff"`
+	// Report is the artifact of a read-only plan: findings, not a change.
+	//
+	// It exists because such a plan has nothing in Diff, and an empty Diff read
+	// as "nothing to object to" would make every inspection self-accepting. A
+	// packet carrying a Report is asking whether the findings are supported, and
+	// that is a different question from whether a change is safe -- but it is
+	// still a question a second agent has to answer, which is the whole reason
+	// the reviewer is independent.
+	Report string `json:"report,omitempty"`
+}
+
+// Inspection reports whether this packet is about findings rather than a change.
+func (p IndependentReviewPacket) Inspection() bool {
+	return strings.TrimSpace(p.Report) != "" && strings.TrimSpace(p.Diff) == ""
 }

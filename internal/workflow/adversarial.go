@@ -37,6 +37,17 @@ func candidateRevision(diff string) string {
 	return hex.EncodeToString(sum[:])[:16]
 }
 
+// reportRevision is the identity of one inspection's findings.
+//
+// A read-only run has no diff to digest, and a review still has to be bound to
+// the exact bytes it read: the worker revises its findings between cycles just
+// as it revises a change, and a verdict that outlived the text it judged would
+// be attached to findings nobody reviewed.
+func reportRevision(report string) string {
+	sum := sha256.Sum256([]byte(report))
+	return hex.EncodeToString(sum[:])[:16]
+}
+
 // reviewPacket assembles what an independent reviewer is given.
 //
 // It carries the governing facts, the artifact, and the evidence produced by
@@ -60,6 +71,32 @@ func reviewPacket(tc taskContext, binding roles.Binding, start certifiedStart, p
 		Audit:              audit,
 		Validation:         evidence,
 		Diff:               diff,
+	}
+}
+
+// inspectionPacket is what the reviewer receives for a read-only plan.
+//
+// It carries no diff because there is none, and no Sensei diff audit for the
+// same reason: awareness_audit_diff judges a change, and there is nothing for
+// it to judge. What remains is the plan, the evidence the run was given, and
+// the findings the worker produced -- which is exactly the material needed to
+// answer whether those findings are supported or merely asserted.
+func inspectionPacket(tc taskContext, binding roles.Binding, start certifiedStart, plan, report string) roles.IndependentReviewPacket {
+	return roles.IndependentReviewPacket{
+		Provenance: roles.Provenance{
+			TaskID: binding.TaskID, Role: roles.Reviewer,
+			BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+			GraphBuildCommit: start.GraphBuildCommit(),
+			SessionMode:      roles.Fresh,
+			At:               time.Now().UTC(),
+		},
+		Task:               tc.Task,
+		Plan:               plan,
+		Conversation:       tc.Conversation,
+		ArchitectIntent:    tc.intent(),
+		WorkspaceAuthority: tc.WorkspaceStatus,
+		Preflight:          tc.Preflight,
+		Report:             report,
 	}
 }
 
