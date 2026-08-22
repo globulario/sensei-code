@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/assist"
+	"github.com/globulario/sensei-code/internal/history"
 	"github.com/globulario/sensei-code/internal/investigate"
 	"github.com/globulario/sensei-code/internal/project"
 	"github.com/globulario/sensei-code/internal/retrieval"
@@ -32,7 +33,18 @@ import (
 //
 // It shares the assisted path's own functions rather than reimplementing them,
 // so the two cannot drift into disagreeing about what governs a region.
-func (e *Engine) architecturalContext(ctx context.Context, sc *sensei.Client, domain, task string) (retrievedEvidence, repositoryEvidence, standingContext string, consulted assist.Consulted) {
+func (e *Engine) architecturalContext(ctx context.Context, sc *sensei.Client, domain, task string) (retrievedEvidence, repositoryEvidence, standingContext, recordedHistory string, consulted assist.Consulted) {
+	// What this repository has already decided and already found about itself.
+	// Read from committed files, so it survives the session boundary that
+	// bounds everything else here -- Store.Load reads one session's events, so
+	// the standing summary resets on /clear and on a new run.
+	past := history.Gather(e.Repo.Root, 6)
+	recordedHistory = past.Render()
+	consulted.Add(assist.Observation{
+		Source: "recorded decisions and audits",
+		State:  historyPresence(past),
+		Reason: strings.Join(past.Unavailable, "; "),
+	})
 	// The standing summary needs no Sensei and is available even when the graph
 	// is not, so it is folded first and unconditionally.
 	standing := project.Summarize(e.sessionEvents(), nil, project.DefaultBounds())
@@ -44,7 +56,7 @@ func (e *Engine) architecturalContext(ctx context.Context, sc *sensei.Client, do
 			State:  assist.Absent,
 			Reason: "no Sensei client for this turn, so nothing was looked up",
 		})
-		return "", "", standingContext, consulted
+		return "", "", standingContext, recordedHistory, consulted
 	}
 
 	plan := retrieval.PlanFor(task, retrievalBudget)
@@ -84,5 +96,19 @@ func (e *Engine) architecturalContext(ctx context.Context, sc *sensei.Client, do
 	})
 	repositoryEvidence = repo.Render()
 
-	return retrievedEvidence, repositoryEvidence, standingContext, consulted
+	return retrievedEvidence, repositoryEvidence, standingContext, recordedHistory, consulted
+}
+
+// historyPresence distinguishes a corpus that holds nothing from one that could
+// not be read. Both render as no history in a brief, and only one of them is a
+// fact about the project.
+func historyPresence(r history.Record) assist.Presence {
+	switch {
+	case len(r.Unavailable) != 0:
+		return assist.Absent
+	case r.Empty():
+		return assist.EmptyProven
+	default:
+		return assist.Present
+	}
 }

@@ -284,7 +284,7 @@ func TestApprovalClassesRequiringAHumanAllEscalate(t *testing.T) {
 // actually asked for claims, and a prompt is the kind of thing that gets
 // reworded without anyone noticing what depended on it.
 func TestArchitectPromptDemandsClaims(t *testing.T) {
-	prompt := architecturePrompt("/repo", "github.com/globulario/sensei-code", "ChatGPT", "add a thing", "", "workspace", "preflight", "", "", "")
+	prompt := architecturePrompt("/repo", "github.com/globulario/sensei-code", "ChatGPT", "add a thing", "", "workspace", "preflight", "", "", "", "")
 	for _, required := range []string{`"claims"`, "inference", "graph", "repository"} {
 		if !strings.Contains(prompt, required) {
 			t.Fatalf("architect prompt does not mention %q, so claims-based routing cannot fire", required)

@@ -16,7 +16,8 @@ func TestTheArchitectIsGivenWhatGovernsTheSubject(t *testing.T) {
 		"ws", "pf",
 		"invariant:sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary — critical",
 		"internal/workflow/engine.go: runCandidate observes the candidate",
-		"1 candidate resumable; 2 decisions taken")
+		"1 candidate resumable; 2 decisions taken",
+		"2026-08-20 (task-1787235334698173142): decided: Preserve current human-owned intent")
 
 	for _, want := range []string{
 		"WHAT SENSEI HOLDS ABOUT THIS SUBJECT",
@@ -36,7 +37,7 @@ func TestTheArchitectIsGivenWhatGovernsTheSubject(t *testing.T) {
 // thin" as a finding that the work is ungoverned rather than as an artefact of
 // being asked before a plan exists.
 func TestTheUnscopedPreflightSaysWhyItIsThin(t *testing.T) {
-	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "")
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "", "")
 	for _, want := range []string{"UNSCOPED", "thin by construction", "before knowing what you will touch"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("the preflight section does not explain itself: missing %q", want)
@@ -47,7 +48,7 @@ func TestTheUnscopedPreflightSaysWhyItIsThin(t *testing.T) {
 // An empty section must read as a stated absence. A blank heading looks like a
 // prompt that lost its content, and a model will treat it as one.
 func TestAnEmptySectionStatesItsAbsence(t *testing.T) {
-	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "")
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "", "")
 	for _, want := range []string{
 		"(the graph returned nothing for this subject)",
 		"(no repository evidence was gathered for this turn)",
@@ -68,7 +69,7 @@ func TestAnEmptySectionStatesItsAbsence(t *testing.T) {
 // The standing summary is context, not permission. It is folded from the
 // session record and must not read as authority to widen the plan.
 func TestStandingContextAuthorisesNothing(t *testing.T) {
-	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "work in flight")
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "work in flight", "")
 	if !strings.Contains(prompt, "authorises nothing on its own") {
 		t.Fatal("the standing section does not disclaim authority")
 	}
@@ -116,7 +117,7 @@ func TestTheGovernedBriefIsEmittedAsEvidence(t *testing.T) {
 // must still carry the standing summary, which needs no graph.
 func TestABriefWithoutSenseiSaysSo(t *testing.T) {
 	e := &Engine{}
-	retrieved, repo, standing, consulted := e.architecturalContext(t.Context(), nil, "d", "task")
+	retrieved, repo, standing, _, consulted := e.architecturalContext(t.Context(), nil, "d", "task")
 	if retrieved != "" || repo != "" {
 		t.Error("graph-derived sections were populated without a Sensei client")
 	}
@@ -124,4 +125,44 @@ func TestABriefWithoutSenseiSaysSo(t *testing.T) {
 		t.Errorf("the absence is not recorded: %q", consulted.Render())
 	}
 	_ = standing // folded unconditionally; its content depends on the session record
+}
+
+// The standing summary is bounded by the session: Store.Load reads one
+// session's events.jsonl, so it resets on /clear and on every new run. The
+// recorded decisions and audits are committed files, and are the only part of
+// the brief that survives that boundary.
+func TestRecordedHistoryCrossesTheSessionBoundary(t *testing.T) {
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "",
+		"2026-08-20 (task-123): decided: Preserve current human-owned intent")
+	for _, want := range []string{
+		"WHAT THIS REPOSITORY HAS ALREADY DECIDED AND FOUND",
+		"Read from committed records, not recalled",
+		"Preserve current human-owned intent",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the architect prompt is missing %q", want)
+		}
+	}
+	// A recorded decision binds; the architect must be told that, or it will
+	// treat a settled condition as an open one.
+	if !strings.Contains(prompt, "has been answered") {
+		t.Error("the prompt does not say a recorded decision binds")
+	}
+}
+
+func TestRecordedHistoryIsGatheredAndDrawn(t *testing.T) {
+	body := funcBody(t, "internal/workflow/architect_context.go", "architecturalContext")
+	if !strings.Contains(body, "history.Gather") {
+		t.Fatal("the brief no longer reads the recorded decisions and audits")
+	}
+	// Gathered before the Sensei-dependent sections, so a turn with no graph
+	// still carries what the repository has decided.
+	gather := strings.Index(body, "history.Gather")
+	guard := strings.Index(body, "sc == nil")
+	if guard >= 0 && guard < gather {
+		t.Fatal("recorded history is skipped when Sensei is unavailable, though it needs no graph")
+	}
+	if !strings.Contains(body, "historyPresence") {
+		t.Fatal("the drawer does not distinguish an empty corpus from an unreadable one")
+	}
 }
