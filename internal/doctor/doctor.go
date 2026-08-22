@@ -133,6 +133,11 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 		report.Checks = append(report.Checks, Check{Name: "sensei:" + name, Status: status, Detail: detail})
 	}
 
+	// A stale binding costs the architect its briefing on every governed run and
+	// says so nowhere a person looks. The comparands are resolved here and
+	// passed in, so the check reports what it compared rather than deciding it.
+	report.Checks = append(report.Checks, checkTaskBinding(repo, repositoryHead(ctx, repo), liveGraphDigest(client)))
+
 	// A registered MCP server whose tools an agent cannot call is not access to
 	// Sensei, so it is reported here rather than only in `sensei-code mcp`.
 	for _, access := range mcpconfig.Describe(repo, cfg.Sensei.Args) {

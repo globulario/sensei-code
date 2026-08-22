@@ -291,7 +291,19 @@ func title(r Resolution) string {
 	// preferable to inventing an identity: a fabricated discriminator would
 	// make two records look distinct without either being traceable.
 	if task := strings.TrimSpace(r.TaskID); task != "" {
-		return "Human authority resolution (" + task + "): " + base
+		// The task leads.
+		//
+		// It used to sit in parentheses after "Human authority resolution",
+		// which reads better and does not work: Sensei derives the proposal's
+		// FILENAME by slugging this title and truncating it, and every title
+		// beginning "Human authority resolution (task-…" truncates to the same
+		// slug. The discriminator was past the cut, so two decisions on one
+		// condition still overwrote each other -- observed on 2026-08-22, when
+		// one authorization replaced the record of another taken two hours
+		// earlier.
+		//
+		// A discriminator that a downstream truncation can discard is not one.
+		return task + " human authority resolution: " + base
 	}
 	return "Human authority resolution: " + base
 }
@@ -306,26 +318,74 @@ func ScopeKey(scope []string) string {
 	if len(scope) == 0 {
 		return "(no scope recorded)"
 	}
-	seen := make(map[string]bool, len(scope))
-	normalized := make([]string, 0, len(scope))
-	for _, f := range scope {
-		f = strings.TrimSpace(f)
-		if f == "" || seen[f] {
-			continue
-		}
-		seen[f] = true
-		normalized = append(normalized, f)
-	}
+	normalized := normalizeScope(scope)
 	if len(normalized) == 0 {
 		return "(no scope recorded)"
 	}
-	sort.Strings(normalized)
 	return strings.Join(normalized, "\x00")
 }
 
 // Key is the identity of one answered question: what was asked, about what.
 func (r Resolution) Key() string {
 	return strings.TrimSpace(r.Condition) + "\x00" + ScopeKey(r.Scope)
+}
+
+// Covers reports whether this answer settles the same question about a plan
+// that stays inside what was authorised.
+//
+// Exact-key matching was too strict to live with. The architect re-reasons on
+// every round, so its file list shifts a little each time, and any delta at all
+// made the plan a new question -- the human was asked the identical thing again
+// because a re-plan added one file. Observed on 2026-08-22: an answer given for
+// a ten-file plan did not cover the next one, which shared eight of them.
+//
+// Subset is the tolerance, and deliberately only subset. It is derivable from
+// the authorisation itself -- a person who authorised these files has, by
+// saying so, authorised any part of them -- and needs no threshold. A
+// "near-identity" rule would need a number nobody has evidence for, and would
+// re-open the defect this key exists for by degrees: growth is the direction
+// that carries the risk, because a plan that ADDS files is proposing work the
+// person never saw.
+//
+// An unscoped answer covers only an unscoped question, unchanged. It cannot be
+// shown to be about the current plan, and treating unknown as covering
+// everything is the failure this whole mechanism removes.
+func (r Resolution) Covers(condition string, scope []string) bool {
+	if strings.TrimSpace(r.Condition) != strings.TrimSpace(condition) {
+		return false
+	}
+	answered := normalizeScope(r.Scope)
+	asked := normalizeScope(scope)
+	if len(answered) == 0 || len(asked) == 0 {
+		// Either side unscoped: only an exact match of that state.
+		return len(answered) == 0 && len(asked) == 0
+	}
+	within := make(map[string]bool, len(answered))
+	for _, f := range answered {
+		within[f] = true
+	}
+	for _, f := range asked {
+		if !within[f] {
+			return false
+		}
+	}
+	return true
+}
+
+// normalizeScope is the shared cleaning ScopeKey and Covers must agree on.
+func normalizeScope(scope []string) []string {
+	seen := make(map[string]bool, len(scope))
+	out := make([]string, 0, len(scope))
+	for _, f := range scope {
+		f = strings.TrimSpace(f)
+		if f == "" || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func firstNonEmpty(values ...string) string {
