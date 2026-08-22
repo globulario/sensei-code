@@ -1,0 +1,24 @@
+# Agent-proposed awareness entry — AWAITING REVIEW.
+# Written by the awareness feedback write-path (Propose RPC / awg onboard); NOT a
+# live graph node. Promote by moving the entry into the canonical corpus file
+# after verifying the contract.
+proposal:
+    status: awaiting_review
+    proposed_by: agent
+    kind: contract_unknown
+    id: contract_unknown.sensei_code.human_authority_resolution_task_1787339771162300211_sensei_r
+    title: 'Human authority resolution (task-1787339771162300211): Sensei reported blind spots in the planned region: anchor with severity=critical, file pat'
+    description: |-
+        Level-3 authority resolution.
+        Question: Architectural authority reached a human-owned boundary.
+        Certifiability condition: Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory
+        Chosen: Authorize the architectural change described above (option 1)
+        Task: task-1787339771162300211
+        Decided at: 2026-08-21T19:21:32Z
+    evidence:
+        - sensei-code task task-1787339771162300211
+        - session session-20260820T205241.970783482Z
+        - 'certifiability condition: Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory'
+        - base commit 5bf76a9477bc1c44b680cef321ca0b446f5091e1
+    domain: github.com/globulario/sensei-code
+    proposed_contract: 'When Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory, the human authority for this repository decided: Authorize the architectural change described above.'
