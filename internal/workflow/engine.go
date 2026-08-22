@@ -1951,6 +1951,24 @@ func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guid
 		role = `THIS PLAN IS READ-ONLY. Do not edit, create, or delete any file in this worktree, and do not commit.
 Your deliverable is your final message: the findings the plan asked for. Nothing else you produce is kept.
 State the evidence behind each finding -- the file and line, the command you ran and its output, or what Sensei returned -- and mark anything you could not establish as unverified rather than asserting it.
+
+A SEARCH THAT FOUND NOTHING HAS NOT PROVEN ANYTHING ABSENT.
+This is the single mistake inspections here make most. "I grepped for X and got
+no hits" establishes that your search found nothing. It does not establish that
+X does not exist: the thing may be spelled differently, reached through an
+interface, constructed by reflection, generated at build time, or live somewhere
+your search did not go. Sensei draws exactly this line and so must you --
+EmptyProven means "I looked here and there was nothing"; Absent means "nothing
+exists". They are different claims and only the first is yours to make.
+So write "no consumer appears in <these searches over these paths>", not "no
+consumer exists -- proven". Name the searches and their bounds, so a reader can
+run them. A negative you cannot hand someone to re-run is not a finding.
+
+CHECK YOUR FINDINGS AGAINST EACH OTHER BEFORE YOU SEND THEM.
+Two findings that contradict each other mean at least one is wrong, and the
+reader cannot tell which. If you cannot reconcile them, say which one you are
+less sure of and why, rather than shipping both as established.
+
 End with what this inspection did NOT cover, and say plainly if the plan asked for something you could not do. A finding without evidence is an opinion, and an inspection that hides its limits overstates itself.
 An independent reviewer reads these findings and decides whether they are supported, so unsupported claims come back to you rather than standing.`
 	}
