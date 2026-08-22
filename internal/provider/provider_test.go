@@ -1,7 +1,10 @@
 package provider
 
 import (
+	"slices"
+
 	"encoding/json"
+	"github.com/globulario/sensei-code/internal/roles"
 	"os"
 	"reflect"
 	"strings"
@@ -236,5 +239,41 @@ func TestTheStrippedListCoversTheProvidersReportedOn(t *testing.T) {
 		if !byPrefix[family] {
 			t.Errorf("no %s credential is stripped, but StatusFor reports an account for it", family)
 		}
+	}
+}
+
+// Independence had nowhere to go. ChatGPT and Codex authenticate against one
+// account, so exhausting it removes both; with Claude as the worker,
+// roles.Assign correctly refuses to let it review its own change. A governed
+// run then ends with "no independent reviewer produced a bounded decision"
+// while a verified candidate sits unreviewed — observed twice on 2026-08-22.
+func TestAThirdProviderCanReview(t *testing.T) {
+	if !slices.Contains(Roles(Antigravity), roles.Reviewer) {
+		t.Fatal("Antigravity cannot hold the reviewer role, so it cannot break a single-account deadlock")
+	}
+	// Reviewer only. Implementing needs a write-capable sandbox this adapter's
+	// permission model does not expose the way the others do, and the architect
+	// is a continuity relationship rather than a capability.
+	for _, unwanted := range []roles.Role{roles.Implementer, roles.Architect} {
+		if slices.Contains(Roles(Antigravity), unwanted) {
+			t.Errorf("Antigravity declares %s, which it has not been shown to hold", unwanted)
+		}
+	}
+}
+
+// The point of the third provider is that it does not share an account with the
+// first two. If it ever did, declaring the role would buy nothing.
+func TestTheReviewerPoolIsNotOneAccount(t *testing.T) {
+	reviewers := map[ID]bool{}
+	for _, id := range Ordered {
+		if slices.Contains(Roles(id), roles.Reviewer) {
+			reviewers[id] = true
+		}
+	}
+	if len(reviewers) < 3 {
+		t.Fatalf("only %d provider(s) can review; ChatGPT and Codex share one account, so two is one outage", len(reviewers))
+	}
+	if !reviewers[Claude] || !reviewers[Antigravity] {
+		t.Error("the pool does not span more than the ChatGPT account")
 	}
 }

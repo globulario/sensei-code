@@ -47,6 +47,28 @@ func Roles(id ID) []roles.Role {
 		return []roles.Role{roles.Architect, roles.Reviewer}
 	case Codex, Claude:
 		return []roles.Role{roles.Architect, roles.Implementer, roles.Reviewer}
+	case Antigravity:
+		// Reviewer only, and deliberately not Implementer or Architect.
+		//
+		// Reviewing needs a bounded verdict over work someone else produced,
+		// which is the narrowest of the three and the one an adapter can be
+		// trusted with first. Implementing needs a write-capable sandbox this
+		// adapter's permission model does not expose the way the others do,
+		// and the architect is the agent a person talks to, which is a
+		// continuity relationship rather than a capability.
+		//
+		// It exists because independence had nowhere to go. ChatGPT and Codex
+		// authenticate against one account, so when that account is exhausted
+		// BOTH are gone -- and with Claude as the worker, roles.Assign
+		// correctly refuses to let it review its own change. A run then ends
+		// with "no independent reviewer produced a bounded decision" while a
+		// perfectly good candidate sits verified and unreviewed. Observed on
+		// 2026-08-22, twice.
+		//
+		// Declaring the role does not make it work: the roster still has to
+		// name an argv that produces a bounded review, and a provider that
+		// cannot is reported as one that could not, exactly as Codex is here.
+		return []roles.Role{roles.Reviewer}
 	default:
 		return nil
 	}
