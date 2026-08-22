@@ -2773,8 +2773,8 @@ func openFindings(review, audit string, cause error) []taskstate.Finding {
 // is authority.Persist, and it stays separate. What is remembered here binds
 // this task only, which is exactly the status a resolution has before Sensei
 // promotes it.
-func (e *Engine) answeredConditions(taskID string) map[string]bool {
-	out := map[string]bool{}
+func (e *Engine) answeredConditions(taskID string) []authority.Resolution {
+	var out []authority.Resolution
 	if e.Store == nil {
 		return out
 	}
@@ -2799,7 +2799,7 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 			continue
 		}
 		if strings.TrimSpace(res.Condition) != "" {
-			out[res.Key()] = res.Outcome.Permits()
+			out = append(out, res)
 		}
 	}
 	return out
@@ -2812,12 +2812,28 @@ func (e *Engine) answeredConditions(taskID string) map[string]bool {
 // reports whether the question has been put at all, so a caller can tell "the
 // human said yes" from "the human has not been asked".
 func (e *Engine) applyAnsweredCondition(taskID, condition string, scope ...string) (authorized, asked bool) {
-	// Keyed on the plan as well as the question. A condition is a property of
+	// Matched on the plan as well as the question. A condition is a property of
 	// the region, not of the work: reusing an answer across plans let one yes
 	// authorize a later plan touching entirely different files.
-	key := strings.TrimSpace(condition) + "\x00" + authority.ScopeKey(scope)
-	answer, ok := e.answeredConditions(taskID)[key]
-	return answer, ok
+	//
+	// Coverage is subset-tolerant, so a re-plan that stays inside what was
+	// authorised is not a new question. Exact matching re-asked the human the
+	// identical thing because the architect's file list shifted by a file
+	// between rounds.
+	//
+	// A refusal that covers this plan governs over an authorisation that also
+	// covers it. Both were given about a region containing this work, and
+	// between "you may" and "you may not" the only safe reading is the refusal.
+	for _, res := range e.answeredConditions(taskID) {
+		if !res.Covers(condition, scope) {
+			continue
+		}
+		if !res.Outcome.Permits() {
+			return false, true
+		}
+		authorized, asked = true, true
+	}
+	return authorized, asked
 }
 
 // oneLine flattens a multi-line review into something readable inside an error.

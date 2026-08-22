@@ -1048,12 +1048,11 @@ func TestAnInspectionEscalationReachesTheArchitect(t *testing.T) {
 // The scope has to actually reach the recorded answer and the memo lookup, or
 // keying on it changes nothing.
 func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
-	memo := funcBody(t, "internal/workflow/engine.go", "answeredConditions")
-	if !strings.Contains(memo, "res.Key") {
-		t.Fatal("the memo is keyed on the condition alone again")
-	}
 	apply := funcBody(t, "internal/workflow/engine.go", "applyAnsweredCondition")
-	if !strings.Contains(apply, "ScopeKey") {
+	// Coverage is subset-tolerant now, so the lookup matches answers rather
+	// than looking up one key. The property is unchanged: the plan's scope
+	// must reach the decision, or keying on it changes nothing.
+	if !strings.Contains(apply, "Covers") {
 		t.Fatal("the lookup does not consider the plan's scope")
 	}
 	// Every caller must supply the scope; one that does not would silently key
@@ -1109,5 +1108,24 @@ func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
 	}
 	if !strings.Contains(rest, "did not settle after") {
 		t.Fatal("exhausting the rounds does not say what happened")
+	}
+}
+
+// Between "you may" and "you may not" about the same work, the refusal governs.
+// Both were given about a region containing this plan, and only one reading is
+// safe.
+func TestARefusalGovernsOverAnAuthorisationThatAlsoCovers(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "applyAnsweredCondition")
+	permits := strings.Index(body, "Permits")
+	authorized := strings.Index(body, "authorized")
+	if permits < 0 {
+		t.Fatal("the lookup no longer classifies the answer")
+	}
+	if authorized >= 0 && authorized < permits {
+		t.Fatal("an authorisation is recorded before a refusal is checked")
+	}
+	src := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(src, "the only safe reading is the refusal") {
+		t.Fatal("the precedence between a refusal and an authorisation is not stated")
 	}
 }

@@ -323,3 +323,64 @@ func truncate(s string, n int) string {
 	}
 	return s[:n]
 }
+
+// The case observed on 2026-08-22. An answer given for a ten-file plan did not
+// cover the next plan, which shared eight of them, so the human was asked the
+// identical question again. The architect re-reasons every round, so its file
+// list shifts a little each time and exact matching re-asks on every shift.
+func TestAReplanInsideWhatWasAuthorisedIsNotANewQuestion(t *testing.T) {
+	const condition = "Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory"
+	answered := Resolution{
+		Condition: condition,
+		Outcome:   Authorize,
+		Scope: []string{
+			"internal/admission/admission.go", "internal/workflow/engine.go",
+			"internal/processx/runner.go", "docs/architecture.md",
+		},
+	}
+
+	// Narrower: inside what the person authorised.
+	if !answered.Covers(condition, []string{"internal/admission/admission.go", "docs/architecture.md"}) {
+		t.Error("a plan narrower than the authorisation is treated as a new question")
+	}
+	// Identical, in any order.
+	if !answered.Covers(condition, []string{"docs/architecture.md", "internal/admission/admission.go",
+		"internal/processx/runner.go", "internal/workflow/engine.go"}) {
+		t.Error("the same plan reordered is treated as a new question")
+	}
+	// Grown: proposes work the person never saw.
+	if answered.Covers(condition, append([]string{"internal/sensei/mcp.go"}, answered.Scope...)) {
+		t.Error("a plan that ADDS a file is covered; growth is the direction that carries the risk")
+	}
+	// Different question entirely.
+	if answered.Covers("a different condition", answered.Scope) {
+		t.Error("an answer covers a question it was not asked")
+	}
+}
+
+// Finding 6's original hazard must stay closed: a yes for one plan must not
+// authorise a later plan touching entirely different files.
+func TestSubsetToleranceDoesNotReopenFindingSix(t *testing.T) {
+	const condition = "Sensei requires approval for this change class: human_approval_required (blast radius security)"
+	answered := Resolution{Condition: condition, Outcome: Authorize, Scope: []string{"internal/provider/provider.go"}}
+	if answered.Covers(condition, []string{"internal/workflow/engine.go", "internal/publish/publish.go"}) {
+		t.Fatal("an answer for one plan covers a plan touching entirely different files")
+	}
+}
+
+// Unknown is not everything. An answer with no recorded scope cannot be shown
+// to be about the current plan.
+func TestAnUnscopedAnswerCoversOnlyAnUnscopedQuestion(t *testing.T) {
+	const condition = "a condition"
+	unscoped := Resolution{Condition: condition, Outcome: Authorize}
+	if unscoped.Covers(condition, []string{"a.go"}) {
+		t.Error("an unscoped answer covers a scoped plan")
+	}
+	if !unscoped.Covers(condition, nil) {
+		t.Error("an unscoped answer does not cover an unscoped question")
+	}
+	scoped := Resolution{Condition: condition, Outcome: Authorize, Scope: []string{"a.go"}}
+	if scoped.Covers(condition, nil) {
+		t.Error("a scoped answer covers a plan whose scope is unknown")
+	}
+}
