@@ -293,3 +293,33 @@ func TestAnUnscopedAnswerIsNotAWildcard(t *testing.T) {
 		t.Error("an empty scope and a blank scope are different keys")
 	}
 }
+
+// Sensei derives the proposal filename by slugging the title and truncating it.
+// A discriminator past the cut is discarded, and two decisions on one condition
+// collide again -- which is what happened on 2026-08-22, after the task was
+// added to the title but placed in parentheses at the end of a fixed prefix.
+//
+// This asserts on a truncated prefix rather than the whole title, because the
+// whole title differing is exactly the property that was already true and still
+// let one record overwrite another.
+func TestTheTaskSurvivesFilenameTruncation(t *testing.T) {
+	const condition = "Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory"
+	a := Resolution{TaskID: "task-1787339771162300211", Condition: condition}
+	b := Resolution{TaskID: "task-1787362937689353807", Condition: condition}
+
+	// Sensei's slug is bounded; the exact cut is its business, so this checks a
+	// range of plausible ones rather than pinning one number.
+	for _, cut := range []int{24, 32, 48, 64, 80} {
+		if truncate(title(a), cut) == truncate(title(b), cut) {
+			t.Fatalf("titles collide when truncated to %d chars:\n  %s\n  %s",
+				cut, truncate(title(a), cut), truncate(title(b), cut))
+		}
+	}
+}
+
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n]
+}

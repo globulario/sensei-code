@@ -291,7 +291,19 @@ func title(r Resolution) string {
 	// preferable to inventing an identity: a fabricated discriminator would
 	// make two records look distinct without either being traceable.
 	if task := strings.TrimSpace(r.TaskID); task != "" {
-		return "Human authority resolution (" + task + "): " + base
+		// The task leads.
+		//
+		// It used to sit in parentheses after "Human authority resolution",
+		// which reads better and does not work: Sensei derives the proposal's
+		// FILENAME by slugging this title and truncating it, and every title
+		// beginning "Human authority resolution (task-…" truncates to the same
+		// slug. The discriminator was past the cut, so two decisions on one
+		// condition still overwrote each other -- observed on 2026-08-22, when
+		// one authorization replaced the record of another taken two hours
+		// earlier.
+		//
+		// A discriminator that a downstream truncation can discard is not one.
+		return task + " human authority resolution: " + base
 	}
 	return "Human authority resolution: " + base
 }
