@@ -455,7 +455,15 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	}
 
 	conversation := e.conversationSoFar(task, 40)
-	decision, err := e.resolveArchitecture(ctx, sc, start, taskID, task, architecturePrompt(e.Repo.Root, sensei.RepositoryDomain(workspaceStatus), config.DisplayName(e.Config.Architect.Name), task, conversation, firstText(workspaceStatus), firstText(preflight)))
+	domain := sensei.RepositoryDomain(workspaceStatus)
+	// Assembled before the architect is asked anything, and emitted, so what it
+	// was given is a record rather than an assumption.
+	retrievedEvidence, repositoryEvidence, standingContext, consulted := e.architecturalContext(ctx, sc, domain, task)
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
+	decision, err := e.resolveArchitecture(ctx, sc, start, taskID, task, architecturePrompt(
+		e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
+		firstText(workspaceStatus), firstText(preflight),
+		retrievedEvidence, repositoryEvidence, standingContext))
 	if err != nil {
 		fail(err)
 		return
@@ -1757,7 +1765,8 @@ func decodeModelJSON(text string, dst any) error {
 	return nil
 }
 
-func architecturePrompt(repoRoot, domain, architectName, task, conversation, workspaceStatus, preflight string) string {
+func architecturePrompt(repoRoot, domain, architectName, task, conversation, workspaceStatus, preflight,
+	retrievedEvidence, repositoryEvidence, standingContext string) string {
 	if strings.TrimSpace(domain) == "" {
 		domain = "(no repository domain is bound in this checkout)"
 	}
@@ -1858,7 +1867,41 @@ SENSEI WORKSPACE AUTHORITY:
 %s
 
 SENSEI PREFLIGHT:
-%s`, architectName, repoRoot, domain, conversationOrNone(conversation), task, workspaceStatus, preflight)
+This is the UNSCOPED preflight. It is thin by construction: there are no files
+to scope it to until you have written a plan. Read it as "what the graph can say
+before knowing what you will touch", not as a finding that this work is
+ungoverned. The sections below are what the graph does hold about the subject.
+%s
+
+WHAT SENSEI HOLDS ABOUT THIS SUBJECT:
+Retrieved from the graph by the task's own terms. These are the invariants,
+failure modes, forbidden fixes and tests that govern the region you are planning
+in. Plan inside them, and name any you believe the work must cross.
+%s
+
+REPOSITORY EVIDENCE:
+Read from this checkout, for the files the retrieval above pointed at. It is what
+the code currently does, not what anyone remembers it doing.
+%s
+
+WHERE THIS PROJECT STANDS:
+Folded from this session's durable record: work in flight, candidates left
+standing, decisions already taken. It is context for what you are joining, and
+it authorises nothing on its own.
+%s`, architectName, repoRoot, domain, conversationOrNone(conversation), task, workspaceStatus, preflight,
+		orNone(retrievedEvidence, "(the graph returned nothing for this subject)"),
+		orNone(repositoryEvidence, "(no repository evidence was gathered for this turn)"),
+		orNone(standingContext, "(this session has no standing work)"))
+}
+
+// orNone keeps a section from reading as truncation when it is genuinely empty.
+// A blank heading looks like a prompt that lost its content; a stated absence is
+// an answer.
+func orNone(value, absent string) string {
+	if strings.TrimSpace(value) == "" {
+		return absent
+	}
+	return value
 }
 
 func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guidance []string) string {
