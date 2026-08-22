@@ -214,7 +214,7 @@ func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
 	// architect used to be told the tools existed; a worker that does not know
 	// it can ask forms its own view of the code instead.
 	prompts := map[string]string{
-		"architect": architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf"),
+		"architect": architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", ""),
 		"worker":    implementationPrompt(testContext(), "plan", "", 1, nil),
 		"reviewer":  reviewPrompt(testReviewPacket(testContext(), "plan", "diff", "audit", "evidence")),
 	}
@@ -904,7 +904,7 @@ func TestAReadOnlyRunPublishesAndRetainsNothing(t *testing.T) {
 // The architect is told the vocabulary, and told that listing files does not
 // make a plan a modifying one.
 func TestTheArchitectIsAskedToDeclareTheMode(t *testing.T) {
-	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf")
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "")
 	for _, want := range []string{`"mode": "modify" | "inspect"`, "MODE IS REQUIRED", "changes nothing", "does not make a plan modify"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("the architect prompt is missing %q", want)
