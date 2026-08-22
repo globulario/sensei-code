@@ -165,26 +165,34 @@ func readAudits(root string, limit int, unavailable, truncated []string) ([]Audi
 			unavailable = append(unavailable, "audit "+name+": "+err.Error())
 			continue
 		}
-		out = append(out, Audit{Name: name, Findings: findingsIn(string(data), limit*2)})
+		findings, more := findingsIn(string(data), limit*2)
+		if more {
+			truncated = append(truncated, "findings in "+name)
+		}
+		out = append(out, Audit{Name: name, Findings: findings})
 	}
 	return out, unavailable, truncated
 }
 
-// findingsIn takes the finding headings. The body is deliberately left behind:
-// the brief needs to know what was found, and an architect that wants the
-// argument can open the file.
-func findingsIn(text string, limit int) []string {
-	var out []string
+// findingsIn takes the finding headings, and reports whether it left any behind.
+// The body is deliberately dropped: the brief needs to know what was found, and
+// an architect that wants the argument can open the file.
+//
+// The second return is the point. Silently keeping the first N findings would
+// hand the architect a partial list that reads as a complete one, which is the
+// same defect this package labels audits to avoid -- a bounded record
+// presenting itself as the whole picture.
+func findingsIn(text string, limit int) (found []string, more bool) {
 	for _, line := range strings.Split(text, "\n") {
 		if !strings.HasPrefix(line, "### ") {
 			continue
 		}
-		if len(out) == limit {
-			break
+		if len(found) == limit {
+			return found, true
 		}
-		out = append(out, strings.TrimSpace(strings.TrimPrefix(line, "### ")))
+		found = append(found, strings.TrimSpace(strings.TrimPrefix(line, "### ")))
 	}
-	return out
+	return found, false
 }
 
 // Render is the brief's section. It states what these records are and are not:

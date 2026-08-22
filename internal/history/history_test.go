@@ -128,3 +128,37 @@ func TestThisRepositorysOwnRecordsParse(t *testing.T) {
 	}
 	t.Logf("read %d decision(s) and %d audit(s)", len(got.Decisions), len(got.Audits))
 }
+
+// An audit longer than the cap must say findings were left behind. Keeping the
+// first N silently hands the architect a partial list that reads as complete --
+// the same defect the audit labelling exists to prevent, one level down.
+func TestDroppedFindingsAreReported(t *testing.T) {
+	root := t.TempDir()
+	var b strings.Builder
+	b.WriteString("# Audit\n")
+	for i := 0; i < 30; i++ {
+		b.WriteString("### finding number " + string(rune('a'+i%26)) + "\n")
+	}
+	write(t, root, "docs/audit/2026-01-01-big.md", b.String())
+
+	got := Gather(root, 2) // cap findings at 4
+	if len(got.Audits) != 1 {
+		t.Fatalf("audit not read: %+v", got)
+	}
+	if len(got.Audits[0].Findings) != 4 {
+		t.Fatalf("findings cap not applied: %d", len(got.Audits[0].Findings))
+	}
+	if !strings.Contains(got.Render(), "findings in 2026-01-01-big.md") {
+		t.Fatalf("dropped findings are not reported:\n%s", got.Render())
+	}
+}
+
+// And an audit within the cap must NOT claim truncation.
+func TestACompleteAuditDoesNotClaimTruncation(t *testing.T) {
+	root := t.TempDir()
+	write(t, root, "docs/audit/2026-01-01-small.md", "# A\n### one\n### two\n")
+	got := Gather(root, 6)
+	if strings.Contains(got.Render(), "more exist than are shown here") {
+		t.Fatalf("a complete audit reports itself truncated:\n%s", got.Render())
+	}
+}
