@@ -1129,3 +1129,64 @@ func TestARefusalGovernsOverAnAuthorisationThatAlsoCovers(t *testing.T) {
 		t.Fatal("the precedence between a refusal and an authorisation is not stated")
 	}
 }
+
+// The re-plan after a human answer used to receive the choice and the previous
+// escalation's summary, and nothing about the plan itself. So the architect
+// re-planned from the task rather than revising the approved plan, and produced
+// a different file list every round. Since an answer covers only a plan inside
+// what was authorised, every outward drift became a fresh question and the same
+// boundary went back to the person.
+//
+// Observed twice on 2026-08-22: seven files authorised, nine proposed next,
+// three never seen — including internal/candidate/identity.go.
+func TestTheReplanIsGivenTheScopeTheHumanAuthorised(t *testing.T) {
+	d := architectureDecision{
+		Summary: "the previous escalation",
+		Files:   []string{"internal/admission/admission.go", "internal/workflow/engine.go"},
+	}
+	prompt := humanResolutionPrompt("ORIGINAL", d, "1: Authorize")
+
+	for _, want := range []string{
+		"THE SCOPE THE HUMAN AUTHORISED",
+		"internal/admission/admission.go",
+		"internal/workflow/engine.go",
+		"Revise the plan they approved rather than",
+		"Dropping a file is free",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the re-plan prompt is missing %q", want)
+		}
+	}
+	// The original prompt and the choice must survive.
+	if !strings.Contains(prompt, "ORIGINAL") || !strings.Contains(prompt, "1: Authorize") {
+		t.Error("the re-plan lost the original prompt or the human's choice")
+	}
+}
+
+// An architect that genuinely needs more scope must be able to say so.
+// Forbidding additions outright would trade an honest question for a quiet
+// omission, which is the worse failure.
+func TestWideningIsAllowedButMustBeNamed(t *testing.T) {
+	prompt := humanResolutionPrompt("o", architectureDecision{Files: []string{"a.go"}}, "1")
+	if strings.Contains(prompt, "you may not add") {
+		t.Error("the prompt forbids widening outright, which invites a silent omission instead")
+	}
+	for _, want := range []string{"add what it needs", "files you added and why each is necessary", "wandering is not"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the prompt does not require a widening to be named: missing %q", want)
+		}
+	}
+	// And it must say what widening costs, or there is no reason not to wander.
+	if !strings.Contains(prompt, "asked again") {
+		t.Error("the prompt does not say that adding a file re-asks the human")
+	}
+}
+
+// A plan that named no files means there is no authorised set, which is not the
+// same as no constraint. A blank list would read as the latter.
+func TestAnUnscopedApprovalSaysSoRatherThanRenderingBlank(t *testing.T) {
+	prompt := humanResolutionPrompt("o", architectureDecision{}, "1")
+	if !strings.Contains(prompt, "named no files") {
+		t.Fatal("an approval with no scope renders as an empty list, which reads as no constraint")
+	}
+}

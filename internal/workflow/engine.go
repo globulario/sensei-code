@@ -2146,6 +2146,25 @@ REVIEWER:
 Return ONLY the same architecture JSON contract as before.`, task, plan, audit, review.Summary, review.Instruction())
 }
 
+// humanResolutionPrompt continues an architect whose question a person just
+// answered.
+//
+// It carries the scope that person authorised, which it did not used to. The
+// architect received the choice and the previous escalation's summary and
+// nothing about the plan itself, so it re-planned from the task rather than
+// revising the plan that was approved -- and produced a different file list
+// every round. Since an answer covers a plan that stays inside what was
+// authorised, every drift outward became a fresh question, and the same
+// boundary was put to the person again.
+//
+// Observed twice on 2026-08-22: a seven-file plan was authorised and the next
+// plan named nine, three of them never seen, including internal/candidate/
+// identity.go. The gate was right to re-ask. The drift was not necessary.
+//
+// The instruction is deliberately not "you may not add files". An architect
+// that discovers it genuinely needs more must be able to say so -- suppressing
+// that would trade an honest question for a quiet omission, which is the worse
+// failure. What it must not do is wander, and it must name what it adds.
 func humanResolutionPrompt(original string, d architectureDecision, choice string) string {
 	return fmt.Sprintf(`%s
 
@@ -2154,8 +2173,33 @@ The human selected %s.
 Apply that decision exactly. You now have architectural authority to produce a bounded implementation plan within that human choice.
 Return ONLY architecture JSON with decision="proceed" unless the human choice itself exposes a different unresolved human-owned boundary.
 
+THE SCOPE THE HUMAN AUTHORISED:
+%s
+
+This is what they saw and agreed to. Revise the plan they approved rather than
+writing a new one: keep "files" inside this set. Dropping a file is free — a
+narrower plan stays within what was authorised.
+
+Adding one is not. Every file outside this set is work the person has not seen,
+so it puts the same boundary back in front of them and they are asked again. Do
+not add a file because it might be interesting to read. If the work genuinely
+cannot be done inside this scope, add what it needs and say in "summary" which
+files you added and why each is necessary — an honest widening they can judge is
+right, and wandering is not.
+
 PREVIOUS ESCALATION:
-%s`, original, choice, d.Summary)
+%s`, original, choice, renderScope(d.Files), d.Summary)
+}
+
+// renderScope lists the authorised files, or says plainly that none were named.
+// A blank list would read as "no constraint" to a model, which is the opposite
+// of what an unscoped authorisation means.
+func renderScope(files []string) string {
+	if len(files) == 0 {
+		return "(the approved plan named no files, so there is no authorised set to stay inside; " +
+			"name the files your plan touches and expect to be asked again)"
+	}
+	return "- " + strings.Join(files, "\n- ")
 }
 
 // certifiedResolutionPrompt answers an architect that asked to escalate a
