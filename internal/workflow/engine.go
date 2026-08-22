@@ -993,19 +993,36 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if domain := start.Domain(); domain != "" {
 			auditArgs["domain"] = domain
 		}
-		// expected_head is deliberately NOT sent.
+		// expected_head is the commit this candidate was cut from, and Sensei
+		// needs it to audit a modification at all.
 		//
-		// It reads like "the commit this candidate is based on" and is not: the
-		// audit compares it against the graph's own authority commit, which is
-		// the identity of the rule snapshot. Here that snapshot belongs to the
-		// services and sensei repositories, so a sensei-code commit can never
-		// equal it, and pinning one guarantees cannot_verify on every audit
-		// forever. That is what it did.
+		// It was deliberately omitted, on a rationale that was true when written:
+		// the audit compared expected_head against the graph's own authority
+		// commit, which identifies the rule snapshot rather than the repository,
+		// so a sensei-code commit could never equal it and pinning one produced
+		// cannot_verify on every audit. Omitting it produced cannot_verify too,
+		// through the other door -- base content is read only from a
+		// caller-pinned commit, so without one a modify hunk cannot be
+		// reconstructed and the audit reports repository_context_unavailable.
+		// Both roads ended in the same place, and no candidate that modified an
+		// existing file could ever be verified.
 		//
-		// The candidate/base binding this was meant to provide is real and lives
-		// elsewhere: candidate.Identity records the exact base, and every piece
-		// of validation evidence is bound to the diff digest. Neither needs this
-		// parameter, and neither is weakened by dropping it.
+		// Sensei removed the false coupling (sensei 7bf987d4): the two name
+		// different things and are no longer compared. The remaining rules are
+		// the real ones and both still bind -- a modified file requires a
+		// caller-pinned base, and an authoritative graph requires an exact
+		// source/build commit.
+		//
+		// Measured against sensei b9ebca0c on the same diff: without this field
+		// cannot_verify/repository_context_unavailable; with it, pass/available.
+		//
+		// It is the CANDIDATE's base, not the repository's head. Once a worktree
+		// exists those differ, and auditing a candidate against a commit it was
+		// not cut from would reconstruct the wrong pre-change bytes -- which is
+		// worse than not auditing, because it would look like it worked.
+		if base := strings.TrimSpace(tc.Identity.BaseSHA); base != "" {
+			auditArgs["expected_head"] = base
+		}
 		audit, err := sc.CallTool("awareness_audit_diff", auditArgs)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("Sensei diff audit: %w", err)
