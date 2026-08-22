@@ -1190,3 +1190,59 @@ func TestAnUnscopedApprovalSaysSoRatherThanRenderingBlank(t *testing.T) {
 		t.Fatal("an approval with no scope renders as an empty list, which reads as no constraint")
 	}
 }
+
+// Sensei reads base content only from a caller-pinned commit, so without
+// expected_head a modify hunk cannot be reconstructed and every audit of a
+// changed file returned cannot_verify / repository_context_unavailable. The
+// field used to be omitted deliberately, because the audit also compared it
+// against the graph's own authority commit — which identifies the rule
+// snapshot, not the repository, so a sensei-code commit could never equal it.
+// Both roads ended at cannot_verify.
+//
+// Sensei 7bf987d4 removed that false coupling. Measured against sensei b9ebca0c
+// on one diff: without the field cannot_verify/repository_context_unavailable,
+// with it pass/available.
+func TestTheAuditIsPinnedToTheCandidatesBase(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	if !strings.Contains(body, "auditArgs") {
+		t.Fatal("the diff audit no longer builds its arguments here")
+	}
+	src := rawSource(t, "internal/workflow/engine.go")
+	if !strings.Contains(src, `auditArgs["expected_head"]`) {
+		t.Fatal("expected_head is not sent, so a modified file cannot be audited")
+	}
+	// The candidate's base, never the repository head. Once a worktree exists
+	// those differ, and auditing against a commit the candidate was not cut
+	// from reconstructs the wrong pre-change bytes — which is worse than not
+	// auditing, because it looks like it worked.
+	i := strings.Index(src, `auditArgs["expected_head"]`)
+	window := src[max0(i-260) : i+120]
+	if !strings.Contains(window, "tc.Identity.BaseSHA") {
+		t.Fatalf("expected_head is not taken from the candidate's identity:\n%s", window)
+	}
+	for _, wrong := range []string{"repositoryHead(", "start.SourceRepoCommit()", "GraphBuildCommit()"} {
+		if strings.Contains(window, wrong) {
+			t.Errorf("expected_head is taken from %s, which is not the candidate's base", wrong)
+		}
+	}
+}
+
+// An empty base must not be sent. A blank pin is not a pin, and Sensei would
+// read it as no base at all — the same cannot_verify, reached less honestly.
+func TestAnEmptyBaseIsNotSentAsAPin(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	i := strings.Index(src, `auditArgs["expected_head"]`)
+	if i < 0 {
+		t.Fatal("expected_head is not sent")
+	}
+	if !strings.Contains(src[max0(i-160):i], `!= ""`) {
+		t.Fatal("expected_head is set without checking the base is present")
+	}
+}
+
+func max0(i int) int {
+	if i < 0 {
+		return 0
+	}
+	return i
+}
