@@ -209,3 +209,51 @@ func TestClosureBudgetIsPerConditionAndPerTask(t *testing.T) {
 		t.Fatal("budgets leaked across conditions")
 	}
 }
+
+// One gap class closes with no write path at all, and it is the one the
+// architect stage can actually do.
+//
+// An inferred premise is the plan telling us nothing checked something. Closing
+// it means going and checking — reading the source — which a read-only role can
+// do in full. The claim then carries source="repository" and the gap is gone,
+// with no proposal written and no graph mutation, so the admission question
+// (dq.closure_knowledge_admission) does not arise for this class at all.
+//
+// The other class, absent coverage, cannot close this way: establishing durable
+// coverage means writing something down, and that is the open question.
+func TestAVerifiedPremiseClosesItsOwnGapWithNoWritePath(t *testing.T) {
+	const body = `{"status":"PREFLIGHT_STATUS_OK",
+		"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` + healthyAuthority + `}`
+	scoped := scopedPreflight(t, body)
+	edit := Action{Stage: StageCandidateEdit, Files: []string{"internal/event/bus.go"}}
+
+	inferred := []Claim{{
+		Statement: "no other caller depends on this signature",
+		About:     "internal/event", Source: "inference",
+	}}
+	before := routeAuthorityForAction(scoped, inferred, edit)
+	if !before.ClosesGap() {
+		t.Fatalf("an unverified premise is bounded epistemic work: %+v", before)
+	}
+
+	// The architect reads the callers and comes back with the same premise,
+	// now checked. Nothing was written anywhere.
+	verified := []Claim{{
+		Statement: "no other caller depends on this signature (grep over internal/: bus.Publish has three callers, all in internal/workflow, none taking its address)",
+		About:     "internal/event", Source: "repository",
+	}}
+	after := routeAuthorityForAction(scoped, verified, edit)
+	if !after.Granted() {
+		t.Fatalf("a verified premise did not close its gap: %+v", after)
+	}
+
+	// And the check is on the SOURCE, not on how convincing the prose is. A
+	// longer inference is still an inference.
+	dressed := []Claim{{
+		Statement: "I am confident, having considered it carefully, that no other caller depends on this signature",
+		About:     "internal/event", Source: "inference",
+	}}
+	if got := routeAuthorityForAction(scoped, dressed, edit); !got.ClosesGap() {
+		t.Fatalf("a more eloquent inference was accepted as verification: %+v", got)
+	}
+}

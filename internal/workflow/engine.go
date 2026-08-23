@@ -2353,18 +2353,26 @@ DO THIS, IN THIS ORDER:
  2. Check whether the knowledge exists elsewhere in the repository already and
     was simply not surfaced here — a sibling file, an existing contract, a
     scar, a required test, a header comment that states the rule.
- 3. Record what you established with 'sensei propose', choosing the kind that
-    fits what you actually found. Every entry must cite the evidence it rests
-    on: the file and symbol, the test that demonstrates it, the commit that
-    introduced it.
+ 3. Fold what you established back into the plan as CLAIMS with
+    source="repository", each naming the file and symbol it was read from. A
+    premise you have now verified is no longer an inferred one, and that is a
+    gap you can close here in full.
+
+YOU ARE READ-ONLY IN THIS STAGE. Do not try to write a proposal: this role runs
+without write permission, deliberately, so that investigation cannot become
+authorship. Establishing DURABLE knowledge — an anchor that survives this task
+and spares the next one — needs a write path this stage does not have, and how
+that knowledge may enter the graph without the graph becoming a mirror of what
+you asserted is an open question (dq.closure_knowledge_admission). Until it is
+settled, a coverage gap you cannot close by verification is reported, not
+papered over.
 
 DO NOT:
- - invent a rule so that the warning goes away. A proposal that is not
-   supported by something already in the repository is worse than the gap: the
-   gap is honest.
+ - invent a rule so that the warning goes away. A claim that is not supported by
+   something already in the repository is worse than the gap: the gap is honest.
  - assert that the region is safe. Absence of a finding is not a finding.
- - treat your own proposal as established knowledge. 'sensei propose' writes a
-   candidate for review; it does not move the graph, and you may not promote it.
+ - restate an inference as a repository claim. If nothing in the repository
+   shows it, its source is still "inference".
 
 IF THE GAP CANNOT BE CLOSED from evidence available to you, say so plainly and
 return decision="escalate" with a claim naming exactly what could not be

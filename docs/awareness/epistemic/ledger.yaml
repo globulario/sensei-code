@@ -11,6 +11,28 @@
 # Write with `sensei epistemic declare|hypothesize|observe|adopt`, which validate.
 version: 1
 design_questions:
+    - id: dq.closure_knowledge_admission
+      objective: 'Let a provider''s closure work reach the graph without the graph becoming a mirror of what the agent asserted (sensei-code #67)'
+      question: How does knowledge established by a closure round enter the graph, given that the agent that wrote it is the agent that would gain authority from it?
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T23:51:20Z"
+      alternatives:
+        - id: human_promotion
+          statement: 'Closure proposes a candidate and a human promotes it. Correct today, and explicitly not autonomous: the ratchet turns once per human review.'
+        - id: mechanically_derived_only
+          statement: 'A closure round may only establish anchors an extractor can derive from the repository — code symbols, imports, test-to-symbol edges — never an authored rule. No judgment is involved, so self-approval does not arise. Autonomous but narrow: it cannot state why anything matters.'
+        - id: independent_verification
+          statement: The agent authors the claim and a different provider verifies it against the source; agreement admits it. Autonomous, but two models agreeing is not evidence, and this is the self-confirmation shape the epistemic lane already counts rather than trusts.
+        - id: future_only
+          statement: Closure knowledge is admitted, but may never be the anchor that covers the region it was written to unblock. The current task still stops; the next task over that region does not. Self-approval is structurally impossible because the author never benefits from its own writing.
+      constraints:
+        - brief:item 8 — if an agent meets a blind spot, invents a rule, writes it, the rule removes the blind spot, and the agent receives authority, the route has merely automated self-approval
+        - observed:sensei propose writes a candidate under docs/awareness/candidates/; preflight changes only after promotion into canonical YAML and a domain rebuild, both human-gated today
+        - observed:the manual demonstration in this PR needed a human to commit the corpus and run sensei build — that human step is the current anti-self-certification guard
+      consequences:
+        - effect: changes what a closure round may cause; no existing invariant, gate or approval semantics moves either way
+          reversible: true
+      notes: 'Declared because the autonomous ratchet stops here, not on an implementation detail. Two blockers were found by trying: (1) the closure round is wired into the ARCHITECT stage, which runs --permission-mode plan and is read-only by design, so it cannot write a proposal at all; (2) even a written proposal is a candidate, and only promotion plus rebuild moves the graph. Blocker 1 is a defect in this PR''s wiring. Blocker 2 is this question.'
     - id: dq.consequence_blind_spot_authority
       objective: Stop a knowledge signal from overriding the channel that weighs consequence (sensei-code CLOSE_GAP slice)
       question: May a consequence-type blind spot be left to the risk gate, when that gate has already classified the same region APPROVAL_GATE_NONE?
