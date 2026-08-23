@@ -140,7 +140,7 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 
 	// A registered MCP server whose tools an agent cannot call is not access to
 	// Sensei, so it is reported here rather than only in `sensei-code mcp`.
-	for _, access := range mcpconfig.Describe(repo, cfg.Sensei.Args) {
+	for _, access := range mcpconfig.Describe(repo, cfg.Sensei.Args, cfg.SenseiAddressIsStated()) {
 		check := Check{Name: "mcp:" + string(access.Agent), Detail: string(access.State)}
 		switch access.State {
 		case mcpconfig.Configured:
@@ -153,6 +153,15 @@ func Run(ctx context.Context, repo string, cfg config.Config) Report {
 			// produces a plan built without the graph, which is what happened.
 			check.Status = Fail
 			check.Detail += " · " + access.Detail + " · fix with: sensei-code mcp " + string(access.Agent)
+		case mcpconfig.Unproven:
+			// Not a fault, and emphatically not a prescription. Two addresses
+			// differ and nothing has established which is authoritative here,
+			// so the honest report is the disagreement. Naming a "fix" would
+			// be telling the operator to rewrite a possibly-correct entry to
+			// match a built-in default, which is how a working configuration
+			// gets broken.
+			check.Status = Unproven
+			check.Detail += " · " + access.Detail
 		case mcpconfig.Unknown:
 			check.Status = Warn
 		default:

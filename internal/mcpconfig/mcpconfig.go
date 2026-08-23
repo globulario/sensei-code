@@ -73,6 +73,24 @@ const (
 	// whether an entry existed, so `doctor` said configured while every
 	// awareness call an agent made failed.
 	Stale State = "stale"
+	// Unproven is an entry that names a different address than the one Sensei
+	// Code happens to be using, where nothing has established which is right.
+	//
+	// It is not Stale, and the difference is the whole point. Stale is a claim:
+	// the repository states an endpoint and this entry disagrees with it.
+	// Unproven says only that two addresses differ and no authority has spoken
+	// — which is the true situation whenever Sensei Code is running on its
+	// built-in default, because a default is a starting point, not a statement
+	// about this repository.
+	//
+	// It exists because this happened. `doctor` reported an entry pointing at
+	// the correct, authoritative graph as Stale, on the sole basis that it
+	// disagreed with a hardcoded fallback, and prescribed a repair that
+	// repointed both agents at a two-day-old graph serving a DIFFERENT
+	// repository's domain. The operator followed the prescription and the
+	// system became more wrong. A diagnostic that cannot distinguish
+	// configured from certified will confidently break a working setup.
+	Unproven State = "unproven"
 )
 
 // ReadOnlyTools are the Sensei surfaces an agent needs to consult the graph.
@@ -120,12 +138,22 @@ func awarenessAddress(args []string) string {
 // default, which may well be right, and calling that stale would report every
 // hand-written entry as broken. What is reported is a stated address that
 // disagrees.
-func addressDrift(have, want []string) string {
+func addressDrift(have, want []string, wantIsStated bool) (State, string) {
 	h, w := awarenessAddress(have), awarenessAddress(want)
 	if w == "" || h == "" || h == w {
-		return ""
+		return "", ""
 	}
-	return "points at " + h + "; this repository certifies against " + w +
+	if !wantIsStated {
+		// Two addresses differ and nothing here has said which is right. The
+		// honest report is the disagreement, not a verdict — and emphatically
+		// not a repair, because rewriting a working entry to match a fallback
+		// is how a correct configuration gets broken.
+		return Unproven, "points at " + h + "; Sensei Code is using " + w +
+			", which is its built-in default rather than a choice this repository stated" +
+			" — nothing establishes which graph is authoritative here, so this is reported, not repaired." +
+			" Set the endpoint in .sensei-code/config.json to make it checkable"
+	}
+	return Stale, "points at " + h + "; this repository is configured for " + w +
 		" — the agent would consult a different graph than the run delegating to it"
 }
 
@@ -141,20 +169,20 @@ type Status struct {
 // Describe reports every agent's Sensei access without changing anything.
 // Describe reports each agent's access. want is the orchestrator's own Sensei
 // argv, so a divergent entry can be named rather than merely counted.
-func Describe(repoRoot string, want []string) []Status {
+func Describe(repoRoot string, want []string, wantIsStated bool) []Status {
 	out := make([]Status, 0, len(Ordered))
 	for _, a := range Ordered {
-		out = append(out, describe(repoRoot, a, want))
+		out = append(out, describe(repoRoot, a, want, wantIsStated))
 	}
 	return out
 }
 
-func describe(repoRoot string, a Agent, want []string) Status {
+func describe(repoRoot string, a Agent, want []string, wantIsStated bool) Status {
 	switch a {
 	case Claude:
-		return describeClaude(repoRoot, want)
+		return describeClaude(repoRoot, want, wantIsStated)
 	case Codex:
-		return describeCodex(want)
+		return describeCodex(want, wantIsStated)
 	case Antigravity:
 		return Status{
 			Agent:  Antigravity,
@@ -178,7 +206,7 @@ type claudeServer struct {
 	Args    []string `json:"args,omitempty"`
 }
 
-func describeClaude(repoRoot string, want []string) Status {
+func describeClaude(repoRoot string, want []string, wantIsStated bool) Status {
 	path := claudePath(repoRoot)
 	st := Status{Agent: Claude, Path: path}
 	b, err := os.ReadFile(path)
@@ -206,8 +234,8 @@ func describeClaude(repoRoot string, want []string) Status {
 	}
 	st.Command = server.Command
 	st.Detail = resolvable(server.Command)
-	if drift := addressDrift(server.Args, want); drift != "" {
-		st.State = Stale
+	if state, drift := addressDrift(server.Args, want, wantIsStated); drift != "" {
+		st.State = state
 		st.Detail = drift
 		return st
 	}
@@ -225,7 +253,7 @@ func codexPath() (string, error) {
 	return filepath.Join(home, ".codex", "config.toml"), nil
 }
 
-func describeCodex(want []string) Status {
+func describeCodex(want []string, wantIsStated bool) Status {
 	st := Status{Agent: Codex}
 	path, err := codexPath()
 	if err != nil {
@@ -255,8 +283,8 @@ func describeCodex(want []string) Status {
 	// Drift is reported ahead of the allowlist. Both make the entry unusable,
 	// and only one of them explains why every awareness call an agent makes
 	// comes back as a transport failure.
-	if drift := addressDrift(codexServerArgs(string(b)), want); drift != "" {
-		st.State = Stale
+	if state, drift := addressDrift(codexServerArgs(string(b)), want, wantIsStated); drift != "" {
+		st.State = state
 		st.Detail = drift
 		return st
 	}
@@ -381,16 +409,22 @@ func resolvable(command string) string {
 // Reconciliation happens here rather than in describe because this is an
 // explicit action a person took. Reading the configuration reports the
 // divergence; it does not repair it behind them.
-func Configure(repoRoot string, a Agent, command string, args []string) (Status, error) {
-	current := describe(repoRoot, a, args)
+func Configure(repoRoot string, a Agent, command string, args []string, wantIsStated bool) (Status, error) {
+	current := describe(repoRoot, a, args, wantIsStated)
 	switch current.State {
 	case Configured:
 		return current, nil
+	case Unproven:
+		// Refusing is the repair. Rewriting a working entry to match a
+		// built-in default is precisely how a correct configuration gets
+		// broken, and it has happened: both agents were repointed at another
+		// repository's graph because a fallback was mistaken for a decision.
+		return current, fmt.Errorf("%s: %s", Label(a), current.Detail)
 	case Stale:
 		if err := reconcileAddress(repoRoot, a, args); err != nil {
 			return current, fmt.Errorf("%s: %s: %w", Label(a), current.Detail, err)
 		}
-		return describe(repoRoot, a, args), nil
+		return describe(repoRoot, a, args, wantIsStated), nil
 	case Unknown:
 		return current, fmt.Errorf("%s: %s", Label(a), current.Detail)
 	case Partial:
@@ -402,7 +436,7 @@ func Configure(repoRoot string, a Agent, command string, args []string) (Status,
 		if err := allowCodexTools(); err != nil {
 			return current, err
 		}
-		return describe(repoRoot, a, args), nil
+		return describe(repoRoot, a, args, wantIsStated), nil
 	}
 	var err error
 	switch a {
@@ -416,7 +450,7 @@ func Configure(repoRoot string, a Agent, command string, args []string) (Status,
 	if err != nil {
 		return current, err
 	}
-	return describe(repoRoot, a, args), nil
+	return describe(repoRoot, a, args, wantIsStated), nil
 }
 
 // reconcileAddress rewrites only --awareness-addr in an existing entry.

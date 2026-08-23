@@ -43,7 +43,7 @@ func InspectRepository(ctx context.Context, repoRoot string, cfg config.Config) 
 	report := Inspect(ctx, options)
 	// Agent access is part of readiness: a registered server whose tools an
 	// agent cannot call is not access to Sensei.
-	for _, access := range mcpconfig.Describe(repoRoot, cfg.Sensei.Args) {
+	for _, access := range mcpconfig.Describe(repoRoot, cfg.Sensei.Args, cfg.SenseiAddressIsStated()) {
 		report.Checks = append(report.Checks, mcpCheck(repoRoot, cfg, access))
 	}
 	return report
@@ -54,6 +54,13 @@ func mcpCheck(repoRoot string, cfg config.Config, access mcpconfig.Status) Check
 	switch access.State {
 	case mcpconfig.Configured:
 		c.State = OK
+	case mcpconfig.Unproven:
+		// Degraded, with no Repair. A repair here would rewrite an entry that
+		// may well be the correct one, on the authority of a default.
+		c.State = Degraded
+		c.Detail = access.Detail
+		c.Symptom = "nothing establishes which graph is authoritative for this repository, so neither address can be called wrong"
+		c.Fix = "state the endpoint in .sensei-code/config.json, then re-run"
 	case mcpconfig.Unknown:
 		c.State = Degraded
 		c.Detail = access.Detail
@@ -63,7 +70,7 @@ func mcpCheck(repoRoot string, cfg config.Config, access mcpconfig.Status) Check
 		c.Fix = "sensei-code mcp " + string(access.Agent)
 		agent := access.Agent
 		c.Repair = func(ctx context.Context) error {
-			_, err := mcpconfig.Configure(repoRoot, agent, cfg.Sensei.Command, cfg.Sensei.Args)
+			_, err := mcpconfig.Configure(repoRoot, agent, cfg.Sensei.Command, cfg.Sensei.Args, cfg.SenseiAddressIsStated())
 			return err
 		}
 	}
