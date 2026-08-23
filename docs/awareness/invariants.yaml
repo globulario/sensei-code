@@ -415,3 +415,17 @@ invariants:
       - internal/doctor/doctor_test.go:TestAuthenticationAloneIsNotReadiness
       - internal/doctor/doctor_test.go:TestTheDiagnosticSpendsNoProviderQuota
     contract: doctor projects confirmed provider state and never spends provider quota to establish it
+  - id: sensei_code.event_bus.subscriber_channel_lifetime_is_the_lock
+    title: A subscriber channel is closed only under the write lock Publish reads under
+    status: active
+    description: 'Bus.Publish sends to each subscriber while holding RLock; the cancel returned by Subscribe deletes the entry and closes the channel while holding Lock. Those are mutually exclusive, so a subscriber channel can never be closed while a send to it is in flight. That mutual exclusion — not the map — is what the RWMutex is protecting: Go panics on a send to a closed channel, and the lock discipline is the only thing preventing it.'
+    protects:
+      files:
+        - internal/event/bus.go
+    required_tests:
+      - internal/event/bus_test.go:TestCancelClosesTheChannelAndPublishSkipsIt
+    evidence:
+      - internal/event/bus.go:33 Publish holds b.mu.RLock() for the whole send loop
+      - internal/event/bus.go:22 the cancel closure takes b.mu.Lock() before close(c)
+      - internal/event/bus_test.go:TestCancelClosesTheChannelAndPublishSkipsIt passes under -race
+    contract: Bus.Publish and the Subscribe cancel closure are mutually exclusive; a subscriber channel is never closed while a send to it is in flight
