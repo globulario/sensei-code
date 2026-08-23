@@ -23,6 +23,8 @@ design_questions:
           statement: The blind-spot channel is a second, independent consequence opinion and both must agree before an unattended edit; the 22 files keep stopping at a human
         - id: narrow_by_signal
           statement: 'Distinguish the three signals: severity=critical is graph knowledge and defers to the gate, while security-namespace and high-risk-path remain independent stops'
+        - id: requires_assessment
+          statement: 'A consequence-bearing blind spot neither grants nor escalates. It requires the consequence boundary of the PROPOSED ACTION to be established: bounded or reversible consequences continue in the technical lane, unacceptable or insufficiently bounded consequences reach human authority, and a boundary that cannot be established at all is CANNOT_ESTABLISH. Signal is not verdict — the same file carries different consequences under an isolated worktree, a release, and a state migration, so the path cannot be the authority unit.'
       constraints:
         - measured:22 of 26 OK files carry gate=APPROVAL_GATE_NONE and escalate anyway on high-risk-directory or severity=critical
         - measured:10 of 10 recorded contract_unknown authority receipts in this repository name this identical condition
