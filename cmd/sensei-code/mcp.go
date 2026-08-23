@@ -15,18 +15,18 @@ import (
 // through Sensei Code, so what the agent sees is what Sensei actually said.
 func runMCP(repo gitx.Repo, cfg config.Config, args []string) error {
 	if len(args) == 0 {
-		printMCPStatus(repo.Root, cfg.Sensei.Args)
+		printMCPStatus(repo.Root, cfg.Sensei.Args, cfg.SenseiAddressIsStated())
 		return nil
 	}
 	target := strings.ToLower(strings.TrimSpace(args[0]))
 	if target == "all" {
 		var failures []string
 		for _, agent := range mcpconfig.Ordered {
-			if _, err := mcpconfig.Configure(repo.Root, agent, cfg.Sensei.Command, cfg.Sensei.Args); err != nil {
+			if _, err := mcpconfig.Configure(repo.Root, agent, cfg.Sensei.Command, cfg.Sensei.Args, cfg.SenseiAddressIsStated()); err != nil {
 				failures = append(failures, err.Error())
 			}
 		}
-		printMCPStatus(repo.Root, cfg.Sensei.Args)
+		printMCPStatus(repo.Root, cfg.Sensei.Args, cfg.SenseiAddressIsStated())
 		if len(failures) != 0 {
 			return fmt.Errorf("%s", strings.Join(failures, "; "))
 		}
@@ -36,7 +36,7 @@ func runMCP(repo gitx.Repo, cfg config.Config, args []string) error {
 	if err != nil {
 		return err
 	}
-	status, err := mcpconfig.Configure(repo.Root, agent, cfg.Sensei.Command, cfg.Sensei.Args)
+	status, err := mcpconfig.Configure(repo.Root, agent, cfg.Sensei.Command, cfg.Sensei.Args, cfg.SenseiAddressIsStated())
 	if err != nil {
 		return err
 	}
@@ -56,9 +56,9 @@ func parseAgent(value string) (mcpconfig.Agent, error) {
 	return "", fmt.Errorf("unknown agent %q; use codex, claude, antigravity, or all", value)
 }
 
-func printMCPStatus(repoRoot string, want []string) {
+func printMCPStatus(repoRoot string, want []string, stated bool) {
 	fmt.Fprintln(os.Stdout, "Sensei MCP access per agent")
-	for i, status := range mcpconfig.Describe(repoRoot, want) {
+	for i, status := range mcpconfig.Describe(repoRoot, want, stated) {
 		fmt.Printf("  %d. %-22s %s\n", i+1, mcpconfig.Label(status.Agent), formatMCP(status))
 		if status.Path != "" {
 			fmt.Printf("     %s\n", status.Path)

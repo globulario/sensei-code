@@ -62,10 +62,40 @@ type Config struct {
 	Behavioral  behavioral.Config `json:"behavioral"`
 	Permissions Permissions       `json:"permissions"`
 	Validation  Validation        `json:"validation"`
+
+	// Source records where this configuration came from. It is not persisted:
+	// it is a fact about THIS load, not about the file.
+	//
+	// It exists because a diagnostic that cannot tell a repository's stated
+	// choice from a built-in fallback will report the fallback as though the
+	// repository had asserted it. That is how `doctor` came to announce that
+	// this repository "certifies against" an address nothing here had ever
+	// named, and prescribe a repair that pointed agents at another
+	// repository's graph.
+	Source Source `json:"-"`
 }
+
+// Source is the provenance of a loaded configuration.
+type Source string
+
+const (
+	// FromRepository means .sensei-code/config.json supplied the values.
+	FromRepository Source = "repository"
+	// FromDefault means no configuration exists and the built-in values are in
+	// use. A default is a starting point, never evidence about the repository.
+	FromDefault Source = "default"
+)
+
+// SenseiAddressIsStated reports whether the Sensei endpoint in use was chosen
+// for this repository, rather than inherited from the built-in default.
+//
+// Callers use it to decide whether a divergent agent entry is drift or merely
+// unproven: without a stated address there is nothing to be drifting FROM.
+func (c Config) SenseiAddressIsStated() bool { return c.Source == FromRepository }
 
 func Default() Config {
 	var c Config
+	c.Source = FromDefault
 	c.Sensei.Command = "awareness-mcp"
 	c.Sensei.Args = []string{"--awareness-addr", "localhost:10120"}
 	// ChatGPT is the first-version architectural authority, and it is the agent
@@ -179,7 +209,9 @@ func Load(repo string) (Config, error) {
 	p := Path(repo)
 	b, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return Default(), nil
+		d := Default()
+		d.Source = FromDefault
+		return d, nil
 	}
 	if err != nil {
 		return Config{}, err
@@ -196,6 +228,7 @@ func Load(repo string) (Config, error) {
 	if c.Workflow.ReviewCycles < 1 {
 		c.Workflow.ReviewCycles = 1
 	}
+	c.Source = FromRepository
 	return c, nil
 }
 

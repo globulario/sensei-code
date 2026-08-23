@@ -103,3 +103,19 @@ failure_modes:
       - internal/provider/chatgpt_session.go AskFork was reached for req.Role == Reviewer
       - the reviewer verdict carried no candidate identity, so it could also be carried onto a later revision
     contract: an independent review is independent of the session, the author, and the revision it did not read
+  - id: failure.diagnostic_elevates_a_configured_default_into_a_claim_of_cer
+    title: Diagnostic elevates a configured default into a claim of certified repository authority
+    description: A default is a starting point, not a statement about the repository. doctor compared each agent's MCP endpoint against config.Sensei.Args without knowing whether that address came from .sensei-code/config.json or from config.Default(), and reported the difference as 'this repository certifies against <default>'. Configured is not certified, reachable is not authoritative, and a default is not discovered truth.
+    protects:
+      files:
+        - internal/mcpconfig/mcpconfig.go
+        - internal/doctor/doctor.go
+    related_invariants:
+      - sensei_code.evidence.counts_carry_their_provenance
+    required_tests:
+      - internal/mcpconfig/mcpconfig_test.go:TestADefaultAddressIsNotEvidenceThatAnEntryIsStale
+      - internal/mcpconfig/mcpconfig_test.go:TestConfigureRefusesToRewriteAnEntryOnTheAuthorityOfADefault
+    evidence:
+      - doctor reported 'this repository certifies against localhost:10120', an address supplied only by config.Default()
+      - the entry it called stale pointed at localhost:10122, the authoritative graph for this repository's domain
+      - the prescribed repair 'sensei-code mcp codex' was followed and repointed both agents at a two-day-old graph serving github.com/globulario/services; the system became more wrong by following the diagnostic

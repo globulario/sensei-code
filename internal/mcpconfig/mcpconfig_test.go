@@ -40,7 +40,7 @@ func TestClaudeMissingWhenServerAbsent(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(`{"mcpServers":{}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := describeClaude(dir, nil).State; got != Missing {
+	if got := describeClaude(dir, nil, true).State; got != Missing {
 		t.Fatalf("state = %q, want %q", got, Missing)
 	}
 }
@@ -51,7 +51,7 @@ func TestConfigureClaudeAddsServerAndPreservesOthers(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"mcpServers":{"other":{"command":"keep-me"}}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	st, err := Configure(dir, Claude, "awareness-mcp", []string{"--awareness-addr", "localhost:10120"})
+	st, err := Configure(dir, Claude, "awareness-mcp", []string{"--awareness-addr", "localhost:10120"}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -74,7 +74,7 @@ func TestConfigureLeavesAnExistingEntryAlone(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := Configure(dir, Claude, "awareness-mcp", nil); err != nil {
+	if _, err := Configure(dir, Claude, "awareness-mcp", nil, true); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(path)
@@ -138,12 +138,12 @@ func TestAnEntryPointingElsewhereIsStaleRatherThanConfigured(t *testing.T) {
 	want := []string{"--awareness-addr", "localhost:10122"}
 
 	write("localhost:10122")
-	if got := describeClaude(dir, want).State; got != Configured {
+	if got := describeClaude(dir, want, true).State; got != Configured {
 		t.Fatalf("an entry pointing at the certified endpoint = %q, want configured", got)
 	}
 
 	write("localhost:10120")
-	got := describeClaude(dir, want)
+	got := describeClaude(dir, want, true)
 	if got.State != Stale {
 		t.Fatalf("an entry pointing elsewhere = %q, want stale", got.State)
 	}
@@ -163,11 +163,11 @@ func TestAnEntryWithNoStatedAddressIsNotStale(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := describeClaude(dir, []string{"--awareness-addr", "localhost:10122"}).State; got != Configured {
+	if got := describeClaude(dir, []string{"--awareness-addr", "localhost:10122"}, true).State; got != Configured {
 		t.Fatalf("an entry stating no address = %q, want configured", got)
 	}
 	// And a caller that states no address of its own cannot judge drift.
-	if got := describeClaude(dir, nil).State; got != Configured {
+	if got := describeClaude(dir, nil, true).State; got != Configured {
 		t.Fatalf("with nothing to compare against = %q, want configured", got)
 	}
 }
@@ -181,7 +181,7 @@ func TestReconcilingTheAddressLeavesTheRestOfTheEntryAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []string{"--awareness-addr", "localhost:10122"}
-	if _, err := Configure(dir, Claude, "awareness-mcp", want); err != nil {
+	if _, err := Configure(dir, Claude, "awareness-mcp", want, true); err != nil {
 		t.Fatalf("reconcile: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
@@ -197,7 +197,7 @@ func TestReconcilingTheAddressLeavesTheRestOfTheEntryAlone(t *testing.T) {
 	if strings.Contains(got, "localhost:10120") {
 		t.Fatalf("the stale address survived: %s", got)
 	}
-	if got := describeClaude(dir, want).State; got != Configured {
+	if got := describeClaude(dir, want, true).State; got != Configured {
 		t.Fatalf("after reconciliation = %q, want configured", got)
 	}
 }
@@ -214,5 +214,91 @@ func TestReplacingAnAddressDoesNotAccumulateFlags(t *testing.T) {
 	}
 	if got := replaceAddress([]string{"--awareness-addr=a:1"}, "b:2"); got[0] != "--awareness-addr=b:2" {
 		t.Fatalf("the joined form was not rewritten: %v", got)
+	}
+}
+
+// A built-in default is not evidence about the repository.
+//
+// This is the defect that made doctor dangerous: it reported an entry pointing
+// at the correct, authoritative graph as stale, purely because that address
+// disagreed with a hardcoded fallback, and prescribed a repair that repointed
+// both agents at a two-day-old graph serving another repository's domain. The
+// operator followed the prescription and the system became more wrong.
+func TestADefaultAddressIsNotEvidenceThatAnEntryIsStale(t *testing.T) {
+	dir := t.TempDir()
+	writeClaudeConfig(t, dir, "localhost:10122")
+
+	unstated := describeClaude(dir, []string{"--awareness-addr", "localhost:10120"}, false)
+	if unstated.State == Stale {
+		t.Fatal("an entry was called stale on the authority of a built-in default")
+	}
+	if unstated.State != Unproven {
+		t.Fatalf("state=%q, want unproven: two addresses differ and nothing has established which is right", unstated.State)
+	}
+	for _, want := range []string{"localhost:10122", "localhost:10120", "built-in default", "reported, not repaired"} {
+		if !strings.Contains(unstated.Detail, want) {
+			t.Fatalf("the finding does not say %q: %s", want, unstated.Detail)
+		}
+	}
+	if strings.Contains(unstated.Detail, "certifies") {
+		t.Fatal("the finding still claims the repository certified something it never stated")
+	}
+
+	// The same divergence, once the repository has actually stated an address,
+	// is real drift and is reported as such.
+	stated := describeClaude(dir, []string{"--awareness-addr", "localhost:10120"}, true)
+	if stated.State != Stale {
+		t.Fatalf("state=%q, want stale once the repository states its endpoint", stated.State)
+	}
+	if strings.Contains(stated.Detail, "certifies") {
+		t.Fatal("a configured endpoint is still being described as certified")
+	}
+}
+
+// Refusing is the repair. Rewriting a working entry to match a fallback is how
+// a correct configuration gets broken.
+func TestConfigureRefusesToRewriteAnEntryOnTheAuthorityOfADefault(t *testing.T) {
+	dir := t.TempDir()
+	writeClaudeConfig(t, dir, "localhost:10122")
+	before, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, refusal := Configure(dir, Claude, "awareness-mcp", []string{"--awareness-addr", "localhost:10120"}, false)
+	if refusal == nil {
+		t.Fatal("Configure rewrote an entry although nothing established which graph is authoritative")
+	}
+	if status.State != Unproven {
+		t.Fatalf("state=%q, want unproven", status.State)
+	}
+	after, err := os.ReadFile(filepath.Join(dir, ".mcp.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) {
+		t.Fatal("the entry was modified despite the refusal")
+	}
+	if !strings.Contains(refusal.Error(), ".sensei-code/config.json") {
+		t.Fatalf("the refusal does not say how to make it checkable: %v", refusal)
+	}
+}
+
+// An agreeing entry is configured whatever the provenance: there is no
+// disagreement to adjudicate.
+func TestAnAgreeingEntryIsConfiguredRegardlessOfProvenance(t *testing.T) {
+	dir := t.TempDir()
+	writeClaudeConfig(t, dir, "localhost:10120")
+	for _, stated := range []bool{true, false} {
+		if got := describeClaude(dir, []string{"--awareness-addr", "localhost:10120"}, stated); got.State != Configured {
+			t.Fatalf("stated=%v: state=%q, want configured", stated, got.State)
+		}
+	}
+}
+
+func writeClaudeConfig(t *testing.T, dir, addr string) {
+	t.Helper()
+	body := `{"mcpServers":{"sensei":{"command":"awareness-mcp","args":["--awareness-addr","` + addr + `"]}}}`
+	if err := os.WriteFile(filepath.Join(dir, ".mcp.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

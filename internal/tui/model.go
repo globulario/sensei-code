@@ -347,7 +347,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Batch(cmds...)
 			}
 			m.mcpMenu = false
-			status, err := mcpconfig.Configure(m.engine.Repo.Root, agent, m.engine.Config.Sensei.Command, m.engine.Config.Sensei.Args)
+			status, err := mcpconfig.Configure(m.engine.Repo.Root, agent, m.engine.Config.Sensei.Command, m.engine.Config.Sensei.Args, m.engine.Config.SenseiAddressIsStated())
 			if err != nil {
 				m.lines = append(m.lines, errorStyle.Render("✗ MCP"), "  "+mcpconfig.Label(agent)+": "+err.Error(), "")
 			} else {
@@ -687,7 +687,7 @@ func (m Model) View() tea.View {
 	case m.pending != nil:
 		composer = renderAuthority(*m.pending, inner)
 	case m.mcpMenu:
-		composer = renderMCP(m.engine.Repo.Root, m.engine.Config.Sensei.Args, inner)
+		composer = renderMCP(m.engine.Repo.Root, m.engine.Config.Sensei.Args, m.engine.Config.SenseiAddressIsStated(), inner)
 	case m.loginMenu:
 		composer = renderProviderLogin(inner)
 	default:
@@ -977,11 +977,11 @@ func mcpAgentFor(key string) (mcpconfig.Agent, bool) {
 // renderMCP shows where each agent gets Sensei from. An agent whose
 // configuration Sensei Code cannot read is shown as unknown rather than as
 // working, because an unverified route to Sensei is not a route to Sensei.
-func renderMCP(repoRoot string, want []string, width int) string {
+func renderMCP(repoRoot string, want []string, stated bool, width int) string {
 	var b strings.Builder
 	b.WriteString(architectStyle.Render("Sensei MCP access"))
 	b.WriteString("\n\nEach agent reaches Sensei through its own MCP configuration, so what it\nsees is what Sensei said. Sensei Code never answers for Sensei.\n")
-	for i, status := range mcpconfig.Describe(repoRoot, want) {
+	for i, status := range mcpconfig.Describe(repoRoot, want, stated) {
 		mark := dimStyle.Render("○")
 		switch status.State {
 		case mcpconfig.Configured:
