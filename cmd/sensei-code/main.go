@@ -71,6 +71,8 @@ func main() {
 		case "handoff":
 			fatalIf(runHandoff(os.Args[2:]))
 			return
+		case "run":
+			os.Exit(runGoverned(ctx, repo, cfg, os.Args[2:]))
 		case "routine-scan":
 			fatalIf(runRoutineScan(ctx, repo, cfg, os.Args[2:]))
 			return
@@ -129,6 +131,7 @@ func printUsage() {
 
 Usage:
   sensei-code             launch the ChatGPT architect workspace
+  sensei-code run         run one governed task headlessly (same engine as /run)
   sensei-code init        create the local capability/provider configuration
   sensei-code doctor      verify Git, providers, and the Sensei MCP surface
   sensei-code providers   show provider installation/authentication state
@@ -138,6 +141,12 @@ Usage:
   sensei-code handoff     bind agent continuity to an exact context packet
   sensei-code help        show this help
   sensei-code --version   print the Sensei Code version
+
+Headless governed run:
+  sensei-code run --task "..."      exit 0 complete · 1 failed · 3 awaiting human
+                                    authority · 4 stopped · 5 timed out
+  --json      emit the event stream as JSONL
+  --timeout   give up after a duration, leaving the candidate in place
 
 Inside the TUI:
   normal text             talk to the persistent ChatGPT architect
