@@ -157,3 +157,57 @@ func TestTheTenTimesRepeatedInterruptionIsStillHuman(t *testing.T) {
 		t.Fatalf("specimen no longer reproduces the two-channel contradiction: gate=%q", scoped.ChangeRisk.Gate())
 	}
 }
+
+// The ratchet, measured on a real file against a real graph.
+//
+// internal/event/bus.go was one of the 84 EMPTY files. The gap was closed by
+// reading the code — Publish sends under RLock, the Subscribe cancel closes
+// under Lock, so a subscriber channel is never closed mid-send, and that
+// mutual exclusion is what the RWMutex is actually protecting. The invariant
+// and its test were recorded through `sensei propose`, the corpus was
+// committed (the publish path REFUSED an uncommitted corpus: it would certify
+// a revision while shipping bytes that revision does not contain), and the
+// domain was rebuilt.
+//
+// Live preflight against the isolated graph, same file, before and after:
+//
+//	before  PREFLIGHT_STATUS_EMPTY  anchors=0  "no anchored rules apply"
+//	after   PREFLIGHT_STATUS_OK     anchors=1  invariant surfaced by id
+//
+// The coverage gap does not recur. That is the ratchet: ignorance was
+// converted into durable knowledge, and the next task over this region does
+// not ask the same question.
+//
+// What it did NOT reach is a grant, and this test says so rather than rounding
+// up. The file sits under a high-risk directory, so it now stops on a
+// CONSEQUENCE signal — a different question, correctly classified, and the one
+// dq.consequence_blind_spot_authority decides.
+func TestClosingARealGapChangesTheRouteAndDoesNotRecur(t *testing.T) {
+	const risk = `"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},`
+
+	before := routeAuthority(scopedPreflight(t,
+		`{"status":"PREFLIGHT_STATUS_EMPTY","blind_spots":["graph indexes this area but no anchored rules apply to the request"],`+
+			risk+healthyAuthority+`}`), nil)
+	if !before.ClosesGap() {
+		t.Fatalf("before: %+v", before)
+	}
+
+	after := routeAuthority(scopedPreflight(t,
+		`{"status":"PREFLIGHT_STATUS_OK","blind_spots":["file path under high-risk directory"],`+
+			risk+healthyAuthority+`}`), nil)
+
+	// The ratchet: the coverage gap is gone and cannot come back for this file.
+	if after.ClosesGap() {
+		t.Fatal("the same coverage gap recurred after the knowledge was established; the ratchet did not hold")
+	}
+	// And the honest limit: it stops for a different reason, not for none.
+	if !after.RequiresHuman() {
+		t.Fatalf("after: %+v", after)
+	}
+	if after.Condition == before.Condition {
+		t.Fatal("the condition did not change; closing the gap changed nothing the router can see")
+	}
+	if after.Granted() {
+		t.Fatal("closing a knowledge gap must not by itself produce a grant")
+	}
+}
