@@ -25,6 +25,8 @@ design_questions:
           statement: The agent authors the claim and a different provider verifies it against the source; agreement admits it. Autonomous, but two models agreeing is not evidence, and this is the self-confirmation shape the epistemic lane already counts rather than trusts.
         - id: future_only
           statement: Closure knowledge is admitted, but may never be the anchor that covers the region it was written to unblock. The current task still stops; the next task over that region does not. Self-approval is structurally impossible because the author never benefits from its own writing.
+        - id: independent_admission
+          statement: 'Separate discovery from establishment. The agent may discover candidate knowledge and may propose it; an independent admission boundary — evidential, not necessarily another model and not necessarily a human — must establish it before it counts; and only established knowledge may alter authority. Whether the SAME run may then benefit, or only later ones, is left open inside this alternative rather than decided by it: the load-bearing claim is that authority-increasing knowledge crosses an independent boundary, not that it waits.'
       constraints:
         - brief:item 8 — if an agent meets a blind spot, invents a rule, writes it, the rule removes the blind spot, and the agent receives authority, the route has merely automated self-approval
         - observed:sensei propose writes a candidate under docs/awareness/candidates/; preflight changes only after promotion into canonical YAML and a domain rebuild, both human-gated today
