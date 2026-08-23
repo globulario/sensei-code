@@ -1,0 +1,2 @@
+// stub-smoke target: a scratch file owned by the deterministic governed-run tripwire.
+// The stub implementor appends to it, so no product file is touched.
