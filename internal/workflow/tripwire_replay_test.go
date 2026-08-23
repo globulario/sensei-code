@@ -48,7 +48,11 @@ func replay(t *testing.T, rows []probeRow) (RouteTally, map[string][]string) {
 		body := fmt.Sprintf(`{"status":%q,"blind_spots":%s,`+
 			`"change_risk":{"blast_radius":%q,"approval_gate":%q},`+healthyAuthority+`}`,
 			r.Status, spots, r.Blast, r.Gate)
-		got := routeAuthority(scopedPreflight(t, body), nil)
+		// The governed architect stage: an edit inside an isolated candidate
+		// worktree. That is what this repository's governed run actually does,
+		// so it is what the replay routes.
+		got := routeAuthorityForAction(scopedPreflight(t, body), nil,
+			Action{Stage: StageCandidateEdit, Files: []string{r.File}})
 		tally.Observe(got)
 		byRoute[string(got.Route)] = append(byRoute[string(got.Route)], r.File)
 	}
@@ -67,9 +71,9 @@ func TestTheCoverageTripwireSplitsByMeaning(t *testing.T) {
 	}
 	want := map[string]int{
 		string(RouteCloseGap):        84, // EMPTY: the graph reports it has nothing
-		string(RouteHuman):           26, // OK, consequence signals only — the declared question
+		string(RouteArchitectural):   22, // OK, consequence signal, gate=none, action bounded
+		string(RouteHuman):           4,  // OK, APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED — the gate outranks
 		string(RouteCannotEstablish): 25, // DEGRADED: the surface itself is degraded
-		string(RouteArchitectural):   0,
 	}
 	for route, n := range want {
 		if got := len(byRoute[route]); got != n {
@@ -77,11 +81,64 @@ func TestTheCoverageTripwireSplitsByMeaning(t *testing.T) {
 		}
 	}
 
-	// The load-bearing assertion. Nothing here became grantable: this slice
-	// moved work off the human queue, it did not widen the router.
-	if tally.Granted != 0 {
-		t.Fatalf("%d files became grantable; no relaxation was intended and none is justified by this change",
-			tally.Granted)
+	// The 22 are granted because the ACTION was assessed, not because the
+	// router was widened. Each of them already carried APPROVAL_GATE_NONE from
+	// the risk channel; what changed is that a consequence SIGNAL no longer
+	// overrides that verdict on its own.
+	//
+	// The 4 that still stop are the proof this is not a relaxation: they carry
+	// APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED, and no assessment of any action can
+	// clear an explicit approval gate.
+	if tally.Human != 4 {
+		t.Fatalf("human = %d, want 4; an explicit approval gate must survive any consequence assessment", tally.Human)
+	}
+}
+
+// The two halves of the consequence question, on the same file.
+//
+// This is what separates risky SUBJECT MATTER from risky CONSEQUENCES. bus.go
+// sits under a high-risk directory either way; what differs is what is being
+// done with it, and the file cannot tell those apart.
+func TestTheSameFileIsBoundedToEditAndNotBoundedToPublish(t *testing.T) {
+	// After its coverage gap was closed: OK, one anchor, one consequence signal.
+	const covered = `{"status":"PREFLIGHT_STATUS_OK","blind_spots":["file path under high-risk directory"],` +
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` + healthyAuthority + `}`
+	scoped := scopedPreflight(t, covered)
+
+	edit := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: []string{"internal/event/bus.go"},
+		DeclaredSteps: []string{"add a comment explaining the lock discipline", "run go test ./internal/event/"},
+	})
+	if !edit.Granted() {
+		t.Fatalf("editing in a disposable worktree was not bounded: %+v", edit)
+	}
+
+	publish := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StagePublish, Files: []string{"internal/event/bus.go"},
+	})
+	if publish.Granted() {
+		t.Fatal("publishing the same file was granted; the stage is what changes the consequence")
+	}
+	if !publish.RequiresHuman() {
+		t.Fatalf("publish: %+v", publish)
+	}
+
+	// And a plan that SAYS it will act outward escalates even at the edit
+	// stage. A claim may make an assessment worse; it may never clear one.
+	declared := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: []string{"internal/event/bus.go"},
+		DeclaredSteps: []string{"run the schema migration against the shared database"},
+	})
+	if declared.Granted() {
+		t.Fatal("a plan declaring a migration was granted at the edit stage")
+	}
+
+	// Silence is not safety. An action with no stage cannot be bounded, and the
+	// answer is CANNOT_ESTABLISH rather than a risk verdict: "nobody knows" and
+	// "this is dangerous" are different findings.
+	unstated := routeAuthorityForAction(scoped, nil, Action{Files: []string{"internal/event/bus.go"}})
+	if unstated.Route != RouteCannotEstablish {
+		t.Fatalf("an unclassified stage: %+v", unstated)
 	}
 }
 
@@ -131,30 +188,43 @@ func TestEveryReplayedGapNamesWhatIsMissing(t *testing.T) {
 // policy choice about who may edit high-risk paths unattended, it is declared
 // as dq.consequence_blind_spot_authority, and this test is where the answer
 // lands when it is given.
-func TestTheTenTimesRepeatedInterruptionIsStillHuman(t *testing.T) {
+func TestTheTenTimesRepeatedInterruptionResolvesAtTheEditStage(t *testing.T) {
 	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",
 		"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		"blind_spots":["anchor with severity=critical","file path under high-risk directory"],`+
 		healthyAuthority+`}`)
-	got := routeAuthority(scoped, nil)
 
-	if !got.RequiresHuman() {
-		t.Fatalf("the specimen changed route without the declared question being answered: %+v", got)
-	}
-	if got.ClosesGap() {
-		t.Fatal("a consequence signal was reclassified as a knowledge gap; " +
-			"severity=critical fires because the graph KNOWS something, and closing it is not possible by definition")
-	}
-	// The correction this slice does make.
-	if got.Condition == "Sensei reported blind spots in the planned region: anchor with severity=critical, file path under high-risk directory" {
-		t.Error("the condition still describes knowledge the graph holds as a blind spot")
-	}
-
-	// And the contradiction that motivates the declared question is real: the
-	// risk channel already published a verdict for this exact region, and it
-	// says no human approval is required.
+	// The contradiction that motivated the whole question: the risk channel
+	// already published a verdict for this exact region, and it says no human
+	// approval is required.
 	if scoped.ChangeRisk.Gate() != "none" {
 		t.Fatalf("specimen no longer reproduces the two-channel contradiction: gate=%q", scoped.ChangeRisk.Gate())
+	}
+
+	// Ten receipts, one condition, no coverage gained between them. At the
+	// governed edit stage the eleventh run does not ring that doorbell: the
+	// signals are read as knowledge the graph holds, the action is assessed,
+	// and the assessment finds the worktree bounds it.
+	edit := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: []string{"internal/workflow/authority.go"},
+	})
+	if !edit.Granted() {
+		t.Fatalf("the ten-times specimen still interrupts at the edit stage: %+v", edit)
+	}
+
+	// It is not a blanket pass on the region. Publishing the same change is a
+	// different action and stops.
+	publish := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StagePublish, Files: []string{"internal/workflow/authority.go"},
+	})
+	if !publish.RequiresHuman() {
+		t.Fatalf("publishing the specimen was not stopped: %+v", publish)
+	}
+
+	// And it was never a knowledge gap: severity=critical fires BECAUSE the
+	// graph knows something, so there is nothing to close.
+	if edit.ClosesGap() || publish.ClosesGap() {
+		t.Fatal("a consequence signal was reclassified as a knowledge gap")
 	}
 }
 
@@ -192,22 +262,33 @@ func TestClosingARealGapChangesTheRouteAndDoesNotRecur(t *testing.T) {
 		t.Fatalf("before: %+v", before)
 	}
 
-	after := routeAuthority(scopedPreflight(t,
+	after := routeAuthorityForAction(scopedPreflight(t,
 		`{"status":"PREFLIGHT_STATUS_OK","blind_spots":["file path under high-risk directory"],`+
-			risk+healthyAuthority+`}`), nil)
+			risk+healthyAuthority+`}`), nil,
+		Action{Stage: StageCandidateEdit, Files: []string{"internal/event/bus.go"}})
 
 	// The ratchet: the coverage gap is gone and cannot come back for this file.
 	if after.ClosesGap() {
 		t.Fatal("the same coverage gap recurred after the knowledge was established; the ratchet did not hold")
 	}
-	// And the honest limit: it stops for a different reason, not for none.
-	if !after.RequiresHuman() {
-		t.Fatalf("after: %+v", after)
-	}
 	if after.Condition == before.Condition {
 		t.Fatal("the condition did not change; closing the gap changed nothing the router can see")
 	}
-	if after.Granted() {
-		t.Fatal("closing a knowledge gap must not by itself produce a grant")
+
+	// The complete route, ignorance to autonomous action: the gap was closed by
+	// establishing real knowledge, the consequence signal underneath it was
+	// then assessed against the actual action, and the edit stage is bounded by
+	// the candidate worktree.
+	if !after.Granted() {
+		t.Fatalf("after closure and assessment: %+v", after)
+	}
+
+	// Closing a knowledge gap did not BY ITSELF produce the grant. Take the
+	// assessment away and the same closed-coverage file stops again.
+	unassessed := routeAuthority(scopedPreflight(t,
+		`{"status":"PREFLIGHT_STATUS_OK","blind_spots":["file path under high-risk directory"],`+
+			risk+healthyAuthority+`}`), nil)
+	if unassessed.Granted() {
+		t.Fatal("coverage alone granted; the consequence assessment is doing no work")
 	}
 }

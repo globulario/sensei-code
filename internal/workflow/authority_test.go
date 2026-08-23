@@ -78,9 +78,18 @@ func TestCloseGapRoutesNameTheirCondition(t *testing.T) {
 	}
 }
 
-// TestBlindSpotRequiresHuman covers the contradicted/uncovered governing region
-// case: Sensei says there is something here it cannot see.
-func TestBlindSpotRequiresHuman(t *testing.T) {
+// A consequence signal never reaches a grant without an assessment behind it.
+//
+// This test used to be called TestBlindSpotRequiresHuman and described
+// `anchor with severity=critical` as "something here Sensei cannot see". That
+// was the misreading the blind-spot classifier corrects: the anchor fires
+// BECAUSE the graph can see something, and severity is a property of knowledge
+// it holds.
+//
+// What survives is the part that was always right — this must never be a free
+// pass. With no action stated there is nothing to assess, and the answer is
+// CANNOT_ESTABLISH: nobody knows, which is not the same as nobody needs to.
+func TestAConsequenceSignalIsNeverAGrantOnItsOwn(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
 		"blind_spots": ["anchor with severity=critical"],
@@ -88,11 +97,14 @@ func TestBlindSpotRequiresHuman(t *testing.T) {
 		`+healthyAuthority+`
 	}`)
 	got := routeAuthority(scoped, nil)
-	if got.Route != RouteHuman {
-		t.Fatalf("a blind spot did not require human authority: %+v", got)
+	if got.Granted() {
+		t.Fatalf("a consequence signal was granted with no action assessed: %+v", got)
+	}
+	if got.Route != RouteCannotEstablish {
+		t.Fatalf("an unassessable action: %+v", got)
 	}
 	if !strings.Contains(got.Condition, "anchor with severity=critical") {
-		t.Fatalf("condition does not name the blind spot: %q", got.Condition)
+		t.Fatalf("condition does not name the signal: %q", got.Condition)
 	}
 }
 

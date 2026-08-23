@@ -106,17 +106,33 @@ func (r Routing) ClosesGap() bool { return r.Route == RouteCloseGap }
 // investigation, but it cannot by itself manufacture a human interruption when
 // Sensei can certify the question.
 func routeAuthority(scoped sensei.PreflightDecision, claims []Claim) Routing {
+	return routeAuthorityForAction(scoped, claims, Action{})
+}
+
+// routeAuthorityForAction is routeAuthority with the proposed action supplied.
+// Production always uses this: an action-less routing can only ever reach
+// CANNOT_ESTABLISH once a consequence signal is the last thing standing, which
+// is the correct answer to a question nobody asked properly.
+func routeAuthorityForAction(scoped sensei.PreflightDecision, claims []Claim, action Action) Routing {
 	// The risk reading is attached to whatever route the decision reaches. It is
 	// not the route's justification; it is a fact about the change that outlives
 	// this decision, and a caller that has to re-derive it will re-derive it
 	// from a preflight taken at a different moment.
-	r := decideRoute(scoped, claims)
+	r := decideRouteForAction(scoped, claims, action)
 	r.Blast = scoped.ChangeRisk.Blast()
 	r.Gate = scoped.ChangeRisk.Gate()
 	return r
 }
 
 func decideRoute(scoped sensei.PreflightDecision, claims []Claim) Routing {
+	return decideRouteForAction(scoped, claims, Action{})
+}
+
+// decideRouteForAction is decideRoute with the proposed action supplied.
+//
+// The action matters only where a consequence signal is the last thing
+// standing: everywhere else the route is decided before it is read.
+func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, action Action) Routing {
 	// The order below is the whole design, and it is not the order the
 	// conditions were written in.
 	//
@@ -237,10 +253,34 @@ func decideRoute(scoped sensei.PreflightDecision, claims []Claim) Routing {
 			// Declared as dq.consequence_blind_spot_authority rather than
 			// decided in passing. Widening a router to improve a coverage
 			// number is the failure this line of work exists to avoid.
-			return Routing{
-				Route: RouteHuman,
-				Condition: "Sensei reported consequence signals in the planned region (knowledge the graph holds, not a gap): " +
-					strings.Join(spots.Consequence, ", "),
+			//
+			// Assessed rather than routed. A consequence signal says LOOK
+			// HARDER HERE; it does not say who decides. What decides is
+			// whether THIS action's consequences are bounded.
+			signals := strings.Join(spots.Consequence, ", ")
+			assessment := AssessConsequences(action)
+			switch assessment.Result {
+			case ConsequenceBounded:
+				// The signal was real and the action is still bounded. Fall
+				// through to the gate checks, which have already run above --
+				// so reaching here means the risk channel published
+				// APPROVAL_GATE_NONE for this exact region and this assessment
+				// agrees the action cannot reach past its boundary.
+			case ConsequenceUnacceptable:
+				return Routing{
+					Route: RouteHuman,
+					Condition: "consequence signals in the planned region (" + signals + ") and the proposed action is not bounded: " +
+						assessment.Boundary,
+				}
+			default:
+				// "Nobody knows" is not "this is dangerous", and reporting it
+				// as an authority question would ask a human to adjudicate
+				// something no one has evidence about.
+				return Routing{
+					Route: RouteCannotEstablish,
+					Condition: "consequence signals in the planned region (" + signals + ") and this action's consequences could not be established: " +
+						assessment.Boundary,
+				}
 			}
 		}
 	}

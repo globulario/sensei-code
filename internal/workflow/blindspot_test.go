@@ -94,27 +94,39 @@ func TestCoverageBlindSpotRoutesToBoundedWork(t *testing.T) {
 	}
 }
 
-// Consequence signals still stop at a human. This slice corrects what the
-// escalation SAYS, not who owns it: deferring them to the risk gate would make
-// 22 of the 26 measured OK files grantable, which is a policy choice about who
-// may edit high-risk paths unattended and is declared rather than taken.
-func TestConsequenceSignalsStillStopAtAHumanForNow(t *testing.T) {
+// Consequence signals are ASSESSED, not routed.
+//
+// An earlier version of this test asserted they always stop at a human, with a
+// comment saying that was the declared question rather than this change. The
+// question has since been answered: dq.consequence_blind_spot_authority gained
+// a fourth alternative — a consequence signal neither grants nor escalates, it
+// requires the consequence boundary of the proposed action to be established —
+// and that is what the router now does.
+//
+// So the same signal reaches different routes depending on the action, which is
+// the whole point: severity and path say LOOK HARDER HERE, not WHO DECIDES.
+func TestConsequenceSignalsAreAssessedAgainstTheAction(t *testing.T) {
 	for _, spot := range []string{
 		"file path under high-risk directory",
 		"anchor with severity=critical",
 		"anchored entity in security/auth/rbac/pki/jwt/cert namespace",
 	} {
-		scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",
+		body := `{"status":"PREFLIGHT_STATUS_OK",
 			"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
-			"blind_spots":["`+spot+`"],`+healthyAuthority+`}`)
-		got := routeAuthority(scoped, nil)
-		if !got.RequiresHuman() {
-			t.Fatalf("%q no longer stops at a human: %+v — that is the declared question, not this change", spot, got)
+			"blind_spots":["` + spot + `"],` + healthyAuthority + `}`
+		scoped := scopedPreflight(t, body)
+
+		// Editing in a disposable worktree: bounded, so the technical lane runs.
+		if got := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit}); !got.Granted() {
+			t.Errorf("%q at the edit stage: %+v", spot, got)
 		}
-		// The correction that IS made: the condition stops calling strong
-		// knowledge a blind spot.
-		if !strings.Contains(got.Condition, "knowledge the graph holds") {
-			t.Errorf("%q: condition still describes knowledge as a gap: %q", spot, got.Condition)
+		// Publishing the same thing: not bounded.
+		if got := routeAuthorityForAction(scoped, nil, Action{Stage: StagePublish}); !got.RequiresHuman() {
+			t.Errorf("%q at the publish stage: %+v", spot, got)
+		}
+		// No stage stated: nobody knows, and that is not a risk verdict.
+		if got := routeAuthorityForAction(scoped, nil, Action{}); got.Route != RouteCannotEstablish {
+			t.Errorf("%q with no stage: %+v", spot, got)
 		}
 	}
 }

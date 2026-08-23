@@ -1655,7 +1655,20 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string,
 	// asks a different one of the same evidence. Re-querying instead would ask
 	// a graph that may have moved between the two questions, and the answers
 	// would then describe different moments while appearing to describe one.
-	return routeAuthority(scoped, d.Claims), scoped, nil
+	// The action the authority decision actually covers.
+	//
+	// Stage is set HERE, from what the governed workflow does, and never from
+	// anything a provider returned: the architect stage edits inside an
+	// isolated candidate worktree whose diff is audited before it can leave.
+	// The plan's own steps and consequences travel with it as claims, which the
+	// assessment may use to escalate and never to clear.
+	action := Action{
+		Stage:                StageCandidateEdit,
+		Files:                d.Files,
+		DeclaredSteps:        d.Steps,
+		DeclaredConsequences: d.Consequences,
+	}
+	return routeAuthorityForAction(scoped, d.Claims, action), scoped, nil
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
