@@ -130,7 +130,13 @@ type stubRun struct {
 func isCoverageCeiling(condition string) bool {
 	for _, known := range []string{
 		"graph coverage is absent for the planned files",
-		"Sensei reported blind spots in the planned region",
+		// The blind-spot channel is now classified rather than counted, so the
+		// ceiling arrives under whichever reading applied. A gap that failed to
+		// close reaches the human branch with its original condition prefixed,
+		// and still contains one of these.
+		"Sensei reported missing coverage in the planned region",
+		"Sensei reported consequence signals in the planned region",
+		"Sensei reported a blind spot this router has no reading for",
 		"Sensei classified no approval gate for the planned region",
 	} {
 		if strings.Contains(condition, known) {

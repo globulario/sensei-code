@@ -239,8 +239,8 @@ func TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge(t *testing.T) {
 func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 	// Before: the region is uncovered, so a human owns it.
 	uncovered := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
-	if got := routeAuthority(uncovered, nil); got.Route != RouteHuman {
-		t.Fatalf("an uncovered region did not ask the human: %+v", got)
+	if got := routeAuthority(uncovered, nil); got.Granted() || !got.ClosesGap() {
+		t.Fatalf("an uncovered region was not stopped as a bounded gap: %+v", got)
 	}
 
 	// After promotion the same question is covered, and no human is asked.

@@ -1,0 +1,56 @@
+# Epistemic lane — uncertain design belief (globulario/sensei#288).
+#
+# NOT canonical knowledge. Nothing here is an invariant, a contract or a
+# decision, nothing here is compiled into the awareness seed, and no routing
+# surface reads it. A DesignQuestion records what must be resolved; a
+# Hypothesis records what is believed and what would refute it; an
+# Observation records what actually happened.
+#
+# Dispositions are COMPUTED (`sensei epistemic status`), never authored, and
+# nothing here is established architecture until an `adoptions` entry says so.
+# Write with `sensei epistemic declare|hypothesize|observe|adopt`, which validate.
+version: 1
+design_questions:
+    - id: dq.consequence_blind_spot_authority
+      objective: Stop a knowledge signal from overriding the channel that weighs consequence (sensei-code CLOSE_GAP slice)
+      question: May a consequence-type blind spot be left to the risk gate, when that gate has already classified the same region APPROVAL_GATE_NONE?
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T22:55:24Z"
+      alternatives:
+        - id: defer_to_gate
+          statement: A consequence blind spot adds nothing the risk channel has not already weighed; route on the gate alone, which makes the 22 files grantable
+        - id: keep_escalating
+          statement: The blind-spot channel is a second, independent consequence opinion and both must agree before an unattended edit; the 22 files keep stopping at a human
+        - id: narrow_by_signal
+          statement: 'Distinguish the three signals: severity=critical is graph knowledge and defers to the gate, while security-namespace and high-risk-path remain independent stops'
+      constraints:
+        - measured:22 of 26 OK files carry gate=APPROVAL_GATE_NONE and escalate anyway on high-risk-directory or severity=critical
+        - measured:10 of 10 recorded contract_unknown authority receipts in this repository name this identical condition
+        - doc:experimental-engineering-epistemology.md#11.7 — AUTHORITY is reached by consequence or value, never by technical difficulty
+      consequences:
+        - effect: changes who may edit files under high-risk directories without a human present
+          reversible: true
+        - effect: an unattended edit to governance-critical code that later proves wrong has already run; reverting the commit does not unrun it
+          reversible: false
+      notes: 'Declared instead of taken. The implementation deliberately keeps these on the human route and corrects only the wording of the escalation. The specimen is real and repeated: ten authority receipts, one condition, no coverage improvement between them.'
+    - id: dq.degraded_preflight_meaning
+      objective: Decide whether PREFLIGHT_STATUS_DEGRADED is a broken surface or a bounded knowledge gap (sensei-code CLOSE_GAP slice)
+      question: Is a DEGRADED preflight a governance-surface failure, or the same missing coverage that EMPTY reports under a different name?
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T22:55:40Z"
+      alternatives:
+        - id: broken_surface
+          statement: DEGRADED means the preflight itself is degraded; no amount of evidence-gathering fixes a surface that is not answering, and it stays CannotEstablish
+        - id: same_as_empty
+          statement: DEGRADED with 0 anchors is EMPTY wearing a different status; route it to bounded work like the other 84
+        - id: read_the_spots
+          statement: 'Decide by the blind spots rather than the status: coverage-type spots make it bounded work, anything else keeps it CannotEstablish'
+      constraints:
+        - measured:all 25 DEGRADED files carry 0 direct anchors and blind spots that say outright 'graph has no facts about this file'
+        - measured:the router reaches CannotEstablish on status alone, so those blind spots are never read
+      consequences:
+        - effect: changes 25 of 135 files from a hard stop to a closure attempt; no grant either way
+          reversible: true
+      notes: Left as CannotEstablish in this slice. DEGRADED is a claim about the ANSWER, not about the repository, and reclassifying it on 25 same-shaped observations from one graph would be generalising from a single cause. What is missing is knowing WHY those 25 degrade — the router never looks past the status.
+hypotheses: []
+observations: []
