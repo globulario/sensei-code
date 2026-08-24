@@ -153,3 +153,50 @@ func TestAnObservationRunsOnAnUncertifiedWorkspaceAndReportsIt(t *testing.T) {
 		t.Fatalf("the caveat is rendered after the claim it qualifies:\n%s", out)
 	}
 }
+
+// The observation lane uses an inspection brief, by definition of the lane.
+//
+// The first observe run reported a PLAN to audit rather than the audit. That
+// was not a weak model answer: the base prompt asks for steps and files because
+// in the governed lane a worker does the reading afterwards, and nothing had
+// told the architect that here there is no afterwards. Same task, inspection
+// prompt: four concrete findings, one of them a real defect nobody had noticed.
+//
+// So the prompt is not an improvement that could drift back out. It is what
+// makes the lane mean anything, and this pins it structurally.
+func TestTheObservationLaneAlwaysGetsAnInspectionBrief(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "execute")
+	if !strings.Contains(body, "observationPrompt") {
+		t.Fatal("the observation lane no longer specialises the architect brief; " +
+			"a planning brief in a lane with no worker produces a plan nobody will execute")
+	}
+	if !strings.Contains(body, "e.observes(") {
+		t.Fatal("the brief is not selected from the lane")
+	}
+
+	brief := observationPrompt("BASE")
+	if !strings.HasPrefix(brief, "BASE") {
+		t.Fatal("the inspection brief discarded the architect's base context")
+	}
+	// The three things that make it an inspection rather than a plan.
+	for _, required := range []string{
+		"no worker runs after you", // there is no later stage
+		"do the inspection NOW",    // this turn is the whole run
+		"past tense",               // findings, not intentions
+	} {
+		if !strings.Contains(brief, required) {
+			t.Errorf("the inspection brief no longer says %q", required)
+		}
+	}
+	// The source distinction is load-bearing downstream: observationFindings
+	// renders inference separately and labelled NOT established.
+	for _, src := range []string{"repository", "graph", "inference"} {
+		if !strings.Contains(brief, src) {
+			t.Errorf("the inspection brief does not require the %q source", src)
+		}
+	}
+	// An audit that finds nothing must be able to say so.
+	if !strings.Contains(brief, "found nothing") {
+		t.Fatal("the brief does not permit an empty result, which is how audits learn to invent findings")
+	}
+}
