@@ -84,3 +84,14 @@ go.work.sum
 # disposition, verification digest, ledger digest — never the workspace.
 /.sensei/tasks/
 index.scip
+
+# Machine-local runtime state written by sensei-code itself: the resolved
+# provider config, session event logs, per-task guards and candidates, the
+# architect thread, the login context. None of it describes the repository.
+#
+# Not ignoring it had a consequence beyond untidiness. The governed tripwire
+# refuses to run against a dirty checkout by design, so on any machine that had
+# actually RUN sensei-code the tripwire silently skipped itself — the test that
+# exists to catch state-machine regressions was disabled on exactly the machines
+# where the state machine runs.
+.sensei-code/

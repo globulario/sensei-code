@@ -1,0 +1,1257 @@
+[
+ {
+  "file": "cmd/sensei-code/assist.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/main.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/mcp.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/providers.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
+  ],
+  "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
+  "blast": "BLAST_RADIUS_SECURITY"
+ },
+ {
+  "file": "cmd/sensei-code/routine.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/run.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/run_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/setup.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/version.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "cmd/sensei-code/version_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/authority_root_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/change_risk_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/conversation_parity_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/domain_authority_matrix_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/governed_run_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/governed_stub_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/helpers_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/acceptance/semantic_retrieval_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/admission/admission.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/admission/admission_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/agent/activity_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/agent/agent.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/agent/agent_session_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/architect/debt.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/architect/debt_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/architect/report.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/architect/report_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/architect/run.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/architect/run_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/assist/handoff.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/assist/packet.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/assist/packet_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/authority/authority.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/authority/authority_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/authority/resolution.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/authority/resolution_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/behavioral/behavioral.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/behavioral/behavioral_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/broker/broker.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/broker/broker_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/candidate/disposition.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/candidate/disposition_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/candidate/identity.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/candidate/identity_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/command/command.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/command/command_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/config/config.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/config/config_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/continuity/continuity.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/continuity/continuity_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/decision/record.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/decision/record_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/doctor/doctor.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/doctor/doctor_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/doctor/taskbinding.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/doctor/taskbinding_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/event/bus.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/event/bus_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/event/event.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/gitx/git.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/gitx/git_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/history/history.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/history/history_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/investigate/investigate.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/investigate/investigate_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/mcpconfig/mcpconfig.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/mcpconfig/mcpconfig_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/processx/env_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/processx/runner.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/project/project.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/project/project_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/provider/chatgpt_session.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/provider/chatgpt_session_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/provider/codex_appserver.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
+  ],
+  "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
+  "blast": "BLAST_RADIUS_SECURITY"
+ },
+ {
+  "file": "internal/provider/provider.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
+  ],
+  "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
+  "blast": "BLAST_RADIUS_SECURITY"
+ },
+ {
+  "file": "internal/provider/provider_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/publish/publish.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/publish/publish_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/report/report.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/report/report_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/retrieval/retrieval.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/retrieval/retrieval_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/retrieval/semantic.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/retrieval/semantic_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/assign.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/packet.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/provenance.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/reconcile.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/roles.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/roles_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/roles/verdict.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/sensei/contracts.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/sensei/contracts_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/sensei/mcp.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/sensei/mcp_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/session/interrupted_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/session/store.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/setup/checks.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/setup/inspect.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/setup/inspect_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/setup/setup.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/setup/setup_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/taskstate/state.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/taskstate/state_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/tui/astutil_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/tui/clipboard.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/tui/clipboard_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/tui/layout_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/tui/model.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
+  ],
+  "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
+  "blast": "BLAST_RADIUS_SECURITY"
+ },
+ {
+  "file": "internal/tui/scroll_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/tui/setup_command_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/validation/evidence.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/validation/evidence_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/adversarial.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/adversarial_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/architect_context.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/architect_context_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/assisted.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/assisted_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/authority.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/authority_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/disposal_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/engine.go",
+  "status": "PREFLIGHT_STATUS_OK",
+  "blind_spots": [
+   "anchor with severity=critical",
+   "file path under high-risk directory"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/engine_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/gate.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/gate_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/mode.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/mode_test.go",
+  "status": "PREFLIGHT_STATUS_DEGRADED",
+  "blind_spots": [
+   "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply \u2014 graph has no facts about this file; treat as unknown, read source directly",
+   "this is NOT proof of safety \u2014 the graph has no facts about this file"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/parity_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/protection_live_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/publication_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/routine.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/routine_live_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/routine_scan.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ },
+ {
+  "file": "internal/workflow/routine_test.go",
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "blind_spots": [
+   "graph indexes this area but no anchored rules apply to the request"
+  ],
+  "gate": "APPROVAL_GATE_NONE",
+  "blast": "BLAST_RADIUS_LOCAL"
+ }
+]

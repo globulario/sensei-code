@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/decision"
+	"github.com/globulario/sensei-code/internal/derived"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/provider"
@@ -55,6 +58,39 @@ type Engine struct {
 	// preflight would describe a possibly-moved graph while appearing to
 	// describe the moment the plan was authorised.
 	routings map[string]routingRecord
+	// closures counts gap-closure rounds already spent on one condition within
+	// one task, so a gap that does not actually close cannot loop forever.
+	//
+	// Keyed by task and condition rather than by task alone: a run may
+	// legitimately meet several different gaps, and spending one budget across
+	// all of them would send the second gap straight to a human because the
+	// first one used the attempts.
+	closures map[string]int
+}
+
+// closureBudget is how many rounds one condition gets to close its own gap.
+//
+// One. A second round on the identical condition means the first produced
+// nothing the router could see, and repeating it burns provider calls to
+// re-derive the same non-answer. When it is spent the gap is reported as
+// unclosed and the question becomes a human's — honestly, and naming what was
+// attempted.
+const closureBudget = 1
+
+// spendClosure records an attempt at one gap and reports whether the budget
+// allowed it.
+func (e *Engine) spendClosure(taskID, condition string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.closures == nil {
+		e.closures = map[string]int{}
+	}
+	key := taskID + "\x00" + condition
+	if e.closures[key] >= closureBudget {
+		return false
+	}
+	e.closures[key]++
+	return true
 }
 
 // routingRecord is the evidence one plan was routed on.
@@ -1322,6 +1358,31 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			switch {
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
+			case routing.ClosesGap() && e.spendClosure(taskID, routing.Condition):
+				// Bounded epistemic work, not an owner for the decision.
+				// Nothing is granted here: the round establishes what is
+				// knowable and the router runs again over what the graph then
+				// holds. If the gap did not close, the budget is spent and the
+				// next pass falls through to the human branch below with the
+				// condition intact.
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, nil))
+				if err := newRound("a bounded knowledge gap"); err != nil {
+					return architectureDecision{}, err
+				}
+				prompt = gapClosurePrompt(prompt, d, routing.Condition)
+				attempt = 0
+				continue
+			case routing.ClosesGap():
+				// The budget is spent and the router still reports the same
+				// gap. Report it as unclosed rather than looping: what the
+				// human is being asked now is not the technical question, it is
+				// whether to proceed with the gap still open.
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+				routing.Route = RouteHuman
+				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
+				fallthrough
 			case routing.RequiresHuman():
 				// Authorizing does not change the graph, so the router will
 				// reach this same condition on the next plan. Ask once per
@@ -1376,6 +1437,21 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			}
 			if routing.Route == RouteCannotEstablish {
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
+			}
+			if routing.ClosesGap() {
+				if e.spendClosure(taskID, routing.Condition) {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, nil))
+					if err := newRound("a bounded knowledge gap"); err != nil {
+						return architectureDecision{}, err
+					}
+					prompt = gapClosurePrompt(prompt, d, routing.Condition)
+					attempt = 0
+					continue
+				}
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 			}
 			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
 				if !authorized {
@@ -1582,7 +1658,66 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string,
 	// asks a different one of the same evidence. Re-querying instead would ask
 	// a graph that may have moved between the two questions, and the answers
 	// would then describe different moments while appearing to describe one.
-	return routeAuthority(scoped, d.Claims), scoped, nil
+	// The action the authority decision actually covers.
+	//
+	// Stage is set HERE, from what the governed workflow does, and never from
+	// anything a provider returned: the architect stage edits inside an
+	// isolated candidate worktree whose diff is audited before it can leave.
+	// The plan's own steps and consequences travel with it as claims, which the
+	// assessment may use to escalate and never to clear.
+	action := Action{
+		Stage:                StageCandidateEdit,
+		Files:                d.Files,
+		DeclaredSteps:        d.Steps,
+		DeclaredConsequences: d.Consequences,
+	}
+	return routeAuthorityForAction(scoped, d.Claims, action), scoped, nil
+}
+
+// derivedRecipesPath is where the durable questions live.
+const derivedRecipesPath = "docs/awareness/derived_recipes.json"
+
+// senseiBinary is the CLI that performs derivations.
+//
+// Separate from Config.Sensei, which names the MCP server. SENSEI_BIN exists so
+// a checkout can point at a build carrying `derive` without reinstalling.
+func senseiBinary() string {
+	if b := strings.TrimSpace(os.Getenv("SENSEI_BIN")); b != "" {
+		return b
+	}
+	return "sensei"
+}
+
+// derivedCoverage revalidates the committed recipes against the world being
+// assessed and returns the planned files a derivation established THERE.
+//
+// The only thing reaching the router is a list of files a derivation just
+// succeeded over. Recipes do not reach it, and neither does any earlier
+// success: a fact that derived yesterday, or at another commit, has no standing
+// here. A recipe costs one derivation and buys nothing on its own.
+//
+// Failure is silence rather than coverage. A missing recipe file, a sensei
+// binary without `derive`, a derivation that refuses — each leaves the region
+// uncovered and the gap intact, which is the direction this must fail in.
+func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []string {
+	if len(planned) == 0 {
+		return nil
+	}
+	recipes, err := derived.LoadRecipes(filepath.Join(e.Repo.Root, derivedRecipesPath))
+	if err != nil || len(recipes) == 0 {
+		return nil
+	}
+	world, err := e.Repo.Head(ctx)
+	if err != nil {
+		return nil
+	}
+	world = strings.TrimSpace(world)
+	if world == "" {
+		return nil
+	}
+	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
+	covered, _ := derived.CoveredFiles(anchors, world, planned)
+	return covered
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
@@ -2226,6 +2361,79 @@ func renderScope(files []string) string {
 // certification as evidence and is asked to decide on it, because the useful
 // behaviour to reinforce is asking when unsure, not staying quiet — what must
 // not happen is the asking alone interrupting a human.
+// gapClosurePrompt turns a bounded knowledge gap into work instead of an
+// interruption.
+//
+// The three refusals in it are the whole safety argument.
+//
+// It must not invent. An agent that meets a blind spot, writes a rule that
+// removes the blind spot, and thereby obtains authority has automated
+// self-approval — the graph becomes a mirror, and governance certifies
+// whatever the agent last asserted. So closure establishes what the repository
+// ALREADY shows and records it through `sensei propose`, which writes a
+// candidate awaiting review rather than canonical knowledge. The agent cannot
+// promote its own proposal.
+//
+// It must not treat closure as permission. Establishing knowledge says nothing
+// about whether the original change may proceed; governance runs again from the
+// top over whatever the graph then holds.
+//
+// It must not manufacture success. A gap that cannot be closed from available
+// evidence is reported as unclosed, which is a real and useful answer — and
+// the one that keeps this from becoming a machine for making warnings
+// disappear.
+func gapClosurePrompt(original string, d architectureDecision, condition string) string {
+	return fmt.Sprintf(`%s
+
+BOUNDED KNOWLEDGE GAP — CLOSE IT, DO NOT ROUTE IT:
+Sensei did not refuse this work and no human owns it. It reported that the
+knowledge needed to govern it is incomplete:
+
+    %s
+
+This is not permission to proceed, and it is not permission to experiment. It
+is an instruction to establish what is already knowable, after which governance
+runs again over what the graph then holds.
+
+DO THIS, IN THIS ORDER:
+ 1. Read the actual source of the planned files, their tests, their callers and
+    their package documentation. Prefer evidence that already exists over
+    anything you would have to reason your way to.
+ 2. Check whether the knowledge exists elsewhere in the repository already and
+    was simply not surfaced here — a sibling file, an existing contract, a
+    scar, a required test, a header comment that states the rule.
+ 3. Fold what you established back into the plan as CLAIMS with
+    source="repository", each naming the file and symbol it was read from. A
+    premise you have now verified is no longer an inferred one, and that is a
+    gap you can close here in full.
+
+YOU ARE READ-ONLY IN THIS STAGE. Do not try to write a proposal: this role runs
+without write permission, deliberately, so that investigation cannot become
+authorship. Establishing DURABLE knowledge — an anchor that survives this task
+and spares the next one — needs a write path this stage does not have, and how
+that knowledge may enter the graph without the graph becoming a mirror of what
+you asserted is an open question (dq.closure_knowledge_admission). Until it is
+settled, a coverage gap you cannot close by verification is reported, not
+papered over.
+
+DO NOT:
+ - invent a rule so that the warning goes away. A claim that is not supported by
+   something already in the repository is worse than the gap: the gap is honest.
+ - assert that the region is safe. Absence of a finding is not a finding.
+ - restate an inference as a repository claim. If nothing in the repository
+   shows it, its source is still "inference".
+
+IF THE GAP CANNOT BE CLOSED from evidence available to you, say so plainly and
+return decision="escalate" with a claim naming exactly what could not be
+established and what evidence would be needed. An unclosable gap reported
+honestly is a correct outcome. A gap papered over is not.
+
+THE PLAN THAT MET THE GAP:
+%s
+
+Return ONLY architecture JSON.`, original, condition, d.Plan)
+}
+
 func certifiedResolutionPrompt(original string, d architectureDecision) string {
 	return fmt.Sprintf(`%s
 

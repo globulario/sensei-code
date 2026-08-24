@@ -25,28 +25,71 @@ const healthyAuthority = `"authority": {
 	"seed_state": "SEED_STATE_CURRENT"
 }`
 
-// TestCoverageAbsentRequiresHumanEvenWhenTheArchitectIsConfident covers
-// "architect says proceed, graph coverage is absent -> human authority
-// required". The architect's confidence is not an input at all, which is the
-// structural form of that guarantee.
-func TestCoverageAbsentRequiresHumanEvenWhenTheArchitectIsConfident(t *testing.T) {
+// Absent coverage never grants, whatever the architect thinks. Its confidence
+// is not an input at all, which is the structural form of that guarantee.
+//
+// It no longer interrupts a human either. Missing coverage is not a decision
+// anybody owns: asking a person to supply it is asking for a technical answer,
+// and answering leaves the graph as empty as before, so the next task over the
+// same region asks again. The route is bounded epistemic work -- and it is
+// still not permission to proceed, which is what the Granted assertion pins.
+func TestCoverageAbsentNeverGrantsAndNoLongerInterrupts(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_EMPTY",
 		"risk_class": "UNKNOWN_IMPACT",
 		`+healthyAuthority+`
 	}`)
 	got := routeAuthority(scoped, []Claim{{Statement: "this is routine", About: "internal/tui", Source: "graph"}})
-	if got.Route != RouteHuman {
-		t.Fatalf("absent coverage did not require human authority: %+v", got)
+	if got.Granted() {
+		t.Fatalf("absent coverage was granted architectural authority: %+v", got)
+	}
+	if !got.ClosesGap() {
+		t.Fatalf("absent coverage did not route to bounded work: %+v", got)
+	}
+	if got.RequiresHuman() {
+		t.Fatalf("absent coverage asked a human for a technical answer: %+v", got)
 	}
 	if !strings.Contains(got.Condition, "coverage") {
 		t.Fatalf("condition does not name the coverage gap: %q", got.Condition)
 	}
 }
 
-// TestBlindSpotRequiresHuman covers the contradicted/uncovered governing region
-// case: Sensei says there is something here it cannot see.
-func TestBlindSpotRequiresHuman(t *testing.T) {
+// Every route that is not a grant must carry a condition, including the new
+// one. A gap-closing instruction nobody can trace to a cause is as useless as
+// an interruption nobody can trace to a cause.
+func TestCloseGapRoutesNameTheirCondition(t *testing.T) {
+	cases := map[string]string{
+		"coverage absent": `{"status":"PREFLIGHT_STATUS_EMPTY",` + healthyAuthority + `}`,
+		"coverage blind spot": `{"status":"PREFLIGHT_STATUS_OK",` +
+			`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` +
+			`"blind_spots":["coverage_insufficient: no direct anchors and no indexed files"],` +
+			healthyAuthority + `}`,
+	}
+	for name, body := range cases {
+		t.Run(name, func(t *testing.T) {
+			got := routeAuthority(scopedPreflight(t, body), nil)
+			if !got.ClosesGap() {
+				t.Fatalf("got %+v", got)
+			}
+			if strings.TrimSpace(got.Condition) == "" {
+				t.Fatal("a gap-closing route carried no condition")
+			}
+		})
+	}
+}
+
+// A consequence signal never reaches a grant without an assessment behind it.
+//
+// This test used to be called TestBlindSpotRequiresHuman and described
+// `anchor with severity=critical` as "something here Sensei cannot see". That
+// was the misreading the blind-spot classifier corrects: the anchor fires
+// BECAUSE the graph can see something, and severity is a property of knowledge
+// it holds.
+//
+// What survives is the part that was always right — this must never be a free
+// pass. With no action stated there is nothing to assess, and the answer is
+// CANNOT_ESTABLISH: nobody knows, which is not the same as nobody needs to.
+func TestAConsequenceSignalIsNeverAGrantOnItsOwn(t *testing.T) {
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
 		"blind_spots": ["anchor with severity=critical"],
@@ -54,11 +97,14 @@ func TestBlindSpotRequiresHuman(t *testing.T) {
 		`+healthyAuthority+`
 	}`)
 	got := routeAuthority(scoped, nil)
-	if got.Route != RouteHuman {
-		t.Fatalf("a blind spot did not require human authority: %+v", got)
+	if got.Granted() {
+		t.Fatalf("a consequence signal was granted with no action assessed: %+v", got)
+	}
+	if got.Route != RouteCannotEstablish {
+		t.Fatalf("an unassessable action: %+v", got)
 	}
 	if !strings.Contains(got.Condition, "anchor with severity=critical") {
-		t.Fatalf("condition does not name the blind spot: %q", got.Condition)
+		t.Fatalf("condition does not name the signal: %q", got.Condition)
 	}
 }
 
@@ -75,8 +121,13 @@ func TestUnverifiedPremiseCannotAcquireArchitecturalAuthority(t *testing.T) {
 		{Statement: "no other caller depends on this signature", About: "internal/agent", Source: "inference"},
 	}
 	got := routeAuthority(scoped, claims)
-	if got.Route != RouteHuman {
+	if got.Granted() {
 		t.Fatalf("an inferred premise still acquired architectural authority: %+v", got)
+	}
+	// It is a verification task, not a decision anybody owns: what the plan
+	// needs is evidence, and the architect is the one who can go and get it.
+	if !got.ClosesGap() {
+		t.Fatalf("an inferred premise did not route to verification: %+v", got)
 	}
 	if !strings.Contains(got.Condition, "no other caller depends on this signature") {
 		t.Fatalf("condition does not quote the unverified premise: %q", got.Condition)
@@ -161,11 +212,11 @@ func TestEveryHumanRouteNamesItsCondition(t *testing.T) {
 		body   string
 		claims []Claim
 	}{
-		{"coverage absent", `{"status":"PREFLIGHT_STATUS_EMPTY",` + healthyAuthority + `}`, nil},
-		{"blind spot", `{"status":"PREFLIGHT_STATUS_OK","blind_spots":["x"],` + healthyAuthority + `}`, nil},
+		{"unrecognised blind spot", `{"status":"PREFLIGHT_STATUS_OK","blind_spots":["x"],` + healthyAuthority + `}`, nil},
+		{"consequence blind spot", `{"status":"PREFLIGHT_STATUS_OK","blind_spots":["file path under high-risk directory"],` +
+			healthyAuthority + `}`, nil},
 		{"approval required", `{"status":"PREFLIGHT_STATUS_OK","change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},` + healthyAuthority + `}`, nil},
-		{"unverified premise", `{"status":"PREFLIGHT_STATUS_OK","change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` + healthyAuthority + `}`,
-			[]Claim{{Statement: "nothing else reads this", Source: "inference"}}},
+		{"unclassified gate with coverage", `{"status":"PREFLIGHT_STATUS_OK","direct_invariants":[{"id":"i","label":"l","severity":"warning","status":"active"}],` + healthyAuthority + `}`, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -334,8 +385,11 @@ func TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt(t *testing.T) {
 	// asked about the new file set and answered; that answer is what escalates.
 	outside := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
 	got := routeAuthority(outside, revised)
-	if got.Route != RouteHuman {
-		t.Fatalf("a revision reaching outside the certified region did not ask: %+v", got)
+	if got.Granted() {
+		t.Fatalf("a revision reaching outside the certified region was granted: %+v", got)
+	}
+	if !got.ClosesGap() {
+		t.Fatalf("a revision reaching outside the certified region did not stop: %+v", got)
 	}
 	if !strings.Contains(got.Condition, "coverage") {
 		t.Errorf("the interruption does not name the region that caused it: %q", got.Condition)

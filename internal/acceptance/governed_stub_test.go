@@ -130,7 +130,13 @@ type stubRun struct {
 func isCoverageCeiling(condition string) bool {
 	for _, known := range []string{
 		"graph coverage is absent for the planned files",
-		"Sensei reported blind spots in the planned region",
+		// The blind-spot channel is now classified rather than counted, so the
+		// ceiling arrives under whichever reading applied. A gap that failed to
+		// close reaches the human branch with its original condition prefixed,
+		// and still contains one of these.
+		"Sensei reported missing coverage in the planned region",
+		"Sensei reported consequence signals in the planned region",
+		"Sensei reported a blind spot this router has no reading for",
 		"Sensei classified no approval gate for the planned region",
 	} {
 		if strings.Contains(condition, known) {
@@ -164,9 +170,21 @@ func runStubGoverned(t *testing.T, target string) stubRun {
 	stub := buildStubAgent(t, root)
 	// Only the providers are replaced. Sensei, the workflow, the candidate
 	// lifecycle and the authority router are exactly the product's.
+	//
+	// The names are real provider ids, not descriptive labels. roles.Assign
+	// reads them through provider.Capability, which returns no roles at all for
+	// an unrecognised name — so "stub-reviewer" declared nothing and the review
+	// stage refused with "no configured provider declares the reviewer role".
+	//
+	// That was invisible until now. The router escalated every run before it
+	// reached review, so the reviewer stub had never been exercised and its
+	// name had never been checked against anything. Implementor and reviewer
+	// must also be DIFFERENT providers, because a candidate may not review
+	// itself; one binary serving both roles under one name is excluded by the
+	// same rule that makes review independent.
 	cfg.Architect = config.Agent{Name: "stub-architect", Command: stub, Args: []string{"--role", "architect", "--target", target}}
-	cfg.Implementors = []config.Agent{{Name: "stub-implementor", Command: stub, Args: []string{"--role", "implementor", "--target", target}}}
-	cfg.Reviewer = config.Agent{Name: "stub-reviewer", Command: stub, Args: []string{"--role", "reviewer"}}
+	cfg.Implementors = []config.Agent{{Name: "claude", Command: stub, Args: []string{"--role", "implementor", "--target", target}}}
+	cfg.Reviewer = config.Agent{Name: "codex", Command: stub, Args: []string{"--role", "reviewer"}}
 	cfg.Reviewers = []config.Agent{cfg.Reviewer}
 
 	sessionID := session.ID(time.Now())

@@ -1,0 +1,103 @@
+# Epistemic lane — uncertain design belief (globulario/sensei#288).
+#
+# NOT canonical knowledge. Nothing here is an invariant, a contract or a
+# decision, nothing here is compiled into the awareness seed, and no routing
+# surface reads it. A DesignQuestion records what must be resolved; a
+# Hypothesis records what is believed and what would refute it; an
+# Observation records what actually happened.
+#
+# Dispositions are COMPUTED (`sensei epistemic status`), never authored, and
+# nothing here is established architecture until an `adoptions` entry says so.
+# Write with `sensei epistemic declare|hypothesize|observe|adopt`, which validate.
+version: 1
+design_questions:
+    - id: dq.closure_knowledge_admission
+      objective: 'Let a provider''s closure work reach the graph without the graph becoming a mirror of what the agent asserted (sensei-code #67)'
+      question: How does knowledge established by a closure round enter the graph, given that the agent that wrote it is the agent that would gain authority from it?
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T23:51:20Z"
+      alternatives:
+        - id: human_promotion
+          statement: 'Closure proposes a candidate and a human promotes it. Correct today, and explicitly not autonomous: the ratchet turns once per human review.'
+        - id: mechanically_derived_only
+          statement: 'A closure round may only establish anchors an extractor can derive from the repository — code symbols, imports, test-to-symbol edges — never an authored rule. No judgment is involved, so self-approval does not arise. Autonomous but narrow: it cannot state why anything matters.'
+        - id: independent_verification
+          statement: The agent authors the claim and a different provider verifies it against the source; agreement admits it. Autonomous, but two models agreeing is not evidence, and this is the self-confirmation shape the epistemic lane already counts rather than trusts.
+        - id: future_only
+          statement: Closure knowledge is admitted, but may never be the anchor that covers the region it was written to unblock. The current task still stops; the next task over that region does not. Self-approval is structurally impossible because the author never benefits from its own writing.
+        - id: independent_admission
+          statement: 'Separate discovery from establishment. The agent may discover candidate knowledge and may propose it; an independent admission boundary — evidential, not necessarily another model and not necessarily a human — must establish it before it counts; and only established knowledge may alter authority. Whether the SAME run may then benefit, or only later ones, is left open inside this alternative rather than decided by it: the load-bearing claim is that authority-increasing knowledge crosses an independent boundary, not that it waits.'
+      constraints:
+        - brief:item 8 — if an agent meets a blind spot, invents a rule, writes it, the rule removes the blind spot, and the agent receives authority, the route has merely automated self-approval
+        - observed:sensei propose writes a candidate under docs/awareness/candidates/; preflight changes only after promotion into canonical YAML and a domain rebuild, both human-gated today
+        - observed:the manual demonstration in this PR needed a human to commit the corpus and run sensei build — that human step is the current anti-self-certification guard
+      consequences:
+        - effect: changes what a closure round may cause; no existing invariant, gate or approval semantics moves either way
+          reversible: true
+      notes: 'Declared because the autonomous ratchet stops here, not on an implementation detail. Two blockers were found by trying: (1) the closure round is wired into the ARCHITECT stage, which runs --permission-mode plan and is read-only by design, so it cannot write a proposal at all; (2) even a written proposal is a candidate, and only promotion plus rebuild moves the graph. Blocker 1 is a defect in this PR''s wiring. Blocker 2 is this question.'
+    - id: dq.consequence_blind_spot_authority
+      objective: Stop a knowledge signal from overriding the channel that weighs consequence (sensei-code CLOSE_GAP slice)
+      question: May a consequence-type blind spot be left to the risk gate, when that gate has already classified the same region APPROVAL_GATE_NONE?
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T22:55:24Z"
+      alternatives:
+        - id: defer_to_gate
+          statement: A consequence blind spot adds nothing the risk channel has not already weighed; route on the gate alone, which makes the 22 files grantable
+        - id: keep_escalating
+          statement: The blind-spot channel is a second, independent consequence opinion and both must agree before an unattended edit; the 22 files keep stopping at a human
+        - id: narrow_by_signal
+          statement: 'Distinguish the three signals: severity=critical is graph knowledge and defers to the gate, while security-namespace and high-risk-path remain independent stops'
+        - id: requires_assessment
+          statement: 'A consequence-bearing blind spot neither grants nor escalates. It requires the consequence boundary of the PROPOSED ACTION to be established: bounded or reversible consequences continue in the technical lane, unacceptable or insufficiently bounded consequences reach human authority, and a boundary that cannot be established at all is CANNOT_ESTABLISH. Signal is not verdict — the same file carries different consequences under an isolated worktree, a release, and a state migration, so the path cannot be the authority unit.'
+      constraints:
+        - measured:22 of 26 OK files carry gate=APPROVAL_GATE_NONE and escalate anyway on high-risk-directory or severity=critical
+        - measured:10 of 10 recorded contract_unknown authority receipts in this repository name this identical condition
+        - doc:experimental-engineering-epistemology.md#11.7 — AUTHORITY is reached by consequence or value, never by technical difficulty
+      consequences:
+        - effect: changes who may edit files under high-risk directories without a human present
+          reversible: true
+        - effect: an unattended edit to governance-critical code that later proves wrong has already run; reverting the commit does not unrun it
+          reversible: false
+      notes: 'Declared instead of taken. The implementation deliberately keeps these on the human route and corrects only the wording of the escalation. The specimen is real and repeated: ten authority receipts, one condition, no coverage improvement between them.'
+    - id: dq.degraded_preflight_meaning
+      objective: Decide whether PREFLIGHT_STATUS_DEGRADED is a broken surface or a bounded knowledge gap (sensei-code CLOSE_GAP slice)
+      question: Is a DEGRADED preflight a governance-surface failure, or the same missing coverage that EMPTY reports under a different name?
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T22:55:40Z"
+      alternatives:
+        - id: broken_surface
+          statement: DEGRADED means the preflight itself is degraded; no amount of evidence-gathering fixes a surface that is not answering, and it stays CannotEstablish
+        - id: same_as_empty
+          statement: DEGRADED with 0 anchors is EMPTY wearing a different status; route it to bounded work like the other 84
+        - id: read_the_spots
+          statement: 'Decide by the blind spots rather than the status: coverage-type spots make it bounded work, anything else keeps it CannotEstablish'
+      constraints:
+        - measured:all 25 DEGRADED files carry 0 direct anchors and blind spots that say outright 'graph has no facts about this file'
+        - measured:the router reaches CannotEstablish on status alone, so those blind spots are never read
+      consequences:
+        - effect: changes 25 of 135 files from a hard stop to a closure attempt; no grant either way
+          reversible: true
+      notes: Left as CannotEstablish in this slice. DEGRADED is a claim about the ANSWER, not about the repository, and reclassifying it on 25 same-shaped observations from one graph would be generalising from a single cause. What is missing is knowing WHY those 25 degrade — the router never looks past the status.
+hypotheses:
+    - id: h.promote_is_form_independent_not_evidence_independent
+      question: dq.closure_knowledge_admission
+      alternative: independent_admission
+      prediction: sensei promote is author-independent in EXECUTION but not in EVIDENCE. Given three candidates against the isolated graph — (A) a true claim supported by repository evidence, (B) a well-formed, non-contradictory, plausible but FALSE claim about the same file, and (C) a claim whose evidence references only artifacts the claim itself introduced, and whose promotion would remove the exact coverage gap blocking the current run — promote will accept A, and will ALSO accept B and C, because what it validates is naming, status, confidence, presence of evidence and coherence with the rest of the graph, none of which can distinguish a true claim from a plausible false one.
+      falsifier: promote refuses B or C on EVIDENTIAL grounds — because the cited evidence does not establish the claim, or because the evidence is self-referential — rather than on a format or identifier technicality, with every existing gate green. That would make it a sufficient independent boundary and would support same-run closure.
+      horizon:
+        due_at: "2026-08-24T00:00:00Z"
+        condition: at the completion of the three-case promote experiment
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T23:59:36Z"
+      notes: 'Preregistered before any case was constructed or run. The B case is the dangerous one: a novel false claim can be perfectly coherent, so testing only contradictions would test the wrong thing. Concretely, B asserts the bus.go mutex serializes MAP ACCESS, which is plausible and false — the fact established by reading the code is that it makes close-versus-send mutually exclusive.'
+observations:
+    - id: o.promote_accepts_a_plausible_false_claim
+      hypothesis: h.promote_is_form_independent_not_evidence_independent
+      observed_at: "2026-08-24T00:02:19Z"
+      what: 'All three candidates passed with ''validation: OK'' and exit 0. A: true claim — accepted. B: ''the bus mutex exists to serialize concurrent map access'', plausible, well-formed, non-contradictory and FALSE relative to the code (the lock makes close-versus-send mutually exclusive; serialized map access is a consequence, not the reason) — accepted, identically. C: a claim whose evidence cites only files the same change introduced, and whose promotion would remove the exact coverage gap blocking the run — accepted, identically. The complete validation is: class is known, status==''candidate'', confidence!=''low'', evidence is a non-empty STRING, discovered_from is a non-empty string. It never opens the source file, never checks that the cited evidence establishes the claim, and cannot distinguish a true claim from a plausible false one.'
+      outcome: supports
+      evidence:
+        - 'sensei promote --dry-run on all three ids against the isolated graph :10199; each printed ''validation: OK'' and the rendered canonical entry'
+        - cmd/awg/cmd_promote.go:439-446 — the whole evidential check is a non-empty string test
+        - 'separately: sensei promote cannot read the agent write-path at all. Proposals land in docs/awareness/candidates/proposals/ under a ''proposal:'' key; promote reads docs/awareness/candidates/*.yaml under a ''candidates:'' list. A real recorded contract_unknown proposal was not found by promote.'
+      observed_by: claude-opus-5
