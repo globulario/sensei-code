@@ -3403,26 +3403,29 @@ this lane exists to avoid.`
 // worker, or can exit through a completion branch, because none of that code is
 // on this path at all.
 //
-// # What actually makes it read-only
+// # Exactly what the two mechanisms establish
 //
-// The architect runs in a DETACHED, disposable worktree of the pinned commit.
-// The governed checkout is never its working directory. That is the boundary.
+// Stated separately and narrowly, because the explanatory surface here has now
+// outrun the mechanism twice: once when a post-hoc cleanliness check was called
+// a boundary, and again when a detached worktree was described as stopping a
+// write-capable provider from touching the governed checkout. Both times the
+// observation lane read the comment and reported it as false.
 //
-// The previous version ran the architect in the governed checkout and then
-// checked `git status --porcelain`, which is evidence after the fact rather
-// than a boundary: a commit leaves a clean tree, so does a write to an ignored
-// path, and so does a write followed by a restore. A repository configuring a
-// write-capable architect could have modified the governed tree and passed.
+//	isolated worktree   the provider's normal workspace is elsewhere
+//	before/after witness the governed repository ended unchanged across the
+//	                     state we measure
+//	neither              filesystem confinement
 //
-// # What is claimed, and what is not
+// The witness is `git status --porcelain` on the governed root, taken before
+// the observer starts and again after it finishes. It establishes that the
+// measured state is the same at both moments. It does NOT establish that the
+// provider was unable to write there, and it does not exclude a write followed
+// by a restore, or a change to something porcelain does not report.
 //
-// Claimed: an observation cannot modify the governed repository's tracked
-// content or its working tree.
-//
-// NOT claimed: that nothing happens anywhere on the machine. The architect is a
-// subprocess with the ambient permissions of the user running Sensei Code, and
-// this bounds where it is pointed, not what a determined process can reach.
-// Overclaiming here would be the same mistake as the status token that said OK.
+// The architect is a subprocess holding the ambient permissions of the user
+// running Sensei Code. Nothing here constrains what such a process can reach;
+// it constrains where it is POINTED, and it notices afterwards if the governed
+// repository moved.
 //
 // Writes to the disposable workspace are measured rather than ignored. They
 // harm nothing, and they are the observable signal that a configured provider
