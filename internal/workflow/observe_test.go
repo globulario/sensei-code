@@ -99,7 +99,7 @@ func TestObservationFindingsSeparateInferenceFromEvidence(t *testing.T) {
 			{Statement: "Anchor.Files is documented as the inputs read", About: "derived.go", Source: "repository"},
 			{Statement: "these five packages can merge without behavioural change", About: "internal/", Source: "inference"},
 		},
-	}, nil)
+	}, nil, "")
 	obs := strings.Index(out, "from the repository or the graph")
 	inf := strings.Index(out, "NOT established")
 	if obs < 0 || inf < 0 {
@@ -145,7 +145,7 @@ func TestAnObservationRunsOnAnUncertifiedWorkspaceAndReportsIt(t *testing.T) {
 	out := observationFindings(architectureDecision{
 		Summary: "audited x",
 		Claims:  []Claim{{Statement: "the graph says y", Source: "graph"}},
-	}, start.Degraded())
+	}, start.Degraded(), "")
 	if !strings.Contains(out, "did not certify itself") {
 		t.Fatalf("findings do not disclose the uncertified graph:\n%s", out)
 	}
@@ -165,13 +165,19 @@ func TestAnObservationRunsOnAnUncertifiedWorkspaceAndReportsIt(t *testing.T) {
 // So the prompt is not an improvement that could drift back out. It is what
 // makes the lane mean anything, and this pins it structurally.
 func TestTheObservationLaneAlwaysGetsAnInspectionBrief(t *testing.T) {
-	body := funcBody(t, "internal/workflow/engine.go", "execute")
+	body := funcBody(t, "internal/workflow/engine.go", "observe")
 	if !strings.Contains(body, "observationPrompt") {
 		t.Fatal("the observation lane no longer specialises the architect brief; " +
 			"a planning brief in a lane with no worker produces a plan nobody will execute")
 	}
-	if !strings.Contains(body, "e.observes(") {
-		t.Fatal("the brief is not selected from the lane")
+	// And the change path must not carry the lane at all: it is a separate
+	// executor now, not a guard threaded through the change workflow.
+	change := funcBody(t, "internal/workflow/engine.go", "execute")
+	if !strings.Contains(change, "e.observes(") {
+		t.Fatal("execute no longer branches to the observation executor")
+	}
+	if strings.Contains(change, "observationFindings") {
+		t.Fatal("the change path still renders observation findings; the lanes have re-merged")
 	}
 
 	brief := observationPrompt("BASE")
@@ -198,5 +204,118 @@ func TestTheObservationLaneAlwaysGetsAnInspectionBrief(t *testing.T) {
 	// An audit that finds nothing must be able to say so.
 	if !strings.Contains(brief, "found nothing") {
 		t.Fatal("the brief does not permit an empty result, which is how audits learn to invent findings")
+	}
+}
+
+// The observation lane is a path, not a guard.
+//
+// It began as a check near the end of the change workflow, and reviewers found
+// two consequences of that shape rather than two separate bugs: an observation
+// established a candidate identity on its way past, and an architect answering
+// "reply" left through the completion branch and reported a read-only run as a
+// completed change.
+//
+// Branching before the change lifecycle removes both by construction. This
+// asserts the branch is where it must be, because a guard that drifts one line
+// downward reintroduces exactly those bugs and nothing would fail.
+func TestTheObservationLaneBranchesBeforeTheChangeLifecycle(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	body := src[strings.Index(src, "func (e *Engine) execute("):]
+	if next := strings.Index(body[1:], "\nfunc "); next > 0 {
+		body = body[:next]
+	}
+
+	branch := strings.Index(body, "e.observes(taskID)")
+	if branch < 0 {
+		t.Fatal("execute no longer branches to the observation executor")
+	}
+	// Everything the change lifecycle does must come AFTER the branch.
+	for _, afterwards := range []string{
+		"candidate.Establish", // identity, and a file written under .sensei-code
+		"WorkflowCompleted",   // the reply/completion exit
+		"resolveArchitecture", // the change lane's own architect call
+	} {
+		at := strings.Index(body, afterwards)
+		if at < 0 {
+			continue
+		}
+		if at < branch {
+			t.Errorf("%s runs before the observation branch; an observation would reach it", afterwards)
+		}
+	}
+}
+
+// The governed checkout is never the observer's working directory.
+//
+// This is the actual boundary. The earlier version ran the architect in the
+// governed checkout and then read `git status --porcelain`, which is evidence
+// after the fact rather than a boundary: a commit leaves a clean tree, so does
+// a write to an ignored path, and so does a write followed by a restore.
+func TestTheObserverNeverRunsInTheGovernedCheckout(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "observe")
+	if !strings.Contains(body, "e.Repo.CreateObservationWorktree(") {
+		t.Fatal("the observation lane no longer creates a disposable workspace")
+	}
+	if !strings.Contains(body, "e.resolveArchitectureIn(") {
+		t.Fatal("the observer no longer receives an explicit working directory, " +
+			"so it runs wherever the default points — which is the governed checkout")
+	}
+	if !strings.Contains(body, "e.Repo.RemoveObservationWorktree(") {
+		t.Fatal("the disposable workspace is never discarded")
+	}
+	// Defense in depth is kept, and must not be the only thing there.
+	if !strings.Contains(body, "e.Repo.IsClean(") {
+		t.Fatal("the governed repository is no longer checked after an observation")
+	}
+}
+
+// A write by the provider is reported, not swallowed.
+//
+// It harms nothing — the workspace is discarded — but it falsifies the
+// assumption the lane is configured on, and silence would let a write-capable
+// architect look identical to a read-only one forever.
+func TestAProviderThatWritesIsReported(t *testing.T) {
+	out := observationFindings(architectureDecision{Summary: "audited x"}, nil,
+		" M internal/derived/derived.go\n?? scratch.txt")
+	if !strings.Contains(out, "not read-only") {
+		t.Fatalf("a provider write was not surfaced:\n%s", out)
+	}
+	if !strings.Contains(out, "governed repository is unchanged") {
+		t.Fatalf("the report does not distinguish a workspace write from a governed-repo write:\n%s", out)
+	}
+	// And a clean run says nothing about it.
+	if clean := observationFindings(architectureDecision{Summary: "audited x"}, nil, ""); strings.Contains(clean, "not read-only") {
+		t.Fatalf("a clean observation reported a provider write:\n%s", clean)
+	}
+}
+
+// The workspace is discarded before the terminal event, not in a defer.
+//
+// A deferred cleanup leaked every workspace: a headless caller returns from its
+// event loop the moment WorkflowObserved arrives and exits the process, so the
+// defer raced teardown and lost. The first restructured run left a detached
+// worktree behind, which is a read-only lane leaving state behind.
+func TestTheObservationWorkspaceIsDiscardedBeforeTheTerminalEvent(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	body := src[strings.Index(src, "func (e *Engine) observe("):]
+	if next := strings.Index(body[1:], "\nfunc "); next > 0 {
+		body = body[:next]
+	}
+	remove := strings.Index(body, "e.Repo.RemoveObservationWorktree(ctx, workspace)")
+	terminal := strings.Index(body, "event.WorkflowObserved")
+	if remove < 0 {
+		t.Fatal("the workspace is no longer discarded on the success path")
+	}
+	if terminal < 0 {
+		t.Fatal("the observation terminal event is gone")
+	}
+	if remove > terminal {
+		t.Fatal("the workspace is discarded after the terminal event; a headless caller exits on " +
+			"that event and the cleanup will not run")
+	}
+	// And a failure to discard is reported rather than swallowed: a read-only
+	// run that leaves state behind has not been read-only.
+	if !strings.Contains(body, "could not be discarded") {
+		t.Fatal("a failed discard is silent")
 	}
 }

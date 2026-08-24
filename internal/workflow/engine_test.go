@@ -1080,10 +1080,14 @@ func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
 func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
 	// Read the bytes, scoped to this function: funcBody collects identifiers
 	// only, so an assignment like `attempt = 0` never appears in it.
+	// resolveArchitectureIn holds the loop; resolveArchitecture is a wrapper
+	// that supplies the governed checkout as the working directory. The
+	// observation lane calls the same loop with a disposable workspace, so the
+	// ceiling being asserted here covers both lanes.
 	src := rawSource(t, "internal/workflow/engine.go")
-	start := strings.Index(src, "func (e *Engine) resolveArchitecture")
+	start := strings.Index(src, "func (e *Engine) resolveArchitectureIn")
 	if start < 0 {
-		t.Fatal("resolveArchitecture is gone")
+		t.Fatal("resolveArchitectureIn is gone")
 	}
 	rest := src[start:]
 	if next := strings.Index(rest[1:], "\nfunc "); next > 0 {
