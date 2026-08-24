@@ -1,0 +1,11 @@
+contract_unknown:
+  - id: contract_unknown.is_an_examined_file_with_no_anchors_a_knowledge_gap_or_an_an
+    kind: contract_unknown
+    title: is an examined file with no anchors a knowledge gap or an answer
+    description: 'The first end-to-end self-repair attempt stopped here twice. After regenerating the symbol index, the repair''s own files were examined and Coverage.Proven() reported sufficient over indexed files, while the blind spot high_risk_path_no_direct_anchors still reported the graph as having no facts about them. Both are accurate: indexed>0 and direct==0. The router treats the blind spot as a coverage gap, so a closure round runs against a gap the coverage evidence says is already closed, cannot close it, and escalates.'
+    proposed_contract: Once the graph has examined a file, 'no governing rule applies' is an answer rather than an absence, and is not a closable knowledge gap.
+    revision_request: This is a governance policy decision, not a technical one, and it is human-owned. The Makefile above symbol-index states the intent that indexing turns 'the graph never looked' into 'examined, no governing rule applies -- only the second is true here', which supports the proposed contract. But applying it grants autonomous architectural authority over 107 of 135 files instead of 22. Either the proposed contract is right and the tripwire expectation must move deliberately, or unanchored-but-examined must remain a gap and autonomous repair of unanchored regions is not currently possible. An agent must not choose this to make its own benchmark pass.
+    source_files:
+      - internal/workflow/authority.go
+    evidence:
+      - 'task-1787587662262823569 at 2026-08-24T16:13:04Z escalated with: ''the knowledge gap did not close ... high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply — graph has no facts about this file'', while the same scoped preflight reported coverage sufficient=true indexed_file_count=4 of 4. MEASURED CONSEQUENCE: making the coverage evidence outrank the blind spot moves the 135-file tripwire from 22 granted to 107 granted, and from 109 bounded-knowledge-gap to 24. Change reverted unapplied.'
