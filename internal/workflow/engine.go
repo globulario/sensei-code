@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/decision"
+	"github.com/globulario/sensei-code/internal/derived"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/provider"
@@ -1669,6 +1672,52 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string,
 		DeclaredConsequences: d.Consequences,
 	}
 	return routeAuthorityForAction(scoped, d.Claims, action), scoped, nil
+}
+
+// derivedRecipesPath is where the durable questions live.
+const derivedRecipesPath = "docs/awareness/derived_recipes.json"
+
+// senseiBinary is the CLI that performs derivations.
+//
+// Separate from Config.Sensei, which names the MCP server. SENSEI_BIN exists so
+// a checkout can point at a build carrying `derive` without reinstalling.
+func senseiBinary() string {
+	if b := strings.TrimSpace(os.Getenv("SENSEI_BIN")); b != "" {
+		return b
+	}
+	return "sensei"
+}
+
+// derivedCoverage revalidates the committed recipes against the world being
+// assessed and returns the planned files a derivation established THERE.
+//
+// The only thing reaching the router is a list of files a derivation just
+// succeeded over. Recipes do not reach it, and neither does any earlier
+// success: a fact that derived yesterday, or at another commit, has no standing
+// here. A recipe costs one derivation and buys nothing on its own.
+//
+// Failure is silence rather than coverage. A missing recipe file, a sensei
+// binary without `derive`, a derivation that refuses — each leaves the region
+// uncovered and the gap intact, which is the direction this must fail in.
+func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []string {
+	if len(planned) == 0 {
+		return nil
+	}
+	recipes, err := derived.LoadRecipes(filepath.Join(e.Repo.Root, derivedRecipesPath))
+	if err != nil || len(recipes) == 0 {
+		return nil
+	}
+	world, err := e.Repo.Head(ctx)
+	if err != nil {
+		return nil
+	}
+	world = strings.TrimSpace(world)
+	if world == "" {
+		return nil
+	}
+	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
+	covered, _ := derived.CoveredFiles(anchors, world, planned)
+	return covered
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
