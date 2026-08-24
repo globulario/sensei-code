@@ -192,10 +192,47 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 
 	// The status decides whether there is an ANSWER to read. It does not decide
 	// what the answer says about coverage.
+	spots := readBlindSpots(scoped.BlindSpots)
 	switch scoped.Status {
 	case sensei.PreflightOK, sensei.PreflightEmpty:
 		// Both are answers. What they establish is read below, from the
 		// coverage evidence, not from which of the two words came back.
+	case sensei.PreflightDegraded:
+		// DEGRADED is two different findings sharing one word, and only one of
+		// them is "the surface is unreliable".
+		//
+		// Found by attempting the first autonomous self-repair. A repair had to
+		// touch internal/workflow/authority_test.go, which answers DEGRADED
+		// with exactly these blind spots:
+		//
+		//	high_risk_path_no_direct_anchors: file is under a high-risk
+		//	  directory but no awareness anchors apply
+		//	this is NOT proof of safety — the graph has no facts about this file
+		//
+		// Both are COVERAGE markers -- readBlindSpots already classifies them
+		// that way, and the whole blind-spot vocabulary was split on exactly
+		// this distinction. The graph is not broken here; it is uninformed
+		// about a risky file. Routing that to CannotEstablish reported an
+		// epistemic gap as a broken instrument, and CannotEstablish is a hard
+		// stop: no closure round is ever attempted, so the one condition a
+		// closure round exists to fix could never be fixed.
+		//
+		// Across the 135-file specimen every DEGRADED file is coverage-shaped,
+		// so this is the common case rather than an edge one.
+		//
+		// It still fails closed on anything else. A DEGRADED answer carrying an
+		// unrecognised blind spot, a consequence-shaped one, or NO blind spots
+		// at all tells us nothing about WHY, and an instrument that will not
+		// say why it is degraded is not one to reason from.
+		if len(spots.Coverage) == 0 || len(spots.Unrecognised) != 0 || len(spots.Consequence) != 0 {
+			return Routing{
+				Route: RouteCannotEstablish,
+				Condition: "preflight degraded and the reason is not a coverage gap: " +
+					degradedReason(scoped.BlindSpots),
+			}
+		}
+		// Fall through: this is missing knowledge, and the coverage logic below
+		// decides it from the coverage evidence like any other answer.
 	default:
 		return Routing{
 			Route:     RouteCannotEstablish,
@@ -404,4 +441,13 @@ func escalationCondition(r Routing) string {
 		return string(r.Route)
 	}
 	return fmt.Sprintf("%s: %s", r.Route, r.Condition)
+}
+
+// degradedReason renders why a degraded preflight could not be read as a
+// coverage gap, so the refusal names its own evidence.
+func degradedReason(spots []string) string {
+	if len(spots) == 0 {
+		return "the preflight reported no blind spots, so nothing says what is degraded"
+	}
+	return strings.Join(spots, "; ")
 }

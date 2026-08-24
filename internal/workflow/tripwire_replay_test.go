@@ -98,10 +98,22 @@ func TestTheCoverageTripwireSplitsByMeaning(t *testing.T) {
 		t.Fatalf("probe size changed: %d", tally.Total)
 	}
 	want := map[string]int{
-		string(RouteCloseGap):        84, // EMPTY: the graph reports it has nothing
-		string(RouteArchitectural):   22, // OK, consequence signal, gate=none, action bounded
-		string(RouteHuman):           4,  // OK, APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED — the gate outranks
-		string(RouteCannotEstablish): 25, // DEGRADED: the surface itself is degraded
+		// 84 EMPTY, plus the 25 DEGRADED whose blind spots are entirely
+		// coverage-shaped. Those 25 moved here from CannotEstablish when the
+		// first autonomous self-repair attempt could not proceed: a repair had
+		// to touch a high-risk test file with no anchors, DEGRADED was read as
+		// "the instrument is broken", and a hard stop meant no closure round
+		// was ever attempted for the one condition a closure round exists to
+		// fix. Every DEGRADED file in this specimen carries
+		// high_risk_path_no_direct_anchors and "the graph has no facts about
+		// this file" -- both coverage markers.
+		string(RouteCloseGap):      109,
+		string(RouteArchitectural): 22, // unchanged: nothing was granted that was not granted before
+		string(RouteHuman):         4,  // unchanged: an explicit approval gate still outranks everything
+		// 0, because no file in this specimen is degraded for a reason other
+		// than absent coverage. A degraded answer that will not say why still
+		// refuses; TestADegradedSurfaceThatIsNotACoverageGapStillRefuses pins it.
+		string(RouteCannotEstablish): 0,
 	}
 	for route, n := range want {
 		if got := len(byRoute[route]); got != n {
