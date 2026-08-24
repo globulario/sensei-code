@@ -71,9 +71,10 @@ const (
 type Anchor struct {
 	recipe Recipe
 	world  string
-	// files are the inputs the derivation actually read. Coverage extends
-	// exactly that far and no further: a file the derivation never opened is
-	// not covered by it, whatever the recipe names.
+	// files are the SUBJECT files: what the proposition is about. Not what the
+	// derivation read — those are different sets, and using the second was a
+	// shipped defect that covered internal/event/event.go with a proposition
+	// about Bus.subs under Bus.mu.
 	files []string
 	scope []string
 }
@@ -123,11 +124,42 @@ type Revalidator interface {
 
 // receipt is the subset of `sensei derive -json` this package reads.
 type receipt struct {
-	Result            string   `json:"result"`
-	Detail            string   `json:"detail"`
-	Commit            string   `json:"pinned_commit"`
-	Inputs            []string `json:"independently_observed_inputs"`
+	Result string `json:"result"`
+	Detail string `json:"detail"`
+	Commit string `json:"pinned_commit"`
+	// Inputs are the files the derivation READ. They are deliberately not used
+	// for coverage: a derivation parses a whole package to resolve types, so
+	// this list includes files the proposition says nothing about.
+	Inputs []string `json:"independently_observed_inputs"`
+	// Subjects are the entities the proposition is ABOUT, computed by the
+	// derivation from its own proof. Coverage comes from here.
+	Subjects []struct {
+		File   string `json:"file"`
+		Entity string `json:"entity"`
+		Role   string `json:"role"`
+	} `json:"subjects"`
 	CompletenessScope []string `json:"completeness_scope"`
+}
+
+// subjectFiles are the distinct files the proposition is about.
+//
+// internal/event/event.go contains neither Bus nor mu and was once covered by a
+// proposition about Bus.subs under Bus.mu, because it appeared in Inputs. A file
+// may be necessary to compute a truth without being something that truth says
+// anything about.
+func (r receipt) subjectFiles() []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range r.Subjects {
+		f := strings.TrimSpace(s.File)
+		if f == "" || seen[f] {
+			continue
+		}
+		seen[f] = true
+		out = append(out, f)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // CLI revalidates by running `sensei derive`.
@@ -160,7 +192,17 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
 	}
 	// The one construction site. Everything above is inert until here, and this
 	// runs only on a DERIVED receipt from the world being assessed.
-	res.Anchor = &Anchor{recipe: r, world: rec.Commit, files: rec.Inputs, scope: rec.CompletenessScope}
+	//
+	// Extent is the SUBJECT files. A derivation that named no subjects covers
+	// nothing rather than falling back to everything it read.
+	subjects := rec.subjectFiles()
+	if len(subjects) == 0 {
+		res.Outcome = Unknown
+		res.Detail = "the derivation named no subjects, so there is nothing this proposition is about; " +
+			"coverage may not fall back to the files it read — " + rec.Detail
+		return res
+	}
+	res.Anchor = &Anchor{recipe: r, world: rec.Commit, files: subjects, scope: rec.CompletenessScope}
 	return res
 }
 

@@ -123,3 +123,36 @@ func TestLiveARecoveredRecipeRevalidatesTheSame(t *testing.T) {
 		t.Logf("recovered and revalidated: %s", a.Describe())
 	}
 }
+
+// The event.go specimen, through the live control plane.
+//
+// The derivation reads internal/event/event.go to resolve types and says
+// nothing about it. Coverage must reach bus.go and stop.
+//
+// This test is willing to LOSE apparent coverage in exchange for truthfulness,
+// which is the whole point: before the fix, both files were covered and the
+// numbers looked better.
+func TestLiveCoverageStopsAtTheSubjectFile(t *testing.T) {
+	root, _ := os.Getwd()
+	repo := strings.TrimSuffix(root, "/internal/derived")
+	world := head(t, repo)
+
+	anchors, results := AnchorsFor(context.Background(), CLI{Bin: bin(t)}, repo, world, []Recipe{busRecipe()})
+	if len(anchors) != 1 {
+		t.Fatalf("no anchor: %+v", results)
+	}
+	files := anchors[0].Files()
+	if len(files) != 1 || files[0] != "internal/event/bus.go" {
+		t.Fatalf("coverage extent = %v, want only internal/event/bus.go", files)
+	}
+
+	covered, uncovered := CoveredFiles(anchors, world,
+		[]string{"internal/event/bus.go", "internal/event/event.go"})
+	if len(covered) != 1 || covered[0] != "internal/event/bus.go" {
+		t.Fatalf("covered=%v", covered)
+	}
+	if len(uncovered) != 1 || uncovered[0] != "internal/event/event.go" {
+		t.Fatalf("event.go was covered by a proposition that says nothing about it: uncovered=%v", uncovered)
+	}
+	t.Logf("read more than it covers, correctly: covered=%v uncovered=%v", covered, uncovered)
+}
