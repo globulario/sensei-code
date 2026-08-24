@@ -39,17 +39,34 @@ import (
 // Inert by construction. Nothing in it asserts the proposition holds, and no
 // field is read as authority.
 type Recipe struct {
-	Kind  string `json:"kind"`
-	Dir   string `json:"dir"`
-	Type  string `json:"type"`
-	Field string `json:"field"`
-	Lock  string `json:"lock"`
+	Kind string `json:"kind"`
+	// Dir, Type, Field and Lock name a field_access_under_lock question.
+	Dir   string `json:"dir,omitempty"`
+	Type  string `json:"type,omitempty"`
+	Field string `json:"field,omitempty"`
+	Lock  string `json:"lock,omitempty"`
+	// Command, Owner and SearchPaths name a command_invocation_confined_to
+	// question: which executable, which package is claimed to own it, and where
+	// the derivation looked.
+	//
+	// SearchPaths is a term of the question rather than a search convenience.
+	// A narrower search is a WEAKER claim, not a cheaper one -- looking only
+	// inside the owner package "confirms" a confinement by not looking where a
+	// violation would live. It is carried here so the recipe cannot be widened
+	// or narrowed silently between revalidations.
+	Command     string   `json:"command,omitempty"`
+	Owner       string   `json:"owner,omitempty"`
+	SearchPaths []string `json:"search_paths,omitempty"`
 	// Why records the investigation that produced the question. Provenance for
 	// a human reader; never consulted when deciding anything.
 	Why string `json:"why,omitempty"`
 }
 
 func (r Recipe) String() string {
+	if r.Kind == "command_invocation_confined_to" {
+		return fmt.Sprintf("%s(%q confined to %s) searched under %s",
+			r.Kind, r.Command, r.Owner, strings.Join(r.SearchPaths, ", "))
+	}
 	return fmt.Sprintf("%s(%s.%s under %s.%s) in %s", r.Kind, r.Type, r.Field, r.Type, r.Lock, r.Dir)
 }
 
@@ -99,7 +116,10 @@ func (a Anchor) Covers(world, file string) bool {
 // World is the revision this anchor speaks for.
 func (a Anchor) World() string { return a.world }
 
-// Files are the inputs the derivation read.
+// Files are the SUBJECT files -- what the proposition is about -- not the files
+// the derivation read to compute it. The doc comment said "inputs" until the
+// two were separated; on a confinement derivation the gap is 71 files read to
+// one file covered, so the wrong reading is not a subtlety.
 func (a Anchor) Files() []string { return append([]string(nil), a.files...) }
 
 // Describe renders the anchor with the derivation's envelope attached, so a
@@ -173,9 +193,17 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
 	if strings.TrimSpace(bin) == "" {
 		bin = "sensei"
 	}
-	cmd := exec.CommandContext(ctx, bin, "derive", "-json",
-		"-repo-root", repoRoot, "-revision", revision,
-		"-kind", r.Kind, "-dir", r.Dir, "-type", r.Type, "-field", r.Field, "-lock", r.Lock)
+	args := []string{"derive", "-json", "-repo-root", repoRoot, "-revision", revision, "-kind", r.Kind}
+	switch r.Kind {
+	case "command_invocation_confined_to":
+		args = append(args, "-command", r.Command, "-owner", r.Owner)
+		for _, p := range r.SearchPaths {
+			args = append(args, "-search", p)
+		}
+	default:
+		args = append(args, "-dir", r.Dir, "-type", r.Type, "-field", r.Field, "-lock", r.Lock)
+	}
+	cmd := exec.CommandContext(ctx, bin, args...)
 	out, err := cmd.Output()
 	if len(out) == 0 {
 		return Result{Recipe: r, Outcome: Unknown,
