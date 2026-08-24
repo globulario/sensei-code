@@ -52,6 +52,13 @@ const (
 	// run the repository's own tests. The worktree is discarded on refusal, and
 	// the diff is audited before it can go anywhere.
 	StageCandidateEdit ActionStage = "candidate-edit"
+	// StageObserve: read the repository and report what was found. No file is
+	// written, no worktree is created, nothing is admitted.
+	//
+	// Structural like every other stage: set by the entrypoint the task came
+	// through, never from a plan that says it will only read. A plan claiming
+	// read-only is a claim, and claims escalate rather than clear.
+	StageObserve ActionStage = "observe"
 	// StagePublish: anything that leaves the worktree — merge, release, deploy,
 	// or mutating state something else can observe.
 	StagePublish ActionStage = "publish"
@@ -170,6 +177,13 @@ func AssessConsequences(a Action) ConsequenceAssessment {
 	}
 
 	switch a.Stage {
+	case StageObserve:
+		assessment.Result = ConsequenceBounded
+		assessment.Boundary = "nothing is written: the observation lane reads the repository, " +
+			"creates no candidate worktree, and ends by reporting findings rather than by admitting a change"
+		assessment.Evidence = append(assessment.Evidence,
+			"stage is structural — set by the entrypoint, not claimed by the plan",
+			"the run is verified to have produced no working-tree change before it may report observed")
 	case StageCandidateEdit:
 		assessment.Result = ConsequenceBounded
 		assessment.Boundary = "the candidate worktree: files are edited in an isolated checkout, " +

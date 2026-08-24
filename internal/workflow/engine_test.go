@@ -404,7 +404,7 @@ func TestAStoppedRunIsReportedAsStoppedNotFailed(t *testing.T) {
 	// ReadRepository is not granted, so the run refuses immediately and takes
 	// the failure path with an already-cancelled context — which is exactly the
 	// shape a stop produces, without needing a live Sensei or a worker.
-	e.run(ctx, "task-1", "do something")
+	e.run(ctx, "task-1", "do something", RequestedByHuman)
 
 	var kinds []event.Kind
 	for {
