@@ -1,0 +1,11 @@
+contract_unknown:
+  - id: contract_unknown.git_invocation_is_not_confined_to_internal_gitx
+    kind: contract_unknown
+    title: git invocation is not confined to internal/gitx
+    description: A machine derivation observed that git is invoked from three packages, not one. internal/gitx holds 6 of 8 observable invocations; internal/doctor and internal/investigate each hold one. Nothing in the graph says internal/gitx owns the git process boundary, so the derivation can report that the confinement does not hold but cannot report whether it was ever meant to.
+    proposed_contract: All git invocation is confined to internal/gitx, which owns the process boundary to git.
+    revision_request: Is internal/gitx intended to own git invocation? The derivation observes the boundary is not held; whether it SHOULD be held is a purpose claim no derivation establishes. If yes, the two sites are defects. If no, there is no boundary and this should not be recorded as a question.
+    source_files:
+      - internal/doctor/taskbinding.go
+    evidence:
+      - 'derive.command_invocation_confined_to/v1 at 54a891e45d46: 2 of 8 observable invocations of "git" under internal, cmd originate outside internal/gitx — internal/doctor/taskbinding.go:124 in internal/doctor; internal/investigate/investigate.go:80 in internal/investigate. Both files answer PREFLIGHT_STATUS_EMPTY, so the graph has no facts about exactly the two files that break the boundary.'
