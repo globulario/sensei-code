@@ -8,7 +8,7 @@ import "testing"
 // than compares: an observer reasoning its way to a conclusion is not a reason
 // to edit the repository, and everything downstream treats a task as a task.
 func TestAnInferenceCannotBecomeRepairWork(t *testing.T) {
-	f := New("task-1", "abc123", "audit x", "these packages could be merged safely", "internal/", []string{"internal/a.go"}, "inference")
+	f := New("task-1", "abc123", "audit x", "these packages could be merged safely", "internal/", []string{"internal/a.go"}, []string{"internal/a.go"}, "inference")
 	if f.Eligible() {
 		t.Fatal("an inference-only finding was eligible to become a change objective")
 	}
@@ -23,7 +23,7 @@ func TestAnInferenceCannotBecomeRepairWork(t *testing.T) {
 // unrecognised one through.
 func TestUnknownProvenanceFailsClosed(t *testing.T) {
 	for _, src := range []string{"", "assumed", "reasoning", "model_certified", "REPOSITORY_ISH", "inferred", "  "} {
-		f := New("task-1", "abc", "audit", "a statement", "somewhere", []string{"a.go"}, src)
+		f := New("task-1", "abc", "audit", "a statement", "somewhere", []string{"a.go"}, []string{"a.go"}, src)
 		if f.Source.EvidenceBearing() {
 			t.Errorf("source %q was treated as evidence-bearing", src)
 		}
@@ -33,7 +33,7 @@ func TestUnknownProvenanceFailsClosed(t *testing.T) {
 	}
 	// And the two that are evidence do proceed, or the gate is just "refuse".
 	for _, src := range []string{"repository", "Repository", "  graph  "} {
-		f := New("task-1", "abc", "audit", "a statement", "somewhere", []string{"a.go"}, src)
+		f := New("task-1", "abc", "audit", "a statement", "somewhere", []string{"a.go"}, []string{"a.go"}, src)
 		if !f.Eligible() {
 			t.Errorf("source %q could not become repair work", src)
 		}
@@ -54,7 +54,7 @@ func TestTheZeroProvenanceIsUnrecognised(t *testing.T) {
 // A finding that names nowhere cannot be repaired, because nothing can be
 // re-checked.
 func TestAFindingWithNoFilesIsNotWork(t *testing.T) {
-	if New("t", "w", "o", "something is wrong", "", nil, "repository").Eligible() {
+	if New("t", "w", "o", "something is wrong", "", nil, []string{"a.go"}, "repository").Eligible() {
 		t.Fatal("a finding naming no files became repair work")
 	}
 }
@@ -62,12 +62,12 @@ func TestAFindingWithNoFilesIsNotWork(t *testing.T) {
 // Identity is stable for the same claim at the same revision, so re-running an
 // audit does not manufacture new work, and moves when the world moves.
 func TestFindingIdentityIsStablePerWorld(t *testing.T) {
-	a := New("task-1", "world-1", "obj", "s", "a", []string{"x.go"}, "repository")
-	b := New("task-2", "world-1", "different objective", "s", "a", []string{"x.go"}, "repository")
+	a := New("task-1", "world-1", "obj", "s", "a", []string{"x.go"}, []string{"x.go"}, "repository")
+	b := New("task-2", "world-1", "different objective", "s", "a", []string{"x.go"}, []string{"x.go"}, "repository")
 	if a.ID != b.ID {
 		t.Fatal("the same claim at the same revision produced two identities")
 	}
-	c := New("task-1", "world-2", "obj", "s", "a", []string{"x.go"}, "repository")
+	c := New("task-1", "world-2", "obj", "s", "a", []string{"x.go"}, []string{"x.go"}, "repository")
 	if a.ID == c.ID {
 		t.Fatal("a finding kept its identity across revisions; a repair must re-check the current world")
 	}
@@ -80,7 +80,7 @@ func TestFindingIdentityIsStablePerWorld(t *testing.T) {
 func TestTheRepairObjectiveDoesNotSupplyTheFix(t *testing.T) {
 	f := New("task-1", "abc123", "audit the router",
 		"only the literal source inference is treated as unverified", "authority.go",
-		[]string{"internal/workflow/authority.go"}, "repository")
+		[]string{"internal/workflow/authority.go"}, []string{"internal/workflow/authority.go"}, "repository")
 	obj := f.RepairObjective()
 	for _, required := range []string{
 		"re-check the CURRENT repository", // the world may have moved
@@ -103,4 +103,42 @@ func contains(h, n string) bool {
 		}
 		return false
 	}())
+}
+
+// A claimed provenance is not evidence on its own.
+//
+// Review finding on the bridge, and it is the defect this whole line of work
+// started from, one level up: an architect can write source "repository" about
+// a file it never opened, and that word alone would have opened autonomous
+// repair work. The label must at least agree with what the run did.
+func TestAFindingAboutAFileTheObservationNeverReadIsNotWork(t *testing.T) {
+	f := New("task-1", "w", "obj",
+		"internal/publish/publish.go pushes without checking the gate", "internal/publish/publish.go",
+		[]string{"internal/publish/publish.go"},    // claimed
+		[]string{"internal/workflow/authority.go"}, // actually read
+		"repository")
+	if f.Eligible() {
+		t.Fatal("a finding about a file the observation never opened became repair work")
+	}
+	if f.AboutFilesWereRead() {
+		t.Fatal("AboutFilesWereRead accepted a file that was not read")
+	}
+}
+
+// And when nothing records what was read, nothing establishes the finding is
+// about it. Fail closed.
+func TestAFindingWithNoRecordOfWhatWasReadIsNotWork(t *testing.T) {
+	f := New("t", "w", "o", "a real statement", "x.go", []string{"x.go"}, nil, "repository")
+	if f.Eligible() {
+		t.Fatal("a finding with no record of what was read became repair work")
+	}
+}
+
+// Partial overlap is not enough: a finding naming two files where only one was
+// read is a finding half of which nobody looked at.
+func TestEveryFileAFindingNamesMustHaveBeenRead(t *testing.T) {
+	f := New("t", "w", "o", "s", "x", []string{"a.go", "b.go"}, []string{"a.go"}, "repository")
+	if f.Eligible() {
+		t.Fatal("a finding naming an unread file became repair work")
+	}
 }

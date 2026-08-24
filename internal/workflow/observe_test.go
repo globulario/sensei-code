@@ -263,9 +263,15 @@ func TestTheObserverNeverRunsInTheGovernedCheckout(t *testing.T) {
 	if !strings.Contains(body, "e.Repo.RemoveObservationWorktree(") {
 		t.Fatal("the disposable workspace is never discarded")
 	}
-	// Defense in depth is kept, and must not be the only thing there.
-	if !strings.Contains(body, "e.Repo.IsClean(") {
-		t.Fatal("the governed repository is no longer checked after an observation")
+	// Defense in depth is kept, and must not be the only thing there. It
+	// compares two moments rather than testing one: a single after-the-fact
+	// check cannot tell a change this run made from one already present, and
+	// accused an already-dirty repository of being mutated by the observation.
+	if !strings.Contains(body, "e.Repo.WorktreeIsCleanDetail(") {
+		t.Fatal("the governed repository is no longer checked around an observation")
+	}
+	if strings.Count(body, "WorktreeIsCleanDetail(") < 2 {
+		t.Fatal("the governed repository is checked only once; before and after are both required")
 	}
 }
 

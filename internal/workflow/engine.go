@@ -3433,6 +3433,25 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 		return errors.New("observation cannot start: the repository HEAD could not be resolved, " +
 			"so there is no commit to check out a disposable copy of")
 	}
+	// What the governed repository looked like BEFORE the observer ran.
+	//
+	// The check used to read `git status --porcelain` only afterwards, which
+	// asks the wrong question twice over: it cannot tell a change this run made
+	// from one that was already there, and it reported an already-dirty
+	// repository as having been mutated by the observation. Hit for real while
+	// re-auditing a retained candidate, whose fix is uncommitted by design.
+	//
+	// Comparing before and after answers the question that matters -- did THIS
+	// run change the governed repository -- and it is still evidence rather
+	// than confinement. The boundary is that the observer's working directory
+	// is somewhere else; this is what detects a provider that went looking for
+	// the governed checkout anyway.
+	before, beforeErr := e.Repo.WorktreeIsCleanDetail(ctx, e.Repo.Root)
+	if beforeErr != nil {
+		return fmt.Errorf("observation cannot start: the governed repository could not be read, "+
+			"so nothing could establish whether this run changed it: %w", beforeErr)
+	}
+
 	workspace, err := e.Repo.CreateObservationWorktree(ctx, taskID, head)
 	if err != nil {
 		return fmt.Errorf("observation workspace: %w", err)
@@ -3458,14 +3477,16 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 		return err
 	}
 
-	// The governed repository must be untouched. Defense in depth: the lane
-	// already never pointed the architect at it.
-	if clean, cerr := e.Repo.IsClean(ctx); cerr != nil {
-		return fmt.Errorf("observation cannot report: the governed repository could not be checked: %w", cerr)
-	} else if !clean {
-		return errors.New("the governed repository changed during an observation; refusing to report it " +
-			"as read-only. The observer was pointed at a disposable workspace, so this is not a lane " +
-			"violation by the architect -- something else in this process wrote to the repository")
+	// The governed repository must be exactly as this run found it.
+	after, afterErr := e.Repo.WorktreeIsCleanDetail(ctx, e.Repo.Root)
+	if afterErr != nil {
+		return fmt.Errorf("observation cannot report: the governed repository could not be checked: %w", afterErr)
+	}
+	if after != before {
+		return fmt.Errorf("the governed repository changed during this observation; refusing to report it "+
+			"as read-only. The observer was pointed at a disposable workspace, so either the configured "+
+			"provider reached the governed checkout anyway or something else in this process wrote to it.\n"+
+			"before:\n%s\nafter:\n%s", indentOrNone(before), indentOrNone(after))
 	}
 
 	var wrote string
@@ -3508,7 +3529,8 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 func (e *Engine) recordFindings(taskID, objective, world string, d architectureDecision) {
 	var out []finding.Finding
 	for _, c := range d.Claims {
-		out = append(out, finding.New(taskID, world, objective, c.Statement, c.About, filesFor(c, d), c.Source))
+		out = append(out, finding.New(taskID, world, objective, c.Statement, c.About,
+			filesFor(c, d), d.Files, c.Source))
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -3544,4 +3566,16 @@ func (e *Engine) Findings(taskID string) []finding.Finding {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return append([]finding.Finding(nil), e.findings[taskID]...)
+}
+
+// indentOrNone renders a worktree status for a refusal message.
+func indentOrNone(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "  (clean)"
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(status, "\n"), "\n") {
+		b.WriteString("  " + line + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }

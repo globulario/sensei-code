@@ -45,6 +45,16 @@ func runAuditRepair(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 		fs.Usage()
 		return exitUsage
 	}
+	// A non-positive limit is a caller error, not "audit and repair nothing".
+	// Left to fall through, the loop broke on the first finding and returned a
+	// completed status for a run that repaired nothing -- the caller would read
+	// success where no work was even attempted. Use observe for an audit that
+	// opens no repairs.
+	if *maxRepairs < 1 {
+		fmt.Fprintf(os.Stderr, "sensei-code audit-repair: --max-repairs must be at least 1 (got %d); "+
+			"use `sensei-code observe` to audit without opening repair work\n", *maxRepairs)
+		return exitUsage
+	}
 	if report := inspectQuick(ctx, repo, cfg); !report.Ready() {
 		fmt.Fprintln(os.Stderr, report.Render())
 		return exitFailed
@@ -77,11 +87,18 @@ func runAuditRepair(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 	// Phase 2: decide what may become work. Eligibility is the finding's own
 	// provenance, not this command's intent.
 	all := engine.Findings(observation)
+	// Deduplicate by the finding's stable id. An observation that states the
+	// same thing twice -- easy for a model, and likelier the more thorough the
+	// audit -- would otherwise open the same repair twice, and the second task
+	// would run against a world the first had already changed.
 	var eligible []finding.Finding
+	seen := map[string]bool{}
 	for _, f := range all {
-		if f.Eligible() {
-			eligible = append(eligible, f)
+		if !f.Eligible() || seen[f.ID] {
+			continue
 		}
+		seen[f.ID] = true
+		eligible = append(eligible, f)
 	}
 	fmt.Printf("\n%d finding(s); %d eligible to become repair work\n", len(all), len(eligible))
 	for _, f := range all {

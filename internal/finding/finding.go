@@ -96,6 +96,19 @@ type Finding struct {
 	About     string
 	Files     []string
 	Source    Provenance
+	// ReadFiles are the files the observation actually opened.
+	//
+	// Carried because Source is a label the model typed. The defect this
+	// package is named after -- an unchecked value read as evidence -- applies
+	// to the finding itself: an architect can write source "repository" about a
+	// file it never read, and that word alone would open autonomous repair
+	// work.
+	//
+	// Checking this does not make the claim true. It establishes the weaker
+	// thing that CAN be checked here: the finding is about something the
+	// observation looked at. Verifying the statement is the repair task's job,
+	// and the repair re-checks the current world before changing anything.
+	ReadFiles []string
 }
 
 // Eligible reports whether this finding may become repair WORK.
@@ -106,17 +119,44 @@ type Finding struct {
 // where that distinction has to hold, because everything downstream treats a
 // task as a task.
 //
-// It must also name where it is, or the repair has nothing to re-check.
+// It must also name where it is, or the repair has nothing to re-check, and
+// every file it names must be one the observation actually opened. A claimed
+// provenance is not evidence on its own -- the lesson of the very defect this
+// bridge first carried -- so the label must at least agree with what the run
+// did.
 func (f Finding) Eligible() bool {
-	return f.Source.EvidenceBearing() && strings.TrimSpace(f.Statement) != "" && len(f.Files) != 0
+	if !f.Source.EvidenceBearing() || strings.TrimSpace(f.Statement) == "" || len(f.Files) == 0 {
+		return false
+	}
+	return f.AboutFilesWereRead()
+}
+
+// AboutFilesWereRead reports whether every file this finding is about was
+// opened by the observation that produced it.
+func (f Finding) AboutFilesWereRead() bool {
+	if len(f.ReadFiles) == 0 {
+		// Nothing establishes what was read, so nothing establishes that this
+		// finding is about it. Fail closed, like every other unknown here.
+		return false
+	}
+	read := make(map[string]bool, len(f.ReadFiles))
+	for _, r := range f.ReadFiles {
+		read[strings.TrimSpace(r)] = true
+	}
+	for _, name := range f.Files {
+		if !read[name] {
+			return false
+		}
+	}
+	return true
 }
 
 // New builds a finding and computes its identity.
-func New(observationTask, world, objective, statement, about string, files []string, source string) Finding {
+func New(observationTask, world, objective, statement, about string, files, readFiles []string, source string) Finding {
 	f := Finding{
 		ObservationTask: observationTask, World: world, Objective: objective,
 		Statement: strings.TrimSpace(statement), About: strings.TrimSpace(about),
-		Files: normalise(files), Source: Classify(source),
+		Files: normalise(files), ReadFiles: normalise(readFiles), Source: Classify(source),
 	}
 	sum := sha256.Sum256([]byte(strings.Join([]string{
 		f.World, f.Statement, f.About, strings.Join(f.Files, ","),
