@@ -9,14 +9,33 @@ import (
 
 // scopedPreflight builds a file-scoped preflight result on a healthy graph,
 // with the fields under test overridden by the caller.
+// scopedPreflight decodes a fixture, defaulting the coverage block the way a
+// real server always fills it.
+//
+// Every fixture in this package used to omit "coverage" entirely, which no live
+// preflight does -- probing the running graph, an OK answer carries
+// sufficient=true with real counts and an EMPTY answer carries nulls. That gap
+// stopped mattering while the router inferred coverage from the STATUS, and
+// started mattering the moment it read the coverage evidence instead.
+//
+// So the default is applied by status, matching observed responses, and any
+// fixture stating its own coverage keeps it. A test about thin or absent
+// coverage now says so explicitly rather than relying on a silence that real
+// responses never contain.
 func scopedPreflight(t *testing.T, body string) sensei.PreflightDecision {
 	t.Helper()
+	if !strings.Contains(body, "\"coverage\"") && strings.Contains(body, "PREFLIGHT_STATUS_OK") {
+		body = strings.Replace(body, "{", "{\n\t\t\t\t"+provenCoverage, 1)
+	}
 	d, err := sensei.DecodePreflight(result(t, "preflight", body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	return d
 }
+
+// provenCoverage is what a live OK preflight publishes alongside its status.
+const provenCoverage = `"coverage": {"sufficient": true, "direct_anchor_count": 1, "indexed_file_count": 1, "file_count": 1},`
 
 const healthyAuthority = `"authority": {
 	"authoritative": true,

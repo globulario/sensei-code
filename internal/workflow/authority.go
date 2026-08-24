@@ -156,21 +156,40 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		return Routing{Route: RouteCannotEstablish, Condition: scoped.Authority.Diagnostic()}
 	}
 
-	coverageAbsent := false
+	// The status decides whether there is an ANSWER to read. It does not decide
+	// what the answer says about coverage.
 	switch scoped.Status {
-	case sensei.PreflightOK:
-		// The only status that can lead to a grant.
-	case sensei.PreflightEmpty:
-		// Files were named and Sensei still found nothing: the planned region
-		// is outside what the graph covers. Recorded rather than returned, so
-		// the consequence checks below still run over it.
-		coverageAbsent = true
+	case sensei.PreflightOK, sensei.PreflightEmpty:
+		// Both are answers. What they establish is read below, from the
+		// coverage evidence, not from which of the two words came back.
 	default:
 		return Routing{
 			Route:     RouteCannotEstablish,
 			Condition: "preflight " + strings.ToLower(strings.TrimPrefix(string(scoped.Status), "PREFLIGHT_STATUS_")),
 		}
 	}
+
+	// Coverage is computed from coverage evidence.
+	//
+	// This read `PreflightEmpty -> coverageAbsent = true`, converting a summary
+	// status into a different and stronger proposition: "graph coverage is
+	// absent for the planned files". Those are equivalent only if the preflight
+	// contract guarantees the equivalence, and it does not. Live counterexample,
+	// pinned in TestAnEmptyStatusIsNotACoverageVerdict:
+	//
+	//	internal/workflow/authority.go
+	//	  status   PREFLIGHT_STATUS_EMPTY
+	//	  coverage sufficient=true indexed_file_count=1
+	//
+	// Coverage.Proven() is TRUE there while the router declared the region
+	// uncovered and sent the run off to close a gap that was not open. The
+	// status was accurate; the stronger reading of it was false.
+	//
+	// Reading Coverage directly also stops a future status value from silently
+	// changing routing: a new enum member alters what is ANSWERABLE, never what
+	// is COVERED.
+	// DerivedCoverage is applied further down, where it already was.
+	coverageAbsent := !scoped.Coverage.Proven()
 
 	// Consequence authority. Both of these escalate rather than permit, so
 	// reading them on an EMPTY preflight is safe in the one direction that
@@ -212,7 +231,12 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		// Sending this to a human asks them to supply coverage Sensei lacks —
 		// a technical answer — and answering leaves the graph exactly as empty
 		// as before, so the next task over the same region asks again.
-		return Routing{Route: RouteCloseGap, Condition: "graph coverage is absent for the planned files"}
+		//
+		// The condition states the evidence rather than the status, because the
+		// two came apart: a preflight can answer EMPTY while publishing
+		// sufficient coverage, and it can answer OK while proving none.
+		return Routing{Route: RouteCloseGap,
+			Condition: "graph coverage is absent for the planned files: " + scoped.Coverage.Diagnostic()}
 	}
 
 	// An unclassified gate on a preflight that DOES hold coverage is a

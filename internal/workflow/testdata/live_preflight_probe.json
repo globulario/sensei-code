@@ -7,7 +7,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 4,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/main.go",
@@ -16,7 +21,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/mcp.go",
@@ -25,7 +35,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/providers.go",
@@ -34,7 +49,12 @@
    "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
   ],
   "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
-  "blast": "BLAST_RADIUS_SECURITY"
+  "blast": "BLAST_RADIUS_SECURITY",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/routine.go",
@@ -43,7 +63,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/run.go",
@@ -52,7 +77,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "cmd/sensei-code/run_test.go",
@@ -61,7 +91,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "cmd/sensei-code/setup.go",
@@ -70,7 +105,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/version.go",
@@ -79,7 +119,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "cmd/sensei-code/version_test.go",
@@ -88,7 +133,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/acceptance/authority_root_test.go",
@@ -97,7 +147,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/change_risk_test.go",
@@ -106,7 +161,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/conversation_parity_test.go",
@@ -115,7 +175,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/domain_authority_matrix_test.go",
@@ -124,7 +189,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/governed_run_test.go",
@@ -133,7 +203,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/governed_stub_test.go",
@@ -142,7 +217,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/helpers_test.go",
@@ -151,7 +231,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/acceptance/semantic_retrieval_test.go",
@@ -160,7 +245,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/admission/admission.go",
@@ -169,7 +259,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/admission/admission_test.go",
@@ -179,7 +274,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/agent/activity_test.go",
@@ -188,7 +288,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/agent/agent.go",
@@ -198,7 +303,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/agent/agent_session_test.go",
@@ -208,7 +318,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/architect/debt.go",
@@ -217,7 +332,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/architect/debt_test.go",
@@ -226,7 +346,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/architect/report.go",
@@ -235,7 +360,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/architect/report_test.go",
@@ -245,7 +375,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/architect/run.go",
@@ -254,7 +389,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/architect/run_test.go",
@@ -263,7 +403,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/assist/handoff.go",
@@ -273,7 +418,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 4,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/assist/packet.go",
@@ -283,7 +433,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 3,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/assist/packet_test.go",
@@ -293,7 +448,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/authority/authority.go",
@@ -302,7 +462,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/authority/authority_test.go",
@@ -311,7 +476,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/authority/resolution.go",
@@ -320,7 +490,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/authority/resolution_test.go",
@@ -329,7 +504,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/behavioral/behavioral.go",
@@ -338,7 +518,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/behavioral/behavioral_test.go",
@@ -348,7 +533,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/broker/broker.go",
@@ -357,7 +547,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/broker/broker_test.go",
@@ -366,7 +561,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/candidate/disposition.go",
@@ -376,7 +576,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/candidate/disposition_test.go",
@@ -386,7 +591,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/candidate/identity.go",
@@ -395,7 +605,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/candidate/identity_test.go",
@@ -404,7 +619,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/command/command.go",
@@ -413,7 +633,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/command/command_test.go",
@@ -423,7 +648,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/config/config.go",
@@ -432,7 +662,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/config/config_test.go",
@@ -441,7 +676,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/continuity/continuity.go",
@@ -450,7 +690,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/continuity/continuity_test.go",
@@ -460,7 +705,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/decision/record.go",
@@ -470,7 +720,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/decision/record_test.go",
@@ -480,7 +735,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/doctor/doctor.go",
@@ -490,7 +750,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 4,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/doctor/doctor_test.go",
@@ -500,7 +765,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/doctor/taskbinding.go",
@@ -509,7 +779,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/doctor/taskbinding_test.go",
@@ -518,7 +793,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/event/bus.go",
@@ -527,7 +807,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/event/bus_test.go",
@@ -536,7 +821,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/event/event.go",
@@ -545,7 +835,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/gitx/git.go",
@@ -555,7 +850,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/gitx/git_test.go",
@@ -565,7 +865,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/history/history.go",
@@ -574,7 +879,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/history/history_test.go",
@@ -583,7 +893,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/investigate/investigate.go",
@@ -592,7 +907,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/investigate/investigate_test.go",
@@ -602,7 +922,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/mcpconfig/mcpconfig.go",
@@ -611,7 +936,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/mcpconfig/mcpconfig_test.go",
@@ -621,7 +951,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/processx/env_test.go",
@@ -630,7 +965,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/processx/runner.go",
@@ -639,7 +979,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/project/project.go",
@@ -648,7 +993,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/project/project_test.go",
@@ -658,7 +1008,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/provider/chatgpt_session.go",
@@ -668,7 +1023,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/provider/chatgpt_session_test.go",
@@ -677,7 +1037,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/provider/codex_appserver.go",
@@ -686,7 +1051,12 @@
    "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
   ],
   "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
-  "blast": "BLAST_RADIUS_SECURITY"
+  "blast": "BLAST_RADIUS_SECURITY",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 4,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/provider/provider.go",
@@ -695,7 +1065,12 @@
    "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
   ],
   "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
-  "blast": "BLAST_RADIUS_SECURITY"
+  "blast": "BLAST_RADIUS_SECURITY",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 4,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/provider/provider_test.go",
@@ -705,7 +1080,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/publish/publish.go",
@@ -715,7 +1095,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/publish/publish_test.go",
@@ -725,7 +1110,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/report/report.go",
@@ -734,7 +1124,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/report/report_test.go",
@@ -744,7 +1139,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/retrieval/retrieval.go",
@@ -753,7 +1153,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/retrieval/retrieval_test.go",
@@ -763,7 +1168,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/retrieval/semantic.go",
@@ -772,7 +1182,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/retrieval/semantic_test.go",
@@ -781,7 +1196,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/assign.go",
@@ -790,7 +1210,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/packet.go",
@@ -799,7 +1224,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/provenance.go",
@@ -808,7 +1238,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/reconcile.go",
@@ -817,7 +1252,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/roles.go",
@@ -827,7 +1267,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/roles_test.go",
@@ -837,7 +1282,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/roles/verdict.go",
@@ -847,7 +1297,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/sensei/contracts.go",
@@ -856,7 +1311,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/sensei/contracts_test.go",
@@ -865,7 +1325,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/sensei/mcp.go",
@@ -874,7 +1339,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 1,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/sensei/mcp_test.go",
@@ -884,7 +1354,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/session/interrupted_test.go",
@@ -894,7 +1369,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/session/store.go",
@@ -904,7 +1384,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/setup/checks.go",
@@ -913,7 +1398,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/setup/inspect.go",
@@ -922,7 +1412,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/setup/inspect_test.go",
@@ -931,7 +1426,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/setup/setup.go",
@@ -940,7 +1440,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/setup/setup_test.go",
@@ -949,7 +1454,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/taskstate/state.go",
@@ -958,7 +1468,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/taskstate/state_test.go",
@@ -967,7 +1482,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/tui/astutil_test.go",
@@ -976,7 +1496,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/tui/clipboard.go",
@@ -985,7 +1510,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/tui/clipboard_test.go",
@@ -994,7 +1524,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/tui/layout_test.go",
@@ -1003,7 +1538,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/tui/model.go",
@@ -1012,7 +1552,12 @@
    "anchored entity in security/auth/rbac/pki/jwt/cert namespace"
   ],
   "gate": "APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED",
-  "blast": "BLAST_RADIUS_SECURITY"
+  "blast": "BLAST_RADIUS_SECURITY",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/tui/scroll_test.go",
@@ -1021,7 +1566,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/tui/setup_command_test.go",
@@ -1030,7 +1580,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/validation/evidence.go",
@@ -1039,7 +1594,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/validation/evidence_test.go",
@@ -1048,7 +1608,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/adversarial.go",
@@ -1058,7 +1623,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 2,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/adversarial_test.go",
@@ -1068,7 +1638,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/architect_context.go",
@@ -1077,7 +1652,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/architect_context_test.go",
@@ -1086,7 +1666,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/assisted.go",
@@ -1095,7 +1680,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 3,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/assisted_test.go",
@@ -1104,7 +1694,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/authority.go",
@@ -1113,7 +1708,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/authority_test.go",
@@ -1123,7 +1723,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/disposal_test.go",
@@ -1132,7 +1737,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/engine.go",
@@ -1142,7 +1752,12 @@
    "file path under high-risk directory"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 4,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/engine_test.go",
@@ -1152,7 +1767,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/gate.go",
@@ -1161,7 +1781,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/gate_test.go",
@@ -1170,7 +1795,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/mode.go",
@@ -1179,7 +1809,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/mode_test.go",
@@ -1189,7 +1824,12 @@
    "this is NOT proof of safety \u2014 the graph has no facts about this file"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/parity_test.go",
@@ -1198,7 +1838,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/protection_live_test.go",
@@ -1207,7 +1852,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/publication_test.go",
@@ -1216,7 +1866,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/routine.go",
@@ -1225,7 +1880,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/routine_live_test.go",
@@ -1234,7 +1894,12 @@
    "coverage_insufficient: no direct anchors and no indexed files \u2014 a pattern match is guidance, not coverage"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": false,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 0
+  }
  },
  {
   "file": "internal/workflow/routine_scan.go",
@@ -1243,7 +1908,12 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  },
  {
   "file": "internal/workflow/routine_test.go",
@@ -1252,6 +1922,11 @@
    "graph indexes this area but no anchored rules apply to the request"
   ],
   "gate": "APPROVAL_GATE_NONE",
-  "blast": "BLAST_RADIUS_LOCAL"
+  "blast": "BLAST_RADIUS_LOCAL",
+  "coverage": {
+   "sufficient": true,
+   "direct_anchor_count": 0,
+   "indexed_file_count": 1
+  }
  }
 ]
