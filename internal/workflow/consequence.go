@@ -70,6 +70,16 @@ type Action struct {
 	// it will do. Claims: they may escalate an assessment, never clear one.
 	DeclaredSteps        []string
 	DeclaredConsequences string
+	// DerivedCoverage are planned files a machine-derived fact covers in THIS
+	// world, established by re-running a derivation rather than by a record
+	// existing.
+	//
+	// Computed before routing, because revalidation reads the repository and
+	// this package is pure. The caller must obtain it from
+	// derived.CoveredFiles over anchors produced in the world being assessed —
+	// a list assembled any other way would be the forbidden collapse (recipe
+	// present -> coverage) wearing a different type.
+	DerivedCoverage []string
 }
 
 // ConsequenceResult is the answer, and there are only three.

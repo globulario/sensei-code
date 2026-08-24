@@ -199,6 +199,15 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	// and the missing coverage are one absence, and reporting it as "nobody
 	// judged what this change costs" dresses an epistemic hole as a consequence
 	// verdict. That is the same conflation this file exists to undo.
+	// A machine-derived fact may close a coverage gap, but only where a
+	// derivation succeeded in THIS world over THESE files. The caller
+	// revalidated to obtain the list; nothing here reads a stored record.
+	//
+	// It closes the gap rather than granting anything: the consequence checks
+	// above have already run, and the premise checks below still apply.
+	if coverageAbsent && len(action.Files) != 0 && coversAll(action.DerivedCoverage, action.Files) {
+		coverageAbsent = false
+	}
 	if coverageAbsent {
 		// Sending this to a human asks them to supply coverage Sensei lacks —
 		// a technical answer — and answering leaves the graph exactly as empty
@@ -307,6 +316,27 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	}
 
 	return Routing{Route: RouteArchitectural}
+}
+
+// coversAll reports whether every planned file is covered.
+//
+// Every one. Partial derived coverage is not coverage: a plan touching a file
+// no derivation looked at is a plan Sensei cannot speak for, and accepting the
+// majority would grant authority over the remainder for free.
+func coversAll(covered, planned []string) bool {
+	if len(covered) == 0 {
+		return false
+	}
+	have := make(map[string]bool, len(covered))
+	for _, c := range covered {
+		have[c] = true
+	}
+	for _, p := range planned {
+		if !have[p] {
+			return false
+		}
+	}
+	return true
 }
 
 // escalationCondition renders a routing for a human, so a Level-3 interruption

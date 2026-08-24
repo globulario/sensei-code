@@ -257,3 +257,64 @@ func TestAVerifiedPremiseClosesItsOwnGapWithNoWritePath(t *testing.T) {
 		t.Fatalf("a more eloquent inference was accepted as verification: %+v", got)
 	}
 }
+
+// A machine-derived fact closes a coverage gap — and only where a derivation
+// succeeded in this world over these files.
+//
+// The list arrives from the caller because revalidation reads the repository
+// and this package is pure. What the router must never do is treat the mere
+// EXISTENCE of a stored recipe as coverage; it never sees one.
+func TestDerivedCoverageClosesAGapOnlyWhereItWasDerived(t *testing.T) {
+	const empty = `{"status":"PREFLIGHT_STATUS_EMPTY",` +
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` +
+		healthyAuthority + `}`
+	scoped := scopedPreflight(t, empty)
+	planned := []string{"internal/event/bus.go"}
+
+	// No derived coverage: still a bounded knowledge gap.
+	bare := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned})
+	if !bare.ClosesGap() {
+		t.Fatalf("an uncovered region did not route to bounded work: %+v", bare)
+	}
+
+	// Derived coverage for exactly the planned file: the gap is closed, and the
+	// action is then assessed like any other.
+	covered := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: planned})
+	if covered.ClosesGap() {
+		t.Fatalf("a derived fact did not close the coverage gap: %+v", covered)
+	}
+	if !covered.Granted() {
+		t.Fatalf("after closure the bounded edit was not granted: %+v", covered)
+	}
+
+	// Partial coverage is not coverage. A plan touching a file no derivation
+	// looked at is one Sensei cannot speak for.
+	partial := routeAuthorityForAction(scoped, nil, Action{
+		Stage:           StageCandidateEdit,
+		Files:           []string{"internal/event/bus.go", "internal/event/unseen.go"},
+		DerivedCoverage: planned})
+	if !partial.ClosesGap() {
+		t.Fatalf("partial derived coverage was accepted as coverage: %+v", partial)
+	}
+
+	// An empty plan cannot be covered by anything.
+	none := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, DerivedCoverage: planned})
+	if !none.ClosesGap() {
+		t.Fatalf("a plan naming no files was treated as covered: %+v", none)
+	}
+}
+
+// Derived coverage closes a KNOWLEDGE gap. It does not clear an approval gate,
+// and it does not survive an unrecognised blind spot.
+func TestDerivedCoverageDoesNotBuyConsequenceAuthority(t *testing.T) {
+	planned := []string{"internal/event/bus.go"}
+	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
+		healthyAuthority+`}`)
+	got := routeAuthorityForAction(gated, nil, Action{
+		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: planned})
+	if !got.RequiresHuman() {
+		t.Fatalf("derived coverage cleared an approval gate: %+v", got)
+	}
+}
