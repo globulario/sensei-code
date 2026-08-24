@@ -20,6 +20,7 @@ import (
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/derived"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/finding"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/publish"
@@ -55,6 +56,11 @@ type Engine struct {
 	// reason ActionStage is not a provider field: the lane is a property of how
 	// the task was submitted, and anything a plan could set is a claim.
 	observing map[string]bool
+	// findings holds what each observation established, so a caller may open
+	// repair work from it. Holding evidence is not holding authority: a repair
+	// opened from one enters the ordinary governed path with nothing carried
+	// over except the objective text.
+	findings map[string][]finding.Finding
 	// routings holds what the authority router read when it decided each task,
 	// kept because two later decisions ask different questions of the same
 	// evidence: how adversarially the candidate must be judged, and whether the
@@ -3480,10 +3486,62 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 	}
 	discarded = true
 
+	// Recorded before the terminal event, so a caller that acts on the outcome
+	// can read them. Recording is not authorising: nothing here grants the
+	// repair anything, and an ineligible finding is retained and reported
+	// exactly like an eligible one -- it simply cannot become work.
+	e.recordFindings(taskID, task, head, decision)
+
 	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
 		observationFindings(decision, start.Degraded(), wrote), decision))
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowObserved,
 		"observed and reported; nothing was admitted, the governed repository is unchanged, "+
 			"and the observation workspace was discarded", nil))
 	return nil
+}
+
+// recordFindings converts an observation's claims into durable findings.
+//
+// Kept on the engine rather than returned, because the observation lane is
+// terminal: its caller sees an event stream, not a value. Findings() reads them
+// back afterwards.
+func (e *Engine) recordFindings(taskID, objective, world string, d architectureDecision) {
+	var out []finding.Finding
+	for _, c := range d.Claims {
+		out = append(out, finding.New(taskID, world, objective, c.Statement, c.About, filesFor(c, d), c.Source))
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.findings == nil {
+		e.findings = map[string][]finding.Finding{}
+	}
+	e.findings[taskID] = out
+}
+
+// filesFor decides which files a claim is about.
+//
+// A claim's About field is prose the observer wrote, so it is read for a path
+// and never trusted to BE one: if it names a file the observation actually
+// opened, that is the claim's subject. Otherwise the claim inherits the files
+// the observation read, which is wider and therefore weaker, and the repair
+// re-checks all of it anyway.
+func filesFor(c Claim, d architectureDecision) []string {
+	var named []string
+	for _, f := range d.Files {
+		if strings.Contains(c.About, f) || strings.Contains(c.Statement, f) {
+			named = append(named, f)
+		}
+	}
+	if len(named) != 0 {
+		return named
+	}
+	return d.Files
+}
+
+// Findings returns what an observation established, for a caller deciding
+// whether to open repair work.
+func (e *Engine) Findings(taskID string) []finding.Finding {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]finding.Finding(nil), e.findings[taskID]...)
 }

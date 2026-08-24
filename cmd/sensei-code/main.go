@@ -73,6 +73,8 @@ func main() {
 			return
 		case "run":
 			os.Exit(runGoverned(ctx, repo, cfg, os.Args[2:]))
+		case "audit-repair":
+			os.Exit(runAuditRepair(ctx, repo, cfg, os.Args[2:]))
 		case "observe":
 			os.Exit(runObservation(ctx, repo, cfg, os.Args[2:]))
 		case "routine-scan":
