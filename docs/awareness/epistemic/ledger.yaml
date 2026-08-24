@@ -78,5 +78,26 @@ design_questions:
         - effect: changes 25 of 135 files from a hard stop to a closure attempt; no grant either way
           reversible: true
       notes: Left as CannotEstablish in this slice. DEGRADED is a claim about the ANSWER, not about the repository, and reclassifying it on 25 same-shaped observations from one graph would be generalising from a single cause. What is missing is knowing WHY those 25 degrade — the router never looks past the status.
-hypotheses: []
-observations: []
+hypotheses:
+    - id: h.promote_is_form_independent_not_evidence_independent
+      question: dq.closure_knowledge_admission
+      alternative: independent_admission
+      prediction: sensei promote is author-independent in EXECUTION but not in EVIDENCE. Given three candidates against the isolated graph — (A) a true claim supported by repository evidence, (B) a well-formed, non-contradictory, plausible but FALSE claim about the same file, and (C) a claim whose evidence references only artifacts the claim itself introduced, and whose promotion would remove the exact coverage gap blocking the current run — promote will accept A, and will ALSO accept B and C, because what it validates is naming, status, confidence, presence of evidence and coherence with the rest of the graph, none of which can distinguish a true claim from a plausible false one.
+      falsifier: promote refuses B or C on EVIDENTIAL grounds — because the cited evidence does not establish the claim, or because the evidence is self-referential — rather than on a format or identifier technicality, with every existing gate green. That would make it a sufficient independent boundary and would support same-run closure.
+      horizon:
+        due_at: "2026-08-24T00:00:00Z"
+        condition: at the completion of the three-case promote experiment
+      declared_by: claude-opus-5
+      declared_at: "2026-08-23T23:59:36Z"
+      notes: 'Preregistered before any case was constructed or run. The B case is the dangerous one: a novel false claim can be perfectly coherent, so testing only contradictions would test the wrong thing. Concretely, B asserts the bus.go mutex serializes MAP ACCESS, which is plausible and false — the fact established by reading the code is that it makes close-versus-send mutually exclusive.'
+observations:
+    - id: o.promote_accepts_a_plausible_false_claim
+      hypothesis: h.promote_is_form_independent_not_evidence_independent
+      observed_at: "2026-08-24T00:02:19Z"
+      what: 'All three candidates passed with ''validation: OK'' and exit 0. A: true claim — accepted. B: ''the bus mutex exists to serialize concurrent map access'', plausible, well-formed, non-contradictory and FALSE relative to the code (the lock makes close-versus-send mutually exclusive; serialized map access is a consequence, not the reason) — accepted, identically. C: a claim whose evidence cites only files the same change introduced, and whose promotion would remove the exact coverage gap blocking the run — accepted, identically. The complete validation is: class is known, status==''candidate'', confidence!=''low'', evidence is a non-empty STRING, discovered_from is a non-empty string. It never opens the source file, never checks that the cited evidence establishes the claim, and cannot distinguish a true claim from a plausible false one.'
+      outcome: supports
+      evidence:
+        - 'sensei promote --dry-run on all three ids against the isolated graph :10199; each printed ''validation: OK'' and the rendered canonical entry'
+        - cmd/awg/cmd_promote.go:439-446 — the whole evidential check is a non-empty string test
+        - 'separately: sensei promote cannot read the agent write-path at all. Proposals land in docs/awareness/candidates/proposals/ under a ''proposal:'' key; promote reads docs/awareness/candidates/*.yaml under a ''candidates:'' list. A real recorded contract_unknown proposal was not found by promote.'
+      observed_by: claude-opus-5
