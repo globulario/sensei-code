@@ -291,10 +291,11 @@ func runCampaign(args []string) int {
 		return exitFailed
 	}
 	runner := proofbench.Runner{
-		RepoRoot: root,
-		WorkDir:  filepath.Join(os.TempDir(), "proofbench", m.Version),
-		Binary:   binaryPath(root),
-		Now:      time.Now,
+		RepoRoot:   root,
+		WorkDir:    filepath.Join(os.TempDir(), "proofbench", m.Version),
+		Binary:     binaryPath(root),
+		RawCommand: rawCommand(),
+		Now:        time.Now,
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -344,8 +345,67 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		fmt.Println("  dry run: isolation verified, no provider invoked, nothing recorded")
 		return nil
 	}
-	return fmt.Errorf("arm execution is not wired to a provider in this build; use --dry-run to " +
-		"verify isolation, and see docs/evidence for the campaign's execution status")
+
+	governedBefore := r.GovernedState(ctx)
+	started := time.Now()
+	var out proofbench.ArmOutcome
+	if arm == proofbench.ArmRaw {
+		out = r.ExecuteRaw(ctx, dir, t.Statement, timeout)
+	} else {
+		out = r.ExecuteGoverned(ctx, dir, t.Statement, timeout)
+	}
+	ended := time.Now()
+
+	ev := r.Evidence(ctx, dir, governedBefore)
+	verdict := proofbench.OracleResult{Verdict: proofbench.NoResult, Detail: out.Infrastructure}
+	if out.Infrastructure == "" {
+		verdict = r.Judge(ctx, dir, t)
+	}
+
+	a := proofbench.Attempt{
+		Task: t.ID, Arm: arm, Number: attempt, ManifestHash: hash, Benchmark: m.Version,
+		BaseSHA: t.BaseSHA, Providers: providerIdentity(),
+		Started: started.UTC().Format(time.RFC3339), Ended: ended.UTC().Format(time.RFC3339),
+		WallSecs: int(ended.Sub(started).Seconds()),
+		Terminal: out.Terminal, Verdict: verdict.Verdict, OracleDetail: verdict.Detail,
+		Interventions: out.Interventions, Objections: out.Objections,
+		ReviewCycles: out.ReviewCycles, Observations: out.Observations,
+		DiffHash: ev.DiffHash, GovernedCheckoutClean: ev.GovernedClean,
+		GovernedCheckoutState: ev.GovernedState,
+		Infrastructure:        out.Infrastructure,
+		Artifacts:             map[string]string{"transcript_tail_sha256": proofbench.HashBytes([]byte(out.Raw))},
+		Notes:                 fmt.Sprintf("%d event(s) observed", out.Events),
+	}
+	// Cost is left nil unless a provider reported it. Zero is a measurement;
+	// nil is the absence of one.
+	if err := l.Append(a); err != nil {
+		return err
+	}
+	fmt.Printf("  terminal %s\n  oracle   %s\n  wall     %ds\n", a.Terminal, a.Verdict, a.WallSecs)
+	if a.Infrastructure != "" {
+		fmt.Printf("  infra    %s\n", a.Infrastructure)
+	}
+	return nil
+}
+
+// providerIdentity records which provider/model played which role.
+//
+// Read from the environment the campaign was launched with, so a change between
+// arms is visible in the record and invalidates the pair rather than being
+// silently combined.
+func providerIdentity() map[string]string {
+	get := func(k, dflt string) string {
+		if v := strings.TrimSpace(os.Getenv(k)); v != "" {
+			return v
+		}
+		return dflt
+	}
+	return map[string]string{
+		"architect":   get("PROOFBENCH_ARCHITECT", "chatgpt/unrecorded"),
+		"implementor": get("PROOFBENCH_IMPLEMENTOR", "codex+claude/unrecorded"),
+		"reviewer":    get("PROOFBENCH_REVIEWER", "independent/unrecorded"),
+		"raw":         get("PROOFBENCH_RAW", "unrecorded"),
+	}
 }
 
 func repoRoot() (string, error) {
@@ -354,6 +414,18 @@ func repoRoot() (string, error) {
 		return "", fmt.Errorf("not a git repository: %w", err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// rawCommand is the ordinary coding agent the RAW baseline drives.
+//
+// Configured rather than hardcoded, and absent by default: an unconfigured RAW
+// arm records NO_RESULT with the reason instead of quietly comparing the
+// governed arms against nothing.
+func rawCommand() []string {
+	if v := strings.TrimSpace(os.Getenv("PROOFBENCH_RAW_CMD")); v != "" {
+		return strings.Fields(v)
+	}
+	return nil
 }
 
 func binaryPath(root string) string {
