@@ -1250,3 +1250,46 @@ func max0(i int) int {
 	}
 	return i
 }
+
+// Four consecutive inspection reports on 2026-08-22 were sent back by the
+// independent reviewer for the same error, and the prompt's existing "mark
+// anything you could not establish as unverified" did not prevent any of them:
+//
+//	"zero consumers, non-test and test. The package is orphaned"
+//	"No non-test consumer exists — proven"
+//
+// A worker does not experience an empty search as unestablished. It searched,
+// found nothing, and concluded nothing exists — so the move has to be named.
+// Sensei already draws this line: EmptyProven is "I looked here and there was
+// nothing"; Absent is "nothing exists".
+func TestAReadOnlyWorkerIsToldNotToProveAbsenceFromASearch(t *testing.T) {
+	prompt := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil)
+	for _, want := range []string{
+		"A SEARCH THAT FOUND NOTHING HAS NOT PROVEN ANYTHING ABSENT",
+		"EmptyProven",
+		"Absent",
+		"Name the searches and their bounds",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the read-only prompt does not name the prove-a-negative mistake: missing %q", want)
+		}
+	}
+	// The modify worker must not inherit it: it is not writing findings.
+	if strings.Contains(implementationPrompt(taskContext{Mode: ModeModify}, "p", "", 1, nil),
+		"A SEARCH THAT FOUND NOTHING") {
+		t.Error("a modify worker is given inspection-report guidance it has no use for")
+	}
+}
+
+// Two findings that contradict each other mean at least one is wrong and the
+// reader cannot tell which. A reviewer caught exactly this on 2026-08-22:
+// "every field of admission.Request except Repo is produced by steps 1-2"
+// conflicting with the report's own Finding 5.
+func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
+	prompt := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil)
+	for _, want := range []string{"CHECK YOUR FINDINGS AGAINST EACH OTHER", "at least one is wrong", "less sure of"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the prompt does not require internal consistency: missing %q", want)
+		}
+	}
+}
