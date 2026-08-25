@@ -341,7 +341,7 @@
     },
     {
       "id": "internal-agent-01f3fe1",
-      "statement": "internal/agent streams a worker's raw output verbatim. For the claude worker that output is JSON envelopes, so the reader sees protocol rather than activity.\n\nAdd the exported function:\n\n    func Activity(name, line string) string\n\nFor a worker whose name is not \"claude\" it returns the line trimmed of surrounding whitespace. For \"claude\" it renders one readable activity line from the JSON envelope -- the assistant's text, or the name of the tool being used -- and returns the empty string for an envelope carrying neither. A line that is not valid JSON is returned trimmed.",
+      "statement": "internal/agent streams a worker's raw output verbatim. For the claude worker that output is JSON envelopes, so the reader is shown protocol rather than activity.\n\nAdd the exported function:\n\n    func Activity(name, line string) string\n\nFor a worker whose name is not \"claude\" it returns the line trimmed of surrounding whitespace and otherwise unchanged. For \"claude\" it renders one readable activity line from an assistant envelope -- representing the assistant's text, and naming any tool being used -- and returns the empty string for anything that is not assistant activity, including envelopes of other types, empty content, and lines that are not valid JSON. No raw envelope syntax may reach the reader.",
       "base_sha": "da311a56277119d4def7bc7526aadf119e7f96ad",
       "origin": "01f3fe173884a88b469f1b9087a8fdece7e5a531",
       "oracle": {
@@ -354,6 +354,39 @@
           "test",
           "-buildvcs=false",
           "./internal/agent/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/agent/contract_probe_test.go",
+        "source_file": "oracles/internal-agent-01f3fe1.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/agent/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-agent-01f3fe1/WRONG",
+            "want": "INCORRECT",
+            "why": "provides the named function and hands the reader the raw stream, which is the defect"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-agent-01f3fe1/ALTERNATE",
+            "want": "CORRECT",
+            "why": "decodes into a generic map rather than a typed envelope, renders the WHOLE text rather than the first sentence, and formats a tool call as 'name -> target'. Same behaviour, no shared structure."
+          }
         ]
       }
     },

@@ -1,0 +1,30 @@
+[
+  {
+    "task": "internal-agent-01f3fe1",
+    "oracle_hash": "sha256:6f4016b3a2c6a2bb4e5fc8670cbb84bd",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.004s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractAssistantTextIsRenderedReadably (0.00s)\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"type\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"content\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"{\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"message\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n--- FAIL: TestContractAToolCallIsNamed (0.00s)\n    contract_probe_test.go:59: raw envelope leaked into the activity line: \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"tool_use\\\",\\\"name\\\":\\\"Read\\\",\\\"input\\\":{\\\"file_path\\\":\\\"internal/gitx/git.go\\\"}}]}}\"\n--- FAIL: TestContractNonActivityProducesNothing (0.00s)\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\") = \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\") = \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"not json at all\") = \"not json at all\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\") = \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\", want empty: this is not activity a reader should be shown\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/agent\t0.005s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.005s"
+      }
+    ],
+    "eligible": true
+  }
+]
