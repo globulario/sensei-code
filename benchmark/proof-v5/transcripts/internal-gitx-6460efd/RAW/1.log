@@ -1,0 +1,15 @@
+Done. Both checks now read without writing.
+
+**The change.** Both cleanliness checks route through one helper, `porcelainStatus`, which runs `git -C <path> --no-optional-locks status --porcelain`. That is git's own switch for read-only callers: it suppresses the index write-back that a status query otherwise performs whenever the stat cache is stale. Signatures, return values, trimming, and error text are unchanged; `WorktreeIsClean` still returns `(out == "", out, nil)`.
+
+**Why the write happened.** `git status` refreshes the stat cache and rewrites `.git/index` whenever an mtime has moved — a build, a test run, or a plain checkout is enough. I confirmed this directly: touching three unmodified files and running a plain status changed `.git/index`'s content hash. So the probe guarding a write-free lane was itself mutating the repository.
+
+**Why the answer is still correct.** `--no-optional-locks` skips only the persistence of the refresh, not the refresh: git still stats every path and compares content where stat data disagrees. Verified in the shell and pinned in a test — a re-stamped but unmodified file reads clean, a genuine modification and an untracked file are both reported, and the two functions agree.
+
+**The test.** `TestCleanlinessChecksDoNotWriteToTheRepository` hashes every file under the worktree including `.git`, before and after each call, in three phases: clean-but-stale, real modification, and a guard asserting that a plain status *is* a write here (otherwise the test proves nothing on this platform's git).
+
+One thing worth flagging, because it nearly let a vacuous test through: my first version of the staling helper reused the same clock second across calls. Git is normally built without `USE_NSEC` and compares mtime seconds only, so the index was never actually stale and the test passed against the old writing implementation. The helper now steps a distinct whole second per call, and I re-ran both directions — it fails on the old code (`changed or added: .git/index`) and passes on the new.
+
+Verification: `gofmt` clean, `go vet ./...` clean, `go test ./...` passes except `internal/history.TestThisRepositorysOwnRecordsParse`, which fails identically with my changes stashed — it reads this repository's own authority-decision records, which this bounded worktree does not carry. Pre-existing and untouched by this change.
+
+AWG: briefing(none available — no `docs/awareness/` or `.sensei/` in this checkout) | invariants: read-only lane must not mutate what it measures, cleanliness detection unchanged for genuine modifications | uncertainty: `--no-optional-locks` requires git ≥ 2.15 (2017); on an older git the command errors rather than silently writing, which fails closed.

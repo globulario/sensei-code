@@ -1,0 +1,31 @@
+Done. `internal/setup` now reports leftover candidate worktrees.
+
+**What changed**
+
+`internal/gitx/git.go` — the worktree-container naming rule was inline in `WorktreePath`; I extracted it to `WorktreesDir()` so the code that *creates* candidates and the code that *looks for the ones left behind* cannot drift apart. Added `LiveWorktrees(ctx)`, which parses `git worktree list --porcelain` — git is the authority on which sibling directories are still in flight.
+
+`internal/setup/checks.go` — new `checkCandidateWorktrees`, registered last in `Inspect` as a Check named `candidate worktrees`:
+
+| situation | result |
+|---|---|
+| no container dir, or nothing left behind | `OK` |
+| git still lists the path | not reported — in flight, counted in the OK detail |
+| leftover, empty | `Degraded`, named, `Repair` removes it |
+| leftover, holds files | `Degraded`, named with its full path, **no** repair |
+| `git worktree list` fails, or the dir is unreadable | `Unknown` / treated as holding files — never deleted |
+
+Rendered, a mixed directory looks like:
+
+```
+  warn   candidate worktrees        2 left behind in /…/.repo-worktrees: task-7 (empty), task-9 (holds files, not removed)
+         what you would see: directories from finished runs sit beside the repository and nothing says which are still in use
+         will run: rmdir /…/.repo-worktrees/task-7
+```
+
+Two deliberate choices. The repair uses `os.Remove`, not `RemoveAll` — the same refusal `rmdir` gives, so a worktree that gained files between the report and `--apply` survives the race, and the command printed is exactly the command performed. And a directory that can't be read counts as holding files: nothing here deletes what it couldn't look inside.
+
+**Verification** — `internal/setup/checks_test.go`, six tests over a real git repo with a real `git worktree add`. Full suite passes (`go test ./...`, all packages ok). I mutation-tested the new check rather than trusting the green: disabling the git-live list makes the live-worktree test fail; classifying every leftover as empty and switching to `RemoveAll` makes both preservation tests fail. Then restored and re-ran.
+
+`sensei propose` was not run — this is a gap being filled, not a durable error class recurring, and this checkout carries no `docs/awareness` corpus to append to. Briefing on `internal/setup/checks.go` reported `BRIEFING_STATUS_DEGRADED` with one package-level decision (read-only TUI readiness report; repair/apply stays exclusive to the CLI `setup` flow) — this change respects it: the repair runs only through `setup --apply`.
+
+AWG: briefing(internal/setup/checks.go) | invariants: candidates live beside the repository not inside it, git alone decides live-vs-abandoned, unfinished work is never deleted automatically | uncertainty: the graph knows an `InspectQuick`/`internal/setup/inspect.go` that does not exist in this checkout — if a read-only inspect path lands later it must include this check too

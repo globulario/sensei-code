@@ -1,0 +1,12 @@
+Added `Activity` to `internal/agent/agent.go:121`, with tests in `internal/agent/agent_test.go`.
+
+**Behavior**
+- Non-`claude` workers: the line is returned trimmed of surrounding whitespace, otherwise byte-for-byte unchanged (a codex line that happens to look like JSON still passes through — the name, not the shape, selects the parser).
+- `claude`: only `type: "assistant"` envelopes render. Text blocks contribute the assistant's text (internal newlines folded, so one envelope stays one line); `tool_use` blocks contribute `using <Name>`. Parts join with a space.
+- Everything else returns `""`: other envelope types (`system` init banner, `user` tool results, the final `result`), assistant envelopes with empty or blank-only content, unknown block types, and lines that aren't valid JSON. There is deliberately no raw-line fallback for `claude` — that fallback is exactly what would put envelope syntax back on screen, so a test asserts the rendered output never contains `{"`, `"type"`, `":`, `tool_use`, or `session_id` for any input.
+
+`gofmt`, `go vet ./...`, and `go test ./...` all pass.
+
+One thing I left alone, since you scoped this to the function: the emit site at `internal/agent/agent.go:72` still streams `line.Text` verbatim into the `event.Output` event. `Activity` is not called from there yet, so nothing the reader sees has changed. Wiring it in means deciding whether an `Output` event that renders to `""` should be dropped entirely or emitted with the raw text kept in metadata for the session log — that's a behavior change to the event stream, so say which you want and I'll do it.
+
+AWG: briefing(internal/agent/agent.go) | invariants: adversarial_roles_inherit_nothing_and_bind_to_a_revision (untouched — this is a rendering helper, no role or verdict plumbing) | uncertainty: the exact stream-json block vocabulary is taken from the live `claude -p --output-format stream-json` shape; an unknown future block type renders as nothing rather than as protocol, which is the fail-closed direction.

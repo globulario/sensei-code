@@ -1,0 +1,16 @@
+Done. `internal/setup/checks.go:433` — the check now asks whether a candidate holds work, instead of whether it is empty.
+
+**What was wrong.** Two things, both making the same mistake — treating this tool's own output as the user's:
+
+1. The push guard. `runCandidate` installs it at `filepath.Dir(workspace)/.guard` (`internal/workflow/engine.go:526`), deliberately *beside* the candidates so it can't be committed into the change it protects. The check scanned every directory in the worktree root, found `.guard` non-empty and untracked by git, and reported it as an abandoned candidate holding unreviewed work — offering only "inspect and remove by hand" a directory containing one shell script this tool wrote. Every repository that had ever run a worker reported this. Running the new tests against the old code reproduces it verbatim: `degraded / 1 abandoned candidate(s) still holding files, 0 empty`.
+2. Emptiness stood in for "holds work". A leftover candidate containing nothing but the `.git` pointer file `git worktree add` writes is not empty, so it was preserved and handed to the user as work to inspect, with nothing offered to clean it up.
+
+**The fix.** A dot-directory in the worktree root is skipped — candidate names come from `clean(taskID)`, which trims leading dots (`internal/gitx/git.go:113`), so a candidate can never begin with one. For real candidates, `holdsWork` reads the top level and asks whether anything there is outside `candidateArtefacts` (`.git`, `.sensei-code`); anything else, including the checkout itself, counts as work. Candidates holding no work are removable (`os.RemoveAll`, artefacts and all); anything holding work is still named and left for a person. `removeAll` re-establishes the property immediately before deleting, since the check is the only thing that established it, and `holdsWork` fails closed — an unreadable directory is treated as holding work.
+
+**Tests** (`internal/setup/worktrees_test.go`, real git repos): the push guard is invisible to the check and untouched by it; an artefacts-only candidate is removed rather than reported; a candidate holding an unreviewed file is named and survives a repair that removes its neighbour; the repair refuses a candidate that gained work after the check; a live candidate is never touched. The first two fail against the old implementation; the preservation tests pass under both, which is the point of them.
+
+`gofmt`, `go vet ./...`, `go test ./...` all clean.
+
+One thing I could not do: record the scar with `sensei propose`. Commit `ea15337` removed `docs/awareness/` and `.sensei/` from this checkout, so there is no corpus to append to — the failure mode ("a proxy predicate, emptiness, stood in for the real one, holds-work, and the tool's own artefacts were attributed to the user") is worth recording where the corpus lives.
+
+AWG: briefing(internal/setup/checks.go) | invariants: sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal, sensei_code.capability.declared_push_refusal_is_enforced | uncertainty: `.sensei-code` inside a candidate is classified as this tool's artefact on the strength of it being declared local and non-authoritative; if a user ever keeps notes there, that directory would be deleted with the candidate.

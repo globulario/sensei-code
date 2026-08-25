@@ -1,0 +1,43 @@
+{
+  "task": "internal-tui-ea046ba",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+  "run_base_sha": "31209b22be7d23f6bacf5c25d99e9191bacc3c24",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T16:44:21Z",
+  "ended": "2026-08-25T16:50:31Z",
+  "wall_seconds": 370,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "CORRECT",
+  "oracle_detail": "ok  \tgithub.com/globulario/sensei-code/internal/tui\t0.636s",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:360197a6861bad330127742f99ced580089245bd55ac9e5fdab2e4adec5e0cd7",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-tui-ea046ba/RAW/1.log",
+    "transcript_tail_sha256": "sha256:781e17979e14be4b2cf17d1e021d9763a4dbf21511f2472f7280abde788145c7"
+  },
+  "notes": "0 event(s) observed"
+}

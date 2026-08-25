@@ -1,0 +1,30 @@
+All checks pass (`gofmt -w cmd internal`, `go vet ./...`, `go test ./...` — every package ok).
+
+## What was wrong
+
+Two separate things made the keys feel dead:
+
+1. **Only PgUp/PgDn were bound**, and those are the keys terminals and multiplexers claim for their own scrollback.
+2. **A one-line scroll was undone before it was drawn.** The position was stored as a distance from row zero, and "the bottom" was a *computed* row index — computed one way by the key handler (`m.height-8`) and another way by the renderer (`available-1`, measured from the real composer height). The two differed by two rows, so a one-line move landed inside the difference and the renderer clamped it straight back.
+
+## What I changed — `internal/tui/model.go`
+
+**Position storage** (`internal/tui/model.go:105`): now `scrollBack`, a distance *from the newest output*, zero meaning "following". The foot needs no reconciling, so a notch always lands. Its zero value is also the state a reader starts in.
+
+**One window definition** (`transcriptWindow`, `internal/tui/model.go:566`): the key handler and the renderer both measure the window through the same function, which measures the real bottom block (`bottomBlock`). They can no longer disagree.
+
+**Clamped where it is stored** (`clampBack`): a position past either end used to cost one dead notch back for every notch that overshot — the other half of "not clamped back".
+
+**Bindings** (`scroll`, `internal/tui/model.go:1015`): `↑`/`↓` and `ctrl+y`/`ctrl+e` move one line; `pgup`/`pgdown` and `ctrl+b`/`ctrl+f` a page (keeping one row of overlap); `ctrl+u`/`ctrl+d` a half page; `shift+↑`/`shift+↓` and `ctrl+g` kept. Down always moves towards the newest output. Every ctrl binding taken from the composer keeps a surviving equivalent there (`left`/`right`, `home`/`end`, `ctrl+a`, `ctrl+k`, backspace) — that is the trade-off I made deliberately.
+
+**Mouse wheel**: `tea.MouseWheelMsg` handled in `Update`, one notch = one line, and `View` now sets `MouseMode = MouseModeCellMotion` — without asking, the terminal never reports a wheel event at all. Cost worth knowing: mouse reporting takes over drag-selection; terminals still allow it under shift.
+
+**Hidden-line report**: still on the top row, now naming the new keys, and it drops the key hint (never the count) when the terminal is too narrow for both. Unifying the two layout paths also fixed a pre-existing off-by-one where a short transcript rendered one row taller than the terminal.
+
+**Reader stays put**: because the position is a distance from the foot, output arriving below would slide the window down the transcript. `Update` now corrects the distance by the rows appended, wrapping only the new lines so the spinner does not cost a full re-wrap per tick.
+
+`internal/tui/scroll_test.go` covers: one notch = exactly one line for each of the line keys and the wheel; down reaching the newest line; over-scrolling not costing notches back; page/half-page distances; `ctrl+g`; a reader not moving when output arrives; the note not costing a content row and the frame fitting the terminal; a narrow terminal still reporting the count; the arrow reaching the transcript through the real `Update` dispatch; and non-scroll keys left for the composer.
+
+Two things I did not do, both deliberate: I left the work uncommitted (you did not ask for a commit), and I did not run `sensei propose` — the benchmark checkout has `docs/awareness/` removed, so a proposal would write sources that do not exist in this candidate. The briefing for this file (`--domain github.com/globulario/sensei-code`, status DEGRADED) lists no forbidden fix or required test touching it; its one critical invariant concerns provider credentials.
+
+AWG: briefing(internal/tui/model.go) | invariants: sensei_code.provider.credentials_remain_provider_owned (untouched), keys-before-modes dispatch preserved | uncertainty: mouse cell-motion mode disables native drag-select in some terminals
