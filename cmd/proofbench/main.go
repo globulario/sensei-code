@@ -405,16 +405,31 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	// not a zero. proof-v5 scored eleven governed arms on a directory that
 	// never received their work, and one of those recorded INCORRECT candidates
 	// passes the frozen oracle when the oracle is pointed at the real tree.
-	cand, cerr := r.ResolveCandidate(ctx, dir, arm, out.Raw)
+	// Only a run that reached a successful ending is expected to have produced
+	// a candidate; a refusal or an outage legitimately has none.
+	delivered := out.Terminal == "workflow.completed" || out.Terminal == "raw.completed" ||
+		out.Terminal == "retained" || out.Terminal == "accepted"
+	cand, cerr := r.ResolveCandidate(ctx, dir, arm, out.Raw, delivered)
 	if cerr != nil {
 		return fmt.Errorf("%s / %s: %w", t.ID, arm, cerr)
 	}
-	fmt.Printf("  candidate %s (%s)\n", cand.Dir, cand.Method)
+	if cand.Dir != "" {
+		fmt.Printf("  candidate %s (%s)\n", cand.Dir, cand.Method)
+	} else {
+		fmt.Printf("  candidate none created (%s)\n", out.Terminal)
+	}
 
 	ev := r.Evidence(ctx, dir, governedBefore, boundaryMeasurable)
-	ev.DiffHash = proofbench.CandidateDiffHash(ctx, cand, t.BaseSHA)
+	if cand.Dir != "" {
+		ev.DiffHash = proofbench.CandidateDiffHash(ctx, cand, t.BaseSHA)
+	}
 	verdict := proofbench.OracleResult{Verdict: proofbench.NoResult, Detail: out.Infrastructure}
-	if out.Infrastructure == "" {
+	switch {
+	case out.Infrastructure != "":
+	case cand.Dir == "":
+		verdict = proofbench.OracleResult{Verdict: proofbench.NoResult,
+			Detail: "the run produced no candidate to judge: " + out.Terminal}
+	default:
 		verdict = r.Judge(ctx, cand.Dir, t)
 	}
 

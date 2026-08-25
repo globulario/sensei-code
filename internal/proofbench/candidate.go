@@ -92,9 +92,20 @@ func taskIDFrom(stream string) string {
 // cannot answer, and is recorded as the weaker method it is.
 //
 // A RAW arm works in place, so its candidate is the arm checkout itself.
-func (r Runner) ResolveCandidate(ctx context.Context, armDir string, arm Arm, stream string) (Candidate, error) {
+func (r Runner) ResolveCandidate(ctx context.Context, armDir string, arm Arm, stream string, delivered bool) (Candidate, error) {
 	if arm == ArmRaw {
 		return Candidate{Dir: armDir, Method: "arm-checkout"}, nil
+	}
+	// A run that never reached a candidate has nothing to attribute, and that
+	// is a legitimate delivery failure rather than an integrity failure.
+	//
+	// The distinction, learned by getting it wrong: a governed run that refuses
+	// at the start gate, or dies on an unreachable graph, never creates a
+	// candidate worktree at all. Treating that as attribution failure halted a
+	// wave over runs the product had correctly declined to start. Attribution
+	// failure is for a run that DID deliver and whose work cannot be found.
+	if !delivered {
+		return Candidate{Method: "none-created", TaskID: taskIDFrom(stream)}, nil
 	}
 	taskID := taskIDFrom(stream)
 	if taskID == "" {
@@ -205,8 +216,19 @@ func CheckAttributionAnomaly(attempts []Attempt) error {
 	if len(governed) < 2 {
 		return nil
 	}
-	empty, unbound := 0, []string{}
+	// Only attempts that CLAIM to have delivered are held to attribution: a run
+	// that refused or died before creating a candidate legitimately has none.
+	var claimed []Attempt
 	for _, a := range governed {
+		if a.WorkflowTerminal("") == TerminalCompleted {
+			claimed = append(claimed, a)
+		}
+	}
+	if len(claimed) < 2 {
+		return nil
+	}
+	empty, unbound := 0, []string{}
+	for _, a := range claimed {
 		if a.DiffHash == EmptyTreeHash {
 			empty++
 		}
@@ -220,11 +242,11 @@ func CheckAttributionAnomaly(attempts []Attempt) error {
 			"candidate directory, so their verdicts describe a tree nobody identified: %s",
 			len(unbound), strings.Join(unbound, ", "))
 	}
-	if empty == len(governed) {
-		return fmt.Errorf("measurement-integrity failure: all %d governed attempts produced the "+
+	if empty == len(claimed) {
+		return fmt.Errorf("measurement-integrity failure: all %d delivering governed attempts produced the "+
 			"empty-tree diff hash. Independent runs do not agree that precisely, and the proof-v5 "+
 			"COLD wave looked exactly like this while its candidates held real work in a directory "+
-			"the harness never opened", len(governed))
+			"the harness never opened", len(claimed))
 	}
 	return nil
 }

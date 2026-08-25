@@ -68,7 +68,7 @@ func TestTheCandidateIsScoredNotTheArmCheckout(t *testing.T) {
 	repoRoot, armDir, taskID := governedArm(t)
 	r := Runner{RepoRoot: repoRoot}
 
-	cand, err := r.ResolveCandidate(context.Background(), armDir, ArmCold, streamFor(taskID))
+	cand, err := r.ResolveCandidate(context.Background(), armDir, ArmCold, streamFor(taskID), true)
 	if err != nil {
 		t.Fatalf("ResolveCandidate: %v", err)
 	}
@@ -132,19 +132,30 @@ func TestAnUnresolvableCandidateIsNotAScore(t *testing.T) {
 	r := Runner{RepoRoot: repoRoot}
 
 	// No task id in the stream.
-	if _, err := r.ResolveCandidate(context.Background(), repoRoot, ArmCold, "not a stream"); err == nil {
+	if _, err := r.ResolveCandidate(context.Background(), repoRoot, ArmCold, "not a stream", true); err == nil {
 		t.Error("a run whose stream carries no task id resolved a candidate anyway")
 	}
 	// A task id with no worktree anywhere.
-	_, err := r.ResolveCandidate(context.Background(), repoRoot, ArmCold, streamFor("task-does-not-exist"))
+	_, err := r.ResolveCandidate(context.Background(), repoRoot, ArmCold, streamFor("task-does-not-exist"), true)
 	if err == nil {
 		t.Fatal("a task with no candidate worktree resolved one anyway")
 	}
 	if !strings.Contains(err.Error(), "has not been measured") {
 		t.Errorf("the failure does not say the arm is unmeasured: %v", err)
 	}
+	// A run that never reached a candidate has nothing to attribute, and that is
+	// a delivery failure rather than an integrity failure. Getting this wrong
+	// halted a v6 wave over runs the product had correctly declined to start.
+	nd, err := r.ResolveCandidate(context.Background(), repoRoot, ArmCold, streamFor("task-refused"), false)
+	if err != nil {
+		t.Errorf("a run that produced no candidate was reported as an attribution failure: %v", err)
+	}
+	if nd.Dir != "" || nd.Method != "none-created" {
+		t.Errorf("a candidate-less run resolved to %+v", nd)
+	}
+
 	// A RAW arm works in place and needs no resolution.
-	c, err := r.ResolveCandidate(context.Background(), repoRoot, ArmRaw, "")
+	c, err := r.ResolveCandidate(context.Background(), repoRoot, ArmRaw, "", true)
 	if err != nil || c.Dir != repoRoot || c.Method != "arm-checkout" {
 		t.Errorf("a RAW arm did not resolve to its own checkout: %+v %v", c, err)
 	}
@@ -158,6 +169,7 @@ func TestUniformEmptyCandidatesAreAnIntegrityFailure(t *testing.T) {
 	var wave []Attempt
 	for i := 0; i < 11; i++ {
 		wave = append(wave, Attempt{Task: "t" + string(rune('a'+i)), Arm: ArmCold, Number: 1,
+			Terminal: "workflow.completed",
 			DiffHash: EmptyTreeHash, CandidateDir: "/tmp/somewhere"})
 	}
 	err := CheckAttributionAnomaly(wave)
@@ -171,6 +183,15 @@ func TestUniformEmptyCandidatesAreAnIntegrityFailure(t *testing.T) {
 	// One genuinely empty candidate among several is a RESULT, not an anomaly:
 	// a run really can produce nothing, and refusing that would make the check
 	// a quality gate on the product.
+	// A REFUSED run carries no candidate and is not held to attribution.
+	refused := []Attempt{
+		{Task: "a", Arm: ArmCold, Number: 1, Terminal: "workflow.awaiting_authority"},
+		{Task: "b", Arm: ArmCold, Number: 1, Terminal: "workflow.awaiting_authority"},
+	}
+	if err := CheckAttributionAnomaly(refused); err != nil {
+		t.Errorf("runs that legitimately produced no candidate were refused: %v", err)
+	}
+
 	mixed := append([]Attempt(nil), wave[:3]...)
 	mixed[0].DiffHash = "sha256:aaaa"
 	mixed[1].DiffHash = "sha256:bbbb"
@@ -181,8 +202,9 @@ func TestUniformEmptyCandidatesAreAnIntegrityFailure(t *testing.T) {
 	// An unbound candidate is refused whatever its hash: a verdict that cannot
 	// name the tree it describes is not attributable.
 	unbound := []Attempt{
-		{Task: "a", Arm: ArmCold, Number: 1, DiffHash: "sha256:aaaa"},
-		{Task: "b", Arm: ArmCold, Number: 1, DiffHash: "sha256:bbbb", CandidateDir: "/tmp/x"},
+		{Task: "a", Arm: ArmCold, Number: 1, Terminal: "workflow.completed", DiffHash: "sha256:aaaa"},
+		{Task: "b", Arm: ArmCold, Number: 1, Terminal: "workflow.completed",
+			DiffHash: "sha256:bbbb", CandidateDir: "/tmp/x"},
 	}
 	if err := CheckAttributionAnomaly(unbound); err == nil {
 		t.Error("an attempt with no resolved candidate directory was accepted")
@@ -191,8 +213,8 @@ func TestUniformEmptyCandidatesAreAnIntegrityFailure(t *testing.T) {
 	// RAW arms are exempt: they work in place, so an empty diff there is a
 	// genuine "it changed nothing".
 	raws := []Attempt{
-		{Task: "a", Arm: ArmRaw, Number: 1, DiffHash: EmptyTreeHash},
-		{Task: "b", Arm: ArmRaw, Number: 1, DiffHash: EmptyTreeHash},
+		{Task: "a", Arm: ArmRaw, Number: 1, Terminal: "raw.completed", DiffHash: EmptyTreeHash},
+		{Task: "b", Arm: ArmRaw, Number: 1, Terminal: "raw.completed", DiffHash: EmptyTreeHash},
 	}
 	if err := CheckAttributionAnomaly(raws); err != nil {
 		t.Errorf("RAW arms were held to the governed-candidate rule: %v", err)
