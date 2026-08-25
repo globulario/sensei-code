@@ -19,6 +19,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/provider"
 )
 
 // ArmOutcome is what executing one arm produced, before the oracle runs.
@@ -75,7 +77,9 @@ func governedExit(code int) string {
 // So a status code counts only where something says it is a status code.
 var infrastructureSignals = []string{
 	"usage limit", "quota exceeded", "rate limit", "too many requests",
-	"unauthorized", "authentication failed", "not authenticated", "invalid api key",
+	"unauthorized", "authentication failed", "failed to authenticate", "not authenticated",
+	"invalid api key", "api key is invalid", "api error: 401", "api error: 403",
+	"api error: 429", "api error: 500", "api error: 529",
 	"connection refused", "connection reset", "no rollout found",
 	"service unavailable", "bad gateway", "gateway timeout",
 }
@@ -113,7 +117,7 @@ func (r Runner) ExecuteGoverned(ctx context.Context, dir, statement string, time
 	cmd.Dir = dir
 	// A fresh provider session with no conversation carry-over: the worktree is
 	// new, so the session store under it is new too.
-	cmd.Env = append(os.Environ(), "SENSEI_CODE_BENCHMARK=1")
+	cmd.Env = append(strippedEnv(), "SENSEI_CODE_BENCHMARK=1")
 	out, err := cmd.CombinedOutput()
 
 	o := ArmOutcome{Raw: tail(string(out), 20000)}
@@ -214,6 +218,35 @@ func firstLine(s string) string {
 	return tail(s, 240)
 }
 
+// strippedEnv is the environment an arm runs in, without ambient provider
+// credentials.
+//
+// Sensei Code already strips these from every agent process it drives, so an
+// ambient key cannot override the subscription login. The harness has to do the
+// same, and the FIRST RAW arm proved why: it died in 174 seconds with
+//
+//	claude.ai connectors are disabled because ANTHROPIC_API_KEY … takes
+//	precedence over your claude.ai login
+//	Failed to authenticate. API Error: 401 API key is invalid.
+//
+// A RAW arm authenticating differently from the governed arms is not a baseline
+// for them. It is a different provider identity, measured against the same
+// tasks, reported in the same column.
+func strippedEnv() []string {
+	strip := map[string]bool{}
+	for _, k := range provider.SessionOnlyEnv {
+		strip[k] = true
+	}
+	var out []string
+	for _, kv := range os.Environ() {
+		if i := strings.IndexByte(kv, '='); i > 0 && strip[kv[:i]] {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
+}
+
 // ExecuteRaw drives the author model directly, with no Sensei plumbing.
 //
 // The baseline for the only question RAW exists to answer: what did the control
@@ -233,6 +266,7 @@ func (r Runner) ExecuteRaw(ctx context.Context, dir, statement string, timeout t
 	}
 	cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
 	cmd.Dir = dir
+	cmd.Env = strippedEnv()
 	out, err := cmd.CombinedOutput()
 
 	o := ArmOutcome{Raw: tail(string(out), 20000)}

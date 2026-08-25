@@ -45,6 +45,12 @@ func TestOnlyRecognisedProviderFailuresLicenseARetry(t *testing.T) {
 		"authentication failed",
 		"the provider returned status 429",
 		"403 Forbidden",
+		// From the first real RAW arm: an ambient ANTHROPIC_API_KEY overrode the
+		// subscription login and the agent died authenticating. Recorded as a
+		// semantic INCORRECT until this was added -- the mirror of the "403"
+		// defect, and worse: it makes an arm that never ran look like one that
+		// produced a wrong answer.
+		"Failed to authenticate. API Error: 401 API key is invalid.",
 	} {
 		if infrastructureReason(infra) == "" {
 			t.Errorf("an externally attributable failure was not recognised: %q", infra)
@@ -132,6 +138,32 @@ func TestAnUnconfiguredRawArmIsNotABaseline(t *testing.T) {
 	a := Attempt{Verdict: NoResult, Infrastructure: out.Infrastructure}
 	if a.Eligible() {
 		t.Error("an arm that never ran counted toward a correctness rate")
+	}
+}
+
+// Every arm runs without ambient provider credentials.
+//
+// Sensei Code strips these from the agents it drives so an ambient key cannot
+// override the subscription login. A RAW arm authenticating differently from
+// the governed arms is not a baseline for them.
+func TestArmsRunWithoutAmbientCredentials(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "sk-should-not-survive")
+	t.Setenv("PROOFBENCH_KEEP", "yes")
+	env := strippedEnv()
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "ANTHROPIC_API_KEY=") {
+			t.Error("an ambient ANTHROPIC_API_KEY survived into an arm; it overrides the " +
+				"subscription login and the arm measures a different provider identity")
+		}
+	}
+	var kept bool
+	for _, kv := range env {
+		if kv == "PROOFBENCH_KEEP=yes" {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Error("stripping removed unrelated environment; an arm needs its ordinary environment")
 	}
 }
 
