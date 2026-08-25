@@ -1,0 +1,43 @@
+{
+  "task": "internal-mcpconfig-21c5a6b",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "110678d517ca18d3d39484ad4e217b8f77498430",
+  "run_base_sha": "ff2ede42021159f82fc79e21802489079ed1f722",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T05:50:44Z",
+  "ended": "2026-08-25T06:00:19Z",
+  "wall_seconds": 575,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/mcpconfig [github.com/globulario/sensei-code/internal/mcpconfig.test]\ninternal/mcpconfig/mcpconfig_test.go:43:32: too many arguments in call to describeClaude\n\thave (string, nil, bool)\n\twant (string)\ninternal/mcpconfig/mcpconfig_test.go:54:102: too many arguments in call to Configure\n\thave (string, Agent, string, []string, bool)\n\twant (string, Agent, string, []string)\ninternal/mcpconfig/mcpconfig_test.go:77:60: too many arguments in call to Configure\n\thave (string, Agent, string, nil, bool)\n\twant (string, Agent, string, []string)\ninternal/mcpconfig/mcpconfig_test.go:104:13: undefined: missingCodexTools\ninternal/mcpconfig/mcpconfig_test.go:105:25: undefined: ReadOnlyTools\ninternal/mcpconfig/mcpconfig_test.go:117:23: undefined: ReadOnlyTools\ninternal/mcpconfig/mcpconfig_test.go:120:16: undefined: missingCodexTools\ninternal/mcpconfig/mcpconfig_test.go:141:32: too many arguments in call to describeClaude\n\thave (string, []string, bool)\n\twant (string)\ninternal/mcpconfig/mcpconfig_test.go:146:29: too many arguments in call to describeClaude\n\thave (string, []string, bool)\n\twant (string)\ninternal/mcpconfig/mcpconfig_test.go:147:18: undefined: Stale\ninternal/mcpconfig/mcpconfig_test.go:147:18: too many errors\nFAIL\tgithub.com/globulario/sensei-code/internal/mcpconfig [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:87296cf7f448563097458cf96de599f440c9f0a09d4b76346dbb96f15545cf76",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-mcpconfig-21c5a6b/RAW/1.log",
+    "transcript_tail_sha256": "sha256:8a4fdcade10e396a4b97ab3e82c89890c703d6fbb303292e792267d137071ae8"
+  },
+  "notes": "0 event(s) observed"
+}

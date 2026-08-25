@@ -43,6 +43,8 @@ func run(args []string) int {
 		return validate(args[1:])
 	case "calibrate":
 		return calibrate(args[1:])
+	case "discriminate":
+		return discriminate(args[1:])
 	case "run":
 		return runCampaign(args[1:])
 	case "report":
@@ -67,6 +69,11 @@ func usage() {
                        --repair <commit> [--out <dir>]
         prove the instrument can record the known #62 failure and the
         known #79/#80 win
+
+  proofbench discriminate --manifest <path> [--task <id>]
+        gate each task's contract oracle against REFERENCE / WRONG /
+        ALTERNATE specimens. A task whose ALTERNATE fails is refused:
+        that oracle has memorised one answer, not learned the contract
 
   proofbench run       --manifest <path> [--task <id>] [--arm RAW|COLD|WARM]
                        [--attempt N] [--dry-run]

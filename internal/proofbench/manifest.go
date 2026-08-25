@@ -96,9 +96,14 @@ type Task struct {
 	// allowed to carry into this one. A task with dependencies is a linked
 	// later-task specimen: the COLD-vs-WARM compounding comparison.
 	DependsOn []string `json:"depends_on,omitempty"`
-	// Calibration marks a known-outcome instrument check. Expected is what the
-	// harness must reproduce.
+	// Expected is what a calibration specimen's outcome must be.
 	Expected string `json:"expected,omitempty"`
+	// Contract is the behavioural oracle that replaced the withheld-tests one.
+	//
+	// Optional while a corpus is being rebuilt: a task with no contract oracle
+	// is simply not yet benchmark-eligible, and discriminate says so rather
+	// than failing to load the manifest.
+	Contract *ContractOracle `json:"contract,omitempty"`
 }
 
 // Linked reports whether this task can carry earlier experience.
