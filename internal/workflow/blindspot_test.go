@@ -67,7 +67,7 @@ func TestUnrecognisedBlindSpotsFailClosed(t *testing.T) {
 	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",
 		"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		"blind_spots":["some future condition nobody has classified yet"],`+healthyAuthority+`}`)
-	got := routeAuthority(scoped, nil)
+	got := routeAuthorityForAction(scoped, nil, plannedEdit())
 	if !got.RequiresHuman() {
 		t.Fatalf("an unclassified blind spot did not fail closed: %+v", got)
 	}
@@ -82,7 +82,7 @@ func TestCoverageBlindSpotRoutesToBoundedWork(t *testing.T) {
 	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",
 		"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		"blind_spots":["graph indexes this area but no anchored rules apply to the request"],`+healthyAuthority+`}`)
-	got := routeAuthority(scoped, nil)
+	got := routeAuthorityForAction(scoped, nil, plannedEdit())
 	if !got.ClosesGap() {
 		t.Fatalf("got %+v", got)
 	}
@@ -138,7 +138,7 @@ func TestCoverageWinsOverConsequenceInAMixedReading(t *testing.T) {
 		"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		"blind_spots":["file path under high-risk directory","coverage_insufficient: no direct anchors and no indexed files"],`+
 		healthyAuthority+`}`)
-	if got := routeAuthority(scoped, nil); !got.ClosesGap() {
+	if got := routeAuthorityForAction(scoped, nil, plannedEdit()); !got.ClosesGap() {
 		t.Fatalf("got %+v", got)
 	}
 }
@@ -149,7 +149,7 @@ func TestUnrecognisedBeatsEveryOtherReading(t *testing.T) {
 	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",
 		"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		"blind_spots":["coverage_insufficient: no direct anchors","brand new condition"],`+healthyAuthority+`}`)
-	if got := routeAuthority(scoped, nil); !got.RequiresHuman() {
+	if got := routeAuthorityForAction(scoped, nil, plannedEdit()); !got.RequiresHuman() {
 		t.Fatalf("got %+v", got)
 	}
 }
@@ -160,7 +160,7 @@ func TestAnApprovalGateIsNotClosableByEvidence(t *testing.T) {
 	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",
 		"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},
 		"blind_spots":["coverage_insufficient: no direct anchors"],`+healthyAuthority+`}`)
-	got := routeAuthority(scoped, nil)
+	got := routeAuthorityForAction(scoped, nil, plannedEdit())
 	if got.ClosesGap() {
 		t.Fatalf("a gated change class was reduced to bounded work: %+v", got)
 	}
@@ -174,7 +174,7 @@ func TestAnApprovalGateIsNotClosableByEvidence(t *testing.T) {
 func TestAnUncertifiableGraphIsNeverABoundedGap(t *testing.T) {
 	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",
 		"authority":{"verdict":"AUTHORITY_VERDICT_NOT_AUTHORITATIVE","freshness":{"state":"GRAPH_FRESHNESS_STATE_STALE"}}}`)
-	got := routeAuthority(scoped, nil)
+	got := routeAuthorityForAction(scoped, nil, plannedEdit())
 	if got.Route != RouteCannotEstablish {
 		t.Fatalf("got %+v", got)
 	}
