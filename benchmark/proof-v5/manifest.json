@@ -608,7 +608,7 @@
     },
     {
       "id": "internal-setup-e645669",
-      "statement": "internal/setup does not notice candidate worktrees left behind by earlier runs, so a repository accumulates abandoned checkouts that nothing reports.\n\nInspect must include a Check named \"candidate worktrees\" in its Report. The check is OK when the worktree root does not exist or holds nothing, and reports the abandoned directories it found otherwise. A worktree holding real work and one holding nothing must be distinguishable from the check's own reported state.",
+      "statement": "internal/setup does not notice candidate worktrees left behind by earlier runs, so a repository accumulates abandoned checkouts beside it that nothing reports.\n\nInspect must include a Check named \"candidate worktrees\" in its Report. A repository with no leftovers reports OK. A leftover directory that is EMPTY is reported and carries a Repair that removes it. A leftover directory HOLDING FILES is reported and is never deleted automatically -- unfinished work is not litter -- and the check says where it is so a person can decide. A worktree git still considers live is not abandoned.",
       "base_sha": "ab882a4676c72610c37e8caf3a2b207441548579",
       "origin": "e6456697ce11009c493b2c01bf2fb53dfcefc088",
       "oracle": {
@@ -621,6 +621,39 @@
           "test",
           "-buildvcs=false",
           "./internal/setup/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/setup/contract_probe_test.go",
+        "source_file": "oracles/internal-setup-e645669.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/setup/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-setup-e645669/WRONG",
+            "want": "INCORRECT",
+            "why": "reports every leftover the same way and offers to delete them all. Plausible -- a leftover is a leftover -- and it treats somebody's unfinished candidate as litter"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-setup-e645669/ALTERNATE",
+            "want": "CORRECT",
+            "why": "classifies each leftover into a map keyed by disposition and assembles the report from it, where the reference walks entries into two named slices and switches over their lengths"
+          }
         ]
       }
     },
