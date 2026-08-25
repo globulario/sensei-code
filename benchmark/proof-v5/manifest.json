@@ -493,27 +493,6 @@
       }
     },
     {
-      "id": "internal-setup-10a4f32",
-      "statement": "Nothing lets a caller ask cheaply whether a repository is fit to work in before starting: the full Inspect does more work than a startup check should.\n\nAdd to internal/setup the exported function:\n\n    func InspectQuick(ctx context.Context, o Options) Report\n\nIt returns a Report whose Ready() answers whether this repository can work, covering the conditions that would make every task fail, and it must not perform the expensive checks Inspect does. A repository that is fit reports ready; one missing what it needs reports not ready and its Report says which condition failed.",
-      "base_sha": "e6456697ce11009c493b2c01bf2fb53dfcefc088",
-      "origin": "10a4f321924e8fc41e834d8ab189aa6978bce422",
-      "oracle": {
-        "kind": "withheld_tests",
-        "paths": [
-          "internal/setup/setup_test.go"
-        ],
-        "command": [
-          "go",
-          "test",
-          "-buildvcs=false",
-          "./internal/setup/"
-        ]
-      },
-      "depends_on": [
-        "internal-setup-e645669"
-      ]
-    },
-    {
       "id": "internal-setup-16ecbc3",
       "statement": "The abandoned-worktree check treats a directory containing only this tool's own artefacts as if it held the user's work, so a repository is reported as holding abandoned work when it holds none.\n\nA candidate worktree directory whose contents are entirely artefacts this tool created must not be reported as holding work. A directory holding anything the user could have written must still be reported. Hidden entries are not counted as work.",
       "base_sha": "2b5ecda293c5dd35583243bd234134f592ccec5b",
@@ -531,7 +510,7 @@
         ]
       },
       "depends_on": [
-        "internal-setup-10a4f32"
+        "internal-setup-e645669"
       ]
     }
   ],
@@ -612,6 +591,20 @@
       "package": "internal/mcpconfig",
       "verdict": "ORACLE_INELIGIBLE",
       "reason": "Rejected after admission, while its oracle was being built: the Codex branch reads the user's home configuration, so the behaviour is not reachable hermetically. The corpus drops to 12 tasks and retains 4 linked specimens, so BOTH stopping conditions still hold and the walk does not resume."
+    },
+    {
+      "position": "post-walk revision",
+      "commit": "10a4f32192",
+      "package": "internal/setup",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Rejected after admission, while its oracle was being built. The contract is whether InspectQuick reports a repository READY, and two of its three checks are exec.LookPath probes for 'sensei' and 'awareness-mcp' -- the verdict depends on what is installed on the machine, which criterion (6) forbids. Its dependent internal-setup-16ecbc3 is re-linked to the surviving setup seed e6456697ce rather than left dangling. LINKED SPECIMENS DROP TO 3, one below the minimum, so the chronological walk RESUMES from position 11."
+    },
+    {
+      "position": "walk resumed, positions 11+",
+      "commit": "(survey)",
+      "package": "(all remaining)",
+      "verdict": "NO_FOURTH_LINKED_PAIR_FOUND",
+      "reason": "Resuming the walk to restore stopping condition (b), every remaining package with two or more eligible commits was assessed against criterion (6): internal/tui aee4c5b519 adds only private functions and shells out to clipboard tools (machine state); internal/workflow's thirteen candidates have their contracts on private identifiers; internal/doctor's third candidate sits in the same provider-seam area as the two already rejected; cmd/sensei-code is package main, so observed behaviour cannot be attributed; internal/provider offers at most one admissible commit, not a pair. CONCLUSION: under criterion (6) this repository's history supports at most THREE linked specimens -- internal/gitx, internal/tui and internal/setup. Stopping condition (b) cannot be satisfied by continuing the walk. This is a limit of the corpus, not a reason to weaken the criterion, and it is recorded for a decision rather than resolved by lowering the minimum."
     }
   ],
   "intermediate_state": {
