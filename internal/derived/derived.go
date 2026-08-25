@@ -264,7 +264,16 @@ func AnchorsFor(ctx context.Context, rv Revalidator, repoRoot, revision string, 
 	for _, r := range recipes {
 		res := rv.Revalidate(ctx, repoRoot, revision, r)
 		results = append(results, res)
-		if res.Anchor != nil {
+		// Both conditions, and the outcome is the one that matters.
+		//
+		// This read `res.Anchor != nil` alone, which delegated "no partial
+		// credit" to every Revalidator rather than enforcing it here. CLI does
+		// set Anchor only on Derived, so nothing was wrong in practice -- but
+		// Revalidator is an interface, and the one place that states the
+		// guarantee was the one place not checking it. An implementation that
+		// returned a retained anchor beside NOT_DERIVED would have had it
+		// counted as coverage.
+		if res.Outcome == Derived && res.Anchor != nil {
 			anchors = append(anchors, *res.Anchor)
 		}
 	}

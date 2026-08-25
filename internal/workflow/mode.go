@@ -47,6 +47,21 @@ const (
 	RequestedByHuman Provenance = "requested by the human with /run"
 	// ResumedGoverned is a governed task continuing after an interruption.
 	ResumedGoverned Provenance = "resumed governed task"
+	// SubmittedUnattended is a task submitted through the headless CLI.
+	//
+	// RequestedByHuman used to be stamped on these too, because it was set from
+	// which ENTRYPOINT was called rather than from anything establishing that a
+	// person was there. "Typing it is the authorization" is true of the TUI,
+	// where a human demonstrably typed; a headless run has no such evidence,
+	// and during a dogfooding run an AI submitted a task that the engine then
+	// labelled as the human's.
+	//
+	// There is deliberately no flag to assert human presence here. A flag would
+	// be exactly the forgeable claim this replaces. Human provenance comes from
+	// the interactive session, where the evidence is the interaction.
+	SubmittedUnattended Provenance = "submitted unattended; no human presence was established"
+	// ObservationUnattended is an unattended read-only observation run.
+	ObservationUnattended Provenance = "observation submitted unattended; reads only, admits nothing"
 )
 
 // TaskMode is the mode of one task together with why.

@@ -1,0 +1,11 @@
+contract_unknown:
+  - id: contract_unknown.sensei_serve_loses_a_race_starting_oxigraph_and_exits
+    kind: contract_unknown
+    title: sensei serve loses a race starting oxigraph and exits
+    description: 'sensei serve starts oxigraph as a child and waits 10 seconds for readiness. On a ~34k-triple store with a cold cache the child regularly needs longer, so serve logs ''oxigraph did not become ready in 10s'' and exits, leaving no graph server. Every later governed run fails with ''awareness-graph backend is unreachable'' -- accurate about the transport, silent about the cause, so an operator debugs the wrong layer. Workaround: start oxigraph separately, then sensei serve --no-oxigraph against it.'
+    proposed_contract: A managed backend either becomes ready or its supervisor reports why it did not, and readiness waits scale with the store rather than being a fixed constant.
+    revision_request: 'Should the 10s wait be configurable, proportional to store size, or replaced by retry-until-deadline? And should serve exiting leave a marker that later ''backend unreachable'' errors can point at, so the reported symptom names the cause? This matters for unattended operation more than for interactive use: an agent asked to run for hours needs the substrate to be boring, and this is the class of failure that ends such runs quietly.'
+    source_files:
+      - internal/sensei/mcp.go
+    evidence:
+      - 'Observed twice on 2026-08-24 during the first self-repair experiment. serve.log: ''oxigraph started (pid 4113669)'' then ''oxigraph did not become ready in 10s''. The isolated stack died mid-experiment; subsequent runs failed with ''dial tcp 127.0.0.1:10199: connect: connection refused''. Standalone oxigraph on the same store took about 20s to reach ''Listening for requests'', after which serve --no-oxigraph attached immediately.'

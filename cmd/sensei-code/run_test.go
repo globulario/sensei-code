@@ -136,8 +136,20 @@ func TestHeadlessRunUsesTheSameEngineEntryAsTheTUI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(cli), "engine.SubmitGoverned(") {
-		t.Fatal("the headless path no longer calls Engine.SubmitGoverned")
+	if !strings.Contains(string(cli), "engine.SubmitGovernedUnattended") &&
+		!strings.Contains(string(cli), "engine.SubmitGoverned(") {
+		t.Fatal("the headless path no longer enters through an Engine.SubmitGoverned* entry")
+	}
+	// Nobody typed a headless task, and the engine must not be told otherwise.
+	//
+	// Provenance was stamped from which entrypoint ran rather than from
+	// anything establishing a person was present, so `sensei-code run` recorded
+	// its tasks as the human's -- including, during a dogfooding run, one an AI
+	// submitted. The governed workflow is unchanged; only the claim about who
+	// asked for it is.
+	if strings.Contains(string(cli), "engine.SubmitGoverned(") {
+		t.Fatal("the headless path claims human provenance: SubmitGoverned means a human typed /run, " +
+			"and a headless run has no typing in it. Use SubmitGovernedUnattended")
 	}
 	tui, err := os.ReadFile(filepath.Join("..", "..", "internal", "tui", "model.go"))
 	if err != nil {

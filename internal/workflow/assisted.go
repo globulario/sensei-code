@@ -50,6 +50,31 @@ func (e *Engine) SubmitAssisted(ctx context.Context, task string) string {
 // what makes Stop possible, and Stop is what keeps removing the rendezvous
 // honest rather than merely quieter.
 func (e *Engine) SubmitGoverned(ctx context.Context, task string) string {
+	return e.submit(ctx, task, RequestedByHuman, false)
+}
+
+// SubmitGovernedUnattended is a governed run nobody typed.
+//
+// Same workflow, honest provenance. The doc above says typing /run IS the
+// authorization; a headless or looped submission has no typing in it, and
+// stamping those as the human's put an authorization on record that nobody
+// gave. What changes is the label, not the governance: every gate below reads
+// the same evidence either way.
+func (e *Engine) SubmitGovernedUnattended(ctx context.Context, task string) string {
+	return e.submit(ctx, task, SubmittedUnattended, false)
+}
+
+// SubmitObservation starts a read-only run: read the repository, report what
+// was found, admit nothing.
+//
+// The lane is fixed HERE, at submission, which is what makes it structural. It
+// is not inferable from a plan, cannot be requested by a worker, and cannot be
+// widened once the run is going.
+func (e *Engine) SubmitObservation(ctx context.Context, task string) string {
+	return e.submit(ctx, task, ObservationUnattended, true)
+}
+
+func (e *Engine) submit(ctx context.Context, task string, how Provenance, observe bool) string {
 	taskID := fmt.Sprintf("task-%d", time.Now().UTC().UnixNano())
 	ctx, cancel := context.WithCancel(ctx)
 	e.mu.Lock()
@@ -58,9 +83,12 @@ func (e *Engine) SubmitGoverned(ctx context.Context, task string) string {
 	}
 	e.stops[taskID] = cancel
 	e.mu.Unlock()
+	if observe {
+		e.markObserving(taskID)
+	}
 	go func() {
 		defer e.clearStop(taskID)
-		e.run(ctx, taskID, strings.TrimSpace(task))
+		e.run(ctx, taskID, strings.TrimSpace(task), how)
 	}()
 	return taskID
 }

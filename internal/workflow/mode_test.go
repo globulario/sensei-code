@@ -23,9 +23,31 @@ func TestPlainMessageStartsAssisted(t *testing.T) {
 		t.Fatalf("Submit still starts governed execution directly:\n%s", body)
 	}
 
+	// SubmitGoverned reaches governed execution through the shared submit path.
+	// Following one hop keeps this a check on the call graph rather than on
+	// where a line happens to sit.
 	governed := funcBody(t, "internal/workflow/assisted.go", "SubmitGoverned")
-	if !strings.Contains(governed, "e.run(") {
+	if !strings.Contains(governed, "e.submit(") {
 		t.Fatalf("SubmitGoverned does not start the governed workflow:\n%s", governed)
+	}
+	shared := funcBody(t, "internal/workflow/assisted.go", "submit")
+	if !strings.Contains(shared, "e.run(") {
+		t.Fatalf("submit does not start governed execution:\n%s", shared)
+	}
+	// Provenance is a parameter of submission, not a constant of the workflow.
+	if !strings.Contains(governed, "RequestedByHuman") {
+		t.Fatalf("SubmitGoverned no longer records human provenance:\n%s", governed)
+	}
+	unattended := funcBody(t, "internal/workflow/assisted.go", "SubmitGovernedUnattended")
+	if strings.Contains(unattended, "RequestedByHuman") {
+		t.Fatalf("an unattended submission claims a human asked for it:\n%s", unattended)
+	}
+	// The observation lane is fixed at submission, where nothing downstream can
+	// widen it. If it ever becomes inferable from a plan it stops being
+	// structural and becomes a claim a worker can make about itself.
+	observe := funcBody(t, "internal/workflow/assisted.go", "SubmitObservation")
+	if !strings.Contains(observe, "true") {
+		t.Fatalf("SubmitObservation does not fix the observation lane at submission:\n%s", observe)
 	}
 }
 
@@ -239,7 +261,7 @@ func TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge(t *testing.T) {
 func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 	// Before: the region is uncovered, so a human owns it.
 	uncovered := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
-	if got := routeAuthority(uncovered, nil); got.Granted() || !got.ClosesGap() {
+	if got := routeAuthorityForAction(uncovered, nil, plannedEdit()); got.Granted() || !got.ClosesGap() {
 		t.Fatalf("an uncovered region was not stopped as a bounded gap: %+v", got)
 	}
 
@@ -250,7 +272,7 @@ func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 		"direct_invariants": [{"id":"invariant:promoted.from.resolution","label":"the human decided this","severity":"critical","status":"active"}],
 		`+healthyAuthority+`
 	}`)
-	if got := routeAuthority(covered, nil); got.Route != RouteArchitectural {
+	if got := routeAuthorityForAction(covered, nil, plannedEdit()); got.Route != RouteArchitectural {
 		t.Fatalf("a promoted resolution still reprompted the human: %+v", got)
 	}
 

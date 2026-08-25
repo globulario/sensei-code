@@ -103,6 +103,7 @@ invariants:
     protects:
       files:
         - internal/workflow/
+        - internal/workflow/authority.go
         - internal/workflow/engine.go
     required_tests:
       - internal/workflow/engine_test.go:TestRunDoesNotAskForRoutinePlanApproval
@@ -209,6 +210,7 @@ invariants:
     protects:
       files:
         - internal/workflow/
+        - internal/workflow/authority.go
         - internal/workflow/engine.go
         - internal/session/store.go
     required_tests:
