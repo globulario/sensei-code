@@ -25,7 +25,7 @@
       "id": "revision and produce a binary unified",
       "cycle": 1,
       "status": "new",
-      "text": "…revision and produce a binary unified diff from that base after registering untracked non-ignored paths with intent-to-add. Add tests for committed created work and staged tracked work, alongside the existing clean/ignored/raw-output cases."
+      "text": "\u2026revision and produce a binary unified diff from that base after registering untracked non-ignored paths with intent-to-add. Add tests for committed created work and staged tracked work, alongside the existing clean/ignored/raw-output cases."
     }
   ],
   "review_cycles": 2,
@@ -50,5 +50,6 @@
     "transcript": "benchmark/proof-v6/transcripts/internal-gitx-a4fa351/COLD/1.log",
     "transcript_tail_sha256": "sha256:50a9116120a957b8d1f13f693fa69615896a3eaaf6377442ac533011d3efbd8d"
   },
-  "notes": "3849 event(s) observed"
+  "notes": "3849 event(s) observed",
+  "measurement_status": "PRE_RESTORATION: taken while the governed child was reaching a non-authoritative DEV graph, before the environment was identified and restored. Preserved as evidence about the environment; excluded from the quantitative result. The wave is re-run in full."
 }
