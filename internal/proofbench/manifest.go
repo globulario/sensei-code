@@ -90,6 +90,48 @@ type Manifest struct {
 	// ScoringContract is the two-axis rule, written down before the campaign so
 	// that "we did not reinterpret the scores after seeing them" is checkable.
 	ScoringContract string `json:"scoring_contract,omitempty"`
+	// CorpusV1Record is every task the previous corpus selected, with the
+	// verdict criterion (6) reached on it. Preserved rather than erased: the
+	// rejections are the evidence for why the selection rule changed.
+	CorpusV1Record []CorpusVerdict `json:"corpus_v1_record,omitempty"`
+	// SelectionWalk is the mechanical re-selection, position by position,
+	// including every candidate rejected on the way. A walk that recorded only
+	// its admissions could not be distinguished from a search for tasks the
+	// product happens to suit.
+	SelectionWalk []WalkStep `json:"selection_walk,omitempty"`
+	// IntermediateState is the corpus at the moment it first reached ten tasks.
+	//
+	// Preserved so it is impossible to claim later that the walk continued
+	// because the first ten were disliked: at that point the size requirement
+	// was met and the linked requirement was not, and the stopping condition
+	// has always had both.
+	IntermediateState *IntermediateState `json:"intermediate_state,omitempty"`
+}
+
+// CorpusVerdict is what criterion (6) decided about one previously selected
+// task.
+type CorpusVerdict struct {
+	Task    string `json:"task"`
+	Verdict string `json:"verdict"`
+	Reason  string `json:"reason"`
+}
+
+// WalkStep is one position of the mechanical re-selection walk.
+type WalkStep struct {
+	Position int    `json:"position"`
+	Commit   string `json:"commit"`
+	Package  string `json:"package"`
+	Verdict  string `json:"verdict"`
+	Reason   string `json:"reason"`
+}
+
+// IntermediateState is a corpus snapshot at a stopping-condition checkpoint.
+type IntermediateState struct {
+	Label                      string `json:"label"`
+	Tasks                      int    `json:"tasks"`
+	LinkedSpecimens            int    `json:"linked_specimens"`
+	StoppingConditionSatisfied bool   `json:"stopping_condition_satisfied"`
+	Note                       string `json:"note"`
 }
 
 // Exclusion is one candidate the corpus did not take.

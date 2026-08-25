@@ -1,7 +1,7 @@
 {
   "version": "proof-v5",
   "stage": "full",
-  "selection_rule": "Frozen before the corpus was chosen. From `git log --first-parent main` in CHRONOLOGICAL order, a commit is eligible when: (1) its diff touches at least one _test.go and at least one non-test .go; (2) it changes at most 6 files; (3) exactly one package contains both changed tests and changed non-test code -- that package is the tested package; and (4) the withheld oracle DISCRIMINATES, meaning `go test ./<pkg>/` FAILS at the parent commit with only the fix's test files restored, and PASSES at the accepted fix. Criterion (4) is the instrument-capability check: an oracle that passes pre-fix would score any candidate CORRECT, including one that changed nothing. Eligible commits are grouped by tested package in order of first appearance; packages with fewer than two eligible commits are excluded because they cannot form a linked later-task specimen. From each remaining package the EARLIEST eligible commit is a seed and the NEXT later one is its linked task, until 10 tasks are selected. Task statements are written from the pre-fix state and the commit subject, stating the problem and never the implementation. ORACLE REPLACEMENT (v4): proof-v3's withheld-test oracles were lifted from the accepted fix and failed to COMPILE against any solution that chose different names, so they measured whether a worker guessed the reference patch rather than whether it delivered the behaviour. v4 replaces every oracle with a BEHAVIOURAL CONTRACT probe written for the benchmark, and adds eligibility criterion (5): a task may enter the corpus only after its oracle separates three specimens -- REFERENCE (the accepted fix) PASS, WRONG (a plausible non-solution) FAIL, and ALTERNATE (correct, structurally unlike the reference) PASS. The ALTERNATE specimen is the whole point: it asks whether the oracle can recognise correctness it did not already know how to write. Where a task requires a NEW exported surface, the task statement names that surface -- an interface is a requirement, not a leak, and naming it still leaves the implementation free. Task bases, origins and thresholds are unchanged from v3. PROTOCOL AMENDMENT, pre-campaign, triggered by calibration. Criterion (6) is added to criteria (1)-(5). This is a measurement-eligibility condition, not a performance result: no RAW/COLD/WARM campaign arm had been run when it was adopted, and the tasks it rejects are rejected because correctness cannot be observed without prescribing the answer. (6) BEHAVIOURAL ORACLE-ABILITY: At the pinned task base, the task statement establishes externally observable behaviour that can be tested without requiring private identifiers, reference-patch structure, incidental environment state, or implementation choices not specified by the task. Before admission, the oracle must pass REFERENCE and a structurally distinct ALTERNATE correct implementation, and fail a plausible WRONG implementation. RE-SELECTION IS MECHANICAL. The original ten (corpus v1) are preserved in corpus_v1_record with their verdicts; six are marked ORACLE_INELIGIBLE with reasons. Replacements are drawn by walking the eligible pool in the ALREADY-DEFINED chronological order -- packages in order of first appearance, packages with fewer than two criterion-(6)-eligible commits excluded, earliest commit a seed and the next later one its linked task -- admitting the first that satisfy all six criteria and the three-specimen gate, until the corpus contains ten measurable tasks. Candidates are not chosen for how well they suit Sensei-code, and every rejection is recorded. SCOPE LIMITATION, to be restated in the final report: after criterion (6) this experiment no longer estimates performance on all ordinary coding tasks. It estimates performance on REAL REPOSITORY TASKS WITH INDEPENDENTLY OBSERVABLE BEHAVIOURAL CONTRACTS. That is narrower and far more defensible, and the six rejections show why: subjective text quality, uncontrolled machine state, a prescribed API/design leaving no room for a structurally different correct answer, and a package-main change whose observed behaviour cannot be attributed to it.",
+  "selection_rule": "Frozen before the corpus was chosen. From `git log --first-parent main` in CHRONOLOGICAL order, a commit is eligible when: (1) its diff touches at least one _test.go and at least one non-test .go; (2) it changes at most 6 files; (3) exactly one package contains both changed tests and changed non-test code -- that package is the tested package; and (4) the withheld oracle DISCRIMINATES, meaning `go test ./<pkg>/` FAILS at the parent commit with only the fix's test files restored, and PASSES at the accepted fix. Criterion (4) is the instrument-capability check: an oracle that passes pre-fix would score any candidate CORRECT, including one that changed nothing. Eligible commits are grouped by tested package in order of first appearance; packages with fewer than two eligible commits are excluded because they cannot form a linked later-task specimen. From each remaining package the EARLIEST eligible commit is a seed and the NEXT later one is its linked task, until 10 tasks are selected. Task statements are written from the pre-fix state and the commit subject, stating the problem and never the implementation. ORACLE REPLACEMENT (v4): proof-v3's withheld-test oracles were lifted from the accepted fix and failed to COMPILE against any solution that chose different names, so they measured whether a worker guessed the reference patch rather than whether it delivered the behaviour. v4 replaces every oracle with a BEHAVIOURAL CONTRACT probe written for the benchmark, and adds eligibility criterion (5): a task may enter the corpus only after its oracle separates three specimens -- REFERENCE (the accepted fix) PASS, WRONG (a plausible non-solution) FAIL, and ALTERNATE (correct, structurally unlike the reference) PASS. The ALTERNATE specimen is the whole point: it asks whether the oracle can recognise correctness it did not already know how to write. Where a task requires a NEW exported surface, the task statement names that surface -- an interface is a requirement, not a leak, and naming it still leaves the implementation free. Task bases, origins and thresholds are unchanged from v3. PROTOCOL AMENDMENT, pre-campaign, triggered by calibration. Criterion (6) is added to criteria (1)-(5). This is a measurement-eligibility condition, not a performance result: no RAW/COLD/WARM campaign arm had been run when it was adopted, and the tasks it rejects are rejected because correctness cannot be observed without prescribing the answer. (6) BEHAVIOURAL ORACLE-ABILITY: At the pinned task base, the task statement establishes externally observable behaviour that can be tested without requiring private identifiers, reference-patch structure, incidental environment state, or implementation choices not specified by the task. Before admission, the oracle must pass REFERENCE and a structurally distinct ALTERNATE correct implementation, and fail a plausible WRONG implementation. RE-SELECTION IS MECHANICAL. The original ten (corpus v1) are preserved in corpus_v1_record with their verdicts: four ADMITTED, five ORACLE_INELIGIBLE with reasons, and one ADMITTED_UNLINKED -- internal-mcpconfig-21c5a6b independently satisfies all six measurement criteria, and rejecting it because its seed failed would let a package-pairing convention override oracle validity. It contributes to RAW/COLD correctness and to end-to-end rates, and not to the WARM linkage denominator. Replacements are drawn by walking the eligible pool in the ALREADY-DEFINED chronological order -- packages in order of first appearance, packages with fewer than two criterion-(6)-eligible commits excluded, earliest commit a seed and the next later one its linked task -- admitting every candidate that satisfies all six criteria and the three-specimen gate, until BOTH stopping conditions hold: (a) the corpus contains at least 10 measurable tasks, AND (b) the corpus contains at least 4 linked specimens suitable for WARM-to-COLD compounding measurement. The stopping condition has always had two independent requirements; making that explicit is not curation, because the admission order stays mechanical. The linked minimum is NOT relaxed to stop sooner: RAW versus COLD asks whether governance works, while WARM asks whether accumulated governed experience compounds, and two pairs would give almost no leverage on the harder claim. The corpus reached ten tasks at walk position 7 with only two linked specimens -- preserved as intermediate_state -- and the walk continued in the same order to position 10, where the fourth linked specimen was admitted. Candidates are not chosen for how well they suit Sensei-code, and every rejection is recorded. SCOPE LIMITATION, to be restated in the final report: after criterion (6) this experiment no longer estimates performance on all ordinary coding tasks. It estimates performance on REAL REPOSITORY TASKS WITH INDEPENDENTLY OBSERVABLE BEHAVIOURAL CONTRACTS. That is narrower and far more defensible, and the six rejections show why: subjective text quality, uncontrolled machine state, a prescribed API/design leaving no room for a structurally different correct answer, and a package-main change whose observed behaviour cannot be attributed to it.",
   "corpus_v1_record": [
     {
       "task": "internal-tui-ea046ba",
@@ -20,8 +20,8 @@
     },
     {
       "task": "internal-mcpconfig-21c5a6b",
-      "verdict": "ORACLE_ELIGIBLE_BUT_UNPAIRED",
-      "reason": "Describe(repoRoot) is hermetic and testable, but with 110678d rejected internal/mcpconfig retains fewer than two criterion-(6)-eligible commits, and the frozen rule excludes such packages because they cannot form a linked later-task specimen"
+      "verdict": "ADMITTED_UNLINKED",
+      "reason": "measurable task; seed/linkage condition unavailable \u2014 its seed failed criterion (6), so the package cannot supply a linked pair. It contributes to RAW/COLD correctness and to end-to-end rates, and not to the WARM linkage denominator."
     },
     {
       "task": "internal-behavioral-a453be8",
@@ -245,6 +245,292 @@
           }
         ]
       }
+    },
+    {
+      "id": "internal-tui-ea046ba",
+      "statement": "The transcript view in internal/tui cannot be scrolled: long output runs off the top and there is no way to reach earlier lines. Make the transcript scrollable.",
+      "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+      "origin": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/tui/scroll_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/tui/"
+        ]
+      }
+    },
+    {
+      "id": "internal-tui-be512db",
+      "statement": "Scrolling in the transcript view does not respond to the keys and the mouse wheel people actually use. Make it respond to the ordinary scrolling inputs.",
+      "base_sha": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+      "origin": "be512dbd60601ba40d53281b233bb1ab7f7f5b4f",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/tui/scroll_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/tui/"
+        ]
+      },
+      "depends_on": [
+        "internal-tui-ea046ba"
+      ]
+    },
+    {
+      "id": "internal-mcpconfig-21c5a6b",
+      "statement": "internal/mcpconfig assumes what tools the MCP server exposes rather than reporting the allowlist the server was actually configured with. Report what is configured.",
+      "base_sha": "110678d517ca18d3d39484ad4e217b8f77498430",
+      "origin": "21c5a6b18b68298867b037ab3a05cd1bf80b682c",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/mcpconfig/mcpconfig_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/mcpconfig/"
+        ]
+      }
+    },
+    {
+      "id": "internal-assist-5dfffad",
+      "statement": "internal/assist scopes its awareness_preflight call without telling Sensei which repository domain it is asking about, so the answer is not scoped to the workspace Sensei itself reported.\n\nWhen the workspace result carries a repository domain at binding.repository_domain, the preflight call must pass it as the \"domain\" argument. When no domain is available, the call must be made without a \"domain\" argument rather than with an empty one. Nothing else about the call changes.",
+      "base_sha": "5619d645e52570cabd43c7906b7d160d536d1c14",
+      "origin": "5dfffad64161a954b547028934edb8bbfc05e4e9",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/assist/packet_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/assist/"
+        ]
+      }
+    },
+    {
+      "id": "internal-decision-6cf23e8",
+      "statement": "internal/decision sends every decision to the sensei CLI, including ones that link to no governing invariant and no failure mode. Such a decision cannot be recorded and the CLI refuses it, so the user learns about it as a tool error rather than as a statement about their decision.\n\nAdd the exported sentinel:\n\n    var ErrNotLinked = errors.New(...)\n\nWrite must return ErrNotLinked, without invoking the CLI at all, when a Record links to neither an invariant nor a failure. Also add a Failures []string field to Record, carried to the CLI the way Invariants already is. A record that links to either kind still proceeds as before.",
+      "base_sha": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
+      "origin": "6cf23e8490c71e5a1531305d6327114048b9aefb",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/decision/record_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/decision/"
+        ]
+      }
+    },
+    {
+      "id": "internal-agent-01f3fe1",
+      "statement": "internal/agent streams a worker's raw output verbatim. For the claude worker that output is JSON envelopes, so the reader sees protocol rather than activity.\n\nAdd the exported function:\n\n    func Activity(name, line string) string\n\nFor a worker whose name is not \"claude\" it returns the line trimmed of surrounding whitespace. For \"claude\" it renders one readable activity line from the JSON envelope -- the assistant's text, or the name of the tool being used -- and returns the empty string for an envelope carrying neither. A line that is not valid JSON is returned trimmed.",
+      "base_sha": "da311a56277119d4def7bc7526aadf119e7f96ad",
+      "origin": "01f3fe173884a88b469f1b9087a8fdece7e5a531",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/agent/activity_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/agent/"
+        ]
+      }
+    },
+    {
+      "id": "internal-session-4d32937",
+      "statement": "A task interrupted after its plan was approved cannot be resumed: nothing reconstructs, from the recorded event stream, which tasks were left in that state.\n\nAdd to internal/session the exported type and function:\n\n    type Interrupted struct { TaskID, Task, Plan, Review string }\n    func FindInterrupted(events []event.Event) []Interrupted\n\nGiven a session's events it returns one entry per task that was created and had a plan proposed but never reached a terminal workflow outcome, carrying the task text, the plan, and the latest review if one exists. Tasks that completed, failed or were stopped are not returned.",
+      "base_sha": "008b9a347edc9675e34ea5e1eb6e834d28faf9d0",
+      "origin": "4d3293745da84ffa1b577bef9dd39c85809664e2",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/session/interrupted_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/session/"
+        ]
+      }
+    },
+    {
+      "id": "internal-architect-2e095c4",
+      "statement": "There is no way to ask the architect why a specific piece of governing knowledge exists.\n\nAdd to internal/architect the exported function:\n\n    func RunWhy(caller Caller, domain, id string) (string, error)\n\nGiven an id it queries the graph through the supplied Caller and renders what that node says. An empty id is an error naming the expected form. The domain, when non-empty, is passed to the query; when empty it is omitted. An id that matches nothing yields a report saying so rather than an error.",
+      "base_sha": "7dbe79e50f150be4e5bf998d4762c5004507e500",
+      "origin": "2e095c4a2d1daf5c1c306ae938efc83de2f13885",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/architect/run_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/architect/"
+        ]
+      }
+    },
+    {
+      "id": "internal-setup-e645669",
+      "statement": "internal/setup does not notice candidate worktrees left behind by earlier runs, so a repository accumulates abandoned checkouts that nothing reports.\n\nInspect must include a Check named \"candidate worktrees\" in its Report. The check is OK when the worktree root does not exist or holds nothing, and reports the abandoned directories it found otherwise. A worktree holding real work and one holding nothing must be distinguishable from the check's own reported state.",
+      "base_sha": "ab882a4676c72610c37e8caf3a2b207441548579",
+      "origin": "e6456697ce11009c493b2c01bf2fb53dfcefc088",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/setup/setup_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/setup/"
+        ]
+      }
+    },
+    {
+      "id": "internal-setup-10a4f32",
+      "statement": "Nothing lets a caller ask cheaply whether a repository is fit to work in before starting: the full Inspect does more work than a startup check should.\n\nAdd to internal/setup the exported function:\n\n    func InspectQuick(ctx context.Context, o Options) Report\n\nIt returns a Report whose Ready() answers whether this repository can work, covering the conditions that would make every task fail, and it must not perform the expensive checks Inspect does. A repository that is fit reports ready; one missing what it needs reports not ready and its Report says which condition failed.",
+      "base_sha": "e6456697ce11009c493b2c01bf2fb53dfcefc088",
+      "origin": "10a4f321924e8fc41e834d8ab189aa6978bce422",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/setup/setup_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/setup/"
+        ]
+      },
+      "depends_on": [
+        "internal-setup-e645669"
+      ]
+    },
+    {
+      "id": "internal-setup-16ecbc3",
+      "statement": "The abandoned-worktree check treats a directory containing only this tool's own artefacts as if it held the user's work, so a repository is reported as holding abandoned work when it holds none.\n\nA candidate worktree directory whose contents are entirely artefacts this tool created must not be reported as holding work. A directory holding anything the user could have written must still be reported. Hidden entries are not counted as work.",
+      "base_sha": "2b5ecda293c5dd35583243bd234134f592ccec5b",
+      "origin": "16ecbc3e50654829ffd1d5e63d9f981a30ad24dd",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/setup/setup_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/setup/"
+        ]
+      },
+      "depends_on": [
+        "internal-setup-10a4f32"
+      ]
     }
-  ]
+  ],
+  "selection_walk": [
+    {
+      "position": 1,
+      "commit": "5dfffad641",
+      "package": "internal/assist",
+      "verdict": "ADMIT",
+      "reason": "SenseiCaller is an interface; a fake observes which domain the preflight was scoped to"
+    },
+    {
+      "position": 2,
+      "commit": "6cf23e8490",
+      "package": "internal/decision",
+      "verdict": "ADMIT",
+      "reason": "Write returns exported ErrNotLinked before invoking the CLI"
+    },
+    {
+      "position": 3,
+      "commit": "da311a5627",
+      "package": "internal/publish",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the commit CREATES internal/publish. Its contract is the package's design, and specifying it leaves no room for a structurally distinct ALTERNATE \u2014 the same ground the behavioral tasks were rejected on, applied consistently rather than relaxed to reach the corpus size faster"
+    },
+    {
+      "position": 4,
+      "commit": "01f3fe1738",
+      "package": "internal/agent",
+      "verdict": "ADMIT",
+      "reason": "Activity(name, line) string is an exported pure function on an existing package"
+    },
+    {
+      "position": 5,
+      "commit": "cde6bf9212",
+      "package": "internal/workflow",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Engine.Note is exported but delivery is observable only by driving a real Engine with providers \u2014 incidental environment state"
+    },
+    {
+      "position": 6,
+      "commit": "4d3293745d",
+      "package": "internal/session",
+      "verdict": "ADMIT",
+      "reason": "FindInterrupted is pure over an event slice"
+    },
+    {
+      "position": 7,
+      "commit": "2e095c4a2d",
+      "package": "internal/architect",
+      "verdict": "ADMIT",
+      "reason": "RunWhy takes a Caller interface; hermetic. CORPUS REACHES 10 TASKS HERE \u2014 see intermediate_state: the stopping condition is NOT satisfied, because only 2 linked specimens exist"
+    },
+    {
+      "position": 8,
+      "commit": "e6456697ce",
+      "package": "internal/setup",
+      "verdict": "ADMIT",
+      "reason": "the abandoned-worktree check is observable through exported Inspect on a temp repo; seed for the setup chain"
+    },
+    {
+      "position": 9,
+      "commit": "10a4f32192",
+      "package": "internal/setup",
+      "verdict": "ADMIT",
+      "reason": "InspectQuick is exported and hermetic; LINKED specimen 3"
+    },
+    {
+      "position": 10,
+      "commit": "16ecbc3e50",
+      "package": "internal/setup",
+      "verdict": "ADMIT",
+      "reason": "tool-artefact handling observable through Inspect; LINKED specimen 4 \u2014 BOTH stopping conditions now satisfied"
+    }
+  ],
+  "intermediate_state": {
+    "label": "v2-selection-at-N=10",
+    "tasks": 10,
+    "linked_specimens": 2,
+    "stopping_condition_satisfied": false,
+    "note": "Preserved so it is impossible to claim later that the walk continued because the first ten were disliked. At position 7 the corpus contained ten measurable tasks and only two linked specimens. The stopping condition has always had two independent requirements \u2014 at least ten measurable tasks AND at least four linked specimens \u2014 and only the second was outstanding. The walk continued in the same order, admitting every candidate that passed, and stopped at position 10 when the fourth linked specimen was admitted."
+  }
 }
