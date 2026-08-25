@@ -136,7 +136,7 @@ func TestAFailedReviewerFallsBackBeforeTheRunFails(t *testing.T) {
 // vouch for itself, the route is the same however many agents concurred.
 func TestAgreementDoesNotSubstituteForCertification(t *testing.T) {
 	uncertifiable := sensei.PreflightDecision{Status: sensei.PreflightOK}
-	routing := routeAuthority(uncertifiable, nil)
+	routing := routeAuthorityForAction(uncertifiable, nil, plannedEdit())
 	if routing.Route != RouteCannotEstablish {
 		t.Fatalf("an uncertifiable graph produced route %q", routing.Route)
 	}

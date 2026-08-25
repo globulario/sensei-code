@@ -261,7 +261,7 @@ func TestOrdinaryConfirmationsAreNotFiledAsGovernanceKnowledge(t *testing.T) {
 func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 	// Before: the region is uncovered, so a human owns it.
 	uncovered := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
-	if got := routeAuthority(uncovered, nil); got.Granted() || !got.ClosesGap() {
+	if got := routeAuthorityForAction(uncovered, nil, plannedEdit()); got.Granted() || !got.ClosesGap() {
 		t.Fatalf("an uncovered region was not stopped as a bounded gap: %+v", got)
 	}
 
@@ -272,7 +272,7 @@ func TestReplayIsAvoidedByTheGraphNotByACache(t *testing.T) {
 		"direct_invariants": [{"id":"invariant:promoted.from.resolution","label":"the human decided this","severity":"critical","status":"active"}],
 		`+healthyAuthority+`
 	}`)
-	if got := routeAuthority(covered, nil); got.Route != RouteArchitectural {
+	if got := routeAuthorityForAction(covered, nil, plannedEdit()); got.Route != RouteArchitectural {
 		t.Fatalf("a promoted resolution still reprompted the human: %+v", got)
 	}
 

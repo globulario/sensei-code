@@ -59,7 +59,7 @@ func TestCoverageAbsentNeverGrantsAndNoLongerInterrupts(t *testing.T) {
 		"risk_class": "UNKNOWN_IMPACT",
 		`+healthyAuthority+`
 	}`)
-	got := routeAuthority(scoped, []Claim{{Statement: "this is routine", About: "internal/tui", Source: "graph"}})
+	got := routeAuthorityForAction(scoped, []Claim{{Statement: "this is routine", About: "internal/tui", Source: "graph"}}, plannedEdit())
 	if got.Granted() {
 		t.Fatalf("absent coverage was granted architectural authority: %+v", got)
 	}
@@ -87,7 +87,7 @@ func TestCloseGapRoutesNameTheirCondition(t *testing.T) {
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
-			got := routeAuthority(scopedPreflight(t, body), nil)
+			got := routeAuthorityForAction(scopedPreflight(t, body), nil, plannedEdit())
 			if !got.ClosesGap() {
 				t.Fatalf("got %+v", got)
 			}
@@ -116,7 +116,7 @@ func TestAConsequenceSignalIsNeverAGrantOnItsOwn(t *testing.T) {
 		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
-	got := routeAuthority(scoped, nil)
+	got := routeAuthorityForAction(scoped, nil, unclassifiedAction())
 	if got.Granted() {
 		t.Fatalf("a consequence signal was granted with no action assessed: %+v", got)
 	}
@@ -140,7 +140,7 @@ func TestUnverifiedPremiseCannotAcquireArchitecturalAuthority(t *testing.T) {
 		{Statement: "the store is append-only", About: "internal/session", Source: "graph"},
 		{Statement: "no other caller depends on this signature", About: "internal/agent", Source: "inference"},
 	}
-	got := routeAuthority(scoped, claims)
+	got := routeAuthorityForAction(scoped, claims, plannedEdit())
 	if got.Granted() {
 		t.Fatalf("an inferred premise still acquired architectural authority: %+v", got)
 	}
@@ -167,7 +167,7 @@ func TestCertifiableQuestionIsResolvedWithoutAHumanPrompt(t *testing.T) {
 		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
-	got := routeAuthority(scoped, []Claim{{Statement: "engine.go owns the loop", About: "internal/workflow", Source: "graph"}})
+	got := routeAuthorityForAction(scoped, []Claim{{Statement: "engine.go owns the loop", About: "internal/workflow", Source: "graph"}}, plannedEdit())
 	if got.Route != RouteArchitectural {
 		t.Fatalf("a fully certifiable question was not granted architectural authority: %+v", got)
 	}
@@ -189,13 +189,13 @@ func TestModelConfidenceHasNoEffectOnRouting(t *testing.T) {
 		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
-	base := routeAuthority(scoped, []Claim{{Statement: "certain", About: "x", Source: "graph"}})
+	base := routeAuthorityForAction(scoped, []Claim{{Statement: "certain", About: "x", Source: "graph"}}, plannedEdit())
 	for _, prose := range []string{
 		"I am not at all sure about this and would prefer a human decide",
 		"ESCALATE: this feels dangerous",
 		"absolutely certain, no risk whatsoever",
 	} {
-		got := routeAuthority(scoped, []Claim{{Statement: prose, About: "x", Source: "graph"}})
+		got := routeAuthorityForAction(scoped, []Claim{{Statement: prose, About: "x", Source: "graph"}}, plannedEdit())
 		if got.Route != base.Route {
 			t.Fatalf("routing changed with model prose %q: %v != %v", prose, got.Route, base.Route)
 		}
@@ -215,7 +215,7 @@ func TestUncertifiableGraphIsNotAHumanDesignQuestion(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`)
-	got := routeAuthority(scoped, nil)
+	got := routeAuthorityForAction(scoped, nil, plannedEdit())
 	if got.Route != RouteCannotEstablish {
 		t.Fatalf("a stale graph produced %v rather than cannot-establish: %+v", got.Route, got)
 	}
@@ -240,7 +240,7 @@ func TestEveryHumanRouteNamesItsCondition(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := routeAuthority(scopedPreflight(t, tc.body), tc.claims)
+			got := routeAuthorityForAction(scopedPreflight(t, tc.body), tc.claims, plannedEdit())
 			if got.Route != RouteHuman {
 				t.Fatalf("expected a human route, got %+v", got)
 			}
@@ -274,7 +274,7 @@ func TestUnclassifiedChangeRiskFailsClosed(t *testing.T) {
 				"status": "PREFLIGHT_STATUS_OK",
 				`+tc.risk+healthyAuthority+`
 			}`)
-			got := routeAuthority(scoped, nil)
+			got := routeAuthorityForAction(scoped, nil, plannedEdit())
 			if got.Route != RouteHuman {
 				t.Fatalf("an unclassified approval gate granted authority: %+v", got)
 			}
@@ -298,7 +298,7 @@ func TestRoutingReadsChangeRiskStructurallyNotAsProse(t *testing.T) {
 		"change_risk": {"blast_radius":"BLAST_RADIUS_SECURITY","approval_gate":"APPROVAL_GATE_MANUAL_ONLY"},
 		`+healthyAuthority+`
 	}`)
-	if got := routeAuthority(contradicted, nil); got.Route != RouteHuman {
+	if got := routeAuthorityForAction(contradicted, nil, plannedEdit()); got.Route != RouteHuman {
 		t.Fatalf("prose overrode the structured verdict: %+v", got)
 	}
 
@@ -310,7 +310,7 @@ func TestRoutingReadsChangeRiskStructurallyNotAsProse(t *testing.T) {
 		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
 		`+healthyAuthority+`
 	}`)
-	if got := routeAuthority(reworded, nil); got.Route != RouteArchitectural {
+	if got := routeAuthorityForAction(reworded, nil, plannedEdit()); got.Route != RouteArchitectural {
 		t.Fatalf("a reworded prose line still reached the router: %+v", got)
 	}
 
@@ -336,7 +336,7 @@ func TestApprovalClassesRequiringAHumanAllEscalate(t *testing.T) {
 			"change_risk": {"blast_radius":"BLAST_RADIUS_SERVICE","approval_gate":"`+gate+`"},
 			`+healthyAuthority+`
 		}`)
-		got := routeAuthority(scoped, nil)
+		got := routeAuthorityForAction(scoped, nil, plannedEdit())
 		if got.Route != RouteHuman {
 			t.Fatalf("approval=%s did not require a human: %+v", gate, got)
 		}
@@ -397,14 +397,14 @@ func TestPlanRevisionInsideTheCertifiedEnvelopeDoesNotInterrupt(t *testing.T) {
 		`+healthyAuthority+`
 	}`)
 	revised := []Claim{{Statement: "step C is unnecessary", About: "internal/workflow", Source: "graph"}}
-	if got := routeAuthority(inside, revised); got.Route != RouteArchitectural {
+	if got := routeAuthorityForAction(inside, revised, plannedEdit()); got.Route != RouteArchitectural {
 		t.Fatalf("a revision inside the certified envelope interrupted a human: %+v", got)
 	}
 
 	// The revision now reaches a region the graph does not cover. Sensei was
 	// asked about the new file set and answered; that answer is what escalates.
 	outside := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+healthyAuthority+`}`)
-	got := routeAuthority(outside, revised)
+	got := routeAuthorityForAction(outside, revised, plannedEdit())
 	if got.Granted() {
 		t.Fatalf("a revision reaching outside the certified region was granted: %+v", got)
 	}
@@ -437,7 +437,7 @@ func TestUnreadableClaimProvenanceCannotAcquireArchitecturalAuthority(t *testing
 	}`)
 	// Same evidence, a claim whose source IS readable: this is what the
 	// unreadable cases below are being distinguished from.
-	if got := routeAuthority(scoped, []Claim{{Statement: "the store is append-only", About: "internal/session", Source: "graph"}}); got.Route != RouteArchitectural {
+	if got := routeAuthorityForAction(scoped, []Claim{{Statement: "the store is append-only", About: "internal/session", Source: "graph"}}, plannedEdit()); got.Route != RouteArchitectural {
 		t.Fatalf("a verified premise on certifiable evidence was not granted: %+v", got)
 	}
 
@@ -451,7 +451,7 @@ func TestUnreadableClaimProvenanceCannotAcquireArchitecturalAuthority(t *testing
 		"graph, mostly",
 		"trust me",
 	} {
-		got := routeAuthority(scoped, []Claim{{Statement: "no other caller depends on this signature", About: "internal/agent", Source: source}})
+		got := routeAuthorityForAction(scoped, []Claim{{Statement: "no other caller depends on this signature", About: "internal/agent", Source: source}}, plannedEdit())
 		normalised := strings.ToLower(strings.TrimSpace(source))
 		if normalised == "graph" || normalised == "repository" {
 			if got.Route != RouteArchitectural {
@@ -504,7 +504,7 @@ func TestOneUnreadableClaimIsEnough(t *testing.T) {
 		{verified, unreadable},
 		{verified, verified, unreadable, verified},
 	} {
-		got := routeAuthority(scoped, claims)
+		got := routeAuthorityForAction(scoped, claims, plannedEdit())
 		if got.Granted() {
 			t.Fatalf("an unreadable premise beside verified ones was granted: %+v", got)
 		}
@@ -541,3 +541,29 @@ func TestTheDecoderStillDoesNotValidateClaims(t *testing.T) {
 		t.Fatalf("the decoder invented a source for a claim that omitted one: %+v", d.Claims[1])
 	}
 }
+
+// plannedEdit is the ordinary action a router test is about: a candidate edit
+// in an isolated worktree, declaring nothing outward.
+//
+// Every routing test must now state its action. There used to be an action-less
+// routeAuthority for tests that were not "about" the action, and Action{} meant
+// unspecified — which reached a grant, because nothing on the path read the
+// stage unless a blind spot happened to route it there. An unspecified action
+// is not a neutral one, so there is no longer a way to leave it out.
+//
+// Files are deliberately left empty by default: that is the only field whose
+// absence still changes a route (derived coverage is refused over an empty file
+// list), so a test that cares about files names them.
+func plannedEdit(files ...string) Action {
+	return Action{Stage: StageCandidateEdit, Files: files}
+}
+
+// unclassifiedAction is an action whose stage nothing has classified.
+//
+// Named rather than written as a bare Action{}, because the two used to be
+// spelled the same and meant different things: "I am not testing the action"
+// and "nobody established what this action is". Only the second is a real
+// state, and it must fail closed as ignorance -- CANNOT_ESTABLISH, never a
+// silent grant and never a human authority question about something no one has
+// evidence for.
+func unclassifiedAction() Action { return Action{} }

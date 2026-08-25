@@ -195,7 +195,7 @@ func TestEveryReplayedGapNamesWhatIsMissing(t *testing.T) {
 			`"change_risk":{"blast_radius":%q,"approval_gate":%q},`+healthyAuthority+`}`,
 			r.Status, spots, r.Coverage.Sufficient, r.Coverage.DirectAnchorCount,
 			r.Coverage.IndexedFileCount, r.Blast, r.Gate)
-		got := routeAuthority(scopedPreflight(t, body), nil)
+		got := routeAuthorityForAction(scopedPreflight(t, body), nil, plannedEdit())
 		if !got.ClosesGap() {
 			t.Fatalf("%s: %+v", r.File, got)
 		}
@@ -297,9 +297,9 @@ func TestTheTenTimesRepeatedInterruptionResolvesAtTheEditStage(t *testing.T) {
 func TestClosingARealGapChangesTheRouteAndDoesNotRecur(t *testing.T) {
 	const risk = `"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},`
 
-	before := routeAuthority(scopedPreflight(t,
+	before := routeAuthorityForAction(scopedPreflight(t,
 		`{"status":"PREFLIGHT_STATUS_EMPTY","blind_spots":["graph indexes this area but no anchored rules apply to the request"],`+
-			risk+healthyAuthority+`}`), nil)
+			risk+healthyAuthority+`}`), nil, plannedEdit())
 	if !before.ClosesGap() {
 		t.Fatalf("before: %+v", before)
 	}
@@ -327,9 +327,9 @@ func TestClosingARealGapChangesTheRouteAndDoesNotRecur(t *testing.T) {
 
 	// Closing a knowledge gap did not BY ITSELF produce the grant. Take the
 	// assessment away and the same closed-coverage file stops again.
-	unassessed := routeAuthority(scopedPreflight(t,
+	unassessed := routeAuthorityForAction(scopedPreflight(t,
 		`{"status":"PREFLIGHT_STATUS_OK","blind_spots":["file path under high-risk directory"],`+
-			risk+healthyAuthority+`}`), nil)
+			risk+healthyAuthority+`}`), nil, unclassifiedAction())
 	if unassessed.Granted() {
 		t.Fatal("coverage alone granted; the consequence assessment is doing no work")
 	}

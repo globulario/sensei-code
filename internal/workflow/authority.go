@@ -123,14 +123,11 @@ func (r Routing) Observes() bool { return r.Route == RouteObserve }
 // may ask for more investigation, and that request is worth honouring as
 // investigation, but it cannot by itself manufacture a human interruption when
 // Sensei can certify the question.
-func routeAuthority(scoped sensei.PreflightDecision, claims []Claim) Routing {
-	return routeAuthorityForAction(scoped, claims, Action{})
-}
-
-// routeAuthorityForAction is routeAuthority with the proposed action supplied.
-// Production always uses this: an action-less routing can only ever reach
-// CANNOT_ESTABLISH once a consequence signal is the last thing standing, which
-// is the correct answer to a question nobody asked properly.
+// There is deliberately no action-less form. Consequence assessment is a
+// property of the proposed ACTION, so a routing decision without one is a
+// question nobody asked properly -- and the wrapper that used to supply
+// Action{} made "unspecified" reach a grant, because nothing on the path
+// consulted the stage unless a blind spot happened to send it there.
 func routeAuthorityForAction(scoped sensei.PreflightDecision, claims []Claim, action Action) Routing {
 	// The risk reading is attached to whatever route the decision reaches. It is
 	// not the route's justification; it is a fact about the change that outlives
@@ -142,22 +139,15 @@ func routeAuthorityForAction(scoped sensei.PreflightDecision, claims []Claim, ac
 	return r
 }
 
-func decideRoute(scoped sensei.PreflightDecision, claims []Claim) Routing {
-	return decideRouteForAction(scoped, claims, Action{})
-}
-
-// decideRouteForAction is decideRoute with the proposed action supplied.
-//
-// The action matters only where a consequence signal is the last thing
-// standing: everywhere else the route is decided before it is read.
 func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, action Action) Routing {
 	// The order below is the whole design, and it is not the order the
 	// conditions were written in.
 	//
 	//   1. can Sensei vouch for itself at all
 	//   2. is the surface answering
-	//   3. does a CONSEQUENCE verdict already own this
-	//   4. only then, is the blocker epistemic
+	//   3. does an EXPLICIT approval gate already own this
+	//   4. what are THIS ACTION's consequences
+	//   5. only then, is the blocker epistemic
 	//
 	// Consequence must outrank every epistemic question, or closing a knowledge
 	// gap becomes a way to walk past an approval gate: the router would notice
@@ -165,6 +155,16 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	// never reach the verdict that said a human owns this change class. That
 	// bug was live in the first draft of this file and is pinned by
 	// TestAnApprovalGateIsNotClosableByEvidence.
+	//
+	// Step 4 is a step. It used to be a branch: AssessConsequences was reached
+	// only when the blind-spot list had already been narrowed to consequence
+	// signals, so whether an action's consequences were assessed AT ALL was
+	// decided by metadata about the graph's coverage. Ordinary candidate edits
+	// looked correct anyway, because their stage happens to produce the route
+	// the fall-through produced -- a right answer resting on the wrong
+	// dependency, and a publish action arriving with no blind spots was granted
+	// without anything ever reading its stage. Blind spots may INFORM the
+	// assessment; they must not own the edge that makes it exist.
 
 	// Sensei vouching for itself comes first. Every judgement below reads a
 	// field of this same result, so if the graph is stale or unauthoritative
@@ -282,6 +282,36 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		}
 	}
 
+	// Consequence assessment. Established for every action that can reach a
+	// grant, from the action itself, before any epistemic question is asked.
+	//
+	// The stage it reads is engine-owned and structural -- fixed by which
+	// entrypoint the task came through -- so provider text can neither choose
+	// nor clear it. A plan MAY escalate itself by declaring an outward step,
+	// which is the one direction a claim is allowed to move an assessment.
+	//
+	// Nothing here grants. Bounded means "the technical lane may continue",
+	// and everything below still applies to it -- an explicit gate has already
+	// run above precisely so that a bounded assessment cannot clear one.
+	consequences := AssessConsequences(action)
+	switch consequences.Result {
+	case ConsequenceUnacceptable:
+		return Routing{
+			Route:     RouteHuman,
+			Condition: "this action's consequences are not bounded: " + consequences.Boundary + consequenceSignalSuffix(spots),
+		}
+	case ConsequenceBounded:
+		// Continue. The boundary is recorded on the routing below.
+	default:
+		// An unclassified stage fails closed as ignorance rather than as risk.
+		// Reporting it to a human as an authority question would ask them to
+		// adjudicate something nobody has evidence about.
+		return Routing{
+			Route:     RouteCannotEstablish,
+			Condition: "this action's consequences could not be established: " + consequences.Boundary + consequenceSignalSuffix(spots),
+		}
+	}
+
 	// Epistemic incompleteness. Nothing below grants; each names work that must
 	// happen before the question can be asked properly.
 	//
@@ -359,34 +389,13 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 			// decided in passing. Widening a router to improve a coverage
 			// number is the failure this line of work exists to avoid.
 			//
-			// Assessed rather than routed. A consequence signal says LOOK
-			// HARDER HERE; it does not say who decides. What decides is
-			// whether THIS action's consequences are bounded.
-			signals := strings.Join(spots.Consequence, ", ")
-			assessment := AssessConsequences(action)
-			switch assessment.Result {
-			case ConsequenceBounded:
-				// The signal was real and the action is still bounded. Fall
-				// through to the gate checks, which have already run above --
-				// so reaching here means the risk channel published
-				// APPROVAL_GATE_NONE for this exact region and this assessment
-				// agrees the action cannot reach past its boundary.
-			case ConsequenceUnacceptable:
-				return Routing{
-					Route: RouteHuman,
-					Condition: "consequence signals in the planned region (" + signals + ") and the proposed action is not bounded: " +
-						assessment.Boundary,
-				}
-			default:
-				// "Nobody knows" is not "this is dangerous", and reporting it
-				// as an authority question would ask a human to adjudicate
-				// something no one has evidence about.
-				return Routing{
-					Route: RouteCannotEstablish,
-					Condition: "consequence signals in the planned region (" + signals + ") and this action's consequences could not be established: " +
-						assessment.Boundary,
-				}
-			}
+			// Nothing is decided here any more. A consequence signal says LOOK
+			// HARDER HERE; it does not say who decides, and what decides is
+			// whether THIS action's consequences are bounded -- which was
+			// established above, for every action, and would have returned
+			// already had it been anything but bounded. The signals were
+			// carried into that decision's condition, so an escalation still
+			// names them.
 		}
 	}
 
@@ -481,6 +490,21 @@ func escalationCondition(r Routing) string {
 		return string(r.Route)
 	}
 	return fmt.Sprintf("%s: %s", r.Route, r.Condition)
+}
+
+// consequenceSignalSuffix names the graph's consequence signals for a
+// consequence decision that escalates or refuses.
+//
+// The signals are context for the decision, never its cause: the assessment
+// reads the action, and reaches the same result whether or not the graph
+// happened to publish a blind spot about the region. Rendering them here keeps
+// the message the old blind-spot branch produced without restoring the
+// dependency that produced it.
+func consequenceSignalSuffix(spots blindSpotReading) string {
+	if len(spots.Consequence) == 0 {
+		return ""
+	}
+	return " (consequence signals in the planned region: " + strings.Join(spots.Consequence, ", ") + ")"
 }
 
 // degradedReason renders why a degraded preflight could not be read as a
