@@ -1,0 +1,250 @@
+{
+  "version": "proof-v5",
+  "stage": "full",
+  "selection_rule": "Frozen before the corpus was chosen. From `git log --first-parent main` in CHRONOLOGICAL order, a commit is eligible when: (1) its diff touches at least one _test.go and at least one non-test .go; (2) it changes at most 6 files; (3) exactly one package contains both changed tests and changed non-test code -- that package is the tested package; and (4) the withheld oracle DISCRIMINATES, meaning `go test ./<pkg>/` FAILS at the parent commit with only the fix's test files restored, and PASSES at the accepted fix. Criterion (4) is the instrument-capability check: an oracle that passes pre-fix would score any candidate CORRECT, including one that changed nothing. Eligible commits are grouped by tested package in order of first appearance; packages with fewer than two eligible commits are excluded because they cannot form a linked later-task specimen. From each remaining package the EARLIEST eligible commit is a seed and the NEXT later one is its linked task, until 10 tasks are selected. Task statements are written from the pre-fix state and the commit subject, stating the problem and never the implementation. ORACLE REPLACEMENT (v4): proof-v3's withheld-test oracles were lifted from the accepted fix and failed to COMPILE against any solution that chose different names, so they measured whether a worker guessed the reference patch rather than whether it delivered the behaviour. v4 replaces every oracle with a BEHAVIOURAL CONTRACT probe written for the benchmark, and adds eligibility criterion (5): a task may enter the corpus only after its oracle separates three specimens -- REFERENCE (the accepted fix) PASS, WRONG (a plausible non-solution) FAIL, and ALTERNATE (correct, structurally unlike the reference) PASS. The ALTERNATE specimen is the whole point: it asks whether the oracle can recognise correctness it did not already know how to write. Where a task requires a NEW exported surface, the task statement names that surface -- an interface is a requirement, not a leak, and naming it still leaves the implementation free. Task bases, origins and thresholds are unchanged from v3. PROTOCOL AMENDMENT, pre-campaign, triggered by calibration. Criterion (6) is added to criteria (1)-(5). This is a measurement-eligibility condition, not a performance result: no RAW/COLD/WARM campaign arm had been run when it was adopted, and the tasks it rejects are rejected because correctness cannot be observed without prescribing the answer. (6) BEHAVIOURAL ORACLE-ABILITY: At the pinned task base, the task statement establishes externally observable behaviour that can be tested without requiring private identifiers, reference-patch structure, incidental environment state, or implementation choices not specified by the task. Before admission, the oracle must pass REFERENCE and a structurally distinct ALTERNATE correct implementation, and fail a plausible WRONG implementation. RE-SELECTION IS MECHANICAL. The original ten (corpus v1) are preserved in corpus_v1_record with their verdicts; six are marked ORACLE_INELIGIBLE with reasons. Replacements are drawn by walking the eligible pool in the ALREADY-DEFINED chronological order -- packages in order of first appearance, packages with fewer than two criterion-(6)-eligible commits excluded, earliest commit a seed and the next later one its linked task -- admitting the first that satisfy all six criteria and the three-specimen gate, until the corpus contains ten measurable tasks. Candidates are not chosen for how well they suit Sensei-code, and every rejection is recorded. SCOPE LIMITATION, to be restated in the final report: after criterion (6) this experiment no longer estimates performance on all ordinary coding tasks. It estimates performance on REAL REPOSITORY TASKS WITH INDEPENDENTLY OBSERVABLE BEHAVIOURAL CONTRACTS. That is narrower and far more defensible, and the six rejections show why: subjective text quality, uncontrolled machine state, a prescribed API/design leaving no room for a structurally different correct answer, and a package-main change whose observed behaviour cannot be attributed to it.",
+  "corpus_v1_record": [
+    {
+      "task": "internal-tui-ea046ba",
+      "verdict": "ADMITTED",
+      "reason": "scroll behaviour is observable through Update/View at the base"
+    },
+    {
+      "task": "internal-tui-be512db",
+      "verdict": "ADMITTED",
+      "reason": "same surface as its seed"
+    },
+    {
+      "task": "internal-mcpconfig-110678d",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the change lands in package main; its only observable surface is the built CLI, and the same commit also changes internal/mcpconfig, so a probe cannot attribute what it observes to the intended change"
+    },
+    {
+      "task": "internal-mcpconfig-21c5a6b",
+      "verdict": "ORACLE_ELIGIBLE_BUT_UNPAIRED",
+      "reason": "Describe(repoRoot) is hermetic and testable, but with 110678d rejected internal/mcpconfig retains fewer than two criterion-(6)-eligible commits, and the frozen rule excludes such packages because they cannot form a linked later-task specimen"
+    },
+    {
+      "task": "internal-behavioral-a453be8",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the package does not exist at the base, so the contract is types, constructor, error values AND a JSON-RPC handshake. Specifying all of it makes the task 'implement this design', leaving no room for a structurally distinct ALTERNATE -- the task cannot exercise the gate that makes this benchmark trustworthy"
+    },
+    {
+      "task": "internal-behavioral-055fe6b",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "same as its seed: the contract is a prescribed API and wire protocol"
+    },
+    {
+      "task": "internal-doctor-853fbe3",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the contract is that a check reporting a missing tool must name the fix -- subjective TEXT QUALITY. An oracle either prescribes wording, which is the reference-patch shape-binding criterion (6) forbids, or is too loose to separate WRONG from ALTERNATE"
+    },
+    {
+      "task": "internal-doctor-7a56cd2",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the behaviour depends on provider.StatusFor, which doctor.Run calls directly with no seam; a probe cannot construct 'authenticated but capability unknown' and would test incidental machine state rather than the candidate"
+    },
+    {
+      "task": "internal-gitx-a4fa351",
+      "verdict": "ADMITTED",
+      "reason": "gated: REFERENCE, WRONG and a structurally distinct ALTERNATE all separated"
+    },
+    {
+      "task": "internal-gitx-6460efd",
+      "verdict": "ADMITTED",
+      "reason": "gated: same"
+    }
+  ],
+  "excluded": [
+    {
+      "ref": "5dfffad641",
+      "reason": "package internal/assist has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "6cf23e8490",
+      "reason": "package internal/decision has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "da311a5627",
+      "reason": "package internal/publish has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "01f3fe1738",
+      "reason": "package internal/agent has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "cde6bf9212",
+      "reason": "package internal/workflow eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "4d3293745d",
+      "reason": "package internal/session has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "2e095c4a2d",
+      "reason": "package internal/architect has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "e6456697ce",
+      "reason": "package internal/setup eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "f1584969fc",
+      "reason": "package cmd/sensei-code eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "2dfad9c0c2",
+      "reason": "package internal/admission has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "be424a5f9a",
+      "reason": "package internal/retrieval has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "abcf63e9d5",
+      "reason": "package internal/provider eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "2034122fe9",
+      "reason": "package internal/authority has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "98197c1dce",
+      "reason": "rejected by eligibility criterion (4): its withheld oracle PASSES at the pinned base, so it cannot discriminate a correct candidate from one that changed nothing. Replaced by the next eligible commits in internal/tui."
+    }
+  ],
+  "calibration": [
+    {
+      "id": "cal-non-convergence-62",
+      "statement": "Known failure: the six-cycle inspection that never converged (PR #62). Instrument check only.",
+      "base_sha": "0000000000000000000000000000000000000000",
+      "origin": "pr-62",
+      "expected": "negative / non_convergence",
+      "oracle": {
+        "kind": "behavioral_probe",
+        "command": [
+          "true"
+        ]
+      }
+    },
+    {
+      "id": "cal-self-repair-79-80",
+      "statement": "Known win: the first end-to-end autonomous self-repair (PR #79/#80). Instrument check only.",
+      "base_sha": "0000000000000000000000000000000000000000",
+      "origin": "2f5ee40e42b460820ab93beac209188318a268de",
+      "expected": "positive",
+      "oracle": {
+        "kind": "behavioral_probe",
+        "command": [
+          "true"
+        ]
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "internal-gitx-a4fa351",
+      "statement": "internal/gitx must be able to show a reviewer the WHOLE of a candidate's work, including files the worker created rather than only files it modified. Today a worker that added a file produced a diff that did not contain it, so the reviewer judged the candidate with its new files invisible.\n\nProvide the exported method:\n\n    func (r Repo) CandidateDiff(ctx context.Context) (string, error)\n\nIt must return a unified diff covering modified tracked files AND newly created untracked files, must honour .gitignore, and must return empty output with no error on a clean tree. How it does that is yours to decide.",
+      "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+      "origin": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/gitx/git_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/gitx/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/gitx/contract_probe_test.go",
+        "source_file": "oracles/internal-gitx-a4fa351.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/gitx/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix. If this fails the probe is wrong about the contract, not the candidate."
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-gitx-a4fa351/WRONG",
+            "want": "INCORRECT",
+            "why": "provides the named method and returns the OLD behaviour, so created files stay invisible. This is what a plausible non-solution looks like."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-gitx-a4fa351/ALTERNATE",
+            "want": "CORRECT",
+            "why": "correct and structurally unlike the reference: the accepted fix records new paths with `git add --intent-to-add`; this one never touches the index, asking ls-files which paths are untracked and synthesising each diff with --no-index. If the oracle only recognises the reference, this fails."
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-gitx-6460efd",
+      "statement": "internal/gitx's read-only measurements of a checkout can themselves WRITE to the repository they are measuring: answering an ordinary status query lets git refresh and rewrite .git/index. A checker for a read-only lane must not become the write it is trying to detect.\n\nMake Repo.WorktreeIsClean and Repo.WorktreeIsCleanDetail leave the repository byte-for-byte unchanged while still answering correctly, including detecting a genuine modification. Their signatures and behaviour are otherwise unchanged. How you achieve it is yours to decide.",
+      "base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+      "origin": "6460efd8639a501fbf599b93bb478184edda2c9e",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/gitx/observation_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/gitx/"
+        ]
+      },
+      "depends_on": [
+        "internal-gitx-a4fa351"
+      ],
+      "contract": {
+        "probe": "internal/gitx/contract_probe_test.go",
+        "source_file": "oracles/internal-gitx-6460efd.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/gitx/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix, which routes reads through a helper carrying --no-optional-locks."
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-gitx-6460efd/WRONG",
+            "want": "INCORRECT",
+            "why": "plausible hardening that does not stop the refresh: --porcelain=v1 and -uall change the OUTPUT, never the write."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-gitx-6460efd/ALTERNATE",
+            "want": "CORRECT",
+            "why": "correct with no helper and no flag, setting GIT_OPTIONAL_LOCKS=0 on each command instead. Structurally unlike the reference; the oracle must still recognise it."
+          }
+        ]
+      }
+    }
+  ]
+}
