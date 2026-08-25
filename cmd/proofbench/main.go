@@ -348,6 +348,15 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 
 	runBase := r.RunBase(ctx, dir)
 	governedBefore := r.GovernedState(ctx)
+	// The boundary reading is only meaningful if the governed checkout is
+	// quiescent. A dirty tree at arm start means a later difference cannot be
+	// attributed to the arm, so the reading is recorded as unmeasurable rather
+	// than as a violation.
+	boundaryMeasurable := strings.TrimSpace(governedBefore) == ""
+	if !boundaryMeasurable {
+		fmt.Println("  note     governed checkout is not quiescent; the boundary reading for this " +
+			"arm will be recorded as unmeasurable rather than as clean or violated")
+	}
 	started := time.Now()
 	var out proofbench.ArmOutcome
 	if arm == proofbench.ArmRaw {
@@ -357,7 +366,7 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	}
 	ended := time.Now()
 
-	ev := r.Evidence(ctx, dir, governedBefore)
+	ev := r.Evidence(ctx, dir, governedBefore, boundaryMeasurable)
 	verdict := proofbench.OracleResult{Verdict: proofbench.NoResult, Detail: out.Infrastructure}
 	if out.Infrastructure == "" {
 		verdict = r.Judge(ctx, dir, t)
@@ -372,9 +381,9 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		Interventions: out.Interventions, Objections: out.Objections,
 		ReviewCycles: out.ReviewCycles, Observations: out.Observations,
 		DiffHash: ev.DiffHash, GovernedCheckoutClean: ev.GovernedClean,
-		GovernedCheckoutState: ev.GovernedState,
-		Infrastructure:        out.Infrastructure,
-		Artifacts:             map[string]string{"transcript_tail_sha256": proofbench.HashBytes([]byte(out.Raw))},
+		GovernedCheckoutState: ev.GovernedState, BoundaryMeasurable: ev.Measurable,
+		Infrastructure: out.Infrastructure,
+		Artifacts:      map[string]string{"transcript_tail_sha256": proofbench.HashBytes([]byte(out.Raw))},
 		// filled below once the transcript is on disk
 		Notes: fmt.Sprintf("%d event(s) observed", out.Events),
 	}

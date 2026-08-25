@@ -76,7 +76,8 @@ func TestAnAuthorityQuestionIsNotATechnicalAnswer(t *testing.T) {
 			"autonomy rate would then measure how chatty the gate is")
 	}
 	// And the attempt is still autonomous-correct if the oracle passes.
-	a := Attempt{Verdict: Correct, GovernedCheckoutClean: true, Interventions: o.Interventions}
+	a := Attempt{Verdict: Correct, BoundaryMeasurable: true, GovernedCheckoutClean: true,
+		Interventions: o.Interventions}
 	if !a.AutonomousCorrect() {
 		t.Error("a run whose only human contact was an authority decision was scored non-autonomous")
 	}

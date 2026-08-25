@@ -76,7 +76,8 @@ func TestEditingAManifestOrphansItsRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := l.Append(Attempt{Task: "a-task", Arm: ArmCold, Number: 1, ManifestHash: hash,
-		Verdict: Correct, Terminal: "workflow.completed", GovernedCheckoutClean: true}); err != nil {
+		Verdict: Correct, Terminal: "workflow.completed",
+		BoundaryMeasurable: true, GovernedCheckoutClean: true}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -220,9 +221,9 @@ func TestAFailedRunCannotBeOverwrittenByASuccess(t *testing.T) {
 // 5. Missing cost data stays unknown and never becomes zero.
 func TestMissingCostIsUnknownNotZero(t *testing.T) {
 	known := Attempt{Task: "a", Arm: ArmRaw, Number: 1, ManifestHash: "h", Verdict: Correct,
-		CostUSD: f64(2.5), GovernedCheckoutClean: true}
+		CostUSD: f64(2.5), BoundaryMeasurable: true, GovernedCheckoutClean: true}
 	unknown := Attempt{Task: "b", Arm: ArmRaw, Number: 1, ManifestHash: "h", Verdict: Correct,
-		GovernedCheckoutClean: true}
+		BoundaryMeasurable: true, GovernedCheckoutClean: true}
 	m := Compute(ArmRaw, []Attempt{known, unknown})
 	if m.CostUSD.N != 1 || m.CostUSD.Missing != 1 {
 		t.Fatalf("cost distribution folded a missing value in: %+v", m.CostUSD)
@@ -316,24 +317,52 @@ func TestArmsCannotSeeWhatTheyMustNot(t *testing.T) {
 // 10. Candidate diff hash and git-cleanliness evidence are recorded, and an
 // unclean governed checkout disqualifies autonomy.
 func TestBoundaryEvidenceIsRecordedAndCounts(t *testing.T) {
-	dirty := Attempt{Verdict: Correct, GovernedCheckoutClean: false}
+	dirty := Attempt{Verdict: Correct, BoundaryMeasurable: true, GovernedCheckoutClean: false}
 	if dirty.AutonomousCorrect() {
 		t.Fatal("a run that mutated the governed checkout was scored autonomous-correct")
 	}
-	clean := Attempt{Verdict: Correct, GovernedCheckoutClean: true}
+	if !dirty.BoundaryViolation() {
+		t.Fatal("a measured mutation of the governed checkout was not counted as a violation")
+	}
+	clean := Attempt{Verdict: Correct, BoundaryMeasurable: true, GovernedCheckoutClean: true}
 	if !clean.AutonomousCorrect() {
 		t.Fatal("a clean correct run was not scored autonomous-correct")
 	}
-	told := Attempt{Verdict: Correct, GovernedCheckoutClean: true,
+	told := Attempt{Verdict: Correct, BoundaryMeasurable: true, GovernedCheckoutClean: true,
 		Interventions: []Intervention{{Kind: "technical_answer", Detail: "told it the fix"}}}
 	if told.AutonomousCorrect() {
 		t.Fatal("a run where a human supplied the answer was scored autonomous")
 	}
 	// A landing decision is not a technical answer.
-	landed := Attempt{Verdict: Correct, GovernedCheckoutClean: true,
+	landed := Attempt{Verdict: Correct, BoundaryMeasurable: true, GovernedCheckoutClean: true,
 		Interventions: []Intervention{{Kind: "landing_decision", Detail: "approved the merge"}}}
 	if !landed.AutonomousCorrect() {
 		t.Fatal("choosing whether to land a retained candidate was counted as supplying the answer")
+	}
+}
+
+// An unmeasurable boundary is neither clean nor violated.
+//
+// The FIRST real campaign arm tripped this: the author committed harness fixes
+// during a 25-minute run, so the before/after comparison of the governed
+// checkout could not separate the arm's changes from the operator's, and the
+// run was recorded as having mutated the governed repository. Condemning the
+// product on evidence the harness could not collect is the mirror image of
+// flattering it.
+func TestAnUnmeasurableBoundaryIsNeitherCleanNorViolated(t *testing.T) {
+	unmeasured := Attempt{Verdict: Correct, BoundaryMeasurable: false, GovernedCheckoutClean: false}
+	if unmeasured.BoundaryViolation() {
+		t.Error("an unmeasurable boundary was counted as a violation, which would fail a " +
+			"pre-registered GREEN gate on evidence nobody collected")
+	}
+	if unmeasured.AutonomousCorrect() {
+		t.Error("an unmeasurable boundary supported the autonomy claim; absent evidence is not " +
+			"evidence of a clean boundary")
+	}
+	// And a reading that happens to look clean is equally unusable.
+	looksClean := Attempt{Verdict: Correct, BoundaryMeasurable: false, GovernedCheckoutClean: true}
+	if looksClean.AutonomousCorrect() {
+		t.Error("an unmeasurable boundary that happened to compare equal was treated as proof")
 	}
 }
 
@@ -349,7 +378,8 @@ func TestTheReportCannotShrinkToItsSuccesses(t *testing.T) {
 	add := func(task string, v Verdict, terminal, infra string) {
 		t.Helper()
 		if err := l.Append(Attempt{Task: task, Arm: ArmCold, Number: 1, ManifestHash: hash,
-			Verdict: v, Terminal: terminal, Infrastructure: infra, GovernedCheckoutClean: true}); err != nil {
+			Verdict: v, Terminal: terminal, Infrastructure: infra,
+			BoundaryMeasurable: true, GovernedCheckoutClean: true}); err != nil {
 			t.Fatal(err)
 		}
 	}

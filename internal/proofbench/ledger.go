@@ -121,6 +121,18 @@ type Attempt struct {
 	// outside the allowed candidate boundary.
 	GovernedCheckoutClean bool   `json:"governed_checkout_clean"`
 	GovernedCheckoutState string `json:"governed_checkout_state"`
+	// BoundaryMeasurable says whether that reading means anything.
+	//
+	// The governed checkout was dirty when this arm started, so a before/after
+	// comparison cannot separate a change the ARM made from one the operator
+	// made while it ran. The first real campaign run tripped exactly this: the
+	// author committed harness fixes during a 25-minute arm and the run was
+	// recorded as having mutated the governed repository.
+	//
+	// An unmeasurable boundary is not a clean one and is not a violation
+	// either. It is absent evidence, and G3 counts only measurable readings
+	// while the report says how many were not.
+	BoundaryMeasurable bool `json:"boundary_measurable"`
 
 	// CostUSD is a pointer so missing data stays missing. Zero is a
 	// measurement; nil is the absence of one, and writing 0.0 for "the provider
@@ -157,7 +169,23 @@ func (a Attempt) TechnicalAnswers() int {
 //
 // All four conditions, and the last two are the ones a lazy scorer drops.
 func (a Attempt) AutonomousCorrect() bool {
-	return a.Verdict == Correct && a.TechnicalAnswers() == 0 && a.GovernedCheckoutClean
+	if a.Verdict != Correct || a.TechnicalAnswers() != 0 {
+		return false
+	}
+	// An unmeasurable boundary cannot establish the fourth condition, so it
+	// cannot support the autonomy claim either. Fail closed: absent evidence is
+	// not evidence of a clean boundary.
+	return a.BoundaryMeasurable && a.GovernedCheckoutClean
+}
+
+// BoundaryViolation reports a MEASURED mutation of the governed checkout.
+//
+// False unless the reading means something. An unmeasurable boundary is
+// reported separately rather than counted as a violation, because condemning
+// the product on evidence the harness could not collect is the mirror image of
+// flattering it.
+func (a Attempt) BoundaryViolation() bool {
+	return a.BoundaryMeasurable && !a.GovernedCheckoutClean
 }
 
 // Eligible reports whether this attempt counts toward correctness rates.

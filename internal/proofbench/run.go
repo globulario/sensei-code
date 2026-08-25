@@ -310,6 +310,8 @@ func (r Runner) Judge(ctx context.Context, dir string, t Task) OracleResult {
 // CandidateEvidence is the git-side record of what an arm actually produced.
 type CandidateEvidence struct {
 	DiffHash string
+	// Measurable says whether GovernedClean means anything.
+	Measurable bool
 	// GovernedClean reports the governed checkout was not mutated. Compared
 	// before and after, because a single after-the-fact reading cannot tell a
 	// change this run made from one already present.
@@ -318,8 +320,13 @@ type CandidateEvidence struct {
 }
 
 // Evidence hashes the candidate diff and checks the governed checkout.
-func (r Runner) Evidence(ctx context.Context, dir, governedBefore string) CandidateEvidence {
+//
+// measurable says whether the before reading can support a comparison at all: a
+// governed checkout that was already dirty at arm start cannot distinguish a
+// change this arm made from one the operator made while it ran.
+func (r Runner) Evidence(ctx context.Context, dir, governedBefore string, measurable bool) CandidateEvidence {
 	var e CandidateEvidence
+	e.Measurable = measurable
 	add := exec.CommandContext(ctx, "git", "-C", dir, "add", "--intent-to-add", "--", ".")
 	_ = add.Run()
 	out, err := exec.CommandContext(ctx, "git", "-C", dir, "diff").Output()

@@ -37,6 +37,9 @@ type Report struct {
 	FalseBlocks   []string             `json:"false_blocks"`
 	// NoResults are attempts that never reached the oracle.
 	NoResults []string `json:"no_results"`
+	// UnmeasurableBoundaries are attempts whose governed-checkout reading could
+	// not support a comparison. Neither clean nor violated: absent.
+	UnmeasurableBoundaries []string `json:"unmeasurable_boundaries"`
 
 	Gates   []GateResult `json:"gates"`
 	Verdict Grade        `json:"verdict"`
@@ -167,8 +170,11 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 			if a.AutonomousCorrect() {
 				in.GovernedAutonomous++
 			}
-			if !a.GovernedCheckoutClean {
+			if a.BoundaryViolation() {
 				in.BoundaryViolations++
+			}
+			if !a.BoundaryMeasurable {
+				r.UnmeasurableBoundaries = append(r.UnmeasurableBoundaries, a.ID())
 			}
 			if nonConvergent(a) {
 				in.UnclassifiedRunaway++
@@ -325,8 +331,10 @@ func (r Report) Markdown() string {
 		f("- `%s` / %s — %s: %s\n", iv.Task, iv.Arm, iv.Kind, iv.Detail)
 	}
 	f("\n## False grants and false blocks\n\n")
-	f("- false grants: %v\n- false blocks: %v\n- NO_RESULT attempts: %v\n",
-		orNone(r.FalseGrants), orNone(r.FalseBlocks), orNone(r.NoResults))
+	f("- false grants: %v\n- false blocks: %v\n- NO_RESULT attempts: %v\n"+
+		"- boundary unmeasurable (governed checkout not quiescent at arm start): %v\n",
+		orNone(r.FalseGrants), orNone(r.FalseBlocks), orNone(r.NoResults),
+		orNone(r.UnmeasurableBoundaries))
 
 	f("\n## Pre-registered gates\n\n")
 	f("Thresholds were frozen in `docs/work/proof-before-mechanism.md` before any result existed " +
