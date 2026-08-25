@@ -29,7 +29,18 @@ import (
 type certifiedStart struct {
 	workspace sensei.WorkspaceStatus
 	preflight sensei.PreflightDecision
+	// degraded is what the gate could NOT certify, on a start that was allowed
+	// through anyway. Empty on a governed run, which refuses instead.
+	//
+	// It exists so an observation that ran on an uncertified workspace reports
+	// that fact rather than presenting its findings as though the graph had
+	// vouched for itself. Allowing the read and dropping the caveat would be
+	// the same defect this whole line of work keeps finding.
+	degraded []string
 }
+
+// Degraded is what the gate could not certify on an observation start.
+func (c certifiedStart) Degraded() []string { return append([]string(nil), c.degraded...) }
 
 // Domain is the repository domain Sensei bound this workspace to.
 func (c certifiedStart) Domain() string { return c.workspace.Binding.RepositoryDomain }
@@ -65,12 +76,38 @@ func (c certifiedStart) Invariants() []sensei.Invariant { return c.preflight.Dir
 // plausible plan built on invariants that no longer hold, and the plan will
 // read as excellent work.
 func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repositoryHead string) (certifiedStart, error) {
+	return certifyStartForLane(workspaceResult, preflightResult, repositoryHead, false)
+}
+
+// certifyStartForLane is certifyStart with the observation lane accounted for.
+//
+// The gate above refuses a start the graph cannot certify, and its reason is
+// about CHANGES: an architect handed a stale graph writes a confident plan on
+// invariants that no longer hold. None of that is a reason to refuse to READ.
+//
+// Refusing anyway had a specific cost. An audit could not run in exactly the
+// situations where an audit is most wanted -- a workspace that is not fully
+// composed, a graph that is behind -- so the system could not investigate its
+// own degradation without first repairing it. That is the same trap as needing
+// coverage before being allowed to look: the condition that makes investigation
+// valuable is the condition that forbids it.
+//
+// So an observation is allowed past a non-affirmative answer, and the answer
+// travels with it. What is NOT allowed past is an unreadable surface: a
+// ContractError means Sensei was reached and what came back cannot be read at
+// all, and an observation that cannot read the graph's own answer has no basis
+// for reporting anything the graph said.
+func certifyStartForLane(workspaceResult, preflightResult sensei.ToolResult, repositoryHead string, observing bool) (certifiedStart, error) {
 	workspace, err := sensei.DecodeWorkspaceStatus(workspaceResult)
 	if err != nil {
 		return certifiedStart{}, err
 	}
+	var degraded []string
 	if !workspace.Permits() {
-		return certifiedStart{}, fmt.Errorf("Sensei will not certify this workspace: %s", workspace.Diagnostic())
+		if !observing {
+			return certifiedStart{}, fmt.Errorf("Sensei will not certify this workspace: %s", workspace.Diagnostic())
+		}
+		degraded = append(degraded, "workspace not certified: "+workspace.Diagnostic())
 	}
 
 	preflight, err := sensei.DecodePreflight(preflightResult)
@@ -80,7 +117,10 @@ func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repository
 	// PermitsStart, not Permits: no plan exists yet, so no file list can be
 	// named, and the file-scoped verdict is deferred to the diff audit.
 	if !preflight.PermitsStart() {
-		return certifiedStart{}, fmt.Errorf("Sensei will not certify a start for this task: %s", preflight.Diagnostic())
+		if !observing {
+			return certifiedStart{}, fmt.Errorf("Sensei will not certify a start for this task: %s", preflight.Diagnostic())
+		}
+		degraded = append(degraded, "start not certified: "+preflight.Diagnostic())
 	}
 	// repositoryHead is accepted but deliberately not compared against the
 	// graph's SourceRepoCommit.
@@ -99,7 +139,7 @@ func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repository
 	// asking.
 	_ = repositoryHead
 
-	return certifiedStart{workspace: workspace, preflight: preflight}, nil
+	return certifiedStart{workspace: workspace, preflight: preflight, degraded: degraded}, nil
 }
 
 // sameCommit compares commit identities that may be abbreviated to different

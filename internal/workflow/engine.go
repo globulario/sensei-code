@@ -49,6 +49,12 @@ type Engine struct {
 	// run they no longer want. Assisted turns are not registered: a
 	// conversation has nothing to withdraw.
 	stops map[string]context.CancelFunc
+	// observing records which tasks entered through the observation lane.
+	//
+	// Kept on the engine rather than passed through the plan, for the same
+	// reason ActionStage is not a provider field: the lane is a property of how
+	// the task was submitted, and anything a plan could set is a claim.
+	observing map[string]bool
 	// routings holds what the authority router read when it decided each task,
 	// kept because two later decisions ask different questions of the same
 	// evidence: how adversarially the candidate must be judged, and whether the
@@ -378,10 +384,27 @@ func (c taskContext) intent() string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (e *Engine) run(ctx context.Context, taskID, task string) {
+func (e *Engine) run(ctx context.Context, taskID, task string, how Provenance) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
-	e.announceMode(taskID, governedMode(RequestedByHuman))
+	e.announceMode(taskID, governedMode(how))
 	e.execute(ctx, taskID, task)
+}
+
+// observes reports whether a task entered through the observation lane.
+func (e *Engine) observes(taskID string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.observing[taskID]
+}
+
+// markObserving records the lane before the run starts.
+func (e *Engine) markObserving(taskID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.observing == nil {
+		e.observing = make(map[string]bool)
+	}
+	e.observing[taskID] = true
 }
 
 // execute is the governed run itself, separated from how it was entered.
@@ -455,11 +478,31 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// overridable by the architect's decision, because an architect handed a
 	// stale or uncertifiable graph produces a confident, specific plan built on
 	// invariants that no longer hold — which reads as excellent work.
-	start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
+	start, err := certifyStartForLane(workspaceStatus, preflight, repositoryHead(ctx, e.Repo), e.observes(taskID))
 	if err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 		e.reportOutcome(ctx, "blocked", task, err.Error())
 		fail(err)
+		return
+	}
+
+	// The observation lane leaves here, before the change lifecycle begins.
+	//
+	// It used to run the whole governed path and stop near the end, which meant
+	// an observation established a candidate identity, wrote
+	// .sensei-code/candidates/<task>.json, and left it unresolved -- and an
+	// architect that answered "reply" exited through the completion branch
+	// above, reporting a read-only run as a completed change.
+	//
+	// Both were the same defect: the lane was a guard sprinkled into the change
+	// workflow rather than a path of its own. Branching here removes both by
+	// construction. Nothing below this line can run for an observation, so
+	// nothing below it needs to know the lane exists.
+	if e.observes(taskID) {
+		if err := e.observe(ctx, sc, start, taskID, task, workspaceStatus); err != nil {
+			e.reportOutcome(ctx, "blocked", task, err.Error())
+			fail(err)
+		}
 		return
 	}
 
@@ -1283,6 +1326,13 @@ type reviewDecision struct {
 }
 
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
+	return e.resolveArchitectureIn(ctx, sc, start, taskID, task, prompt, e.Repo.Root)
+}
+
+// resolveArchitectureIn is resolveArchitecture with an explicit working
+// directory, so the observation lane can run the architect somewhere the
+// governed checkout is not.
+func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt, workspace string) (architectureDecision, error) {
 	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	var lastErr error
 	// rounds bounds the whole resolution, which attempt does not.
@@ -1315,7 +1365,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 		if attempt > 1 {
 			p += "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
 		}
-		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p}, e.emit)
+		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p}, e.emit)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1346,7 +1396,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
-			routing, scoped, err := e.routePlan(sc, start, task, d)
+			routing, scoped, err := e.routePlan(sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1420,7 +1470,7 @@ func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, sta
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, scoped, err := e.routePlan(sc, start, task, d)
+			routing, scoped, err := e.routePlan(sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1640,7 +1690,7 @@ func shortDigest(d string) string {
 // This is the first preflight in the workflow that can name files: the start
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
-func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
+func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
@@ -1665,8 +1715,12 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, task string,
 	// isolated candidate worktree whose diff is audited before it can leave.
 	// The plan's own steps and consequences travel with it as claims, which the
 	// assessment may use to escalate and never to clear.
+	stage := StageCandidateEdit
+	if e.observes(taskID) {
+		stage = StageObserve
+	}
 	action := Action{
-		Stage:                StageCandidateEdit,
+		Stage:                stage,
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
@@ -3232,4 +3286,222 @@ func repositoryHead(ctx context.Context, repo gitx.Repo) string {
 		return ""
 	}
 	return strings.TrimSpace(head)
+}
+
+// observationFindings renders what an audit found, in the vocabulary the run
+// actually established rather than as a plan.
+//
+// The architect returns a plan-shaped decision because that is the only shape
+// the protocol has. In the observation lane there is nothing to implement, so
+// the plan text is the account of what was inspected and the claims are the
+// findings -- each already carrying whether it came from the repository, the
+// graph, or the model's own inference.
+func observationFindings(d architectureDecision, degraded []string, wroteToWorkspace string) string {
+	var b strings.Builder
+	b.WriteString("Observed. Nothing was admitted.\n")
+	// A provider that wrote is not a safety failure -- the workspace is thrown
+	// away -- but it contradicts the assumption the lane is configured on, so
+	// it is surfaced rather than swallowed.
+	if strings.TrimSpace(wroteToWorkspace) != "" {
+		b.WriteString("\nThe configured architect WROTE to the disposable observation workspace. " +
+			"Nothing left it and the governed repository is unchanged, but this provider is not " +
+			"read-only and the lane assumes it is:\n")
+		for _, line := range strings.Split(strings.TrimSpace(wroteToWorkspace), "\n") {
+			b.WriteString("  ~ " + strings.TrimSpace(line) + "\n")
+		}
+	}
+	// First, because it qualifies everything below it that came from the graph.
+	if len(degraded) != 0 {
+		b.WriteString("\nThe graph did not certify itself for this run. Findings sourced from it " +
+			"are reported as read, not as established:\n")
+		for _, d := range degraded {
+			b.WriteString("  ! " + d + "\n")
+		}
+	}
+	if s := strings.TrimSpace(d.Summary); s != "" {
+		b.WriteString("\n" + s + "\n")
+	}
+	if len(d.Files) != 0 {
+		b.WriteString("\nRead:\n")
+		for _, f := range d.Files {
+			b.WriteString("  " + f + "\n")
+		}
+	}
+	var observed, inferred []Claim
+	for _, c := range d.Claims {
+		if strings.EqualFold(strings.TrimSpace(c.Source), "inference") {
+			inferred = append(inferred, c)
+			continue
+		}
+		observed = append(observed, c)
+	}
+	render := func(title string, cs []Claim) {
+		if len(cs) == 0 {
+			return
+		}
+		b.WriteString("\n" + title + "\n")
+		for _, c := range cs {
+			line := "  - " + strings.TrimSpace(c.Statement)
+			if about := strings.TrimSpace(c.About); about != "" {
+				line += "  [" + about + "]"
+			}
+			if src := strings.TrimSpace(c.Source); src != "" {
+				line += "  (" + src + ")"
+			}
+			b.WriteString(line + "\n")
+		}
+	}
+	render("Findings, from the repository or the graph:", observed)
+	// Kept separate and kept last. An inferred claim is the model reasoning,
+	// not something it read, and in the governed lane exactly this distinction
+	// is what stops a plan. An audit may report one; it may not launder it into
+	// a finding by listing it alongside the others.
+	render("Model inferences — NOT established, and not evidence:", inferred)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// observationPrompt turns the architect's planning brief into an inspection brief.
+//
+// The first observation run reported a PLAN to audit rather than the audit: the
+// base prompt asks for steps and files, so a model given a read-only task
+// answered with how it would carry the task out. Nothing had told it there
+// would be no later stage, and in the governed lane there always is one -- the
+// worker that does the reading is a separate agent further down.
+//
+// In this lane there is no worker. The architect is the only thing that will
+// ever look at the code, so the plan IS the deliverable, and it has to be
+// findings.
+func observationPrompt(base string) string {
+	return base + `
+
+OBSERVATION RUN — READ THE FOLLOWING BEFORE YOU ANSWER.
+
+This task entered through the observation lane. Nothing you say will be implemented:
+no worker runs after you, no candidate worktree is created, no change is admitted,
+and the run is verified to have left the working tree untouched before it may report
+anything at all. You are not scoping work for someone else. You are the only agent
+that will ever look at this code.
+
+So do the inspection NOW, in this turn, and report what you actually found.
+
+Still answer with "proceed" and the usual fields, but read them as an inspection:
+
+- "plan" and "summary": what you INSPECTED and what you CONCLUDED, in the past tense.
+  Not what you would do. A plan-shaped answer here produces a report that inspected
+  nothing.
+- "files": the files you actually opened.
+- "claims": THE FINDINGS. This is the substance of the run. One claim per finding,
+  each with its source:
+    "repository"  you opened the file and read the thing you are describing.
+                  Quote or name the exact symbol, comment, or line.
+    "graph"       a Sensei tool returned it. Say which tool.
+    "inference"   you reasoned to it and did not directly observe it.
+
+The source field is load-bearing and it is checked. An "inference" is reported
+separately and explicitly as NOT established, so putting a real observation there
+buries it, and putting a guess under "repository" is a false statement about what
+you read. Prefer fewer, verified findings over a long list.
+
+Report a defect even when the fix looks obvious, and do not report the fix as though
+it were done. If you found nothing, say so plainly — an audit that finds nothing is
+a valid result, and inventing findings to look productive is the specific failure
+this lane exists to avoid.`
+}
+
+// observe is the read-only lane, end to end.
+//
+// A path of its own rather than a guard inside the change workflow. Nothing
+// here establishes a candidate identity, creates an admission record, runs a
+// worker, or can exit through a completion branch, because none of that code is
+// on this path at all.
+//
+// # What actually makes it read-only
+//
+// The architect runs in a DETACHED, disposable worktree of the pinned commit.
+// The governed checkout is never its working directory. That is the boundary.
+//
+// The previous version ran the architect in the governed checkout and then
+// checked `git status --porcelain`, which is evidence after the fact rather
+// than a boundary: a commit leaves a clean tree, so does a write to an ignored
+// path, and so does a write followed by a restore. A repository configuring a
+// write-capable architect could have modified the governed tree and passed.
+//
+// # What is claimed, and what is not
+//
+// Claimed: an observation cannot modify the governed repository's tracked
+// content or its working tree.
+//
+// NOT claimed: that nothing happens anywhere on the machine. The architect is a
+// subprocess with the ambient permissions of the user running Sensei Code, and
+// this bounds where it is pointed, not what a determined process can reach.
+// Overclaiming here would be the same mistake as the status token that said OK.
+//
+// Writes to the disposable workspace are measured rather than ignored. They
+// harm nothing, and they are the observable signal that a configured provider
+// is not as read-only as the lane assumes, so they are reported.
+func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, workspaceStatus sensei.ToolResult) error {
+	head := repositoryHead(ctx, e.Repo)
+	if strings.TrimSpace(head) == "" {
+		return errors.New("observation cannot start: the repository HEAD could not be resolved, " +
+			"so there is no commit to check out a disposable copy of")
+	}
+	workspace, err := e.Repo.CreateObservationWorktree(ctx, taskID, head)
+	if err != nil {
+		return fmt.Errorf("observation workspace: %w", err)
+	}
+	// A backstop for the error paths below. The success path discards the
+	// workspace explicitly, BEFORE the terminal event.
+	discarded := false
+	defer func() {
+		if !discarded {
+			_ = e.Repo.RemoveObservationWorktree(context.WithoutCancel(ctx), workspace)
+		}
+	}()
+
+	domain := sensei.RepositoryDomain(workspaceStatus)
+	conversation := e.conversationSoFar(task, 40)
+	retrieved, repository, standing, history, consulted := e.architecturalContext(ctx, sc, domain, task)
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
+
+	decision, err := e.resolveArchitectureIn(ctx, sc, start, taskID, task, observationPrompt(architecturePrompt(
+		workspace, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
+		firstText(workspaceStatus), "", retrieved, repository, standing, history)), workspace)
+	if err != nil {
+		return err
+	}
+
+	// The governed repository must be untouched. Defense in depth: the lane
+	// already never pointed the architect at it.
+	if clean, cerr := e.Repo.IsClean(ctx); cerr != nil {
+		return fmt.Errorf("observation cannot report: the governed repository could not be checked: %w", cerr)
+	} else if !clean {
+		return errors.New("the governed repository changed during an observation; refusing to report it " +
+			"as read-only. The observer was pointed at a disposable workspace, so this is not a lane " +
+			"violation by the architect -- something else in this process wrote to the repository")
+	}
+
+	var wrote string
+	if clean, dirty, werr := e.Repo.WorktreeIsClean(ctx, workspace); werr == nil && !clean {
+		wrote = dirty
+	}
+
+	// Discard BEFORE the terminal event, not in a defer.
+	//
+	// A deferred cleanup leaked every workspace: a headless caller returns from
+	// its event loop the moment WorkflowObserved arrives and exits the process,
+	// so the defer was racing process teardown and losing. Observed directly --
+	// the first restructured run left
+	// .sc2-worktrees/task-...-observe behind.
+	if err := e.Repo.RemoveObservationWorktree(ctx, workspace); err != nil {
+		return fmt.Errorf("observation workspace could not be discarded, so a read-only run left "+
+			"state behind: %w", err)
+	}
+	discarded = true
+
+	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
+		observationFindings(decision, start.Degraded(), wrote), decision))
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowObserved,
+		"observed and reported; nothing was admitted, the governed repository is unchanged, "+
+			"and the observation workspace was discarded", nil))
+	return nil
 }

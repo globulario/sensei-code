@@ -46,6 +46,20 @@ const (
 	// leaves more than one viable technical alternative, does the
 	// DesignQuestion lane become relevant. This route does not enter it.
 	RouteCloseGap Route = "bounded-knowledge-gap"
+	// RouteObserve means the action changes nothing, so no architectural
+	// authority is needed and none is granted.
+	//
+	// This exists because a governed audit of an uncovered region used to be
+	// impossible. "Check these doc comments against the code" needs no coverage
+	// -- reading a file establishes nothing and breaks nothing -- but the router
+	// saw a region the graph could not cover and sent the question to a human,
+	// which meant the system could not investigate a subsystem until it already
+	// knew enough to modify it. Observation and authorization were the same
+	// question, and they are not.
+	//
+	// What makes this safe is not trust. It is that the stage is structural and
+	// the absence of a change is VERIFIED before the run may report anything.
+	RouteObserve Route = "observation-no-authority-needed"
 	// RouteCannotEstablish means Sensei could not vouch for its own answers, so
 	// the question is not "who decides" but "the governance surface is broken".
 	// Escalating this to a human as a design question would be asking them to
@@ -92,6 +106,9 @@ func (r Routing) Granted() bool { return r.Route == RouteArchitectural }
 // ClosesGap reports whether the route names bounded epistemic work rather than
 // an owner for the decision.
 func (r Routing) ClosesGap() bool { return r.Route == RouteCloseGap }
+
+// Observes reports whether this action may proceed as a read-only observation.
+func (r Routing) Observes() bool { return r.Route == RouteObserve }
 
 // routeAuthority decides who owns this plan.
 //
@@ -152,6 +169,23 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	// field of this same result, so if the graph is stale or unauthoritative
 	// then the coverage and risk answers are not evidence either — they are a
 	// stale graph's opinions, delivered with exactly the same confidence.
+	// An action that changes nothing is routed before Sensei is asked to vouch
+	// for anything, because none of what follows is about it.
+	//
+	// Deliberately ahead of the certifiability check: whether the graph is
+	// stale, unauthoritative or silent has no bearing on whether a process may
+	// READ a file. Placing it after would make an unusable graph prevent the
+	// very investigation that might explain why the graph is unusable -- which
+	// is precisely the trap where a system cannot learn about itself until it
+	// already knows enough to change itself.
+	//
+	// Nothing here grants authority. It records that none was required.
+	if action.Stage == StageObserve {
+		return Routing{Route: RouteObserve,
+			Condition: "the action reads and reports; no file is written and nothing is admitted, " +
+				"so there is no architectural authority to grant"}
+	}
+
 	if !scoped.Authority.Certifiable() {
 		return Routing{Route: RouteCannotEstablish, Condition: scoped.Authority.Diagnostic()}
 	}

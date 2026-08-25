@@ -23,9 +23,31 @@ func TestPlainMessageStartsAssisted(t *testing.T) {
 		t.Fatalf("Submit still starts governed execution directly:\n%s", body)
 	}
 
+	// SubmitGoverned reaches governed execution through the shared submit path.
+	// Following one hop keeps this a check on the call graph rather than on
+	// where a line happens to sit.
 	governed := funcBody(t, "internal/workflow/assisted.go", "SubmitGoverned")
-	if !strings.Contains(governed, "e.run(") {
+	if !strings.Contains(governed, "e.submit(") {
 		t.Fatalf("SubmitGoverned does not start the governed workflow:\n%s", governed)
+	}
+	shared := funcBody(t, "internal/workflow/assisted.go", "submit")
+	if !strings.Contains(shared, "e.run(") {
+		t.Fatalf("submit does not start governed execution:\n%s", shared)
+	}
+	// Provenance is a parameter of submission, not a constant of the workflow.
+	if !strings.Contains(governed, "RequestedByHuman") {
+		t.Fatalf("SubmitGoverned no longer records human provenance:\n%s", governed)
+	}
+	unattended := funcBody(t, "internal/workflow/assisted.go", "SubmitGovernedUnattended")
+	if strings.Contains(unattended, "RequestedByHuman") {
+		t.Fatalf("an unattended submission claims a human asked for it:\n%s", unattended)
+	}
+	// The observation lane is fixed at submission, where nothing downstream can
+	// widen it. If it ever becomes inferable from a plan it stops being
+	// structural and becomes a claim a worker can make about itself.
+	observe := funcBody(t, "internal/workflow/assisted.go", "SubmitObservation")
+	if !strings.Contains(observe, "true") {
+		t.Fatalf("SubmitObservation does not fix the observation lane at submission:\n%s", observe)
 	}
 }
 

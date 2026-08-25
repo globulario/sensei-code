@@ -96,6 +96,13 @@ const (
 	AuthorityResolved Kind = "authority.resolved"
 	WorkflowFailed    Kind = "workflow.failed"
 	WorkflowCompleted Kind = "workflow.completed"
+	// WorkflowObserved is a read-only run that finished by reporting findings.
+	//
+	// Distinct from WorkflowCompleted, which means a change was admitted. An
+	// audit that finds three real defects and admits nothing has succeeded, and
+	// a control plane whose only successful ending is an admitted change cannot
+	// say so -- it has to report the audit as awaiting a human instead.
+	WorkflowObserved Kind = "workflow.observed"
 	// WorkflowStopped is the human withdrawing from a running task. It is its
 	// own transition rather than a flavour of failure: a stop proves nothing
 	// about the work, and the candidate it leaves behind is resumable, where a
