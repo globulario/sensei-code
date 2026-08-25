@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 type Client struct {
@@ -20,6 +22,9 @@ type Client struct {
 	stderr *stderrTail
 	mu     sync.Mutex
 	next   atomic.Int64
+	// ok remembers when Sensei last answered, so a failure can say when the
+	// environment was last known good rather than only that it is bad now.
+	ok lastOK
 }
 
 const (
@@ -132,12 +137,45 @@ func (c *Client) CallTool(name string, args map[string]any) (ToolResult, error) 
 	var result ToolResult
 	err := c.call("tools/call", map[string]any{"name": name, "arguments": args}, &result)
 	if err != nil {
-		return ToolResult{}, err
+		// A transport failure is reported with what this process witnessed
+		// about its dependency, because the error text names the socket and
+		// the cause is usually a layer below it.
+		return ToolResult{}, fmt.Errorf("%s", c.diagnose(name, err))
 	}
 	if result.IsError {
+		// A refusal is Sensei working correctly and saying no. Deliberately
+		// NOT diagnosed: attaching dependency state here would dress a
+		// fail-closed answer as an outage, which is the opposite of the
+		// distinction this file exists to keep.
+		c.ok.mark(name)
 		return result, fmt.Errorf("sensei tool %s refused: %s", name, refusalReason(result))
 	}
+	c.ok.mark(name)
 	return result, nil
+}
+
+// Health is what this client has witnessed about its dependency.
+func (c *Client) Health() Health {
+	at, tool := c.ok.read()
+	h := Health{LastOK: at, LastTool: tool}
+	if c.cmd != nil && c.cmd.Process != nil {
+		// Signal 0 asks whether the process exists without disturbing it.
+		h.SubprocessAlive = c.cmd.Process.Signal(syscall.Signal(0)) == nil
+	}
+	if c.stderr != nil {
+		h.Stderr = c.stderr.String()
+	}
+	return h
+}
+
+// diagnose renders a failed call with its causal chain attached.
+func (c *Client) diagnose(tool string, err error) string {
+	h := c.Health()
+	var elapsed time.Duration
+	if !h.LastOK.IsZero() {
+		elapsed = time.Since(h.LastOK)
+	}
+	return Causes{Tool: tool, Err: err, Health: h, Elapsed: elapsed}.Diagnose()
 }
 
 // refusalReason recovers the reason Sensei gave for refusing. Dropping it would
