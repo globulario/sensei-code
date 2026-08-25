@@ -36,6 +36,9 @@ type Runner struct {
 	// RawCommand is the ordinary coding agent RAW uses, as argv with {{TASK}}
 	// replaced by the task statement.
 	RawCommand []string
+	// CorpusRoot is where the manifest and its oracles live, so a contract
+	// probe can be loaded at judgement time.
+	CorpusRoot string
 	// Now is injected so a run record's timestamps are reproducible in tests.
 	Now func() time.Time
 }
@@ -259,6 +262,13 @@ type OracleResult struct {
 // candidate checkout. The worker never saw these files; the oracle is built
 // from them.
 func (r Runner) Judge(ctx context.Context, dir string, t Task) OracleResult {
+	// A gated task is judged by its behavioural contract, never by the accepted
+	// fix's own tests. The withheld-tests path below survives only for tasks
+	// that have not been given a contract oracle yet, and a task in that state
+	// is not benchmark-eligible.
+	if t.Contract != nil {
+		return r.judgeContract(ctx, dir, t, *t.Contract)
+	}
 	switch t.Oracle.Kind {
 	case "withheld_tests":
 		for _, rel := range t.Oracle.Paths {
@@ -305,6 +315,44 @@ func (r Runner) Judge(ctx context.Context, dir string, t Task) OracleResult {
 				"candidate; not executed by this harness"}
 	}
 	return OracleResult{Inconclusive, "unknown oracle kind " + t.Oracle.Kind}
+}
+
+// judgeContract writes the probe into the finished candidate and runs it.
+//
+// The probe arrives AFTER the worker is done, exactly like the withheld tests
+// it replaces. What changed is what it asserts: observable behaviour through a
+// surface the task statement establishes, so a correct solution the benchmark
+// did not write still passes.
+func (r Runner) judgeContract(ctx context.Context, dir string, t Task, o ContractOracle) OracleResult {
+	if strings.TrimSpace(o.Source) == "" {
+		if err := o.LoadProbe(r.CorpusRoot); err != nil {
+			return OracleResult{Inconclusive, "contract oracle: " + err.Error()}
+		}
+	}
+	// The accepted fix's own tests must not be in the candidate: they would
+	// judge an ALTERNATE-shaped answer by the reference's names, which is the
+	// defect this whole oracle replaced.
+	for _, rel := range t.Oracle.Paths {
+		_ = os.RemoveAll(filepath.Join(dir, rel))
+	}
+	probe := filepath.Join(dir, o.Probe)
+	if err := os.MkdirAll(filepath.Dir(probe), 0o755); err != nil {
+		return OracleResult{Inconclusive, err.Error()}
+	}
+	if err := os.WriteFile(probe, []byte(o.Source), 0o644); err != nil {
+		return OracleResult{Inconclusive, err.Error()}
+	}
+	cmd := exec.CommandContext(ctx, o.Command[0], o.Command[1:]...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	detail := tail(string(out), 4000)
+	if err == nil {
+		return OracleResult{Correct, detail}
+	}
+	if _, ok := err.(*exec.ExitError); !ok {
+		return OracleResult{Inconclusive, fmt.Sprintf("contract probe could not run: %v\n%s", err, detail)}
+	}
+	return OracleResult{Incorrect, detail}
 }
 
 // CandidateEvidence is the git-side record of what an arm actually produced.

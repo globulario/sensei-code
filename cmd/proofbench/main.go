@@ -301,6 +301,7 @@ func runCampaign(args []string) int {
 		RepoRoot:   root,
 		WorkDir:    filepath.Join(os.TempDir(), "proofbench", m.Version),
 		Binary:     binaryPath(root),
+		CorpusRoot: dir,
 		RawCommand: rawCommand(),
 		Now:        time.Now,
 	}
