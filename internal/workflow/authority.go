@@ -18,6 +18,7 @@ package workflow
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/sensei"
@@ -352,28 +353,67 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		}
 	}
 
+	// Provenance is read from a closed vocabulary, and only "graph" and
+	// "repository" are evidence.
+	//
 	// An inferred premise is the architect telling us, in its own words, that
 	// this part of the plan rests on something nothing checked. That is a
 	// verification task, not a decision a human owns: what is being asked for
 	// is evidence, and the architect is the one who can go and get it.
+	//
+	// Anything else is read the same way, and that is the point. Claim.Source
+	// is whatever the model typed: decodeModelJSON validates no field, so a
+	// blank source, a misspelling, or a word this router has no reading for
+	// arrives looking exactly like a checked premise. Recognising only
+	// "inference" made every one of those grantable -- an unchecked premise
+	// acquired architectural authority by being labelled with something nobody
+	// defined. The same fail-closed rule as an unrecognised blind spot above,
+	// for the same reason: a later addition to the vocabulary must not become
+	// silent autonomy by arriving before the router has a reading for it.
 	for _, c := range claims {
-		if strings.EqualFold(strings.TrimSpace(c.Source), "inference") {
-			statement := strings.TrimSpace(c.Statement)
-			if statement == "" {
-				statement = "(unstated)"
-			}
-			about := strings.TrimSpace(c.About)
-			if about != "" {
-				about = " about " + about
-			}
+		source := strings.ToLower(strings.TrimSpace(c.Source))
+		if source == "graph" || source == "repository" {
+			continue
+		}
+		statement := strings.TrimSpace(c.Statement)
+		if statement == "" {
+			statement = "(unstated)"
+		}
+		about := strings.TrimSpace(c.About)
+		if about != "" {
+			about = " about " + about
+		}
+		if source == "inference" {
 			return Routing{
 				Route:     RouteCloseGap,
 				Condition: "the plan rests on an unverified premise" + about + ": " + statement,
 			}
 		}
+		// The provenance is named, because the work this route asks for is not
+		// the same work: an inference needs evidence gathered, while this needs
+		// the premise re-stated with a source that can be checked at all.
+		return Routing{
+			Route: RouteCloseGap,
+			Condition: "the plan rests on an unverified premise" + about +
+				" (" + declaredSource(c.Source) + "): " + statement,
+		}
 	}
 
 	return Routing{Route: RouteArchitectural}
+}
+
+// declaredSource renders what the architect actually wrote in a claim's source
+// field, so a routing caused by unreadable provenance says which provenance.
+//
+// A missing source and a misspelled one are different mistakes and are reported
+// as different mistakes: the first is a claim that never stated where it came
+// from, the second is a claim that stated something this router cannot read.
+func declaredSource(source string) string {
+	declared := strings.TrimSpace(source)
+	if declared == "" {
+		return "no source was declared"
+	}
+	return "unrecognised source " + strconv.Quote(declared)
 }
 
 // coversAll reports whether every planned file is covered.
