@@ -659,7 +659,7 @@
     },
     {
       "id": "internal-setup-16ecbc3",
-      "statement": "The abandoned-worktree check treats a directory containing only this tool's own artefacts as if it held the user's work, so a repository is reported as holding abandoned work when it holds none.\n\nA candidate worktree directory whose contents are entirely artefacts this tool created must not be reported as holding work. A directory holding anything the user could have written must still be reported. Hidden entries are not counted as work.",
+      "statement": "The abandoned-worktree check treats a candidate directory containing only this tool's own artefacts as if it held the user's work, so a repository is reported as holding abandoned work when it holds none, and nothing offers to clean it up.\n\nA candidate whose contents are entirely artefacts this tool created must not be described as holding work, and must be removable automatically. A candidate holding anything the user could have written must still be preserved and reported for a person to decide. Dot-directories beside a candidate are this tool's own and are not candidates.",
       "base_sha": "2b5ecda293c5dd35583243bd234134f592ccec5b",
       "origin": "16ecbc3e50654829ffd1d5e63d9f981a30ad24dd",
       "oracle": {
@@ -676,7 +676,40 @@
       },
       "depends_on": [
         "internal-setup-e645669"
-      ]
+      ],
+      "contract": {
+        "probe": "internal/setup/contract_probe_test.go",
+        "source_file": "oracles/internal-setup-16ecbc3.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/setup/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-setup-16ecbc3/WRONG",
+            "want": "INCORRECT",
+            "why": "the pre-fix file: a directory holding only a .guard artefact counts as work, so it is preserved and reported as abandoned work that nobody can clean up"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-setup-16ecbc3/ALTERNATE",
+            "want": "CORRECT",
+            "why": "asks the opposite question -- counts entries that are NOT this tool's and calls a candidate removable when that count is zero -- where the reference keeps an allowlist of artefact names and asks whether a directory holds only those"
+          }
+        ]
+      }
     }
   ],
   "selection_walk": [
@@ -823,5 +856,178 @@
     "later_condition": "internal-gitx-6460efd changes read-only measurement in internal/gitx/git.go, the file K governs, and must not disturb the behaviour K requires of the candidate diff.",
     "reuse_vs_rediscovery": "REUSE: the WARM run cites K as a claim with source=graph rather than inference, and its candidate leaves internal/gitx/git_test.go:TestCandidateDiffIncludesFilesTheWorkerCreated passing without the worker having had to derive the requirement from the code. REDISCOVERY: the run works the constraint out for itself, or breaks that test. Written before either arm runs."
   },
-  "campaign_design": "PRIMARY: RAW versus COLD across all measurable tasks. Correctness, end-to-end delivery, timeout/refusal/infrastructure rates, wall time and cost.\n\nWARM: exactly one arm, the downstream half of the single qualifying relation (internal-gitx-6460efd), executed after its upstream task has produced and revalidated K, and compared DESCRIPTIVELY against that task's COLD run. No WARM arm is scheduled for any other task.\n\nThe report states two separate results: RAW/COLD effectiveness, measured quantitatively over the frozen behavioural corpus; and governed knowledge compounding, NOT ESTABLISHED by this corpus, with the single qualifying pair reported as a descriptive case study only."
+  "campaign_design": "PRIMARY: RAW versus COLD across all measurable tasks. Correctness, end-to-end delivery, timeout/refusal/infrastructure rates, wall time and cost.\n\nWARM: exactly one arm, the downstream half of the single qualifying relation (internal-gitx-6460efd), executed after its upstream task has produced and revalidated K, and compared DESCRIPTIVELY against that task's COLD run. No WARM arm is scheduled for any other task.\n\nThe report states two separate results: RAW/COLD effectiveness, measured quantitatively over the frozen behavioural corpus; and governed knowledge compounding, NOT ESTABLISHED by this corpus, with the single qualifying pair reported as a descriptive case study only.",
+  "oracle_hashes": {
+    "internal-gitx-a4fa351": "sha256:141838ace1a8989fd153fafe40df6cd9",
+    "internal-gitx-6460efd": "sha256:cce7e47ef1ac203eaa66eca3a8f25162",
+    "internal-tui-ea046ba": "sha256:44930fbbd8407e47d0ac658feea50b53",
+    "internal-tui-be512db": "sha256:33370c08dc1e07033039644eeba4233c",
+    "internal-assist-5dfffad": "sha256:099743112cadc2ed9a3021510a62bfcd",
+    "internal-decision-6cf23e8": "sha256:5b6f2653604ede940adda050f103c577",
+    "internal-agent-01f3fe1": "sha256:6f4016b3a2c6a2bb4e5fc8670cbb84bd",
+    "internal-session-4d32937": "sha256:a55f6dfc6af0874ea226ac6fc77cb7cc",
+    "internal-architect-2e095c4": "sha256:1e41997ade41ee07afc920681e161e19",
+    "internal-setup-e645669": "sha256:e8e4fc026a08e4597d3ee08f03b0b967",
+    "internal-setup-16ecbc3": "sha256:7a5c2135a60a3de75d95c6ee11ce545b"
+  },
+  "execution_manifest": {
+    "frozen_before_first_arm": true,
+    "operational_budget": "22m",
+    "arms": 23,
+    "waves": [
+      "RAW_WAVE",
+      "COLD_WAVE",
+      "WARM_CASE_STUDY"
+    ],
+    "checkpoints": [
+      "RAW_COMPLETE",
+      "COLD_COMPLETE",
+      "WARM_COMPLETE",
+      "FINAL_VERDICT"
+    ],
+    "checkpoint_rule": "A checkpoint is captured after each wave and NO DECISION is taken from it. It exists so evidence survives a later catastrophe, not so the campaign can stop when the numbers look a certain way.",
+    "parallelism": "RAW and COLD may run 2 tasks at once, because those arms are isolated. The WARM case study runs sequentially after its upstream task, so accumulated knowledge has an unambiguous history.",
+    "halt_rule": "Results do NOT alter execution. The campaign may halt ONLY for measurement-integrity failure: a broken oracle, corrupted state isolation, attribution failure, provider credentials behaving incorrectly, or evidence loss. A bad score, a timeout, a refusal or an expensive run is a RESULT and must not change the schedule.",
+    "schedule": [
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-gitx-a4fa351",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-gitx-6460efd",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-tui-ea046ba",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-tui-be512db",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-assist-5dfffad",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-decision-6cf23e8",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-agent-01f3fe1",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-session-4d32937",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-architect-2e095c4",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-setup-e645669",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-setup-16ecbc3",
+        "arm": "RAW",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-gitx-a4fa351",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-gitx-6460efd",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-tui-ea046ba",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-tui-be512db",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-assist-5dfffad",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-decision-6cf23e8",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-agent-01f3fe1",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-session-4d32937",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-architect-2e095c4",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-setup-e645669",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-setup-16ecbc3",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "WARM_CASE_STUDY",
+        "task": "internal-gitx-6460efd",
+        "arm": "WARM",
+        "attempt": 1,
+        "note": "the downstream half of the single qualifying linkage relation; run after its upstream task has produced and revalidated K, compared descriptively against that task's COLD run"
+      }
+    ]
+  }
 }

@@ -1,5 +1,257 @@
 [
   {
+    "task": "internal-gitx-a4fa351",
+    "oracle_hash": "sha256:141838ace1a8989fd153fafe40df6cd9",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.064s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractCandidateDiffShowsCreatedFiles (0.02s)\n    contract_probe_test.go:62: a file the worker CREATED is invisible to the reviewer, which is the whole defect:\n        diff --git a/existing.go b/existing.go\n        index c89cd18..80d359e 100644\n        --- a/existing.go\n        +++ b/existing.go\n        @@ -1 +1,3 @@\n         package p\n        +\n        +func Existing() {}\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx\t0.049s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.062s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-gitx-6460efd",
+    "oracle_hash": "sha256:cce7e47ef1ac203eaa66eca3a8f25162",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.067s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractTheCleanlinessCheckDoesNotWriteTheIndex (0.03s)\n    contract_probe_test.go:93: the read-only cleanliness check touched .git/index (2026-08-25 12:19:30.65021663 -0400 EDT -\u003e 2026-08-25 12:19:30.653218141 -0400 EDT)\n--- FAIL: TestContractWorktreeIsCleanAlsoDoesNotWrite (0.03s)\n    contract_probe_test.go:117: WorktreeIsClean rewrote .git/index while reporting on it\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx\t0.067s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.064s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-tui-ea046ba",
+    "oracle_hash": "sha256:44930fbbd8407e47d0ac658feea50b53",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/tui\t0.045s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "…[38;2;255;158;100m»  auto mode on\u001b[m\u001b[38;2;86;95;137m (shift+tab to cycle)\u001b[m\n--- FAIL: TestContractScrollingUpRevealsEarlierLines (0.01s)\n    contract_probe_test.go:104: scrolling up changed nothing the reader can see\n--- FAIL: TestContractScrollingPastTheStartRestsAtTheStart (0.01s)\n    contract_probe_test.go:147: scrolling to the top did not reach the first line:\n        \u001b[1;38;2;122;162;247m◈ ARCHITECT\u001b[m                                                                                         \n          TRANSCRIPTLINE117                                                                                 \n                                                                                                            \n        \u001b[1;38;2;122;162;247m◈ ARCHITECT\u001b[m                                                                                         \n          TRANSCRIPTLINE118                                                                                 \n                                                                                                            \n        \u001b[1;38;2;122;162;247m◈ ARCHITECT\u001b[m                                                                                         \n          TRANSCRIPTLINE119                                                                                 \n                                                                                                            \n        \u001b[38;2;86;95;137m● ready — describe a task, or /help for commands\u001b[m\n        \u001b[38;2;255;255;255m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\n         \u001b[40m\u001b[37m› \u001b[m\u001b[m\u001b[40m\u001b[7mD\u001b[m\u001b[m\u001b[40m\u001b[38;5;240mescribe a task for Sensei Code...\u001b[m\u001b[m\u001b[40m                                                          \u001b[m     \n        \u001b[38;2;255;255;255m────────────────────────────────────────────────────────────────────────────────────────────────────\u001b[m\n        \u001b[38;2;255;158;100m»  auto mode on\u001b[m\u001b[38;2;86;95;137m (shift+tab to cycle)\u001b[m\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/tui\t0.040s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/tui\t0.038s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-tui-be512db",
+    "oracle_hash": "sha256:33370c08dc1e07033039644eeba4233c",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/tui\t0.070s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractTheOrdinaryKeysScroll (0.04s)\n    contract_probe_test.go:110: \"up\" did not scroll back: hidden 445 -\u003e 445\n    contract_probe_test.go:110: \"shift+up\" did not scroll back: hidden 445 -\u003e 445\n    contract_probe_test.go:110: \"ctrl+p\" did not scroll back: hidden 445 -\u003e 445\n--- FAIL: TestContractASingleNotchActuallyMoves (0.01s)\n    contract_probe_test.go:126: one notch moved hidden 445 -\u003e 445; a single-line scroll must move exactly one line and must not be clamped back\n--- FAIL: TestContractTheWheelScrolls (0.01s)\n    contract_probe_test.go:138: the wheel did not scroll back: hidden 445 -\u003e 445\n    contract_probe_test.go:142: the wheel did not scroll forward again from hidden 445\n--- FAIL: TestContractScrollingDownReturns (0.01s)\n    contract_probe_test.go:156: scrolling down did not move towards the newest output from hidden 445\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/tui\t0.077s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/tui\t0.071s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-assist-5dfffad",
+    "oracle_hash": "sha256:099743112cadc2ed9a3021510a62bfcd",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/assist\t0.167s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied (0.18s)\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/empty_string (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/wrong_type (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/binding_wrong_type (0.08s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/no_binding_at_all (0.03s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/binding_without_it (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/assist\t0.210s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/assist\t0.164s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-decision-6cf23e8",
+    "oracle_hash": "sha256:5b6f2653604ede940adda050f103c577",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/decision\t0.006s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractSourceFilesAloneDoNotLinkADecision (0.00s)\n    contract_probe_test.go:35: Validate() = \u003cnil\u003e, want ErrNotLinked: naming files is not a link\n--- FAIL: TestContractAnInvariantOrAFailureLinksADecision (0.00s)\n    contract_probe_test.go:51: failure: Validate() = decision is not linked to an invariant or a source file, want nil\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/decision\t0.003s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/decision\t0.003s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-agent-01f3fe1",
+    "oracle_hash": "sha256:6f4016b3a2c6a2bb4e5fc8670cbb84bd",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.003s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractAssistantTextIsRenderedReadably (0.00s)\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"type\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"content\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"{\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"message\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n--- FAIL: TestContractAToolCallIsNamed (0.00s)\n    contract_probe_test.go:59: raw envelope leaked into the activity line: \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"tool_use\\\",\\\"name\\\":\\\"Read\\\",\\\"input\\\":{\\\"file_path\\\":\\\"internal/gitx/git.go\\\"}}]}}\"\n--- FAIL: TestContractNonActivityProducesNothing (0.00s)\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\") = \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\") = \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"not json at all\") = \"not json at all\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\") = \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\", want empty: this is not activity a reader should be shown\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/agent\t0.004s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.003s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-session-4d32937",
+    "oracle_hash": "sha256:a55f6dfc6af0874ea226ac6fc77cb7cc",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/session\t0.003s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractAnUnauthorisedPlanIsNotInterrupted (0.00s)\n    contract_probe_test.go:72: a task still awaiting authority was offered for resume: [{TaskID:task-1 Task:a task Plan:a plan Review:}]\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/session\t0.004s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/session\t0.003s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-architect-2e095c4",
+    "oracle_hash": "sha256:1e41997ade41ee07afc920681e161e19",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/architect\t0.003s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractARuleOfAnotherKindIsStillFound (0.00s)\n    contract_probe_test.go:79: a rule held under another class was not found: Sensei holds no invariant, failure mode or forbidden fix under \"sensei_code.some.failure\" in this domain\n--- FAIL: TestContractAPrefixedIDResolvesToTheSameRule (0.00s)\n    contract_probe_test.go:111: the id sent to Sensei still carries a class prefix: \"invariant:sensei_code.publication.never_merges\"\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/architect\t0.004s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/architect\t0.003s"
+      }
+    ],
+    "eligible": true
+  },
+  {
     "task": "internal-setup-e645669",
     "oracle_hash": "sha256:e8e4fc026a08e4597d3ee08f03b0b967",
     "results": [
@@ -8,21 +260,49 @@
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/setup\t5.081s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/setup\t5.192s"
       },
       {
         "kind": "WRONG",
         "want": "INCORRECT",
         "got": "INCORRECT",
         "ok": true,
-        "detail": "--- FAIL: TestContractALeftoverHoldingWorkIsNotRemovedAutomatically (1.08s)\n    contract_probe_test.go:117: repair: /tmp/TestContractALeftoverHoldingWorkIsNotRemovedAutomatically348081228/001/.project-worktrees/task-2 is no longer empty; left alone\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/setup\t5.290s\nFAIL"
+        "detail": "--- FAIL: TestContractALeftoverHoldingWorkIsNotRemovedAutomatically (0.99s)\n    contract_probe_test.go:117: repair: /tmp/TestContractALeftoverHoldingWorkIsNotRemovedAutomatically3860210826/001/.project-worktrees/task-2 is no longer empty; left alone\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/setup\t4.947s\nFAIL"
       },
       {
         "kind": "ALTERNATE",
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/setup\t5.384s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/setup\t4.852s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-setup-16ecbc3",
+    "oracle_hash": "sha256:7a5c2135a60a3de75d95c6ee11ce545b",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/setup\t3.545s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractToolArtefactsAreNotTheUsersWork (1.48s)\n    contract_probe_test.go:85: a candidate holding only this tool's own artefacts was treated as holding the user's work, so nothing offered to remove it\n--- FAIL: TestContractArtefactsAloneAreNotReportedAsHoldingWork (1.17s)\n    contract_probe_test.go:128: artefacts alone were described as work: detail=\"1 abandoned candidate(s) still holding files, 0 empty\" fix=\"inspect and remove by hand: /tmp/TestContractArtefactsAloneAreNotReportedAsHoldingWork3263437832/001/.project-worktrees/task-3\"\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/setup\t3.824s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/setup\t3.111s"
       }
     ],
     "eligible": true

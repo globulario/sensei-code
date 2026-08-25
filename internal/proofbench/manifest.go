@@ -120,6 +120,12 @@ type Manifest struct {
 	// WarmCaseStudy is the one qualifying relation, run and reported
 	// descriptively rather than as a benchmark gate.
 	WarmCaseStudy *CaseStudy `json:"warm_case_study,omitempty"`
+	// OracleHashes is every admitted task's frozen oracle identity. Editing a
+	// probe after this point changes its hash and orphans any result taken
+	// under the old one.
+	OracleHashes map[string]string `json:"oracle_hashes,omitempty"`
+	// ExecutionManifest is the frozen arm schedule, waves and halt rule.
+	ExecutionManifest json.RawMessage `json:"execution_manifest,omitempty"`
 	// CampaignDesign is which arms this campaign schedules and why. Recorded in
 	// the manifest so the arm list is frozen with everything else.
 	CampaignDesign string `json:"campaign_design,omitempty"`
