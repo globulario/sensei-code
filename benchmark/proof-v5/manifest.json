@@ -248,7 +248,7 @@
     },
     {
       "id": "internal-tui-ea046ba",
-      "statement": "The transcript view in internal/tui cannot be scrolled: long output runs off the top and there is no way to reach earlier lines. Make the transcript scrollable.",
+      "statement": "The transcript in internal/tui cannot be scrolled: once the conversation is longer than the window, earlier lines run off the top and there is no way to reach them.\n\nMake the transcript scrollable through the ordinary bubbletea surface. A transcript longer than the window must show its most recent lines and tell the reader that earlier ones exist; PgUp must reveal previously hidden lines; PgDn must return towards the newest; scrolling past the start must rest at the first line rather than running off it or emptying the screen; and a transcript that fits must claim nothing is hidden. How the window is tracked is yours to decide.",
       "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
       "origin": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
       "oracle": {
@@ -261,6 +261,39 @@
           "test",
           "-buildvcs=false",
           "./internal/tui/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/tui/contract_probe_test.go",
+        "source_file": "oracles/internal-tui-ea046ba.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/tui/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-tui-ea046ba/WRONG",
+            "want": "INCORRECT",
+            "why": "the pre-fix file: the transcript is truncated to its tail with no way to reach earlier lines. The plainest non-solution."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-tui-ea046ba/ALTERNATE",
+            "want": "CORRECT",
+            "why": "tracks the window as an OFFSET FROM THE BOTTOM with a single number and no follow flag, clamped while rendering -- where the reference keeps an absolute scrollTop plus an atBottom flag and a scrollPosition helper"
+          }
         ]
       }
     },
