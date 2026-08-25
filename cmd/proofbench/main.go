@@ -47,6 +47,8 @@ func run(args []string) int {
 		return discriminate(args[1:])
 	case "preflight-candidate":
 		return preflightCandidate(args[1:])
+	case "environment":
+		return environment(args[1:])
 	case "run":
 		return runCampaign(args[1:])
 	case "report":
@@ -82,6 +84,11 @@ func usage() {
         point the frozen oracle at an existing candidate worktree and
         prove the evaluator finds work where a governed run leaves it,
         without spending a provider token
+
+  proofbench environment --manifest <path> [--pin] [--against <file>]
+        establish, without spending a provider token, which graph the
+        governed child process actually reaches, and refuse a wave whose
+        authority is DEV, unusable or drifted
 
   proofbench run       --manifest <path> [--task <id>] [--arm RAW|COLD|WARM]
                        [--attempt N] [--dry-run]
