@@ -118,7 +118,10 @@ type CorpusVerdict struct {
 
 // WalkStep is one position of the mechanical re-selection walk.
 type WalkStep struct {
-	Position int    `json:"position"`
+	// Position is the walk index, or a label for a decision taken outside the
+	// walk -- a task rejected after admission, for instance, while its oracle
+	// was being built. Recorded in the same list so the corpus has one history.
+	Position any    `json:"position"`
 	Commit   string `json:"commit"`
 	Package  string `json:"package"`
 	Verdict  string `json:"verdict"`

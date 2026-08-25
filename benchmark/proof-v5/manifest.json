@@ -20,8 +20,8 @@
     },
     {
       "task": "internal-mcpconfig-21c5a6b",
-      "verdict": "ADMITTED_UNLINKED",
-      "reason": "measurable task; seed/linkage condition unavailable \u2014 its seed failed criterion (6), so the package cannot supply a linked pair. It contributes to RAW/COLD correctness and to end-to-end rates, and not to the WARM linkage denominator."
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Admitted provisionally on the assumption that Describe(repoRoot) was hermetic, and REJECTED while building its oracle. Describe is hermetic for the Claude agent only; the change this task is about is entirely the CODEX path, and describeCodex() takes no repoRoot -- it reads the user's ~/.codex/config.toml. A probe would test incidental machine state rather than the candidate, which criterion (6) forbids. Discovered by writing the probe, which is what the gate is for."
     },
     {
       "task": "internal-behavioral-a453be8",
@@ -286,24 +286,6 @@
       ]
     },
     {
-      "id": "internal-mcpconfig-21c5a6b",
-      "statement": "internal/mcpconfig assumes what tools the MCP server exposes rather than reporting the allowlist the server was actually configured with. Report what is configured.",
-      "base_sha": "110678d517ca18d3d39484ad4e217b8f77498430",
-      "origin": "21c5a6b18b68298867b037ab3a05cd1bf80b682c",
-      "oracle": {
-        "kind": "withheld_tests",
-        "paths": [
-          "internal/mcpconfig/mcpconfig_test.go"
-        ],
-        "command": [
-          "go",
-          "test",
-          "-buildvcs=false",
-          "./internal/mcpconfig/"
-        ]
-      }
-    },
-    {
       "id": "internal-assist-5dfffad",
       "statement": "internal/assist scopes its awareness_preflight call without telling Sensei which repository domain it is asking about, so the answer is not scoped to the workspace Sensei itself reported.\n\nWhen the workspace result carries a repository domain at binding.repository_domain, the preflight call must pass it as the \"domain\" argument. When no domain is available, the call must be made without a \"domain\" argument rather than with an empty one. Nothing else about the call changes.",
       "base_sha": "5619d645e52570cabd43c7906b7d160d536d1c14",
@@ -323,7 +305,7 @@
     },
     {
       "id": "internal-decision-6cf23e8",
-      "statement": "internal/decision sends every decision to the sensei CLI, including ones that link to no governing invariant and no failure mode. Such a decision cannot be recorded and the CLI refuses it, so the user learns about it as a tool error rather than as a statement about their decision.\n\nAdd the exported sentinel:\n\n    var ErrNotLinked = errors.New(...)\n\nWrite must return ErrNotLinked, without invoking the CLI at all, when a Record links to neither an invariant nor a failure. Also add a Failures []string field to Record, carried to the CLI the way Invariants already is. A record that links to either kind still proceeds as before.",
+      "statement": "internal/decision sends a decision to the sensei CLI whenever it names an invariant OR any source file. Sensei's own contract-first rule is narrower: a decision must connect to a governing invariant or a failure mode, and naming the files it touched is not a connection. So an unlinkable decision is sent to be refused, and the user learns about it as a tool error rather than as a statement about their decision.\n\nAdd a Failures []string field to Record, carried to Sensei as --related-failure per non-empty entry, the way Invariants is already carried as --related-invariant.\n\nValidate must return the exported ErrNotLinked when a record links to neither an invariant nor a failure -- source files alone no longer satisfy it -- and Write must return that without invoking the CLI at all. A record missing a title or rationale is still invalid, and that is not an unlinked decision.",
       "base_sha": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
       "origin": "6cf23e8490c71e5a1531305d6327114048b9aefb",
       "oracle": {
@@ -336,6 +318,39 @@
           "test",
           "-buildvcs=false",
           "./internal/decision/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/decision/contract_probe_test.go",
+        "source_file": "oracles/internal-decision-6cf23e8.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/decision/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-decision-6cf23e8/WRONG",
+            "want": "INCORRECT",
+            "why": "adds the field and carries it to argv while leaving the LINK RULE untouched, so a decision linked only by source files is still sent to be refused. The plausible half-fix."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-decision-6cf23e8/ALTERNATE",
+            "want": "CORRECT",
+            "why": "asks linkage as one question over a combined links() helper rather than a condition over two named fields, and builds the link flags from a table rather than two hand-written loops"
+          }
         ]
       }
     },
@@ -590,6 +605,13 @@
       "package": "internal/setup",
       "verdict": "ADMIT",
       "reason": "tool-artefact handling observable through Inspect; LINKED specimen 4 \u2014 BOTH stopping conditions now satisfied"
+    },
+    {
+      "position": "post-walk revision",
+      "commit": "21c5a6b18b",
+      "package": "internal/mcpconfig",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Rejected after admission, while its oracle was being built: the Codex branch reads the user's home configuration, so the behaviour is not reachable hermetically. The corpus drops to 12 tasks and retains 4 linked specimens, so BOTH stopping conditions still hold and the walk does not resume."
     }
   ],
   "intermediate_state": {
