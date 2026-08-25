@@ -78,7 +78,14 @@ type GateInput struct {
 	Raw          ArmMetrics
 	Cold         ArmMetrics
 	Warm         ArmMetrics
-	// GovernedCorrect counts primary tasks CORRECT under COLD or WARM.
+	// GovernedCorrect counts primary tasks DELIVERED under COLD or WARM:
+	// completed inside the operational budget and judged correct.
+	//
+	// End-to-end, not engineering correctness. "At least 9 of 10 tasks end
+	// CORRECT" asks whether the product delivered; a run that timed out did not
+	// deliver, whatever its unfinished code would have been worth. The
+	// engineering rate is reported beside the gates and gates nothing, because
+	// a system can be right whenever it answers and still be unusable.
 	GovernedCorrect int
 	// GovernedAutonomous counts those with no human technical answer.
 	GovernedAutonomous int

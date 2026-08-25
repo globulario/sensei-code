@@ -240,6 +240,7 @@ func report(args []string) int {
 		_ = json.Unmarshal(b, &calib)
 	}
 
+	proofbench.SetCorpusRoot(dir)
 	rep := proofbench.Build(m, hash, ledger, calib)
 	j, err := rep.JSON()
 	if err != nil {

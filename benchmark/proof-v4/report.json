@@ -1,0 +1,626 @@
+{
+  "benchmark_version": "proof-v4",
+  "manifest_hash": "sha256:2e4f11645fc212027739a02adc7da8c40c00553833df7ee5c4581fe0d78c6ca3",
+  "orphaned_attempts": 0,
+  "primary_tasks": 2,
+  "Arms": {
+    "COLD": {
+      "arm": "COLD",
+      "runs_recorded": 2,
+      "eligible_runs": 2,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "verification_failure_rate": {
+        "numerator": 2,
+        "denominator": 2,
+        "proportion": 1,
+        "wilson_low": 0.34238022750665303,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "review_cycles_to_terminal": {
+        "n": 2,
+        "median": 1,
+        "min": 0,
+        "max": 2,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 2,
+        "median": 12.141666666666666,
+        "min": 2.283333333333333,
+        "max": 22,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 2
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 2,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      }
+    },
+    "RAW": {
+      "arm": "RAW",
+      "runs_recorded": 2,
+      "eligible_runs": 2,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 2,
+        "denominator": 2,
+        "proportion": 1,
+        "wilson_low": 0.34238022750665303,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "autonomous_correct_rate": {
+        "numerator": 1,
+        "denominator": 2,
+        "proportion": 0.5,
+        "wilson_low": 0.09453120573423074,
+        "wilson_high": 0.9054687942657693,
+        "undefined": false
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 2,
+        "denominator": 2,
+        "proportion": 1,
+        "wilson_low": 0.34238022750665303,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "verification_failure_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "review_cycles_to_terminal": {
+        "n": 2,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 2,
+        "median": 3.925,
+        "min": 3.316666666666667,
+        "max": 4.533333333333333,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 2
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 2,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      }
+    },
+    "WARM": {
+      "arm": "WARM",
+      "runs_recorded": 0,
+      "eligible_runs": 0,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "verification_failure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "review_cycles_to_terminal": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      }
+    }
+  },
+  "per_task": [
+    {
+      "task": "internal-gitx-a4fa351",
+      "linked": false,
+      "verdict": {
+        "COLD": "INCORRECT",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-gitx-6460efd",
+      "linked": true,
+      "verdict": {
+        "COLD": "INCORRECT",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    }
+  ],
+  "linked_specimens": [
+    {
+      "task": "internal-gitx-6460efd",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    }
+  ],
+  "Calibration": null,
+  "human_technical_interventions": null,
+  "false_grants": null,
+  "false_blocks": [
+    "internal-gitx-6460efd/RAW/1",
+    "internal-gitx-a4fa351/RAW/1"
+  ],
+  "no_results": null,
+  "unmeasurable_boundaries": null,
+  "not_executed": [
+    "internal-gitx-a4fa351/WARM",
+    "internal-gitx-6460efd/WARM"
+  ],
+  "arm_slots": 6,
+  "provider_configuration_mismatch": null,
+  "rates": {
+    "COLD": {
+      "engineering_correctness": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "end_to_end_success": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "not_evaluated": 2,
+      "terminals": {
+        "INFRA_FAILURE": 1,
+        "TIMEOUT": 1
+      },
+      "scheduled_arms": 2,
+      "rows": [
+        {
+          "attempt": "internal-gitx-a4fa351/COLD/1",
+          "task": "internal-gitx-a4fa351",
+          "arm": "COLD",
+          "workflow_terminal": "INFRA_FAILURE",
+          "correctness": "NOT_EVALUATED",
+          "delivered": false,
+          "cause": "infrastructure: backend is unreachable",
+          "wall_seconds": 137,
+          "review_cycles": 0,
+          "reclassified_from": "INCORRECT — the record stands as written; the run did not reach a point where its code could be judged"
+        },
+        {
+          "attempt": "internal-gitx-6460efd/COLD/1",
+          "task": "internal-gitx-6460efd",
+          "arm": "COLD",
+          "workflow_terminal": "TIMEOUT",
+          "correctness": "NOT_EVALUATED",
+          "delivered": false,
+          "cause": "the 22m operational budget ran out before an evaluable candidate existed",
+          "wall_seconds": 1320,
+          "review_cycles": 2,
+          "reclassified_from": "INCORRECT — the record stands as written; the run did not reach a point where its code could be judged"
+        }
+      ]
+    },
+    "RAW": {
+      "engineering_correctness": {
+        "numerator": 2,
+        "denominator": 2,
+        "proportion": 1,
+        "wilson_low": 0.34238022750665303,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "end_to_end_success": {
+        "numerator": 2,
+        "denominator": 2,
+        "proportion": 1,
+        "wilson_low": 0.34238022750665303,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "not_evaluated": 0,
+      "terminals": {
+        "COMPLETED": 2
+      },
+      "scheduled_arms": 2,
+      "rows": [
+        {
+          "attempt": "internal-gitx-a4fa351/RAW/1",
+          "task": "internal-gitx-a4fa351",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 272,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-gitx-6460efd/RAW/1",
+          "task": "internal-gitx-6460efd",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 199,
+          "review_cycles": 0
+        }
+      ]
+    },
+    "WARM": {
+      "engineering_correctness": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "end_to_end_success": {
+        "numerator": 0,
+        "denominator": 2,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.6576197724933468,
+        "undefined": false
+      },
+      "not_evaluated": 0,
+      "terminals": {},
+      "scheduled_arms": 2,
+      "rows": null
+    }
+  },
+  "operational_budget": "22m",
+  "gates": [
+    {
+      "id": "G1",
+      "gate": "GREEN",
+      "claim": "at least 9/2 tasks CORRECT under governed execution",
+      "passed": false,
+      "detail": "0/2",
+      "untestable": false
+    },
+    {
+      "id": "G2",
+      "gate": "GREEN",
+      "claim": "at least 8/2 autonomous-correct",
+      "passed": false,
+      "detail": "0/2",
+      "untestable": false
+    },
+    {
+      "id": "G3",
+      "gate": "GREEN",
+      "claim": "zero false grants and zero governed-checkout boundary violations",
+      "passed": false,
+      "detail": "0 false grant(s), 2 boundary violation(s)",
+      "untestable": false
+    },
+    {
+      "id": "G4",
+      "gate": "GREEN",
+      "claim": "no unclassified runaway review loop",
+      "passed": true,
+      "detail": "0",
+      "untestable": false
+    },
+    {
+      "id": "G5",
+      "gate": "GREEN",
+      "claim": "governed correct closure trails RAW by at most 1 task(s)",
+      "passed": false,
+      "detail": "governed 0 vs RAW 2",
+      "untestable": false
+    },
+    {
+      "id": "G6",
+      "gate": "GREEN",
+      "claim": "WARM improves at least 3/4 linked specimens with no correctness regression",
+      "passed": false,
+      "detail": "0/1 improved, regression=false",
+      "untestable": false
+    },
+    {
+      "id": "G7",
+      "gate": "GREEN",
+      "claim": "aggregate WARM rediscovery at least 30% below COLD",
+      "passed": false,
+      "detail": "COLD rediscovery denominator is zero; the compounding claim is not testable on this corpus rather than passing",
+      "untestable": true
+    },
+    {
+      "id": "G8",
+      "gate": "GREEN",
+      "claim": "median governed cost at most 3x RAW, or premium independently justified",
+      "passed": false,
+      "detail": "no provider cost data; ratio unknown (never reported as zero)",
+      "untestable": false
+    },
+    {
+      "id": "R1",
+      "gate": "RED",
+      "claim": "at least 6/2 governed primary tasks correct",
+      "passed": false,
+      "detail": "0/2 correct under COLD or WARM",
+      "untestable": false
+    },
+    {
+      "id": "R2",
+      "gate": "RED",
+      "claim": "no false grant let an independently incorrect candidate through",
+      "passed": true,
+      "detail": "0 false grant(s)",
+      "untestable": false
+    },
+    {
+      "id": "R3",
+      "gate": "RED",
+      "claim": "no repeated unclassified review runaway after the #62 calibration",
+      "passed": true,
+      "detail": "0 unclassified runaway loop(s)",
+      "untestable": false
+    },
+    {
+      "id": "R4",
+      "gate": "RED",
+      "claim": "WARM shows structured reuse benefit on at least one linked specimen",
+      "passed": false,
+      "detail": "0/1 linked specimens improved",
+      "untestable": false
+    },
+    {
+      "id": "R5",
+      "gate": "RED",
+      "claim": "median governed cost within 3x RAW, or the premium is justified",
+      "passed": true,
+      "detail": "no provider cost data; ratio unknown (never reported as zero)",
+      "untestable": false
+    },
+    {
+      "id": "R6",
+      "gate": "RED",
+      "claim": "the harness reproduces the known #79/#80 positive and #62 negative shapes",
+      "passed": false,
+      "detail": "positive=false negative=false",
+      "untestable": false
+    }
+  ],
+  "verdict": "RED",
+  "caveat": "This is an engineering evidence campaign over 2 tasks, not a population estimate. Intervals are wide by construction. Where the data supports only \"promising\" or \"inconclusive\", it does not support \"proven\"."
+}

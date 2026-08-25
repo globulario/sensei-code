@@ -9,6 +9,7 @@ package proofbench
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 )
@@ -53,6 +54,11 @@ type Report struct {
 	// provider configuration, so a reader knows the scored attempt may be under
 	// a superseded one.
 	ProviderMismatch []string `json:"provider_configuration_mismatch"`
+	// Rates is the frozen two-axis scoring: engineering correctness and
+	// end-to-end success, per arm, never collapsed into one number.
+	Rates map[Arm]TwoRates `json:"rates"`
+	// Budget is the frozen operational allowance every arm was given.
+	Budget string `json:"operational_budget"`
 
 	Gates   []GateResult `json:"gates"`
 	Verdict Grade        `json:"verdict"`
@@ -92,6 +98,26 @@ type InterventionRecord struct {
 // verdict is a function of committed records. Running it twice on the same
 // ledger returns the same answer -- which is what makes the pre-registration
 // meaningful rather than decorative.
+// dirOfManifest is where transcripts live, so a scoring pass can re-derive an
+// infrastructure cause the classifier missed when a record was written.
+var dirOfManifest string
+
+// SetCorpusRoot tells Build where committed transcripts are.
+func SetCorpusRoot(dir string) { dirOfManifest = dir }
+
+// readEvidence loads an attempt's committed transcript, if it referenced one.
+func readEvidence(root string, a Attempt) string {
+	p := a.Artifacts["transcript"]
+	if strings.TrimSpace(p) == "" || strings.TrimSpace(root) == "" {
+		return ""
+	}
+	b, err := os.ReadFile(p)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
 func Build(m Manifest, manifestHash string, l *Ledger, calibration []CalibrationResult) Report {
 	current, orphaned := l.ForManifest(manifestHash)
 	r := Report{
@@ -169,6 +195,25 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 		r.Arms[arm] = Compute(arm, perArm[arm])
 	}
 
+	// The two-axis scoring, over the SCHEDULED denominator: every task in the
+	// corpus, whether or not its arm ran. An arm nobody executed is an
+	// end-to-end failure like any other, and letting the denominator shrink to
+	// what happened to run measures a product's availability only on the days
+	// it was up.
+	r.Budget = OperationalBudget
+	r.Rates = map[Arm]TwoRates{}
+	for _, arm := range Arms {
+		var rows []Scoring
+		for _, t := range m.Tasks {
+			s, ok := scoredBy[t.ID+"/"+string(arm)]
+			if !ok {
+				continue
+			}
+			rows = append(rows, Score(s, readEvidence(dirOfManifest, s)))
+		}
+		r.Rates[arm] = Rates(rows, len(m.Tasks))
+	}
+
 	// Linked specimens: the compounding evidence.
 	for _, t := range m.Tasks {
 		if !t.Linked() {
@@ -192,11 +237,26 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 		ArmSlots: r.ArmSlots, Executed: r.ArmSlots - len(r.NotExecuted),
 		Raw: r.Arms[ArmRaw], Cold: r.Arms[ArmCold], Warm: r.Arms[ArmWarm],
 		FalseGrants: len(r.FalseGrants), Linked: r.Linked}
-	for _, row := range r.PerTask {
-		if row.Verdict[ArmCold] == Correct || row.Verdict[ArmWarm] == Correct {
+	// The pre-registered counts are END-TO-END questions: "at least 9/10 tasks
+	// end CORRECT" asks whether the product delivered, not whether its code
+	// would have been right had it finished. Mapped to the frozen axes here,
+	// before any campaign result exists, so it is a definition rather than a
+	// reinterpretation. The engineering-correctness rate is reported beside
+	// them and gates nothing.
+	delivered := map[string]map[Arm]bool{}
+	for _, arm := range Arms {
+		for _, row := range r.Rates[arm].Rows {
+			if delivered[row.Task] == nil {
+				delivered[row.Task] = map[Arm]bool{}
+			}
+			delivered[row.Task][arm] = row.Delivered
+		}
+	}
+	for _, t := range m.Tasks {
+		if delivered[t.ID][ArmCold] || delivered[t.ID][ArmWarm] {
 			in.GovernedCorrect++
 		}
-		if row.Verdict[ArmRaw] == Correct {
+		if delivered[t.ID][ArmRaw] {
 			in.RawCorrect++
 		}
 	}
@@ -217,11 +277,13 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 		}
 	}
 	// Autonomous-correct is counted per TASK, not per arm run, so a task
-	// correct under both COLD and WARM is not counted twice.
+	// correct under both COLD and WARM is not counted twice. It also requires
+	// DELIVERY: a run that timed out cannot be autonomous-correct, whatever the
+	// oracle said about its partial work.
 	in.GovernedAutonomous = 0
 	for _, t := range m.Tasks {
 		for _, arm := range []Arm{ArmCold, ArmWarm} {
-			if s, ok := scoredBy[t.ID+"/"+string(arm)]; ok && s.AutonomousCorrect() {
+			if s, ok := scoredBy[t.ID+"/"+string(arm)]; ok && s.AutonomousCorrect() && delivered[t.ID][arm] {
 				in.GovernedAutonomous++
 				break
 			}
@@ -315,6 +377,51 @@ func (r Report) Markdown() string {
 		}
 		f("| %s | %s | %s | %s | %s |\n", t.Task, linked,
 			t.Verdict[ArmRaw], t.Verdict[ArmCold], t.Verdict[ArmWarm])
+	}
+
+	f("\n## The two rates\n\n")
+	f("Correctness and delivery are separate axes and are never collapsed. A run that did not " +
+		"reach an evaluable candidate is NOT_EVALUATED for correctness -- it cannot be called wrong " +
+		"for code it never wrote -- and counts as a failure for end-to-end success, because a task " +
+		"the product could not deliver on is a product failure whatever the code would have been.\n\n")
+	f("Operational budget: **%s per arm, frozen**. The system cannot improve its score by taking "+
+		"longer.\n\n", r.Budget)
+	f("| arm | engineering correctness | end-to-end success | NOT_EVALUATED | terminals |\n")
+	f("|---|---|---|---|---|\n")
+	for _, arm := range Arms {
+		t := r.Rates[arm]
+		var terms []string
+		for _, k := range []Terminal{TerminalCompleted, TerminalRefused, TerminalInfraFailure,
+			TerminalTimeout, TerminalOtherFailure} {
+			if n := t.Terminals[k]; n > 0 {
+				terms = append(terms, fmt.Sprintf("%s %d", k, n))
+			}
+		}
+		if len(terms) == 0 {
+			terms = []string{"none run"}
+		}
+		f("| %s | %s | %s | %d | %s |\n", arm, pct(t.Engineering), pct(t.EndToEnd),
+			t.NotEvaluated, strings.Join(terms, ", "))
+	}
+	f("\n*Engineering correctness is CORRECT / (CORRECT + INCORRECT): when the system produced an "+
+		"evaluable solution, was it right? End-to-end success is delivered / all %d scheduled arms "+
+		"per condition: could it be given a task and return a correct result inside the budget?*\n", r.PrimaryTasks)
+
+	f("\n### Every arm, both axes\n\n")
+	f("| attempt | terminal | correctness | delivered | wall | cause |\n|---|---|---|---|---|---|\n")
+	for _, arm := range Arms {
+		for _, row := range r.Rates[arm].Rows {
+			d := ""
+			if row.Delivered {
+				d = "yes"
+			}
+			cause := row.Cause
+			if row.ReclassifiedFrom != "" {
+				cause += " [recorded " + row.ReclassifiedFrom + "]"
+			}
+			f("| %s | %s | %s | %s | %ds | %s |\n", row.Attempt, row.Terminal,
+				row.Correctness, d, row.WallSeconds, cause)
+		}
 	}
 
 	f("\n## Primary metrics\n\n")

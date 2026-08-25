@@ -83,6 +83,13 @@ type Manifest struct {
 	Calibration []Task `json:"calibration"`
 	// Tasks is the primary corpus.
 	Tasks []Task `json:"tasks"`
+	// OperationalBudget is the frozen per-arm allowance. Recorded in the
+	// manifest so it is part of the hash: raising it produces a different
+	// experiment rather than a kinder version of this one.
+	OperationalBudget string `json:"operational_budget,omitempty"`
+	// ScoringContract is the two-axis rule, written down before the campaign so
+	// that "we did not reinterpret the scores after seeing them" is checkable.
+	ScoringContract string `json:"scoring_contract,omitempty"`
 }
 
 // Exclusion is one candidate the corpus did not take.
@@ -190,6 +197,11 @@ func (m Manifest) Validate() error {
 
 	if strings.TrimSpace(m.Version) == "" {
 		add("manifest has no version; a frozen artifact needs a name to be frozen under")
+	}
+	if b := strings.TrimSpace(m.OperationalBudget); b != "" && b != OperationalBudget {
+		add("manifest declares a %s operational budget; this benchmark's budget is frozen at %s. "+
+			"A different allowance is a different experiment and needs its own manifest",
+			b, OperationalBudget)
 	}
 	if strings.TrimSpace(m.SelectionRule) == "" {
 		add("no selection rule recorded. The rule must be frozen before the corpus is chosen, " +
