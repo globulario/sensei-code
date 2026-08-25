@@ -134,23 +134,22 @@ func printUsage() {
 	fmt.Println(`Sensei Code
 
 Usage:
-  sensei-code             launch the ChatGPT architect workspace
-  sensei-code run         run one governed task headlessly (same engine as /run)
-  sensei-code init        create the local capability/provider configuration
-  sensei-code doctor      verify Git, providers, and the Sensei MCP surface
-  sensei-code providers   show provider installation/authentication state
-  sensei-code login       connect a provider using its native authentication
-  sensei-code logout      disconnect a provider using its native authentication
-  sensei-code context     build an assisted context packet from live Sensei evidence
-  sensei-code handoff     bind agent continuity to an exact context packet
-  sensei-code help        show this help
-  sensei-code --version   print the Sensei Code version
+` + renderCommands() + `
+  sensei-code --version                 print the Sensei Code version
+
+Run it with no command to launch the ChatGPT architect workspace.
 
 Headless governed run:
   sensei-code run --task "..."      exit 0 complete · 1 failed · 3 awaiting human
                                     authority · 4 stopped · 5 timed out
   --json      emit the event stream as JSONL
   --timeout   give up after a duration, leaving the candidate in place
+
+Read-only lanes:
+  sensei-code observe --task "..."       exit 6 observed; the repository is unchanged
+  sensei-code audit-repair --task "..."  observes first, then opens a SEPARATE
+                                         governed task per evidence-backed finding
+  --dry-run   report what WOULD become repair work, opening none
 
 Inside the TUI:
   normal text             talk to the persistent ChatGPT architect
