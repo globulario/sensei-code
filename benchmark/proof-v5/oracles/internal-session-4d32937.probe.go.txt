@@ -1,0 +1,116 @@
+package session
+
+// Behavioural contract probe for FindInterrupted.
+//
+// Pure over an event slice, so the whole contract is observable: which tasks
+// come back, what they carry, and in what order. Nothing here names a private
+// helper or depends on how the scan is structured.
+
+import (
+	"testing"
+	"time"
+
+	"github.com/globulario/sensei-code/internal/event"
+)
+
+func ev(task string, source event.Source, kind event.Kind, summary string) event.Event {
+	return event.Event{Time: time.Unix(0, 0), TaskID: task, Source: source, Kind: kind, Summary: summary}
+}
+
+// A task whose plan was authorised and which never finished is resumable, and
+// comes back carrying what a resume needs.
+func TestContractAnAuthorisedUnfinishedTaskIsInterrupted(t *testing.T) {
+	got := FindInterrupted([]event.Event{
+		ev("task-1", event.SourceSystem, event.TaskCreated, "add a String method"),
+		ev("task-1", event.SourceArchitect, event.PlanProposed, "edit roles.go"),
+		ev("task-1", event.SourceSystem, event.AuthorityResolved, "approved"),
+		ev("task-1", event.SourceReviewer, event.Status, "REVISE: name the invariant"),
+	})
+	if len(got) != 1 {
+		t.Fatalf("got %d interrupted tasks, want 1: %+v", len(got), got)
+	}
+	if got[0].TaskID != "task-1" {
+		t.Errorf("TaskID = %q", got[0].TaskID)
+	}
+	if got[0].Task != "add a String method" {
+		t.Errorf("Task = %q; the task text is what a resume restates", got[0].Task)
+	}
+	if got[0].Plan != "edit roles.go" {
+		t.Errorf("Plan = %q; the approved plan is what a resume continues", got[0].Plan)
+	}
+	if got[0].Review != "REVISE: name the invariant" {
+		t.Errorf("Review = %q; the reviewer's last word is what a resume answers", got[0].Review)
+	}
+}
+
+// A task that finished is not interrupted, however it finished.
+func TestContractAFinishedTaskIsNotInterrupted(t *testing.T) {
+	for _, terminal := range []event.Kind{event.WorkflowCompleted, event.WorkflowFailed} {
+		got := FindInterrupted([]event.Event{
+			ev("task-1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("task-1", event.SourceArchitect, event.PlanProposed, "a plan"),
+			ev("task-1", event.SourceSystem, event.AuthorityResolved, "approved"),
+			ev("task-1", event.SourceSystem, terminal, "done"),
+		})
+		if len(got) != 0 {
+			t.Errorf("%s: a finished task was offered for resume: %+v", terminal, got)
+		}
+	}
+}
+
+// A plan nobody authorised has produced no work to continue.
+//
+// The distinction that matters: proposing a plan is not the same as being
+// allowed to act on it, and a task still waiting on a human has nothing to
+// resume.
+func TestContractAnUnauthorisedPlanIsNotInterrupted(t *testing.T) {
+	got := FindInterrupted([]event.Event{
+		ev("task-1", event.SourceSystem, event.TaskCreated, "a task"),
+		ev("task-1", event.SourceArchitect, event.PlanProposed, "a plan"),
+	})
+	if len(got) != 0 {
+		t.Errorf("a task still awaiting authority was offered for resume: %+v", got)
+	}
+}
+
+// Several tasks come back in the order they first appeared.
+func TestContractInterruptedTasksKeepTheirOrder(t *testing.T) {
+	mk := func(id, text string, finish bool) []event.Event {
+		out := []event.Event{
+			ev(id, event.SourceSystem, event.TaskCreated, text),
+			ev(id, event.SourceArchitect, event.PlanProposed, "plan for "+text),
+			ev(id, event.SourceSystem, event.AuthorityResolved, "approved"),
+		}
+		if finish {
+			out = append(out, ev(id, event.SourceSystem, event.WorkflowCompleted, "done"))
+		}
+		return out
+	}
+	var all []event.Event
+	all = append(all, mk("task-a", "first", false)...)
+	all = append(all, mk("task-b", "second", true)...)
+	all = append(all, mk("task-c", "third", false)...)
+
+	got := FindInterrupted(all)
+	if len(got) != 2 {
+		t.Fatalf("got %d, want 2 (the finished one excluded): %+v", len(got), got)
+	}
+	if got[0].TaskID != "task-a" || got[1].TaskID != "task-c" {
+		t.Errorf("order = %s, %s; want task-a then task-c, the order they appeared",
+			got[0].TaskID, got[1].TaskID)
+	}
+}
+
+// Events carrying no task, and a task with no text, produce nothing.
+func TestContractIncompleteEvidenceProducesNothing(t *testing.T) {
+	got := FindInterrupted([]event.Event{
+		ev("", event.SourceSystem, event.TaskCreated, "no task id"),
+		ev("task-1", event.SourceSystem, event.AuthorityResolved, "approved but never created"),
+	})
+	if len(got) != 0 {
+		t.Errorf("a task with no recorded request was offered for resume: %+v", got)
+	}
+	if got := FindInterrupted(nil); len(got) != 0 {
+		t.Errorf("an empty stream produced %d tasks", len(got))
+	}
+}

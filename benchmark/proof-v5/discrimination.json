@@ -1,5 +1,61 @@
 [
   {
+    "task": "internal-gitx-a4fa351",
+    "oracle_hash": "sha256:141838ace1a8989fd153fafe40df6cd9",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.064s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractCandidateDiffShowsCreatedFiles (0.03s)\n    contract_probe_test.go:62: a file the worker CREATED is invisible to the reviewer, which is the whole defect:\n        diff --git a/existing.go b/existing.go\n        index c89cd18..80d359e 100644\n        --- a/existing.go\n        +++ b/existing.go\n        @@ -1 +1,3 @@\n         package p\n        +\n        +func Existing() {}\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx\t0.109s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.059s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-gitx-6460efd",
+    "oracle_hash": "sha256:cce7e47ef1ac203eaa66eca3a8f25162",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.075s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractTheCleanlinessCheckDoesNotWriteTheIndex (0.10s)\n    contract_probe_test.go:93: the read-only cleanliness check touched .git/index (2026-08-25 10:41:43.379915941 -0400 EDT -\u003e 2026-08-25 10:41:43.386920309 -0400 EDT)\n--- FAIL: TestContractWorktreeIsCleanAlsoDoesNotWrite (0.04s)\n    contract_probe_test.go:117: WorktreeIsClean rewrote .git/index while reporting on it\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx\t0.143s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.075s"
+      }
+    ],
+    "eligible": true
+  },
+  {
     "task": "internal-agent-01f3fe1",
     "oracle_hash": "sha256:6f4016b3a2c6a2bb4e5fc8670cbb84bd",
     "results": [
@@ -8,21 +64,49 @@
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.004s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.003s"
       },
       {
         "kind": "WRONG",
         "want": "INCORRECT",
         "got": "INCORRECT",
         "ok": true,
-        "detail": "--- FAIL: TestContractAssistantTextIsRenderedReadably (0.00s)\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"type\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"content\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"{\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"message\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n--- FAIL: TestContractAToolCallIsNamed (0.00s)\n    contract_probe_test.go:59: raw envelope leaked into the activity line: \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"tool_use\\\",\\\"name\\\":\\\"Read\\\",\\\"input\\\":{\\\"file_path\\\":\\\"internal/gitx/git.go\\\"}}]}}\"\n--- FAIL: TestContractNonActivityProducesNothing (0.00s)\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\") = \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\") = \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"not json at all\") = \"not json at all\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\") = \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\", want empty: this is not activity a reader should be shown\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/agent\t0.005s\nFAIL"
+        "detail": "--- FAIL: TestContractAssistantTextIsRenderedReadably (0.00s)\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"type\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"content\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"{\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n    contract_probe_test.go:45: raw envelope leaked into the activity line (\"\\\"message\\\"\"): \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"Reading the router to find the coverage check. Then I will edit it.\\\"}]}}\"\n--- FAIL: TestContractAToolCallIsNamed (0.00s)\n    contract_probe_test.go:59: raw envelope leaked into the activity line: \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[{\\\"type\\\":\\\"tool_use\\\",\\\"name\\\":\\\"Read\\\",\\\"input\\\":{\\\"file_path\\\":\\\"internal/gitx/git.go\\\"}}]}}\"\n--- FAIL: TestContractNonActivityProducesNothing (0.00s)\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\") = \"{\\\"type\\\":\\\"result\\\",\\\"subtype\\\":\\\"success\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\") = \"{\\\"type\\\":\\\"system\\\",\\\"subtype\\\":\\\"init\\\"}\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"not json at all\") = \"not json at all\", want empty: this is not activity a reader should be shown\n    contract_probe_test.go:73: Activity(claude, \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\") = \"{\\\"type\\\":\\\"assistant\\\",\\\"message\\\":{\\\"content\\\":[]}}\", want empty: this is not activity a reader should be shown\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/agent\t0.006s\nFAIL"
       },
       {
         "kind": "ALTERNATE",
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.005s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/agent\t0.003s"
+      }
+    ],
+    "eligible": true
+  },
+  {
+    "task": "internal-session-4d32937",
+    "oracle_hash": "sha256:a55f6dfc6af0874ea226ac6fc77cb7cc",
+    "results": [
+      {
+        "kind": "REFERENCE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/session\t0.003s"
+      },
+      {
+        "kind": "WRONG",
+        "want": "INCORRECT",
+        "got": "INCORRECT",
+        "ok": true,
+        "detail": "--- FAIL: TestContractAnUnauthorisedPlanIsNotInterrupted (0.00s)\n    contract_probe_test.go:72: a task still awaiting authority was offered for resume: [{TaskID:task-1 Task:a task Plan:a plan Review:}]\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/session\t0.003s\nFAIL"
+      },
+      {
+        "kind": "ALTERNATE",
+        "want": "CORRECT",
+        "got": "CORRECT",
+        "ok": true,
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/session\t0.003s"
       }
     ],
     "eligible": true

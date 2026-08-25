@@ -392,7 +392,7 @@
     },
     {
       "id": "internal-session-4d32937",
-      "statement": "A task interrupted after its plan was approved cannot be resumed: nothing reconstructs, from the recorded event stream, which tasks were left in that state.\n\nAdd to internal/session the exported type and function:\n\n    type Interrupted struct { TaskID, Task, Plan, Review string }\n    func FindInterrupted(events []event.Event) []Interrupted\n\nGiven a session's events it returns one entry per task that was created and had a plan proposed but never reached a terminal workflow outcome, carrying the task text, the plan, and the latest review if one exists. Tasks that completed, failed or were stopped are not returned.",
+      "statement": "A task interrupted after its plan was authorised cannot be resumed: nothing reconstructs, from the recorded event stream, which tasks were left in that state.\n\nAdd to internal/session the exported type and function:\n\n    type Interrupted struct { TaskID, Task, Plan, Review string }\n    func FindInterrupted(events []event.Event) []Interrupted\n\nGiven a session's events it returns one entry per task that was created, had its authority RESOLVED, and never reached a terminal workflow outcome -- carrying the task text, the plan, and the reviewer's latest status if one exists. A plan that was merely PROPOSED is not resumable: a task still waiting on a human has produced no work to continue. Tasks that completed or failed are excluded, entries come back in the order the tasks first appeared, and a task with no recorded request text is not returned.",
       "base_sha": "008b9a347edc9675e34ea5e1eb6e834d28faf9d0",
       "origin": "4d3293745da84ffa1b577bef9dd39c85809664e2",
       "oracle": {
@@ -405,6 +405,39 @@
           "test",
           "-buildvcs=false",
           "./internal/session/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/session/contract_probe_test.go",
+        "source_file": "oracles/internal-session-4d32937.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/session/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-session-4d32937/WRONG",
+            "want": "INCORRECT",
+            "why": "treats a PROPOSED plan as resumable. Plausible -- a plan exists, so surely there is work to continue -- and wrong, because a task still awaiting a human has produced nothing"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-session-4d32937/ALTERNATE",
+            "want": "CORRECT",
+            "why": "three passes over independent sets (appeared, finished, authorised) then a reassembly pass, where the reference makes one pass into a per-task struct carrying its own flags"
+          }
         ]
       }
     },
