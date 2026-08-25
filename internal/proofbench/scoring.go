@@ -139,7 +139,22 @@ func (a Attempt) WorkflowTerminal(evidence string) Terminal {
 // to write correct code.
 func (a Attempt) Correctness(term Terminal) Correctness {
 	switch term {
-	case TerminalInfraFailure, TerminalTimeout:
+	case TerminalInfraFailure, TerminalTimeout, TerminalRefused, TerminalOtherFailure:
+		// Every non-delivery terminal. A run that stopped to ask a human, ran
+		// out of budget, hit an outage, or failed for a reason nobody has a
+		// reading for did not reach an evaluable candidate, so the oracle's
+		// answer is about partial or absent work rather than about the system's
+		// ability to write correct code.
+		//
+		// This was narrower than the frozen contract until the COLD wave
+		// produced its first workflow.awaiting_authority: the contract says "a
+		// run that did not reach an evaluable candidate is NOT_EVALUATED,
+		// whatever the oracle returned", and the code only implemented it for
+		// timeouts and outages. Scoring a REFUSED arm INCORRECT attributes to
+		// the CODE what was a delivery decision.
+		//
+		// Nothing recorded changes. The ledger stores the terminal status and
+		// the raw oracle verdict; both axes are derived here at report time.
 		return NotEvaluated
 	}
 	switch a.Verdict {

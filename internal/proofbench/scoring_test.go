@@ -153,3 +153,60 @@ func TestTheBudgetIsFrozen(t *testing.T) {
 		t.Errorf("a manifest declaring the frozen budget was refused: %v", err)
 	}
 }
+
+// Every non-delivery terminal is NOT_EVALUATED for correctness.
+//
+// The frozen contract says a run that did not reach an evaluable candidate is
+// NOT_EVALUATED whatever the oracle returned. The code implemented that for
+// timeouts and outages only, and the COLD wave's first workflow.awaiting_authority
+// exposed the gap: scoring a REFUSED arm INCORRECT attributes to the code what
+// was a delivery decision.
+func TestEveryNonDeliveryTerminalIsNotEvaluated(t *testing.T) {
+	for name, tc := range map[string]struct {
+		attempt  Attempt
+		evidence string
+		want     Terminal
+	}{
+		"asked a human": {
+			attempt: Attempt{Terminal: "workflow.awaiting_authority", Verdict: Incorrect},
+			want:    TerminalRefused},
+		"governance refused": {
+			attempt:  Attempt{Terminal: "workflow.failed", Verdict: Incorrect},
+			evidence: "cannot establish authority for this plan",
+			want:     TerminalRefused},
+		"budget exhausted": {
+			attempt: Attempt{Terminal: "workflow.timed_out", Verdict: Incorrect},
+			want:    TerminalTimeout},
+		"service down": {
+			attempt:  Attempt{Terminal: "workflow.failed", Verdict: Incorrect},
+			evidence: "awareness-graph backend is unreachable",
+			want:     TerminalInfraFailure},
+		"unreadable failure": {
+			attempt: Attempt{Terminal: "workflow.failed", Verdict: Incorrect},
+			want:    TerminalOtherFailure},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := Score(tc.attempt, tc.evidence)
+			if s.Terminal != tc.want {
+				t.Fatalf("terminal = %s, want %s", s.Terminal, tc.want)
+			}
+			if s.Correctness != NotEvaluated {
+				t.Errorf("correctness = %s; this run produced no evaluable candidate, so the "+
+					"oracle's answer is not a claim about the code", s.Correctness)
+			}
+			if s.Delivered {
+				t.Error("a non-delivery terminal counted as delivery")
+			}
+		})
+	}
+	// And a run that DID deliver is still judged on its code, in both directions.
+	for verdict, want := range map[Verdict]Correctness{
+		Correct:   CorrectnessCorrect,
+		Incorrect: CorrectnessIncorrect,
+	} {
+		s := Score(Attempt{Terminal: "workflow.completed", Verdict: verdict}, "")
+		if s.Correctness != want {
+			t.Errorf("a completed run with verdict %s scored %s, want %s", verdict, s.Correctness, want)
+		}
+	}
+}
