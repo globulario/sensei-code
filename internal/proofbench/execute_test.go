@@ -182,3 +182,32 @@ func TestGovernedExitCodesMatchTheDocumentedContract(t *testing.T) {
 		t.Errorf("an unknown exit code became %q", got)
 	}
 }
+
+// A governed run whose awareness graph is down is not evidence about
+// governance.
+//
+// From a real COLD arm in the proof-v4 calibration, recorded as a semantic
+// INCORRECT until this was added. The third time this class of miss has
+// appeared: an externally attributable failure scored as a wrong answer makes
+// the product look worse for something that never reached it.
+func TestAnUnreachableGraphIsInfrastructure(t *testing.T) {
+	real := "Sensei scoped preflight: sensei tool awareness_preflight failed: rpc -32000: " +
+		"preflight unavailable: awareness-graph backend is unreachable; this is not an " +
+		"empty/no-guidance result: awareness-graph transport failed on all configured " +
+		"addresses: localhost:10120: stream terminated by RST_STREAM with error code: CANCEL; " +
+		"localhost:9090: context deadline exceeded"
+	if why := infrastructureReason(real); why == "" {
+		t.Error("a governed arm whose graph backend was unreachable was scored as a wrong answer")
+	}
+	// And an ordinary governed refusal is still semantic. A graph that ANSWERS
+	// "I have nothing" is the product working, not the service being down.
+	for _, semantic := range []string{
+		"preflight empty; authority non_authoritative",
+		"cannot establish authority for this plan: preflight degraded",
+		"Sensei will not certify this workspace",
+	} {
+		if why := infrastructureReason(semantic); why != "" {
+			t.Errorf("a governed refusal was classified as infrastructure (%q): %q", why, semantic)
+		}
+	}
+}

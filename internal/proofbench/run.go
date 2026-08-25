@@ -382,12 +382,15 @@ func (r Runner) Evidence(ctx context.Context, dir, governedBefore string, measur
 		sum := sha256.Sum256(out)
 		e.DiffHash = "sha256:" + hex.EncodeToString(sum[:])
 	}
-	after, aerr := exec.CommandContext(ctx, "git", "-C", r.RepoRoot,
-		"--no-optional-locks", "status", "--porcelain").Output()
-	if aerr == nil {
-		e.GovernedState = strings.TrimSpace(string(after))
-		e.GovernedClean = e.GovernedState == governedBefore
-	}
+	// Read the AFTER state through the same filter as the before state.
+	//
+	// It was read raw while the before was filtered, so the harness's own
+	// output -- the record and transcript this very call is about to write --
+	// appeared only on one side of the comparison and every arm reported a
+	// governed-checkout mutation it had not made. Comparing two readings taken
+	// different ways is not comparing two moments.
+	e.GovernedState = r.GovernedState(ctx)
+	e.GovernedClean = e.GovernedState == governedBefore
 	return e
 }
 

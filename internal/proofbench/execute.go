@@ -82,6 +82,14 @@ var infrastructureSignals = []string{
 	"api error: 429", "api error: 500", "api error: 529",
 	"connection refused", "connection reset", "no rollout found",
 	"service unavailable", "bad gateway", "gateway timeout",
+	// The graph backend, added after a real COLD arm died on it and was
+	// recorded as a semantic INCORRECT. A governed run whose awareness graph is
+	// unreachable is not evidence about governance -- it is evidence that the
+	// service was down, and it must be retry-eligible rather than scored.
+	"backend is unreachable", "preflight unavailable",
+	"transport failed on all configured addresses",
+	"rst_stream", "context deadline exceeded",
+	"awareness-graph backend", "sensei mcp handshake",
 }
 
 // statusCodeContext are the shapes a real HTTP failure is reported in.
