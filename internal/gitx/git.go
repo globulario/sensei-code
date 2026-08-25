@@ -15,8 +15,15 @@ type Repo struct{ Root string }
 
 var safeName = regexp.MustCompile(`[^A-Za-z0-9._-]+`)
 
+// noOptionalLocks is git's flag for "answer this query without taking the
+// locks a query would otherwise take". Named once so a test can pin that the
+// read-only inspections still carry it.
+const noOptionalLocks = "--no-optional-locks"
+
 func Discover(ctx context.Context, start string) (Repo, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", start, "rev-parse", "--show-toplevel")
+	// Read-only, and it runs before any Repo exists, so the flag is spelled out
+	// here rather than routed through readOnly.
+	cmd := exec.CommandContext(ctx, "git", "-C", start, noOptionalLocks, "rev-parse", "--show-toplevel")
 	b, err := cmd.Output()
 	if err != nil {
 		return Repo{}, fmt.Errorf("not a git repository: %w", err)
@@ -24,9 +31,11 @@ func Discover(ctx context.Context, start string) (Repo, error) {
 	return Repo{Root: strings.TrimSpace(string(b))}, nil
 }
 
-func (r Repo) Head(ctx context.Context) (string, error) { return r.output(ctx, "rev-parse", "HEAD") }
+func (r Repo) Head(ctx context.Context) (string, error) {
+	return r.readOnlyOutput(ctx, "rev-parse", "HEAD")
+}
 func (r Repo) Branch(ctx context.Context) (string, error) {
-	return r.output(ctx, "branch", "--show-current")
+	return r.readOnlyOutput(ctx, "branch", "--show-current")
 }
 
 // Diff returns the working-tree diff verbatim.
@@ -101,7 +110,7 @@ func (r Repo) CommitDiff(ctx context.Context, commit string) (string, error) {
 }
 
 func (r Repo) IsClean(ctx context.Context) (bool, error) {
-	s, err := r.output(ctx, "status", "--porcelain")
+	s, err := r.readOnlyOutput(ctx, "status", "--porcelain")
 	return s == "", err
 }
 
@@ -212,10 +221,9 @@ func (r Repo) CreateObservationWorktree(ctx context.Context, taskID, baseSHA str
 // result is informative and a negative one proves nothing. Do not promote this
 // to a boundary.
 func (r Repo) WorktreeIsClean(ctx context.Context, path string) (bool, string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", path, "status", "--porcelain")
-	b, err := cmd.CombinedOutput()
+	b, err := r.readOnly(ctx, path, "status", "--porcelain")
 	if err != nil {
-		return false, "", fmt.Errorf("git status in %s: %w: %s", path, err, strings.TrimSpace(string(b)))
+		return false, "", err
 	}
 	out := strings.TrimSpace(string(b))
 	return out == "", out, nil
@@ -253,10 +261,9 @@ func (r Repo) DeleteBranch(ctx context.Context, name string) error {
 // repository as evidence of mutation is a false accusation that fires exactly
 // when someone audits a work-in-progress.
 func (r Repo) WorktreeIsCleanDetail(ctx context.Context, path string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", "-C", path, "status", "--porcelain")
-	b, err := cmd.CombinedOutput()
+	b, err := r.readOnly(ctx, path, "status", "--porcelain")
 	if err != nil {
-		return "", fmt.Errorf("git status in %s: %w: %s", path, err, strings.TrimSpace(string(b)))
+		return "", err
 	}
 	return strings.TrimSpace(string(b)), nil
 }
@@ -273,6 +280,42 @@ func (r Repo) RemoveWorktree(ctx context.Context, path string) error {
 		return fmt.Errorf("git worktree remove: %w: %s", err, strings.TrimSpace(string(b)))
 	}
 	return nil
+}
+
+// readOnly runs a git command that INSPECTS a checkout, taking no optional
+// lock while it does.
+//
+// `--no-optional-locks` is git's own switch for exactly this. Without it a
+// plain `git status` may refresh and rewrite the index while answering, which
+// is a write to the repository being measured -- so the read-only lane's own
+// cleanliness check was capable of modifying the thing it exists to prove
+// unmodified. A checker for a read-only lane must not become the write it is
+// trying to detect.
+//
+// What this narrows is precise and small: THIS PROGRAM'S measurement of a
+// checkout does not mutate it. It is not filesystem confinement, not a
+// sandbox, and says nothing about what a subprocess may reach. Do not describe
+// it as a boundary.
+//
+// Reserved for genuine reads. `worktree add`, `worktree remove` and
+// `branch -D` are writes and are left alone: suppressing the locks a write
+// needs would be a correctness bug, not a narrowing.
+func (r Repo) readOnly(ctx context.Context, dir string, args ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir, noOptionalLocks}, args...)...)
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("git %s in %s: %w: %s", strings.Join(args, " "), dir, err, strings.TrimSpace(string(b)))
+	}
+	return b, nil
+}
+
+// readOnlyOutput is readOnly for a short single value, trimmed like output().
+func (r Repo) readOnlyOutput(ctx context.Context, args ...string) (string, error) {
+	b, err := r.readOnly(ctx, r.Root, args...)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
 }
 
 // raw runs git and returns stdout exactly as produced. Use it for anything
