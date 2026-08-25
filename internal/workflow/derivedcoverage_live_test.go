@@ -53,8 +53,14 @@ func TestLiveTheCommittedRecipeClosesTheGapThroughTheEnginePath(t *testing.T) {
 	planned := []string{"internal/event/bus.go"}
 
 	covered := e.derivedCoverage(context.Background(), planned)
-	if len(covered) != 1 || covered[0] != planned[0] {
+	if len(covered) != 1 || covered[0].File != planned[0] {
 		t.Fatalf("the engine path produced no coverage for a file a committed recipe covers: %v", covered)
+	}
+	// And it carries what that derivation is able to answer, computed from the
+	// family rather than read off the wire.
+	if covered[0].Requirement != RequirementLockDiscipline {
+		t.Fatalf("the live anchor resolves %q; the committed recipe is field_access_under_lock",
+			covered[0].Requirement)
 	}
 
 	// A real EMPTY preflight over that file, routed with what the engine

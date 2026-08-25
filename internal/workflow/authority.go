@@ -326,8 +326,15 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	//
 	// It closes the gap rather than granting anything: the consequence checks
 	// above have already run, and the premise checks below still apply.
-	if coverageAbsent && len(action.Files) != 0 && coversAll(action.DerivedCoverage, action.Files) {
-		coverageAbsent = false
+	//
+	// Truthfulness is necessary and not sufficient. The relation below asks
+	// whether the derivation RESOLVES this gap, not merely whether it is true
+	// over the same files -- subject overlap alone let a wide irrelevant truth
+	// manufacture coverage. See relevance.go.
+	if coverageAbsent && len(action.Files) != 0 {
+		if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.Files); closed {
+			coverageAbsent = false
+		}
 	}
 	if coverageAbsent {
 		// Sending this to a human asks them to supply coverage Sensei lacks —
@@ -460,27 +467,6 @@ func declaredSource(source string) string {
 		return "no source was declared"
 	}
 	return "unrecognised source " + strconv.Quote(declared)
-}
-
-// coversAll reports whether every planned file is covered.
-//
-// Every one. Partial derived coverage is not coverage: a plan touching a file
-// no derivation looked at is a plan Sensei cannot speak for, and accepting the
-// majority would grant authority over the remainder for free.
-func coversAll(covered, planned []string) bool {
-	if len(covered) == 0 {
-		return false
-	}
-	have := make(map[string]bool, len(covered))
-	for _, c := range covered {
-		have[c] = true
-	}
-	for _, p := range planned {
-		if !have[p] {
-			return false
-		}
-	}
-	return true
 }
 
 // escalationCondition renders a routing for a human, so a Level-3 interruption

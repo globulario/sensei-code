@@ -280,7 +280,7 @@ func TestDerivedCoverageClosesAGapOnlyWhereItWasDerived(t *testing.T) {
 	// Derived coverage for exactly the planned file: the gap is closed, and the
 	// action is then assessed like any other.
 	covered := routeAuthorityForAction(scoped, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: planned})
+		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
 	if covered.ClosesGap() {
 		t.Fatalf("a derived fact did not close the coverage gap: %+v", covered)
 	}
@@ -293,13 +293,13 @@ func TestDerivedCoverageClosesAGapOnlyWhereItWasDerived(t *testing.T) {
 	partial := routeAuthorityForAction(scoped, nil, Action{
 		Stage:           StageCandidateEdit,
 		Files:           []string{"internal/event/bus.go", "internal/event/unseen.go"},
-		DerivedCoverage: planned})
+		DerivedCoverage: lockAnchors(planned...)})
 	if !partial.ClosesGap() {
 		t.Fatalf("partial derived coverage was accepted as coverage: %+v", partial)
 	}
 
 	// An empty plan cannot be covered by anything.
-	none := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, DerivedCoverage: planned})
+	none := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, DerivedCoverage: lockAnchors(planned...)})
 	if !none.ClosesGap() {
 		t.Fatalf("a plan naming no files was treated as covered: %+v", none)
 	}
@@ -313,8 +313,23 @@ func TestDerivedCoverageDoesNotBuyConsequenceAuthority(t *testing.T) {
 		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
 		healthyAuthority+`}`)
 	got := routeAuthorityForAction(gated, nil, Action{
-		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: planned})
+		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
 	if !got.RequiresHuman() {
 		t.Fatalf("derived coverage cleared an approval gate: %+v", got)
 	}
+}
+
+// lockAnchors is derived coverage from the committed lock-discipline family.
+//
+// Spelled out rather than defaulted, because the family is now what decides
+// whether the coverage resolves anything: a test that wrote `DerivedCoverage:
+// planned` was asserting subject overlap, which is the adversary this slice
+// refuses. See relevance.go and TestAWideTrueIrrelevantDerivationClosesNothing.
+func lockAnchors(files ...string) []CoverageAnchor {
+	var out []CoverageAnchor
+	for _, f := range files {
+		out = append(out, CoverageAnchor{File: f, Requirement: RequirementLockDiscipline,
+			Describe: "field_access_under_lock(Bus.subs under Bus.mu)"})
+	}
+	return out
 }

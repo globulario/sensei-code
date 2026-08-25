@@ -116,6 +116,15 @@ func (a Anchor) Covers(world, file string) bool {
 // World is the revision this anchor speaks for.
 func (a Anchor) World() string { return a.world }
 
+// Kind is the derivation family this anchor came from.
+//
+// Exposed so a consumer can decide what KIND of architectural question this
+// anchor is able to answer. It is a fact about which derivation ran, not a
+// claim about relevance: nothing in this package decides what a family
+// resolves, because a recipe is data anyone may commit and a relevance rule
+// living beside it would be self-labelling. The consumer owns the mapping.
+func (a Anchor) Kind() string { return a.recipe.Kind }
+
 // Files are the SUBJECT files -- what the proposition is about -- not the files
 // the derivation read to compute it. The doc comment said "inputs" until the
 // two were separated; on a confinement derivation the gap is 71 files read to
