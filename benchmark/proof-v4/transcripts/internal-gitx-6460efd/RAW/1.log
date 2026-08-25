@@ -1,0 +1,48 @@
+`internal/history` failure is pre-existing — it fails identically on a clean tree (this benchmark worktree has no authority decision records). Unrelated to this change.
+
+## What was wrong
+
+`git status --porcelain` is a read to the caller and a write to the filesystem. When a tracked file's stat no longer matches the index's cached one but the content still does — after a checkout, a `touch`, a build that rewrote a file with identical bytes — git re-hashes, finds the content unchanged, and persists the corrected stat back to `.git/index` so the next status is cheap.
+
+Measured directly:
+
+```
+before:      c04c0f98deb822e197816c9c406d84cf
+after plain: 7fa50bd0110603ead8ebfb1ca94cd1d8   ← index rewritten, mtime bumped
+```
+
+Both checkers exist to police a lane that must touch nothing, and `WorktreeIsCleanDetail`'s caller in `internal/workflow/engine.go:3470,3502` compares two moments of `.git` to decide whether a provider misbehaved. A checker that rewrites the index cannot distinguish its own write from the one it was sent to find.
+
+## The fix
+
+`internal/gitx/git.go` — both functions now route through one `statusPorcelain` helper that passes `--no-optional-locks`. Git declines `index.lock`, computes the identical answer in memory, and leaves `.git` byte-for-byte as it found it. Status output is unchanged; only the cache refresh is given up.
+
+I used the flag rather than `GIT_OPTIONAL_LOCKS=0` deliberately. Git honours both identically, but on a git too old to know either (pre-2.15) the env var is silently ignored and the index is rewritten anyway — the exact failure this code exists to prevent, occurring where nobody would look. The flag makes that git fail loudly instead.
+
+Consolidating into one helper is the point, not tidiness: the read-only guarantee now lives in a single place rather than two call sites that can drift apart.
+
+## Proof
+
+`internal/gitx/git_test.go` — a repo is built with a deliberately stale stat cache (fixed past `Chtimes`, not a sleep, so the mismatch is certain rather than probable). Every file under `.git` is fingerprinted by content and mode before and after each call.
+
+- Both checkers leave `.git` unchanged — and are called twice, since a check that only writes on its first call still writes.
+- A control run first proves plain `git status` *does* disturb `.git` in this setup; otherwise every assertion below it is vacuous.
+- A separate test proves the checkers still name a modified tracked file and an untracked one, and that both functions agree.
+
+Mutation-checked: reverting the flag fails the test with `cleanliness check wrote to the repository it was measuring: [index (rewritten)]`.
+
+## Two things to flag
+
+**`Repo.IsClean` (`git.go:103`) has the same defect.** It calls `r.output(ctx, "status", "--porcelain")` on `r.Root` — the governed repository. I left it alone because you scoped this to the two named functions, but it's the same write on a more sensitive target. Say the word and it's a one-line change.
+
+**I did not run `sensei propose`.** It rebuilds the seed artifact, which would bury this focused change under a regenerated graph blob in a bounded candidate worktree. The briefing showed no forbidden fixes or required tests for this file. The scar is worth recording if you want it:
+
+```bash
+sensei propose --kind failure_mode --domain github.com/globulario/sensei-code \
+  --title "Read-only cleanliness check rewrote the index it was measuring" \
+  --evidence ".git/index md5 changed across git status --porcelain" \
+  --source-file internal/gitx/git.go \
+  --required-test internal/gitx/git_test.go:TestWorktreeCleanlinessChecksLeaveTheRepositoryUntouched
+```
+
+AWG: briefing(internal/gitx/git.go) | invariants: observation lane leaves the measured repository byte-for-byte unchanged, status still names genuine modifications | uncertainty: `Repo.IsClean` carries the same defect on the governed repository and is out of the stated scope

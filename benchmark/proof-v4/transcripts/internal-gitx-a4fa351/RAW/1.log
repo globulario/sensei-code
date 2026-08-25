@@ -1,0 +1,36 @@
+Done. `gofmt`, `go vet ./...`, and `go test ./...` all pass.
+
+## What I built
+
+**`Repo.CandidateDiff`** (`internal/gitx/git.go:50`) stages the working tree into a **throwaway index outside the repository**, then diffs that index against HEAD:
+
+```go
+GIT_INDEX_FILE=<tmp>/index  git -C <root> add --all
+GIT_INDEX_FILE=<tmp>/index  git -C <root> diff --no-ext-diff --binary --cached HEAD
+```
+
+`git add --all` is what pulls in created files, and it applies the standard exclude rules, so `.gitignore` comes for free rather than being reimplemented. One `git diff` invocation then emits a single coherent diff with proper `new file mode` headers — no stitching together of `--no-index` fragments with synthetic `a/dev/null` paths.
+
+Two details worth flagging:
+
+- **The scratch index must live outside the worktree.** My first prototype put it inside, and it promptly appeared *in the diff it was generating* (as `GIT binary patch` noise), while also mutating the worker's own index underneath it. This is the same failure class already recorded at `engine.go:449` for the push guard. There's a test pinning it.
+- **Unborn HEAD** falls back to the empty tree (`diffBase`). A repo where every file is new is exactly the case a diff against a missing HEAD would lose entirely — the bug being fixed, in extreme form.
+
+`seedIndex` copies the real index first so `add --all` can trust cached stat info instead of rehashing every file each review cycle; failure there is only slower, never wrong.
+
+## Wiring
+
+`internal/workflow/engine.go:469` — the reviewer/audit path — now calls `CandidateDiff`. Left as `Diff` this would have been dead code and the reported bug would persist.
+
+## Tests
+
+`internal/gitx/git_test.go`, on real repos: created files, modified/staged/deleted, `.gitignore` honoured, clean tree → empty + no error, candidate state unchanged, unborn HEAD. I mutation-tested them — reverting to the old `Diff`, moving the scratch index inside the worktree, and adding `--force` each produce failures, so they aren't vacuous. Separately verified (throwaway tests, not committed) against a real linked worktree and against a hostile inherited `GIT_INDEX_FILE`.
+
+## Two things I did not do
+
+- **`Diff` still exists** and is now unused in production. I kept it — removing exported API is a separate call — but the name invites exactly the misuse that caused this bug. My test uses it as a deliberate contrast, so it isn't dead. Worth deleting if you agree.
+- **No `sensei propose`.** The briefing shows the graph *already* carries `sensei_code.candidate.reviewer_sees_every_changed_file` (critical) and already expects `Repo.CandidateDiff`, so the invariant is recorded. But this checkout has no `.sensei/` or `docs/awareness/` sources to append to, so proposing would fabricate a source tree nobody asked for. The gap left open: a `required_test` linking `TestCandidateDiffShowsCreatedFiles` to that invariant, and a `forbidden_fix` for staging into the candidate's own index. Both need running from a checkout that has the awareness sources. Also note the briefing reports `BRIEFING_STATUS_DEGRADED` / `transaction=uncertified`, and lists a `Repo.CommitDiff` symbol that does not exist here.
+
+```
+AWG: briefing(internal/gitx/git.go) | invariants: sensei_code.candidate.reviewer_sees_every_changed_file | uncertainty: awareness sources absent in this checkout, so the required_test/forbidden_fix scars are unrecorded; briefing authority is DEGRADED/uncertified
+```
