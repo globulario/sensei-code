@@ -173,7 +173,65 @@ func (r Runner) Prepare(ctx context.Context, p Plan) (string, error) {
 	if err := CheckWorktreeIsolation(dir, p.Arm, p.Task); err != nil {
 		return "", err
 	}
+	// The withholding has to be COMMITTED, not merely applied.
+	//
+	// A governed run refuses to start in a checkout with uncommitted changes --
+	// "a governed candidate cut from HEAD would omit them, so it would govern a
+	// state you are not looking at" -- which is a correct product rule and not
+	// one this harness may weaken to make itself runnable. Deleting the oracle
+	// files leaves exactly that dirt, so every COLD and WARM arm failed in one
+	// second before reaching a provider.
+	//
+	// The commit message states plainly what was done. Concealing it would mean
+	// the instrument deceiving the thing it measures, and the removed paths are
+	// visible in the diff regardless; what the worker cannot see is the CONTENT
+	// of the withheld tests, which is what the oracle rests on.
+	if _, err := r.commitWithholding(ctx, dir); err != nil {
+		return "", err
+	}
 	return dir, nil
+}
+
+// commitWithholding commits the harness's own preparation and returns the
+// derived commit the arm actually runs from.
+//
+// Recorded separately from the manifest's pinned base: the two are different
+// commits and reporting the pinned one as what ran would be a small lie about
+// which tree the provider saw.
+func (r Runner) commitWithholding(ctx context.Context, dir string) (string, error) {
+	status, err := exec.CommandContext(ctx, "git", "-C", dir,
+		"--no-optional-locks", "status", "--porcelain").Output()
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(string(status)) == "" {
+		return r.headOf(ctx, dir)
+	}
+	if b, err := exec.CommandContext(ctx, "git", "-C", dir, "add", "-A").CombinedOutput(); err != nil {
+		return "", fmt.Errorf("staging the withholding: %w: %s", err, strings.TrimSpace(string(b)))
+	}
+	msg := "benchmark: withhold the task oracle from this worker checkout\n\n" +
+		"Applied by proofbench before any provider ran. The withheld test files are " +
+		"restored only at evaluation time, by the harness, after the worker has finished."
+	cmd := exec.CommandContext(ctx, "git", "-C", dir, "-c", "user.name=proofbench",
+		"-c", "user.email=proofbench@invalid", "commit", "-q", "-m", msg)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("committing the withholding: %w: %s", err, strings.TrimSpace(string(b)))
+	}
+	return r.headOf(ctx, dir)
+}
+
+func (r Runner) headOf(ctx context.Context, dir string) (string, error) {
+	out, err := exec.CommandContext(ctx, "git", "-C", dir,
+		"--no-optional-locks", "rev-parse", "HEAD").Output()
+	return strings.TrimSpace(string(out)), err
+}
+
+// RunBase is the commit an arm actually ran from: the pinned base with the
+// withheld oracle removed.
+func (r Runner) RunBase(ctx context.Context, dir string) string {
+	h, _ := r.headOf(ctx, dir)
+	return h
 }
 
 // verifyBase refuses a checkout that is not at the pinned commit.

@@ -309,7 +309,7 @@ func runCampaign(args []string) int {
 			if *arm != "" && string(a) != *arm {
 				continue
 			}
-			if err := executeArm(ctx, runner, ledger, m, hash, t, a, *attempt, *dry, *timeout); err != nil {
+			if err := executeArm(ctx, runner, ledger, m, hash, *manifest, t, a, *attempt, *dry, *timeout); err != nil {
 				fmt.Fprintf(os.Stderr, "%s/%s: %v\n", t.ID, a, err)
 				failures++
 			}
@@ -327,7 +327,7 @@ func runCampaign(args []string) int {
 // rather than warned about: a contaminated run reported as a result is worse
 // than no result at all.
 func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
-	m proofbench.Manifest, hash string, t proofbench.Task, arm proofbench.Arm,
+	m proofbench.Manifest, hash, manifestPath string, t proofbench.Task, arm proofbench.Arm,
 	attempt int, dry bool, timeout time.Duration) error {
 
 	plan := proofbench.Plan{Task: t, Arm: arm, Attempt: attempt, ManifestHash: hash, Benchmark: m.Version}
@@ -346,6 +346,7 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		return nil
 	}
 
+	runBase := r.RunBase(ctx, dir)
 	governedBefore := r.GovernedState(ctx)
 	started := time.Now()
 	var out proofbench.ArmOutcome
@@ -364,7 +365,7 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 
 	a := proofbench.Attempt{
 		Task: t.ID, Arm: arm, Number: attempt, ManifestHash: hash, Benchmark: m.Version,
-		BaseSHA: t.BaseSHA, Providers: providerIdentity(),
+		BaseSHA: t.BaseSHA, RunBase: runBase, Providers: providerIdentity(),
 		Started: started.UTC().Format(time.RFC3339), Ended: ended.UTC().Format(time.RFC3339),
 		WallSecs: int(ended.Sub(started).Seconds()),
 		Terminal: out.Terminal, Verdict: verdict.Verdict, OracleDetail: verdict.Detail,
@@ -374,10 +375,20 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		GovernedCheckoutState: ev.GovernedState,
 		Infrastructure:        out.Infrastructure,
 		Artifacts:             map[string]string{"transcript_tail_sha256": proofbench.HashBytes([]byte(out.Raw))},
-		Notes:                 fmt.Sprintf("%d event(s) observed", out.Events),
+		// filled below once the transcript is on disk
+		Notes: fmt.Sprintf("%d event(s) observed", out.Events),
 	}
 	// Cost is left nil unless a provider reported it. Zero is a measurement;
 	// nil is the absence of one.
+	// The transcript is written beside the record, so the hash above binds to
+	// something a reader can actually re-hash.
+	tdir := filepath.Join(dirOf(manifestPath), "transcripts", t.ID, string(arm))
+	if err := os.MkdirAll(tdir, 0o755); err == nil {
+		tpath := filepath.Join(tdir, fmt.Sprintf("%d.log", attempt))
+		if err := os.WriteFile(tpath, []byte(out.Raw), 0o644); err == nil {
+			a.Artifacts["transcript"] = tpath
+		}
+	}
 	if err := l.Append(a); err != nil {
 		return err
 	}

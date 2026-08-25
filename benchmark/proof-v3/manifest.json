@@ -1,0 +1,287 @@
+{
+  "version": "proof-v3",
+  "selection_rule": "Frozen before the corpus was chosen. From `git log --first-parent main` in CHRONOLOGICAL order, a commit is eligible when: (1) its diff touches at least one _test.go and at least one non-test .go; (2) it changes at most 6 files; (3) exactly one package contains both changed tests and changed non-test code -- that package is the tested package; and (4) the withheld oracle DISCRIMINATES, meaning `go test ./<pkg>/` FAILS at the parent commit with only the fix's test files restored, and PASSES at the accepted fix. Criterion (4) is the instrument-capability check: an oracle that passes pre-fix would score any candidate CORRECT, including one that changed nothing. Eligible commits are grouped by tested package in order of first appearance; packages with fewer than two eligible commits are excluded because they cannot form a linked later-task specimen. From each remaining package the EARLIEST eligible commit is a seed and the NEXT later one is its linked task, until 10 tasks are selected. Task statements are written from the pre-fix state and the commit subject, stating the problem and never the implementation. RESTART NOTE: proof-v2 is proof-v1's corpus re-pinned under a repaired harness. The first real proof-v1 run exposed a harness-blocking defect -- the infrastructure classifier matched the bare substring '403' inside a commit hash and recorded a governed failure as an externally attributable one, which would have licensed retries the rule forbids. Per the brief, the pre-fix failure is preserved (benchmark/proof-v1/) and the affected slice restarts under a newly pinned version rather than being overwritten. No task, base, oracle or threshold changed. SECOND RESTART: proof-v3 re-pins the same corpus after a second harness-blocking defect. The harness withheld the oracle by DELETING the test files, which left the worker checkout dirty, and a governed run correctly refuses to start in a dirty checkout -- so every COLD/WARM arm failed in one second without reaching a provider. The withholding is now committed inside the isolated worktree and the derived run base is recorded alongside the pinned base. proof-v2's pre-fix records are preserved.",
+  "excluded": [
+    {
+      "ref": "5dfffad641",
+      "reason": "package internal/assist has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "6cf23e8490",
+      "reason": "package internal/decision has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "da311a5627",
+      "reason": "package internal/publish has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "01f3fe1738",
+      "reason": "package internal/agent has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "cde6bf9212",
+      "reason": "package internal/workflow eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "4d3293745d",
+      "reason": "package internal/session has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "2e095c4a2d",
+      "reason": "package internal/architect has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "e6456697ce",
+      "reason": "package internal/setup eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "f1584969fc",
+      "reason": "package cmd/sensei-code eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "2dfad9c0c2",
+      "reason": "package internal/admission has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "be424a5f9a",
+      "reason": "package internal/retrieval has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "abcf63e9d5",
+      "reason": "package internal/provider eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "2034122fe9",
+      "reason": "package internal/authority has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "98197c1dce",
+      "reason": "rejected by eligibility criterion (4): its withheld oracle PASSES at the pinned base, so it cannot discriminate a correct candidate from one that changed nothing. Replaced by the next eligible commits in internal/tui."
+    }
+  ],
+  "calibration": [
+    {
+      "id": "cal-non-convergence-62",
+      "statement": "Known failure: the six-cycle inspection that never converged (PR #62). Instrument check only.",
+      "base_sha": "0000000000000000000000000000000000000000",
+      "origin": "pr-62",
+      "expected": "negative / non_convergence",
+      "oracle": {
+        "kind": "behavioral_probe",
+        "command": [
+          "true"
+        ]
+      }
+    },
+    {
+      "id": "cal-self-repair-79-80",
+      "statement": "Known win: the first end-to-end autonomous self-repair (PR #79/#80). Instrument check only.",
+      "base_sha": "0000000000000000000000000000000000000000",
+      "origin": "2f5ee40e42b460820ab93beac209188318a268de",
+      "expected": "positive",
+      "oracle": {
+        "kind": "behavioral_probe",
+        "command": [
+          "true"
+        ]
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "internal-tui-ea046ba",
+      "statement": "The transcript view in internal/tui cannot be scrolled: long output runs off the top and there is no way to reach earlier lines. Make the transcript scrollable.",
+      "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+      "origin": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/tui/scroll_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/tui/"
+        ]
+      }
+    },
+    {
+      "id": "internal-tui-be512db",
+      "statement": "Scrolling in the transcript view does not respond to the keys and the mouse wheel people actually use. Make it respond to the ordinary scrolling inputs.",
+      "base_sha": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+      "origin": "be512dbd60601ba40d53281b233bb1ab7f7f5b4f",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/tui/scroll_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/tui/"
+        ]
+      },
+      "depends_on": [
+        "internal-tui-ea046ba"
+      ]
+    },
+    {
+      "id": "internal-mcpconfig-110678d",
+      "statement": "internal/mcpconfig cannot describe an MCP server configuration for the architect. Give it the configuration model the architect needs.",
+      "base_sha": "98197c1dceeeca9319bd1d093f277166a8e7cbda",
+      "origin": "110678d517ca18d3d39484ad4e217b8f77498430",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/mcpconfig/mcpconfig_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/mcpconfig/"
+        ]
+      }
+    },
+    {
+      "id": "internal-mcpconfig-21c5a6b",
+      "statement": "internal/mcpconfig assumes what tools the MCP server exposes rather than reporting the allowlist the server was actually configured with. Report what is configured.",
+      "base_sha": "110678d517ca18d3d39484ad4e217b8f77498430",
+      "origin": "21c5a6b18b68298867b037ab3a05cd1bf80b682c",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/mcpconfig/mcpconfig_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/mcpconfig/"
+        ]
+      },
+      "depends_on": [
+        "internal-mcpconfig-110678d"
+      ]
+    },
+    {
+      "id": "internal-behavioral-a453be8",
+      "statement": "Task outcomes are never reported to the behavioral service. Report them.",
+      "base_sha": "7e02e4e59151c37a1113632c333b6aaece04be75",
+      "origin": "a453be875dd17871c64482f17a144b96851269df",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/behavioral/behavioral_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/behavioral/"
+        ]
+      }
+    },
+    {
+      "id": "internal-behavioral-055fe6b",
+      "statement": "internal/behavioral does not consult the behavioral gate before proceeding, and an absent answer must never be read as permission. Consult it, and fail closed on silence.",
+      "base_sha": "d0ac2705298c0fef389a8483e9222fb70ee745d1",
+      "origin": "055fe6b76afcc5618d7465c9764a5988a7ec4d6d",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/behavioral/behavioral_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/behavioral/"
+        ]
+      },
+      "depends_on": [
+        "internal-behavioral-a453be8"
+      ]
+    },
+    {
+      "id": "internal-doctor-853fbe3",
+      "statement": "The push guard leaks into the candidate worktree, and doctor does not say how to fix what it reports. Keep the guard out of the candidate and make doctor actionable.",
+      "base_sha": "02b9959d620e0cb793b12cc8a42077f584bf14be",
+      "origin": "853fbe3f3801277ae09457c1a91b10750dc96530",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/doctor/doctor_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/doctor/"
+        ]
+      }
+    },
+    {
+      "id": "internal-doctor-7a56cd2",
+      "statement": "doctor reports a provider as ready when it is merely authenticated. Authentication is not readiness; report the difference.",
+      "base_sha": "42a801b2f1eb7ee63227a789ee7c9e8cad287f98",
+      "origin": "7a56cd21b6476da5521975fc881bdfb7407d5dbc",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/doctor/doctor_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/doctor/"
+        ]
+      },
+      "depends_on": [
+        "internal-doctor-853fbe3"
+      ]
+    },
+    {
+      "id": "internal-gitx-a4fa351",
+      "statement": "The reviewer does not see files the worker created, only files it modified. The reviewer must judge the whole candidate.",
+      "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+      "origin": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/gitx/git_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/gitx/"
+        ]
+      }
+    },
+    {
+      "id": "internal-gitx-6460efd",
+      "statement": "The read-only observation lane measures the governed checkout with a git command that can itself write to that repository. A checker for a read-only lane must not become the write it is trying to detect.",
+      "base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+      "origin": "6460efd8639a501fbf599b93bb478184edda2c9e",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/gitx/observation_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/gitx/"
+        ]
+      },
+      "depends_on": [
+        "internal-gitx-a4fa351"
+      ]
+    }
+  ]
+}

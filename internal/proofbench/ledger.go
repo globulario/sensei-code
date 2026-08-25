@@ -70,6 +70,12 @@ type Attempt struct {
 	Benchmark    string `json:"benchmark_version"`
 
 	BaseSHA string `json:"base_sha"`
+	// RunBase is the commit the arm actually ran from: BaseSHA with the
+	// withheld oracle removed and that removal committed, because a governed
+	// run refuses to start in a dirty checkout. Recorded separately, because
+	// reporting the pinned base as what ran would misstate which tree the
+	// provider saw.
+	RunBase string `json:"run_base_sha"`
 	// ExecutionOrder is where this arm fell in the per-task randomised order,
 	// recorded so provider service drift cannot silently favour one arm.
 	ExecutionOrder int `json:"execution_order"`
