@@ -1,0 +1,20 @@
+All green: `gofmt` clean, `go vet ./...` clean, `go test ./...` passing.
+
+## What was wrong
+
+The transcript *was* scrollable, but only through bindings almost nobody reaches for: `PgUp`/`PgDn`, `shift+↑`/`shift+↓`, `ctrl+g`. The wheel did nothing at all — and could not have, because `View` never set `MouseMode`, so the terminal was never asked to report mouse events in the first place.
+
+## What I changed (`internal/tui/model.go`)
+
+- **Mouse wheel.** `View` now sets `v.MouseMode = tea.MouseModeCellMotion`, and `Update` handles `tea.MouseWheelMsg` ahead of every mode, so the wheel works while a task runs, while a menu is open, and while an authority prompt waits. One notch moves 3 rows.
+- **Bare `↑`/`↓`, `Home`/`End`.** They scroll when the composer is empty; with text typed they still belong to the line you are editing (the textarea ignores mouse events entirely, so clicks stay inert). `PgUp`/`PgDn` now keep two rows of overlap instead of jumping a blind screen.
+- **Scrolling to the foot resumes following new output.** Previously any scroll set `atBottom = false` permanently: you could wheel back down to the bottom and the transcript would quietly stop moving, with nothing on screen distinguishing that from a live view. Scrolling back is still anchored to absolute position, so new output does not drag the window while you read.
+- **Geometry is measured, not guessed.** The old code approximated the viewport as `m.height-8`; `chrome()` is now shared by the renderer and the scroll keys, so a key press and the frame it produces agree about where the bottom is.
+
+## One adjacent bug I fixed
+
+Two tests I wrote for the new behaviour caught the frame rendering **one row taller than the terminal**, which pushes the composer off the bottom of the screen. The "↑ N earlier lines" note was prepended *after* the padding was computed, so it always added a row it had not been counted for; and the note was also shown when nothing was hidden at all. The note is now built first and counted against the available height, and only appears when the transcript actually overflows. This is adjacent to your request rather than inside it — say the word if you would rather it were a separate commit.
+
+I did not run `sensei propose` for the scar: the live store here holds three domains, `propose` rebuilds and reloads that shared store, and the only invariant anchored to this file is about provider credentials — nothing this bug violates. Happy to add the missing invariant ("a rendered frame must fit the terminal") if you want it in the graph.
+
+AWG: briefing(internal/tui/model.go) | invariants: credentials_remain_provider_owned (untouched), TUI stays a projection of events | uncertainty: enabling cell-motion mouse capture means terminal text selection now needs Shift held — the standard cost of wheel support, but a visible change in habit

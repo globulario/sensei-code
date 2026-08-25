@@ -1,0 +1,22 @@
+The transcript is now scrollable. `internal/tui/model.go:552-625`, plus `internal/tui/scroll_test.go`.
+
+**What it does**
+
+- `pgup` / `pgdn` move a page (one screenful less two rows of overlap), `shift+↑` / `shift+↓` move one row. Keys are intercepted at the top of the `KeyPressMsg` branch, so scrolling works in every posture — including while the human-authority panel or a menu holds the bottom of the screen, which is exactly when you want to re-read the plan above.
+- The transcript still follows the newest line at rest, so nothing changes until you scroll back.
+- Once scrolled, the **first visible row** is pinned, not a distance from the foot. Output arriving from a running task appends below the window instead of dragging it — otherwise scrolling back during a long run, the case that motivated this, would be unusable.
+- Scrolling down to the foot drops the pin and returns to live; the status bar says `scrolled back · pgdn returns to live` while you're pinned, and the mode bar advertises the keys.
+- Two cases force a return to live: a `AuthorityRequired` event (a rendezvous the human must answer can't sit off-screen) and pressing enter (you want to see the reply).
+
+**Structure change:** `View` was computing the transcript height inline. I extracted `bottomBlock()` (status bar + composer/panel + mode bar) and `window()` (wrapped rows, first visible row, rows available), so the key handler and the renderer agree on the same geometry. `window()` re-clamps on every read, so a resize that rewraps into a shorter transcript can't strand the window past the end. `statusLine` must not call `window()` — the window is measured from that bar's height; there's a comment saying so.
+
+**Verified:** `gofmt -l cmd internal` clean, `go vet ./...` clean, `go test ./...` all packages pass. Six new tests assert on the *rendered view content*, not on the offset field — reaching line 000 of a 200-line transcript, returning to live, the window holding still across five arriving events, the authority snap-back, the enter snap-back, and a transcript shorter than the screen being a no-op (that last one caught a real bug: `scrollBy` marked itself scrolled before clamping).
+
+**Two things I left out, deliberately:**
+
+- **No mouse wheel.** It's available (`tea.MouseWheelMsg` + `View.MouseMode`), but enabling mouse capture disables the terminal's own select-to-copy in most emulators — a global behavior change wider than this ask. Say the word and it's a few lines.
+- **No `sensei propose`.** The briefing for this file reported `Governed briefing feedback unavailable (repository_context_absent)`, and this is a missing feature rather than a violated invariant. If you want the durable lesson recorded — *a scrolled transcript window must be pinned to a row, not to a distance from the foot* — that's a `forbidden_fix` I can file, but it writes to the shared graph so I didn't do it unasked.
+
+Changes are in the working tree, uncommitted.
+
+AWG: briefing(internal/tui/model.go) | invariants: transcript remains a projection of structured events (no governance semantics added); human-authority rendezvous cannot be hidden by view state | uncertainty: row-anchored scroll position is approximate across a terminal resize — it clamps rather than tracking the same logical line through the rewrap

@@ -345,14 +345,35 @@ func (r Runner) Evidence(ctx context.Context, dir, governedBefore string, measur
 
 // GovernedState reads the governed checkout, for the before half of the
 // comparison.
+//
+// The harness's OWN output is excluded. proofbench writes each record and
+// transcript into benchmark/<version>/ inside the governed checkout, so after
+// the first arm the checkout was never quiescent again and every subsequent
+// boundary reading was discarded as unmeasurable -- the instrument blinding
+// itself, one arm at a time.
+//
+// Excluding it is sound because those paths are attributable by construction:
+// they are written by this process, after its arm has finished, and no arm can
+// reach them from its own isolated worktree. Everything else still counts.
 func (r Runner) GovernedState(ctx context.Context) string {
 	out, err := exec.CommandContext(ctx, "git", "-C", r.RepoRoot,
 		"--no-optional-locks", "status", "--porcelain").Output()
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(string(out))
+	var kept []string
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" || strings.Contains(line, HarnessOutputDir) {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
 }
+
+// HarnessOutputDir is where proofbench writes its own evidence. A path
+// containing it is this process's work, not an arm's.
+const HarnessOutputDir = "benchmark/"
 
 // Cleanup removes an arm's worktree.
 func (r Runner) Cleanup(ctx context.Context, dir string) error {

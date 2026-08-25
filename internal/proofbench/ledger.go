@@ -284,6 +284,26 @@ func (a Attempt) checkRecordable() error {
 	return nil
 }
 
+// Has reports whether an attempt id is already committed.
+//
+// Meant to be checked BEFORE an arm runs. Append's refusal is correct but
+// arrives after the provider time is spent, and the campaign burned a
+// 25-minute governed arm and a 5-minute RAW arm learning an id was taken. A
+// rule that protects evidence should not also waste the budget collecting it.
+func (l *Ledger) Has(task string, arm Arm, number int) bool {
+	_, ok := l.attempts[fmt.Sprintf("%s/%s/%d", task, arm, number)]
+	return ok
+}
+
+// NextAttempt is the first unused attempt number for a task/arm.
+func (l *Ledger) NextAttempt(task string, arm Arm) int {
+	for n := 1; ; n++ {
+		if !l.Has(task, arm, n) {
+			return n
+		}
+	}
+}
+
 // Attempts returns every recorded attempt, ordered for deterministic reporting.
 func (l *Ledger) Attempts() []Attempt {
 	out := make([]Attempt, 0, len(l.attempts))

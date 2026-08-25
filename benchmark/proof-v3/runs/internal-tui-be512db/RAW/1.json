@@ -1,0 +1,43 @@
+{
+  "task": "internal-tui-be512db",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+  "run_base_sha": "8bfa58d4e96e9bb7f13458e260e6fbfbde27e665",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T05:05:28Z",
+  "ended": "2026-08-25T05:10:42Z",
+  "wall_seconds": 314,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/tui [github.com/globulario/sensei-code/internal/tui.test]\ninternal/tui/scroll_test.go:28:4: m.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:55:14: scrolled.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:68:4: m.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:70:26: returned.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:111:4: m.scrollUp undefined (type Model has no field or method scrollUp)\nFAIL\tgithub.com/globulario/sensei-code/internal/tui [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:409cfc35d92dba4a82414d0664bc8c457aa4544c496277afec75079d1b999f36",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-tui-be512db/RAW/1.log",
+    "transcript_tail_sha256": "sha256:cf390c455402417017e9c212bd144f86b7559e7145e2d7a88006ec484e73beeb"
+  },
+  "notes": "0 event(s) observed"
+}

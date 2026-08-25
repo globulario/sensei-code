@@ -330,6 +330,17 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	m proofbench.Manifest, hash, manifestPath string, t proofbench.Task, arm proofbench.Arm,
 	attempt int, dry bool, timeout time.Duration) error {
 
+	// Refuse before spending provider time, not after.
+	//
+	// The ledger's append-only rule already refuses a duplicate id, but it does
+	// so once the arm has RUN. A governed arm is 22 minutes and a RAW arm is
+	// five, and the campaign burned both learning an id was taken. A rule that
+	// protects evidence should not also waste the budget collecting it.
+	if l.Has(t.ID, arm, attempt) {
+		fmt.Printf("%s / %s / attempt %d is already recorded; skipping. A retry is attempt %d, and "+
+			"only an infrastructure failure licenses one.\n", t.ID, arm, attempt, l.NextAttempt(t.ID, arm))
+		return nil
+	}
 	plan := proofbench.Plan{Task: t, Arm: arm, Attempt: attempt, ManifestHash: hash, Benchmark: m.Version}
 	if err := proofbench.CheckPromptIsolation(t.Statement, t); err != nil {
 		return err

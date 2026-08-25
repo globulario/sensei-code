@@ -581,3 +581,88 @@ func TestAnIncompleteCampaignPlacesNoVerdict(t *testing.T) {
 		t.Fatalf("an unslotted input graded %s", g)
 	}
 }
+
+// A taken attempt id is refusable before the provider is paid.
+//
+// Append's refusal is correct and arrives too late: the campaign spent a
+// 25-minute governed arm and a 5-minute RAW arm discovering an id was taken.
+func TestATakenAttemptIsKnowableBeforeRunning(t *testing.T) {
+	l, err := OpenLedger(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if l.Has("a-task", ArmCold, 1) {
+		t.Fatal("an empty ledger claimed to hold an attempt")
+	}
+	if n := l.NextAttempt("a-task", ArmCold); n != 1 {
+		t.Fatalf("NextAttempt on an empty ledger = %d", n)
+	}
+	if err := l.Append(Attempt{Task: "a-task", Arm: ArmCold, Number: 1, ManifestHash: "h",
+		Verdict: Incorrect, BoundaryMeasurable: true}); err != nil {
+		t.Fatal(err)
+	}
+	if !l.Has("a-task", ArmCold, 1) {
+		t.Error("a committed attempt is not visible before the next run")
+	}
+	if n := l.NextAttempt("a-task", ArmCold); n != 2 {
+		t.Errorf("NextAttempt = %d, want 2", n)
+	}
+	// A different arm of the same task is untouched.
+	if l.Has("a-task", ArmRaw, 1) {
+		t.Error("Has confused two arms of the same task")
+	}
+}
+
+// The harness must not blind itself by writing into the checkout it measures.
+//
+// proofbench writes each record and transcript into benchmark/<version>/ inside
+// the governed checkout. Once the first arm's evidence landed there, the
+// checkout was never quiescent again and every later boundary reading was
+// discarded as unmeasurable -- the instrument putting out its own eyes, one arm
+// at a time.
+//
+// Excluding those paths is sound because they are attributable by construction:
+// written by the harness process after its arm finished, and unreachable from an
+// arm's isolated worktree.
+func TestTheHarnessOwnOutputDoesNotCountAsCheckoutDirt(t *testing.T) {
+	repo := t.TempDir()
+	git := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("config", "user.email", "t@example.invalid")
+	git("config", "user.name", "T")
+	if err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", "main.go")
+	git("commit", "-qm", "init")
+
+	r := Runner{RepoRoot: repo}
+	if s := r.GovernedState(context.Background()); s != "" {
+		t.Fatalf("a clean checkout read as dirty: %q", s)
+	}
+	// The harness's own evidence must not make the next arm unmeasurable.
+	if err := os.MkdirAll(filepath.Join(repo, "benchmark", "proof-v3", "runs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, "benchmark", "proof-v3", "runs", "a.json"),
+		[]byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s := r.GovernedState(context.Background()); s != "" {
+		t.Errorf("the harness's own output made the checkout non-quiescent, so every later arm "+
+			"would record an unmeasurable boundary: %q", s)
+	}
+	// Real dirt still counts.
+	if err := os.WriteFile(filepath.Join(repo, "main.go"), []byte("package main // edited\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if s := r.GovernedState(context.Background()); s == "" {
+		t.Error("a genuine modification to the governed checkout was excluded along with the " +
+			"harness's own output")
+	}
+}
