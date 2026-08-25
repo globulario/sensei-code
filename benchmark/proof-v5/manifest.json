@@ -491,7 +491,7 @@
     },
     {
       "id": "internal-architect-2e095c4",
-      "statement": "There is no way to ask the architect why a specific piece of governing knowledge exists.\n\nAdd to internal/architect the exported function:\n\n    func RunWhy(caller Caller, domain, id string) (string, error)\n\nGiven an id it queries the graph through the supplied Caller and renders what that node says. An empty id is an error naming the expected form. The domain, when non-empty, is passed to the query; when empty it is omitted. An id that matches nothing yields a report saying so rather than an error.",
+      "statement": "There is no way to ask why a specific piece of governing knowledge exists.\n\nAdd to internal/architect the exported function:\n\n    func RunWhy(caller Caller, domain, id string) (string, error)\n\nGiven an id it resolves the rule through the supplied Caller's awareness_resolve tool and returns a report carrying what the graph holds about it. An empty id is an error naming the expected form. The class is not assumed from the id: an architect copies whatever they were shown, so a rule held under another kind must still be found rather than refused on a guess, and an id carrying a class prefix must resolve to the same rule as the bare one, with no prefix sent to Sensei. The domain scopes the query when non-empty and is omitted when empty. An id the graph holds nothing under is an error naming that id.",
       "base_sha": "7dbe79e50f150be4e5bf998d4762c5004507e500",
       "origin": "2e095c4a2d1daf5c1c306ae938efc83de2f13885",
       "oracle": {
@@ -504,6 +504,39 @@
           "test",
           "-buildvcs=false",
           "./internal/architect/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/architect/contract_probe_test.go",
+        "source_file": "oracles/internal-architect-2e095c4.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/architect/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-architect-2e095c4/WRONG",
+            "want": "INCORRECT",
+            "why": "assumes the class from the id and refuses on a guess, so a rule the graph holds under another class is reported as absent"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-architect-2e095c4/ALTERNATE",
+            "want": "CORRECT",
+            "why": "splits the id on ':' to learn any stated class and tries that first, then the remainder from a set, rendering with fmt -- where the reference strips a known prefix list via a helper and walks an ordered slice chosen by prefix"
+          }
         ]
       }
     },

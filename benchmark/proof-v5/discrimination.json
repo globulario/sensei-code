@@ -1,28 +1,28 @@
 [
   {
-    "task": "internal-assist-5dfffad",
-    "oracle_hash": "sha256:099743112cadc2ed9a3021510a62bfcd",
+    "task": "internal-architect-2e095c4",
+    "oracle_hash": "sha256:1e41997ade41ee07afc920681e161e19",
     "results": [
       {
         "kind": "REFERENCE",
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/assist\t0.135s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/architect\t0.003s"
       },
       {
         "kind": "WRONG",
         "want": "INCORRECT",
         "got": "INCORRECT",
         "ok": true,
-        "detail": "--- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied (0.11s)\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/no_binding_at_all (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/binding_without_it (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/empty_string (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/wrong_type (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/binding_wrong_type (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/assist\t0.134s\nFAIL"
+        "detail": "--- FAIL: TestContractARuleOfAnotherKindIsStillFound (0.00s)\n    contract_probe_test.go:79: a rule held under another class was not found: Sensei holds no invariant, failure mode or forbidden fix under \"sensei_code.some.failure\" in this domain\n--- FAIL: TestContractAPrefixedIDResolvesToTheSameRule (0.00s)\n    contract_probe_test.go:111: the id sent to Sensei still carries a class prefix: \"invariant:sensei_code.publication.never_merges\"\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/architect\t0.004s\nFAIL"
       },
       {
         "kind": "ALTERNATE",
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/assist\t0.210s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/architect\t0.003s"
       }
     ],
     "eligible": true
