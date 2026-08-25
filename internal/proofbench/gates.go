@@ -70,6 +70,14 @@ type GateResult struct {
 	// passed: the brief is explicit that an untestable compounding claim is
 	// reported as not testable rather than passed.
 	Untestable bool `json:"untestable"`
+	// NotTested marks a claim this campaign DELIBERATELY does not test, because
+	// the corpus cannot support it under a frozen standard.
+	//
+	// Distinct from Untestable, which is a gate the collected evidence could
+	// not decide. NotTested is declared BEFORE the campaign: the runs that
+	// would feed it are not scheduled, so the claim is reported as
+	// unestablished rather than as failed, weakly passed, or quietly dropped.
+	NotTested bool `json:"not_tested"`
 }
 
 // GateInput is everything the verdict is allowed to read.
@@ -113,6 +121,17 @@ type GateInput struct {
 	// CostPremiumJustified records an independently verified benefit that
 	// accompanies a larger premium.
 	CostPremiumJustified bool
+	// CompoundingTested says whether this campaign schedules the WARM arms an
+	// aggregate compounding claim would need.
+	//
+	// False for a corpus whose linkage evaluation found too few qualifying
+	// relations. The compounding gates then report NOT TESTED and neither pass
+	// nor fail, because running WARM across unrelated tasks to fill a matrix
+	// would produce arms that cannot tell anyone whether knowledge compounded.
+	CompoundingTested bool
+	// CompoundingNote is why the claim is not tested. Rendered in the report
+	// beside the gates it replaces.
+	CompoundingNote string
 	// ArmSlots and Executed decide whether a verdict may be placed at all.
 	ArmSlots int
 	Executed int
@@ -189,9 +208,15 @@ func Evaluate(in GateInput) (Grade, []GateResult) {
 			warmBenefit++
 		}
 	}
-	red("R4", "WARM shows structured reuse benefit on at least one linked specimen",
-		len(in.Linked) > 0 && warmBenefit == 0,
-		fmt.Sprintf("%d/%d linked specimens improved", warmBenefit, len(in.Linked)))
+	if in.CompoundingTested {
+		red("R4", "WARM shows structured reuse benefit on at least one linked specimen",
+			len(in.Linked) > 0 && warmBenefit == 0,
+			fmt.Sprintf("%d/%d linked specimens improved", warmBenefit, len(in.Linked)))
+	} else {
+		gates = append(gates, GateResult{ID: "R4", Gate: "RED", NotTested: true,
+			Claim:  "WARM shows structured reuse benefit on at least one linked specimen",
+			Detail: in.CompoundingNote})
+	}
 	red("R5", fmt.Sprintf("median governed cost within %.0fx RAW, or the premium is justified", redCostRatioAbove),
 		in.CostKnown && in.GovernedCostRatio > redCostRatioAbove && !in.CostPremiumJustified,
 		costDetail(in))
@@ -214,14 +239,23 @@ func Evaluate(in GateInput) (Grade, []GateResult) {
 	green("G5", fmt.Sprintf("governed correct closure trails RAW by at most %d task(s)", greenRawSlackMax),
 		in.GovernedCorrect >= in.RawCorrect-greenRawSlackMax,
 		fmt.Sprintf("governed %d vs RAW %d", in.GovernedCorrect, in.RawCorrect))
-	green("G6", fmt.Sprintf("WARM improves at least %d/%d linked specimens with no correctness regression", greenLinkedMin, MinLinkedTasks),
-		len(in.Linked) >= MinLinkedTasks && warmBenefit >= greenLinkedMin && !anyRegressed(in.Linked),
-		fmt.Sprintf("%d/%d improved, regression=%v", warmBenefit, len(in.Linked), anyRegressed(in.Linked)))
+	if in.CompoundingTested {
+		green("G6", fmt.Sprintf("WARM improves at least %d/%d linked specimens with no correctness regression", greenLinkedMin, MinLinkedTasks),
+			len(in.Linked) >= MinLinkedTasks && warmBenefit >= greenLinkedMin && !anyRegressed(in.Linked),
+			fmt.Sprintf("%d/%d improved, regression=%v", warmBenefit, len(in.Linked), anyRegressed(in.Linked)))
+	} else {
+		gates = append(gates, GateResult{ID: "G6", Gate: "GREEN", NotTested: true,
+			Claim:  fmt.Sprintf("WARM improves at least %d/%d linked specimens", greenLinkedMin, MinLinkedTasks),
+			Detail: in.CompoundingNote})
+	}
 
 	// G7 is the one gate that can be UNTESTABLE rather than merely failed.
 	g7 := GateResult{ID: "G7", Gate: "GREEN",
 		Claim: fmt.Sprintf("aggregate WARM rediscovery at least %.0f%% below COLD", greenRediscDrop*100)}
 	switch {
+	case !in.CompoundingTested:
+		g7.NotTested = true
+		g7.Detail = in.CompoundingNote
 	case in.ColdRediscovery == 0:
 		g7.Untestable = true
 		g7.Detail = "COLD rediscovery denominator is zero; the compounding claim is not testable " +
@@ -243,12 +277,16 @@ func Evaluate(in GateInput) (Grade, []GateResult) {
 	sort.SliceStable(gates, func(i, j int) bool { return gates[i].ID < gates[j].ID })
 
 	for _, g := range gates {
-		if g.Gate == "RED" && !g.Passed {
+		if g.Gate == "RED" && !g.NotTested && !g.Passed {
 			return Red, gates
 		}
 	}
 	for _, g := range gates {
-		if g.Gate == "GREEN" && (!g.Passed || g.Untestable) {
+		// A NOT TESTED gate neither passes nor blocks: the campaign declared in
+		// advance that it does not schedule the runs that would decide it, and
+		// the report states the claim as unestablished. An UNTESTABLE gate does
+		// block, because there the evidence was collected and could not decide.
+		if g.Gate == "GREEN" && !g.NotTested && (!g.Passed || g.Untestable) {
 			return Amber, gates
 		}
 	}

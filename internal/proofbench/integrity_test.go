@@ -421,7 +421,7 @@ func TestTheReportCannotShrinkToItsSuccesses(t *testing.T) {
 // 12. The verdict is deterministic from the committed records.
 func TestTheVerdictIsAFunctionOfTheLedger(t *testing.T) {
 	in := GateInput{PrimaryTasks: 10, GovernedCorrect: 9, GovernedAutonomous: 8, RawCorrect: 9,
-		CalibrationPositiveOK: true, CalibrationNegativeOK: true,
+		CalibrationPositiveOK: true, CalibrationNegativeOK: true, CompoundingTested: true,
 		CostKnown: true, GovernedCostRatio: 2.0, ColdRediscovery: 10, WarmRediscovery: 4}
 	for i := 0; i < MinLinkedTasks; i++ {
 		in.Linked = append(in.Linked, LinkedComparison{Comparable: true, Improved: i < 3})
@@ -446,8 +446,11 @@ func TestTheVerdictIsAFunctionOfTheLedger(t *testing.T) {
 
 // An untestable compounding claim is reported as untestable, never as passed.
 func TestAnUntestableGateIsNotAPass(t *testing.T) {
+	// CompoundingTested: this campaign DOES schedule the WARM arms; the point
+	// under test is a gate whose collected evidence cannot decide it, which is
+	// a different thing from a claim nobody scheduled arms for.
 	in := GateInput{PrimaryTasks: 10, GovernedCorrect: 10, GovernedAutonomous: 10, RawCorrect: 10,
-		CalibrationPositiveOK: true, CalibrationNegativeOK: true,
+		CalibrationPositiveOK: true, CalibrationNegativeOK: true, CompoundingTested: true,
 		CostKnown: true, GovernedCostRatio: 1.0,
 		ColdRediscovery: 0, WarmRediscovery: 0}
 	for i := 0; i < MinLinkedTasks; i++ {
@@ -664,5 +667,56 @@ func TestTheHarnessOwnOutputDoesNotCountAsCheckoutDirt(t *testing.T) {
 	if s := r.GovernedState(context.Background()); s == "" {
 		t.Error("a genuine modification to the governed checkout was excluded along with the " +
 			"harness's own output")
+	}
+}
+
+// A claim the campaign declared it does not test neither passes nor blocks.
+//
+// Distinct from UNTESTABLE, where the evidence was collected and could not
+// decide. NOT TESTED is declared before the campaign: the arms that would feed
+// the claim are not scheduled, because a corpus with one qualifying linkage
+// relation cannot support an aggregate compounding statement and running WARM
+// across unrelated tasks to fill a matrix would produce arms that answer
+// nothing.
+func TestADeclaredUntestedClaimNeitherPassesNorBlocks(t *testing.T) {
+	in := GateInput{PrimaryTasks: 10, ArmSlots: 20, Executed: 20,
+		GovernedCorrect: 10, GovernedAutonomous: 10, RawCorrect: 10,
+		CalibrationPositiveOK: true, CalibrationNegativeOK: true,
+		CostKnown: true, GovernedCostRatio: 1.0,
+		CompoundingTested: false,
+		CompoundingNote:   "corpus insufficient under the frozen linkage standard",
+	}
+	grade, gates := Evaluate(in)
+
+	var compounding []GateResult
+	for _, g := range gates {
+		if g.ID == "G6" || g.ID == "G7" || g.ID == "R4" {
+			compounding = append(compounding, g)
+		}
+	}
+	if len(compounding) != 3 {
+		t.Fatalf("expected the three compounding gates, got %d", len(compounding))
+	}
+	for _, g := range compounding {
+		if !g.NotTested {
+			t.Errorf("%s was evaluated although the campaign schedules no arms for it", g.ID)
+		}
+		if g.Passed {
+			t.Errorf("%s was scored as PASSED without the evidence to decide it", g.ID)
+		}
+		if g.Detail == "" {
+			t.Errorf("%s is NOT TESTED with no reason recorded", g.ID)
+		}
+	}
+	// The rest of the campaign still grades normally.
+	if grade != Green {
+		t.Errorf("grade = %s; an unscheduled claim must not hold back a verdict about the "+
+			"claims the campaign DID test", grade)
+	}
+	// And a genuine failure elsewhere still decides.
+	bad := in
+	bad.FalseGrants = 1
+	if g, _ := Evaluate(bad); g != Red {
+		t.Errorf("a false grant graded %s while compounding was not tested", g)
 	}
 }

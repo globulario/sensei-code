@@ -99,21 +99,30 @@ type Manifest struct {
 	// its admissions could not be distinguished from a search for tasks the
 	// product happens to suit.
 	SelectionWalk []WalkStep `json:"selection_walk,omitempty"`
-	// WarmClaim says how strongly the compounding result may be stated.
+	// WarmClaim says what this campaign does about compounding.
 	//
-	// "measured" is the default and requires MinLinkedTasks linked specimens.
-	// "exploratory" is a DECLARED DOWNGRADE for a corpus that cannot supply
-	// them: the campaign still runs WARM and the report must present it as
-	// exploratory rather than as a test of the compounding claim.
+	// "measured" is the default and requires MinLinkedTasks qualifying
+	// relations. "not_tested" is a DECLARED ABSENCE: the corpus cannot supply
+	// them under the frozen linkage standard, so the aggregate WARM arms are
+	// NOT SCHEDULED and the claim is reported as unestablished.
 	//
-	// Declaring it is not the same as lowering the minimum. The minimum stands;
-	// what changes is what the eventual number is allowed to be called, and the
-	// downgrade is recorded with the evidence that forced it.
+	// There is deliberately no "exploratory" value any more. Running WARM
+	// across unrelated tasks to preserve a three-arm matrix produces arms that
+	// cannot tell anyone whether knowledge compounded, and reporting one
+	// qualifying relation as exploratory evidence gives that single specimen
+	// more weight than it can carry. Unproven is a cleaner result than weakly
+	// proven.
 	WarmClaim string `json:"warm_claim,omitempty"`
-	// WarmDowngradeReason is why the stronger claim is unavailable. Required
-	// whenever WarmClaim is "exploratory", so the weakening can never be a bare
-	// flag somebody set on a slow evening.
+	// WarmDowngradeReason is why the claim is not tested. Required whenever
+	// WarmClaim is not "measured", so an absent claim can never be a bare flag
+	// somebody set on a slow evening.
 	WarmDowngradeReason string `json:"warm_downgrade_reason,omitempty"`
+	// WarmCaseStudy is the one qualifying relation, run and reported
+	// descriptively rather than as a benchmark gate.
+	WarmCaseStudy *CaseStudy `json:"warm_case_study,omitempty"`
+	// CampaignDesign is which arms this campaign schedules and why. Recorded in
+	// the manifest so the arm list is frozen with everything else.
+	CampaignDesign string `json:"campaign_design,omitempty"`
 	// LinkageDefinition is what makes a later task a linked specimen.
 	//
 	// Amended pre-campaign from same-package pairing to pre-registered
@@ -132,6 +141,24 @@ type Manifest struct {
 	// was met and the linked requirement was not, and the stopping condition
 	// has always had both.
 	IntermediateState *IntermediateState `json:"intermediate_state,omitempty"`
+}
+
+// CaseStudy is a single pre-registered A -> K -> B relation, reported
+// descriptively.
+//
+// Not a gate and not a rate. One relation cannot support an aggregate claim,
+// and presenting it as though it could is the failure this whole linkage
+// evaluation exists to prevent.
+type CaseStudy struct {
+	Earlier string `json:"earlier_task"`
+	Later   string `json:"later_task"`
+	K       string `json:"durable_artifact"`
+	// Condition is the later task's pre-registered technical condition K bears
+	// on, written before either arm runs.
+	Condition string `json:"later_condition"`
+	// ReuseEvidence is the observable difference between reuse and
+	// rediscovery, also written before either arm runs.
+	ReuseEvidence string `json:"reuse_vs_rediscovery"`
 }
 
 // CorpusVerdict is what criterion (6) decided about one previously selected
@@ -331,7 +358,7 @@ func (m Manifest) Validate() error {
 	}
 	if n := m.LinkedTasks(); n < MinLinkedTasks {
 		switch m.WarmClaim {
-		case "exploratory":
+		case "not_tested":
 			if strings.TrimSpace(m.WarmDowngradeReason) == "" {
 				add("warm_claim is \"exploratory\" with no reason recorded; a downgrade nobody had " +
 					"to justify is indistinguishable from a threshold quietly lowered")
