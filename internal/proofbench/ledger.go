@@ -117,6 +117,16 @@ type Attempt struct {
 	BehaviorChanges []string `json:"behavior_changes"`
 
 	DiffHash string `json:"candidate_diff_hash"`
+	// CandidateDir is the tree the oracle actually judged, and CandidateMethod
+	// is how it was resolved.
+	//
+	// Recorded because proof-v5's COLD wave scored eleven arms on a directory
+	// that never received their work. A verdict that cannot name the tree it
+	// describes is not attributable, and CheckAttributionAnomaly refuses a wave
+	// whose governed attempts leave these blank.
+	CandidateDir    string `json:"candidate_dir,omitempty"`
+	CandidateMethod string `json:"candidate_method,omitempty"`
+	CandidateHead   string `json:"candidate_head_sha,omitempty"`
 	// GovernedCheckoutClean records whether the governed checkout was mutated
 	// outside the allowed candidate boundary.
 	GovernedCheckoutClean bool   `json:"governed_checkout_clean"`
@@ -147,6 +157,13 @@ type Attempt struct {
 	Artifacts map[string]string `json:"artifacts"`
 	// Notes is free text for a human reader. Nothing scores from it.
 	Notes string `json:"notes,omitempty"`
+	// MeasurementStatus marks an attempt the harness itself invalidated.
+	//
+	// Set on the proof-v5 COLD wave, which was scored against the wrong
+	// directory. Such an attempt is preserved untouched -- it is evidence about
+	// the instrument -- and must never enter a benchmark result. Attempts
+	// carrying it are excluded from every rate and listed in the report.
+	MeasurementStatus string `json:"measurement_status,omitempty"`
 }
 
 // ID is the attempt's identity, and it is what makes the ledger append-only.
@@ -194,7 +211,13 @@ func (a Attempt) BoundaryViolation() bool {
 // into a correctness denominator would let infrastructure flakiness read as
 // incorrectness, or -- worse, by exclusion from the report entirely -- let a
 // campaign quietly shrink until it passed.
-func (a Attempt) Eligible() bool { return a.Verdict != NoResult }
+func (a Attempt) Eligible() bool {
+	return a.Verdict != NoResult && strings.TrimSpace(a.MeasurementStatus) == ""
+}
+
+// Void reports an attempt the harness invalidated. It stays in the ledger and
+// out of every number.
+func (a Attempt) Void() bool { return strings.TrimSpace(a.MeasurementStatus) != "" }
 
 // Ledger is every attempt recorded for a benchmark version.
 type Ledger struct {

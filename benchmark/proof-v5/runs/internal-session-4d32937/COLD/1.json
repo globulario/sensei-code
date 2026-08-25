@@ -45,5 +45,6 @@
     "transcript": "benchmark/proof-v5/transcripts/internal-session-4d32937/COLD/1.log",
     "transcript_tail_sha256": "sha256:272b2ef0a0f2ba315ca6e03bc6770b0cacb2516c7bc8f72aab2b3bdb8e3f07a0"
   },
-  "notes": "69 event(s) observed"
+  "notes": "69 event(s) observed",
+  "measurement_status": "VOID_MEASUREMENT: oracle evaluated wrong worktree \u2014 this attempt was scored against the ARM checkout, which never receives a governed run's work. The run's real candidate worktree held its code. Preserved untouched as evidence about the INSTRUMENT; it is not evidence about Sensei-code and must not enter any benchmark result."
 }

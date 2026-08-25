@@ -1,0 +1,154 @@
+package session
+
+import (
+	"strings"
+	"bufio"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"sync"
+	"time"
+
+	"github.com/globulario/sensei-code/internal/event"
+)
+
+type Store struct {
+	mu   sync.Mutex
+	path string
+}
+
+func New(repo, sessionID string) (*Store, error) {
+	p := filepath.Join(repo, ".sensei-code", "sessions", sessionID, "events.jsonl")
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		return nil, err
+	}
+	return &Store{path: p}, nil
+}
+
+func (s *Store) Append(e event.Event) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(e)
+}
+
+func (s *Store) Load() ([]event.Event, error) {
+	f, err := os.Open(s.path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var out []event.Event
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		var e event.Event
+		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, sc.Err()
+}
+
+// ID mints a session identifier that sorts chronologically as a string, so the
+// most recent session can be found without reading any file.
+func ID(t time.Time) string {
+	return "session-" + t.UTC().Format("20060102T150405.000000000Z")
+}
+
+// Latest returns the most recent recorded session for this repository, so a
+// relaunch can continue the conversation instead of starting blank.
+func Latest(repo string) (string, bool) {
+	dir := filepath.Join(repo, ".sensei-code", "sessions")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return "", false
+	}
+	var ids []string
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, entry.Name(), "events.jsonl")); err != nil {
+			continue
+		}
+		ids = append(ids, entry.Name())
+	}
+	if len(ids) == 0 {
+		return "", false
+	}
+	sort.Strings(ids)
+	return ids[len(ids)-1], true
+}
+
+// Interrupted is a task whose authorised plan never reached a terminal outcome.
+type Interrupted struct {
+	TaskID string
+	Task   string
+	Plan   string
+	Review string
+}
+
+// FindInterrupted is the ALTERNATE specimen: correct, and structurally unlike
+// the reference.
+//
+// The accepted fix makes ONE pass, accumulating into a per-task struct that
+// carries its own approved/done flags. This one makes THREE passes over
+// independent sets -- which tasks appeared, which finished, which were
+// authorised -- and only then assembles the survivors, reading fields back out
+// of the stream on the final pass.
+func FindInterrupted(events []event.Event) []Interrupted {
+	var order []string
+	seen := map[string]bool{}
+	finished := map[string]bool{}
+	authorised := map[string]bool{}
+
+	for _, e := range events {
+		if e.TaskID == "" {
+			continue
+		}
+		if !seen[e.TaskID] {
+			seen[e.TaskID] = true
+			order = append(order, e.TaskID)
+		}
+	}
+	for _, e := range events {
+		switch e.Kind {
+		case event.WorkflowCompleted, event.WorkflowFailed:
+			finished[e.TaskID] = true
+		case event.AuthorityResolved:
+			authorised[e.TaskID] = true
+		}
+	}
+	var out []Interrupted
+	for _, id := range order {
+		if !authorised[id] || finished[id] {
+			continue
+		}
+		row := Interrupted{TaskID: id}
+		for _, e := range events {
+			if e.TaskID != id {
+				continue
+			}
+			switch {
+			case e.Kind == event.TaskCreated:
+				row.Task = e.Summary
+			case e.Kind == event.PlanProposed:
+				row.Plan = e.Summary
+			case e.Source == event.SourceReviewer && e.Kind == event.Status &&
+				strings.TrimSpace(e.Summary) != "":
+				row.Review = e.Summary
+			}
+		}
+		if strings.TrimSpace(row.Task) == "" {
+			continue
+		}
+		out = append(out, row)
+	}
+	return out
+}

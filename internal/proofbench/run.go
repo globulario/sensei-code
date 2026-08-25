@@ -261,6 +261,11 @@ type OracleResult struct {
 // Restored AFTER the worker is finished, from the accepted fix, into the
 // candidate checkout. The worker never saw these files; the oracle is built
 // from them.
+// Judge scores the tree passed to it.
+//
+// The caller resolves that tree with ResolveCandidate and passes it in. Judge
+// deliberately does NOT derive it: the proof-v5 failure was an evaluator that
+// assumed the arm checkout, and an evaluator that can assume can assume wrong.
 func (r Runner) Judge(ctx context.Context, dir string, t Task) OracleResult {
 	// A gated task is judged by its behavioural contract, never by the accepted
 	// fix's own tests. The withheld-tests path below survives only for tasks

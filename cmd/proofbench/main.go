@@ -45,6 +45,8 @@ func run(args []string) int {
 		return calibrate(args[1:])
 	case "discriminate":
 		return discriminate(args[1:])
+	case "preflight-candidate":
+		return preflightCandidate(args[1:])
 	case "run":
 		return runCampaign(args[1:])
 	case "report":
@@ -74,6 +76,12 @@ func usage() {
         gate each task's contract oracle against REFERENCE / WRONG /
         ALTERNATE specimens. A task whose ALTERNATE fails is refused:
         that oracle has memorised one answer, not learned the contract
+
+  proofbench preflight-candidate --manifest <path> --task <id>
+                       --candidate <dir> [--want CORRECT]
+        point the frozen oracle at an existing candidate worktree and
+        prove the evaluator finds work where a governed run leaves it,
+        without spending a provider token
 
   proofbench run       --manifest <path> [--task <id>] [--arm RAW|COLD|WARM]
                        [--attempt N] [--dry-run]
@@ -358,6 +366,9 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	if err != nil {
 		return err
 	}
+	// The arm checkout is removed after the candidate has been resolved and
+	// judged, never before: the candidate's registration lives in the arm's git
+	// metadata.
 	defer func() { _ = r.Cleanup(context.Background(), dir) }()
 
 	fmt.Printf("%s / %s / attempt %d\n  worktree %s\n  base     %s\n", t.ID, arm, attempt, dir, t.BaseSHA)
@@ -386,10 +397,25 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	}
 	ended := time.Now()
 
+	// Resolve the tree this arm's work is actually in, BEFORE cleanup: a
+	// governed candidate is registered in the arm checkout's git metadata, and
+	// that registration disappears with the checkout.
+	//
+	// A candidate that cannot be resolved is a measurement-integrity failure,
+	// not a zero. proof-v5 scored eleven governed arms on a directory that
+	// never received their work, and one of those recorded INCORRECT candidates
+	// passes the frozen oracle when the oracle is pointed at the real tree.
+	cand, cerr := r.ResolveCandidate(ctx, dir, arm, out.Raw)
+	if cerr != nil {
+		return fmt.Errorf("%s / %s: %w", t.ID, arm, cerr)
+	}
+	fmt.Printf("  candidate %s (%s)\n", cand.Dir, cand.Method)
+
 	ev := r.Evidence(ctx, dir, governedBefore, boundaryMeasurable)
+	ev.DiffHash = proofbench.CandidateDiffHash(ctx, cand, t.BaseSHA)
 	verdict := proofbench.OracleResult{Verdict: proofbench.NoResult, Detail: out.Infrastructure}
 	if out.Infrastructure == "" {
-		verdict = r.Judge(ctx, dir, t)
+		verdict = r.Judge(ctx, cand.Dir, t)
 	}
 
 	a := proofbench.Attempt{
@@ -400,7 +426,9 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		Terminal: out.Terminal, Verdict: verdict.Verdict, OracleDetail: verdict.Detail,
 		Interventions: out.Interventions, Objections: out.Objections,
 		ReviewCycles: out.ReviewCycles, Observations: out.Observations,
-		DiffHash: ev.DiffHash, GovernedCheckoutClean: ev.GovernedClean,
+		DiffHash: ev.DiffHash, CandidateDir: cand.Dir, CandidateMethod: cand.Method,
+		CandidateHead:         cand.HeadSHA,
+		GovernedCheckoutClean: ev.GovernedClean,
 		GovernedCheckoutState: ev.GovernedState, BoundaryMeasurable: ev.Measurable,
 		Infrastructure: out.Infrastructure,
 		Artifacts:      map[string]string{"transcript_tail_sha256": proofbench.HashBytes([]byte(out.Raw))},

@@ -1,0 +1,1065 @@
+{
+  "version": "proof-v6",
+  "stage": "full",
+  "selection_rule": "Frozen before the corpus was chosen. From `git log --first-parent main` in CHRONOLOGICAL order, a commit is eligible when: (1) its diff touches at least one _test.go and at least one non-test .go; (2) it changes at most 6 files; (3) exactly one package contains both changed tests and changed non-test code -- that package is the tested package; and (4) the withheld oracle DISCRIMINATES, meaning `go test ./<pkg>/` FAILS at the parent commit with only the fix's test files restored, and PASSES at the accepted fix. Criterion (4) is the instrument-capability check: an oracle that passes pre-fix would score any candidate CORRECT, including one that changed nothing. Eligible commits are grouped by tested package in order of first appearance; packages with fewer than two eligible commits are excluded because they cannot form a linked later-task specimen. From each remaining package the EARLIEST eligible commit is a seed and the NEXT later one is its linked task, until 10 tasks are selected. Task statements are written from the pre-fix state and the commit subject, stating the problem and never the implementation. ORACLE REPLACEMENT (v4): proof-v3's withheld-test oracles were lifted from the accepted fix and failed to COMPILE against any solution that chose different names, so they measured whether a worker guessed the reference patch rather than whether it delivered the behaviour. v4 replaces every oracle with a BEHAVIOURAL CONTRACT probe written for the benchmark, and adds eligibility criterion (5): a task may enter the corpus only after its oracle separates three specimens -- REFERENCE (the accepted fix) PASS, WRONG (a plausible non-solution) FAIL, and ALTERNATE (correct, structurally unlike the reference) PASS. The ALTERNATE specimen is the whole point: it asks whether the oracle can recognise correctness it did not already know how to write. Where a task requires a NEW exported surface, the task statement names that surface -- an interface is a requirement, not a leak, and naming it still leaves the implementation free. Task bases, origins and thresholds are unchanged from v3. PROTOCOL AMENDMENT, pre-campaign, triggered by calibration. Criterion (6) is added to criteria (1)-(5). This is a measurement-eligibility condition, not a performance result: no RAW/COLD/WARM campaign arm had been run when it was adopted, and the tasks it rejects are rejected because correctness cannot be observed without prescribing the answer. (6) BEHAVIOURAL ORACLE-ABILITY: At the pinned task base, the task statement establishes externally observable behaviour that can be tested without requiring private identifiers, reference-patch structure, incidental environment state, or implementation choices not specified by the task. Before admission, the oracle must pass REFERENCE and a structurally distinct ALTERNATE correct implementation, and fail a plausible WRONG implementation. RE-SELECTION IS MECHANICAL. The original ten (corpus v1) are preserved in corpus_v1_record with their verdicts: four ADMITTED, five ORACLE_INELIGIBLE with reasons, and one ADMITTED_UNLINKED -- internal-mcpconfig-21c5a6b independently satisfies all six measurement criteria, and rejecting it because its seed failed would let a package-pairing convention override oracle validity. It contributes to RAW/COLD correctness and to end-to-end rates, and not to the WARM linkage denominator. Replacements are drawn by walking the eligible pool in the ALREADY-DEFINED chronological order -- packages in order of first appearance, packages with fewer than two criterion-(6)-eligible commits excluded, earliest commit a seed and the next later one its linked task -- admitting every candidate that satisfies all six criteria and the three-specimen gate, until BOTH stopping conditions hold: (a) the corpus contains at least 10 measurable tasks, AND (b) the corpus contains at least 4 linked specimens suitable for WARM-to-COLD compounding measurement. The stopping condition has always had two independent requirements; making that explicit is not curation, because the admission order stays mechanical. The linked minimum is NOT relaxed to stop sooner: RAW versus COLD asks whether governance works, while WARM asks whether accumulated governed experience compounds, and two pairs would give almost no leverage on the harder claim. The corpus reached ten tasks at walk position 7 with only two linked specimens -- preserved as intermediate_state -- and the walk continued in the same order to position 10, where the fourth linked specimen was admitted. Candidates are not chosen for how well they suit Sensei-code, and every rejection is recorded. SCOPE LIMITATION, to be restated in the final report: after criterion (6) this experiment no longer estimates performance on all ordinary coding tasks. It estimates performance on REAL REPOSITORY TASKS WITH INDEPENDENTLY OBSERVABLE BEHAVIOURAL CONTRACTS. That is narrower and far more defensible, and the six rejections show why: subjective text quality, uncontrolled machine state, a prescribed API/design leaving no room for a structurally different correct answer, and a package-main change whose observed behaviour cannot be attributed to it. EVALUATOR REPAIR (v6): proof-v5's COLD wave was VOID. A governed run does its work in its own candidate worktree, created by the engine beside the arm's checkout, and the harness evaluated the ARM checkout -- which never receives that work. All eleven governed arms recorded the empty-tree diff hash and were scored on code that was never there; one recorded INCORRECT candidate passes this same frozen oracle when the oracle is pointed at its real tree. proof-v6 re-pins the identical corpus, task statements, oracles, oracle hashes, thresholds, budget and schedule -- ONLY the evaluator changed. The candidate is now resolved through the arm's git worktree registration before cleanup, bound to the attempt by path, method and head commit, and an arm whose candidate cannot be resolved is a measurement-integrity failure rather than a zero. The proof-v5 COLD attempts are preserved untouched and labelled VOID_MEASUREMENT.",
+  "corpus_v1_record": [
+    {
+      "task": "internal-tui-ea046ba",
+      "verdict": "ADMITTED",
+      "reason": "scroll behaviour is observable through Update/View at the base"
+    },
+    {
+      "task": "internal-tui-be512db",
+      "verdict": "ADMITTED",
+      "reason": "same surface as its seed"
+    },
+    {
+      "task": "internal-mcpconfig-110678d",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the change lands in package main; its only observable surface is the built CLI, and the same commit also changes internal/mcpconfig, so a probe cannot attribute what it observes to the intended change"
+    },
+    {
+      "task": "internal-mcpconfig-21c5a6b",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Admitted provisionally on the assumption that Describe(repoRoot) was hermetic, and REJECTED while building its oracle. Describe is hermetic for the Claude agent only; the change this task is about is entirely the CODEX path, and describeCodex() takes no repoRoot -- it reads the user's ~/.codex/config.toml. A probe would test incidental machine state rather than the candidate, which criterion (6) forbids. Discovered by writing the probe, which is what the gate is for."
+    },
+    {
+      "task": "internal-behavioral-a453be8",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the package does not exist at the base, so the contract is types, constructor, error values AND a JSON-RPC handshake. Specifying all of it makes the task 'implement this design', leaving no room for a structurally distinct ALTERNATE -- the task cannot exercise the gate that makes this benchmark trustworthy"
+    },
+    {
+      "task": "internal-behavioral-055fe6b",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "same as its seed: the contract is a prescribed API and wire protocol"
+    },
+    {
+      "task": "internal-doctor-853fbe3",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the contract is that a check reporting a missing tool must name the fix -- subjective TEXT QUALITY. An oracle either prescribes wording, which is the reference-patch shape-binding criterion (6) forbids, or is too loose to separate WRONG from ALTERNATE"
+    },
+    {
+      "task": "internal-doctor-7a56cd2",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the behaviour depends on provider.StatusFor, which doctor.Run calls directly with no seam; a probe cannot construct 'authenticated but capability unknown' and would test incidental machine state rather than the candidate"
+    },
+    {
+      "task": "internal-gitx-a4fa351",
+      "verdict": "ADMITTED",
+      "reason": "gated: REFERENCE, WRONG and a structurally distinct ALTERNATE all separated"
+    },
+    {
+      "task": "internal-gitx-6460efd",
+      "verdict": "ADMITTED",
+      "reason": "gated: same"
+    }
+  ],
+  "excluded": [
+    {
+      "ref": "5dfffad641",
+      "reason": "package internal/assist has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "6cf23e8490",
+      "reason": "package internal/decision has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "da311a5627",
+      "reason": "package internal/publish has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "01f3fe1738",
+      "reason": "package internal/agent has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "cde6bf9212",
+      "reason": "package internal/workflow eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "4d3293745d",
+      "reason": "package internal/session has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "2e095c4a2d",
+      "reason": "package internal/architect has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "e6456697ce",
+      "reason": "package internal/setup eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "f1584969fc",
+      "reason": "package cmd/sensei-code eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "2dfad9c0c2",
+      "reason": "package internal/admission has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "be424a5f9a",
+      "reason": "package internal/retrieval has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "abcf63e9d5",
+      "reason": "package internal/provider eligible; the corpus reached 10 tasks first (chronological cut)"
+    },
+    {
+      "ref": "2034122fe9",
+      "reason": "package internal/authority has one eligible commit; it cannot form a linked later-task specimen"
+    },
+    {
+      "ref": "98197c1dce",
+      "reason": "rejected by eligibility criterion (4): its withheld oracle PASSES at the pinned base, so it cannot discriminate a correct candidate from one that changed nothing. Replaced by the next eligible commits in internal/tui."
+    }
+  ],
+  "calibration": [
+    {
+      "id": "cal-non-convergence-62",
+      "statement": "Known failure: the six-cycle inspection that never converged (PR #62). Instrument check only.",
+      "base_sha": "0000000000000000000000000000000000000000",
+      "origin": "pr-62",
+      "expected": "negative / non_convergence",
+      "oracle": {
+        "kind": "behavioral_probe",
+        "command": [
+          "true"
+        ]
+      }
+    },
+    {
+      "id": "cal-self-repair-79-80",
+      "statement": "Known win: the first end-to-end autonomous self-repair (PR #79/#80). Instrument check only.",
+      "base_sha": "0000000000000000000000000000000000000000",
+      "origin": "2f5ee40e42b460820ab93beac209188318a268de",
+      "expected": "positive",
+      "oracle": {
+        "kind": "behavioral_probe",
+        "command": [
+          "true"
+        ]
+      }
+    }
+  ],
+  "tasks": [
+    {
+      "id": "internal-gitx-a4fa351",
+      "statement": "internal/gitx must be able to show a reviewer the WHOLE of a candidate's work, including files the worker created rather than only files it modified. Today a worker that added a file produced a diff that did not contain it, so the reviewer judged the candidate with its new files invisible.\n\nProvide the exported method:\n\n    func (r Repo) CandidateDiff(ctx context.Context) (string, error)\n\nIt must return a unified diff covering modified tracked files AND newly created untracked files, must honour .gitignore, and must return empty output with no error on a clean tree. How it does that is yours to decide.",
+      "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+      "origin": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/gitx/git_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/gitx/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/gitx/contract_probe_test.go",
+        "source_file": "oracles/internal-gitx-a4fa351.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/gitx/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix. If this fails the probe is wrong about the contract, not the candidate."
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-gitx-a4fa351/WRONG",
+            "want": "INCORRECT",
+            "why": "provides the named method and returns the OLD behaviour, so created files stay invisible. This is what a plausible non-solution looks like."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-gitx-a4fa351/ALTERNATE",
+            "want": "CORRECT",
+            "why": "correct and structurally unlike the reference: the accepted fix records new paths with `git add --intent-to-add`; this one never touches the index, asking ls-files which paths are untracked and synthesising each diff with --no-index. If the oracle only recognises the reference, this fails."
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-gitx-6460efd",
+      "statement": "internal/gitx's read-only measurements of a checkout can themselves WRITE to the repository they are measuring: answering an ordinary status query lets git refresh and rewrite .git/index. A checker for a read-only lane must not become the write it is trying to detect.\n\nMake Repo.WorktreeIsClean and Repo.WorktreeIsCleanDetail leave the repository byte-for-byte unchanged while still answering correctly, including detecting a genuine modification. Their signatures and behaviour are otherwise unchanged. How you achieve it is yours to decide.",
+      "base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+      "origin": "6460efd8639a501fbf599b93bb478184edda2c9e",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/gitx/observation_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/gitx/"
+        ]
+      },
+      "depends_on": [
+        "internal-gitx-a4fa351"
+      ],
+      "contract": {
+        "probe": "internal/gitx/contract_probe_test.go",
+        "source_file": "oracles/internal-gitx-6460efd.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/gitx/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix, which routes reads through a helper carrying --no-optional-locks."
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-gitx-6460efd/WRONG",
+            "want": "INCORRECT",
+            "why": "plausible hardening that does not stop the refresh: --porcelain=v1 and -uall change the OUTPUT, never the write."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-gitx-6460efd/ALTERNATE",
+            "want": "CORRECT",
+            "why": "correct with no helper and no flag, setting GIT_OPTIONAL_LOCKS=0 on each command instead. Structurally unlike the reference; the oracle must still recognise it."
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-tui-ea046ba",
+      "statement": "The transcript in internal/tui cannot be scrolled: once the conversation is longer than the window, earlier lines run off the top and there is no way to reach them.\n\nMake the transcript scrollable through the ordinary bubbletea surface. A transcript longer than the window must show its most recent lines and tell the reader that earlier ones exist; PgUp must reveal previously hidden lines; PgDn must return towards the newest; scrolling past the start must rest at the first line rather than running off it or emptying the screen; and a transcript that fits must claim nothing is hidden. How the window is tracked is yours to decide.",
+      "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+      "origin": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/tui/scroll_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/tui/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/tui/contract_probe_test.go",
+        "source_file": "oracles/internal-tui-ea046ba.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/tui/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-tui-ea046ba/WRONG",
+            "want": "INCORRECT",
+            "why": "the pre-fix file: the transcript is truncated to its tail with no way to reach earlier lines. The plainest non-solution."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-tui-ea046ba/ALTERNATE",
+            "want": "CORRECT",
+            "why": "tracks the window as an OFFSET FROM THE BOTTOM with a single number and no follow flag, clamped while rendering -- where the reference keeps an absolute scrollTop plus an atBottom flag and a scrollPosition helper"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-tui-be512db",
+      "statement": "Scrolling the transcript responds only to PgUp/PgDn, which terminals and multiplexers routinely capture for their own scrollback before the program sees it, and a single-line scroll is undone immediately so the keys appear dead.\n\nMake scrolling respond to what a reader actually reaches for: the arrow keys, the usual ctrl bindings, and the mouse wheel. One notch must move exactly one line and must not be clamped back. Scrolling down must move towards the newest output, and the transcript must keep reporting how many earlier lines are hidden. How the position is stored is yours to decide.",
+      "base_sha": "ea046ba32c7d0ab482749caaf1aef0168848b53f",
+      "origin": "be512dbd60601ba40d53281b233bb1ab7f7f5b4f",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/tui/scroll_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/tui/"
+        ]
+      },
+      "depends_on": [
+        "internal-tui-ea046ba"
+      ],
+      "contract": {
+        "probe": "internal/tui/contract_probe_test.go",
+        "source_file": "oracles/internal-tui-be512db.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/tui/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-tui-be512db/WRONG",
+            "want": "INCORRECT",
+            "why": "the pre-fix file, which reproduces the real defect: PgUp only, an absolute top recomputed with a different formula, so the arrow keys are dead and a one-line scroll is clamped straight back"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-tui-be512db/ALTERNATE",
+            "want": "CORRECT",
+            "why": "resolves each binding to a signed row delta through a TABLE and applies it once, so adding a binding is data -- where the reference switches on the key with grouped cases and mutates the position in each arm"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-assist-5dfffad",
+      "statement": "internal/assist scopes its awareness_preflight call without telling Sensei which repository domain it is asking about, so the answer is not scoped to the workspace Sensei itself reported.\n\nWhen the workspace result carries a repository domain at binding.repository_domain, the preflight call must pass it as the \"domain\" argument. When no domain is available, the call must be made without a \"domain\" argument rather than with an empty one. Nothing else about the call changes.",
+      "base_sha": "5619d645e52570cabd43c7906b7d160d536d1c14",
+      "origin": "5dfffad64161a954b547028934edb8bbfc05e4e9",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/assist/packet_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/assist/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/assist/contract_probe_test.go",
+        "source_file": "oracles/internal-assist-5dfffad.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/assist/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-assist-5dfffad/WRONG",
+            "want": "INCORRECT",
+            "why": "always sends the key, empty when unknown. Plausible -- 'always present, sometimes blank' -- and it asks Sensei to scope an answer to nothing, which is a different request from asking unscoped"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-assist-5dfffad/ALTERNATE",
+            "want": "CORRECT",
+            "why": "no helper and no mutation: the binding is read inline into a typed local and the call chooses between two complete argument maps, where the reference builds one map and conditionally adds to it via a repositoryDomain helper"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-decision-6cf23e8",
+      "statement": "internal/decision sends a decision to the sensei CLI whenever it names an invariant OR any source file. Sensei's own contract-first rule is narrower: a decision must connect to a governing invariant or a failure mode, and naming the files it touched is not a connection. So an unlinkable decision is sent to be refused, and the user learns about it as a tool error rather than as a statement about their decision.\n\nAdd a Failures []string field to Record, carried to Sensei as --related-failure per non-empty entry, the way Invariants is already carried as --related-invariant.\n\nValidate must return the exported ErrNotLinked when a record links to neither an invariant nor a failure -- source files alone no longer satisfy it -- and Write must return that without invoking the CLI at all. A record missing a title or rationale is still invalid, and that is not an unlinked decision.",
+      "base_sha": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
+      "origin": "6cf23e8490c71e5a1531305d6327114048b9aefb",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/decision/record_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/decision/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/decision/contract_probe_test.go",
+        "source_file": "oracles/internal-decision-6cf23e8.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/decision/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-decision-6cf23e8/WRONG",
+            "want": "INCORRECT",
+            "why": "adds the field and carries it to argv while leaving the LINK RULE untouched, so a decision linked only by source files is still sent to be refused. The plausible half-fix."
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-decision-6cf23e8/ALTERNATE",
+            "want": "CORRECT",
+            "why": "asks linkage as one question over a combined links() helper rather than a condition over two named fields, and builds the link flags from a table rather than two hand-written loops"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-agent-01f3fe1",
+      "statement": "internal/agent streams a worker's raw output verbatim. For the claude worker that output is JSON envelopes, so the reader is shown protocol rather than activity.\n\nAdd the exported function:\n\n    func Activity(name, line string) string\n\nFor a worker whose name is not \"claude\" it returns the line trimmed of surrounding whitespace and otherwise unchanged. For \"claude\" it renders one readable activity line from an assistant envelope -- representing the assistant's text, and naming any tool being used -- and returns the empty string for anything that is not assistant activity, including envelopes of other types, empty content, and lines that are not valid JSON. No raw envelope syntax may reach the reader.",
+      "base_sha": "da311a56277119d4def7bc7526aadf119e7f96ad",
+      "origin": "01f3fe173884a88b469f1b9087a8fdece7e5a531",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/agent/activity_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/agent/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/agent/contract_probe_test.go",
+        "source_file": "oracles/internal-agent-01f3fe1.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/agent/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-agent-01f3fe1/WRONG",
+            "want": "INCORRECT",
+            "why": "provides the named function and hands the reader the raw stream, which is the defect"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-agent-01f3fe1/ALTERNATE",
+            "want": "CORRECT",
+            "why": "decodes into a generic map rather than a typed envelope, renders the WHOLE text rather than the first sentence, and formats a tool call as 'name -> target'. Same behaviour, no shared structure."
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-session-4d32937",
+      "statement": "A task interrupted after its plan was authorised cannot be resumed: nothing reconstructs, from the recorded event stream, which tasks were left in that state.\n\nAdd to internal/session the exported type and function:\n\n    type Interrupted struct { TaskID, Task, Plan, Review string }\n    func FindInterrupted(events []event.Event) []Interrupted\n\nGiven a session's events it returns one entry per task that was created, had its authority RESOLVED, and never reached a terminal workflow outcome -- carrying the task text, the plan, and the reviewer's latest status if one exists. A plan that was merely PROPOSED is not resumable: a task still waiting on a human has produced no work to continue. Tasks that completed or failed are excluded, entries come back in the order the tasks first appeared, and a task with no recorded request text is not returned.",
+      "base_sha": "008b9a347edc9675e34ea5e1eb6e834d28faf9d0",
+      "origin": "4d3293745da84ffa1b577bef9dd39c85809664e2",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/session/interrupted_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/session/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/session/contract_probe_test.go",
+        "source_file": "oracles/internal-session-4d32937.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/session/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-session-4d32937/WRONG",
+            "want": "INCORRECT",
+            "why": "treats a PROPOSED plan as resumable. Plausible -- a plan exists, so surely there is work to continue -- and wrong, because a task still awaiting a human has produced nothing"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-session-4d32937/ALTERNATE",
+            "want": "CORRECT",
+            "why": "three passes over independent sets (appeared, finished, authorised) then a reassembly pass, where the reference makes one pass into a per-task struct carrying its own flags"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-architect-2e095c4",
+      "statement": "There is no way to ask why a specific piece of governing knowledge exists.\n\nAdd to internal/architect the exported function:\n\n    func RunWhy(caller Caller, domain, id string) (string, error)\n\nGiven an id it resolves the rule through the supplied Caller's awareness_resolve tool and returns a report carrying what the graph holds about it. An empty id is an error naming the expected form. The class is not assumed from the id: an architect copies whatever they were shown, so a rule held under another kind must still be found rather than refused on a guess, and an id carrying a class prefix must resolve to the same rule as the bare one, with no prefix sent to Sensei. The domain scopes the query when non-empty and is omitted when empty. An id the graph holds nothing under is an error naming that id.",
+      "base_sha": "7dbe79e50f150be4e5bf998d4762c5004507e500",
+      "origin": "2e095c4a2d1daf5c1c306ae938efc83de2f13885",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/architect/run_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/architect/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/architect/contract_probe_test.go",
+        "source_file": "oracles/internal-architect-2e095c4.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/architect/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-architect-2e095c4/WRONG",
+            "want": "INCORRECT",
+            "why": "assumes the class from the id and refuses on a guess, so a rule the graph holds under another class is reported as absent"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-architect-2e095c4/ALTERNATE",
+            "want": "CORRECT",
+            "why": "splits the id on ':' to learn any stated class and tries that first, then the remainder from a set, rendering with fmt -- where the reference strips a known prefix list via a helper and walks an ordered slice chosen by prefix"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-setup-e645669",
+      "statement": "internal/setup does not notice candidate worktrees left behind by earlier runs, so a repository accumulates abandoned checkouts beside it that nothing reports.\n\nInspect must include a Check named \"candidate worktrees\" in its Report. A repository with no leftovers reports OK. A leftover directory that is EMPTY is reported and carries a Repair that removes it. A leftover directory HOLDING FILES is reported and is never deleted automatically -- unfinished work is not litter -- and the check says where it is so a person can decide. A worktree git still considers live is not abandoned.",
+      "base_sha": "ab882a4676c72610c37e8caf3a2b207441548579",
+      "origin": "e6456697ce11009c493b2c01bf2fb53dfcefc088",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/setup/setup_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/setup/"
+        ]
+      },
+      "contract": {
+        "probe": "internal/setup/contract_probe_test.go",
+        "source_file": "oracles/internal-setup-e645669.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/setup/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-setup-e645669/WRONG",
+            "want": "INCORRECT",
+            "why": "reports every leftover the same way and offers to delete them all. Plausible -- a leftover is a leftover -- and it treats somebody's unfinished candidate as litter"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-setup-e645669/ALTERNATE",
+            "want": "CORRECT",
+            "why": "classifies each leftover into a map keyed by disposition and assembles the report from it, where the reference walks entries into two named slices and switches over their lengths"
+          }
+        ]
+      }
+    },
+    {
+      "id": "internal-setup-16ecbc3",
+      "statement": "The abandoned-worktree check treats a candidate directory containing only this tool's own artefacts as if it held the user's work, so a repository is reported as holding abandoned work when it holds none, and nothing offers to clean it up.\n\nA candidate whose contents are entirely artefacts this tool created must not be described as holding work, and must be removable automatically. A candidate holding anything the user could have written must still be preserved and reported for a person to decide. Dot-directories beside a candidate are this tool's own and are not candidates.",
+      "base_sha": "2b5ecda293c5dd35583243bd234134f592ccec5b",
+      "origin": "16ecbc3e50654829ffd1d5e63d9f981a30ad24dd",
+      "oracle": {
+        "kind": "withheld_tests",
+        "paths": [
+          "internal/setup/setup_test.go"
+        ],
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "./internal/setup/"
+        ]
+      },
+      "depends_on": [
+        "internal-setup-e645669"
+      ],
+      "contract": {
+        "probe": "internal/setup/contract_probe_test.go",
+        "source_file": "oracles/internal-setup-16ecbc3.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/setup/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-setup-16ecbc3/WRONG",
+            "want": "INCORRECT",
+            "why": "the pre-fix file: a directory holding only a .guard artefact counts as work, so it is preserved and reported as abandoned work that nobody can clean up"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-setup-16ecbc3/ALTERNATE",
+            "want": "CORRECT",
+            "why": "asks the opposite question -- counts entries that are NOT this tool's and calls a candidate removable when that count is zero -- where the reference keeps an allowlist of artefact names and asks whether a directory holds only those"
+          }
+        ]
+      }
+    }
+  ],
+  "selection_walk": [
+    {
+      "position": 1,
+      "commit": "5dfffad641",
+      "package": "internal/assist",
+      "verdict": "ADMIT",
+      "reason": "SenseiCaller is an interface; a fake observes which domain the preflight was scoped to"
+    },
+    {
+      "position": 2,
+      "commit": "6cf23e8490",
+      "package": "internal/decision",
+      "verdict": "ADMIT",
+      "reason": "Write returns exported ErrNotLinked before invoking the CLI"
+    },
+    {
+      "position": 3,
+      "commit": "da311a5627",
+      "package": "internal/publish",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "the commit CREATES internal/publish. Its contract is the package's design, and specifying it leaves no room for a structurally distinct ALTERNATE \u2014 the same ground the behavioral tasks were rejected on, applied consistently rather than relaxed to reach the corpus size faster"
+    },
+    {
+      "position": 4,
+      "commit": "01f3fe1738",
+      "package": "internal/agent",
+      "verdict": "ADMIT",
+      "reason": "Activity(name, line) string is an exported pure function on an existing package"
+    },
+    {
+      "position": 5,
+      "commit": "cde6bf9212",
+      "package": "internal/workflow",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Engine.Note is exported but delivery is observable only by driving a real Engine with providers \u2014 incidental environment state"
+    },
+    {
+      "position": 6,
+      "commit": "4d3293745d",
+      "package": "internal/session",
+      "verdict": "ADMIT",
+      "reason": "FindInterrupted is pure over an event slice"
+    },
+    {
+      "position": 7,
+      "commit": "2e095c4a2d",
+      "package": "internal/architect",
+      "verdict": "ADMIT",
+      "reason": "RunWhy takes a Caller interface; hermetic. CORPUS REACHES 10 TASKS HERE \u2014 see intermediate_state: the stopping condition is NOT satisfied, because only 2 linked specimens exist"
+    },
+    {
+      "position": 8,
+      "commit": "e6456697ce",
+      "package": "internal/setup",
+      "verdict": "ADMIT",
+      "reason": "the abandoned-worktree check is observable through exported Inspect on a temp repo; seed for the setup chain"
+    },
+    {
+      "position": 9,
+      "commit": "10a4f32192",
+      "package": "internal/setup",
+      "verdict": "ADMIT",
+      "reason": "InspectQuick is exported and hermetic; LINKED specimen 3"
+    },
+    {
+      "position": 10,
+      "commit": "16ecbc3e50",
+      "package": "internal/setup",
+      "verdict": "ADMIT",
+      "reason": "tool-artefact handling observable through Inspect; LINKED specimen 4 \u2014 BOTH stopping conditions now satisfied"
+    },
+    {
+      "position": "post-walk revision",
+      "commit": "21c5a6b18b",
+      "package": "internal/mcpconfig",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Rejected after admission, while its oracle was being built: the Codex branch reads the user's home configuration, so the behaviour is not reachable hermetically. The corpus drops to 12 tasks and retains 4 linked specimens, so BOTH stopping conditions still hold and the walk does not resume."
+    },
+    {
+      "position": "post-walk revision",
+      "commit": "10a4f32192",
+      "package": "internal/setup",
+      "verdict": "ORACLE_INELIGIBLE",
+      "reason": "Rejected after admission, while its oracle was being built. The contract is whether InspectQuick reports a repository READY, and two of its three checks are exec.LookPath probes for 'sensei' and 'awareness-mcp' -- the verdict depends on what is installed on the machine, which criterion (6) forbids. Its dependent internal-setup-16ecbc3 is re-linked to the surviving setup seed e6456697ce rather than left dangling. LINKED SPECIMENS DROP TO 3, one below the minimum, so the chronological walk RESUMES from position 11."
+    },
+    {
+      "position": "walk resumed, positions 11+",
+      "commit": "(survey)",
+      "package": "(all remaining)",
+      "verdict": "NO_FOURTH_LINKED_PAIR_FOUND",
+      "reason": "Resuming the walk to restore stopping condition (b), every remaining package with two or more eligible commits was assessed against criterion (6): internal/tui aee4c5b519 adds only private functions and shells out to clipboard tools (machine state); internal/workflow's thirteen candidates have their contracts on private identifiers; internal/doctor's third candidate sits in the same provider-seam area as the two already rejected; cmd/sensei-code is package main, so observed behaviour cannot be attributed; internal/provider offers at most one admissible commit, not a pair. CONCLUSION: under criterion (6) this repository's history supports at most THREE linked specimens -- internal/gitx, internal/tui and internal/setup. Stopping condition (b) cannot be satisfied by continuing the walk. This is a limit of the corpus, not a reason to weaken the criterion, and it is recorded for a decision rather than resolved by lowering the minimum."
+    }
+  ],
+  "intermediate_state": {
+    "label": "v2-selection-at-N=10",
+    "tasks": 10,
+    "linked_specimens": 2,
+    "stopping_condition_satisfied": false,
+    "note": "Preserved so it is impossible to claim later that the walk continued because the first ten were disliked. At position 7 the corpus contained ten measurable tasks and only two linked specimens. The stopping condition has always had two independent requirements \u2014 at least ten measurable tasks AND at least four linked specimens \u2014 and only the second was outstanding. The walk continued in the same order, admitting every candidate that passed, and stopped at position 10 when the fourth linked specimen was admitted."
+  },
+  "linkage_definition": "AMENDED, pre-campaign, before any WARM result exists. The previous rule -- a linked specimen is a later task in the SAME Go PACKAGE -- was a PROXY for the claim, and it proved structurally incapable of supplying four specimens under criterion (6). Package membership was never the thing being measured.\n\nLINKED SPECIMEN: an earlier task establishes a specific durable artifact K, and a later task has a pre-registered technical condition for which K is relevant. Before any arm runs the benchmark must identify K, the later decision/investigation/test it could affect, and the observable difference between REUSE and REDISCOVERY. Package membership is neither necessary nor sufficient.\n\nRETRIEVAL ALONE DOES NOT COUNT. For WARM to score as compounding, K must measurably alter the later route, investigation, test selection, refusal or implementation. A 'memory retrieved' receipt with no engineering consequence is not evidence of compounding.\n\nThe fourth link was NOT nominated by inspection. All ordered earlier->later relations across the frozen corpus were re-evaluated mechanically from repository evidence only -- the awareness graph's invariants, their protects.files and their required_tests -- with no provider output consulted. Every candidate relation considered is recorded in linkage_evaluation.",
+  "linkage_evaluation": {
+    "method": "For each ordered pair (A before B) in the frozen corpus, a relation qualifies when an invariant K protects a CONTRACT file of A and a contract file of B by EXACT PATH, and K carries required_tests so reuse has an observable test-selection consequence. Contract files are the tested package's non-test files -- what the task statement establishes -- not every file the accepted fix happened to touch.",
+    "first_pass_rejected": "An earlier pass matched on every file each commit touched and produced 35 relations. Almost all were incidental wiring: internal/workflow/engine.go and internal/tui/model.go are edited by many commits, so unrelated tasks appeared to share a governing invariant. That pass was discarded as too loose -- it would have manufactured a fourth link out of a coincidence.",
+    "relations_found": [
+      {
+        "earlier": "internal-gitx-a4fa351",
+        "later": "internal-gitx-6460efd",
+        "K": "sensei_code.candidate.reviewer_sees_every_changed_file",
+        "verdict": "QUALIFIES",
+        "why": "K governs internal/gitx/git.go, the contract file of both tasks, and is substantively ABOUT the earlier task: A establishes that a candidate's diff includes files the worker created, which is what K requires. B changes the same file's measurement behaviour.",
+        "later_condition": "B alters read-only measurement in internal/gitx/git.go, the file K governs",
+        "reuse_evidence": "REUSE: B's plan cites K as a claim with source=graph rather than inference, and B's candidate leaves internal/gitx/git_test.go:TestCandidateDiffIncludesFilesTheWorkerCreated passing without the worker having had to derive the requirement. REDISCOVERY: the run works the constraint out from the code, or breaks that test."
+      },
+      {
+        "earlier": "internal-tui-ea046ba",
+        "later": "internal-tui-be512db",
+        "K": "sensei_code.provider.credentials_remain_provider_owned",
+        "verdict": "REJECTED_AS_SPURIOUS",
+        "why": "The only invariant matching both contract files is about PROVIDER CREDENTIALS, and both tui tasks are about scrolling. It matches because internal/tui/model.go is listed in that invariant's protected files, not because the earlier task establishes anything the later one needs. Counting it would be exactly the coincidence this evaluation exists to refuse."
+      }
+    ],
+    "no_relation_found": [
+      {
+        "pair": "internal-setup-e645669 -> internal-setup-16ecbc3",
+        "why": "no invariant carrying required_tests protects internal/setup/checks.go by exact path, so no K can be named"
+      },
+      {
+        "pair": "all other ordered pairs",
+        "why": "no invariant protects a contract file of both tasks by exact path"
+      }
+    ],
+    "result": "The corrected definition yields ONE qualifying relation, not four. The three same-package links are PRESERVED unchanged as instructed, and their status under the stronger definition is disclosed: internal/gitx qualifies with an identified K; internal/tui and internal/setup are same-package adjacency with NO identified K. No fourth link was found, and none was manufactured.",
+    "consequence": "WARM is reported as a THREE-SPECIMEN EXPLORATORY RESULT, and of those three only one carries pre-registered durable-knowledge relevance. The compounding claim is the weakest in the campaign and the report must say so in those terms rather than presenting three linked pairs as three tests of it."
+  },
+  "warm_claim": "not_tested",
+  "warm_downgrade_reason": "COMPOUNDING CLAIM: NOT TESTED \u2014 corpus insufficient under the frozen linkage standard.\n\nThe corrected linkage definition was applied mechanically to every ordered pair in the frozen corpus from repository evidence only, and yielded ONE qualifying relation, not four. The aggregate WARM arms are therefore NOT SCHEDULED: running WARM across unrelated tasks to preserve a three-arm matrix would produce arms that cannot tell anyone whether knowledge compounded, and calling one relation 'exploratory compounding evidence' would give that specimen more weight than it can carry.\n\nThe four-relation minimum is KEPT as the requirement for any future aggregate compounding claim. It is UNMET, not relaxed.\n\nA finding worth recording on its own: a loose file-overlap rule produced 35 apparent relations across this corpus, and all but one disappeared once a named, test-backed contract K was required. The distance between 'these tasks touch nearby code' and 'the system holds durable knowledge that could causally help later work' is enormous. That does not mean Sensei cannot compound knowledge. It means this repository's history cannot currently support measuring the claim.",
+  "warm_case_study": {
+    "earlier_task": "internal-gitx-a4fa351",
+    "later_task": "internal-gitx-6460efd",
+    "durable_artifact": "sensei_code.candidate.reviewer_sees_every_changed_file",
+    "later_condition": "internal-gitx-6460efd changes read-only measurement in internal/gitx/git.go, the file K governs, and must not disturb the behaviour K requires of the candidate diff.",
+    "reuse_vs_rediscovery": "REUSE: the WARM run cites K as a claim with source=graph rather than inference, and its candidate leaves internal/gitx/git_test.go:TestCandidateDiffIncludesFilesTheWorkerCreated passing without the worker having had to derive the requirement from the code. REDISCOVERY: the run works the constraint out for itself, or breaks that test. Written before either arm runs."
+  },
+  "campaign_design": "PRIMARY: RAW versus COLD across all measurable tasks. Correctness, end-to-end delivery, timeout/refusal/infrastructure rates, wall time and cost.\n\nWARM: exactly one arm, the downstream half of the single qualifying relation (internal-gitx-6460efd), executed after its upstream task has produced and revalidated K, and compared DESCRIPTIVELY against that task's COLD run. No WARM arm is scheduled for any other task.\n\nThe report states two separate results: RAW/COLD effectiveness, measured quantitatively over the frozen behavioural corpus; and governed knowledge compounding, NOT ESTABLISHED by this corpus, with the single qualifying pair reported as a descriptive case study only.",
+  "oracle_hashes": {
+    "internal-gitx-a4fa351": "sha256:141838ace1a8989fd153fafe40df6cd9",
+    "internal-gitx-6460efd": "sha256:cce7e47ef1ac203eaa66eca3a8f25162",
+    "internal-tui-ea046ba": "sha256:44930fbbd8407e47d0ac658feea50b53",
+    "internal-tui-be512db": "sha256:33370c08dc1e07033039644eeba4233c",
+    "internal-assist-5dfffad": "sha256:099743112cadc2ed9a3021510a62bfcd",
+    "internal-decision-6cf23e8": "sha256:5b6f2653604ede940adda050f103c577",
+    "internal-agent-01f3fe1": "sha256:6f4016b3a2c6a2bb4e5fc8670cbb84bd",
+    "internal-session-4d32937": "sha256:a55f6dfc6af0874ea226ac6fc77cb7cc",
+    "internal-architect-2e095c4": "sha256:1e41997ade41ee07afc920681e161e19",
+    "internal-setup-e645669": "sha256:e8e4fc026a08e4597d3ee08f03b0b967",
+    "internal-setup-16ecbc3": "sha256:7a5c2135a60a3de75d95c6ee11ce545b"
+  },
+  "execution_manifest": {
+    "frozen_before_first_arm": true,
+    "operational_budget": "22m",
+    "arms": 23,
+    "waves": [
+      "RAW_WAVE",
+      "COLD_WAVE",
+      "WARM_CASE_STUDY"
+    ],
+    "checkpoints": [
+      "RAW_COMPLETE",
+      "COLD_COMPLETE",
+      "WARM_COMPLETE",
+      "FINAL_VERDICT"
+    ],
+    "checkpoint_rule": "A checkpoint is captured after each wave and NO DECISION is taken from it. It exists so evidence survives a later catastrophe, not so the campaign can stop when the numbers look a certain way.",
+    "parallelism": "RAW and COLD may run 2 tasks at once, because those arms are isolated. The WARM case study runs sequentially after its upstream task, so accumulated knowledge has an unambiguous history.",
+    "halt_rule": "Results do NOT alter execution. The campaign may halt ONLY for measurement-integrity failure: a broken oracle, corrupted state isolation, attribution failure, provider credentials behaving incorrectly, or evidence loss. A bad score, a timeout, a refusal or an expensive run is a RESULT and must not change the schedule.",
+    "schedule": [
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-gitx-a4fa351",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-gitx-6460efd",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-tui-ea046ba",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-tui-be512db",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-assist-5dfffad",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-decision-6cf23e8",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-agent-01f3fe1",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-session-4d32937",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-architect-2e095c4",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-setup-e645669",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "RAW_WAVE",
+        "task": "internal-setup-16ecbc3",
+        "arm": "RAW",
+        "attempt": 1,
+        "carried_from": "proof-v5",
+        "note": "RAW works in its own checkout, so the evaluator defect did not touch it; not re-run"
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-gitx-a4fa351",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-gitx-6460efd",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-tui-ea046ba",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-tui-be512db",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-assist-5dfffad",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-decision-6cf23e8",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-agent-01f3fe1",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-session-4d32937",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-architect-2e095c4",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-setup-e645669",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "COLD_WAVE",
+        "task": "internal-setup-16ecbc3",
+        "arm": "COLD",
+        "attempt": 1
+      },
+      {
+        "wave": "WARM_CASE_STUDY",
+        "task": "internal-gitx-6460efd",
+        "arm": "WARM",
+        "attempt": 1,
+        "note": "the downstream half of the single qualifying linkage relation; run after its upstream task has produced and revalidated K, compared descriptively against that task's COLD run"
+      }
+    ],
+    "cold_rerun": "ALL ELEVEN COLD arms are re-run from scratch. Not only the four that completed and not only the ones that looked suspicious: selecting after seeing the first wave would introduce exactly the bias the frozen schedule exists to prevent."
+  },
+  "evaluator": {
+    "resolves": "the candidate worktree the governed run actually produced, before the arm checkout is removed",
+    "binding": "path, resolution method and head commit recorded on every attempt",
+    "diff": "computed from the resolved candidate against the arm's pinned base, never from the arm checkout",
+    "oracle": "the frozen contract probe, run against the resolved candidate",
+    "fails_closed": "an unresolvable candidate is a measurement-integrity failure, not a score",
+    "anomaly_check": "a wave whose governed attempts all produce the empty-tree hash, or any of which carry no resolved candidate directory, is refused as a measurement-integrity failure. proof-v5 was caught by that uniformity by eye; it is caught by the harness now.",
+    "preflight": "reproduced CORRECT for internal-gitx-a4fa351 from its surviving proof-v5 candidate worktree, with a non-empty diff, before any provider token was spent on v6."
+  }
+}

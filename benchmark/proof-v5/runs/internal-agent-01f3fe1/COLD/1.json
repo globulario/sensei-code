@@ -25,19 +25,19 @@
       "id": "d make activitypart report recognition validity",
       "cycle": 1,
       "status": "new",
-      "text": "…d. → Make activityPart report recognition/validity separately from rendered text, and have Activity return an empty string if any content block is malformed or unrecognized. Preserve source order only after the envelope is fully accepted."
+      "text": "\u2026d. \u2192 Make activityPart report recognition/validity separately from rendered text, and have Activity return an empty string if any content block is malformed or unrecognized. Preserve source order only after the envelope is fully accepted."
     },
     {
       "id": "demonstrably bound to the candidate revision",
       "cycle": 1,
       "status": "new",
-      "text": "… demonstrably bound to the candidate revision under review. → Run the review/audit from a checkout resolving d60801812142, supplying that revision as the audit expected head, then attach its workspace identity and resulting audit receipt."
+      "text": "\u2026 demonstrably bound to the candidate revision under review. \u2192 Run the review/audit from a checkout resolving d60801812142, supplying that revision as the audit expected head, then attach its workspace identity and resulting audit receipt."
     },
     {
       "id": "t an adversarial verdict be bound",
       "cycle": 2,
       "status": "new",
-      "text": "…t an adversarial verdict be bound to the revision read. A caller-supplied diff audit cannot bridge that identity gap. → Review and validate a checkout whose resolved revision is 4c0a1da7cbd7, using a Git-generated diff from that checkout."
+      "text": "\u2026t an adversarial verdict be bound to the revision read. A caller-supplied diff audit cannot bridge that identity gap. \u2192 Review and validate a checkout whose resolved revision is 4c0a1da7cbd7, using a Git-generated diff from that checkout."
     }
   ],
   "review_cycles": 3,
@@ -58,5 +58,6 @@
     "transcript": "benchmark/proof-v5/transcripts/internal-agent-01f3fe1/COLD/1.log",
     "transcript_tail_sha256": "sha256:c22243860945475604313f86fd03a1369af0039200684523dbec0c04d7ab918c"
   },
-  "notes": "4077 event(s) observed"
+  "notes": "4077 event(s) observed",
+  "measurement_status": "VOID_MEASUREMENT: oracle evaluated wrong worktree \u2014 this attempt was scored against the ARM checkout, which never receives a governed run's work. The run's real candidate worktree held its code. Preserved untouched as evidence about the INSTRUMENT; it is not evidence about Sensei-code and must not enter any benchmark result."
 }

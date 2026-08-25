@@ -126,6 +126,10 @@ type Manifest struct {
 	OracleHashes map[string]string `json:"oracle_hashes,omitempty"`
 	// ExecutionManifest is the frozen arm schedule, waves and halt rule.
 	ExecutionManifest json.RawMessage `json:"execution_manifest,omitempty"`
+	// Evaluator describes how a candidate is located and judged. Recorded in
+	// the manifest because changing it changes what the numbers mean, which is
+	// why proof-v6 exists at all.
+	Evaluator json.RawMessage `json:"evaluator,omitempty"`
 	// CampaignDesign is which arms this campaign schedules and why. Recorded in
 	// the manifest so the arm list is frozen with everything else.
 	CampaignDesign string `json:"campaign_design,omitempty"`
