@@ -24,6 +24,20 @@ type probeRow struct {
 	BlindSpots []string `json:"blind_spots"`
 	Gate       string   `json:"gate"`
 	Blast      string   `json:"blast"`
+	// Coverage is what the graph PUBLISHED about these files, captured in a
+	// second probe of the same 135.
+	//
+	// The original capture recorded only the status, which was enough while the
+	// router inferred coverage from it. Once the router read the coverage
+	// evidence instead, a specimen without that evidence could not exercise the
+	// thing under test -- it would have replayed green while proving nothing,
+	// which is the same false-green shape as the stale binary that answered
+	// UNKNOWN to everything.
+	Coverage struct {
+		Sufficient        bool `json:"sufficient"`
+		DirectAnchorCount int  `json:"direct_anchor_count"`
+		IndexedFileCount  int  `json:"indexed_file_count"`
+	} `json:"coverage"`
 }
 
 func loadProbe(t *testing.T) []probeRow {
@@ -39,15 +53,29 @@ func loadProbe(t *testing.T) []probeRow {
 	return rows
 }
 
+// probeBody renders one probed row as the preflight result it came from.
+func probeBody(r probeRow) string {
+	spots, _ := json.Marshal(r.BlindSpots)
+	return fmt.Sprintf(`{"status":%q,"blind_spots":%s,`+
+		`"coverage":{"sufficient":%t,"direct_anchor_count":%d,"indexed_file_count":%d},`+
+		`"change_risk":{"blast_radius":%q,"approval_gate":%q},`+healthyAuthority+`}`,
+		r.Status, spots, r.Coverage.Sufficient, r.Coverage.DirectAnchorCount,
+		r.Coverage.IndexedFileCount, r.Blast, r.Gate)
+}
+
+// replayOne routes a single probed row through the governed architect stage.
+func replayOne(t *testing.T, r probeRow) Routing {
+	t.Helper()
+	return routeAuthorityForAction(scopedPreflight(t, probeBody(r)), nil,
+		Action{Stage: StageCandidateEdit, Files: []string{r.File}})
+}
+
 func replay(t *testing.T, rows []probeRow) (RouteTally, map[string][]string) {
 	t.Helper()
 	var tally RouteTally
 	byRoute := map[string][]string{}
 	for _, r := range rows {
-		spots, _ := json.Marshal(r.BlindSpots)
-		body := fmt.Sprintf(`{"status":%q,"blind_spots":%s,`+
-			`"change_risk":{"blast_radius":%q,"approval_gate":%q},`+healthyAuthority+`}`,
-			r.Status, spots, r.Blast, r.Gate)
+		body := probeBody(r)
 		// The governed architect stage: an edit inside an isolated candidate
 		// worktree. That is what this repository's governed run actually does,
 		// so it is what the replay routes.
@@ -151,8 +179,10 @@ func TestEveryReplayedGapNamesWhatIsMissing(t *testing.T) {
 		}
 		spots, _ := json.Marshal(r.BlindSpots)
 		body := fmt.Sprintf(`{"status":%q,"blind_spots":%s,`+
+			`"coverage":{"sufficient":%t,"direct_anchor_count":%d,"indexed_file_count":%d},`+
 			`"change_risk":{"blast_radius":%q,"approval_gate":%q},`+healthyAuthority+`}`,
-			r.Status, spots, r.Blast, r.Gate)
+			r.Status, spots, r.Coverage.Sufficient, r.Coverage.DirectAnchorCount,
+			r.Coverage.IndexedFileCount, r.Blast, r.Gate)
 		got := routeAuthority(scopedPreflight(t, body), nil)
 		if !got.ClosesGap() {
 			t.Fatalf("%s: %+v", r.File, got)
@@ -290,5 +320,69 @@ func TestClosingARealGapChangesTheRouteAndDoesNotRecur(t *testing.T) {
 			risk+healthyAuthority+`}`), nil)
 	if unassessed.Granted() {
 		t.Fatal("coverage alone granted; the consequence assessment is doing no work")
+	}
+}
+
+// The coverage channel must stand on its own, not lean on the blind-spot one.
+//
+// sensei-code, auditing its own router, found that PreflightEmpty was converted
+// into "graph coverage is absent for the planned files" without ever consulting
+// the coverage evidence. Re-probing the same 135 files showed how often the two
+// disagree:
+//
+//	EMPTY files                                   84
+//	  of those, coverage.Proven() is TRUE         60
+//
+// On 60 files the graph published sufficient coverage over indexed files while
+// the router declared the region uncovered. And the replay distribution did not
+// move by a single file, because every one of those 60 ALSO carries a coverage
+// blind spot, which routes to the same place through a different channel.
+//
+// So the defect was fully masked: a right answer reached by an unsound route.
+// That is worth fixing precisely because nothing symptomatic pointed at it --
+// it would have diverged the first time the two channels stopped agreeing, and
+// the divergence would have looked like a new bug rather than an old one.
+//
+// This test pins the masking relationship itself, so the coupling cannot become
+// load-bearing silently.
+func TestTheCoverageChannelDoesNotLeanOnTheBlindSpotChannel(t *testing.T) {
+	rows := loadProbe(t)
+
+	var emptyProven, alsoBlindSpotted int
+	for _, r := range rows {
+		if r.Status != "PREFLIGHT_STATUS_EMPTY" {
+			continue
+		}
+		if !(r.Coverage.Sufficient && (r.Coverage.DirectAnchorCount > 0 || r.Coverage.IndexedFileCount > 0)) {
+			continue
+		}
+		emptyProven++
+		if len(readBlindSpots(r.BlindSpots).Coverage) != 0 {
+			alsoBlindSpotted++
+		}
+	}
+	if emptyProven == 0 {
+		t.Fatal("the specimen no longer contains an EMPTY status with proven coverage; " +
+			"re-probe before assuming the two channels agree")
+	}
+	t.Logf("EMPTY with proven coverage: %d, of which blind-spotted: %d", emptyProven, alsoBlindSpotted)
+
+	// Strip the masking channel and route again. The files whose coverage is
+	// genuinely proven must stop being reported as knowledge gaps; if they do
+	// not, the coverage channel is still deciding from the status.
+	for _, r := range rows {
+		if r.Status != "PREFLIGHT_STATUS_EMPTY" {
+			continue
+		}
+		if !(r.Coverage.Sufficient && (r.Coverage.DirectAnchorCount > 0 || r.Coverage.IndexedFileCount > 0)) {
+			continue
+		}
+		unmasked := r
+		unmasked.BlindSpots = nil
+		got := replayOne(t, unmasked)
+		if got.ClosesGap() {
+			t.Fatalf("%s: coverage is proven and no blind spot remains, yet the router still "+
+				"reports a knowledge gap: %s", r.File, got.Condition)
+		}
 	}
 }
