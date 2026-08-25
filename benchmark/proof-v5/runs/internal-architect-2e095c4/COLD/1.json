@@ -1,0 +1,49 @@
+{
+  "task": "internal-architect-2e095c4",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "7dbe79e50f150be4e5bf998d4762c5004507e500",
+  "run_base_sha": "36c459ac4c3e481478b232796ab1f55f03230b25",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T18:48:12Z",
+  "ended": "2026-08-25T18:53:24Z",
+  "wall_seconds": 311,
+  "terminal_status": "workflow.awaiting_authority",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/architect [github.com/globulario/sensei-code/internal/architect.test]\ninternal/architect/contract_probe_test.go:43:15: undefined: RunWhy\ninternal/architect/contract_probe_test.go:58:14: undefined: RunWhy\ninternal/architect/contract_probe_test.go:77:14: undefined: RunWhy\ninternal/architect/contract_probe_test.go:99:15: undefined: RunWhy\ninternal/architect/contract_probe_test.go:120:9: undefined: RunWhy\ninternal/architect/contract_probe_test.go:129:9: undefined: RunWhy\ninternal/architect/contract_probe_test.go:140:14: undefined: RunWhy\nFAIL\tgithub.com/globulario/sensei-code/internal/architect [build failed]\nFAIL",
+  "interventions": [
+    {
+      "kind": "authority_decision",
+      "detail": "Architectural authority reached a human-owned boundary.",
+      "at": "2026-08-25T18:53:24.580103321Z"
+    }
+  ],
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-architect-2e095c4/COLD/1.log",
+    "transcript_tail_sha256": "sha256:c875a48ae91a385a37e53969fe54eaef37d5630176c9f21f1e4b49afac03156f"
+  },
+  "notes": "132 event(s) observed"
+}

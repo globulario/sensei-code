@@ -1,0 +1,49 @@
+{
+  "task": "internal-setup-16ecbc3",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "2b5ecda293c5dd35583243bd234134f592ccec5b",
+  "run_base_sha": "181cb93b9c1cc1cce54910b8443d2155f0bf4988",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T19:15:36Z",
+  "ended": "2026-08-25T19:22:10Z",
+  "wall_seconds": 393,
+  "terminal_status": "workflow.awaiting_authority",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "--- FAIL: TestContractToolArtefactsAreNotTheUsersWork (1.29s)\n    contract_probe_test.go:85: a candidate holding only this tool's own artefacts was treated as holding the user's work, so nothing offered to remove it\n--- FAIL: TestContractArtefactsAloneAreNotReportedAsHoldingWork (1.43s)\n    contract_probe_test.go:128: artefacts alone were described as work: detail=\"1 abandoned candidate(s) still holding files, 0 empty\" fix=\"inspect and remove by hand: /tmp/TestContractArtefactsAloneAreNotReportedAsHoldingWork3227956385/001/.project-worktrees/task-3\"\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/setup\t3.992s\nFAIL",
+  "interventions": [
+    {
+      "kind": "authority_decision",
+      "detail": "Architectural authority reached a human-owned boundary.",
+      "at": "2026-08-25T19:22:10.338086574Z"
+    }
+  ],
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-setup-16ecbc3/COLD/1.log",
+    "transcript_tail_sha256": "sha256:0e2332990eae26aabbf1ce54789d690a354d107653aa3bb69522fa19af728e26"
+  },
+  "notes": "153 event(s) observed"
+}

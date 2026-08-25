@@ -1,0 +1,44 @@
+{
+  "checkpoint": "COLD_COMPLETE",
+  "status": "INVALID_AS_A_MEASUREMENT \u2014 measurement-integrity failure, not a product result",
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "arms_scheduled": 11,
+  "arms_executed": 11,
+  "as_recorded": {
+    "terminals": {
+      "COMPLETED": 4,
+      "REFUSED": 5,
+      "TIMEOUT": 2
+    },
+    "engineering_correctness": "0/4",
+    "end_to_end": "0/11",
+    "not_evaluated": 7,
+    "wall_median_s": 385,
+    "wall_total_min": 105.4,
+    "review_cycles": [
+      3,
+      0,
+      1,
+      1,
+      1,
+      2,
+      0,
+      0,
+      1,
+      0,
+      0
+    ],
+    "human_technical_interventions": 0,
+    "false_grants_as_recorded": 4,
+    "false_blocks_as_recorded": 0,
+    "cost_usd": "unknown \u2014 no provider reported cost in either arm"
+  },
+  "integrity_failure": {
+    "defect": "The harness judged the WRONG DIRECTORY. A governed run does its work in its own candidate worktree, created by the engine beside the arm's checkout. proofbench ran the oracle against the ARM worktree, which never receives that work, so every one of the eleven COLD arms recorded the empty-tree diff hash sha256:e3b0c44298fc1c14... and was scored on code that was never there.",
+    "evidence": "All 11 COLD candidate_diff_hash values are the empty hash. Six candidate worktrees survive on disk and contain real work: internal-gitx-a4fa351 holds the required CandidateDiff method plus tests, and running the frozen contract probe against that candidate PASSES -- the arm was recorded INCORRECT.",
+    "consequence": "The COLD column measures the harness, not the product. Its correctness numbers, its transition matrix, its false-grant count and its comparison with RAW are all void. The RAW wave is unaffected: a RAW arm works directly in its own checkout, so the oracle judged the right tree, and all 11 RAW diffs are non-empty.",
+    "licensed_halt": "The frozen halt rule permits stopping only for measurement-integrity failure -- explicitly including attribution failure. This is one: results were attributed to code that the run did not produce in the place the harness looked."
+  },
+  "preserved": "Every attempt stays in the ledger exactly as written. Nothing is re-run, edited or deleted. The repaired COLD wave becomes a new benchmark version with its own hash, and this slice is preserved as the evidence for why.",
+  "no_decision_taken": "No interpretation A-E is applied and no production change is made. The recorded numbers describe an instrument that was looking in the wrong place."
+}

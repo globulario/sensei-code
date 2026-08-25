@@ -1,0 +1,49 @@
+{
+  "task": "internal-session-4d32937",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "008b9a347edc9675e34ea5e1eb6e834d28faf9d0",
+  "run_base_sha": "008b9a347edc9675e34ea5e1eb6e834d28faf9d0",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T18:45:39Z",
+  "ended": "2026-08-25T18:48:11Z",
+  "wall_seconds": 151,
+  "terminal_status": "workflow.awaiting_authority",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/session [github.com/globulario/sensei-code/internal/session.test]\ninternal/session/contract_probe_test.go:23:9: undefined: FindInterrupted\ninternal/session/contract_probe_test.go:49:10: undefined: FindInterrupted\ninternal/session/contract_probe_test.go:67:9: undefined: FindInterrupted\ninternal/session/contract_probe_test.go:94:9: undefined: FindInterrupted\ninternal/session/contract_probe_test.go:106:9: undefined: FindInterrupted\ninternal/session/contract_probe_test.go:113:12: undefined: FindInterrupted\nFAIL\tgithub.com/globulario/sensei-code/internal/session [build failed]\nFAIL",
+  "interventions": [
+    {
+      "kind": "authority_decision",
+      "detail": "Architectural authority reached a human-owned boundary.",
+      "at": "2026-08-25T18:48:11.769744977Z"
+    }
+  ],
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-session-4d32937/COLD/1.log",
+    "transcript_tail_sha256": "sha256:272b2ef0a0f2ba315ca6e03bc6770b0cacb2516c7bc8f72aab2b3bdb8e3f07a0"
+  },
+  "notes": "69 event(s) observed"
+}

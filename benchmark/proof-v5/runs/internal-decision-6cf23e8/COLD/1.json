@@ -1,0 +1,43 @@
+{
+  "task": "internal-decision-6cf23e8",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "a4fa351d151c20ec9c60718032a1b975c4bb3679",
+  "run_base_sha": "4f602e5afa8f1a0b71bc2e56689a740cb661ea2c",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T18:17:49Z",
+  "ended": "2026-08-25T18:23:38Z",
+  "wall_seconds": 348,
+  "terminal_status": "workflow.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/decision [github.com/globulario/sensei-code/internal/decision.test]\ninternal/decision/contract_probe_test.go:47:32: unknown field Failures in struct literal of type Record\ninternal/decision/contract_probe_test.go:48:65: unknown field Failures in struct literal of type Record\ninternal/decision/contract_probe_test.go:60:3: unknown field Failures in struct literal of type Record\nFAIL\tgithub.com/globulario/sensei-code/internal/decision [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 1,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-decision-6cf23e8/COLD/1.log",
+    "transcript_tail_sha256": "sha256:42debc6a754b1bf98b26d40bf537e4c4fb0530b76988711f8539c9fc978a146c"
+  },
+  "notes": "840 event(s) observed"
+}
