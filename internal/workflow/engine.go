@@ -56,6 +56,11 @@ type Engine struct {
 	// reason ActionStage is not a provider field: the lane is a property of how
 	// the task was submitted, and anything a plan could set is a claim.
 	observing map[string]bool
+	// objectives records what each task was asked to do and what established
+	// that anyone asked. Kept beside observing and for the same reason: it is a
+	// property of how the task was submitted, and a plan that could set it
+	// would be making a claim rather than carrying a fact.
+	objectives map[string]Objective
 	// findings holds what each observation established, so a caller may open
 	// repair work from it. Holding evidence is not holding authority: a repair
 	// opened from one enters the ordinary governed path with nothing carried
@@ -392,8 +397,35 @@ func (c taskContext) intent() string {
 
 func (e *Engine) run(ctx context.Context, taskID, task string, how Provenance) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
+	// Recorded before anything reads it, and never written again. The mode
+	// event used to be the only place provenance went, so it was announced and
+	// then dropped: nothing downstream could tell a task a human asked for from
+	// one an AI submitted with identical wording.
+	e.recordObjective(taskID, Objective{Text: task, Provenance: how})
 	e.announceMode(taskID, governedMode(how))
 	e.execute(ctx, taskID, task)
+}
+
+// objective returns what this task was asked to do, and what established that
+// anyone asked. A task nothing recorded reads as unestablished, which is the
+// honest answer rather than a missing one.
+func (e *Engine) objective(taskID string) Objective {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if o, ok := e.objectives[taskID]; ok {
+		return o
+	}
+	return Objective{Provenance: SubmittedUnattended}
+}
+
+// recordObjective stores the request and its provenance at submission.
+func (e *Engine) recordObjective(taskID string, o Objective) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.objectives == nil {
+		e.objectives = make(map[string]Objective)
+	}
+	e.objectives[taskID] = o
 }
 
 // observes reports whether a task entered through the observation lane.
@@ -1731,7 +1763,20 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
 	}
-	return routeAuthorityForAction(scoped, d.Claims, action), scoped, nil
+	routing := routeAuthorityForAction(scoped, d.Claims, action)
+
+	// What sensei-code can now SAY about this plan: which part came from the
+	// requested objective, which are technical claims still needing evidence,
+	// and which consequence decision remains authority-sensitive.
+	//
+	// Stated, not decided. The route above is already final; this reads the
+	// same inputs and separates them, so a reader can see that the objective
+	// established none of the technical premises and that the consequence
+	// assessment did not consult who asked.
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing.Route, d).Render(), nil))
+
+	return routing, scoped, nil
 }
 
 // derivedRecipesPath is where the durable questions live.
