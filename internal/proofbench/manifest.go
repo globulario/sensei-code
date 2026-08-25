@@ -57,6 +57,19 @@ var Arms = []Arm{ArmRaw, ArmCold, ArmWarm}
 type Manifest struct {
 	// Version names this benchmark. A changed manifest needs a changed version.
 	Version string `json:"version"`
+	// Stage says what this corpus is for, and it changes what soundness means.
+	//
+	// "calibration" is the small slice run first to find out whether the scores
+	// are interpretable at all -- the mandate's two tasks by RAW and COLD. It is
+	// held to the same oracle gate and to none of the size minimums, because
+	// requiring ten tasks of a two-task probe would make the cheap check
+	// impossible and push the campaign straight back to the expensive one.
+	//
+	// "full" is the campaign proper and carries every minimum.
+	//
+	// Declared in the manifest, before results, so the exemption is a stated
+	// purpose rather than a threshold lowered once the corpus came up short.
+	Stage string `json:"stage"`
 	// SelectionRule is the eligibility rule, recorded because it was frozen
 	// BEFORE the corpus was chosen. A rule written after seeing which tasks
 	// Sensei happens to be good at is not a rule.
@@ -214,6 +227,19 @@ func (m Manifest) Validate() error {
 			}
 		}
 	}
+	switch m.Stage {
+	case "calibration":
+		// Size minimums do not apply; the oracle gate still does.
+		if len(problems) == 0 {
+			return nil
+		}
+		sort.Strings(problems)
+		return fmt.Errorf("manifest is not sound:\n  - %s", strings.Join(problems, "\n  - "))
+	case "full", "":
+	default:
+		add("unrecognised stage %q; a corpus must declare what it is for", m.Stage)
+	}
+
 	// The campaign's own stated minimums. Checked here so a corpus that cannot
 	// support the pre-registered gates is refused before it costs provider
 	// budget, rather than discovered in the report.
