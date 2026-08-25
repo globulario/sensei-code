@@ -45,10 +45,32 @@ const (
 	exitAwaitingAuthority = 3
 	exitStopped           = 4
 	exitTimeout           = 5
+	// exitObserved means a read-only run finished by reporting findings.
+	//
+	// Distinct from exitCompleted, which means a change was admitted. An audit
+	// that finds three real defects and admits nothing has succeeded, and a
+	// caller that cannot tell the two apart will either treat every audit as a
+	// no-op or go looking for a change that was never supposed to exist.
+	exitObserved = 6
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
-	fs := flag.NewFlagSet("run", flag.ExitOnError)
+	return runHeadless(ctx, repo, cfg, args, "run", false)
+}
+
+// runObservation is `sensei-code observe`: read the repository, report what was
+// found, admit nothing.
+//
+// A separate entrypoint rather than a flag on run, because the lane has to be
+// structural. A flag is a claim the caller makes; which command was invoked is
+// a fact about how the process was started, and the engine fixes the lane from
+// it at submission time where nothing downstream can widen it.
+func runObservation(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
+	return runHeadless(ctx, repo, cfg, args, "observe", true)
+}
+
+func runHeadless(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string, name string, observe bool) int {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	task := fs.String("task", "", "the work to carry out (required)")
 	timeout := fs.Duration("timeout", 0, "give up after this long; 0 waits indefinitely")
 	asJSON := fs.Bool("json", false, "emit the event stream as JSONL instead of prose")
@@ -57,7 +79,7 @@ func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 		return exitUsage
 	}
 	if strings.TrimSpace(*task) == "" {
-		fmt.Fprintln(os.Stderr, "sensei-code run: --task is required")
+		fmt.Fprintln(os.Stderr, "sensei-code "+name+": --task is required")
 		fs.Usage()
 		return exitUsage
 	}
@@ -73,7 +95,7 @@ func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 	sessionID := session.ID(time.Now())
 	store, err := session.New(repo.Root, sessionID)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "sensei-code run:", err)
+		fmt.Fprintln(os.Stderr, "sensei-code "+name+":", err)
 		return exitFailed
 	}
 	bus := event.NewBus()
@@ -87,7 +109,15 @@ func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 	}
 
 	engine := workflow.New(repo, cfg, bus, store, sessionID)
-	taskID := engine.SubmitGoverned(ctx, strings.TrimSpace(*task))
+	// Nobody typed this. `RequestedByHuman` used to be stamped here because it
+	// was set from which entrypoint ran, not from anything establishing a
+	// person was present -- and in a dogfooding run an AI submitted a task the
+	// engine then recorded as the human's.
+	submit := engine.SubmitGovernedUnattended
+	if observe {
+		submit = engine.SubmitObservation
+	}
+	taskID := submit(ctx, strings.TrimSpace(*task))
 	if !*quiet {
 		fmt.Printf("task %s  session %s\n", taskID, sessionID)
 	}
@@ -145,6 +175,8 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 			switch ev.Kind {
 			case event.WorkflowCompleted:
 				return exitCompleted
+			case event.WorkflowObserved:
+				return exitObserved
 			case event.WorkflowFailed:
 				return exitFailed
 			case event.WorkflowStopped:
@@ -162,7 +194,7 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 func terminal(k event.Kind) bool {
 	switch k {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
-		event.WorkflowAwaitingAuthority, event.AuthorityRequired:
+		event.WorkflowObserved, event.WorkflowAwaitingAuthority, event.AuthorityRequired:
 		return true
 	}
 	return false

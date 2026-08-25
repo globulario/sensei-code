@@ -162,6 +162,65 @@ func (r Repo) CreateWorktreeAt(ctx context.Context, taskID, baseSHA string) (str
 	return path, r.addWorktree(ctx, path, r.WorktreeBranch(taskID), base)
 }
 
+// CreateObservationWorktree checks out a DETACHED copy of one commit for a
+// read-only run.
+//
+// Detached, and deliberately so: an observation has nothing to commit, so a
+// branch would be state to clean up rather than state to use.
+//
+// What this buys, precisely: the observer's working directory is somewhere the
+// governed checkout is not, so an ordinary edit lands here instead of there. It
+// is NOT filesystem confinement. The subprocess keeps the ambient permissions
+// of the user running Sensei Code and can address any path it likes, including
+// the governed root.
+//
+// The first draft of this comment said a separate worktree "stops a
+// write-capable provider from touching" the governed checkout. The observation
+// lane audited this file and reported that sentence as false, which it was --
+// the same overclaim the reviewer had just rejected in the post-hoc
+// cleanliness check, rewritten one layer down.
+//
+// Removing it is the caller's job, and RemoveObservationWorktree does not need
+// a branch deleted afterwards.
+func (r Repo) CreateObservationWorktree(ctx context.Context, taskID, baseSHA string) (string, error) {
+	base := strings.TrimSpace(baseSHA)
+	if base == "" {
+		return "", fmt.Errorf("refusing to create an observation worktree without an explicit base commit")
+	}
+	path := r.WorktreePath(taskID) + "-observe"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return "", err
+	}
+	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "--detach", path, base)
+	if b, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("git worktree add --detach: %w: %s", err, strings.TrimSpace(string(b)))
+	}
+	return path, nil
+}
+
+// WorktreeIsClean reports whether a worktree has no tracked or untracked
+// changes, and names them when it does.
+//
+// Used on the observation workspace, where a write is harmless because the
+// workspace is discarded, as a SIGNAL that a configured provider is not as
+// read-only as the lane assumes.
+//
+// It carries exactly the weakness that disqualified this check as a safety
+// mechanism on the governed repository: a commit, a write to an ignored path,
+// or a write followed by a restore all leave status clean. That is tolerable
+// here and was not there, because nothing rests on the answer -- a positive
+// result is informative and a negative one proves nothing. Do not promote this
+// to a boundary.
+func (r Repo) WorktreeIsClean(ctx context.Context, path string) (bool, string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", path, "status", "--porcelain")
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return false, "", fmt.Errorf("git status in %s: %w: %s", path, err, strings.TrimSpace(string(b)))
+	}
+	out := strings.TrimSpace(string(b))
+	return out == "", out, nil
+}
+
 func (r Repo) addWorktree(ctx context.Context, path, branch, base string) error {
 	cmd := exec.CommandContext(ctx, "git", "-C", r.Root, "worktree", "add", "-b", branch, path, base)
 	if b, err := cmd.CombinedOutput(); err != nil {
@@ -184,6 +243,28 @@ func (r Repo) DeleteBranch(ctx context.Context, name string) error {
 		return fmt.Errorf("git branch -D %s: %w: %s", name, err, strings.TrimSpace(string(b)))
 	}
 	return nil
+}
+
+// WorktreeIsCleanDetail returns a worktree's porcelain status verbatim.
+//
+// Separate from WorktreeIsClean because the observation lane needs to COMPARE
+// two moments rather than test one: "clean" cannot distinguish a change this
+// run made from one that was already present, and treating an already-dirty
+// repository as evidence of mutation is a false accusation that fires exactly
+// when someone audits a work-in-progress.
+func (r Repo) WorktreeIsCleanDetail(ctx context.Context, path string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", path, "status", "--porcelain")
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git status in %s: %w: %s", path, err, strings.TrimSpace(string(b)))
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+// RemoveObservationWorktree discards a detached observation workspace. No
+// branch is deleted, because none was created.
+func (r Repo) RemoveObservationWorktree(ctx context.Context, path string) error {
+	return r.RemoveWorktree(ctx, path)
 }
 
 func (r Repo) RemoveWorktree(ctx context.Context, path string) error {
