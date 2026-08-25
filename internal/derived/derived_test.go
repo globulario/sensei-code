@@ -173,3 +173,34 @@ func TestMissingRecipeFileIsNoRecipesNotAnError(t *testing.T) {
 		t.Fatalf("got=%v err=%v", got, err)
 	}
 }
+
+// A retained anchor beside a refusal is not coverage.
+//
+// Found by sensei-code auditing this package through the observation lane:
+// AnchorsFor documented "recipes that do not derive contribute nothing" while
+// testing only that an anchor was non-nil. CLI never produces that combination,
+// so nothing was broken -- but the guarantee was stated in the one place that
+// did not enforce it, and Revalidator is an interface anyone may implement.
+func TestARetainedAnchorBesideARefusalIsNotCoverage(t *testing.T) {
+	stale := &fake{outcome: NotDerived, inputs: []string{"internal/event/bus.go"}}
+	// A Revalidator that refuses and hands back an anchor anyway.
+	rv := revalidatorFunc(func(ctx context.Context, root, rev string, r Recipe) Result {
+		res := stale.Revalidate(ctx, root, rev, r)
+		res.Outcome = NotDerived
+		res.Anchor = &Anchor{recipe: r, world: rev, files: []string{"internal/event/bus.go"}}
+		return res
+	})
+	anchors, results := AnchorsFor(context.Background(), rv, ".", "world", []Recipe{busRecipe()})
+	if len(anchors) != 0 {
+		t.Fatalf("a NOT_DERIVED result anchored %d file set(s); there is no partial credit", len(anchors))
+	}
+	if results[0].Outcome != NotDerived {
+		t.Fatalf("outcome = %s", results[0].Outcome)
+	}
+}
+
+type revalidatorFunc func(context.Context, string, string, Recipe) Result
+
+func (f revalidatorFunc) Revalidate(ctx context.Context, root, rev string, r Recipe) Result {
+	return f(ctx, root, rev, r)
+}
