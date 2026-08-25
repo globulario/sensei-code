@@ -613,5 +613,42 @@
     "linked_specimens": 2,
     "stopping_condition_satisfied": false,
     "note": "Preserved so it is impossible to claim later that the walk continued because the first ten were disliked. At position 7 the corpus contained ten measurable tasks and only two linked specimens. The stopping condition has always had two independent requirements \u2014 at least ten measurable tasks AND at least four linked specimens \u2014 and only the second was outstanding. The walk continued in the same order, admitting every candidate that passed, and stopped at position 10 when the fourth linked specimen was admitted."
-  }
+  },
+  "linkage_definition": "AMENDED, pre-campaign, before any WARM result exists. The previous rule -- a linked specimen is a later task in the SAME Go PACKAGE -- was a PROXY for the claim, and it proved structurally incapable of supplying four specimens under criterion (6). Package membership was never the thing being measured.\n\nLINKED SPECIMEN: an earlier task establishes a specific durable artifact K, and a later task has a pre-registered technical condition for which K is relevant. Before any arm runs the benchmark must identify K, the later decision/investigation/test it could affect, and the observable difference between REUSE and REDISCOVERY. Package membership is neither necessary nor sufficient.\n\nRETRIEVAL ALONE DOES NOT COUNT. For WARM to score as compounding, K must measurably alter the later route, investigation, test selection, refusal or implementation. A 'memory retrieved' receipt with no engineering consequence is not evidence of compounding.\n\nThe fourth link was NOT nominated by inspection. All ordered earlier->later relations across the frozen corpus were re-evaluated mechanically from repository evidence only -- the awareness graph's invariants, their protects.files and their required_tests -- with no provider output consulted. Every candidate relation considered is recorded in linkage_evaluation.",
+  "linkage_evaluation": {
+    "method": "For each ordered pair (A before B) in the frozen corpus, a relation qualifies when an invariant K protects a CONTRACT file of A and a contract file of B by EXACT PATH, and K carries required_tests so reuse has an observable test-selection consequence. Contract files are the tested package's non-test files -- what the task statement establishes -- not every file the accepted fix happened to touch.",
+    "first_pass_rejected": "An earlier pass matched on every file each commit touched and produced 35 relations. Almost all were incidental wiring: internal/workflow/engine.go and internal/tui/model.go are edited by many commits, so unrelated tasks appeared to share a governing invariant. That pass was discarded as too loose -- it would have manufactured a fourth link out of a coincidence.",
+    "relations_found": [
+      {
+        "earlier": "internal-gitx-a4fa351",
+        "later": "internal-gitx-6460efd",
+        "K": "sensei_code.candidate.reviewer_sees_every_changed_file",
+        "verdict": "QUALIFIES",
+        "why": "K governs internal/gitx/git.go, the contract file of both tasks, and is substantively ABOUT the earlier task: A establishes that a candidate's diff includes files the worker created, which is what K requires. B changes the same file's measurement behaviour.",
+        "later_condition": "B alters read-only measurement in internal/gitx/git.go, the file K governs",
+        "reuse_evidence": "REUSE: B's plan cites K as a claim with source=graph rather than inference, and B's candidate leaves internal/gitx/git_test.go:TestCandidateDiffIncludesFilesTheWorkerCreated passing without the worker having had to derive the requirement. REDISCOVERY: the run works the constraint out from the code, or breaks that test."
+      },
+      {
+        "earlier": "internal-tui-ea046ba",
+        "later": "internal-tui-be512db",
+        "K": "sensei_code.provider.credentials_remain_provider_owned",
+        "verdict": "REJECTED_AS_SPURIOUS",
+        "why": "The only invariant matching both contract files is about PROVIDER CREDENTIALS, and both tui tasks are about scrolling. It matches because internal/tui/model.go is listed in that invariant's protected files, not because the earlier task establishes anything the later one needs. Counting it would be exactly the coincidence this evaluation exists to refuse."
+      }
+    ],
+    "no_relation_found": [
+      {
+        "pair": "internal-setup-e645669 -> internal-setup-16ecbc3",
+        "why": "no invariant carrying required_tests protects internal/setup/checks.go by exact path, so no K can be named"
+      },
+      {
+        "pair": "all other ordered pairs",
+        "why": "no invariant protects a contract file of both tasks by exact path"
+      }
+    ],
+    "result": "The corrected definition yields ONE qualifying relation, not four. The three same-package links are PRESERVED unchanged as instructed, and their status under the stronger definition is disclosed: internal/gitx qualifies with an identified K; internal/tui and internal/setup are same-package adjacency with NO identified K. No fourth link was found, and none was manufactured.",
+    "consequence": "WARM is reported as a THREE-SPECIMEN EXPLORATORY RESULT, and of those three only one carries pre-registered durable-knowledge relevance. The compounding claim is the weakest in the campaign and the report must say so in those terms rather than presenting three linked pairs as three tests of it."
+  },
+  "warm_claim": "exploratory",
+  "warm_downgrade_reason": "The corrected linkage definition -- pre-registered durable-knowledge relevance -- was applied mechanically to every ordered pair in the frozen corpus using repository evidence only, and yielded ONE qualifying relation (internal/gitx), not four. The same-package proxy it replaced could not reach four either, under criterion (6): only internal/gitx, internal/tui and internal/setup can supply same-package pairs at all, and of those only internal/gitx has an identifiable K.\n\nThe three same-package links are preserved and WARM is still executed, because a weaker result is worth more than none. What is NOT permitted is calling it a test of the compounding claim. It is a three-specimen exploratory result of which one specimen carries pre-registered relevance, and the report must say so in those terms.\n\nThe minimum of four was not lowered. The evidence that four is unavailable in this repository's history is recorded in linkage_evaluation, and a corpus that can supply four would still be held to it."
 }

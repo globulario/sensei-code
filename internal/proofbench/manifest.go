@@ -99,6 +99,32 @@ type Manifest struct {
 	// its admissions could not be distinguished from a search for tasks the
 	// product happens to suit.
 	SelectionWalk []WalkStep `json:"selection_walk,omitempty"`
+	// WarmClaim says how strongly the compounding result may be stated.
+	//
+	// "measured" is the default and requires MinLinkedTasks linked specimens.
+	// "exploratory" is a DECLARED DOWNGRADE for a corpus that cannot supply
+	// them: the campaign still runs WARM and the report must present it as
+	// exploratory rather than as a test of the compounding claim.
+	//
+	// Declaring it is not the same as lowering the minimum. The minimum stands;
+	// what changes is what the eventual number is allowed to be called, and the
+	// downgrade is recorded with the evidence that forced it.
+	WarmClaim string `json:"warm_claim,omitempty"`
+	// WarmDowngradeReason is why the stronger claim is unavailable. Required
+	// whenever WarmClaim is "exploratory", so the weakening can never be a bare
+	// flag somebody set on a slow evening.
+	WarmDowngradeReason string `json:"warm_downgrade_reason,omitempty"`
+	// LinkageDefinition is what makes a later task a linked specimen.
+	//
+	// Amended pre-campaign from same-package pairing to pre-registered
+	// durable-knowledge relevance: package membership was a proxy for the WARM
+	// claim and was never the thing being measured.
+	LinkageDefinition string `json:"linkage_definition,omitempty"`
+	// LinkageEvaluation is every earlier-to-later relation considered, with why
+	// each qualified or failed. Recorded in full because a linkage list showing
+	// only its successes cannot be distinguished from one assembled after
+	// noticing a shortfall.
+	LinkageEvaluation json.RawMessage `json:"linkage_evaluation,omitempty"`
 	// IntermediateState is the corpus at the moment it first reached ten tasks.
 	//
 	// Preserved so it is impossible to claim later that the walk continued
@@ -304,8 +330,18 @@ func (m Manifest) Validate() error {
 		add("primary corpus has %d tasks; the campaign requires at least %d", n, MinPrimaryTasks)
 	}
 	if n := m.LinkedTasks(); n < MinLinkedTasks {
-		add("only %d linked later-task specimens; the COLD-vs-WARM compounding comparison "+
-			"requires at least %d", n, MinLinkedTasks)
+		switch m.WarmClaim {
+		case "exploratory":
+			if strings.TrimSpace(m.WarmDowngradeReason) == "" {
+				add("warm_claim is \"exploratory\" with no reason recorded; a downgrade nobody had " +
+					"to justify is indistinguishable from a threshold quietly lowered")
+			}
+		default:
+			add("only %d linked later-task specimens; the COLD-vs-WARM compounding comparison "+
+				"requires at least %d. If the corpus genuinely cannot supply them, declare "+
+				"warm_claim=\"exploratory\" with a reason rather than counting a weaker corpus "+
+				"as a test of the compounding claim", n, MinLinkedTasks)
+		}
 	}
 	if len(m.Calibration) == 0 {
 		add("no calibration specimens; the instrument must first prove it can record a known " +
