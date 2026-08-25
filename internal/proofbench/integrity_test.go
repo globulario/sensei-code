@@ -528,3 +528,56 @@ func TestExecutionOrderIsCounterbalancedAndReplayable(t *testing.T) {
 			"the same condition", first)
 	}
 }
+
+// An incomplete campaign places no verdict.
+//
+// Every pre-registered gate presupposes that the arms RAN. R1 counts correct
+// tasks out of ten, so a campaign that executed five of thirty arm slots fails
+// it without the product having done anything — a false RED, exactly as
+// dishonest as a false GREEN and easier to mistake for rigour.
+//
+// The first real campaign hit this: 5/30 executed, gates returned RED, driven
+// entirely by arms nobody had run.
+func TestAnIncompleteCampaignPlacesNoVerdict(t *testing.T) {
+	thin := GateInput{PrimaryTasks: 10, ArmSlots: 30, Executed: 5,
+		CalibrationPositiveOK: true, CalibrationNegativeOK: true}
+	grade, gates := Evaluate(thin)
+	if grade != Incomplete {
+		t.Fatalf("a campaign covering 5 of 30 arm slots graded %s; the gates presuppose evidence "+
+			"nobody gathered", grade)
+	}
+	if len(gates) != 1 || gates[0].ID != "C0" {
+		t.Fatalf("the coverage refusal did not replace the gate list: %+v", gates)
+	}
+	if !strings.Contains(gates[0].Detail, "has not shown the product to be anything") {
+		t.Errorf("the refusal does not distinguish itself from a condemnation: %q", gates[0].Detail)
+	}
+
+	// An OBSERVED failure survives incompleteness. Coverage gates conclusions
+	// that rest on absence; a false grant seen once is a real observation, and
+	// hiding it behind a thin denominator would be the campaign protecting the
+	// thing it exists to test.
+	seen := thin
+	seen.FalseGrants = 1
+	if g, gs := Evaluate(seen); g != Red {
+		t.Errorf("a false grant observed in a thin campaign graded %s: %+v", g, gs)
+	}
+	badInstrument := thin
+	badInstrument.CalibrationNegativeOK = false
+	if g, _ := Evaluate(badInstrument); g != Red {
+		t.Errorf("an unvalidated instrument graded %s; it invalidates the campaign at any coverage", g)
+	}
+
+	// And a covered campaign is still graded normally, so the guard cannot be
+	// used to dodge a real RED.
+	covered := GateInput{PrimaryTasks: 10, ArmSlots: 30, Executed: 30,
+		GovernedCorrect: 0, CalibrationPositiveOK: true, CalibrationNegativeOK: true}
+	if g, _ := Evaluate(covered); g != Red {
+		t.Fatalf("a fully covered campaign with zero correct tasks graded %s, not RED", g)
+	}
+	// A campaign with no declared slots is graded on its gates, not refused.
+	if g, _ := Evaluate(GateInput{PrimaryTasks: 10, GovernedCorrect: 0,
+		CalibrationPositiveOK: true, CalibrationNegativeOK: true}); g != Red {
+		t.Fatalf("an unslotted input graded %s", g)
+	}
+}

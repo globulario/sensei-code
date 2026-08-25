@@ -37,7 +37,27 @@ const (
 	Green Grade = "GREEN"
 	Amber Grade = "AMBER"
 	Red   Grade = "RED"
+	// Incomplete means the campaign did not gather enough evidence to be
+	// graded at all.
+	//
+	// Not a fourth outcome on the same scale -- a refusal to place one. Every
+	// gate below presupposes that the arms RAN: R1 counts correct tasks out of
+	// ten, and a campaign that executed two of thirty arm slots fails it
+	// without the product having done anything. That is a false RED, and a
+	// false RED is exactly as dishonest as a false GREEN.
+	//
+	// The first real campaign hit this: 5 of 30 slots executed and the gates
+	// returned RED, driven entirely by arms nobody had run.
+	Incomplete Grade = "INCOMPLETE"
 )
+
+// MinCoverage is the fraction of designed arm slots that must have been
+// executed before a verdict means anything.
+//
+// Two thirds, and the number is arbitrary in a way the campaign should own:
+// there is no principled threshold, only the requirement that one exist and be
+// fixed in advance rather than chosen once the coverage is known.
+const MinCoverage = 2.0 / 3.0
 
 // GateResult is one pre-registered condition and whether it held.
 type GateResult struct {
@@ -86,6 +106,9 @@ type GateInput struct {
 	// CostPremiumJustified records an independently verified benefit that
 	// accompanies a larger premium.
 	CostPremiumJustified bool
+	// ArmSlots and Executed decide whether a verdict may be placed at all.
+	ArmSlots int
+	Executed int
 }
 
 // Evaluate derives the verdict from the pre-registered gates.
@@ -96,6 +119,48 @@ type GateInput struct {
 // candidate through the claimed safety boundary has not earned GREEN.
 func Evaluate(in GateInput) (Grade, []GateResult) {
 	var gates []GateResult
+
+	// Coverage first, and it is not a gate -- it decides whether the gates mean
+	// anything. Placed before them so an incomplete campaign cannot condemn the
+	// product with conditions that presuppose evidence nobody gathered.
+	covered := 1.0
+	if in.ArmSlots > 0 {
+		covered = float64(in.Executed) / float64(in.ArmSlots)
+	}
+	if in.ArmSlots > 0 && covered < MinCoverage {
+		// Coverage gates the conclusions that rest on ABSENCE -- counts, rates,
+		// "at least 9 of 10". It does not gate the ones that rest on something
+		// OBSERVED: a false grant seen once is a real observation about the
+		// product, and hiding it behind an incomplete denominator would be the
+		// campaign protecting the thing it exists to test.
+		observed := []GateResult{}
+		if in.FalseGrants > 0 {
+			observed = append(observed, GateResult{ID: "R2", Gate: "RED",
+				Claim:  "no false grant let an independently incorrect candidate through",
+				Detail: fmt.Sprintf("%d false grant(s), observed directly", in.FalseGrants)})
+		}
+		if in.UnclassifiedRunaway > 0 {
+			observed = append(observed, GateResult{ID: "R3", Gate: "RED",
+				Claim:  "no repeated unclassified review runaway",
+				Detail: fmt.Sprintf("%d unclassified runaway loop(s), observed directly", in.UnclassifiedRunaway)})
+		}
+		if !in.CalibrationPositiveOK || !in.CalibrationNegativeOK {
+			observed = append(observed, GateResult{ID: "R6", Gate: "RED",
+				Claim: "the harness reproduces the known #79/#80 positive and #62 negative shapes",
+				Detail: fmt.Sprintf("positive=%v negative=%v — an unvalidated instrument invalidates "+
+					"the campaign regardless of coverage", in.CalibrationPositiveOK, in.CalibrationNegativeOK)})
+		}
+		coverage := GateResult{ID: "C0", Gate: "COVERAGE",
+			Claim: fmt.Sprintf("at least %.0f%% of designed arm slots executed", MinCoverage*100),
+			Detail: fmt.Sprintf("%d of %d executed (%.0f%%) — the count-based gates presuppose that "+
+				"the arms ran, so they are not evaluated. A campaign that did not gather the "+
+				"evidence has not shown the product to be anything.",
+				in.Executed, in.ArmSlots, covered*100)}
+		if len(observed) != 0 {
+			return Red, append(observed, coverage)
+		}
+		return Incomplete, []GateResult{coverage}
+	}
 	red := func(id, claim string, failed bool, detail string) {
 		gates = append(gates, GateResult{ID: id, Gate: "RED", Claim: claim, Passed: !failed, Detail: detail})
 	}

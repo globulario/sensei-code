@@ -40,6 +40,15 @@ type Report struct {
 	// UnmeasurableBoundaries are attempts whose governed-checkout reading could
 	// not support a comparison. Neither clean nor violated: absent.
 	UnmeasurableBoundaries []string `json:"unmeasurable_boundaries"`
+	// NotExecuted are task/arm slots with no recorded attempt at all.
+	//
+	// Distinct from NO_RESULT, which means an arm RAN and produced nothing. An
+	// arm nobody executed is missing coverage of the experiment, and a report
+	// that showed only the arms that happened to run would describe a smaller,
+	// better-behaved campaign than the one that was designed.
+	NotExecuted []string `json:"not_executed"`
+	// ArmSlots is the designed size of the campaign: tasks x arms.
+	ArmSlots int `json:"arm_slots"`
 
 	Gates   []GateResult `json:"gates"`
 	Verdict Grade        `json:"verdict"`
@@ -83,7 +92,8 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 	current, orphaned := l.ForManifest(manifestHash)
 	r := Report{
 		Benchmark: m.Version, ManifestHash: manifestHash, Orphaned: len(orphaned),
-		PrimaryTasks: len(m.Tasks), Arms: map[Arm]ArmMetrics{}, Calibration: calibration,
+		PrimaryTasks: len(m.Tasks), ArmSlots: len(m.Tasks) * len(Arms),
+		Arms: map[Arm]ArmMetrics{}, Calibration: calibration,
 		Caveat: fmt.Sprintf("This is an engineering evidence campaign over %d tasks, not a "+
 			"population estimate. Intervals are wide by construction. Where the data supports "+
 			"only \"promising\" or \"inconclusive\", it does not support \"proven\".", len(m.Tasks)),
@@ -108,7 +118,8 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 		for _, arm := range Arms {
 			s, ok := scoredBy[t.ID+"/"+string(arm)]
 			if !ok {
-				row.Verdict[arm] = NoResult
+				row.Verdict[arm] = "NOT_EXECUTED"
+				r.NotExecuted = append(r.NotExecuted, t.ID+"/"+string(arm))
 				continue
 			}
 			row.Verdict[arm] = s.Verdict
@@ -155,6 +166,7 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 	}
 
 	in := GateInput{PrimaryTasks: len(m.Tasks),
+		ArmSlots: r.ArmSlots, Executed: r.ArmSlots - len(r.NotExecuted),
 		Raw: r.Arms[ArmRaw], Cold: r.Arms[ArmCold], Warm: r.Arms[ArmWarm],
 		FalseGrants: len(r.FalseGrants), Linked: r.Linked}
 	for _, row := range r.PerTask {
@@ -254,6 +266,10 @@ func (r Report) Markdown() string {
 		f("> %d committed attempt(s) ran under a different manifest hash and are excluded from "+
 			"every number below. They are not deleted; they belong to a different experiment.\n\n", r.Orphaned)
 	}
+	f("**Coverage: %d of %d designed arm slots were executed.** %d were never run, and are listed "+
+		"below rather than omitted -- a report showing only the arms that happened to run would "+
+		"describe a smaller, better-behaved campaign than the one that was designed.\n\n",
+		r.ArmSlots-len(r.NotExecuted), r.ArmSlots, len(r.NotExecuted))
 	f("%s\n\n", r.Caveat)
 
 	f("## Calibration — can the instrument record a known win and a known failure?\n\n")
@@ -331,6 +347,7 @@ func (r Report) Markdown() string {
 		f("- `%s` / %s — %s: %s\n", iv.Task, iv.Arm, iv.Kind, iv.Detail)
 	}
 	f("\n## False grants and false blocks\n\n")
+	f("- arm slots never executed (%d): %v\n", len(r.NotExecuted), orNone(r.NotExecuted))
 	f("- false grants: %v\n- false blocks: %v\n- NO_RESULT attempts: %v\n"+
 		"- boundary unmeasurable (governed checkout not quiescent at arm start): %v\n",
 		orNone(r.FalseGrants), orNone(r.FalseBlocks), orNone(r.NoResults),

@@ -1,0 +1,24 @@
+Fixed. The reviewer was reading a different change than the one on disk.
+
+## Root cause
+
+`internal/gitx/git.go` produced the candidate diff with plain `git diff`, which reports only unstaged modifications to **already-tracked** files. Untracked files — everything the worker created — were invisible, and so was anything the worker committed inside its own worktree.
+
+That diff is the sole input to three things (`internal/workflow/engine.go:472`): the reviewer prompt, Sensei's `awareness_audit_diff`, and the change report. All three were judging a subset. It failed silently: the diff is well-formed, just incomplete, so a candidate that added a file beside an edit got accepted on the edit alone. A candidate that was *only* new files hit `"implementor produced no candidate diff"` and was thrown away as if the worker had done nothing.
+
+Corroboration that this was never intended: `report.FromDiff` already parses `new file mode` into a `report.Added` status (`internal/report/report.go:81`) — a branch that could never be reached. `NotEstablished` also warned "no test file was added" whenever a worker added a new `_test.go`, since new files didn't exist as far as the diff was concerned.
+
+## The change
+
+- **`Candidate{Path, Base}`** replaces the bare path string returned by `CreateWorktree`. The base commit is resolved once and used both to branch and to report, so it's the commit the candidate actually started from even if repo HEAD moves.
+- **`Candidate.Diff`** diffs the whole worktree against that base: commits, staged, unstaged, and untracked. It stages into a throwaway `GIT_INDEX_FILE` seeded from the base tree, so the worker's own index and working tree are untouched — reading a change must not edit it. `.gitignore` still applies.
+- Dropped `--binary`. Caused directly by this change: the diff is read and never applied, and now that untracked files are included, one unignored build artifact would inline megabytes of base85 into the reviewer's prompt. Without the flag git still names the file and says it differs.
+- Three tests in `internal/gitx/git_test.go` drive a real worktree: whole-change coverage (created/modified/deleted/committed, ignored excluded), non-disturbance of the candidate, and base pinning.
+
+## What I could not verify
+
+**I did not build or run anything.** `go build`, `go test`, `go vet`, `gofmt`, and `make` are all outside this sandbox's permissions, as is creating a scratch git repo to probe the `read-tree`/`add --all`/`diff --cached` sequence. The git semantics are standard and the tests encode them, but the code is unexecuted — please run `go test ./internal/gitx/ ./internal/workflow/ ./internal/report/` before trusting it.
+
+Also worth flagging for the reviewer of *this* candidate: `git diff --stat` on my own work omits `internal/gitx/git_test.go`, which is the bug reproducing itself.
+
+AWG: briefing(internal/gitx/git.go) — not run, no awareness graph installed in this checkout (`docs/awareness/` absent, no `sensei` binary) | invariants: reading a candidate must not mutate it; the reviewer's diff is the whole candidate | uncertainty: unexecuted — no Go toolchain access in this sandbox

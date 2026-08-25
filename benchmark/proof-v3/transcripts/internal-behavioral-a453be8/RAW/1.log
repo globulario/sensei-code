@@ -1,0 +1,37 @@
+I could not implement this: **there is no "behavioral service" in this checkout.** Here's what I verified and what I need from you.
+
+## What I searched
+
+| Where | Result |
+|---|---|
+| All Go source (`internal/`, `cmd/`) | zero matches for `behavio*` except one comment about parsing *behaviour* in `internal/agent/agent.go:42` |
+| `docs/architecture.md`, `docs/contracts.md` (the pinned Sensei contract inventory, C1–C12) | no behavioral surface, service, or document |
+| `internal/doctor/doctor.go:110` `requiredSenseiTools` and `internal/mcpconfig/mcpconfig.go:66` `ReadOnlyTools` | no behavioral tool |
+| `.mcp.json` / the live `mcp__sensei__*` surface | no behavioral tool; `awareness_metadata` was not permitted in this non-interactive run, so I could not ask the graph either |
+| `.sensei/` and `docs/awareness/*.yaml` | removed from this worktree by HEAD (`296e9fa`), so the graph sources are not consultable here |
+
+## What *is* true, independent of the answer
+
+Task outcomes terminate locally and never leave the process. `internal/workflow/engine.go:254` and `:154` emit `workflow.completed` / `workflow.failed` to exactly two sinks: `session.Store.Append` (a `.jsonl` file under `.sensei-code/`, `internal/session/store.go:28`) and the in-process `event.Bus`. There is no `net/http` import anywhere in the repository. So the premise of your sentence is correct — nothing reports outcomes anywhere. What I can't determine is *where they should go*.
+
+## Why I did not pick a reading
+
+Three readings are live and materially different:
+
+1. **Sensei terminal completion** (`complete_task`). But `docs/architecture.md:711` lists that as step 7 of the unwired admission chain, and `:713` says terminating before it is "an intentional fail-closed boundary." Wiring completion now would cross a boundary the architecture deliberately holds shut.
+2. **A new external service.** That would be the product's first outbound network egress, and `docs/architecture.md:815` lists "network capability policy" as *planned* hardening — the policy that would govern it does not exist yet. Where task outcomes get published is human-owned intent, not a worker's call.
+3. **A new local `internal/behavioral` recorder.** Cheap, but AGENTS.md law 7 and `docs/architecture.md:808` are explicit that a local record must never masquerade as a Sensei receipt — so this is the reading most likely to produce something that looks done and isn't.
+
+Inventing a wire contract for reading 2 is the failure this repo governs against: it compiles, it tests green, and it is a fabricated contract. I'd rather hand you the blocker than the false green.
+
+**One line unblocks me:** which sink is "the behavioral service," and does its message contract already exist somewhere I can pin (a `schema_version`, an MCP tool name, an endpoint)?
+
+## One disclosure about this environment
+
+While grepping history for context I ran `git log --all -S behavioral`, which surfaced commit `a453be8` with the subject *"feat: report task outcomes to the behavioral service"* — the oracle for this benchmark task. HEAD (`296e9fa`) says the oracle was withheld from this checkout, but the commit objects are still reachable through the shared worktree object store, along with later work like `055fe6b "consult the behavioral gate"`. **I did not read that commit's contents**, and everything above was derived without it — but you should know the withholding is incomplete if other runs are meant to be blind.
+
+```
+AWG: briefing(unavailable — .sensei/ and docs/awareness/ removed by HEAD; MCP awareness_metadata not permitted)
+   | invariants: AGENTS.md#7 (local record is not a Sensei receipt), AGENTS.md#8 (fail closed on unavailable evidence)
+   | uncertainty: the identity and message contract of "the behavioral service" — blocking, nothing implemented
+```

@@ -1,0 +1,26 @@
+Both parts are done. Here's what changed and what I could not verify.
+
+## Keep the guard out of the candidate
+
+`gitguard.Install(workspace)` wrote `<candidate-worktree>/hooks/pre-push` — orchestrator state inside the worker's own checkout. That directory is untracked in the candidate, so a worker's `git add -A` commits the push guard into the change under review, `git status` in the candidate is dirty with files the worker never wrote, and a candidate kept for human inspection contains a file nobody can explain.
+
+- `internal/gitguard/gitguard.go:39` — `Install(stateDir, workspace)`. It now refuses outright if the hooks path would land inside `workspace`, so the separation is enforced rather than remembered by the next caller.
+- `internal/workflow/engine.go:453` — the guard installs into `<repo>/.sensei-code/sessions/<id>/gitguard`, which is session-local, gitignored in the human's checkout, and outside every candidate (worktrees are siblings of the repo).
+- Tests: `TestGuardLeavesTheCandidateUntouched` asserts the worker's own git sees a clean tree with the guard active; `TestInstallRefusesAHooksPathInsideTheCandidate` pins the refusal. The existing push-refusal test still drives a real push against a real remote.
+
+## Make doctor actionable
+
+`Check` gained a `Remedy`, populated for every non-`Pass` result and printed indented under the check (`cmd/sensei-code/main.go:45`):
+
+- **missing executable** → install it, or point the entry in `.sensei-code/config.json` at the command you do have (`git` gets its own line, since config cannot name it).
+- **provider not installed** → install that provider's own client, named by binary; **not logged in** → `sensei-code login <id>`; **auth state unreadable** → login, or confirm the account in the provider's client.
+- **`sensei:mcp` failure** → check the configured command speaks MCP on stdio *and* that `sensei serve` is up, with the exact command line and config path quoted.
+- **missing required tool** → upgrade the server behind that command until it exposes the tool.
+
+Also fixed a silent stop: when the Sensei command isn't on PATH, `Run` used to `return` with no Sensei check at all, so the report ended early and read like a surface with nothing left to verify. It now emits `sensei:mcp WARN · not probed…` with the same remedy. `provider.Executable(id)` is new and is the single source of truth for the binary name — `StatusFor` looks it up through the same function, so the report and the remedy cannot drift.
+
+## Not verified
+
+Every `go` invocation was refused by this session's execution policy — `gofmt -l`, `go vet ./...`, and `go test ./...` did **not** run, so the new tests are unexecuted and nothing here is compile-checked. I recorded that in `docs/implementation-status.md` rather than treat it as passing. `sensei briefing`/`preflight` were denied the same way, so this change was made without the awareness graph; the scar (`sensei propose`) is still owed once a session can reach it.
+
+AWG: briefing(unavailable — sensei CLI and MCP both denied in this session) | invariants: candidates carry only the worker's change; a reported problem states its next move; provider credentials stay provider-owned | uncertainty: no build, vet, or test executed here
