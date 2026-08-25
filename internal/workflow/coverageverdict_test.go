@@ -11,6 +11,7 @@ package workflow
 // constructed: sensei-code auditing its own router found it.
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -127,5 +128,65 @@ func TestTheCoverageConditionNamesItsEvidence(t *testing.T) {
 	}
 	if !strings.Contains(got.Condition, "no anchored rules apply") {
 		t.Fatalf("the condition does not carry the coverage evidence it rests on: %q", got.Condition)
+	}
+}
+
+// A degraded surface that is not a coverage gap still refuses.
+//
+// DEGRADED became routable as missing knowledge because every degraded file in
+// this repository is degraded for exactly that reason. The word still covers a
+// genuinely unreliable instrument, and that half must not have moved.
+func TestADegradedSurfaceThatIsNotACoverageGapStillRefuses(t *testing.T) {
+	cases := map[string][]string{
+		"no blind spots at all":  nil,
+		"an unrecognised reason": {"backend returned a partial result nobody has classified"},
+		"a consequence reason":   {"anchor with severity=critical"},
+		"coverage plus unknown":  {"no direct anchors", "something new nobody has read"},
+	}
+	for name, spots := range cases {
+		t.Run(name, func(t *testing.T) {
+			b, _ := json.Marshal(spots)
+			scoped := scopedPreflight(t, `{
+				"status": "PREFLIGHT_STATUS_DEGRADED",
+				"blind_spots": `+string(b)+`,
+				"coverage": {"sufficient": false, "direct_anchor_count": 0, "indexed_file_count": 0},
+				"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
+				`+healthyAuthority+`
+			}`)
+			got := decideRouteForAction(scoped, nil, Action{
+				Stage: StageCandidateEdit, Files: []string{"internal/publish/publish.go"},
+			})
+			if got.Route != RouteCannotEstablish {
+				t.Fatalf("route = %s (%s); an instrument that will not say why it is degraded "+
+					"is not one to reason from", got.Route, got.Condition)
+			}
+			if !strings.Contains(got.Condition, "not a coverage gap") {
+				t.Fatalf("the refusal does not say why it could not be read as a gap: %q", got.Condition)
+			}
+		})
+	}
+}
+
+// And the half that moved: degraded purely because the graph has no facts about
+// a risky file is bounded work, not a broken instrument.
+func TestADegradedCoverageGapIsBoundedWork(t *testing.T) {
+	scoped := scopedPreflight(t, `{
+		"status": "PREFLIGHT_STATUS_DEGRADED",
+		"blind_spots": ["high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply",
+			"this is NOT proof of safety — the graph has no facts about this file"],
+		"coverage": {"sufficient": false, "direct_anchor_count": 0, "indexed_file_count": 0},
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
+		`+healthyAuthority+`
+	}`)
+	got := decideRouteForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: []string{"internal/workflow/authority_test.go"},
+	})
+	if !got.ClosesGap() {
+		t.Fatalf("route = %s (%s); this is missing knowledge about a risky file, which is "+
+			"exactly what a closure round exists for", got.Route, got.Condition)
+	}
+	// It closes a gap; it does not grant.
+	if got.Granted() {
+		t.Fatal("a degraded preflight granted architectural authority")
 	}
 }

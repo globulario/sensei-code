@@ -20,6 +20,7 @@ import (
 	"github.com/globulario/sensei-code/internal/decision"
 	"github.com/globulario/sensei-code/internal/derived"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/finding"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/publish"
@@ -55,6 +56,11 @@ type Engine struct {
 	// reason ActionStage is not a provider field: the lane is a property of how
 	// the task was submitted, and anything a plan could set is a claim.
 	observing map[string]bool
+	// findings holds what each observation established, so a caller may open
+	// repair work from it. Holding evidence is not holding authority: a repair
+	// opened from one enters the ordinary governed path with nothing carried
+	// over except the objective text.
+	findings map[string][]finding.Finding
 	// routings holds what the authority router read when it decided each task,
 	// kept because two later decisions ask different questions of the same
 	// evidence: how adversarially the candidate must be judged, and whether the
@@ -3415,26 +3421,29 @@ this lane exists to avoid.`
 // worker, or can exit through a completion branch, because none of that code is
 // on this path at all.
 //
-// # What actually makes it read-only
+// # Exactly what the two mechanisms establish
 //
-// The architect runs in a DETACHED, disposable worktree of the pinned commit.
-// The governed checkout is never its working directory. That is the boundary.
+// Stated separately and narrowly, because the explanatory surface here has now
+// outrun the mechanism twice: once when a post-hoc cleanliness check was called
+// a boundary, and again when a detached worktree was described as stopping a
+// write-capable provider from touching the governed checkout. Both times the
+// observation lane read the comment and reported it as false.
 //
-// The previous version ran the architect in the governed checkout and then
-// checked `git status --porcelain`, which is evidence after the fact rather
-// than a boundary: a commit leaves a clean tree, so does a write to an ignored
-// path, and so does a write followed by a restore. A repository configuring a
-// write-capable architect could have modified the governed tree and passed.
+//	isolated worktree   the provider's normal workspace is elsewhere
+//	before/after witness the governed repository ended unchanged across the
+//	                     state we measure
+//	neither              filesystem confinement
 //
-// # What is claimed, and what is not
+// The witness is `git status --porcelain` on the governed root, taken before
+// the observer starts and again after it finishes. It establishes that the
+// measured state is the same at both moments. It does NOT establish that the
+// provider was unable to write there, and it does not exclude a write followed
+// by a restore, or a change to something porcelain does not report.
 //
-// Claimed: an observation cannot modify the governed repository's tracked
-// content or its working tree.
-//
-// NOT claimed: that nothing happens anywhere on the machine. The architect is a
-// subprocess with the ambient permissions of the user running Sensei Code, and
-// this bounds where it is pointed, not what a determined process can reach.
-// Overclaiming here would be the same mistake as the status token that said OK.
+// The architect is a subprocess holding the ambient permissions of the user
+// running Sensei Code. Nothing here constrains what such a process can reach;
+// it constrains where it is POINTED, and it notices afterwards if the governed
+// repository moved.
 //
 // Writes to the disposable workspace are measured rather than ignored. They
 // harm nothing, and they are the observable signal that a configured provider
@@ -3445,6 +3454,25 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 		return errors.New("observation cannot start: the repository HEAD could not be resolved, " +
 			"so there is no commit to check out a disposable copy of")
 	}
+	// What the governed repository looked like BEFORE the observer ran.
+	//
+	// The check used to read `git status --porcelain` only afterwards, which
+	// asks the wrong question twice over: it cannot tell a change this run made
+	// from one that was already there, and it reported an already-dirty
+	// repository as having been mutated by the observation. Hit for real while
+	// re-auditing a retained candidate, whose fix is uncommitted by design.
+	//
+	// Comparing before and after answers the question that matters -- did THIS
+	// run change the governed repository -- and it is still evidence rather
+	// than confinement. The boundary is that the observer's working directory
+	// is somewhere else; this is what detects a provider that went looking for
+	// the governed checkout anyway.
+	before, beforeErr := e.Repo.WorktreeIsCleanDetail(ctx, e.Repo.Root)
+	if beforeErr != nil {
+		return fmt.Errorf("observation cannot start: the governed repository could not be read, "+
+			"so nothing could establish whether this run changed it: %w", beforeErr)
+	}
+
 	workspace, err := e.Repo.CreateObservationWorktree(ctx, taskID, head)
 	if err != nil {
 		return fmt.Errorf("observation workspace: %w", err)
@@ -3470,14 +3498,16 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 		return err
 	}
 
-	// The governed repository must be untouched. Defense in depth: the lane
-	// already never pointed the architect at it.
-	if clean, cerr := e.Repo.IsClean(ctx); cerr != nil {
-		return fmt.Errorf("observation cannot report: the governed repository could not be checked: %w", cerr)
-	} else if !clean {
-		return errors.New("the governed repository changed during an observation; refusing to report it " +
-			"as read-only. The observer was pointed at a disposable workspace, so this is not a lane " +
-			"violation by the architect -- something else in this process wrote to the repository")
+	// The governed repository must be exactly as this run found it.
+	after, afterErr := e.Repo.WorktreeIsCleanDetail(ctx, e.Repo.Root)
+	if afterErr != nil {
+		return fmt.Errorf("observation cannot report: the governed repository could not be checked: %w", afterErr)
+	}
+	if after != before {
+		return fmt.Errorf("the governed repository changed during this observation; refusing to report it "+
+			"as read-only. The observer was pointed at a disposable workspace, so either the configured "+
+			"provider reached the governed checkout anyway or something else in this process wrote to it.\n"+
+			"before:\n%s\nafter:\n%s", indentOrNone(before), indentOrNone(after))
 	}
 
 	var wrote string
@@ -3498,10 +3528,75 @@ func (e *Engine) observe(ctx context.Context, sc *sensei.Client, start certified
 	}
 	discarded = true
 
+	// Recorded before the terminal event, so a caller that acts on the outcome
+	// can read them. Recording is not authorising: nothing here grants the
+	// repair anything, and an ineligible finding is retained and reported
+	// exactly like an eligible one -- it simply cannot become work.
+	e.recordFindings(taskID, task, head, decision)
+
 	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke,
 		observationFindings(decision, start.Degraded(), wrote), decision))
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowObserved,
 		"observed and reported; nothing was admitted, the governed repository is unchanged, "+
 			"and the observation workspace was discarded", nil))
 	return nil
+}
+
+// recordFindings converts an observation's claims into durable findings.
+//
+// Kept on the engine rather than returned, because the observation lane is
+// terminal: its caller sees an event stream, not a value. Findings() reads them
+// back afterwards.
+func (e *Engine) recordFindings(taskID, objective, world string, d architectureDecision) {
+	var out []finding.Finding
+	for _, c := range d.Claims {
+		out = append(out, finding.New(taskID, world, objective, c.Statement, c.About,
+			filesFor(c, d), d.Files, c.Source))
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.findings == nil {
+		e.findings = map[string][]finding.Finding{}
+	}
+	e.findings[taskID] = out
+}
+
+// filesFor decides which files a claim is about.
+//
+// A claim's About field is prose the observer wrote, so it is read for a path
+// and never trusted to BE one: if it names a file the observation actually
+// opened, that is the claim's subject. Otherwise the claim inherits the files
+// the observation read, which is wider and therefore weaker, and the repair
+// re-checks all of it anyway.
+func filesFor(c Claim, d architectureDecision) []string {
+	var named []string
+	for _, f := range d.Files {
+		if strings.Contains(c.About, f) || strings.Contains(c.Statement, f) {
+			named = append(named, f)
+		}
+	}
+	if len(named) != 0 {
+		return named
+	}
+	return d.Files
+}
+
+// Findings returns what an observation established, for a caller deciding
+// whether to open repair work.
+func (e *Engine) Findings(taskID string) []finding.Finding {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]finding.Finding(nil), e.findings[taskID]...)
+}
+
+// indentOrNone renders a worktree status for a refusal message.
+func indentOrNone(status string) string {
+	if strings.TrimSpace(status) == "" {
+		return "  (clean)"
+	}
+	var b strings.Builder
+	for _, line := range strings.Split(strings.TrimRight(status, "\n"), "\n") {
+		b.WriteString("  " + line + "\n")
+	}
+	return strings.TrimRight(b.String(), "\n")
 }

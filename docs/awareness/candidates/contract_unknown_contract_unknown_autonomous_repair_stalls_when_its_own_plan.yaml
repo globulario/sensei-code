@@ -1,0 +1,11 @@
+contract_unknown:
+  - id: contract_unknown.autonomous_repair_stalls_when_its_own_plan_expands_to_uninde
+    kind: contract_unknown
+    title: autonomous repair stalls when its own plan expands to unindexed files
+    description: The first end-to-end self-repair attempt reached the plan stage with a correct fix and then could not proceed. The architect's plan named 7 files; the graph indexes 3. The closure round ran twice, could not raise coverage, and the task escalated to human authority with the gap open. No registered derivation family (field_access_under_lock, command_invocation_confined_to) can establish anything about the unindexed files, which are mostly _test.go files under internal/workflow. So the gap is real, correctly reported, and not closable by any mechanism the system currently has.
+    proposed_contract: A governed repair may proceed when the files it must touch are indexed by the graph, or when a registered derivation establishes the relevant proposition over them.
+    revision_request: 'Should a plan that must edit an unindexed test file be closable at all? Three readings are open: (a) test files should be indexed by the graph build, making this an indexing gap; (b) coverage over a test file is not required to change it, making this a scoping question about which files need coverage; (c) a derivation family that establishes facts about test files is missing. This experiment cannot choose between them, and choosing wrong would either weaken a gate or add a family nobody needs.'
+    source_files:
+      - internal/workflow/authority.go
+    evidence:
+      - 'task-1787586075952448853 at 2026-08-24T15:52:43Z: ''the knowledge gap did not close; escalating with it open: graph coverage is absent for the planned files: only 3 of 7 requested file(s) are examined in the graph — the rest are unknown to it''. Two CLOSE_GAP rounds ran (3-of-5, then 3-of-7 after the plan widened). Terminal: workflow.awaiting_authority, exit 3.'

@@ -35,6 +35,18 @@ code_symbols:
     file: cmd/sensei-code/assist.go
     symbol: writeJSON
     kind: function
+  - id: cmd/sensei-code/auditrepair.go:runAuditRepair
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/auditrepair.go
+    symbol: runAuditRepair
+    kind: function
+  - id: cmd/sensei-code/auditrepair.go:truncate
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/auditrepair.go
+    symbol: truncate
+    kind: function
   - id: cmd/sensei-code/main.go:fatalIf
     namespace: structural.scip
     language: go
@@ -113,6 +125,192 @@ code_symbols:
     file: cmd/sensei-code/routine.go
     symbol: runRoutineScan
     kind: function
+  - id: cmd/sensei-code/run.go:DeferAuthority
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: DeferAuthority
+    kind: var
+  - id: cmd/sensei-code/run.go:Stop
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: Stop
+    kind: var
+  - id: cmd/sensei-code/run.go:exitAwaitingAuthority
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitAwaitingAuthority
+    kind: const
+  - id: cmd/sensei-code/run.go:exitCompleted
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitCompleted
+    kind: const
+  - id: cmd/sensei-code/run.go:exitFailed
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitFailed
+    kind: const
+  - id: cmd/sensei-code/run.go:exitObserved
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitObserved
+    kind: const
+  - id: cmd/sensei-code/run.go:exitStopped
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitStopped
+    kind: const
+  - id: cmd/sensei-code/run.go:exitTimeout
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitTimeout
+    kind: const
+  - id: cmd/sensei-code/run.go:exitUsage
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: exitUsage
+    kind: const
+  - id: cmd/sensei-code/run.go:renderEvent
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: renderEvent
+    kind: function
+  - id: cmd/sensei-code/run.go:runControl
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: runControl
+    kind: type
+  - id: cmd/sensei-code/run.go:runGoverned
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: runGoverned
+    kind: function
+  - id: cmd/sensei-code/run.go:runHeadless
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: runHeadless
+    kind: function
+  - id: cmd/sensei-code/run.go:runObservation
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: runObservation
+    kind: function
+  - id: cmd/sensei-code/run.go:streamUntilSettled
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: streamUntilSettled
+    kind: function
+  - id: cmd/sensei-code/run.go:terminal
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run.go
+    symbol: terminal
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestAHumanOwnedDecisionIsDeferredNotAnswered
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestAHumanOwnedDecisionIsDeferredNotAnswered
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestAPlainStopIsNotReportedAsDeferredAuthority
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestAPlainStopIsNotReportedAsDeferredAuthority
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestAnotherTasksEventsAreIgnored
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestAnotherTasksEventsAreIgnored
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestHeadlessRunUsesTheSameEngineEntryAsTheTUI
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestHeadlessRunUsesTheSameEngineEntryAsTheTUI
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestOutcomesHaveDistinctExitCodes
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestOutcomesHaveDistinctExitCodes
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestRenderedEventsCarryNoStyling
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestRenderedEventsCarryNoStyling
+    kind: function
+  - id: cmd/sensei-code/run_test.go:TestTimeoutStopsTheTaskRatherThanAbandoningIt
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: TestTimeoutStopsTheTaskRatherThanAbandoningIt
+    kind: function
+  - id: cmd/sensei-code/run_test.go:canDefer
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: canDefer
+    kind: var
+  - id: cmd/sensei-code/run_test.go:deferred
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: deferred
+    kind: var
+  - id: cmd/sensei-code/run_test.go:ev
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: ev
+    kind: function
+  - id: cmd/sensei-code/run_test.go:fakeControl
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: fakeControl
+    kind: type
+  - id: cmd/sensei-code/run_test.go:fakeControl.DeferAuthority
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: fakeControl.DeferAuthority
+    kind: method
+  - id: cmd/sensei-code/run_test.go:fakeControl.Stop
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: fakeControl.Stop
+    kind: method
+  - id: cmd/sensei-code/run_test.go:feed
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: feed
+    kind: function
+  - id: cmd/sensei-code/run_test.go:stopped
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code/run_test.go
+    symbol: stopped
+    kind: var
   - id: cmd/sensei-code/setup.go:inspect
     namespace: structural.scip
     language: go
@@ -1324,7 +1522,7 @@ code_symbols:
     language: go
     file: internal/assist/packet.go
     symbol: Authority
-    kind: var
+    kind: type
   - id: internal/assist/packet.go:BaseSHA
     namespace: structural.scip
     language: go
@@ -1810,7 +2008,7 @@ code_symbols:
     language: go
     file: internal/authority/authority.go
     symbol: Level
-    kind: var
+    kind: type
   - id: internal/authority/authority.go:Level.String
     namespace: structural.scip
     language: go
@@ -1834,7 +2032,7 @@ code_symbols:
     language: go
     file: internal/authority/authority.go
     symbol: Outcome
-    kind: type
+    kind: var
   - id: internal/authority/authority.go:Outcome.Permits
     namespace: structural.scip
     language: go
@@ -2027,11 +2225,23 @@ code_symbols:
     file: internal/authority/resolution.go
     symbol: Resolution
     kind: type
+  - id: internal/authority/resolution.go:Resolution.Covers
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution.go
+    symbol: Resolution.Covers
+    kind: method
   - id: internal/authority/resolution.go:Resolution.Durable
     namespace: structural.scip
     language: go
     file: internal/authority/resolution.go
     symbol: Resolution.Durable
+    kind: method
+  - id: internal/authority/resolution.go:Resolution.Key
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution.go
+    symbol: Resolution.Key
     kind: method
   - id: internal/authority/resolution.go:Resolution.Summary
     namespace: structural.scip
@@ -2039,6 +2249,18 @@ code_symbols:
     file: internal/authority/resolution.go
     symbol: Resolution.Summary
     kind: method
+  - id: internal/authority/resolution.go:Scope
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution.go
+    symbol: Scope
+    kind: var
+  - id: internal/authority/resolution.go:ScopeKey
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution.go
+    symbol: ScopeKey
+    kind: function
   - id: internal/authority/resolution.go:SessionID
     namespace: structural.scip
     language: go
@@ -2099,11 +2321,29 @@ code_symbols:
     file: internal/authority/resolution.go
     symbol: firstNonEmpty
     kind: function
+  - id: internal/authority/resolution.go:normalizeScope
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution.go
+    symbol: normalizeScope
+    kind: function
   - id: internal/authority/resolution.go:title
     namespace: structural.scip
     language: go
     file: internal/authority/resolution.go
     symbol: title
+    kind: function
+  - id: internal/authority/resolution_test.go:TestAReplanInsideWhatWasAuthorisedIsNotANewQuestion
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestAReplanInsideWhatWasAuthorisedIsNotANewQuestion
+    kind: function
+  - id: internal/authority/resolution_test.go:TestATaskLessDecisionStillNamesTheCondition
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestATaskLessDecisionStillNamesTheCondition
     kind: function
   - id: internal/authority/resolution_test.go:TestAcceptedWithoutAnArtifactIsNotDurable
     namespace: structural.scip
@@ -2111,11 +2351,35 @@ code_symbols:
     file: internal/authority/resolution_test.go
     symbol: TestAcceptedWithoutAnArtifactIsNotDurable
     kind: function
+  - id: internal/authority/resolution_test.go:TestAnUnscopedAnswerCoversOnlyAnUnscopedQuestion
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestAnUnscopedAnswerCoversOnlyAnUnscopedQuestion
+    kind: function
+  - id: internal/authority/resolution_test.go:TestAnUnscopedAnswerIsNotAWildcard
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestAnUnscopedAnswerIsNotAWildcard
+    kind: function
   - id: internal/authority/resolution_test.go:TestNoFailurePathCanClaimDurability
     namespace: structural.scip
     language: go
     file: internal/authority/resolution_test.go
     symbol: TestNoFailurePathCanClaimDurability
+    kind: function
+  - id: internal/authority/resolution_test.go:TestOneDecisionKeepsOneTitle
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestOneDecisionKeepsOneTitle
+    kind: function
+  - id: internal/authority/resolution_test.go:TestOneYesDoesNotAuthorizeADifferentPlan
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestOneYesDoesNotAuthorizeADifferentPlan
     kind: function
   - id: internal/authority/resolution_test.go:TestProvenanceTravelsWithTheResolution
     namespace: structural.scip
@@ -2140,6 +2404,30 @@ code_symbols:
     language: go
     file: internal/authority/resolution_test.go
     symbol: TestResolutionWithoutAQuestionIsRefused
+    kind: function
+  - id: internal/authority/resolution_test.go:TestSubsetToleranceDoesNotReopenFindingSix
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestSubsetToleranceDoesNotReopenFindingSix
+    kind: function
+  - id: internal/authority/resolution_test.go:TestTheSamePlanKeepsItsAnswer
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestTheSamePlanKeepsItsAnswer
+    kind: function
+  - id: internal/authority/resolution_test.go:TestTheTaskSurvivesFilenameTruncation
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestTheTaskSurvivesFilenameTruncation
+    kind: function
+  - id: internal/authority/resolution_test.go:TestTwoDecisionsOnOneConditionDoNotShareATitle
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: TestTwoDecisionsOnOneConditionDoNotShareATitle
     kind: function
   - id: internal/authority/resolution_test.go:TestUnsupportedPersistenceIsVisibleAndNotASuccess
     namespace: structural.scip
@@ -2188,6 +2476,12 @@ code_symbols:
     language: go
     file: internal/authority/resolution_test.go
     symbol: sample
+    kind: function
+  - id: internal/authority/resolution_test.go:truncate
+    namespace: structural.scip
+    language: go
+    file: internal/authority/resolution_test.go
+    symbol: truncate
     kind: function
   - id: internal/behavioral/behavioral.go:Client
     namespace: structural.scip
@@ -2698,7 +2992,7 @@ code_symbols:
     language: go
     file: internal/candidate/disposition.go
     symbol: Disposition
-    kind: type
+    kind: var
   - id: internal/candidate/disposition.go:Disposition.Keeps
     namespace: structural.scip
     language: go
@@ -3280,7 +3574,7 @@ code_symbols:
     language: go
     file: internal/config/config.go
     symbol: Command
-    kind: type
+    kind: var
   - id: internal/config/config.go:Config
     namespace: structural.scip
     language: go
@@ -3292,6 +3586,12 @@ code_symbols:
     language: go
     file: internal/config/config.go
     symbol: Config.ReviewRoster
+    kind: method
+  - id: internal/config/config.go:Config.SenseiAddressIsStated
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: Config.SenseiAddressIsStated
     kind: method
   - id: internal/config/config.go:CreateWorktrees
     namespace: structural.scip
@@ -3335,6 +3635,18 @@ code_symbols:
     file: internal/config/config.go
     symbol: FormatVerify
     kind: var
+  - id: internal/config/config.go:FromDefault
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: FromDefault
+    kind: const
+  - id: internal/config/config.go:FromRepository
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: FromRepository
+    kind: const
   - id: internal/config/config.go:Implementors
     namespace: structural.scip
     language: go
@@ -3370,7 +3682,7 @@ code_symbols:
     language: go
     file: internal/config/config.go
     symbol: Permissions
-    kind: var
+    kind: type
   - id: internal/config/config.go:ProductionDeploy
     namespace: structural.scip
     language: go
@@ -3443,6 +3755,12 @@ code_symbols:
     file: internal/config/config.go
     symbol: Sensei
     kind: var
+  - id: internal/config/config.go:Source
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: Source
+    kind: type
   - id: internal/config/config.go:Test
     namespace: structural.scip
     language: go
@@ -3454,7 +3772,7 @@ code_symbols:
     language: go
     file: internal/config/config.go
     symbol: Validation
-    kind: type
+    kind: var
   - id: internal/config/config.go:Vet
     namespace: structural.scip
     language: go
@@ -3466,7 +3784,7 @@ code_symbols:
     language: go
     file: internal/config/config.go
     symbol: Workflow
-    kind: type
+    kind: var
   - id: internal/config/config.go:WriteCandidates
     namespace: structural.scip
     language: go
@@ -3598,7 +3916,7 @@ code_symbols:
     language: go
     file: internal/continuity/continuity.go
     symbol: State
-    kind: var
+    kind: type
   - id: internal/continuity/continuity.go:Thread
     namespace: structural.scip
     language: go
@@ -3700,7 +4018,7 @@ code_symbols:
     language: go
     file: internal/decision/record.go
     symbol: Authority
-    kind: type
+    kind: var
   - id: internal/decision/record.go:Authority.Describe
     namespace: structural.scip
     language: go
@@ -3778,7 +4096,7 @@ code_symbols:
     language: go
     file: internal/decision/record.go
     symbol: Owner
-    kind: var
+    kind: type
   - id: internal/decision/record.go:Rationale
     namespace: structural.scip
     language: go
@@ -3899,6 +4217,384 @@ code_symbols:
     file: internal/decision/record_test.go
     symbol: TestUnlinkedDecisionIsRefusedRatherThanPadded
     kind: function
+  - id: internal/derived/derived.go:Anchor
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Anchor
+    kind: type
+  - id: internal/derived/derived.go:Anchor.Covers
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Anchor.Covers
+    kind: method
+  - id: internal/derived/derived.go:Anchor.Describe
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Anchor.Describe
+    kind: method
+  - id: internal/derived/derived.go:Anchor.Files
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Anchor.Files
+    kind: method
+  - id: internal/derived/derived.go:Anchor.World
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Anchor.World
+    kind: method
+  - id: internal/derived/derived.go:AnchorsFor
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: AnchorsFor
+    kind: function
+  - id: internal/derived/derived.go:Bin
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Bin
+    kind: var
+  - id: internal/derived/derived.go:CLI
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: CLI
+    kind: type
+  - id: internal/derived/derived.go:CLI.Revalidate
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: CLI.Revalidate
+    kind: method
+  - id: internal/derived/derived.go:Command
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Command
+    kind: var
+  - id: internal/derived/derived.go:Commit
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Commit
+    kind: var
+  - id: internal/derived/derived.go:CompletenessScope
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: CompletenessScope
+    kind: var
+  - id: internal/derived/derived.go:CoveredFiles
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: CoveredFiles
+    kind: function
+  - id: internal/derived/derived.go:Derived
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Derived
+    kind: const
+  - id: internal/derived/derived.go:Detail
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Detail
+    kind: var
+  - id: internal/derived/derived.go:Dir
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Dir
+    kind: var
+  - id: internal/derived/derived.go:Entity
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Entity
+    kind: var
+  - id: internal/derived/derived.go:Field
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Field
+    kind: var
+  - id: internal/derived/derived.go:File
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: File
+    kind: var
+  - id: internal/derived/derived.go:Inputs
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Inputs
+    kind: var
+  - id: internal/derived/derived.go:Kind
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Kind
+    kind: var
+  - id: internal/derived/derived.go:LoadRecipes
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: LoadRecipes
+    kind: function
+  - id: internal/derived/derived.go:Lock
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Lock
+    kind: var
+  - id: internal/derived/derived.go:NotDerived
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: NotDerived
+    kind: const
+  - id: internal/derived/derived.go:Outcome
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Outcome
+    kind: var
+  - id: internal/derived/derived.go:Owner
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Owner
+    kind: var
+  - id: internal/derived/derived.go:Recipe
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Recipe
+    kind: var
+  - id: internal/derived/derived.go:Recipe.String
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Recipe.String
+    kind: method
+  - id: internal/derived/derived.go:Result
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Result
+    kind: type
+  - id: internal/derived/derived.go:Revalidate
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Revalidate
+    kind: var
+  - id: internal/derived/derived.go:Revalidator
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Revalidator
+    kind: type
+  - id: internal/derived/derived.go:Role
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Role
+    kind: var
+  - id: internal/derived/derived.go:SearchPaths
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: SearchPaths
+    kind: var
+  - id: internal/derived/derived.go:Subjects
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Subjects
+    kind: var
+  - id: internal/derived/derived.go:Type
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Type
+    kind: var
+  - id: internal/derived/derived.go:Unknown
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Unknown
+    kind: const
+  - id: internal/derived/derived.go:Why
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: Why
+    kind: var
+  - id: internal/derived/derived.go:derived
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: derived
+    kind: function
+  - id: internal/derived/derived.go:files
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: files
+    kind: var
+  - id: internal/derived/derived.go:receipt
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: receipt
+    kind: type
+  - id: internal/derived/derived.go:receipt.subjectFiles
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: receipt.subjectFiles
+    kind: method
+  - id: internal/derived/derived.go:recipe
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: recipe
+    kind: var
+  - id: internal/derived/derived.go:scope
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: scope
+    kind: var
+  - id: internal/derived/derived.go:shortWorld
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: shortWorld
+    kind: function
+  - id: internal/derived/derived.go:world
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived.go
+    symbol: world
+    kind: var
+  - id: internal/derived/derived_test.go:TestAForgedRecipeClosesNoGap
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestAForgedRecipeClosesNoGap
+    kind: function
+  - id: internal/derived/derived_test.go:TestARecipeAloneProvidesNoCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestARecipeAloneProvidesNoCoverage
+    kind: function
+  - id: internal/derived/derived_test.go:TestARetainedAnchorBesideARefusalIsNotCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestARetainedAnchorBesideARefusalIsNotCoverage
+    kind: function
+  - id: internal/derived/derived_test.go:TestAnAnchorFromTheBaseCannotCoverACandidate
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestAnAnchorFromTheBaseCannotCoverACandidate
+    kind: function
+  - id: internal/derived/derived_test.go:TestCoverageComesFromRevalidationInTheAssessedWorld
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestCoverageComesFromRevalidationInTheAssessedWorld
+    kind: function
+  - id: internal/derived/derived_test.go:TestCoverageReachesOnlyTheFilesTheDerivationRead
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestCoverageReachesOnlyTheFilesTheDerivationRead
+    kind: function
+  - id: internal/derived/derived_test.go:TestMissingRecipeFileIsNoRecipesNotAnError
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestMissingRecipeFileIsNoRecipesNotAnError
+    kind: function
+  - id: internal/derived/derived_test.go:TestTheDescriptionCarriesTheDerivationEnvelope
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestTheDescriptionCarriesTheDerivationEnvelope
+    kind: function
+  - id: internal/derived/derived_test.go:TestThePurposeClaimClosesNoGap
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: TestThePurposeClaimClosesNoGap
+    kind: function
+  - id: internal/derived/derived_test.go:busRecipe
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: busRecipe
+    kind: function
+  - id: internal/derived/derived_test.go:calls
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: calls
+    kind: var
+  - id: internal/derived/derived_test.go:fake
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: fake
+    kind: type
+  - id: internal/derived/derived_test.go:fake.Revalidate
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: fake.Revalidate
+    kind: method
+  - id: internal/derived/derived_test.go:inputs
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: inputs
+    kind: var
+  - id: internal/derived/derived_test.go:outcome
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: outcome
+    kind: var
+  - id: internal/derived/derived_test.go:revalidatorFunc
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: revalidatorFunc
+    kind: type
+  - id: internal/derived/derived_test.go:revalidatorFunc.Revalidate
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: revalidatorFunc.Revalidate
+    kind: method
+  - id: internal/derived/derived_test.go:world
+    namespace: structural.scip
+    language: go
+    file: internal/derived/derived_test.go
+    symbol: world
+    kind: var
   - id: internal/doctor/doctor.go:Check
     namespace: structural.scip
     language: go
@@ -3958,7 +4654,7 @@ code_symbols:
     language: go
     file: internal/doctor/doctor.go
     symbol: Status
-    kind: type
+    kind: var
   - id: internal/doctor/doctor.go:Unproven
     namespace: structural.scip
     language: go
@@ -4073,6 +4769,126 @@ code_symbols:
     file: internal/doctor/doctor_test.go
     symbol: sourceOf
     kind: function
+  - id: internal/doctor/taskbinding.go:Graph
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: Graph
+    kind: var
+  - id: internal/doctor/taskbinding.go:Revision
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: Revision
+    kind: var
+  - id: internal/doctor/taskbinding.go:TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: TaskID
+    kind: var
+  - id: internal/doctor/taskbinding.go:binding
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: binding
+    kind: type
+  - id: internal/doctor/taskbinding.go:bindingError
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: bindingError
+    kind: type
+  - id: internal/doctor/taskbinding.go:bindingError.Error
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: bindingError.Error
+    kind: method
+  - id: internal/doctor/taskbinding.go:checkTaskBinding
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: checkTaskBinding
+    kind: function
+  - id: internal/doctor/taskbinding.go:errUnreadableBinding
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: errUnreadableBinding
+    kind: const
+  - id: internal/doctor/taskbinding.go:liveGraphDigest
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: liveGraphDigest
+    kind: function
+  - id: internal/doctor/taskbinding.go:readBinding
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: readBinding
+    kind: function
+  - id: internal/doctor/taskbinding.go:repositoryHead
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: repositoryHead
+    kind: function
+  - id: internal/doctor/taskbinding.go:short
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding.go
+    symbol: short
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:TestAMatchingBindingPasses
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: TestAMatchingBindingPasses
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:TestAMovedGraphIsAlsoStale
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: TestAMovedGraphIsAlsoStale
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:TestAStaleBindingIsReported
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: TestAStaleBindingIsReported
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:TestAnUnreadableBindingIsNotSilentlyAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: TestAnUnreadableBindingIsNotSilentlyAbsent
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:TestNoBindingIsNotAFailure
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: TestNoBindingIsNotAFailure
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:TestUnknownComparandsDoNotClaimDrift
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: TestUnknownComparandsDoNotClaimDrift
+    kind: function
+  - id: internal/doctor/taskbinding_test.go:boundTask
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: boundTask
+    kind: const
+  - id: internal/doctor/taskbinding_test.go:writeBinding
+    namespace: structural.scip
+    language: go
+    file: internal/doctor/taskbinding_test.go
+    symbol: writeBinding
+    kind: function
   - id: internal/event/bus.go:Bus
     namespace: structural.scip
     language: go
@@ -4126,6 +4942,12 @@ code_symbols:
     language: go
     file: internal/event/bus_test.go
     symbol: TestBusPublish
+    kind: function
+  - id: internal/event/bus_test.go:TestCancelClosesTheChannelAndPublishSkipsIt
+    namespace: structural.scip
+    language: go
+    file: internal/event/bus_test.go
+    symbol: TestCancelClosesTheChannelAndPublishSkipsIt
     kind: function
   - id: internal/event/event.go:AgentFinished
     namespace: structural.scip
@@ -4223,12 +5045,18 @@ code_symbols:
     file: internal/event/event.go
     symbol: ID
     kind: var
+  - id: internal/event/event.go:InspectionReported
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: InspectionReported
+    kind: const
   - id: internal/event/event.go:Kind
     namespace: structural.scip
     language: go
     file: internal/event/event.go
     symbol: Kind
-    kind: var
+    kind: type
   - id: internal/event/event.go:ModeSelected
     namespace: structural.scip
     language: go
@@ -4421,12 +5249,192 @@ code_symbols:
     file: internal/event/event.go
     symbol: WorkflowFailed
     kind: const
+  - id: internal/event/event.go:WorkflowObserved
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: WorkflowObserved
+    kind: const
   - id: internal/event/event.go:WorkflowStopped
     namespace: structural.scip
     language: go
     file: internal/event/event.go
     symbol: WorkflowStopped
     kind: const
+  - id: internal/finding/finding.go:About
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: About
+    kind: var
+  - id: internal/finding/finding.go:Classify
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Classify
+    kind: function
+  - id: internal/finding/finding.go:Files
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Files
+    kind: var
+  - id: internal/finding/finding.go:Finding
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Finding
+    kind: type
+  - id: internal/finding/finding.go:Finding.Eligible
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Finding.Eligible
+    kind: method
+  - id: internal/finding/finding.go:Finding.RepairObjective
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Finding.RepairObjective
+    kind: method
+  - id: internal/finding/finding.go:Graph
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Graph
+    kind: const
+  - id: internal/finding/finding.go:ID
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: ID
+    kind: var
+  - id: internal/finding/finding.go:Inference
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Inference
+    kind: const
+  - id: internal/finding/finding.go:New
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: New
+    kind: function
+  - id: internal/finding/finding.go:Objective
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Objective
+    kind: var
+  - id: internal/finding/finding.go:ObservationTask
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: ObservationTask
+    kind: var
+  - id: internal/finding/finding.go:Provenance
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Provenance
+    kind: type
+  - id: internal/finding/finding.go:Provenance.EvidenceBearing
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Provenance.EvidenceBearing
+    kind: method
+  - id: internal/finding/finding.go:Provenance.String
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Provenance.String
+    kind: method
+  - id: internal/finding/finding.go:Repository
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Repository
+    kind: const
+  - id: internal/finding/finding.go:Source
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Source
+    kind: var
+  - id: internal/finding/finding.go:Statement
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Statement
+    kind: var
+  - id: internal/finding/finding.go:Unrecognised
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: Unrecognised
+    kind: const
+  - id: internal/finding/finding.go:World
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: World
+    kind: var
+  - id: internal/finding/finding.go:finding
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: finding
+    kind: function
+  - id: internal/finding/finding.go:normalise
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding.go
+    symbol: normalise
+    kind: function
+  - id: internal/finding/finding_test.go:TestAFindingWithNoFilesIsNotWork
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: TestAFindingWithNoFilesIsNotWork
+    kind: function
+  - id: internal/finding/finding_test.go:TestAnInferenceCannotBecomeRepairWork
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: TestAnInferenceCannotBecomeRepairWork
+    kind: function
+  - id: internal/finding/finding_test.go:TestFindingIdentityIsStablePerWorld
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: TestFindingIdentityIsStablePerWorld
+    kind: function
+  - id: internal/finding/finding_test.go:TestTheRepairObjectiveDoesNotSupplyTheFix
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: TestTheRepairObjectiveDoesNotSupplyTheFix
+    kind: function
+  - id: internal/finding/finding_test.go:TestTheZeroProvenanceIsUnrecognised
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: TestTheZeroProvenanceIsUnrecognised
+    kind: function
+  - id: internal/finding/finding_test.go:TestUnknownProvenanceFailsClosed
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: TestUnknownProvenanceFailsClosed
+    kind: function
+  - id: internal/finding/finding_test.go:contains
+    namespace: structural.scip
+    language: go
+    file: internal/finding/finding_test.go
+    symbol: contains
+    kind: function
   - id: internal/gitx/git.go:Discover
     namespace: structural.scip
     language: go
@@ -4456,6 +5464,12 @@ code_symbols:
     language: go
     file: internal/gitx/git.go
     symbol: Repo.CommitDiff
+    kind: method
+  - id: internal/gitx/git.go:Repo.CreateObservationWorktree
+    namespace: structural.scip
+    language: go
+    file: internal/gitx/git.go
+    symbol: Repo.CreateObservationWorktree
     kind: method
   - id: internal/gitx/git.go:Repo.CreateWorktree
     namespace: structural.scip
@@ -4493,6 +5507,12 @@ code_symbols:
     file: internal/gitx/git.go
     symbol: Repo.IsClean
     kind: method
+  - id: internal/gitx/git.go:Repo.RemoveObservationWorktree
+    namespace: structural.scip
+    language: go
+    file: internal/gitx/git.go
+    symbol: Repo.RemoveObservationWorktree
+    kind: method
   - id: internal/gitx/git.go:Repo.RemoveWorktree
     namespace: structural.scip
     language: go
@@ -4510,6 +5530,12 @@ code_symbols:
     language: go
     file: internal/gitx/git.go
     symbol: Repo.WorktreeBranch
+    kind: method
+  - id: internal/gitx/git.go:Repo.WorktreeIsClean
+    namespace: structural.scip
+    language: go
+    file: internal/gitx/git.go
+    symbol: Repo.WorktreeIsClean
     kind: method
   - id: internal/gitx/git.go:Repo.WorktreePath
     namespace: structural.scip
@@ -4605,6 +5631,216 @@ code_symbols:
     namespace: structural.scip
     language: go
     file: internal/gitx/git_test.go
+    symbol: write
+    kind: function
+  - id: internal/history/history.go:Audit
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Audit
+    kind: type
+  - id: internal/history/history.go:Audits
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Audits
+    kind: var
+  - id: internal/history/history.go:Chosen
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Chosen
+    kind: var
+  - id: internal/history/history.go:Condition
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Condition
+    kind: var
+  - id: internal/history/history.go:DecidedAt
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: DecidedAt
+    kind: var
+  - id: internal/history/history.go:Decision
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Decision
+    kind: type
+  - id: internal/history/history.go:Decisions
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Decisions
+    kind: var
+  - id: internal/history/history.go:Findings
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Findings
+    kind: var
+  - id: internal/history/history.go:Gather
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Gather
+    kind: function
+  - id: internal/history/history.go:Name
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Name
+    kind: var
+  - id: internal/history/history.go:Record
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Record
+    kind: type
+  - id: internal/history/history.go:Record.Empty
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Record.Empty
+    kind: method
+  - id: internal/history/history.go:Record.Render
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Record.Render
+    kind: method
+  - id: internal/history/history.go:Task
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Task
+    kind: var
+  - id: internal/history/history.go:Truncated
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Truncated
+    kind: var
+  - id: internal/history/history.go:Unavailable
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: Unavailable
+    kind: var
+  - id: internal/history/history.go:decisionFrom
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: decisionFrom
+    kind: function
+  - id: internal/history/history.go:fieldChosen
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: fieldChosen
+    kind: const
+  - id: internal/history/history.go:fieldCondition
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: fieldCondition
+    kind: const
+  - id: internal/history/history.go:fieldDecided
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: fieldDecided
+    kind: const
+  - id: internal/history/history.go:fieldTask
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: fieldTask
+    kind: const
+  - id: internal/history/history.go:findingsIn
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: findingsIn
+    kind: function
+  - id: internal/history/history.go:history
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: history
+    kind: function
+  - id: internal/history/history.go:readAudits
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: readAudits
+    kind: function
+  - id: internal/history/history.go:readDecisions
+    namespace: structural.scip
+    language: go
+    file: internal/history/history.go
+    symbol: readDecisions
+    kind: function
+  - id: internal/history/history_test.go:TestACompleteAuditDoesNotClaimTruncation
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestACompleteAuditDoesNotClaimTruncation
+    kind: function
+  - id: internal/history/history_test.go:TestARecordedDecisionReachesTheBrief
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestARecordedDecisionReachesTheBrief
+    kind: function
+  - id: internal/history/history_test.go:TestAbsentCorporaAreNotAFailure
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestAbsentCorporaAreNotAFailure
+    kind: function
+  - id: internal/history/history_test.go:TestAnAuditIsLabelledAsPointInTime
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestAnAuditIsLabelledAsPointInTime
+    kind: function
+  - id: internal/history/history_test.go:TestAnIncompleteDecisionIsReportedNotGuessed
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestAnIncompleteDecisionIsReportedNotGuessed
+    kind: function
+  - id: internal/history/history_test.go:TestDroppedFindingsAreReported
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestDroppedFindingsAreReported
+    kind: function
+  - id: internal/history/history_test.go:TestThisRepositorysOwnRecordsParse
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestThisRepositorysOwnRecordsParse
+    kind: function
+  - id: internal/history/history_test.go:TestTruncationSaysSo
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: TestTruncationSaysSo
+    kind: function
+  - id: internal/history/history_test.go:proposal
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
+    symbol: proposal
+    kind: const
+  - id: internal/history/history_test.go:write
+    namespace: structural.scip
+    language: go
+    file: internal/history/history_test.go
     symbol: write
     kind: function
   - id: internal/investigate/investigate.go:Allowed
@@ -4876,7 +6112,7 @@ code_symbols:
     language: go
     file: internal/mcpconfig/mcpconfig.go
     symbol: State
-    kind: type
+    kind: var
   - id: internal/mcpconfig/mcpconfig.go:Status
     namespace: structural.scip
     language: go
@@ -4888,6 +6124,12 @@ code_symbols:
     language: go
     file: internal/mcpconfig/mcpconfig.go
     symbol: Unknown
+    kind: const
+  - id: internal/mcpconfig/mcpconfig.go:Unproven
+    namespace: structural.scip
+    language: go
+    file: internal/mcpconfig/mcpconfig.go
+    symbol: Unproven
     kind: const
   - id: internal/mcpconfig/mcpconfig.go:addressDrift
     namespace: structural.scip
@@ -5009,6 +6251,18 @@ code_symbols:
     file: internal/mcpconfig/mcpconfig.go
     symbol: resolvable
     kind: function
+  - id: internal/mcpconfig/mcpconfig_test.go:TestADefaultAddressIsNotEvidenceThatAnEntryIsStale
+    namespace: structural.scip
+    language: go
+    file: internal/mcpconfig/mcpconfig_test.go
+    symbol: TestADefaultAddressIsNotEvidenceThatAnEntryIsStale
+    kind: function
+  - id: internal/mcpconfig/mcpconfig_test.go:TestAnAgreeingEntryIsConfiguredRegardlessOfProvenance
+    namespace: structural.scip
+    language: go
+    file: internal/mcpconfig/mcpconfig_test.go
+    symbol: TestAnAgreeingEntryIsConfiguredRegardlessOfProvenance
+    kind: function
   - id: internal/mcpconfig/mcpconfig_test.go:TestAnEntryPointingElsewhereIsStaleRatherThanConfigured
     namespace: structural.scip
     language: go
@@ -5051,6 +6305,12 @@ code_symbols:
     file: internal/mcpconfig/mcpconfig_test.go
     symbol: TestConfigureLeavesAnExistingEntryAlone
     kind: function
+  - id: internal/mcpconfig/mcpconfig_test.go:TestConfigureRefusesToRewriteAnEntryOnTheAuthorityOfADefault
+    namespace: structural.scip
+    language: go
+    file: internal/mcpconfig/mcpconfig_test.go
+    symbol: TestConfigureRefusesToRewriteAnEntryOnTheAuthorityOfADefault
+    kind: function
   - id: internal/mcpconfig/mcpconfig_test.go:TestMissingCodexToolsEmptyWhenAllAllowlisted
     namespace: structural.scip
     language: go
@@ -5080,6 +6340,12 @@ code_symbols:
     language: go
     file: internal/mcpconfig/mcpconfig_test.go
     symbol: contains
+    kind: function
+  - id: internal/mcpconfig/mcpconfig_test.go:writeClaudeConfig
+    namespace: structural.scip
+    language: go
+    file: internal/mcpconfig/mcpconfig_test.go
+    symbol: writeClaudeConfig
     kind: function
   - id: internal/processx/env_test.go:TestEnvironRemovesOverridingCredentials
     namespace: structural.scip
@@ -5848,7 +7114,7 @@ code_symbols:
     language: go
     file: internal/provider/provider.go
     symbol: Capability
-    kind: var
+    kind: function
   - id: internal/provider/provider.go:CapabilityDemonstrated
     namespace: structural.scip
     language: go
@@ -5896,7 +7162,7 @@ code_symbols:
     language: go
     file: internal/provider/provider.go
     symbol: ID
-    kind: type
+    kind: var
   - id: internal/provider/provider.go:Installed
     namespace: structural.scip
     language: go
@@ -5908,7 +7174,7 @@ code_symbols:
     language: go
     file: internal/provider/provider.go
     symbol: Label
-    kind: function
+    kind: var
   - id: internal/provider/provider.go:Login
     namespace: structural.scip
     language: go
@@ -5987,6 +7253,12 @@ code_symbols:
     file: internal/provider/provider.go
     symbol: runInteractive
     kind: function
+  - id: internal/provider/provider_test.go:TestAThirdProviderCanReview
+    namespace: structural.scip
+    language: go
+    file: internal/provider/provider_test.go
+    symbol: TestAThirdProviderCanReview
+    kind: function
   - id: internal/provider/provider_test.go:TestAnAmbientKeyIsReportedAsStrippedNotAsOverriding
     namespace: structural.scip
     language: go
@@ -6010,6 +7282,12 @@ code_symbols:
     language: go
     file: internal/provider/provider_test.go
     symbol: TestEnvironmentKeyOverrideIsReported
+    kind: function
+  - id: internal/provider/provider_test.go:TestEveryReportedProviderHasItsCredentialsStripped
+    namespace: structural.scip
+    language: go
+    file: internal/provider/provider_test.go
+    symbol: TestEveryReportedProviderHasItsCredentialsStripped
     kind: function
   - id: internal/provider/provider_test.go:TestFormatStatusConnected
     namespace: structural.scip
@@ -6047,6 +7325,18 @@ code_symbols:
     file: internal/provider/provider_test.go
     symbol: TestProviderStatusHasNoCredentialFields
     kind: function
+  - id: internal/provider/provider_test.go:TestTheReviewerPoolIsNotOneAccount
+    namespace: structural.scip
+    language: go
+    file: internal/provider/provider_test.go
+    symbol: TestTheReviewerPoolIsNotOneAccount
+    kind: function
+  - id: internal/provider/provider_test.go:TestTheStrippedListCoversTheProvidersReportedOn
+    namespace: structural.scip
+    language: go
+    file: internal/provider/provider_test.go
+    symbol: TestTheStrippedListCoversTheProvidersReportedOn
+    kind: function
   - id: internal/publish/publish.go:Base
     namespace: structural.scip
     language: go
@@ -6065,11 +7355,23 @@ code_symbols:
     file: internal/publish/publish.go
     symbol: CommitArgs
     kind: function
+  - id: internal/publish/publish.go:Committed
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: Committed
+    kind: var
   - id: internal/publish/publish.go:ErrCommitNotGranted
     namespace: structural.scip
     language: go
     file: internal/publish/publish.go
     symbol: ErrCommitNotGranted
+    kind: var
+  - id: internal/publish/publish.go:ErrNoPullRequestURL
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: ErrNoPullRequestURL
     kind: var
   - id: internal/publish/publish.go:ErrPushNotGranted
     namespace: structural.scip
@@ -6089,6 +7391,12 @@ code_symbols:
     file: internal/publish/publish.go
     symbol: PushArgs
     kind: function
+  - id: internal/publish/publish.go:Pushed
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: Pushed
+    kind: var
   - id: internal/publish/publish.go:Report
     namespace: structural.scip
     language: go
@@ -6113,11 +7421,35 @@ code_symbols:
     file: internal/publish/publish.go
     symbol: Request.PullRequestArgs
     kind: method
+  - id: internal/publish/publish.go:Result
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: Result
+    kind: type
+  - id: internal/publish/publish.go:Result.Effects
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: Result.Effects
+    kind: method
+  - id: internal/publish/publish.go:Result.Opened
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: Result.Opened
+    kind: method
   - id: internal/publish/publish.go:Title
     namespace: structural.scip
     language: go
     file: internal/publish/publish.go
     symbol: Title
+    kind: var
+  - id: internal/publish/publish.go:URL
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: URL
     kind: var
   - id: internal/publish/publish.go:Workspace
     namespace: structural.scip
@@ -6125,6 +7457,12 @@ code_symbols:
     file: internal/publish/publish.go
     symbol: Workspace
     kind: var
+  - id: internal/publish/publish.go:oneLine
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish.go
+    symbol: oneLine
+    kind: function
   - id: internal/publish/publish.go:prURL
     namespace: structural.scip
     language: go
@@ -6143,6 +7481,12 @@ code_symbols:
     file: internal/publish/publish.go
     symbol: run
     kind: function
+  - id: internal/publish/publish_test.go:TestAPartialPublicationReportsWhatReachedTheRemote
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish_test.go
+    symbol: TestAPartialPublicationReportsWhatReachedTheRemote
+    kind: function
   - id: internal/publish/publish_test.go:TestBodyCarriesTheReportAndRefusesToClaimAdmission
     namespace: structural.scip
     language: go
@@ -6154,6 +7498,12 @@ code_symbols:
     language: go
     file: internal/publish/publish_test.go
     symbol: TestCommitAndPushReachARealRemote
+    kind: function
+  - id: internal/publish/publish_test.go:TestNoURLIsNotAPullRequest
+    namespace: structural.scip
+    language: go
+    file: internal/publish/publish_test.go
+    symbol: TestNoURLIsNotAPullRequest
     kind: function
   - id: internal/publish/publish_test.go:TestPRURLIsExtractedRatherThanEchoed
     namespace: structural.scip
@@ -6406,7 +7756,7 @@ code_symbols:
     language: go
     file: internal/retrieval/retrieval.go
     symbol: Kind
-    kind: var
+    kind: type
   - id: internal/retrieval/retrieval.go:Outcome
     namespace: structural.scip
     language: go
@@ -6593,6 +7943,12 @@ code_symbols:
     file: internal/retrieval/semantic.go
     symbol: Class
     kind: var
+  - id: internal/retrieval/semantic.go:Failed
+    namespace: structural.scip
+    language: go
+    file: internal/retrieval/semantic.go
+    symbol: Failed
+    kind: var
   - id: internal/retrieval/semantic.go:ID
     namespace: structural.scip
     language: go
@@ -6622,7 +7978,7 @@ code_symbols:
     language: go
     file: internal/retrieval/semantic.go
     symbol: Node
-    kind: type
+    kind: var
   - id: internal/retrieval/semantic.go:NodesFrom
     namespace: structural.scip
     language: go
@@ -6635,6 +7991,12 @@ code_symbols:
     file: internal/retrieval/semantic.go
     symbol: Queries
     kind: function
+  - id: internal/retrieval/semantic.go:Reason
+    namespace: structural.scip
+    language: go
+    file: internal/retrieval/semantic.go
+    symbol: Reason
+    kind: var
   - id: internal/retrieval/semantic.go:Select
     namespace: structural.scip
     language: go
@@ -6653,6 +8015,12 @@ code_symbols:
     file: internal/retrieval/semantic.go
     symbol: SurveyOutcome
     kind: type
+  - id: internal/retrieval/semantic.go:SurveyOutcome.Complete
+    namespace: structural.scip
+    language: go
+    file: internal/retrieval/semantic.go
+    symbol: SurveyOutcome.Complete
+    kind: method
   - id: internal/retrieval/semantic.go:SurveyOutcome.Describe
     namespace: structural.scip
     language: go
@@ -6695,6 +8063,12 @@ code_symbols:
     file: internal/retrieval/semantic.go
     symbol: terms
     kind: function
+  - id: internal/retrieval/semantic_test.go:TestAPartialSurveySaysItIsPartial
+    namespace: structural.scip
+    language: go
+    file: internal/retrieval/semantic_test.go
+    symbol: TestAPartialSurveySaysItIsPartial
+    kind: function
   - id: internal/retrieval/semantic_test.go:TestAQuestionThatNamesNothingStillFindsWhatGovernsIt
     namespace: structural.scip
     language: go
@@ -6706,6 +8080,18 @@ code_symbols:
     language: go
     file: internal/retrieval/semantic_test.go
     symbol: TestASurveyThatMatchesNothingSaysHowMuchItLookedAt
+    kind: function
+  - id: internal/retrieval/semantic_test.go:TestATotalSurveyFailureIsNotAnEmptyGraph
+    namespace: structural.scip
+    language: go
+    file: internal/retrieval/semantic_test.go
+    symbol: TestATotalSurveyFailureIsNotAnEmptyGraph
+    kind: function
+  - id: internal/retrieval/semantic_test.go:TestAnAnsweredEmptySurveyStillReportsAnEmptyGraph
+    namespace: structural.scip
+    language: go
+    file: internal/retrieval/semantic_test.go
+    symbol: TestAnAnsweredEmptySurveyStillReportsAnEmptyGraph
     kind: function
   - id: internal/retrieval/semantic_test.go:TestCommonWordsDoNotSelect
     namespace: structural.scip
@@ -6875,6 +8261,12 @@ code_symbols:
     file: internal/roles/packet.go
     symbol: IndependentReviewPacket
     kind: type
+  - id: internal/roles/packet.go:IndependentReviewPacket.Inspection
+    namespace: structural.scip
+    language: go
+    file: internal/roles/packet.go
+    symbol: IndependentReviewPacket.Inspection
+    kind: method
   - id: internal/roles/packet.go:OpenFindings
     namespace: structural.scip
     language: go
@@ -6904,6 +8296,12 @@ code_symbols:
     language: go
     file: internal/roles/packet.go
     symbol: Provenance
+    kind: var
+  - id: internal/roles/packet.go:Report
+    namespace: structural.scip
+    language: go
+    file: internal/roles/packet.go
+    symbol: Report
     kind: var
   - id: internal/roles/packet.go:State
     namespace: structural.scip
@@ -7522,7 +8920,7 @@ code_symbols:
     language: go
     file: internal/roles/verdict.go
     symbol: Decision
-    kind: type
+    kind: var
   - id: internal/roles/verdict.go:Decision.Valid
     namespace: structural.scip
     language: go
@@ -7642,7 +9040,7 @@ code_symbols:
     language: go
     file: internal/roles/verdict.go
     symbol: Severity
-    kind: var
+    kind: type
   - id: internal/roles/verdict.go:Severity.Valid
     namespace: structural.scip
     language: go
@@ -7750,7 +9148,7 @@ code_symbols:
     language: go
     file: internal/sensei/contracts.go
     symbol: Authority
-    kind: var
+    kind: type
   - id: internal/sensei/contracts.go:Authority.Certifiable
     namespace: structural.scip
     language: go
@@ -8320,7 +9718,7 @@ code_symbols:
     language: go
     file: internal/sensei/contracts.go
     symbol: SeedState
-    kind: type
+    kind: var
   - id: internal/sensei/contracts.go:SeedUnspecified
     namespace: structural.scip
     language: go
@@ -9298,7 +10696,7 @@ code_symbols:
     language: go
     file: internal/setup/setup.go
     symbol: State
-    kind: type
+    kind: var
   - id: internal/setup/setup.go:Symptom
     namespace: structural.scip
     language: go
@@ -9490,7 +10888,7 @@ code_symbols:
     language: go
     file: internal/taskstate/state.go
     symbol: Contract
-    kind: type
+    kind: var
   - id: internal/taskstate/state.go:DecidedAt
     namespace: structural.scip
     language: go
@@ -9526,7 +10924,7 @@ code_symbols:
     language: go
     file: internal/taskstate/state.go
     symbol: Evidence
-    kind: var
+    kind: type
   - id: internal/taskstate/state.go:Files
     namespace: structural.scip
     language: go
@@ -9604,6 +11002,12 @@ code_symbols:
     language: go
     file: internal/taskstate/state.go
     symbol: Rationale
+    kind: var
+  - id: internal/taskstate/state.go:ReportBytes
+    namespace: structural.scip
+    language: go
+    file: internal/taskstate/state.go
+    symbol: ReportBytes
     kind: var
   - id: internal/taskstate/state.go:RequiredTests
     namespace: structural.scip
@@ -9706,7 +11110,7 @@ code_symbols:
     language: go
     file: internal/taskstate/state.go
     symbol: Version
-    kind: var
+    kind: const
   - id: internal/taskstate/state.go:Workers
     namespace: structural.scip
     language: go
@@ -9784,6 +11188,132 @@ code_symbols:
     language: go
     file: internal/taskstate/state_test.go
     symbol: sample
+    kind: function
+  - id: internal/tui/astutil_test.go:fileTextTUI
+    namespace: structural.scip
+    language: go
+    file: internal/tui/astutil_test.go
+    symbol: fileTextTUI
+    kind: function
+  - id: internal/tui/astutil_test.go:funcBodyTUI
+    namespace: structural.scip
+    language: go
+    file: internal/tui/astutil_test.go
+    symbol: funcBodyTUI
+    kind: function
+  - id: internal/tui/clipboard.go:copyToClipboard
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard.go
+    symbol: copyToClipboard
+    kind: function
+  - id: internal/tui/clipboard.go:pasteHint
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard.go
+    symbol: pasteHint
+    kind: function
+  - id: internal/tui/clipboard.go:pasteRequestedMsg
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard.go
+    symbol: pasteRequestedMsg
+    kind: type
+  - id: internal/tui/clipboard.go:pasteUnansweredMsg
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard.go
+    symbol: pasteUnansweredMsg
+    kind: type
+  - id: internal/tui/clipboard.go:plainTranscript
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard.go
+    symbol: plainTranscript
+    kind: function
+  - id: internal/tui/clipboard.go:tui
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard.go
+    symbol: tui
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestAnAnsweredPasteIsNotWarnedAbout
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestAnAnsweredPasteIsNotWarnedAbout
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestAnUnansweredPasteExplainsItself
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestAnUnansweredPasteExplainsItself
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestClipboardDoesNotShellOutToAHelperBinary
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestClipboardDoesNotShellOutToAHelperBinary
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestCopyKeysDoNotStealQuit
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestCopyKeysDoNotStealQuit
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestCopyKeysProduceClipboardWrites
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestCopyKeysProduceClipboardWrites
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestCopyingNothingWritesNothing
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestCopyingNothingWritesNothing
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestCopyingStripsStyling
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestCopyingStripsStyling
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestLastResponseComesFromTheEventNotTheRendering
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestLastResponseComesFromTheEventNotTheRendering
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestReleasingTheMouseReachesTheView
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestReleasingTheMouseReachesTheView
+    kind: function
+  - id: internal/tui/clipboard_test.go:TestTheHumansOwnWordsAreNotTheLastResponse
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: TestTheHumansOwnWordsAreNotTheLastResponse
+    kind: function
+  - id: internal/tui/clipboard_test.go:collectClipboardWrites
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: collectClipboardWrites
+    kind: function
+  - id: internal/tui/clipboard_test.go:ctrlKey
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: ctrlKey
+    kind: function
+  - id: internal/tui/clipboard_test.go:newTestModel
+    namespace: structural.scip
+    language: go
+    file: internal/tui/clipboard_test.go
+    symbol: newTestModel
     kind: function
   - id: internal/tui/layout_test.go:TestWrapRowsPadsEveryRowToFullWidth
     namespace: structural.scip
@@ -10019,6 +11549,12 @@ code_symbols:
     file: internal/tui/model.go
     symbol: isConversation
     kind: function
+  - id: internal/tui/model.go:lastResponse
+    namespace: structural.scip
+    language: go
+    file: internal/tui/model.go
+    symbol: lastResponse
+    kind: var
   - id: internal/tui/model.go:lines
     namespace: structural.scip
     language: go
@@ -10085,6 +11621,12 @@ code_symbols:
     file: internal/tui/model.go
     symbol: modeStyle
     kind: var
+  - id: internal/tui/model.go:mouseOff
+    namespace: structural.scip
+    language: go
+    file: internal/tui/model.go
+    symbol: mouseOff
+    kind: var
   - id: internal/tui/model.go:name
     namespace: structural.scip
     language: go
@@ -10097,6 +11639,12 @@ code_symbols:
     file: internal/tui/model.go
     symbol: padRow
     kind: function
+  - id: internal/tui/model.go:pasteWaiting
+    namespace: structural.scip
+    language: go
+    file: internal/tui/model.go
+    symbol: pasteWaiting
+    kind: var
   - id: internal/tui/model.go:pending
     namespace: structural.scip
     language: go
@@ -10253,12 +11801,6 @@ code_symbols:
     file: internal/tui/model.go
     symbol: tickMsg
     kind: type
-  - id: internal/tui/model.go:tui
-    namespace: structural.scip
-    language: go
-    file: internal/tui/model.go
-    symbol: tui
-    kind: function
   - id: internal/tui/model.go:userStyle
     namespace: structural.scip
     language: go
@@ -10594,7 +12136,7 @@ code_symbols:
     language: go
     file: internal/validation/evidence.go
     symbol: Outcome
-    kind: var
+    kind: type
   - id: internal/validation/evidence.go:Output
     namespace: structural.scip
     language: go
@@ -10811,11 +12353,23 @@ code_symbols:
     file: internal/workflow/adversarial.go
     symbol: handoffPacket
     kind: function
+  - id: internal/workflow/adversarial.go:inspectionPacket
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/adversarial.go
+    symbol: inspectionPacket
+    kind: function
   - id: internal/workflow/adversarial.go:reconciliationEvidence
     namespace: structural.scip
     language: go
     file: internal/workflow/adversarial.go
     symbol: reconciliationEvidence
+    kind: function
+  - id: internal/workflow/adversarial.go:reportRevision
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/adversarial.go
+    symbol: reportRevision
     kind: function
   - id: internal/workflow/adversarial.go:reviewPacket
     namespace: structural.scip
@@ -10901,6 +12455,72 @@ code_symbols:
     file: internal/workflow/adversarial_test.go
     symbol: testReviewPacket
     kind: function
+  - id: internal/workflow/architect_context.go:Engine.architecturalContext
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context.go
+    symbol: Engine.architecturalContext
+    kind: method
+  - id: internal/workflow/architect_context.go:historyPresence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context.go
+    symbol: historyPresence
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestABriefWithoutSenseiSaysSo
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestABriefWithoutSenseiSaysSo
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestAnEmptySectionStatesItsAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestAnEmptySectionStatesItsAbsence
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestRecordedHistoryCrossesTheSessionBoundary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestRecordedHistoryCrossesTheSessionBoundary
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestRecordedHistoryIsGatheredAndDrawn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestRecordedHistoryIsGatheredAndDrawn
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestStandingContextAuthorisesNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestStandingContextAuthorisesNothing
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestTheArchitectIsGivenWhatGovernsTheSubject
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestTheArchitectIsGivenWhatGovernsTheSubject
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestTheBriefIsDerivedNotRecalled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestTheBriefIsDerivedNotRecalled
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestTheGovernedBriefIsEmittedAsEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestTheGovernedBriefIsEmittedAsEvidence
+    kind: function
+  - id: internal/workflow/architect_context_test.go:TestTheUnscopedPreflightSaysWhyItIsThin
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architect_context_test.go
+    symbol: TestTheUnscopedPreflightSaysWhyItIsThin
+    kind: function
   - id: internal/workflow/assisted.go:Engine.Stop
     namespace: structural.scip
     language: go
@@ -10931,6 +12551,18 @@ code_symbols:
     file: internal/workflow/assisted.go
     symbol: Engine.SubmitGoverned
     kind: method
+  - id: internal/workflow/assisted.go:Engine.SubmitGovernedUnattended
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/assisted.go
+    symbol: Engine.SubmitGovernedUnattended
+    kind: method
+  - id: internal/workflow/assisted.go:Engine.SubmitObservation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/assisted.go
+    symbol: Engine.SubmitObservation
+    kind: method
   - id: internal/workflow/assisted.go:Engine.announceMode
     namespace: structural.scip
     language: go
@@ -10954,6 +12586,12 @@ code_symbols:
     language: go
     file: internal/workflow/assisted.go
     symbol: Engine.sessionEvents
+    kind: method
+  - id: internal/workflow/assisted.go:Engine.submit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/assisted.go
+    symbol: Engine.submit
     kind: method
   - id: internal/workflow/assisted.go:assistedPrompt
     namespace: structural.scip
@@ -11033,6 +12671,12 @@ code_symbols:
     file: internal/workflow/assisted.go
     symbol: surveyPlan
     kind: function
+  - id: internal/workflow/assisted_test.go:TestSurveyFailuresReachTheOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/assisted_test.go
+    symbol: TestSurveyFailuresReachTheOutcome
+    kind: function
   - id: internal/workflow/authority.go:About
     namespace: structural.scip
     language: go
@@ -11081,11 +12725,23 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: RouteCannotEstablish
     kind: const
+  - id: internal/workflow/authority.go:RouteCloseGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: RouteCloseGap
+    kind: const
   - id: internal/workflow/authority.go:RouteHuman
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: RouteHuman
+    kind: const
+  - id: internal/workflow/authority.go:RouteObserve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: RouteObserve
     kind: const
   - id: internal/workflow/authority.go:Routing
     namespace: structural.scip
@@ -11093,11 +12749,23 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: Routing
     kind: type
+  - id: internal/workflow/authority.go:Routing.ClosesGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: Routing.ClosesGap
+    kind: method
   - id: internal/workflow/authority.go:Routing.Granted
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: Routing.Granted
+    kind: method
+  - id: internal/workflow/authority.go:Routing.Observes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: Routing.Observes
     kind: method
   - id: internal/workflow/authority.go:Routing.RequiresHuman
     namespace: structural.scip
@@ -11117,11 +12785,29 @@ code_symbols:
     file: internal/workflow/authority.go
     symbol: Statement
     kind: var
+  - id: internal/workflow/authority.go:coversAll
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: coversAll
+    kind: function
   - id: internal/workflow/authority.go:decideRoute
     namespace: structural.scip
     language: go
     file: internal/workflow/authority.go
     symbol: decideRoute
+    kind: function
+  - id: internal/workflow/authority.go:decideRouteForAction
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: decideRouteForAction
+    kind: function
+  - id: internal/workflow/authority.go:degradedReason
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: degradedReason
     kind: function
   - id: internal/workflow/authority.go:escalationCondition
     namespace: structural.scip
@@ -11134,6 +12820,18 @@ code_symbols:
     language: go
     file: internal/workflow/authority.go
     symbol: routeAuthority
+    kind: function
+  - id: internal/workflow/authority.go:routeAuthorityForAction
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority.go
+    symbol: routeAuthorityForAction
+    kind: function
+  - id: internal/workflow/authority_test.go:TestAConsequenceSignalIsNeverAGrantOnItsOwn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_test.go
+    symbol: TestAConsequenceSignalIsNeverAGrantOnItsOwn
     kind: function
   - id: internal/workflow/authority_test.go:TestApprovalClassesRequiringAHumanAllEscalate
     namespace: structural.scip
@@ -11153,23 +12851,23 @@ code_symbols:
     file: internal/workflow/authority_test.go
     symbol: TestArchitectPromptDemandsClaims
     kind: function
-  - id: internal/workflow/authority_test.go:TestBlindSpotRequiresHuman
-    namespace: structural.scip
-    language: go
-    file: internal/workflow/authority_test.go
-    symbol: TestBlindSpotRequiresHuman
-    kind: function
   - id: internal/workflow/authority_test.go:TestCertifiableQuestionIsResolvedWithoutAHumanPrompt
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_test.go
     symbol: TestCertifiableQuestionIsResolvedWithoutAHumanPrompt
     kind: function
-  - id: internal/workflow/authority_test.go:TestCoverageAbsentRequiresHumanEvenWhenTheArchitectIsConfident
+  - id: internal/workflow/authority_test.go:TestCloseGapRoutesNameTheirCondition
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_test.go
-    symbol: TestCoverageAbsentRequiresHumanEvenWhenTheArchitectIsConfident
+    symbol: TestCloseGapRoutesNameTheirCondition
+    kind: function
+  - id: internal/workflow/authority_test.go:TestCoverageAbsentNeverGrantsAndNoLongerInterrupts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_test.go
+    symbol: TestCoverageAbsentNeverGrantsAndNoLongerInterrupts
     kind: function
   - id: internal/workflow/authority_test.go:TestEveryHumanRouteNamesItsCondition
     namespace: structural.scip
@@ -11219,11 +12917,413 @@ code_symbols:
     file: internal/workflow/authority_test.go
     symbol: healthyAuthority
     kind: const
+  - id: internal/workflow/authority_test.go:provenCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_test.go
+    symbol: provenCoverage
+    kind: const
   - id: internal/workflow/authority_test.go:scopedPreflight
     namespace: structural.scip
     language: go
     file: internal/workflow/authority_test.go
     symbol: scopedPreflight
+    kind: function
+  - id: internal/workflow/blindspot.go:Consequence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: Consequence
+    kind: var
+  - id: internal/workflow/blindspot.go:Coverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: Coverage
+    kind: var
+  - id: internal/workflow/blindspot.go:Unrecognised
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: Unrecognised
+    kind: var
+  - id: internal/workflow/blindspot.go:blindSpotConsequence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: blindSpotConsequence
+    kind: const
+  - id: internal/workflow/blindspot.go:blindSpotCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: blindSpotCoverage
+    kind: const
+  - id: internal/workflow/blindspot.go:blindSpotKind
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: blindSpotKind
+    kind: type
+  - id: internal/workflow/blindspot.go:blindSpotKind.String
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: blindSpotKind.String
+    kind: method
+  - id: internal/workflow/blindspot.go:blindSpotReading
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: blindSpotReading
+    kind: type
+  - id: internal/workflow/blindspot.go:blindSpotUnrecognised
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: blindSpotUnrecognised
+    kind: const
+  - id: internal/workflow/blindspot.go:classifyBlindSpot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: classifyBlindSpot
+    kind: function
+  - id: internal/workflow/blindspot.go:consequenceMarkers
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: consequenceMarkers
+    kind: var
+  - id: internal/workflow/blindspot.go:coverageMarkers
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: coverageMarkers
+    kind: var
+  - id: internal/workflow/blindspot.go:readBlindSpots
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot.go
+    symbol: readBlindSpots
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestAHighRiskPathWithNoFactsIsACoverageGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestAHighRiskPathWithNoFactsIsACoverageGap
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestAVerifiedPremiseClosesItsOwnGapWithNoWritePath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestAVerifiedPremiseClosesItsOwnGapWithNoWritePath
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestAnApprovalGateIsNotClosableByEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestAnApprovalGateIsNotClosableByEvidence
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestAnUncertifiableGraphIsNeverABoundedGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestAnUncertifiableGraphIsNeverABoundedGap
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestClassifyTheMeasuredBlindSpotVocabulary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestClassifyTheMeasuredBlindSpotVocabulary
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestClosureBudgetIsPerConditionAndPerTask
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestClosureBudgetIsPerConditionAndPerTask
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestConsequenceSignalsAreAssessedAgainstTheAction
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestConsequenceSignalsAreAssessedAgainstTheAction
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestCoverageBlindSpotRoutesToBoundedWork
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestCoverageBlindSpotRoutesToBoundedWork
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestCoverageWinsOverConsequenceInAMixedReading
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestCoverageWinsOverConsequenceInAMixedReading
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestDerivedCoverageClosesAGapOnlyWhereItWasDerived
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestDerivedCoverageClosesAGapOnlyWhereItWasDerived
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestDerivedCoverageDoesNotBuyConsequenceAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestDerivedCoverageDoesNotBuyConsequenceAuthority
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestOneConditionGetsOneClosureRound
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestOneConditionGetsOneClosureRound
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestUnrecognisedBeatsEveryOtherReading
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestUnrecognisedBeatsEveryOtherReading
+    kind: function
+  - id: internal/workflow/blindspot_test.go:TestUnrecognisedBlindSpotsFailClosed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestUnrecognisedBlindSpotsFailClosed
+    kind: function
+  - id: internal/workflow/consequence.go:Action
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action
+    kind: type
+  - id: internal/workflow/consequence.go:ActionStage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ActionStage
+    kind: type
+  - id: internal/workflow/consequence.go:AssessConsequences
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: AssessConsequences
+    kind: function
+  - id: internal/workflow/consequence.go:Boundary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Boundary
+    kind: var
+  - id: internal/workflow/consequence.go:ConsequenceAssessment
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ConsequenceAssessment
+    kind: type
+  - id: internal/workflow/consequence.go:ConsequenceAssessment.Bounded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ConsequenceAssessment.Bounded
+    kind: method
+  - id: internal/workflow/consequence.go:ConsequenceBounded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ConsequenceBounded
+    kind: const
+  - id: internal/workflow/consequence.go:ConsequenceCannotEstablish
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ConsequenceCannotEstablish
+    kind: const
+  - id: internal/workflow/consequence.go:ConsequenceResult
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ConsequenceResult
+    kind: type
+  - id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: ConsequenceUnacceptable
+    kind: const
+  - id: internal/workflow/consequence.go:DeclaredConsequences
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredConsequences
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredSteps
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredSteps
+    kind: var
+  - id: internal/workflow/consequence.go:DerivedCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DerivedCoverage
+    kind: var
+  - id: internal/workflow/consequence.go:Effects
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Effects
+    kind: var
+  - id: internal/workflow/consequence.go:Evidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Evidence
+    kind: var
+  - id: internal/workflow/consequence.go:Files
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Files
+    kind: var
+  - id: internal/workflow/consequence.go:Result
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Result
+    kind: var
+  - id: internal/workflow/consequence.go:Stage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Stage
+    kind: var
+  - id: internal/workflow/consequence.go:StageCandidateEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: StageCandidateEdit
+    kind: const
+  - id: internal/workflow/consequence.go:StageObserve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: StageObserve
+    kind: const
+  - id: internal/workflow/consequence.go:StagePublish
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: StagePublish
+    kind: const
+  - id: internal/workflow/consequence.go:StageUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: StageUnknown
+    kind: const
+  - id: internal/workflow/consequence.go:outwardSurfaces
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: outwardSurfaces
+    kind: var
+  - id: internal/workflow/consequence.go:outwardVerbs
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: outwardVerbs
+    kind: var
+  - id: internal/workflow/coverageverdict_test.go:TestADegradedCoverageGapIsBoundedWork
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestADegradedCoverageGapIsBoundedWork
+    kind: function
+  - id: internal/workflow/coverageverdict_test.go:TestADegradedSurfaceThatIsNotACoverageGapStillRefuses
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestADegradedSurfaceThatIsNotACoverageGapStillRefuses
+    kind: function
+  - id: internal/workflow/coverageverdict_test.go:TestANewStatusValueCannotSilentlyChangeCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestANewStatusValueCannotSilentlyChangeCoverage
+    kind: function
+  - id: internal/workflow/coverageverdict_test.go:TestAnEmptyStatusIsNotACoverageVerdict
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestAnEmptyStatusIsNotACoverageVerdict
+    kind: function
+  - id: internal/workflow/coverageverdict_test.go:TestAnOKStatusWithoutProvenCoverageDoesNotGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestAnOKStatusWithoutProvenCoverageDoesNotGrant
+    kind: function
+  - id: internal/workflow/coverageverdict_test.go:TestPatternOnlySufficiencyIsNotCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestPatternOnlySufficiencyIsNotCoverage
+    kind: function
+  - id: internal/workflow/coverageverdict_test.go:TestTheCoverageConditionNamesItsEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/coverageverdict_test.go
+    symbol: TestTheCoverageConditionNamesItsEvidence
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestAModifiedCandidateHoldsWorkEvenWithAnEmptySnapshot
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestAModifiedCandidateHoldsWorkEvenWithAnEmptySnapshot
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestANewUntrackedFileCountsAsWork
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestANewUntrackedFileCountsAsWork
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestAnUnreadableCandidateHoldsWork
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestAnUnreadableCandidateHoldsWork
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestAnUntouchedCandidateIsSeenAsEmpty
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestAnUntouchedCandidateIsSeenAsEmpty
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestDisposalObservesRatherThanRecalls
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestDisposalObservesRatherThanRecalls
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestObservationSurvivesTheCancellationThatTriggeredIt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestObservationSurvivesTheCancellationThatTriggeredIt
+    kind: function
+  - id: internal/workflow/disposal_test.go:candidateIdentityFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: candidateIdentityFor
+    kind: function
+  - id: internal/workflow/disposal_test.go:newRepo
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: newRepo
     kind: function
   - id: internal/workflow/engine.go:BaseSHA
     namespace: structural.scip
@@ -11236,6 +13336,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Bus
+    kind: var
+  - id: internal/workflow/engine.go:ChangedPaths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: ChangedPaths
     kind: var
   - id: internal/workflow/engine.go:Claims
     namespace: structural.scip
@@ -11279,6 +13385,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: DeferredAuthority
     kind: type
+  - id: internal/workflow/engine.go:DiffBytes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: DiffBytes
+    kind: var
   - id: internal/workflow/engine.go:Domain
     namespace: structural.scip
     language: go
@@ -11296,6 +13408,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.DeferAuthority
+    kind: method
+  - id: internal/workflow/engine.go:Engine.Findings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.Findings
     kind: method
   - id: internal/workflow/engine.go:Engine.Note
     namespace: structural.scip
@@ -11375,6 +13493,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.decisionAuthority
     kind: method
+  - id: internal/workflow/engine.go:Engine.derivedCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.derivedCoverage
+    kind: method
   - id: internal/workflow/engine.go:Engine.disposeIfEmpty
     namespace: structural.scip
     language: go
@@ -11411,6 +13535,24 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.implement
     kind: method
+  - id: internal/workflow/engine.go:Engine.markObserving
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.markObserving
+    kind: method
+  - id: internal/workflow/engine.go:Engine.observe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.observe
+    kind: method
+  - id: internal/workflow/engine.go:Engine.observes
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.observes
+    kind: method
   - id: internal/workflow/engine.go:Engine.offerPullRequest
     namespace: structural.scip
     language: go
@@ -11428,6 +13570,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.recordDecision
+    kind: method
+  - id: internal/workflow/engine.go:Engine.recordFindings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.recordFindings
     kind: method
   - id: internal/workflow/engine.go:Engine.reportOutcome
     namespace: structural.scip
@@ -11452,6 +13600,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: Engine.resolveArchitecture
+    kind: method
+  - id: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.resolveArchitectureIn
     kind: method
   - id: internal/workflow/engine.go:Engine.resolveCandidate
     namespace: structural.scip
@@ -11513,6 +13667,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.setRouting
     kind: method
+  - id: internal/workflow/engine.go:Engine.spendClosure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.spendClosure
+    kind: method
   - id: internal/workflow/engine.go:Engine.takeNotes
     namespace: structural.scip
     language: go
@@ -11537,6 +13697,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.windowFrom
     kind: method
+  - id: internal/workflow/engine.go:Err
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Err
+    kind: var
   - id: internal/workflow/engine.go:EvidenceSnapshot
     namespace: structural.scip
     language: go
@@ -11663,6 +13829,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Report
     kind: var
+  - id: internal/workflow/engine.go:Result
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Result
+    kind: var
   - id: internal/workflow/engine.go:Scoped
     namespace: structural.scip
     language: go
@@ -11674,6 +13846,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: SessionID
+    kind: var
+  - id: internal/workflow/engine.go:State
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: State
     kind: var
   - id: internal/workflow/engine.go:Steps
     namespace: structural.scip
@@ -11741,6 +13919,18 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: checksOf
     kind: function
+  - id: internal/workflow/engine.go:closureBudget
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: closureBudget
+    kind: const
+  - id: internal/workflow/engine.go:closures
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: closures
+    kind: var
   - id: internal/workflow/engine.go:composeAuthorityOptions
     namespace: structural.scip
     language: go
@@ -11759,6 +13949,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: ctx
     kind: var
+  - id: internal/workflow/engine.go:declined
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: declined
+    kind: const
   - id: internal/workflow/engine.go:decodeModelJSON
     namespace: structural.scip
     language: go
@@ -11770,6 +13966,18 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: deferToken
+    kind: const
+  - id: internal/workflow/engine.go:deferred
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: deferred
+    kind: const
+  - id: internal/workflow/engine.go:derivedRecipesPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: derivedRecipesPath
     kind: const
   - id: internal/workflow/engine.go:errArchitectSilent
     namespace: structural.scip
@@ -11807,11 +14015,35 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: escalationPrompt
     kind: function
+  - id: internal/workflow/engine.go:failed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: failed
+    kind: const
+  - id: internal/workflow/engine.go:filesFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: filesFor
+    kind: function
+  - id: internal/workflow/engine.go:findings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: findings
+    kind: var
   - id: internal/workflow/engine.go:firstText
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: firstText
+    kind: function
+  - id: internal/workflow/engine.go:gapClosurePrompt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: gapClosurePrompt
     kind: function
   - id: internal/workflow/engine.go:governingInvariants
     namespace: structural.scip
@@ -11831,6 +14063,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: implementationPrompt
     kind: function
+  - id: internal/workflow/engine.go:inspectionReviewPrompt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: inspectionReviewPrompt
+    kind: function
   - id: internal/workflow/engine.go:intentOrNone
     namespace: structural.scip
     language: go
@@ -11843,6 +14081,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: mu
     kind: var
+  - id: internal/workflow/engine.go:notOffered
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: notOffered
+    kind: const
   - id: internal/workflow/engine.go:notes
     namespace: structural.scip
     language: go
@@ -11855,6 +14099,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: numberFindings
     kind: function
+  - id: internal/workflow/engine.go:observation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observation
+    kind: type
+  - id: internal/workflow/engine.go:observation.HoldsWork
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observation.HoldsWork
+    kind: method
+  - id: internal/workflow/engine.go:observationFindings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observationFindings
+    kind: function
+  - id: internal/workflow/engine.go:observationPrompt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observationPrompt
+    kind: function
+  - id: internal/workflow/engine.go:observeCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observeCandidate
+    kind: function
+  - id: internal/workflow/engine.go:observing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: observing
+    kind: var
   - id: internal/workflow/engine.go:oneLine
     namespace: structural.scip
     language: go
@@ -11866,6 +14146,18 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: openFindings
+    kind: function
+  - id: internal/workflow/engine.go:opened
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: opened
+    kind: const
+  - id: internal/workflow/engine.go:orNone
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: orNone
     kind: function
   - id: internal/workflow/engine.go:pending
     namespace: structural.scip
@@ -11884,6 +14176,30 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: planSummary
+    kind: function
+  - id: internal/workflow/engine.go:publication
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: publication
+    kind: type
+  - id: internal/workflow/engine.go:publication.Settled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: publication.Settled
+    kind: method
+  - id: internal/workflow/engine.go:publicationState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: publicationState
+    kind: type
+  - id: internal/workflow/engine.go:renderScope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: renderScope
     kind: function
   - id: internal/workflow/engine.go:repo
     namespace: structural.scip
@@ -11951,6 +14267,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: sc
     kind: var
+  - id: internal/workflow/engine.go:senseiBinary
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: senseiBinary
+    kind: function
   - id: internal/workflow/engine.go:senseiProposer
     namespace: structural.scip
     language: go
@@ -11975,6 +14297,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: sourceFor
     kind: function
+  - id: internal/workflow/engine.go:stopped
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: stopped
+    kind: const
   - id: internal/workflow/engine.go:stops
     namespace: structural.scip
     language: go
@@ -12023,6 +14351,24 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: TestAReadOnlyRunPublishesAndRetainsNothing
     kind: function
+  - id: internal/workflow/engine_test.go:TestAReadOnlyRunThatReportsNothingIsNotSuccess
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAReadOnlyRunThatReportsNothingIsNotSuccess
+    kind: function
+  - id: internal/workflow/engine_test.go:TestAReadOnlyWorkerIsToldNotToEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAReadOnlyWorkerIsToldNotToEdit
+    kind: function
+  - id: internal/workflow/engine_test.go:TestARefusalGovernsOverAnAuthorisationThatAlsoCovers
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestARefusalGovernsOverAnAuthorisationThatAlsoCovers
+    kind: function
   - id: internal/workflow/engine_test.go:TestAResolutionCitesThisRepositorysBaseNotTheGraphsSourceCommit
     namespace: structural.scip
     language: go
@@ -12035,17 +14381,47 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: TestAStoppedRunIsReportedAsStoppedNotFailed
     kind: function
+  - id: internal/workflow/engine_test.go:TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor
+    kind: function
+  - id: internal/workflow/engine_test.go:TestAnEmptyBaseIsNotSentAsAPin
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAnEmptyBaseIsNotSentAsAPin
+    kind: function
+  - id: internal/workflow/engine_test.go:TestAnInspectionEscalationReachesTheArchitect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAnInspectionEscalationReachesTheArchitect
+    kind: function
   - id: internal/workflow/engine_test.go:TestAnOptionsEffectComesFromItsOutcomeNotItsWording
     namespace: structural.scip
     language: go
     file: internal/workflow/engine_test.go
     symbol: TestAnOptionsEffectComesFromItsOutcomeNotItsWording
     kind: function
+  - id: internal/workflow/engine_test.go:TestAnUnchangedReportStopsTheLoop
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAnUnchangedReportStopsTheLoop
+    kind: function
   - id: internal/workflow/engine_test.go:TestAnUnknownPlanModeIsModify
     namespace: structural.scip
     language: go
     file: internal/workflow/engine_test.go
     symbol: TestAnUnknownPlanModeIsModify
+    kind: function
+  - id: internal/workflow/engine_test.go:TestAnUnscopedApprovalSaysSoRatherThanRenderingBlank
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestAnUnscopedApprovalSaysSoRatherThanRenderingBlank
     kind: function
   - id: internal/workflow/engine_test.go:TestArchitectConversationPromptIsHumanFacing
     namespace: structural.scip
@@ -12131,6 +14507,12 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: TestImplementationPromptCarriesContextWithoutWideningScope
     kind: function
+  - id: internal/workflow/engine_test.go:TestInspectionAcceptanceRestsOnAnIndependentReview
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestInspectionAcceptanceRestsOnAnIndependentReview
+    kind: function
   - id: internal/workflow/engine_test.go:TestNoteQueuesOnlyForARealTask
     namespace: structural.scip
     language: go
@@ -12191,11 +14573,53 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: TestTheArchitectIsAskedToDeclareTheMode
     kind: function
+  - id: internal/workflow/engine_test.go:TestTheArchitectResolutionLoopIsBounded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheArchitectResolutionLoopIsBounded
+    kind: function
+  - id: internal/workflow/engine_test.go:TestTheAuditIsPinnedToTheCandidatesBase
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheAuditIsPinnedToTheCandidatesBase
+    kind: function
   - id: internal/workflow/engine_test.go:TestTheDecisionSurfaceIsCompleteWithoutAnyArchitectOptions
     namespace: structural.scip
     language: go
     file: internal/workflow/engine_test.go
     symbol: TestTheDecisionSurfaceIsCompleteWithoutAnyArchitectOptions
+    kind: function
+  - id: internal/workflow/engine_test.go:TestTheInspectionReviewerIsNotTheWorker
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheInspectionReviewerIsNotTheWorker
+    kind: function
+  - id: internal/workflow/engine_test.go:TestTheInspectionReviewerJudgesFindingsNotADiff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheInspectionReviewerJudgesFindingsNotADiff
+    kind: function
+  - id: internal/workflow/engine_test.go:TestTheReplanIsGivenTheScopeTheHumanAuthorised
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheReplanIsGivenTheScopeTheHumanAuthorised
+    kind: function
+  - id: internal/workflow/engine_test.go:TestTheWorkerResultIsKept
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheWorkerResultIsKept
+    kind: function
+  - id: internal/workflow/engine_test.go:TestWideningIsAllowedButMustBeNamed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestWideningIsAllowedButMustBeNamed
     kind: function
   - id: internal/workflow/engine_test.go:drain
     namespace: structural.scip
@@ -12220,6 +14644,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine_test.go
     symbol: level3Options
+    kind: function
+  - id: internal/workflow/engine_test.go:max0
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: max0
     kind: function
   - id: internal/workflow/engine_test.go:rawSource
     namespace: structural.scip
@@ -12269,6 +14699,12 @@ code_symbols:
     file: internal/workflow/gate.go
     symbol: certifiedStart
     kind: type
+  - id: internal/workflow/gate.go:certifiedStart.Degraded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/gate.go
+    symbol: certifiedStart.Degraded
+    kind: method
   - id: internal/workflow/gate.go:certifiedStart.Domain
     namespace: structural.scip
     language: go
@@ -12317,6 +14753,18 @@ code_symbols:
     file: internal/workflow/gate.go
     symbol: certifyStart
     kind: function
+  - id: internal/workflow/gate.go:certifyStartForLane
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/gate.go
+    symbol: certifyStartForLane
+    kind: function
+  - id: internal/workflow/gate.go:degraded
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/gate.go
+    symbol: degraded
+    kind: var
   - id: internal/workflow/gate.go:judgeCandidate
     namespace: structural.scip
     language: go
@@ -12472,7 +14920,13 @@ code_symbols:
     language: go
     file: internal/workflow/mode.go
     symbol: Mode
-    kind: type
+    kind: var
+  - id: internal/workflow/mode.go:ObservationUnattended
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/mode.go
+    symbol: ObservationUnattended
+    kind: const
   - id: internal/workflow/mode.go:Provenance
     namespace: structural.scip
     language: go
@@ -12490,6 +14944,12 @@ code_symbols:
     language: go
     file: internal/workflow/mode.go
     symbol: ResumedGoverned
+    kind: const
+  - id: internal/workflow/mode.go:SubmittedUnattended
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/mode.go
+    symbol: SubmittedUnattended
     kind: const
   - id: internal/workflow/mode.go:TaskMode
     namespace: structural.scip
@@ -12635,6 +15095,96 @@ code_symbols:
     file: internal/workflow/mode_test.go
     symbol: funcBody
     kind: function
+  - id: internal/workflow/observe_test.go:TestADeclaredOutwardActionStillEscalatesAnObservation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestADeclaredOutwardActionStillEscalatesAnObservation
+    kind: function
+  - id: internal/workflow/observe_test.go:TestAProviderThatWritesIsReported
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestAProviderThatWritesIsReported
+    kind: function
+  - id: internal/workflow/observe_test.go:TestARepairFromAFindingIsAnOrdinaryGovernedTask
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestARepairFromAFindingIsAnOrdinaryGovernedTask
+    kind: function
+  - id: internal/workflow/observe_test.go:TestAnObservationRunsOnAnUncertifiedWorkspaceAndReportsIt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestAnObservationRunsOnAnUncertifiedWorkspaceAndReportsIt
+    kind: function
+  - id: internal/workflow/observe_test.go:TestObservationBoundaryIsStructural
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestObservationBoundaryIsStructural
+    kind: function
+  - id: internal/workflow/observe_test.go:TestObservationCannotBeClaimedByAPlan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestObservationCannotBeClaimedByAPlan
+    kind: function
+  - id: internal/workflow/observe_test.go:TestObservationFindingsSeparateInferenceFromEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestObservationFindingsSeparateInferenceFromEvidence
+    kind: function
+  - id: internal/workflow/observe_test.go:TestObservationNeedsNoCoverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestObservationNeedsNoCoverage
+    kind: function
+  - id: internal/workflow/observe_test.go:TestObservationSurvivesAnUncertifiableGraph
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestObservationSurvivesAnUncertifiableGraph
+    kind: function
+  - id: internal/workflow/observe_test.go:TestOnlyEvidenceBackedFindingsOpenRepairWork
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestOnlyEvidenceBackedFindingsOpenRepairWork
+    kind: function
+  - id: internal/workflow/observe_test.go:TestTheObservationLaneAlwaysGetsAnInspectionBrief
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestTheObservationLaneAlwaysGetsAnInspectionBrief
+    kind: function
+  - id: internal/workflow/observe_test.go:TestTheObservationLaneBranchesBeforeTheChangeLifecycle
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestTheObservationLaneBranchesBeforeTheChangeLifecycle
+    kind: function
+  - id: internal/workflow/observe_test.go:TestTheObservationWorkspaceIsDiscardedBeforeTheTerminalEvent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestTheObservationWorkspaceIsDiscardedBeforeTheTerminalEvent
+    kind: function
+  - id: internal/workflow/observe_test.go:TestTheObserverNeverRunsInTheGovernedCheckout
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: TestTheObserverNeverRunsInTheGovernedCheckout
+    kind: function
+  - id: internal/workflow/observe_test.go:observeAction
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/observe_test.go
+    symbol: observeAction
+    kind: function
   - id: internal/workflow/parity_test.go:TestALongConversationIsBoundedAndSaysSo
     namespace: structural.scip
     language: go
@@ -12664,6 +15214,162 @@ code_symbols:
     language: go
     file: internal/workflow/parity_test.go
     symbol: itoa
+    kind: function
+  - id: internal/workflow/publication_test.go:TestADeferredPublicationStaysResumable
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/publication_test.go
+    symbol: TestADeferredPublicationStaysResumable
+    kind: function
+  - id: internal/workflow/publication_test.go:TestAFailedPublicationEmitsOneTerminalEvent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/publication_test.go
+    symbol: TestAFailedPublicationEmitsOneTerminalEvent
+    kind: function
+  - id: internal/workflow/publication_test.go:TestAStopAtPublicationIsNotASuccess
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/publication_test.go
+    symbol: TestAStopAtPublicationIsNotASuccess
+    kind: function
+  - id: internal/workflow/publication_test.go:TestAnOpenedPullRequestIsNotRecordedAsUnpublished
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/publication_test.go
+    symbol: TestAnOpenedPullRequestIsNotRecordedAsUnpublished
+    kind: function
+  - id: internal/workflow/publication_test.go:TestEveryPublicationOutcomeIsDistinguished
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/publication_test.go
+    symbol: TestEveryPublicationOutcomeIsDistinguished
+    kind: function
+  - id: internal/workflow/routecount.go:CannotEstablish
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: CannotEstablish
+    kind: var
+  - id: internal/workflow/routecount.go:CloseGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: CloseGap
+    kind: var
+  - id: internal/workflow/routecount.go:GapLedger
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: GapLedger
+    kind: type
+  - id: internal/workflow/routecount.go:GapLedger.Closed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: GapLedger.Closed
+    kind: method
+  - id: internal/workflow/routecount.go:GapLedger.Distinct
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: GapLedger.Distinct
+    kind: method
+  - id: internal/workflow/routecount.go:GapLedger.Met
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: GapLedger.Met
+    kind: method
+  - id: internal/workflow/routecount.go:GapLedger.Recurrent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: GapLedger.Recurrent
+    kind: method
+  - id: internal/workflow/routecount.go:GapLedger.RecurrentRate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: GapLedger.RecurrentRate
+    kind: method
+  - id: internal/workflow/routecount.go:Granted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: Granted
+    kind: var
+  - id: internal/workflow/routecount.go:Human
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: Human
+    kind: var
+  - id: internal/workflow/routecount.go:NewGapLedger
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: NewGapLedger
+    kind: function
+  - id: internal/workflow/routecount.go:Rate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: Rate
+    kind: function
+  - id: internal/workflow/routecount.go:RouteTally
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: RouteTally
+    kind: type
+  - id: internal/workflow/routecount.go:RouteTally.Observe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: RouteTally.Observe
+    kind: method
+  - id: internal/workflow/routecount.go:Total
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: Total
+    kind: var
+  - id: internal/workflow/routecount.go:closed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: closed
+    kind: var
+  - id: internal/workflow/routecount.go:seen
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount.go
+    symbol: seen
+    kind: var
+  - id: internal/workflow/routecount_test.go:TestGapLedgerRateIsAbsentBeforeAnyGap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount_test.go
+    symbol: TestGapLedgerRateIsAbsentBeforeAnyGap
+    kind: function
+  - id: internal/workflow/routecount_test.go:TestRateIsAbsentWithoutADenominator
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount_test.go
+    symbol: TestRateIsAbsentWithoutADenominator
+    kind: function
+  - id: internal/workflow/routecount_test.go:TestRecurrenceIsMeasuredByTheGapComingBack
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount_test.go
+    symbol: TestRecurrenceIsMeasuredByTheGapComingBack
+    kind: function
+  - id: internal/workflow/routecount_test.go:TestRouteTallyCountsEveryDestination
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/routecount_test.go
+    symbol: TestRouteTallyCountsEveryDestination
     kind: function
   - id: internal/workflow/routine.go:Blocking
     namespace: structural.scip
@@ -13144,5 +15850,125 @@ code_symbols:
     language: go
     file: internal/workflow/routine_test.go
     symbol: qualifyingPreflight
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:Blast
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: Blast
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:BlindSpots
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: BlindSpots
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:Coverage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: Coverage
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:DirectAnchorCount
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: DirectAnchorCount
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:File
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: File
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:Gate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: Gate
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:IndexedFileCount
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: IndexedFileCount
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:Status
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: Status
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:Sufficient
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: Sufficient
+    kind: var
+  - id: internal/workflow/tripwire_replay_test.go:TestClosingARealGapChangesTheRouteAndDoesNotRecur
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: TestClosingARealGapChangesTheRouteAndDoesNotRecur
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:TestEveryReplayedGapNamesWhatIsMissing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: TestEveryReplayedGapNamesWhatIsMissing
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:TestTheCoverageChannelDoesNotLeanOnTheBlindSpotChannel
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: TestTheCoverageChannelDoesNotLeanOnTheBlindSpotChannel
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:TestTheCoverageTripwireSplitsByMeaning
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: TestTheCoverageTripwireSplitsByMeaning
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:TestTheSameFileIsBoundedToEditAndNotBoundedToPublish
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: TestTheSameFileIsBoundedToEditAndNotBoundedToPublish
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:TestTheTenTimesRepeatedInterruptionResolvesAtTheEditStage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: TestTheTenTimesRepeatedInterruptionResolvesAtTheEditStage
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:loadProbe
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: loadProbe
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:probeBody
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: probeBody
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:probeRow
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: probeRow
+    kind: type
+  - id: internal/workflow/tripwire_replay_test.go:replay
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: replay
+    kind: function
+  - id: internal/workflow/tripwire_replay_test.go:replayOne
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/tripwire_replay_test.go
+    symbol: replayOne
     kind: function
 test_symbols:

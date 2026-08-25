@@ -119,3 +119,15 @@ failure_modes:
       - doctor reported 'this repository certifies against localhost:10120', an address supplied only by config.Default()
       - the entry it called stale pointed at localhost:10122, the authoritative graph for this repository's domain
       - the prescribed repair 'sensei-code mcp codex' was followed and repointed both agents at a two-day-old graph serving github.com/globulario/services; the system became more wrong by following the diagnostic
+  - id: failure.a_claimant_supplied_label_established_the_property_the_label
+    title: a claimant-supplied label established the property the label names
+    description: 'The same structural defect shipped twice in one day, in two layers that did not know about each other. In both, a model wrote a word into a source field and the receiving code read that word as the evidentiary property it names. In the router, Claim.Source == ''repository'' let a premise reach RouteArchitectural without anything checking that a repository was read. In the observation-to-repair bridge, the same word made a finding eligible to open autonomous repair work without anything checking that the file was opened. The general shape: a semantic label supplied by the claimant must not itself establish the evidentiary property that label names. It is not enough to require that claims CARRY provenance; the provenance value is itself claimant-controlled and needs something independent standing behind it.'
+    protects:
+      files:
+        - internal/workflow/authority.go
+    related_invariants:
+      - sensei_code.evidence.counts_carry_their_provenance
+    required_tests:
+      - internal/finding/finding_test.go:TestAFindingAboutAFileTheObservationNeverReadIsNotWork
+    evidence:
+      - 'Instance 1: internal/workflow/authority.go decideRouteForAction checked only EqualFold(Source, ''inference''), so every other value including '''' reached a grant. Fixed in sensei-code#80 by a closed vocabulary, but ''graph'' and ''repository'' are still accepted on the word alone. Instance 2: internal/finding/finding.go Classify read the same field to decide Eligible(), so a finding claiming source ''repository'' about a file the observation never opened could open a governed repair. Fixed in sensei-code#79 by requiring every file a finding names to appear in the files the observation actually read. Both found by sensei-code auditing itself.'

@@ -263,9 +263,15 @@ func TestTheObserverNeverRunsInTheGovernedCheckout(t *testing.T) {
 	if !strings.Contains(body, "e.Repo.RemoveObservationWorktree(") {
 		t.Fatal("the disposable workspace is never discarded")
 	}
-	// Defense in depth is kept, and must not be the only thing there.
-	if !strings.Contains(body, "e.Repo.IsClean(") {
-		t.Fatal("the governed repository is no longer checked after an observation")
+	// Defense in depth is kept, and must not be the only thing there. It
+	// compares two moments rather than testing one: a single after-the-fact
+	// check cannot tell a change this run made from one already present, and
+	// accused an already-dirty repository of being mutated by the observation.
+	if !strings.Contains(body, "e.Repo.WorktreeIsCleanDetail(") {
+		t.Fatal("the governed repository is no longer checked around an observation")
+	}
+	if strings.Count(body, "WorktreeIsCleanDetail(") < 2 {
+		t.Fatal("the governed repository is checked only once; before and after are both required")
 	}
 }
 
@@ -317,5 +323,47 @@ func TestTheObservationWorkspaceIsDiscardedBeforeTheTerminalEvent(t *testing.T) 
 	// run that leaves state behind has not been read-only.
 	if !strings.Contains(body, "could not be discarded") {
 		t.Fatal("a failed discard is silent")
+	}
+}
+
+// A repair opened from a finding carries no authority from it.
+//
+// The whole risk in this bridge is that a defect Sensei-code found itself gets
+// treated as more established than one a stranger reported. It must not: the
+// repair is an ordinary governed task, and the finding is provenance for why it
+// exists, not evidence that it may proceed.
+func TestARepairFromAFindingIsAnOrdinaryGovernedTask(t *testing.T) {
+	src := rawSource(t, "cmd/sensei-code/auditrepair.go")
+
+	// Ordinary unattended provenance. Not a human, and not a special lane.
+	if !strings.Contains(src, "engine.SubmitGovernedUnattended(") {
+		t.Fatal("repair work is not submitted as an ordinary unattended governed task")
+	}
+	for _, forbidden := range []string{
+		"SubmitGoverned(",   // would claim a human asked
+		"SubmitObservation", // would keep mutation authority out AND repair impossible
+		"DerivedCoverage",   // would hand the repair coverage it did not earn
+		"RouteArchitectural",
+	} {
+		if strings.Contains(src, forbidden) && forbidden != "SubmitObservation" {
+			t.Errorf("the repair path reaches for %s; a self-found defect earns no privilege", forbidden)
+		}
+	}
+	// The observation must reach its OWN terminal state before any repair.
+	obs := strings.Index(src, "exitObserved")
+	rep := strings.Index(src, "SubmitGovernedUnattended")
+	if obs < 0 || rep < 0 || obs > rep {
+		t.Fatal("repair work is opened before the observation reaches its terminal state")
+	}
+}
+
+// Only what the observation established may become work.
+func TestOnlyEvidenceBackedFindingsOpenRepairWork(t *testing.T) {
+	src := rawSource(t, "cmd/sensei-code/auditrepair.go")
+	if !strings.Contains(src, "f.Eligible()") {
+		t.Fatal("the repair path no longer filters by what the finding established")
+	}
+	if !strings.Contains(src, "nothing evidence-backed to repair") {
+		t.Fatal("an audit that established nothing must open no work and say so")
 	}
 }

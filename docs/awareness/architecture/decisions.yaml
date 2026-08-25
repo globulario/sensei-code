@@ -31,3 +31,30 @@ decisions:
       - sensei_code.command.unknown_input_is_never_run_as_a_task
     source_files:
       - internal/tui/model_test.go
+  - id: decision.sensei_code.fail_closed_when_claim_provenance_is_missing_or_outside_the
+    title: Fail closed when claim provenance is missing or outside the declared graph|repository|inference vocabulary.
+    status: accepted
+    architectural_plane: intended
+    rationale: |-
+      Repair a defect an earlier read-only audit of this repository observed.
+    
+      Observed defect: [Blocker · Proven] Claim.Source at internal/workflow/authority.go:78 declares the closed vocabulary graph|repository|inference, but decideRouteForAction at lines 396-411 only recognizes inference; every empty or unknown source falls through to RouteArchitectural at line 413. decodeModelJSON in internal/workflow/engine.go:1961-1977 performs no field validation, and the focused tests exercise valid source labels only. Therefore malformed provenance can promote an unchecked premise to architectural authority.
+      Where: internal/workflow/authority.go:Claim and decideRouteForAction
+      Files named by the observation: internal/workflow/authority.go, internal/workflow/engine.go
+      Observed at revision: 5e971479b3a0e4f1c34ece91a14c5d29042f6a0a
+      Source of the observation: repository
+    
+      This finding is EVIDENCE, not authority. It grants nothing. Before changing anything:
+        - re-check the CURRENT repository yourself and confirm the defect is still present;
+        - if it is absent, already fixed, or you cannot establish it, say so and change nothing;
+        - decide the correct fix yourself. No fix has been supplied to you.
+    
+      Keep the change minimal and do not alter unrelated behaviour. Add whatever tests establish that the defect cannot return.
+    context: 'decision_authority: architectural; certified_by: github.com/globulario/sensei-code @ 96f19456f5fb; decided_by: ChatGPT; human_authorization: task execution via /run'
+    consequences: Malformed or missing claim provenance can no longer manufacture architectural authority. Valid graph and repository claims continue to route as before, inference remains bounded verification work, and the model JSON wire format is unchanged.
+    related_invariants:
+      - sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
+      - sensei_code.workflow.execution_is_authorized_once_at_run
+    source_files:
+      - internal/workflow/authority.go
+      - internal/workflow/authority_test.go

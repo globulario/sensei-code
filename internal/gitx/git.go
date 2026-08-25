@@ -245,6 +245,22 @@ func (r Repo) DeleteBranch(ctx context.Context, name string) error {
 	return nil
 }
 
+// WorktreeIsCleanDetail returns a worktree's porcelain status verbatim.
+//
+// Separate from WorktreeIsClean because the observation lane needs to COMPARE
+// two moments rather than test one: "clean" cannot distinguish a change this
+// run made from one that was already present, and treating an already-dirty
+// repository as evidence of mutation is a false accusation that fires exactly
+// when someone audits a work-in-progress.
+func (r Repo) WorktreeIsCleanDetail(ctx context.Context, path string) (string, error) {
+	cmd := exec.CommandContext(ctx, "git", "-C", path, "status", "--porcelain")
+	b, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git status in %s: %w: %s", path, err, strings.TrimSpace(string(b)))
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
 // RemoveObservationWorktree discards a detached observation workspace. No
 // branch is deleted, because none was created.
 func (r Repo) RemoveObservationWorktree(ctx context.Context, path string) error {
