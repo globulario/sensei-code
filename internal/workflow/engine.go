@@ -1794,7 +1794,16 @@ func senseiBinary() string {
 }
 
 // derivedCoverage revalidates the committed recipes against the world being
-// assessed and returns the planned files a derivation established THERE.
+// assessed and returns the planned files a derivation established THERE, each
+// with the architectural question that derivation can answer.
+//
+// NOT REACHED BY THE GOVERNED RUN. routePlan builds its Action without
+// DerivedCoverage, so nothing in production calls this; the only caller is the
+// derivelive test. That is recorded here rather than quietly fixed, because
+// wiring it up WIDENS autonomy and is a decision to take deliberately, with the
+// relevance relation already in place, rather than as a side effect of writing
+// about it. TestTheGovernedRunDoesNotYetSupplyDerivedCoverage pins the current
+// state so connecting it is a visible change.
 //
 // The only thing reaching the router is a list of files a derivation just
 // succeeded over. Recipes do not reach it, and neither does any earlier
@@ -1804,7 +1813,7 @@ func senseiBinary() string {
 // Failure is silence rather than coverage. A missing recipe file, a sensei
 // binary without `derive`, a derivation that refuses — each leaves the region
 // uncovered and the gap intact, which is the direction this must fail in.
-func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []string {
+func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []CoverageAnchor {
 	if len(planned) == 0 {
 		return nil
 	}
@@ -1822,7 +1831,25 @@ func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []string
 	}
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	covered, _ := derived.CoveredFiles(anchors, world, planned)
-	return covered
+
+	// Each covered file carries what the derivation that covered it is able to
+	// ANSWER, computed here from the anchor's family. The family mapping lives
+	// in relevance.go, in this consumer: a recipe is data anyone may commit, so
+	// a family that declared its own relevance would be self-labelling.
+	var out []CoverageAnchor
+	for _, f := range covered {
+		for _, a := range anchors {
+			if !a.Covers(world, f) {
+				continue
+			}
+			out = append(out, CoverageAnchor{
+				File:        f,
+				Requirement: requirementOfFamily(a.Kind()),
+				Describe:    a.Describe(),
+			})
+		}
+	}
+	return out
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {

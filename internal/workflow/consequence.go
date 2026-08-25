@@ -79,14 +79,21 @@ type Action struct {
 	DeclaredConsequences string
 	// DerivedCoverage are planned files a machine-derived fact covers in THIS
 	// world, established by re-running a derivation rather than by a record
-	// existing.
+	// existing, each carrying what that derivation is able to ANSWER.
+	//
+	// It was a bare []string of paths. That list could say a file was covered
+	// and could not say covered for WHAT, so subject overlap alone closed a
+	// gap: `P is DERIVED` was read as `P resolves gap G`, and any cheap wide
+	// truth over the right files manufactured coverage honestly.
 	//
 	// Computed before routing, because revalidation reads the repository and
 	// this package is pure. The caller must obtain it from
 	// derived.CoveredFiles over anchors produced in the world being assessed —
 	// a list assembled any other way would be the forbidden collapse (recipe
-	// present -> coverage) wearing a different type.
-	DerivedCoverage []string
+	// present -> coverage) wearing a different type. The Requirement on each
+	// entry is computed by the consumer from the anchor's family and is never
+	// read off the wire.
+	DerivedCoverage []CoverageAnchor
 }
 
 // ConsequenceResult is the answer, and there are only three.
