@@ -1,0 +1,28 @@
+Done. The transcript now answers the inputs people actually use.
+
+**What was wrong**
+
+Scrolling existed but was bound to keys nobody reaches for first (`shift+↑/↓`, `PgUp/PgDn`, `ctrl+g`), and two things made even those feel dead:
+
+1. **The wheel was never enabled.** Under the alternate screen the terminal was never asked to report the mouse, so a wheel notch scrolled the terminal's own (empty) scrollback and nothing reached the app.
+2. **The window drifted past the content.** `scrollPosition` computed the bottom as `rows-(height-8)` while the renderer shows `height-6` rows, and downward scrolling was never clamped. So from the bottom, the first two presses of `shift+↑` moved a field the renderer clamped straight back — the screen didn't change — and after over-scrolling down, several presses back up did nothing at all.
+
+**What it responds to now** (`internal/tui/model.go`)
+
+- **Mouse wheel**, three rows a notch, handled at the `tea.MouseWheelMsg` boundary before every mode, so you can look back while a task runs or a prompt waits; `View` sets `MouseMode = MouseModeCellMotion` so the events arrive.
+- **Plain ↑/↓** a line, alongside the existing shifted pair. The composer is one row tall, so unshifted arrows had nothing to move within it.
+- **PgUp/PgDn** a page, keeping two rows of overlap.
+- **ctrl+home / ctrl+end** for the two ends; `ctrl+g` still returns to following output. Plain `Home`/`End` deliberately stay with the composer — they move along the line being typed, and scroll bindings are read first, so claiming them would remove them from editing for good.
+- Reaching the foot re-enters follow mode instead of parking beyond the last row, and `scrollPosition` is clamped, so a scroll never lands somewhere the renderer silently undoes.
+
+The hint line now reads `↑ N earlier lines · wheel, ↑/↓ or PgUp/PgDn to scroll`.
+
+**Tests** — `internal/tui/scroll_input_test.go`, asserting on the rendered frame rather than the scroll fields, since "the field moved and the screen didn't" is the exact failure: plain arrows move one row and come back, a wheel notch moves three, `View` requests mouse reporting, overshooting the end keeps following and still answers the next notch up, `ctrl+home/ctrl+end` reach both ends, and `home/end/left/right/ctrl+a/ctrl+e` are left to the composer.
+
+`gofmt`, `go vet ./...`, `go test ./...` all clean. Nothing committed.
+
+Two things to know: enabling mouse reporting means the terminal hands clicks and drags to the app, so click-drag *text selection* now needs Shift held down in most terminals — that is the unavoidable cost of a working wheel. And I verified the wheel at the `Update`/`View` boundary in tests, not by turning a physical wheel in a live terminal; this session has no interactive terminal to drive the TUI in.
+
+I did not record a Sensei scar for the clamp-drift class: this checkout has no `docs/awareness/` sources and the briefing reported `repository_context_absent`, so `sensei propose` has nothing to append to here.
+
+AWG: briefing(internal/tui/model.go) | invariants: provider credentials remain provider-owned (untouched — no provider or authority path changed), TUI stays a projection of structured events (scroll state is local UX state only) | uncertainty: wheel confirmed only through Update/View unit tests, never a live terminal; enabling mouse reporting shifts click-drag selection behind Shift

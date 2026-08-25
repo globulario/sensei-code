@@ -49,6 +49,10 @@ type Report struct {
 	NotExecuted []string `json:"not_executed"`
 	// ArmSlots is the designed size of the campaign: tasks x arms.
 	ArmSlots int `json:"arm_slots"`
+	// ProviderMismatch names task/arms whose attempts span more than one
+	// provider configuration, so a reader knows the scored attempt may be under
+	// a superseded one.
+	ProviderMismatch []string `json:"provider_configuration_mismatch"`
 
 	Gates   []GateResult `json:"gates"`
 	Verdict Grade        `json:"verdict"`
@@ -108,6 +112,25 @@ func Build(m Manifest, manifestHash string, l *Ledger, calibration []Calibration
 	for key, attempts := range byPair {
 		if s, ok := Scored(attempts); ok {
 			scoredBy[key] = s
+			// A task/arm whose attempts span more than one provider identity is
+			// disclosed, not silently resolved.
+			//
+			// Scored() takes the earliest SEMANTIC attempt, which is the right
+			// rule against retry-until-green and the wrong one when an earlier
+			// attempt ran under a configuration since corrected -- the RAW arms
+			// that could not run tests are the live case. Choosing a different
+			// attempt now, having seen which is which, is precisely the
+			// after-the-fact rule change the campaign forbids. So the report
+			// says the scored attempt may be under a superseded configuration
+			// and names both, and a reader decides what that is worth.
+			for _, other := range attempts {
+				if same, why := SameProviders(s, other); !same {
+					r.ProviderMismatch = append(r.ProviderMismatch,
+						fmt.Sprintf("%s: scored attempt %d, but attempt %d ran a different "+
+							"configuration (%s)", key, s.Number, other.Number, why))
+					break
+				}
+			}
 		}
 	}
 
@@ -348,6 +371,7 @@ func (r Report) Markdown() string {
 	}
 	f("\n## False grants and false blocks\n\n")
 	f("- arm slots never executed (%d): %v\n", len(r.NotExecuted), orNone(r.NotExecuted))
+	f("- provider-configuration mismatch (%d): %v\n", len(r.ProviderMismatch), orNone(r.ProviderMismatch))
 	f("- false grants: %v\n- false blocks: %v\n- NO_RESULT attempts: %v\n"+
 		"- boundary unmeasurable (governed checkout not quiescent at arm start): %v\n",
 		orNone(r.FalseGrants), orNone(r.FalseBlocks), orNone(r.NoResults),

@@ -1,0 +1,43 @@
+{
+  "task": "internal-mcpconfig-110678d",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "98197c1dceeeca9319bd1d093f277166a8e7cbda",
+  "run_base_sha": "3d32095590cf9625cc705450804cdeef6f9219fe",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T05:23:27Z",
+  "ended": "2026-08-25T05:32:22Z",
+  "wall_seconds": 535,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/mcpconfig [github.com/globulario/sensei-code/internal/mcpconfig.test]\ninternal/mcpconfig/mcpconfig_test.go:23:16: undefined: codexServerCommand\ninternal/mcpconfig/mcpconfig_test.go:33:17: undefined: codexServerCommand\ninternal/mcpconfig/mcpconfig_test.go:43:12: undefined: describeClaude\ninternal/mcpconfig/mcpconfig_test.go:43:57: undefined: Missing\ninternal/mcpconfig/mcpconfig_test.go:44:40: undefined: Missing\ninternal/mcpconfig/mcpconfig_test.go:54:53: too many arguments in call to Configure\n\thave (string, Agent, string, []string, bool)\n\twant (Agent, string, Server)\ninternal/mcpconfig/mcpconfig_test.go:58:8: st.State undefined (type Outcome has no field or method State)\ninternal/mcpconfig/mcpconfig_test.go:59:43: st.State undefined (type Outcome has no field or method State)\ninternal/mcpconfig/mcpconfig_test.go:59:65: st.Detail undefined (type Outcome has no field or method Detail)\ninternal/mcpconfig/mcpconfig_test.go:77:55: too many arguments in call to Configure\n\thave (string, Agent, string, nil, bool)\n\twant (Agent, string, Server)\ninternal/mcpconfig/mcpconfig_test.go:77:55: too many errors\nFAIL\tgithub.com/globulario/sensei-code/internal/mcpconfig [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:600c059bc550b84e9c73fbb371b0ac1371b2af3b499434aa3303071c00fe073e",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-mcpconfig-110678d/RAW/1.log",
+    "transcript_tail_sha256": "sha256:e0137593d84956ad6be523e52c8b8699b42457393f585a8fc7a75a461599c4cd"
+  },
+  "notes": "0 event(s) observed"
+}
