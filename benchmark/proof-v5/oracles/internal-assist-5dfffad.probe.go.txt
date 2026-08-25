@@ -1,0 +1,113 @@
+package assist
+
+// Behavioural contract probe.
+//
+// SenseiCaller is an interface, so the contract is observable exactly where it
+// lives: in the arguments Build passes to awareness_preflight. The probe records
+// those arguments through a fake and asserts nothing about how the domain is
+// extracted.
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/sensei"
+)
+
+// recordingCaller answers every tool and remembers what it was asked.
+type recordingCaller struct {
+	workspace map[string]any
+	calls     map[string]map[string]any
+}
+
+func (c *recordingCaller) CallTool(name string, args map[string]any) (sensei.ToolResult, error) {
+	if c.calls == nil {
+		c.calls = map[string]map[string]any{}
+	}
+	c.calls[name] = args
+	switch name {
+	case "sensei_workspace_status":
+		return sensei.ToolResult{Structured: c.workspace}, nil
+	}
+	return sensei.ToolResult{Structured: map[string]any{}}, nil
+}
+
+func probeRepo(t *testing.T) gitx.Repo {
+	t.Helper()
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "probe@example.invalid"},
+		{"config", "user.name", "probe"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "."}, {"commit", "-qm", "base"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	return gitx.Repo{Root: dir}
+}
+
+// The preflight is scoped to the domain Sensei itself reported.
+func TestContractPreflightCarriesTheDomainSenseiStated(t *testing.T) {
+	caller := &recordingCaller{workspace: map[string]any{
+		"binding": map[string]any{"repository_domain": "github.com/globulario/sensei-code"},
+	}}
+	_, _ = Build(context.Background(), probeRepo(t), caller, "task-1", "a task", nil, time.Unix(0, 0))
+
+	args, ok := caller.calls["awareness_preflight"]
+	if !ok {
+		t.Fatal("awareness_preflight was never called")
+	}
+	got, present := args["domain"]
+	if !present {
+		t.Fatalf("the preflight was not scoped to any domain: %v", args)
+	}
+	if got != "github.com/globulario/sensei-code" {
+		t.Errorf("domain = %v, want the one the workspace reported", got)
+	}
+	// What was already sent is still sent.
+	if _, ok := args["task"]; !ok {
+		t.Errorf("the preflight lost its task argument: %v", args)
+	}
+}
+
+// With no domain to state, the call is made WITHOUT the argument.
+//
+// An empty domain is not a scope. Passing one would ask Sensei to scope an
+// answer to nothing, which is a different request from asking unscoped.
+func TestContractAnAbsentDomainIsOmittedNotEmptied(t *testing.T) {
+	for name, workspace := range map[string]map[string]any{
+		"no binding at all":  {},
+		"binding without it": {"binding": map[string]any{}},
+		"empty string":       {"binding": map[string]any{"repository_domain": ""}},
+		"wrong type":         {"binding": map[string]any{"repository_domain": 7}},
+		"binding wrong type": {"binding": "not a map"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			caller := &recordingCaller{workspace: workspace}
+			_, _ = Build(context.Background(), probeRepo(t), caller, "task-1", "a task", nil, time.Unix(0, 0))
+
+			args, ok := caller.calls["awareness_preflight"]
+			if !ok {
+				t.Fatal("awareness_preflight was never called")
+			}
+			if v, present := args["domain"]; present {
+				t.Errorf("domain = %#v was sent when none was available; an absent domain must be "+
+					"omitted rather than passed empty", v)
+			}
+		})
+	}
+}

@@ -301,6 +301,39 @@
           "-buildvcs=false",
           "./internal/assist/"
         ]
+      },
+      "contract": {
+        "probe": "internal/assist/contract_probe_test.go",
+        "source_file": "oracles/internal-assist-5dfffad.probe.go.txt",
+        "command": [
+          "go",
+          "test",
+          "-buildvcs=false",
+          "-count=1",
+          "-run",
+          "TestContract",
+          "./internal/assist/"
+        ],
+        "specimens": [
+          {
+            "kind": "REFERENCE",
+            "from_commit": true,
+            "want": "CORRECT",
+            "why": "the accepted fix"
+          },
+          {
+            "kind": "WRONG",
+            "patch": "specimens/internal-assist-5dfffad/WRONG",
+            "want": "INCORRECT",
+            "why": "always sends the key, empty when unknown. Plausible -- 'always present, sometimes blank' -- and it asks Sensei to scope an answer to nothing, which is a different request from asking unscoped"
+          },
+          {
+            "kind": "ALTERNATE",
+            "patch": "specimens/internal-assist-5dfffad/ALTERNATE",
+            "want": "CORRECT",
+            "why": "no helper and no mutation: the binding is read inline into a typed local and the call chooses between two complete argument maps, where the reference builds one map and conditionally adds to it via a repositoryDomain helper"
+          }
+        ]
       }
     },
     {

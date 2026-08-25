@@ -1,28 +1,28 @@
 [
   {
-    "task": "internal-decision-6cf23e8",
-    "oracle_hash": "sha256:5b6f2653604ede940adda050f103c577",
+    "task": "internal-assist-5dfffad",
+    "oracle_hash": "sha256:099743112cadc2ed9a3021510a62bfcd",
     "results": [
       {
         "kind": "REFERENCE",
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/decision\t0.005s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/assist\t0.135s"
       },
       {
         "kind": "WRONG",
         "want": "INCORRECT",
         "got": "INCORRECT",
         "ok": true,
-        "detail": "--- FAIL: TestContractSourceFilesAloneDoNotLinkADecision (0.00s)\n    contract_probe_test.go:35: Validate() = \u003cnil\u003e, want ErrNotLinked: naming files is not a link\n--- FAIL: TestContractAnInvariantOrAFailureLinksADecision (0.00s)\n    contract_probe_test.go:51: failure: Validate() = decision is not linked to an invariant or a source file, want nil\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/decision\t0.004s\nFAIL"
+        "detail": "--- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied (0.11s)\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/no_binding_at_all (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/binding_without_it (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/empty_string (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/wrong_type (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\n    --- FAIL: TestContractAnAbsentDomainIsOmittedNotEmptied/binding_wrong_type (0.02s)\n        contract_probe_test.go:108: domain = \"\" was sent when none was available; an absent domain must be omitted rather than passed empty\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/assist\t0.134s\nFAIL"
       },
       {
         "kind": "ALTERNATE",
         "want": "CORRECT",
         "got": "CORRECT",
         "ok": true,
-        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/decision\t0.003s"
+        "detail": "ok  \tgithub.com/globulario/sensei-code/internal/assist\t0.210s"
       }
     ],
     "eligible": true
