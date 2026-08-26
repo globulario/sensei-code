@@ -1785,6 +1785,37 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 
+	// Observational only. Nothing below reads it and no decision depends on it.
+	//
+	// The routing decision above is already made. This records WHAT REACHED the
+	// router, because the event stream could not answer that question: a reader
+	// could see the condition a gap produced and not whether any derivation was
+	// available to close it. Distinguishing "the channel carried nothing" from
+	// "it carried evidence that did not resolve the gap" is the difference
+	// between two unrelated repairs.
+	//
+	// Emitted after the routing so it cannot influence it, and carrying counts
+	// and identities rather than a verdict.
+	if len(action.DerivedCoverage) != 0 || routing.ClosesGap() {
+		files := make([]string, 0, len(action.DerivedCoverage))
+		for _, c := range action.DerivedCoverage {
+			files = append(files, c.File+" ["+string(c.Requirement)+"]")
+		}
+		summary := fmt.Sprintf("derived coverage: %d anchor(s) over %d planned file(s); route %s",
+			len(action.DerivedCoverage), len(d.Files), routing.Route)
+		if len(files) != 0 {
+			summary += "\n  " + strings.Join(files, "\n  ")
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
+			map[string]any{
+				"derived_coverage_anchors": len(action.DerivedCoverage),
+				"planned_files":            len(d.Files),
+				"route":                    string(routing.Route),
+				"closes_gap":               routing.ClosesGap(),
+				"anchors":                  files,
+			}))
+	}
+
 	// What sensei-code can now SAY about this plan: which part came from the
 	// requested objective, which are technical claims still needing evidence,
 	// and which consequence decision remains authority-sensitive.
@@ -1817,13 +1848,16 @@ func senseiBinary() string {
 // assessed and returns the planned files a derivation established THERE, each
 // with the architectural question that derivation can answer.
 //
-// NOT REACHED BY THE GOVERNED RUN. routePlan builds its Action without
-// DerivedCoverage, so nothing in production calls this; the only caller is the
-// derivelive test. That is recorded here rather than quietly fixed, because
-// wiring it up WIDENS autonomy and is a decision to take deliberately, with the
-// relevance relation already in place, rather than as a side effect of writing
-// about it. TestTheGovernedRunDoesNotYetSupplyDerivedCoverage pins the current
-// state so connecting it is a visible change.
+// Reached by the governed run: routePlan supplies it on every routing decision.
+//
+// It was NOT, and the comment here said so, correctly, for as long as that was
+// true. The wiring was deliberately deferred because connecting it WIDENS
+// autonomy, and the evidence that justified connecting it arrived from the
+// proof-v6 campaign: three of five governed refusals were coverage gaps whose
+// closure round ran and could not close, because no channel carried a
+// derivation to the router. TestTheGovernedRunSuppliesDerivedCoverage now pins
+// the channel, and five sibling tests pin that insufficient evidence still
+// refuses.
 //
 // The only thing reaching the router is a list of files a derivation just
 // succeeded over. Recipes do not reach it, and neither does any earlier

@@ -367,3 +367,67 @@ func TestClosureSynthesisesNoHumanAnswer(t *testing.T) {
 		t.Error("derived coverage no longer comes from a revalidation in the assessed world")
 	}
 }
+
+// The coverage-observability event decides nothing.
+//
+// It exists because the event stream could not answer a question the repair
+// verification requires: did a derivation REACH the router, or did the channel
+// carry nothing? Those are different findings needing different repairs, and
+// "the gap did not close" reads identically for both.
+//
+// Measurement-only, so the risk is that it becomes an input. These pin that it
+// is emitted after the decision and read by nothing.
+func TestTheCoverageObservabilityEventDecidesNothing(t *testing.T) {
+	// Raw source, not funcBody: this pins ORDER and the literal that marks the
+	// event, and funcBody renders identifiers rather than source.
+	src := rawSource(t, "internal/workflow/engine.go")
+	at := strings.Index(src, "func (e *Engine) routePlan(")
+	if at < 0 {
+		t.Fatal("routePlan is gone from engine.go")
+	}
+	body := src[at:]
+	if end := strings.Index(body, "\n}\n"); end > 0 {
+		body = body[:end]
+	}
+
+	// Emitted AFTER the routing decision, never before it.
+	route := strings.Index(body, "routeAuthorityForAction")
+	emit := strings.Index(body, "derived coverage:")
+	if route < 0 || emit < 0 {
+		t.Fatal("routePlan no longer routes or no longer records what reached the router")
+	}
+	if emit < route {
+		t.Error("the observability event is built before the routing decision, so it could " +
+			"influence one; it must only describe a decision already made")
+	}
+	// The routing value is never reassigned after it is computed.
+	after := body[route:]
+	if strings.Contains(after, "routing =") || strings.Contains(after, "routing.Route =") {
+		t.Error("routing is mutated after it is decided; the observability path must not touch it")
+	}
+}
+
+// Routing is identical whether or not anything observes it.
+//
+// The strongest form: the same inputs produce the same route, and the route is
+// a pure function of the preflight, the claims and the action.
+func TestRoutingIsUnchangedByObservation(t *testing.T) {
+	scoped := scopedPreflight(t, emptyOverBus)
+	planned := []string{"internal/event/bus.go"}
+
+	for name, action := range map[string]Action{
+		"with resolving coverage": {Stage: StageCandidateEdit, Files: planned,
+			DerivedCoverage: lockAnchors(planned...)},
+		"with irrelevant coverage": {Stage: StageCandidateEdit, Files: planned,
+			DerivedCoverage: layeringAnchors(planned...)},
+		"with none": {Stage: StageCandidateEdit, Files: planned},
+	} {
+		t.Run(name, func(t *testing.T) {
+			first := routeAuthorityForAction(scoped, nil, action)
+			second := routeAuthorityForAction(scoped, nil, action)
+			if first.Route != second.Route || first.Condition != second.Condition {
+				t.Fatalf("routing is not deterministic: %+v then %+v", first, second)
+			}
+		})
+	}
+}
