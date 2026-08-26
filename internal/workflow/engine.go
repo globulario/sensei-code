@@ -1477,7 +1477,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				// whether to proceed with the gap still open.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-				e.recordClosureQuestion(taskID, routing.Condition, d)
+				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
 				routing.Route = RouteHuman
 				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 				fallthrough
@@ -1549,7 +1549,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-				e.recordClosureQuestion(taskID, routing.Condition, d)
+				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
 				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 			}
 			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
@@ -1843,6 +1843,14 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 
 // derivedRecipesPath is where the durable questions live.
 const derivedRecipesPath = "docs/awareness/derived_recipes.json"
+
+// derivedReceiptsPath is the append-only log of investigator runs.
+//
+// Separate from the recipes, and append-only, because V2 §6.3 requires a
+// receipt per inference RUN. A run that proposed a duplicate or proposed
+// nothing still ran, and those are the recurrence and decline signals; storing
+// receipts inside recipes would discard exactly the ones that carry them.
+const derivedReceiptsPath = "docs/awareness/derived_receipts.jsonl"
 
 // senseiBinary is the CLI that performs derivations.
 //
@@ -2600,8 +2608,38 @@ func renderScope(files []string) string {
 // Every outcome is emitted, including refusal and duplication. A round that
 // writes nothing must be as visible as one that writes something, or the
 // experiment measuring this loop would only ever see its successes.
-func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureDecision) {
+func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureDecision,
+	start certifiedStart, model string, round int) {
+
+	graph := map[string]string{}
+	if a := start.workspace.GraphAuthority; a != nil {
+		graph = map[string]string{
+			"verdict": a.Verdict, "state": a.State,
+			"freshness": string(a.GraphFreshnessState), "seed": string(a.SeedState),
+			"provenance":         a.BuildProvenanceState,
+			"graph_build_commit": a.GraphBuildCommit, "source_repo_commit": a.SourceRepoCommit,
+		}
+	}
+	receipt := derived.InferenceReceipt{
+		ModelName:        model,
+		InputGraphDigest: derived.GraphDigest(graph),
+		InputGraphState:  graph["graph_build_commit"],
+		OriginTask:       taskID,
+		OriginGap:        condition,
+		Round:            round,
+		Region:           append([]string(nil), d.Files...),
+		ClosureBudget:    closureBudget,
+		Nondeterminism:   derived.LLMNondeterminism,
+	}
+	defer func() {
+		if err := derived.AppendReceipt(filepath.Join(e.Repo.Root, derivedReceiptsPath), receipt); err != nil {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+				"could not record the inference receipt: "+err.Error(), nil))
+		}
+	}()
+
 	if d.ProposedRecipe == nil {
+		receipt.Outcome = derived.OutcomeNoProposal
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"the closure round proposed no checkable question for this region", nil))
 		return
@@ -2611,6 +2649,9 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 	// could author its own provenance could make an invented question look like
 	// the product of an investigation that never happened.
 	r.Provenance = nil
+	receipt.CandidateDigest = derived.DigestOf(r)
+	receipt.CandidateID = r.Identity()
+
 	added, err := derived.Append(
 		filepath.Join(e.Repo.Root, derivedRecipesPath), r,
 		derived.Provenance{
@@ -2621,12 +2662,15 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 		}, d.Files)
 	switch {
 	case err != nil:
+		receipt.Outcome, receipt.Detail = derived.OutcomeRefused, err.Error()
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"the proposed question was refused: "+err.Error(), nil))
 	case !added:
+		receipt.Outcome = derived.OutcomeDuplicate
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"this question is already recorded; not duplicating it: "+r.String(), nil))
 	default:
+		receipt.Outcome = derived.OutcomeRecorded
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"recorded a question for the next encounter with this region: "+r.String(), nil))
 	}
