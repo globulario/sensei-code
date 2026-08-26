@@ -7,7 +7,6 @@ decisions:
     context: Accepted by the human in an interactive Sensei Code session.
     consequences: TUI users can inspect machine and repository readiness without leaving the session; repairs remain available only through `sensei-code setup --apply`.
     related_invariants:
-      - sensei_code.provider.credentials_remain_provider_owned
       - sensei_code.command.unknown_input_is_never_run_as_a_task
     source_files:
       - README.md
