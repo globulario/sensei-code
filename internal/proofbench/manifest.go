@@ -130,6 +130,19 @@ type Manifest struct {
 	// the manifest because changing it changes what the numbers mean, which is
 	// why proof-v6 exists at all.
 	Evaluator json.RawMessage `json:"evaluator,omitempty"`
+	// Label distinguishes a verification run from a benchmark.
+	//
+	// A repair verification uses a corpus the repairs were DESIGNED FROM, so an
+	// improvement in it cannot support a claim of general superiority. The label
+	// travels with the manifest so a later reader cannot mistake one for the
+	// other.
+	Label string `json:"label,omitempty"`
+	// NotABenchmark says, in the artifact itself, what this run may not be used
+	// to claim.
+	NotABenchmark string `json:"not_a_benchmark,omitempty"`
+	// FrozenPredictions are the expected outcomes, recorded BEFORE the run so a
+	// disagreement is evidence rather than something to rationalise.
+	FrozenPredictions json.RawMessage `json:"frozen_predictions,omitempty"`
 	// CampaignDesign is which arms this campaign schedules and why. Recorded in
 	// the manifest so the arm list is frozen with everything else.
 	CampaignDesign string `json:"campaign_design,omitempty"`

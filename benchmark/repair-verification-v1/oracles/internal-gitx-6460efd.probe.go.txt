@@ -1,0 +1,131 @@
+package gitx
+
+// Behavioural contract probe: a read-only measurement must not write the thing
+// it measures.
+//
+// It asserts an observable property of the repository -- .git/index is byte- and
+// mtime-identical across the call -- and never mentions --no-optional-locks,
+// GIT_OPTIONAL_LOCKS, or any helper name. Any implementation that achieves the
+// property passes.
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+	"time"
+)
+
+func probeGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v %s", args, err, out)
+	}
+}
+
+// probeRepo is a repository whose index is primed and whose tracked file has
+// deliberately stale stat data: identical content, later mtime. That is what
+// tempts git to refresh and rewrite the index while answering a query.
+func probeRepo(t *testing.T) (dir, index string, stale func()) {
+	t.Helper()
+	dir = t.TempDir()
+	probeGit(t, dir, "init", "-q")
+	probeGit(t, dir, "config", "user.email", "probe@example.invalid")
+	probeGit(t, dir, "config", "user.name", "probe")
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	probeGit(t, dir, "add", "main.go")
+	probeGit(t, dir, "commit", "-qm", "init")
+	probeGit(t, dir, "status", "--porcelain")
+	return dir, filepath.Join(dir, ".git", "index"), func() {
+		later := time.Now().Add(2 * time.Second)
+		if err := os.Chtimes(filepath.Join(dir, "main.go"), later, later); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func probeIndex(t *testing.T, index string) (string, time.Time) {
+	t.Helper()
+	b, err := os.ReadFile(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fi, err := os.Stat(index)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b), fi.ModTime()
+}
+
+// Measuring a checkout does not modify it.
+func TestContractTheCleanlinessCheckDoesNotWriteTheIndex(t *testing.T) {
+	dir, index, stale := probeRepo(t)
+
+	// Control: the specimen must be capable of provoking a refresh at all, or
+	// the assertion below proves nothing. An unflagged status is run first and
+	// the test skips if even that leaves the index untouched.
+	beforeB, beforeT := probeIndex(t, index)
+	stale()
+	if out, err := exec.Command("git", "-C", dir, "status", "--porcelain").CombinedOutput(); err != nil {
+		t.Fatalf("control status: %v %s", err, out)
+	}
+	ctrlB, ctrlT := probeIndex(t, index)
+	if ctrlB == beforeB && ctrlT.Equal(beforeT) {
+		t.Skip("this git does not refresh the index here, so there is no property to observe")
+	}
+
+	// The measurement itself, in the same provoked state.
+	stale()
+	repo := Repo{Root: dir}
+	status, err := repo.WorktreeIsCleanDetail(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("WorktreeIsCleanDetail: %v", err)
+	}
+	afterB, afterT := probeIndex(t, index)
+	if afterB != ctrlB {
+		t.Error("the read-only cleanliness check rewrote .git/index; a checker for a read-only " +
+			"lane became the write it is trying to detect")
+	}
+	if !afterT.Equal(ctrlT) {
+		t.Errorf("the read-only cleanliness check touched .git/index (%s -> %s)", ctrlT, afterT)
+	}
+	// And it is still correct: identical content means a clean tree.
+	if status != "" {
+		t.Errorf("an unmodified repository was reported dirty: %q", status)
+	}
+}
+
+// The boolean form has the same obligation, and still answers correctly.
+func TestContractWorktreeIsCleanAlsoDoesNotWrite(t *testing.T) {
+	dir, index, stale := probeRepo(t)
+	stale()
+	if out, err := exec.Command("git", "-C", dir, "status", "--porcelain").CombinedOutput(); err != nil {
+		t.Fatalf("control status: %v %s", err, out)
+	}
+	ctrlB, ctrlT := probeIndex(t, index)
+
+	stale()
+	clean, dirty, err := (Repo{Root: dir}).WorktreeIsClean(context.Background(), dir)
+	if err != nil {
+		t.Fatalf("WorktreeIsClean: %v", err)
+	}
+	afterB, afterT := probeIndex(t, index)
+	if afterB != ctrlB || !afterT.Equal(ctrlT) {
+		t.Error("WorktreeIsClean rewrote .git/index while reporting on it")
+	}
+	if !clean || dirty != "" {
+		t.Errorf("an unmodified repository was reported dirty: clean=%v %q", clean, dirty)
+	}
+
+	// A genuine modification is still detected, so "does not write" was not
+	// achieved by not looking.
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main // changed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if clean, _, err := (Repo{Root: dir}).WorktreeIsClean(context.Background(), dir); err != nil || clean {
+		t.Errorf("a real modification was missed: clean=%v err=%v", clean, err)
+	}
+}
