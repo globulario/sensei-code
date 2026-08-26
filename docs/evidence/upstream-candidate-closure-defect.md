@@ -93,13 +93,33 @@ The narrower alternative — teach the extractor to write candidates under a
 non-governed top-level key — treats the symptom, and would leave any
 hand-authored candidate under `invariants:` still failing.
 
-## Status here
+## Status: FIXED UPSTREAM
 
-Worked around locally by holding
-`docs/awareness/candidates/` outside the fixture's corpus during the build. The
-fixture is now authoritative and the cold-start experiment can proceed. The
-workaround is recorded in the experiment manifest so no result is read as though
-onboarding had worked cleanly.
+`globulario/sensei` branch `fix/candidate-status-domain-closure`, commit
+`80392aaf`. An entry declaring a non-canonical status is recorded in `Excluded`
+— *"declared non-authority; expected NOT to project"* — the field that already
+existed for precisely this.
+
+The non-canonical set is read by **membership** (`{"candidate"}`) so an
+unrecognised status stays **required**. Listing the canonical statuses and
+excusing everything else would fail **open**: a typo, or a status added later,
+would quietly drop an obligation.
+
+Five regression cases: candidate-only, canonical-only, mixed (including an entry
+with *no* status, which keeps its obligation), cold start, and a nested
+`status: candidate` that must not excuse the governed entry containing it.
+
+**The workaround was removed and the fixture rebuilt from scratch**, candidates
+back in the corpus:
+
+```
+before fix   closure FAILED  0/24 projected, 24 missing   →  not_authoritative
+after fix    closure PROVEN  0/0  projected,  0 missing   →  authoritative
+             1498 identical triples, candidates present both times
+```
+
+The original failure is preserved above so the diagnosis remains auditable, and
+the campaign runs on a clean substrate rather than on a worked-around one.
 
 Notable in passing: after the exclusion the domain expects **0** identities to
 project. `golang/sync` has no hand-authored governed identities at all — only

@@ -121,11 +121,44 @@ express, that is a failure of the loop. If no file had qualified, that would
 instead have been evidence the vocabulary is too narrow — a different finding,
 to be reported rather than fixed.
 
-## Open setup question
+## Setup, resolved
 
-Sensei-code's start gate requires an authoritative workspace. `golang/sync` has
-no Sensei domain at all, which is precisely the cold-start condition — and it
-may mean the run refuses before an investigator is ever reached. Establishing an
-empty-but-authoritative binding for an unknown repository is part of the
-experiment's setup and is resolved before Encounter 1, with whatever it takes
-recorded here.
+Onboarding `golang/sync` immediately failed: `sensei import` writes extracted
+candidates under a governed top-level key, domain closure required them to
+publish, they correctly did not, and the graph was **not authoritative** — so the
+start gate would have refused before any investigator ran. See
+[`upstream-candidate-closure-defect.md`](../../docs/evidence/upstream-candidate-closure-defect.md).
+
+**Fixed upstream, not worked around.** `globulario/sensei@80392aaf`. The fixture
+was rebuilt from scratch with candidates in the corpus.
+
+```
+fixture      golang/sync @ 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f
+store        isolated, 127.0.0.1:7890, built from empty
+graph        127.0.0.1:10190, domain github.com/golang/sync
+closure      PROVEN — 0/0 projected, 0 missing, 0 foreign
+authority    authoritative
+triples      1498          (sensei-code, for scale: 158,349)
+failure modes 0 · source files 4
+```
+
+### What `0/0 PROVEN` means, and does not
+
+It means **everything claiming canonical authority is accounted for**. It does
+**not** mean Sensei knows this repository. Both statements are true at once and
+must stay distinguishable:
+
+| | |
+|---|---|
+| graph integrity / authority | **authoritative** |
+| canonical architectural governance | **essentially empty** |
+| architectural coverage | **cold / unknown** |
+| deterministic extracted observations | 1,498 triples |
+
+Nothing may read the absence of missing identities as safety. Law 1 —
+*absence is not safety* — and the regression test
+`TestColdStartProvesClosureWithoutClaimingKnowledge` pins it.
+
+This is the state the investigator is meant to operate on: the floor plan
+generated from source structure, and none of the handwritten signs saying which
+door is load-bearing.
