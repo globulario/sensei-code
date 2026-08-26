@@ -50,7 +50,12 @@ const PostProcessingVersion = "closure-recipe/v1"
 // pipeline; the requirement is the same either way. If the prompt changes, the
 // question distribution changes, and a receipt that cannot say which prompt ran
 // cannot support a comparison across the change.
-const FeatureExtractorVersion = "gap-closure-prompt/v2"
+// v3 removed a placeholder that happened to name a field in the cold-start
+// fixture ("lock":"<mu>"). Idiomatic Go, and still a needless coincidence with
+// the subject about to be measured -- the selector may know the fixture contains
+// an expressible relationship, the investigator must discover which question is
+// worth asking from its own inputs.
+const FeatureExtractorVersion = "gap-closure-prompt/v3"
 
 // InferenceOutcome is what a run produced. Every value is data about the loop,
 // including the ones that produced nothing.

@@ -1,0 +1,38 @@
+{
+  "fixture": {
+    "repo": "github.com/golang/sync",
+    "sha": "3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f",
+    "subject": "semaphore/semaphore.go",
+    "subject_sha256": "sha256:d6ac0d42d09622eabcf394d9f384204bb7793a44781874769bf63f5c06818c73",
+    "graph_triples": 1498,
+    "canonical_governed_identities": 0,
+    "closure": "PROVEN 0/0",
+    "authority": "authoritative",
+    "extraction_depth": "basic (deterministic structural only)"
+  },
+  "substrate": {
+    "sensei_repo": "github.com/globulario/sensei",
+    "sensei_commit": "80392aaf2aaf3349fe144a2ca3ee5b3a9457c882",
+    "sensei_branch": "fix/candidate-status-domain-closure"
+  },
+  "instrument": {
+    "sensei_code_commit": "f4ebfbb79e49b01b5b7d7eda81129bb40a7e766a",
+    "harness_version": "v2",
+    "classifier_version": "v2-anchored",
+    "feature_extractor_version": "gap-closure-prompt/v3",
+    "post_processing_version": "closure-recipe/v1",
+    "recipe_vocabulary": [
+      "field_access_under_lock",
+      "command_invocation_confined_to"
+    ],
+    "recipes_present_in_fixture": 0
+  },
+  "invariants_of_the_experiment": [
+    "no vocabulary may be added after seeing what the investigator proposes",
+    "no recipe may be hand-authored for the subject",
+    "no encounter may be reworded after a run is observed",
+    "the subject may not be re-selected",
+    "semaphore/semaphore.go may not be altered",
+    "any change to substrate semantics, subject, vocabulary, fixture SHA or graph initialisation costs a restart of the experiment"
+  ]
+}

@@ -2739,8 +2739,9 @@ relationship actually holds there.
 Two kinds are answerable. Anything else derives UNKNOWN forever, which is
 writing nothing while looking like accumulation:
 
-  {"kind":"field_access_under_lock","dir":"<pkg dir>","type":"<T>",
-   "field":"<f>","lock":"<mu>","why":"<what you read that made this worth asking>"}
+  {"kind":"field_access_under_lock","dir":"<pkg dir>","type":"<type name>",
+   "field":"<field name>","lock":"<lock field name>",
+   "why":"<what you read that made this worth asking>"}
 
   {"kind":"command_invocation_confined_to","command":"<exe>","owner":"<pkg dir>",
    "search_paths":["<dir>","<dir>"],"why":"..."}

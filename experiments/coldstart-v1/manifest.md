@@ -162,3 +162,66 @@ Nothing may read the absence of missing identities as safety. Law 1 —
 This is the state the investigator is meant to operate on: the floor plan
 generated from source structure, and none of the handwritten signs saying which
 door is load-bearing.
+
+---
+
+## Frozen
+
+State hashes in [`frozen.json`](frozen.json). Any change to substrate semantics,
+subject selection, vocabulary, fixture SHA or graph initialisation costs a
+**restart** of the experiment.
+
+## Leakage audit, before Encounter 1
+
+The selector is allowed to know the fixture contains an expressible
+relationship. The **investigator must not be told which one**.
+
+**Removed.** The closure prompt's placeholder read `"lock":"<mu>"` — idiomatic
+Go, and the exact field name in `semaphore.Weighted`. Now `<lock field name>`,
+with `<T>`/`<f>` widened to `<type name>`/`<field name>`. The prompt changed, so
+`FeatureExtractorVersion` moved `gap-closure-prompt/v2 → v3`; that is precisely
+what the field exists for.
+
+**Residual, disclosed and retained.** Encounter 1 says *"how much weight is
+currently held and how many waiters are queued"*, which names `cur` and
+`waiters` semantically. It says nothing about locks, mutexes, concurrency or
+access discipline — the relationship the recipe actually asks about. The
+investigator must still read the code, notice a lock exists, judge its discipline
+worth checking, and express that in the frozen vocabulary. Any realistic request
+to observe semaphore state names held weight and waiters; writing around it would
+produce an artificial task. Recorded so it is weighed with the result rather
+than discovered afterwards.
+
+## What Encounter 1 can and cannot establish
+
+Deliberately very little. It does **not** succeed by completing the task.
+
+```
+semaphore.go is cold
+→ the deterministic substrate cannot anchor the relationship
+→ the investigator runs
+→ an inference receipt is recorded
+→ a mechanically checkable question is proposed, or NO_PROPOSAL honestly
+→ any accepted question is persisted
+→ that question CANNOT affect Encounter 1
+```
+
+All four outcomes are useful and none may be rewritten into success after
+inspection:
+
+| | |
+|---|---|
+| `RECORDED` | promising |
+| `DUPLICATE` | recurrence signal |
+| `REFUSED` | the admission rule rejected the proposal |
+| `NO_PROPOSAL` | the investigator could not formulate a useful question |
+
+Encounter 2 asks the real question: **does that durable question mechanically
+derive something relevant, and change the knowledge state without granting itself
+authority?**
+
+## Admission
+
+Capacity for the **whole planned pair in both arms**, with margin — not enough to
+start Encounter 1. The seven-day window stood at 96% this morning. The existing
+completion gate decides; tonight is not special-cased.
