@@ -36,7 +36,28 @@ README.md                     LOW_RISK                approval=none
 internal/setup/setup.go       LOW_RISK                approval=none
 ```
 
-**5. Symbol namespace. This is the cause.** The file declares:
+**5. A stored anchor of any kind.** Queried the live store directly:
+
+```sparql
+SELECT ?p ?o WHERE {
+  ?s ?p ?o .
+  FILTER(CONTAINS(STR(?o), "internal/tui/model.go"))
+  FILTER(CONTAINS(STR(?s), "credentials_remain_provider_owned"))
+}
+-> {"bindings": []}
+```
+
+**No triple links the invariant to the file.** The narrowing took effect in the
+store, and the server still reports the invariant as a direct anchor for that
+file. **The match is therefore derived at query time by the Sensei server, not
+read from a stored relationship.** That is the load-bearing finding, and it is
+established rather than inferred.
+
+**6. Reference expansion.** Hypothesis: importing `internal/provider` pulls in
+invariants protecting it. Falsified — `internal/doctor/doctor.go` and
+`internal/workflow/engine.go` both import it and neither lists the invariant.
+
+**7. Symbol naming — the surviving hypothesis.** The file declares:
 
 ```
 internal/tui/model.go:loginMenu
@@ -44,9 +65,17 @@ internal/tui/model.go:providerLoginFinishedMsg
 internal/tui/model.go:renderProviderLogin
 ```
 
-which the graph classifies as *"anchored entity in security/auth/rbac/pki/jwt/cert
-namespace"* — the exact blind spot preflight reports. Three symbol **names**
-containing `Login` make every change to the file a security change class.
+and it is the only property distinguishing it from `doctor.go`, which imports
+the same package and is not gated. Preflight's own blind spot reads *"anchored
+entity in security/auth/rbac/pki/jwt/cert namespace"*, and Sensei's
+`risk_classify.go` matches `securityKeywords` — including `"credential"` — against
+the *"concatenated lowercase id title summary haystack of anchored entities"*.
+
+**Stated as the surviving hypothesis, not as proven.** Four alternatives are
+falsified with evidence above; this one is not, and confirming the exact rule
+needs the Sensei maintainer. The actionable conclusion does not depend on which
+derivation it is: **no stored triple produces this, so it cannot be repaired
+from `sensei-code`.**
 
 ## What this means for the repair
 
