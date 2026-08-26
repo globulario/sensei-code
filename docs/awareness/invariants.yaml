@@ -74,8 +74,6 @@ invariants:
         - cmd/sensei-code/providers.go
     required_tests:
       - internal/provider/provider_test.go:TestProviderStatusHasNoCredentialFields
-      - internal/tui/credentials_test.go:TestTheTUIDelegatesLoginAndHandlesNoCredential
-      - internal/tui/credentials_test.go:TestTheTUIUsesProvidersOnlyForIdentityAndDisplay
 
   - id: sensei_code.provider.unknown_auth_is_not_connected
     title: Unknown provider authentication state must never be rendered as authenticated
