@@ -25,19 +25,19 @@
       "id": "hole candidate including files the worker",
       "cycle": 1,
       "status": "new",
-      "text": "…hole candidate, including files the worker created.” → Add a runCandidate/workflow regression using an untracked created file; capture the audit request and reviewer prompt/packet, and assert both contain its new-file patch and content."
+      "text": "\u2026hole candidate, including files the worker created.\u201d \u2192 Add a runCandidate/workflow regression using an untracked created file; capture the audit request and reviewer prompt/packet, and assert both contain its new-file patch and content."
     },
     {
       "id": "persist or otherwise bind the candidate",
       "cycle": 2,
       "status": "new",
-      "text": "… Persist or otherwise bind the candidate’s creation/base revision when the worktree is made, then construct the tracked portion against that immutable base rather than current HEAD. Preserve the required direct-Git, non-mutating behavior."
+      "text": "\u2026 Persist or otherwise bind the candidate\u2019s creation/base revision when the worktree is made, then construct the tracked portion against that immutable base rather than current HEAD. Preserve the required direct-Git, non-mutating behavior."
     },
     {
       "id": "sport safe lossless representation for diff",
       "cycle": 2,
       "status": "new",
-      "text": "…sport-safe, lossless representation for diff evidence across the MCP boundary, or ensure CandidateDiff emits an ASCII-safe patch representation for every byte sequence sent through JSON without changing the reviewer-visible patch semantics."
+      "text": "\u2026sport-safe, lossless representation for diff evidence across the MCP boundary, or ensure CandidateDiff emits an ASCII-safe patch representation for every byte sequence sent through JSON without changing the reviewer-visible patch semantics."
     }
   ],
   "review_cycles": 2,
@@ -60,5 +60,6 @@
     "transcript": "benchmark/repair-verification-v1/transcripts/internal-gitx-a4fa351/COLD/1.log",
     "transcript_tail_sha256": "sha256:12f8837a92cab3accdfc6bda7258299852439e4861eface851a096182e28f4f0"
   },
-  "notes": "5320 event(s) observed"
+  "notes": "5320 event(s) observed",
+  "measurement_status": "VOID_MEASUREMENT: instrument defect #13 \u2014 this arm exhausted the 22-minute budget while actively investigating the task and was recorded as an infrastructure outage because the phrase \"backend is unreachable\" was matched somewhere in a transcript for a task about transporting diff evidence across the MCP boundary. Only the last 20KB was retained, so the classification can be neither confirmed nor refuted. Preserved as evidence about the INSTRUMENT; it is not evidence about Sensei-code and must not enter any benchmark result. The campaign is voided in full and re-run from arm 1 under harness v2."
 }

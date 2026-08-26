@@ -1,0 +1,143 @@
+package setup
+
+// Behavioural contract probe: this tool's own artefacts are not the user's work.
+//
+// Same surface as the seed task -- Inspect, and the "candidate worktrees" check
+// read out of the Report -- and the same repo-local computation. It names no
+// private helper and no artefact-detection strategy.
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"testing"
+)
+
+const probeCheckName = "candidate worktrees"
+
+func probeCheck(t *testing.T, repoRoot string) Check {
+	t.Helper()
+	report := Inspect(context.Background(), Options{RepoRoot: repoRoot})
+	for _, c := range report.Checks {
+		if c.Name == probeCheckName {
+			return c
+		}
+	}
+	t.Fatalf("Inspect reported no %q check", probeCheckName)
+	return Check{}
+}
+
+func probeRepo(t *testing.T) (repoRoot, worktreeRoot string) {
+	t.Helper()
+	parent := t.TempDir()
+	repoRoot = filepath.Join(parent, "project")
+	if err := os.MkdirAll(repoRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "probe@example.invalid"},
+		{"config", "user.name", "probe"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", repoRoot}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "."}, {"commit", "-qm", "base"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repoRoot}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	return repoRoot, filepath.Join(parent, ".project-worktrees")
+}
+
+func mk(t *testing.T, dir string, files ...string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range files {
+		p := filepath.Join(dir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A candidate holding only this tool's own artefacts holds no work, so it is
+// removable rather than preserved as though it contained something.
+func TestContractToolArtefactsAreNotTheUsersWork(t *testing.T) {
+	repoRoot, worktrees := probeRepo(t)
+	mk(t, filepath.Join(worktrees, "task-1", ".guard"), "hook")
+
+	c := probeCheck(t, repoRoot)
+	if c.State == OK {
+		t.Fatalf("an abandoned candidate was not reported at all: %+v", c)
+	}
+	if c.Repair == nil {
+		t.Fatal("a candidate holding only this tool's own artefacts was treated as holding the " +
+			"user's work, so nothing offered to remove it")
+	}
+	if err := c.Repair(context.Background()); err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(worktrees, "task-1")); !os.IsNotExist(err) {
+		t.Error("the repair did not remove a candidate that held only tool artefacts")
+	}
+}
+
+// Anything the user could have written is still preserved.
+func TestContractRealWorkIsStillPreserved(t *testing.T) {
+	repoRoot, worktrees := probeRepo(t)
+	holding := filepath.Join(worktrees, "task-2")
+	mk(t, holding, "work.go")
+	mk(t, filepath.Join(holding, ".guard"), "hook")
+
+	c := probeCheck(t, repoRoot)
+	if c.State == OK {
+		t.Fatalf("an abandoned candidate was not reported: %+v", c)
+	}
+	if c.Repair != nil {
+		if err := c.Repair(context.Background()); err != nil {
+			t.Fatalf("repair: %v", err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(holding, "work.go")); err != nil {
+		t.Error("a candidate holding the user's work was removed")
+	}
+}
+
+// A repository whose only leftovers are tool artefacts is not reported as
+// holding abandoned work.
+func TestContractArtefactsAloneAreNotReportedAsHoldingWork(t *testing.T) {
+	repoRoot, worktrees := probeRepo(t)
+	mk(t, filepath.Join(worktrees, "task-3", ".guard"), "hook")
+	c := probeCheck(t, repoRoot)
+	if c.Detail == "" {
+		t.Fatal("the check reported no detail")
+	}
+	// It may be reported as removable litter; it must not be reported as work.
+	if containsAny(c.Detail+c.Fix, "still holding files", "hold files") {
+		t.Errorf("artefacts alone were described as work: detail=%q fix=%q", c.Detail, c.Fix)
+	}
+}
+
+func containsAny(s string, subs ...string) bool {
+	for _, sub := range subs {
+		if len(sub) > 0 && len(s) >= len(sub) {
+			for i := 0; i+len(sub) <= len(s); i++ {
+				if s[i:i+len(sub)] == sub {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

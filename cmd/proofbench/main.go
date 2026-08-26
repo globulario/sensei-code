@@ -49,6 +49,8 @@ func run(args []string) int {
 		return preflightCandidate(args[1:])
 	case "environment":
 		return environment(args[1:])
+	case "capacity":
+		return capacity(args[1:])
 	case "run":
 		return runCampaign(args[1:])
 	case "report":
@@ -84,6 +86,14 @@ func usage() {
         point the frozen oracle at an existing candidate worktree and
         prove the evaluator finds work where a governed run leaves it,
         without spending a provider token
+
+  proofbench capacity --manifest <path> [--arms <n>] [--per-arm <fraction>]
+        refuse a campaign that cannot FINISH. Reads the provider's own
+        rate-limit windows and projects every remaining arm against the
+        tightest one. "Can one arm start?" is not the question: the
+        halted REPAIR_VERIFICATION wave passed that gate on a five-hour
+        window that had just reset, while the seven-day window it would
+        actually exhaust sat at 96%
 
   proofbench environment --manifest <path> [--pin] [--against <file>]
         establish, without spending a provider token, which graph the
@@ -308,6 +318,19 @@ func runCampaign(args []string) int {
 		return exitFailed
 	}
 	dir := dirOf(*manifest)
+	// The instrument is frozen for the life of the campaign.
+	//
+	// Repairing the harness mid-wave and continuing would leave arm 1 measured
+	// by one ruler and arms 2..N by another. The lock makes that impossible to
+	// do quietly: a changed build stops matching, and the campaign must be
+	// voided and restarted rather than continued.
+	if !*dry {
+		lock := proofbench.CurrentLock(hash, len(m.Tasks)*len(proofbench.ExecutionOrder("")), "")
+		if err := proofbench.WriteLock(filepath.Join(dir, "harness.lock.json"), lock); err != nil {
+			fmt.Fprintln(os.Stderr, "proofbench run:", err)
+			return exitFailed
+		}
+	}
 	ledger, err := proofbench.OpenLedger(filepath.Join(dir, "runs"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "proofbench run:", err)
@@ -395,6 +418,10 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		fmt.Println("  note     governed checkout is not quiescent; the boundary reading for this " +
 			"arm will be recorded as unmeasurable rather than as clean or violated")
 	}
+	// Read the provider's own remaining capacity either side of the arm. This
+	// is how a campaign learns what an arm actually costs, which is the number
+	// AdmitCampaign needs and which nothing before this measured.
+	quotaBefore := readQuotaOrNil(ctx, r)
 	started := time.Now()
 	var out proofbench.ArmOutcome
 	if arm == proofbench.ArmRaw {
@@ -403,6 +430,7 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		out = r.ExecuteGoverned(ctx, dir, t.Statement, timeout)
 	}
 	ended := time.Now()
+	quotaAfter := readQuotaOrNil(ctx, r)
 
 	// Resolve the tree this arm's work is actually in, BEFORE cleanup: a
 	// governed candidate is registered in the arm checkout's git metadata, and
@@ -452,15 +480,27 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		CandidateHead:         cand.HeadSHA,
 		GovernedCheckoutClean: ev.GovernedClean,
 		GovernedCheckoutState: ev.GovernedState, BoundaryMeasurable: ev.Measurable,
-		Infrastructure: out.Infrastructure,
-		Artifacts:      map[string]string{"transcript_tail_sha256": proofbench.HashBytes([]byte(out.Raw))},
+		Infrastructure:     out.Infrastructure,
+		InfrastructureHint: out.InfrastructureHint,
+		Classifier:         out.Classifier,
+		TerminalSource:     string(out.TerminalSource),
+		HarnessVersion:     proofbench.HarnessVersion,
+		ClassifierVersion:  proofbench.ClassifierVersion,
+		RawBytes:           out.RawBytes,
+		RawSHA256:          out.RawSHA256,
+		QuotaBefore:        quotaBefore,
+		QuotaAfter:         quotaAfter,
+		Artifacts:          map[string]string{"transcript_sha256": out.RawSHA256},
 		// filled below once the transcript is on disk
 		Notes: fmt.Sprintf("%d event(s) observed", out.Events),
 	}
 	// Cost is left nil unless a provider reported it. Zero is a measurement;
 	// nil is the absence of one.
-	// The transcript is written beside the record, so the hash above binds to
-	// something a reader can actually re-hash.
+	// The COMPLETE transcript is written beside the record, so the hash above
+	// binds to something a reader can actually re-hash -- and so a
+	// classification can be checked against the text that produced it. Under
+	// harness v1 only the last 20KB was kept, which is why instrument defect
+	// #13 could be neither confirmed nor refuted.
 	tdir := filepath.Join(dirOf(manifestPath), "transcripts", t.ID, string(arm))
 	if err := os.MkdirAll(tdir, 0o755); err == nil {
 		tpath := filepath.Join(tdir, fmt.Sprintf("%d.log", attempt))
@@ -475,7 +515,23 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	if a.Infrastructure != "" {
 		fmt.Printf("  infra    %s\n", a.Infrastructure)
 	}
+	if a.InfrastructureHint != "" {
+		fmt.Printf("  hint     %q seen but overruled by %s (recorded, not scored)\n",
+			a.InfrastructureHint, a.Terminal)
+	}
 	return nil
+}
+
+// readQuotaOrNil takes a capacity reading, treating failure as absence.
+//
+// nil is "the provider did not tell us", never zero. A missing reading must not
+// read as a full tank.
+func readQuotaOrNil(ctx context.Context, r proofbench.Runner) *proofbench.QuotaReading {
+	q, err := proofbench.ReadQuota(ctx, r.Binary, r.RepoRoot)
+	if err != nil {
+		return nil
+	}
+	return &q
 }
 
 // providerIdentity records which provider/model played which role.
@@ -523,4 +579,72 @@ func binaryPath(root string) string {
 		return b
 	}
 	return filepath.Join(root, "sensei-code")
+}
+
+// capacity refuses a campaign that cannot finish.
+//
+// The gate the halted REPAIR_VERIFICATION wave did not have. It passed a probe
+// asking "can an arm start?" -- which the five-hour window, freshly reset,
+// happily answered yes to -- while the seven-day window that eleven arms would
+// actually consume stood at 96%.
+func capacity(args []string) int {
+	fs := flag.NewFlagSet("capacity", flag.ContinueOnError)
+	manifest := fs.String("manifest", "", "path to the frozen manifest (required)")
+	arms := fs.Int("arms", 0, "arms remaining (default: every arm the manifest schedules)")
+	perArm := fs.Float64("per-arm", 0,
+		"fraction of the binding window one arm consumes (default: the worst observed in this ledger)")
+	if err := fs.Parse(args); err != nil || strings.TrimSpace(*manifest) == "" {
+		fs.Usage()
+		return exitUsage
+	}
+	m, _, err := proofbench.LoadManifest(*manifest)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "proofbench capacity:", err)
+		return exitFailed
+	}
+	root, err := repoRoot()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "proofbench capacity:", err)
+		return exitFailed
+	}
+	dir := dirOf(*manifest)
+	if *arms == 0 {
+		*arms = len(m.Tasks) * len(proofbench.Arms)
+	}
+	// Prefer a measured per-arm cost over anything an operator guessed.
+	source := "supplied"
+	if *perArm <= 0 {
+		if l, lerr := proofbench.OpenLedger(filepath.Join(dir, "runs")); lerr == nil {
+			if observed := proofbench.RecordedPerArm(l.Attempts()); observed > 0 {
+				*perArm, source = observed, "worst observed in this ledger"
+			}
+		}
+	}
+	q, err := proofbench.ReadQuota(context.Background(), binaryPath(root), root)
+	origin := "live probe"
+	if err != nil {
+		// A stale reading, clearly labelled, beats refusing to answer at all --
+		// but it is never silently presented as current.
+		if recovered, from, ok := proofbench.LatestQuotaFromTranscripts(dir); ok {
+			q, origin = recovered, "STALE, from "+from
+		} else {
+			fmt.Fprintln(os.Stderr, "proofbench capacity:", err)
+			return exitFailed
+		}
+	}
+	window, available := q.Tightest()
+	fmt.Printf("  source      %s\n", origin)
+	fmt.Printf("  windows     %s\n", q)
+	fmt.Printf("  binding     %s, %.1f%% remaining\n", window, available*100)
+	if *perArm > 0 {
+		fmt.Printf("  per arm     %.2f%% (%s)\n", *perArm*100, source)
+	}
+	fmt.Printf("  arms        %d scheduled\n", *arms)
+	if err := proofbench.AdmitCampaign(q, *arms, *perArm); err != nil {
+		fmt.Fprintln(os.Stderr, "\n"+err.Error())
+		return exitFailed
+	}
+	fmt.Printf("\n  ADMITTED — %d arm(s) fit in the %s window with a %.0f%% margin\n",
+		*arms, window, (proofbench.CapacityMargin-1)*100)
+	return exitOK
 }

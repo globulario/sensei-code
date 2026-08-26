@@ -103,6 +103,27 @@ var refusalMarkers = []string{
 // evidence is not rewriting the record: the record stays exactly as written and
 // the report says the classification came from its transcript.
 func (a Attempt) WorkflowTerminal(evidence string) Terminal {
+	// A specific structured terminal is authoritative.
+	//
+	// The engine named this outcome through its own documented exit contract,
+	// and no phrase found in a transcript may overrule it. Instrument defect
+	// #13 was exactly this: a run that exhausted its budget while working was
+	// recorded as an outage because "backend is unreachable" appeared somewhere
+	// in twenty-two minutes of output, on a task about transporting diff
+	// evidence across the MCP boundary.
+	//
+	// The bias mattered more than the misreading. INFRA_FAILURE excuses the
+	// product and TIMEOUT counts against it, so the defect leaned the
+	// instrument toward its own subject.
+	//
+	// Attempts recorded before harness v2 carry no TerminalSource and keep the
+	// old precedence exactly. Rescoring a frozen campaign under a rule written
+	// afterwards is the same offence pointed the other way.
+	if TerminalSource(a.TerminalSource) == TerminalStructuredSpecific {
+		if t, ok := structuredTerminal(a.Terminal); ok {
+			return t
+		}
+	}
 	if strings.TrimSpace(a.Infrastructure) != "" {
 		return TerminalInfraFailure
 	}

@@ -1,0 +1,77 @@
+package agent
+
+// Behavioural contract probe for Activity.
+//
+// Asserts what a reader must be able to see, and deliberately not how the line
+// is built. The reference renders the FIRST SENTENCE of an assistant's text; an
+// implementation that renders the whole text is equally correct, so the probe
+// requires the text to be represented, never that it be truncated a particular
+// way. Nothing here names a private helper.
+
+import (
+	"strings"
+	"testing"
+)
+
+// A worker that is not claude streams its own output, trimmed and otherwise
+// untouched.
+func TestContractANonClaudeWorkerIsPassedThroughTrimmed(t *testing.T) {
+	for _, line := range []string{
+		"  compiling internal/gitx  ",
+		`{"type":"assistant"}`, // even JSON is not interpreted for another worker
+		"",
+	} {
+		if got, want := Activity("codex", line), strings.TrimSpace(line); got != want {
+			t.Errorf("Activity(codex, %q) = %q, want %q", line, got, want)
+		}
+	}
+}
+
+// An assistant's text becomes readable activity rather than protocol.
+func TestContractAssistantTextIsRenderedReadably(t *testing.T) {
+	line := `{"type":"assistant","message":{"content":[` +
+		`{"type":"text","text":"Reading the router to find the coverage check. Then I will edit it."}]}}`
+	got := Activity("claude", line)
+	if got == "" {
+		t.Fatal("an assistant's text produced no activity line at all")
+	}
+	// The text must be represented. How much of it is an implementation choice.
+	if !strings.Contains(got, "Reading the router") {
+		t.Errorf("the assistant's text is not represented: %q", got)
+	}
+	// And the reader must not be shown protocol.
+	for _, protocol := range []string{`"type"`, `"content"`, `{"`, `"message"`} {
+		if strings.Contains(got, protocol) {
+			t.Errorf("raw envelope leaked into the activity line (%q): %q", protocol, got)
+		}
+	}
+}
+
+// A tool call becomes the name of the tool being used.
+func TestContractAToolCallIsNamed(t *testing.T) {
+	line := `{"type":"assistant","message":{"content":[` +
+		`{"type":"tool_use","name":"Read","input":{"file_path":"internal/gitx/git.go"}}]}}`
+	got := Activity("claude", line)
+	if !strings.Contains(got, "Read") {
+		t.Errorf("a tool call did not name its tool: %q", got)
+	}
+	if strings.Contains(got, `"input"`) || strings.Contains(got, `{"`) {
+		t.Errorf("raw envelope leaked into the activity line: %q", got)
+	}
+}
+
+// Everything that is not an assistant turn produces nothing to show.
+func TestContractNonActivityProducesNothing(t *testing.T) {
+	for _, line := range []string{
+		`{"type":"result","subtype":"success"}`,
+		`{"type":"system","subtype":"init"}`,
+		`not json at all`,
+		`{"type":"assistant","message":{"content":[]}}`,
+		``,
+	} {
+		if got := Activity("claude", line); got != "" {
+			t.Errorf("Activity(claude, %q) = %q, want empty: this is not activity a reader "+
+				"should be shown", line, got)
+		}
+	}
+}

@@ -150,9 +150,49 @@ type Attempt struct {
 	CostUSD *float64 `json:"cost_usd"`
 	Tokens  *int     `json:"tokens"`
 
+	// TerminalSource says how Terminal was established, and therefore whether
+	// the text classifier was allowed a say.
+	//
+	// "structured_specific" is the engine naming its own outcome -- completed,
+	// timed out, awaiting authority -- and no heuristic may override it.
+	// "structured_generic" is a bare failure whose cause the engine did not
+	// state, which is the only place text classification decides anything.
+	//
+	// Empty on every attempt recorded before harness v2. Those keep the old
+	// precedence exactly, because retroactively rescoring a frozen campaign
+	// would be the same offence in the other direction.
+	TerminalSource string `json:"terminal_source,omitempty"`
+
 	// Infrastructure records an externally attributable failure -- provider
-	// outage, quota, auth. It is the ONLY thing that licenses a retry.
+	// outage, quota, auth. It is the ONLY thing that licenses a retry, and
+	// under classifier v2 it is set only when the engine left the cause
+	// generic.
 	Infrastructure string `json:"infrastructure_failure,omitempty"`
+	// InfrastructureHint is a recognised infrastructure phrase that was found
+	// but NOT allowed to decide, because the engine had already named a
+	// specific terminal.
+	//
+	// Kept because suppressing a signal is not the same as never seeing one: a
+	// run that timed out with "usage limit" in its transcript is still worth a
+	// human's attention, and discarding that would trade one blind spot for
+	// another.
+	InfrastructureHint string `json:"infrastructure_hint,omitempty"`
+	// Classifier is the span that produced the classification, preserved so the
+	// verdict can be checked rather than trusted.
+	Classifier *ClassifierEvidence `json:"classifier_evidence,omitempty"`
+
+	// HarnessVersion and ClassifierVersion are the instrument that produced
+	// this reading. A report refuses to combine attempts that disagree.
+	HarnessVersion    string `json:"harness_version,omitempty"`
+	ClassifierVersion string `json:"classifier_version,omitempty"`
+	// RawBytes and RawSHA256 describe the COMPLETE captured stream, not the
+	// excerpt a reader is shown.
+	RawBytes  int    `json:"raw_bytes,omitempty"`
+	RawSHA256 string `json:"raw_sha256,omitempty"`
+	// QuotaBefore and QuotaAfter are the provider's own rate-limit readings
+	// either side of this arm, which is how a campaign learns what an arm costs.
+	QuotaBefore *QuotaReading `json:"quota_before,omitempty"`
+	QuotaAfter  *QuotaReading `json:"quota_after,omitempty"`
 	// Artifacts binds this summary to its supporting receipts by hash.
 	Artifacts map[string]string `json:"artifacts"`
 	// Notes is free text for a human reader. Nothing scores from it.

@@ -37,7 +37,19 @@ type ArmOutcome struct {
 	Interventions  []Intervention
 	Objections     []Objection
 	Events         int
-	Raw            string
+	// Raw is the COMPLETE captured stream. It used to be the last 20KB, which
+	// meant a classification could rest on text nobody could go back and read.
+	Raw string
+	// RawBytes and RawSHA256 describe that complete stream.
+	RawBytes  int
+	RawSHA256 string
+	// TerminalSource says whether the engine named this outcome specifically,
+	// and so whether the text classifier was permitted to decide.
+	TerminalSource TerminalSource
+	// InfrastructureHint is a recognised phrase that was found and overruled.
+	InfrastructureHint string
+	// Classifier is the span that produced the classification.
+	Classifier *ClassifierEvidence
 }
 
 // governedExit maps the headless run's documented exit codes.
@@ -128,24 +140,23 @@ func (r Runner) ExecuteGoverned(ctx context.Context, dir, statement string, time
 	cmd.Env = append(strippedEnv(), "SENSEI_CODE_BENCHMARK=1")
 	out, err := cmd.CombinedOutput()
 
-	o := ArmOutcome{Raw: tail(string(out), 20000)}
+	full := string(out)
+	o := ArmOutcome{Raw: full, RawBytes: len(out), RawSHA256: HashBytes(out)}
 	code := 0
 	if err != nil {
 		if ee, ok := err.(*exec.ExitError); ok {
 			code = ee.ExitCode()
 		} else {
 			o.Terminal = "workflow.not_started"
+			o.TerminalSource = TerminalProcessFailure
 			o.Infrastructure = "could not start " + r.Binary + ": " + err.Error()
 			return o
 		}
 	}
 	o.Terminal = governedExit(code)
-	o.readEvents(string(out))
-	if code != 0 {
-		if why := infrastructureReason(string(out)); why != "" {
-			o.Infrastructure = why
-		}
-	}
+	o.TerminalSource = terminalSource(code)
+	o.readEvents(full)
+	o.classifyInfrastructure(full, code)
 	return o
 }
 
@@ -277,17 +288,23 @@ func (r Runner) ExecuteRaw(ctx context.Context, dir, statement string, timeout t
 	cmd.Env = strippedEnv()
 	out, err := cmd.CombinedOutput()
 
-	o := ArmOutcome{Raw: tail(string(out), 20000)}
+	full := string(out)
+	o := ArmOutcome{Raw: full, RawBytes: len(out), RawSHA256: HashBytes(out)}
 	switch {
 	case err == nil:
 		o.Terminal = "raw.completed"
+		o.TerminalSource = TerminalStructuredSpecific
 	case ctx.Err() != nil:
+		// The harness itself watched the deadline pass. That is an observation,
+		// not an inference from prose, so it is authoritative on the same terms
+		// as the engine naming its own timeout.
 		o.Terminal = "raw.timed_out"
+		o.TerminalSource = TerminalStructuredSpecific
+		o.classifyInfrastructure(full, 1)
 	default:
 		o.Terminal = "raw.failed"
-		if why := infrastructureReason(string(out)); why != "" {
-			o.Infrastructure = why
-		}
+		o.TerminalSource = TerminalStructuredGeneric
+		o.classifyInfrastructure(full, 1)
 	}
 	return o
 }
