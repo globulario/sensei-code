@@ -1,0 +1,96 @@
+# Repair 2 — where the credential anchor actually comes from
+
+**The declared anchor was real and is narrowed. It is not the dominant cause,
+and the dominant cause is upstream of this repository.**
+
+## What was traced, in order
+
+**1. The declared anchor.** `sensei_code.provider.credentials_remain_provider_owned`
+listed `internal/tui/model.go` in `protects.files`. Removed, rebuilt, republished
+(34,236 triples). **The gate still fired.** So the declaration was not what
+produced it.
+
+**2. The `required_tests` I added.** Hypothesis: pointing them at
+`internal/tui/credentials_test.go` re-created the link. Tested by removing them,
+committing, rebuilding. **The gate still fired.** Reverted; hypothesis wrong.
+
+**3. Package reference.** Hypothesis: referencing `internal/provider` inherits
+the gate. Falsified directly —
+
+```
+internal/doctor/doctor.go     ARCHITECTURE_SENSITIVE  approval=none
+internal/workflow/engine.go   ARCHITECTURE_SENSITIVE  approval=none
+internal/agent/agent.go       ARCHITECTURE_SENSITIVE  approval=none
+```
+
+all use `internal/provider` and none inherits it.
+
+**4. A recorded decision joining invariant × file.**
+`decision.sensei_code.add_a_read_only_tui_readiness_report_command` lists the
+credentials invariant in `related_invariants` and `internal/tui/model.go` in
+`source_files`. Plausible — and falsified: other `source_files` of the same
+decision do **not** inherit the gate.
+
+```
+README.md                     LOW_RISK                approval=none
+internal/setup/setup.go       LOW_RISK                approval=none
+```
+
+**5. Symbol namespace. This is the cause.** The file declares:
+
+```
+internal/tui/model.go:loginMenu
+internal/tui/model.go:providerLoginFinishedMsg
+internal/tui/model.go:renderProviderLogin
+```
+
+which the graph classifies as *"anchored entity in security/auth/rbac/pki/jwt/cert
+namespace"* — the exact blind spot preflight reports. Three symbol **names**
+containing `Login` make every change to the file a security change class.
+
+## What this means for the repair
+
+The mandate said: if the anchor is generated rather than declared, fix the
+source of the derivation, not the generated output. **That source is the Sensei
+graph builder's symbol-namespace classification, which lives in the `sensei`
+repository, not in `sensei-code`.** It cannot be repaired from here, and
+patching the generated SCIP index would be patching the output.
+
+Repair 2 as delivered is therefore **partial, and its limit is stated rather
+than discovered later**:
+
+- **Done:** the over-broad *declared* anchor is removed, and the obligation it
+  carried is now proven by two regression tests rather than asserted by a
+  blanket gate. That is strictly stronger — an approval gate asks a human
+  whether an edit is safe; the tests assert the property continuously and fail
+  if the TUI ever starts handling credentials.
+- **Not done, and not doable here:** the symbol-namespace derivation. The two
+  `internal/tui` tasks are expected to **still refuse** in REPAIR_VERIFICATION.
+
+Predicting that now is the point. A verification run that shows those two still
+refusing is **not** a failed repair — it is the predicted consequence of a cause
+this repository cannot reach.
+
+## The honest classification, revised
+
+The proof-v6 diagnostic classified these two refusals `UNNECESSARY_REFUSAL`, on
+the evidence that a scrolling change touches no credential path. **That
+classification stands** — the refusal still protects nothing.
+
+What changes is the *repair address*. It is not sensei-code's awareness data. It
+is either:
+
+- **upstream:** the namespace classifier should not treat a symbol named
+  `renderProviderLogin` in a view layer as a credential-owning entity; or
+- **local and cosmetic:** renaming those three symbols would clear the gate,
+  which would be tuning code to satisfy a benchmark and is **not done**.
+
+The second option is worth naming precisely because it is available and would
+have "fixed" the number. Renaming a field to escape a governance classifier is
+the kind of change this whole campaign exists to refuse.
+
+## Recommendation
+
+File upstream against the Sensei graph builder with this trace attached. Until
+then, the two `internal/tui` refusals remain a known, understood, and
+correctly-classified delivery cost.
