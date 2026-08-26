@@ -253,26 +253,117 @@ func TestAFamilyMustAnswerTheAdmissionQuestions(t *testing.T) {
 	}
 }
 
-// The governed run does not supply derived coverage at all.
+// The governed run supplies derived coverage to the router.
 //
-// Found while implementing this brief and recorded rather than quietly fixed:
-// routePlan builds its Action WITHOUT DerivedCoverage, so Engine.derivedCoverage
-// has no production caller and the whole closure path is reachable only from
-// the derivelive test.
+// It did not, and the absence was silent: the router's only coverage input was
+// the graph's own, so a bounded knowledge gap could be reported, a closure
+// round could run, the architect could investigate -- and no channel existed by
+// which any of that reached the decision. The gap could not close, so it
+// escalated to a human every time.
 //
-// So the adversary could not reach a live governed run — but not because of any
-// relevance mechanism. The wire was never connected. Connecting it WIDENS
-// autonomy, and doing that as a side effect of writing about relevance is
-// exactly the move this line of work exists to refuse. Pinned so that
-// connecting it is a deliberate, visible change made with the relation above
-// already in place.
-func TestTheGovernedRunDoesNotYetSupplyDerivedCoverage(t *testing.T) {
+// Measured in the proof-v6 campaign: three of five governed refusals were
+// unclosed coverage gaps whose closure round ran and failed for exactly this
+// reason. This is the wiring that repairs them, and it adds no mechanism --
+// derivedCoverage, the derivation families and the relevance gate were all
+// already built.
+func TestTheGovernedRunSuppliesDerivedCoverage(t *testing.T) {
 	body := funcBody(t, "internal/workflow/engine.go", "routePlan")
-	if strings.Contains(body, "DerivedCoverage") {
-		t.Fatal("routePlan now supplies derived coverage to the router. That is a real widening " +
-			"of autonomy and may well be right — but it must arrive with its own evidence, " +
-			"not by editing this test. Re-read relevance.go's limits first: while Sensei's " +
-			"coverage vocabulary stays unqualified, relevance is enforced per FAMILY and not " +
-			"per proposition.")
+	if !strings.Contains(body, "DerivedCoverage") {
+		t.Fatal("routePlan builds its Action without DerivedCoverage, so a derivation cannot " +
+			"reach the router and a coverage gap can never close autonomously")
+	}
+	if !strings.Contains(body, "e.derivedCoverage") {
+		t.Error("the coverage supplied is not the one revalidated in this world over these files")
+	}
+}
+
+// A derivation that resolves the gap lets the run continue.
+func TestDerivedCoverageThatResolvesTheGapAllowsRouting(t *testing.T) {
+	scoped := scopedPreflight(t, emptyOverBus)
+	planned := []string{"internal/event/bus.go"}
+
+	// The specimen must be a live gap, or the closure below closes nothing.
+	if bare := routeAuthorityForAction(scoped, nil, plannedEdit(planned...)); !bare.ClosesGap() {
+		t.Fatalf("the specimen is not a knowledge gap: %+v", bare)
+	}
+	closed := routeAuthorityForAction(scoped, nil, Action{
+		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+	if closed.ClosesGap() {
+		t.Fatalf("a derivation that resolves the gap did not close it: %+v", closed)
+	}
+	if !closed.Granted() {
+		t.Fatalf("after closure the bounded edit was not granted: %+v", closed)
+	}
+}
+
+// Evidence that does not resolve the gap still refuses.
+//
+// Every way the closure can fall short, in one table. This is the half that
+// must not move: the repair connects a channel, it does not lower a bar.
+func TestIncompleteOrUntrustedClosureStillRefuses(t *testing.T) {
+	scoped := scopedPreflight(t, emptyOverBus)
+	one := []string{"internal/event/bus.go"}
+	two := []string{"internal/event/bus.go", "internal/event/unseen.go"}
+
+	for name, action := range map[string]Action{
+		"no derivation at all": {Stage: StageCandidateEdit, Files: one},
+		"a family nobody has an architectural reading for": {
+			Stage: StageCandidateEdit, Files: one, DerivedCoverage: layeringAnchors(one...)},
+		"covers only some of the planned files": {
+			Stage: StageCandidateEdit, Files: two, DerivedCoverage: lockAnchors(one[0])},
+		"a provider-supplied relevance label": {
+			Stage: StageCandidateEdit, Files: one,
+			DerivedCoverage: []CoverageAnchor{{File: one[0], Requirement: Requirement("relevant")}}},
+		"an empty requirement": {
+			Stage: StageCandidateEdit, Files: one,
+			DerivedCoverage: []CoverageAnchor{{File: one[0]}}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := routeAuthorityForAction(scoped, nil, action)
+			if !got.ClosesGap() {
+				t.Fatalf("the gap was treated as closed by insufficient evidence: %+v", got)
+			}
+			if got.Granted() {
+				t.Fatal("insufficient closure reached a grant")
+			}
+		})
+	}
+}
+
+// Closing a coverage gap does not clear an approval gate.
+//
+// The gate is checked before coverage, so supplying a derivation cannot buy
+// consequence authority. Pinned here as well as in blindspot_test.go, because
+// this is the wiring that made derived coverage reachable at all.
+func TestDerivedCoverageStillDoesNotClearAnApprovalGate(t *testing.T) {
+	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
+		healthyAuthority+`}`)
+	planned := []string{"internal/event/bus.go"}
+	got := routeAuthorityForAction(gated, nil, Action{
+		Stage: StageCandidateEdit, Files: planned, DerivedCoverage: lockAnchors(planned...)})
+	if !got.RequiresHuman() {
+		t.Fatalf("derived coverage cleared an approval gate: %+v", got)
+	}
+}
+
+// No human answer is synthesised anywhere on this path.
+//
+// The repair must not make a run look autonomous by inventing an authority
+// answer. Coverage arrives from a revalidated derivation or not at all.
+func TestClosureSynthesisesNoHumanAnswer(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "routePlan")
+	for _, forbidden := range []string{
+		"applyAnsweredCondition", "authority.Resolution", "RouteArchitectural",
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("routePlan reaches for %s; coverage must come from a derivation, never from a "+
+				"manufactured authority answer", forbidden)
+		}
+	}
+	// And the coverage it supplies is revalidated, not read from a store.
+	derived := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
+	if !strings.Contains(derived, "AnchorsFor") {
+		t.Error("derived coverage no longer comes from a revalidation in the assessed world")
 	}
 }

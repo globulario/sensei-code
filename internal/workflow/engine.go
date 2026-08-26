@@ -1434,7 +1434,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
-			routing, scoped, err := e.routePlan(sc, start, taskID, task, d)
+			routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1508,7 +1508,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, scoped, err := e.routePlan(sc, start, taskID, task, d)
+			routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1728,7 +1728,7 @@ func shortDigest(d string) string {
 // This is the first preflight in the workflow that can name files: the start
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
-func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
+func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
@@ -1757,11 +1757,31 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task
 	if e.observes(taskID) {
 		stage = StageObserve
 	}
+	// Machine-derived coverage, revalidated in THIS world over THESE files.
+	//
+	// This was absent, and the absence was silent. The router's only coverage
+	// input was the graph's own, so a bounded knowledge gap could be reported,
+	// a closure round could run, the architect could investigate -- and no
+	// channel existed by which any of that reached the decision. The gap could
+	// not close, so it escalated to a human every time. Measured: three of five
+	// governed refusals in the proof-v6 campaign were unclosed coverage gaps
+	// whose closure round ran and failed for exactly this reason.
+	//
+	// Nothing is granted by supplying it. derivationClosesGap decides whether a
+	// derivation RESOLVES this gap, not merely whether it is true over the same
+	// files, and a derivation that does not resolve it leaves the region
+	// uncovered and the refusal intact. The approval gate is checked before
+	// coverage and is unaffected.
+	//
+	// Failure is silence: a missing recipe file, a sensei binary without
+	// `derive`, or a derivation that refuses each leave the list empty, which is
+	// the direction this must fail in.
 	action := Action{
 		Stage:                stage,
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
+		DerivedCoverage:      e.derivedCoverage(ctx, d.Files),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 
