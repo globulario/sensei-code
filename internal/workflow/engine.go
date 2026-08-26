@@ -1349,6 +1349,15 @@ type architectureDecision struct {
 	// router reads, not a verdict: a premise the architect marks "inference" is
 	// the model telling us nothing checked it.
 	Claims []Claim `json:"claims,omitempty"`
+	// ProposedRecipe is a checkable QUESTION a closure round found worth asking
+	// about the region it investigated. It is not knowledge and it establishes
+	// nothing.
+	//
+	// The architect stage is read-only and stays that way: it PROPOSES here and
+	// the engine writes, so provenance is stamped by something the agent does
+	// not control. It cannot cover the task that proposed it, and it becomes
+	// coverage only if `sensei derive` answers it against a later world.
+	ProposedRecipe *derived.Recipe `json:"proposed_recipe,omitempty"`
 }
 
 // reviewDecision is the reviewer's wire contract. It is deliberately separate
@@ -1468,6 +1477,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				// whether to proceed with the gap still open.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+				e.recordClosureQuestion(taskID, routing.Condition, d)
 				routing.Route = RouteHuman
 				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 				fallthrough
@@ -1539,6 +1549,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+				e.recordClosureQuestion(taskID, routing.Condition, d)
 				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 			}
 			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
@@ -1781,7 +1792,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
-		DerivedCoverage:      e.derivedCoverage(ctx, d.Files),
+		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 
@@ -1867,7 +1878,7 @@ func senseiBinary() string {
 // Failure is silence rather than coverage. A missing recipe file, a sensei
 // binary without `derive`, a derivation that refuses — each leaves the region
 // uncovered and the gap intact, which is the direction this must fail in.
-func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []CoverageAnchor {
+func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string) []CoverageAnchor {
 	if len(planned) == 0 {
 		return nil
 	}
@@ -1883,6 +1894,13 @@ func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []Covera
 	if world == "" {
 		return nil
 	}
+	// The future-only rule, applied before any derivation is spent.
+	//
+	// A closure round that writes a question must not be covered by it. If it
+	// were, a run that could not establish its own authority would have
+	// established it by writing something down -- the self-approval this design
+	// exists to refuse. Encounter 1 writes; encounter 2 benefits.
+	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	covered, _ := derived.CoveredFiles(anchors, world, planned)
 
@@ -2565,6 +2583,55 @@ func renderScope(files []string) string {
 // certification as evidence and is asked to decide on it, because the useful
 // behaviour to reinforce is asking when unsure, not staying quiet — what must
 // not happen is the asking alone interrupting a human.
+// recordClosureQuestion durably records what a failed closure round found worth
+// checking.
+//
+// Called ONLY where a gap could not be closed, so this is not a general-purpose
+// recipe generator: no gap, no question. It records a QUESTION and never a rule,
+// an invariant, a contract, a decision, a derived fact or an authority grant --
+// those still need a human, correctly, until dq.closure_knowledge_admission is
+// answered.
+//
+// Nothing about the CURRENT task changes. The escalation proceeds exactly as it
+// would have; the run that writes the question is excluded from its coverage by
+// ExcludingTask, so the only thing this can affect is a LATER encounter with the
+// same region, and only if the derivation succeeds there.
+//
+// Every outcome is emitted, including refusal and duplication. A round that
+// writes nothing must be as visible as one that writes something, or the
+// experiment measuring this loop would only ever see its successes.
+func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureDecision) {
+	if d.ProposedRecipe == nil {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"the closure round proposed no checkable question for this region", nil))
+		return
+	}
+	r := *d.ProposedRecipe
+	// Provenance is stamped HERE, never taken from the provider: an agent that
+	// could author its own provenance could make an invented question look like
+	// the product of an investigation that never happened.
+	r.Provenance = nil
+	added, err := derived.Append(
+		filepath.Join(e.Repo.Root, derivedRecipesPath), r,
+		derived.Provenance{
+			OriginTask: taskID,
+			OriginGap:  condition,
+			Region:     append([]string(nil), d.Files...),
+			WrittenBy:  "closure_round",
+		}, d.Files)
+	switch {
+	case err != nil:
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"the proposed question was refused: "+err.Error(), nil))
+	case !added:
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"this question is already recorded; not duplicating it: "+r.String(), nil))
+	default:
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"recorded a question for the next encounter with this region: "+r.String(), nil))
+	}
+}
+
 // gapClosurePrompt turns a bounded knowledge gap into work instead of an
 // interruption.
 //
@@ -2613,12 +2680,34 @@ DO THIS, IN THIS ORDER:
 
 YOU ARE READ-ONLY IN THIS STAGE. Do not try to write a proposal: this role runs
 without write permission, deliberately, so that investigation cannot become
-authorship. Establishing DURABLE knowledge — an anchor that survives this task
-and spares the next one — needs a write path this stage does not have, and how
-that knowledge may enter the graph without the graph becoming a mirror of what
-you asserted is an open question (dq.closure_knowledge_admission). Until it is
-settled, a coverage gap you cannot close by verification is reported, not
-papered over.
+authorship. You may not establish that anything is TRUE — how asserted knowledge
+enters the graph without the graph becoming a mirror of what you asserted is an
+open question (dq.closure_knowledge_admission), and it is not settled.
+
+IF YOU CANNOT CLOSE THIS GAP, YOU MAY STILL LEAVE A QUESTION BEHIND.
+Return "proposed_recipe": a single CHECKABLE relationship that, if someone
+verified it mechanically, would have helped here. You are choosing WHERE TO
+LOOK. You are not stating what is so, and you gain nothing by writing it: this
+task still stops, and the question cannot cover the run that proposed it. Only a
+later derivation over this region can turn it into coverage, and only if the
+relationship actually holds there.
+
+Two kinds are answerable. Anything else derives UNKNOWN forever, which is
+writing nothing while looking like accumulation:
+
+  {"kind":"field_access_under_lock","dir":"<pkg dir>","type":"<T>",
+   "field":"<f>","lock":"<mu>","why":"<what you read that made this worth asking>"}
+
+  {"kind":"command_invocation_confined_to","command":"<exe>","owner":"<pkg dir>",
+   "search_paths":["<dir>","<dir>"],"why":"..."}
+
+The question must be about the region you were asked to investigate.
+
+A WRONG QUESTION IS SAFE AND A DISHONEST ONE IS NOT. If the relationship turns
+out not to hold, the derivation says so and nothing is anchored — that costs one
+derivation and misleads no one. So propose the check you actually think matters,
+not the one most likely to pass. Omit the field entirely if nothing mechanical
+would have helped; proposing nothing is a legitimate and common outcome.
 
 DO NOT:
  - invent a rule so that the warning goes away. A claim that is not supported by
