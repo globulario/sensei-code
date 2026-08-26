@@ -1,0 +1,50 @@
+{
+  "task": "internal-tui-ea046ba",
+  "arm": "COLD",
+  "attempt": 2,
+  "manifest_hash": "sha256:65fba801284dfbc123caf4fbe6e45ef410b0329d433d0a0430435bb546c10b6c",
+  "benchmark_version": "proof-v6",
+  "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+  "run_base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "unrecorded",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T23:16:15Z",
+  "ended": "2026-08-25T23:18:35Z",
+  "wall_seconds": 140,
+  "terminal_status": "workflow.awaiting_authority",
+  "oracle_verdict": "NO_RESULT",
+  "oracle_detail": "the run produced no candidate to judge: workflow.awaiting_authority",
+  "interventions": [
+    {
+      "kind": "authority_decision",
+      "detail": "Architectural authority reached a human-owned boundary.",
+      "at": "2026-08-25T23:18:35.974828941Z"
+    }
+  ],
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "candidate_method": "none-created",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v6/transcripts/internal-tui-ea046ba/COLD/2.log",
+    "transcript_tail_sha256": "sha256:746e5b1871f3ce04aa21f8afb7b99a54d30ae661b9e3fdfa08c8b7db29066596"
+  },
+  "notes": "73 event(s) observed"
+}

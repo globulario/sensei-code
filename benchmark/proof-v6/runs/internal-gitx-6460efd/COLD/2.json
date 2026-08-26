@@ -1,0 +1,53 @@
+{
+  "task": "internal-gitx-6460efd",
+  "arm": "COLD",
+  "attempt": 2,
+  "manifest_hash": "sha256:65fba801284dfbc123caf4fbe6e45ef410b0329d433d0a0430435bb546c10b6c",
+  "benchmark_version": "proof-v6",
+  "base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+  "run_base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "unrecorded",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T23:04:41Z",
+  "ended": "2026-08-25T23:16:12Z",
+  "wall_seconds": 690,
+  "terminal_status": "workflow.completed",
+  "oracle_verdict": "CORRECT",
+  "oracle_detail": "ok  \tgithub.com/globulario/sensei-code/internal/gitx\t0.059s",
+  "interventions": null,
+  "objections": [
+    {
+      "id": "uired by the architectural plan create",
+      "cycle": 1,
+      "status": "new",
+      "text": "…uired by the architectural plan. → Create independent fixture/stale-stat/snapshot/call/compare phases for each public method in each scenario, or compare immediately after each call and reset stale stat data before the second measurement."
+    }
+  ],
+  "review_cycles": 2,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:07dff62cee11e023b50bc63638871cad3946b7aa23ec62917b1ea57f3be028ed",
+  "candidate_dir": "/tmp/proofbench/proof-v6/internal-gitx-6460efd/COLD/.2-worktrees/task-1787699081313377078",
+  "candidate_method": "git-worktree-list",
+  "candidate_head_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v6/transcripts/internal-gitx-6460efd/COLD/2.log",
+    "transcript_tail_sha256": "sha256:f4c0622278e52022bfdae18df58dd0535259b38be69b3a3a3a3a74535fbec39e"
+  },
+  "notes": "4320 event(s) observed"
+}
