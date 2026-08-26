@@ -1,0 +1,64 @@
+{
+  "task": "internal-gitx-a4fa351",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:72384ad95612166969b3237737eb8c7e7440dba549e0781ad91fed0767b5a3c7",
+  "benchmark_version": "repair-verification-v1",
+  "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+  "run_base_sha": "9ee66181926671aa41d6736347ffd900529cf5d0",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "unrecorded",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-26T03:41:15Z",
+  "ended": "2026-08-26T04:03:15Z",
+  "wall_seconds": 1320,
+  "terminal_status": "workflow.timed_out",
+  "oracle_verdict": "NO_RESULT",
+  "oracle_detail": "backend is unreachable",
+  "interventions": null,
+  "objections": [
+    {
+      "id": "hole candidate including files the worker",
+      "cycle": 1,
+      "status": "new",
+      "text": "…hole candidate, including files the worker created.” → Add a runCandidate/workflow regression using an untracked created file; capture the audit request and reviewer prompt/packet, and assert both contain its new-file patch and content."
+    },
+    {
+      "id": "persist or otherwise bind the candidate",
+      "cycle": 2,
+      "status": "new",
+      "text": "… Persist or otherwise bind the candidate’s creation/base revision when the worktree is made, then construct the tracked portion against that immutable base rather than current HEAD. Preserve the required direct-Git, non-mutating behavior."
+    },
+    {
+      "id": "sport safe lossless representation for diff",
+      "cycle": 2,
+      "status": "new",
+      "text": "…sport-safe, lossless representation for diff evidence across the MCP boundary, or ensure CandidateDiff emits an ASCII-safe patch representation for every byte sequence sent through JSON without changing the reviewer-visible patch semantics."
+    }
+  ],
+  "review_cycles": 2,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "candidate_method": "none-created",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "infrastructure_failure": "backend is unreachable",
+  "artifacts": {
+    "transcript": "benchmark/repair-verification-v1/transcripts/internal-gitx-a4fa351/COLD/1.log",
+    "transcript_tail_sha256": "sha256:12f8837a92cab3accdfc6bda7258299852439e4861eface851a096182e28f4f0"
+  },
+  "notes": "5320 event(s) observed"
+}
