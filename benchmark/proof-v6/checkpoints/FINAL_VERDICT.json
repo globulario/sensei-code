@@ -1,0 +1,63 @@
+{
+  "checkpoint": "FINAL_VERDICT",
+  "interpretation": "C",
+  "claim": "On 11 real repository tasks with independently observable behavioural contracts, governed execution delivered a candidate for 4 of 11 and every delivered candidate was correct, with zero false grants, zero false blocks and zero human technical answers, at 1.4x the median wall time of an ungoverned baseline that delivered 8 of 11 and was correct on 8.",
+  "limit": "n=4 delivered arms; 4/4 has a 95% Wilson interval of [51%,100%]",
+  "supports": "no observed correctness cost from governance",
+  "does_not_support": "that governance improves correctness",
+  "raw": {
+    "engineering": "8/11",
+    "end_to_end": "8/11",
+    "terminals": {
+      "COMPLETED": 11
+    }
+  },
+  "cold": {
+    "engineering": "4/4",
+    "end_to_end": "4/11",
+    "terminals": {
+      "COMPLETED": 4,
+      "REFUSED": 5,
+      "TIMEOUT": 1,
+      "INFRA_FAILURE": 1
+    },
+    "false_grants": 0,
+    "false_blocks": 0,
+    "human_technical_interventions": 0
+  },
+  "transitions": {
+    "CORRECT->CORRECT": 4,
+    "CORRECT->NOT_EVALUATED": 4,
+    "INCORRECT->NOT_EVALUATED": 3,
+    "INCORRECT->CORRECT": 0,
+    "CORRECT->INCORRECT": 0,
+    "INCORRECT->INCORRECT": 0
+  },
+  "warm": "NO_RESULT \u2014 two provider usage limits; compounding remains NOT TESTED as frozen",
+  "delivery_failure_ranking": [
+    {
+      "class": "REFUSAL",
+      "arms": 5,
+      "causes": [
+        "3 justified: unclosed knowledge gap, autonomous closure path unwired",
+        "2 unnecessary: over-broad security anchor on internal/tui/model.go"
+      ]
+    },
+    {
+      "class": "TIMEOUT",
+      "arms": 1,
+      "note": "single observation"
+    },
+    {
+      "class": "INFRASTRUCTURE",
+      "arms": 1,
+      "note": "single observation, externally attributable"
+    }
+  ],
+  "rule_zero": "held \u2014 both indicated repairs are wiring and data, not new governance mechanism",
+  "excluded_evidence": [
+    "proof-v5 COLD wave: VOID_MEASUREMENT",
+    "proof-v6 arm 1: PRE_RESTORATION",
+    "WARM attempts 1 and 2: NO_RESULT"
+  ]
+}

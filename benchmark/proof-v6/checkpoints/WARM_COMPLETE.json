@@ -1,0 +1,30 @@
+{
+  "checkpoint": "WARM_COMPLETE",
+  "status": "NO_RESULT \u2014 two consecutive infrastructure failures",
+  "case_study": {
+    "earlier_task": "internal-gitx-a4fa351",
+    "later_task": "internal-gitx-6460efd",
+    "durable_artifact": "sensei_code.candidate.reviewer_sees_every_changed_file",
+    "later_condition": "internal-gitx-6460efd changes read-only measurement in internal/gitx/git.go, the file K governs, and must not disturb the behaviour K requires of the candidate diff.",
+    "reuse_vs_rediscovery": "REUSE: the WARM run cites K as a claim with source=graph rather than inference, and its candidate leaves internal/gitx/git_test.go:TestCandidateDiffIncludesFilesTheWorkerCreated passing without the worker having had to derive the requirement from the code. REDISCOVERY: the run works the constraint out for itself, or breaks that test. Written before either arm runs."
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "terminal": "workflow.failed",
+      "infrastructure": "usage limit",
+      "wall_s": 712,
+      "oracle": "NO_RESULT"
+    },
+    {
+      "attempt": 2,
+      "terminal": "workflow.failed",
+      "infrastructure": "usage limit",
+      "wall_s": 11,
+      "oracle": "NO_RESULT"
+    }
+  ],
+  "retry_rule": "The frozen rule licenses ONE retry for an externally attributable failure. Both attempts hit a provider usage limit, so the arm yields NO_RESULT for operational-reliability reporting. Neither attempt is deleted.",
+  "construct_limitation": "Recorded because it bears on what this arm could ever have shown, and it was established BEFORE the arm ran. The durable artifact K -- sensei_code.candidate.reviewer_sees_every_changed_file -- already exists in docs/awareness/invariants.yaml at the later task's pinned base 23c76e26, and the awareness graph the runs consult is a LIVE service rather than one pinned to a task's base. So the COLD arm for this same task already had K available on both counts, and no mechanism in this harness gives WARM knowledge COLD lacks. Even a completed WARM arm could not have isolated compounding here.",
+  "descriptive_only": "Reported descriptively. No aggregate compounding claim is made or implied, consistent with warm_claim=not_tested frozen before the campaign."
+}
