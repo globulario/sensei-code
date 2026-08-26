@@ -455,8 +455,10 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 	}
 
 	ev := r.Evidence(ctx, dir, governedBefore, boundaryMeasurable)
+	patch := ""
 	if cand.Dir != "" {
-		ev.DiffHash = proofbench.CandidateDiffHash(ctx, cand, t.BaseSHA)
+		patch = proofbench.CandidateDiff(ctx, cand, t.BaseSHA)
+		ev.DiffHash = proofbench.HashBytes([]byte(patch))
 	}
 	verdict := proofbench.OracleResult{Verdict: proofbench.NoResult, Detail: out.Infrastructure}
 	switch {
@@ -490,6 +492,7 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 		RawSHA256:          out.RawSHA256,
 		QuotaBefore:        quotaBefore,
 		QuotaAfter:         quotaAfter,
+		RefusalClaims:      out.RefusalClaims,
 		Artifacts:          map[string]string{"transcript_sha256": out.RawSHA256},
 		// filled below once the transcript is on disk
 		Notes: fmt.Sprintf("%d event(s) observed", out.Events),
@@ -508,12 +511,30 @@ func executeArm(ctx context.Context, r proofbench.Runner, l *proofbench.Ledger,
 			a.Artifacts["transcript"] = tpath
 		}
 	}
+	// The patch itself, beside the record.
+	//
+	// A hash proves two runs produced the same patch and supports no other
+	// claim. Asking later whether a solution the oracle scored CORRECT was an
+	// ADMISSIBLE change to this architecture requires the code, and proof-v5
+	// could not answer that question because only hashes survived.
+	if patch != "" {
+		pdir := filepath.Join(dirOf(manifestPath), "patches", t.ID, string(arm))
+		if err := os.MkdirAll(pdir, 0o755); err == nil {
+			ppath := filepath.Join(pdir, fmt.Sprintf("%d.patch", attempt))
+			if err := os.WriteFile(ppath, []byte(patch), 0o644); err == nil {
+				a.Artifacts["patch"] = ppath
+			}
+		}
+	}
 	if err := l.Append(a); err != nil {
 		return err
 	}
 	fmt.Printf("  terminal %s\n  oracle   %s\n  wall     %ds\n", a.Terminal, a.Verdict, a.WallSecs)
 	if a.Infrastructure != "" {
 		fmt.Printf("  infra    %s\n", a.Infrastructure)
+	}
+	for _, c := range a.RefusalClaims {
+		fmt.Printf("  claim    %s\n", firstLineOf(c))
 	}
 	if a.InfrastructureHint != "" {
 		fmt.Printf("  hint     %q seen but overruled by %s (recorded, not scored)\n",
@@ -647,4 +668,15 @@ func capacity(args []string) int {
 	fmt.Printf("\n  ADMITTED — %d arm(s) fit in the %s window with a %.0f%% margin\n",
 		*arms, window, (proofbench.CapacityMargin-1)*100)
 	return exitOK
+}
+
+// firstLineOf keeps console output to one line without losing the record.
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i > 0 {
+		s = s[:i]
+	}
+	if len(s) > 150 {
+		s = s[:150] + "…"
+	}
+	return s
 }

@@ -193,6 +193,15 @@ type Attempt struct {
 	// either side of this arm, which is how a campaign learns what an arm costs.
 	QuotaBefore *QuotaReading `json:"quota_before,omitempty"`
 	QuotaAfter  *QuotaReading `json:"quota_after,omitempty"`
+	// RefusalClaims is what a refusal actually asserted.
+	//
+	// Recorded because "Architectural authority reached a human-owned boundary"
+	// is a ROUTE, not a reason, and adjudicating a refusal means testing what
+	// it claimed. Three different claims hide behind that one route -- an
+	// invariant would be violated, this change class needs approval, or the
+	// graph lacks coverage of these files -- and they deserve three different
+	// verdicts.
+	RefusalClaims []string `json:"refusal_claims,omitempty"`
 	// Artifacts binds this summary to its supporting receipts by hash.
 	Artifacts map[string]string `json:"artifacts"`
 	// Notes is free text for a human reader. Nothing scores from it.

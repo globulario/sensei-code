@@ -50,6 +50,26 @@ type ArmOutcome struct {
 	InfrastructureHint string
 	// Classifier is the span that produced the classification.
 	Classifier *ClassifierEvidence
+	// RefusalClaims are what a refusal actually asserted, verbatim.
+	RefusalClaims []string
+}
+
+// authorityReason digs the stated reason out of an authority.required payload.
+func authorityReason(payload json.RawMessage) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	var p struct {
+		Reason    string `json:"reason"`
+		Condition string `json:"condition"`
+	}
+	if json.Unmarshal(payload, &p) != nil {
+		return ""
+	}
+	if strings.TrimSpace(p.Reason) != "" {
+		return strings.TrimSpace(p.Reason)
+	}
+	return strings.TrimSpace(p.Condition)
 }
 
 // governedExit maps the headless run's documented exit codes.
@@ -179,6 +199,19 @@ func (o *ArmOutcome) readEvents(stream string) {
 			o.Observations++
 		case "authority.required":
 			o.AuthorityAsks++
+			// The refusal's actual claim, captured structurally.
+			//
+			// Adjudicating a refusal means testing what it ASSERTED, and until
+			// now the assertion existed only inside a transcript that was
+			// truncated to its last 20KB. "Architectural authority reached a
+			// human-owned boundary" is a route, not a reason; the reason is in
+			// the payload, and it is the difference between "this change
+			// violates invariant X", "I need permission for this change
+			// class", and "I lack coverage of these files" -- three claims that
+			// deserve three different verdicts.
+			if reason := authorityReason(e.Payload); reason != "" {
+				o.RefusalClaims = append(o.RefusalClaims, reason)
+			}
 			// An authority question is a human DECISION point, not a human
 			// supplying the technical answer. Recorded as such: conflating the
 			// two would let every approval prompt read as lost autonomy, and

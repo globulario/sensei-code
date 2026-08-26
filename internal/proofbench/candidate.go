@@ -19,8 +19,6 @@ package proofbench
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -178,6 +176,25 @@ func headOf(ctx context.Context, dir string) string {
 // unchanged working tree and got the empty hash for a candidate that had
 // committed real work.
 func CandidateDiffHash(ctx context.Context, c Candidate, baseSHA string) string {
+	return HashBytes([]byte(CandidateDiff(ctx, c, baseSHA)))
+}
+
+// CandidateDiff is the patch itself.
+//
+// Added when a question could not be answered: were the RAW solutions the
+// benchmark scored CORRECT actually admissible changes to this architecture?
+// The frozen oracle establishes TASK truth -- the behaviour works. It says
+// nothing about SYSTEM truth -- whether the change respects ownership,
+// invariants and authority paths, which is the thing Sensei exists to judge.
+//
+// That question was unanswerable for proof-v5, because only the diff HASH was
+// kept. The patches lived in temporary worktrees that were cleaned, and the
+// transcripts held the model's prose summary rather than its code. A hash
+// proves two runs produced the same patch and supports no other claim.
+//
+// So the patch is preserved. It costs kilobytes and it is the only way an
+// architectural adjudication can ever be run against what a run actually did.
+func CandidateDiff(ctx context.Context, c Candidate, baseSHA string) string {
 	dir := c.Dir
 	_ = exec.CommandContext(ctx, "git", "-C", dir, "add", "--intent-to-add", "--", ".").Run()
 	var out []byte
@@ -191,8 +208,7 @@ func CandidateDiffHash(ctx context.Context, c Candidate, baseSHA string) string 
 			out = b
 		}
 	}
-	sum := sha256.Sum256(out)
-	return "sha256:" + hex.EncodeToString(sum[:])
+	return string(out)
 }
 
 // CheckAttributionAnomaly refuses a wave whose evidence looks like the
