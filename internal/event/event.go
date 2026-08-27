@@ -119,6 +119,13 @@ const (
 	// resuming asks the same one rather than re-deriving it from a graph that
 	// may have moved.
 	WorkflowAwaitingAuthority Kind = "workflow.awaiting_authority"
+	// ProspectiveGranted records the prospective authorization the router read
+	// for a task's declared new surfaces (sensei#312): the covering surface,
+	// the pinned world and the facts read from it. The payload is the record
+	// the post-creation inspection checks against, carried verbatim so a
+	// resumed task inspects against the facts that authorized it rather than
+	// against whatever is readable after a restart.
+	ProspectiveGranted Kind = "prospective.granted"
 )
 
 type Event struct {

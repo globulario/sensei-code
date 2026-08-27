@@ -64,6 +64,10 @@ type Engine struct {
 	// supplied holds the plan handed in for tasks that entered through
 	// SubmitGovernedWithPlan. Absence means the architect authored the bound.
 	supplied map[string]SuppliedPlan
+	// prospective holds, per task, the prospective grants the router read, so
+	// the post-creation inspection checks the created file against the same
+	// facts about the covering surface that authorized it.
+	prospective map[string][]prospectiveGrant
 	// graphs records, per task, the awareness graph the start gate verified,
 	// as the MCP binding every agent in that task is launched with.
 	//
@@ -424,6 +428,9 @@ type taskContext struct {
 	Mode         string
 	Consequences string
 	Invariants   []string
+	// Prospective is the plan's declared new surfaces. See
+	// architectureDecision.ProspectiveSurfaces.
+	Prospective []ProspectiveSurface
 	// PlanSource and PlanDigest say who authored the bound. See PlanSource.
 	PlanSource PlanSource
 	PlanDigest string
@@ -686,6 +693,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		Mode:            planMode(decision.Mode),
 		Consequences:    decision.Consequences,
 		Invariants:      decision.Invariants,
+		Prospective:     decision.ProspectiveSurfaces,
 		PlanSource:      e.planSource(taskID),
 		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
@@ -1220,6 +1228,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
 
+		// Post-creation inspection of every declared prospective surface
+		// (sensei#312). The authorization was for a shape; a candidate whose
+		// created file has another shape is refuted here, before any review
+		// is asked and with no retry: the authorized shape was not the shape
+		// produced, and nothing downstream may reinterpret that.
+		if len(tc.Prospective) != 0 {
+			facts := map[string]prospectiveFacts{}
+			for _, g := range e.prospectiveGrants(taskID) {
+				facts[g.Anchor.File] = g.Facts
+			}
+			if err := inspectProspectiveSurfaces(diff, tc.Prospective, facts); err != nil {
+				return false, plan, lastReview, lastAudit, err
+			}
+		}
+
 		auditArgs := map[string]any{"diff": diff, "task": task}
 		// Scope the audit to the domain the start gate certified, so the audit
 		// evaluates this candidate against this repository's rules rather than
@@ -1475,6 +1498,12 @@ type architectureDecision struct {
 	// not control. It cannot cover the task that proposed it, and it becomes
 	// coverage only if `sensei derive` answers it against a later world.
 	ProposedRecipe *derived.Recipe `json:"proposed_recipe,omitempty"`
+	// ProspectiveSurfaces declares the files this plan will CREATE, so a file
+	// absent at the pinned world can be covered by prospective authority
+	// (sensei#312). It is a claim the predicate in prospective.go checks
+	// against the covering surface's bytes at the pinned world; an undeclared
+	// new file is uncovered exactly as before.
+	ProspectiveSurfaces []ProspectiveSurface `json:"prospective_surfaces,omitempty"`
 }
 
 // reviewDecision is the reviewer's wire contract. It is deliberately separate
@@ -1969,7 +1998,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
-		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files),
+		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 
@@ -2063,7 +2092,7 @@ func senseiBinary() string {
 // Failure is silence rather than coverage. A missing recipe file, a sensei
 // binary without `derive`, a derivation that refuses — each leaves the region
 // uncovered and the gap intact, which is the direction this must fail in.
-func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string) []CoverageAnchor {
+func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) []CoverageAnchor {
 	if len(planned) == 0 {
 		return nil
 	}
@@ -2071,13 +2100,23 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	if err != nil || len(recipes) == 0 {
 		return nil
 	}
-	world, err := e.Repo.Head(ctx)
-	if err != nil {
-		return nil
-	}
-	world = strings.TrimSpace(world)
+	// The world is the candidate's pinned base, not the canonical HEAD. The
+	// worktree is cut from that base; facts read from a HEAD that advanced
+	// between establishing the identity and finishing routing would authorize
+	// a creation against a package and import set the candidate does not
+	// contain. Only before an identity exists (the observation lane) does
+	// HEAD stand in, and no grant can be issued there.
+	world := strings.TrimSpace(e.governedBase(taskID))
 	if world == "" {
-		return nil
+		head, err := e.Repo.Head(ctx)
+		if err != nil {
+			return nil
+		}
+		world = strings.TrimSpace(head)
+		if world == "" {
+			return nil
+		}
+		declarations = nil
 	}
 	// The future-only rule, applied before any derivation is spent.
 	//
@@ -2087,7 +2126,84 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	// exists to refuse. Encounter 1 writes; encounter 2 benefits.
 	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
-	covered, _ := derived.CoveredFiles(anchors, world, planned)
+	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
+	e.setProspectiveGrants(taskID, grants)
+	if len(grants) != 0 {
+		// The authorization is recorded verbatim, bound to the world it was
+		// read at, so a task resumed after a restart inspects its created
+		// files against these facts and not against a fresh read.
+		names := make([]string, 0, len(grants))
+		for _, g := range grants {
+			names = append(names, g.Anchor.File+" by "+g.Covering)
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ProspectiveGranted,
+			"prospective authority recorded for "+strings.Join(names, ", "),
+			prospectiveRecord{World: world, Grants: grants}))
+	}
+	return out
+}
+
+// restoreProspectiveGrants re-establishes, from the session record, the
+// prospective authorization a resumed task's inspection must check against.
+//
+// A task that declared surfaces but has no intact record for them is not
+// resumed: routing is not re-run on resume, so nothing else could establish
+// the facts, and inspecting against an empty set would either refute a valid
+// creation or accept one whose authorization was never recorded. A record from
+// another world is refused for the same reason.
+func (e *Engine) restoreProspectiveGrants(task session.Interrupted, declared []ProspectiveSurface, world string) error {
+	if len(declared) == 0 {
+		return nil
+	}
+	var rec prospectiveRecord
+	if len(task.ProspectiveRecord) == 0 || json.Unmarshal(task.ProspectiveRecord, &rec) != nil {
+		return fmt.Errorf("cannot resume %s: it declares prospective surfaces but the session record holds no prospective authorization for them", task.TaskID)
+	}
+	if strings.TrimSpace(rec.World) == "" || rec.World != strings.TrimSpace(world) {
+		return fmt.Errorf("cannot resume %s: the recorded prospective authorization was read at world %s, not the candidate's pinned base %s", task.TaskID, shortWorldID(rec.World), shortWorldID(world))
+	}
+	// A record at the right world is not yet the receipt. The grants must be
+	// exactly the authorization for these declarations, or nothing is
+	// restored and the resume refuses before implementation.
+	if err := matchGrantsToDeclarations(declared, rec.Grants); err != nil {
+		return fmt.Errorf("cannot resume %s: %w", task.TaskID, err)
+	}
+	e.setProspectiveGrants(task.TaskID, rec.Grants)
+	return nil
+}
+
+// coverPlannedAtWorld turns revalidated anchors into coverage over the planned
+// files, partitioned FIRST by whether each file exists at the pinned world.
+//
+// Ordinary derived coverage is restricted to files proven present there. A
+// derived.Anchor covers by comparing world and subject paths; it does not
+// establish that a subject exists, so an anchor naming a not-yet-created path
+// would otherwise give a new file ordinary coverage and bypass the whole
+// prospective predicate (sensei#312 cycle 2).
+//
+// Existence is tri-state. Present files take ordinary coverage; files the
+// world's tree provably lacks (errNotAtWorld) are the only ones that reach
+// prospectiveAnchors; a file whose read failed for any other reason is
+// UNREADABLE and takes neither: an unanswered read is not absence, and a
+// transient failure to read F must not become authority to create it (cycle
+// 3). Undeclared missing files stay uncovered.
+func coverPlannedAtWorld(ctx context.Context, world string, planned []string, declarations []ProspectiveSurface, anchors []derived.Anchor, read worldReader) ([]prospectiveGrant, []CoverageAnchor) {
+	if read == nil {
+		return nil, nil
+	}
+	var existing, missing []string
+	for _, f := range planned {
+		_, err := read(ctx, world, f)
+		switch {
+		case err == nil:
+			existing = append(existing, f)
+		case confirmedMissing(err):
+			missing = append(missing, f)
+		default:
+			// Unreadable: neither present nor confirmed missing. Uncovered.
+		}
+	}
+	covered, _ := derived.CoveredFiles(anchors, world, existing)
 
 	// Each covered file carries what the derivation that covered it is able to
 	// ANSWER, computed here from the anchor's family. The family mapping lives
@@ -2106,7 +2222,51 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 			})
 		}
 	}
-	return out
+
+	// Prospective authority (sensei#312): a planned file ABSENT at world can be
+	// covered only by established facts about a covering surface in its
+	// directory plus the plan's declaration. The covering surfaces are every
+	// subject file a derivation established here, planned or not, read from
+	// the pinned world and never the working tree (a subject that cannot be
+	// read there is no surface). Undeclared absent files stay uncovered.
+	var surfaces []CoverageAnchor
+	for _, a := range anchors {
+		for _, f := range a.Files() {
+			if !a.Covers(world, f) {
+				continue
+			}
+			if _, err := read(ctx, world, f); err != nil {
+				continue
+			}
+			surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
+		}
+	}
+	grants := prospectiveAnchors(ctx, world, missing, declarations, surfaces, read)
+	for _, g := range grants {
+		if len(g.Anchors) == 0 {
+			out = append(out, g.Anchor)
+			continue
+		}
+		out = append(out, g.Anchors...)
+	}
+	return grants, out
+}
+
+// setProspectiveGrants records what prospective authority the router read for
+// a task; prospectiveGrants returns it for the post-creation inspection.
+func (e *Engine) setProspectiveGrants(taskID string, grants []prospectiveGrant) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.prospective == nil {
+		e.prospective = make(map[string][]prospectiveGrant)
+	}
+	e.prospective[taskID] = grants
+}
+
+func (e *Engine) prospectiveGrants(taskID string) []prospectiveGrant {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.prospective[taskID]
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
@@ -2362,11 +2522,15 @@ Return ONLY JSON in this exact shape:
   "files": ["path/the/work/touches.go"],
   "mode": "modify" | "inspect",
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
+  "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]}],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
   "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference"}]
 }
+Declare every file the plan CREATES under "prospective_surfaces" (the only role is
+go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
+imports and "testing"); an undeclared new file stays uncovered.
 MODE IS REQUIRED WHENEVER YOU PROCEED.
   modify   - the plan edits this repository. A worker is expected to produce a diff.
   inspect  - the plan reads and reports and changes nothing: an audit, an
@@ -3043,6 +3207,14 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
 		if err != nil {
+			// A prospective grant authorizes one exact creation shape. Once its
+			// post-creation inspection refutes that shape, the run is terminal:
+			// a later implementor has no authority to reinterpret or retry it.
+			// All other candidate failures retain the ordinary handoff path.
+			if isProspectiveSurfaceRefutation(err) {
+				fail(err)
+				return
+			}
 			failures = append(failures, worker.Name+": "+err.Error())
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
@@ -3160,6 +3332,10 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 		"no bounded implementor converged and the candidate holds no work")
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
+}
+
+func isProspectiveSurfaceRefutation(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "prospective surface refuted:")
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
@@ -3447,6 +3623,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			fail(err)
 			return
 		}
+		// The prospective authorization is restored from the record it was
+		// written to, bound to the candidate's pinned base. Routing does not
+		// re-run on resume, so it is the only source of the facts the
+		// post-creation inspection checks against (sensei#312 cycle 3).
+		if err := e.restoreProspectiveGrants(task, bound.Prospective, identity.BaseSHA); err != nil {
+			fail(err)
+			return
+		}
 		tc := taskContext{
 			Task:            task.Task,
 			Identity:        identity,
@@ -3459,6 +3643,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Mode:            bound.Mode,
 			Consequences:    bound.Consequences,
 			Invariants:      bound.Invariants,
+			Prospective:     bound.Prospective,
 			PlanSource:      bound.Source,
 			PlanDigest:      task.PlanDigest,
 		}

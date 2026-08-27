@@ -149,6 +149,7 @@ type resumedBound struct {
 	Mode         string
 	Consequences string
 	Invariants   []string
+	Prospective  []ProspectiveSurface
 }
 
 // restorePlanBound re-establishes, from the session record, both who authored a
@@ -201,5 +202,6 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 		Mode:         planMode(rec.Mode),
 		Consequences: rec.Consequences,
 		Invariants:   rec.Invariants,
+		Prospective:  rec.ProspectiveSurfaces,
 	}, nil
 }

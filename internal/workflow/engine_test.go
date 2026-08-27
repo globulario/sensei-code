@@ -190,6 +190,31 @@ func TestHandoverEntersTheNextWorkerAsUnansweredFeedback(t *testing.T) {
 	}
 }
 
+// A post-creation prospective refutation is terminal. It is not review
+// feedback another implementor may reinterpret or retry.
+func TestAProspectiveSurfaceRefutationStopsBeforeHandoff(t *testing.T) {
+	if !isProspectiveSurfaceRefutation(errors.New("prospective surface refuted: package mismatch")) {
+		t.Fatal("a prospective refutation was not recognized")
+	}
+	if isProspectiveSurfaceRefutation(errors.New("candidate validation failed")) {
+		t.Fatal("an ordinary candidate failure was treated as a prospective refutation")
+	}
+
+	body := rawSource(t, "internal/workflow/engine.go")
+	refutation := strings.Index(body, "isProspectiveSurfaceRefutation")
+	handoff := strings.Index(body, "handoffPacket")
+	if refutation < 0 || handoff < 0 {
+		t.Fatal("the prospective terminal branch or ordinary handoff path is missing")
+	}
+	if refutation > handoff {
+		t.Fatal("a prospective refutation reaches handoff before the terminal branch")
+	}
+	terminal := body[refutation:handoff]
+	if !strings.Contains(terminal, "fail(err)") || !strings.Contains(terminal, "return") {
+		t.Fatal("a prospective refutation does not fail the run before another implementor can be assigned")
+	}
+}
+
 func TestDecisionReferencesFilesTheCandidateActuallyChanged(t *testing.T) {
 	// At approval the architect can only name files it intends to create, and a
 	// decision referencing a file the task never produced references nothing.
