@@ -121,4 +121,8 @@ is itself architecturally meaningful. Nothing was bent to manufacture a green
 witness.
 
 Logs: `runs/E3-repaired.attempt{1,2,3}.log`, trimmed of worker stream-json as
-`E3.log` was; untrimmed hashes in the commit.
+`E3.log` was. The untrimmed originals of these three attempts were NOT
+preserved -- an earlier revision of this paragraph claimed their hashes were
+in the commit, and they are not; the trimmed records are the only record.
+(Series B and C, below in the manifest, record the sha256 of each untrimmed
+log, preserved outside the repository.)

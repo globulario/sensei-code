@@ -100,7 +100,7 @@ retried) → #91 does not hold, recorded; exit 3 → the question preserved.
   `1 anchor over 2 files → bounded-knowledge-gap` on the same bytes. The gap
   #312 named is closed on its natural witness; the implementor ran on this
   task for the first time.
-- Claude produced a 3,985-byte candidate: `main.go` +4/−2 and a 108-line
+- Claude produced a 3,985-byte candidate: `main.go` +2/−2 and a 108-line
   `main_test.go`. It verified with `go vet . && go test .` — **no `go build`,
   no binary in the tree**, so #91's boundary was not reached.
 - Post-creation inspection: **`prospective surface refuted: main_test.go
@@ -115,7 +115,8 @@ retried) → #91 does not hold, recorded; exit 3 → the question preserved.
   worker; the worker cannot see the bound, so a competent test that reaches
   for `httptest` is refuted for exceeding a declaration it was never given.
   Filed as a follow-up, not fixed mid-series.
-- `E3-seriesB.1.log` keeps 19 non-output events (77 dropped);
+- `E3-seriesB.1.log` keeps 19 non-output events (77 dropped); untrimmed
+  71,012 bytes, sha256 `89c8877c1fef0320808ad508fcaf095b5f4f767da3a94b130a5c9a8f443355cd`;
   `E3-seriesB.1.candidate.patch` is the refuted candidate.
 
 Under the rule, B2 runs unchanged.
@@ -134,7 +135,7 @@ Under the rule, B2 runs unchanged.
   re-issued, and the route became `architectural-authority-granted`. The
   architect-lane closure the supplied-plan lane deliberately lacks, seen
   working on the natural task.
-- Claude produced a 4,190-byte candidate: `main.go` +4/−2, `main_test.go`
+- Claude produced a 4,190-byte candidate: `main.go` +2/−2, `main_test.go`
   112 lines. Verified with `go vet ./ && go test ./` — again **no build, no
   binary, #91 not reached**.
 - **`prospective surface refuted: main_test.go imports "bytes"`** — the
@@ -149,7 +150,8 @@ Under the rule, B2 runs unchanged.
   have simply not produced one. Diagnosis (worker lacks the grant / the
   declaration is too narrow / the role's dependency policy is
   underspecified) waits for B3. Recorded, not altered.
-- `E3-seriesB.2.log` keeps 25 non-output events (150 dropped);
+- `E3-seriesB.2.log` keeps 25 non-output events (150 dropped); untrimmed
+  107,379 bytes, sha256 `cdea126cebcf6d495f3d76d68a64e04b53b6187ed6920f3fbcb5460bd8528d66`;
   `E3-seriesB.2.candidate.patch` is the refuted candidate.
 
 Under the rule, B3 runs unchanged; it is the last.
@@ -159,13 +161,14 @@ Under the rule, B3 runs unchanged; it is the last.
 - Declared naturally, 3/3, with the tightest list yet (`io, net/http, os,
   strings, testing`); plan step 2 says *intercepted HTTP transport and
   captured stderr*. Granted on the first route, no closure round.
-- Claude: 3,548-byte candidate, `main.go` +4/−2, `main_test.go` 102 lines,
+- Claude: 3,548-byte candidate, `main.go` +2/−2, `main_test.go` 102 lines,
   verified with `go vet . && go test .` — no build, no binary, #91 not
   reached.
 - **`prospective surface refuted: main_test.go imports "bytes"`** — plus
   `errors`, `regexp`; `var buf bytes.Buffer` at line 59 captures stderr.
   Terminal, one implementor, no review.
-- `E3-seriesB.3.log` keeps 19 non-output events (76 dropped);
+- `E3-seriesB.3.log` keeps 19 non-output events (76 dropped); untrimmed
+  69,521 bytes, sha256 `32e1d24989f7b12aa02067a9ebefa50cdf256711d92144c7804bd8d7ea3cd90f`;
   `E3-seriesB.3.candidate.patch` is the refuted candidate.
 
 ## Series B result
@@ -296,7 +299,7 @@ termination (the local budget did no containment at all).
   net/http, os, strings, testing`), granted, and routed
   `architectural-authority-granted`.
 - Claude, **shown the grant for the first time**, produced a 4,911-byte
-  candidate in 33 s: `main.go` +5/−2 and a 143-line `main_test.go`
+  candidate in 33 s: `main.go` +3/−2 and a 143-line `main_test.go`
   importing exactly `fmt, io, net/http, os, strings, testing` — every one
   inside the shown envelope — capturing stderr with `os.Pipe()` +
   `io.ReadAll`, the idiom the envelope admits, where B1–B3 reached for
@@ -314,7 +317,8 @@ termination (the local budget did no containment at all).
   decision to* — correct; `gosumcheck/main.go` has no direct invariant.
   Candidate retained, unpublished, not admitted: *landing it is the human's
   decision.*
-- `E3-seriesC.1.log` keeps 49 non-output events (2847 dropped);
+- `E3-seriesC.1.log` keeps 49 non-output events (2847 dropped); untrimmed
+  944,283 bytes, sha256 `ba4d0659d164ae463064870ce58fab1edbf62d20bc17aef1bd68ebedf20fefc9`;
   `E3-seriesC.1.candidate.patch` is the accepted candidate.
 
 ## Series C result
