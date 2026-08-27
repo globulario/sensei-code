@@ -2631,7 +2631,7 @@ so the architect can decide. Widening the envelope is the architect's decision, 
 ` + grants
 	}
 	if strings.TrimSpace(feedback) != "" {
-		extra = "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback
+		extra += "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback
 	}
 	if len(guidance) != 0 {
 		extra += "\n\nGUIDANCE FROM THE HUMAN ARCHITECT, sent while you were working:\n- " +

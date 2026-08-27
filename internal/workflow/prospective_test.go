@@ -555,3 +555,24 @@ func TestRunCandidateHandsTheRecordedGrantsToThePrompt(t *testing.T) {
 		t.Fatal("runCandidate does not pass the recorded grants into the implementation prompt")
 	}
 }
+
+// A revision cycle carries review feedback AND the grant. The first draft
+// assigned the feedback into the prompt's extra section, which overwrote the
+// grant: cycle 1 saw the envelope and cycle 2 -- the cycle that edits the
+// authorized file under a reviewer's instruction -- did not.
+func TestTheGrantSurvivesAReviewFeedbackCycle(t *testing.T) {
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()},
+		gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	rendered := renderProspectiveGrants(grants)
+	const feedback = "the test must also cover the non-verbose path"
+	got := implementationPrompt(taskContext{Task: "t"}, "plan", feedback, 2,
+		[]string{"keep the assertion on one line"}, rendered)
+	for _, want := range []string{"PROSPECTIVE CREATE GRANTS", rendered, "REVIEW FEEDBACK TO RECONCILE", feedback, "GUIDANCE FROM THE HUMAN ARCHITECT", "keep the assertion on one line"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("cycle 2 lost %q", want[:min(40, len(want))])
+		}
+	}
+	if strings.Count(got, "PROSPECTIVE CREATE GRANTS") != 1 {
+		t.Fatal("the grant section is repeated")
+	}
+}
