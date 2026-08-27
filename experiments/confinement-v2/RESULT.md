@@ -54,3 +54,7 @@ None of this is the fixture's fault, and none of it is about derivation.
 
 Nothing about compounding beyond one encounter for this family; nothing about
 the reviewer's verdict on the change, which it never got to give.
+
+## E3.log trimmed
+
+The committed `E3.log` keeps every non-`output` event (routing, coverage, audit, review, git, terminal). Worker/reviewer stream-json `output` events -- 104,600 of them, 34353534 bytes, carrying the 9 MB binary through the review transcripts -- are dropped. Untrimmed original: sha256 a0da2009b9ad27128e6160d72c7d82d063fb39a1078daf1a2399b45b471149ae, preserved outside the repository.
