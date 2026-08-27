@@ -131,3 +131,12 @@ stopped. It is preserved because the log is append-only by design (§6.3: a run
 that happened is not un-happened by being voided), and it is excluded from the
 result. It is also, incidentally, a fifth independent proposal of the same
 question.
+
+## Amendment (after link5-v2)
+
+Link 4→5 in the treatment arm had **two** independent blockers, not one. Besides
+the reader's false negative, the derive receipt from the sensei branch in use
+carried no `subjects`, and sensei-code's consumer refuses coverage that cannot
+name what a proposition is about. Had the reader been right, the anchor would
+still have been rejected. The result — loop closed at link 5, compounding
+unmeasured — stands; its attribution was incomplete.
