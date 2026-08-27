@@ -1,0 +1,46 @@
+diff --git a/semaphore/semaphore.go b/semaphore/semaphore.go
+index 96a035a..b0b7791 100644
+--- a/semaphore/semaphore.go
++++ b/semaphore/semaphore.go
+@@ -52,12 +52,11 @@ func (s *Weighted) Acquire(ctx context.Context, n int64) error {
+ 		return ctx.Err()
+ 	default:
+ 	}
+-	if s.size-s.cur >= n && s.waiters.Len() == 0 {
++	if s.tryAcquireLocked(n) {
+ 		// Since we hold s.mu and haven't synchronized since checking done, if
+ 		// ctx becomes done before we return here, it becoming done must have
+ 		// "happened concurrently" with this call - it cannot "happen before"
+ 		// we return in this branch. So, we're ok to always acquire here.
+-		s.cur += n
+ 		s.mu.Unlock()
+ 		return nil
+ 	}
+@@ -116,14 +115,23 @@ func (s *Weighted) TryAcquire(n int64) bool {
+ 		panic("semaphore: n < 0")
+ 	}
+ 	s.mu.Lock()
+-	success := s.size-s.cur >= n && s.waiters.Len() == 0
+-	if success {
+-		s.cur += n
+-	}
++	success := s.tryAcquireLocked(n)
+ 	s.mu.Unlock()
+ 	return success
+ }
+ 
++// tryAcquireLocked reports whether a request of weight n may proceed
++// immediately, and records the acquisition if so. It must be called with
++// s.mu held. A request proceeds only if enough capacity is available and no
++// waiters are queued, so that queued waiters are never starved.
++func (s *Weighted) tryAcquireLocked(n int64) bool {
++	if s.size-s.cur < n || s.waiters.Len() != 0 {
++		return false
++	}
++	s.cur += n
++	return true
++}
++
+ // Release releases the semaphore with a non-negative weight of n.
+ func (s *Weighted) Release(n int64) {
+ 	if n < 0 {
