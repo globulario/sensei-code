@@ -2116,7 +2116,35 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	// exists to refuse. Encounter 1 writes; encounter 2 benefits.
 	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
-	covered, _ := derived.CoveredFiles(anchors, world, planned)
+	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
+	e.setProspectiveGrants(taskID, grants)
+	return out
+}
+
+// coverPlannedAtWorld turns revalidated anchors into coverage over the planned
+// files, partitioned FIRST by whether each file exists at the pinned world.
+//
+// Ordinary derived coverage is restricted to files proven present there. A
+// derived.Anchor covers by comparing world and subject paths; it does not
+// establish that a subject exists, so an anchor naming a not-yet-created path
+// would otherwise give a new file ordinary coverage and bypass the whole
+// prospective predicate (sensei#312 cycle 2). A file whose existence cannot be
+// established is absent for this purpose: absence is not safety, and neither
+// is an unanswered read. Absent files reach prospectiveAnchors only; undeclared
+// ones stay uncovered.
+func coverPlannedAtWorld(ctx context.Context, world string, planned []string, declarations []ProspectiveSurface, anchors []derived.Anchor, read worldReader) ([]prospectiveGrant, []CoverageAnchor) {
+	if read == nil {
+		return nil, nil
+	}
+	var existing, absent []string
+	for _, f := range planned {
+		if _, err := read(ctx, world, f); err == nil {
+			existing = append(existing, f)
+		} else {
+			absent = append(absent, f)
+		}
+	}
+	covered, _ := derived.CoveredFiles(anchors, world, existing)
 
 	// Each covered file carries what the derivation that covered it is able to
 	// ANSWER, computed here from the anchor's family. The family mapping lives
@@ -2140,22 +2168,25 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	// covered only by established facts about a covering surface in its
 	// directory plus the plan's declaration. The covering surfaces are every
 	// subject file a derivation established here, planned or not, read from
-	// the pinned world and never the working tree. Undeclared absent files
-	// stay uncovered.
+	// the pinned world and never the working tree (a subject that cannot be
+	// read there is no surface). Undeclared absent files stay uncovered.
 	var surfaces []CoverageAnchor
 	for _, a := range anchors {
 		for _, f := range a.Files() {
-			if a.Covers(world, f) {
-				surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
+			if !a.Covers(world, f) {
+				continue
 			}
+			if _, err := read(ctx, world, f); err != nil {
+				continue
+			}
+			surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
 		}
 	}
-	grants := prospectiveAnchors(ctx, world, planned, declarations, surfaces, gitShowAt(e.Repo.Root))
-	e.setProspectiveGrants(taskID, grants)
+	grants := prospectiveAnchors(ctx, world, absent, declarations, surfaces, read)
 	for _, g := range grants {
 		out = append(out, g.Anchor)
 	}
-	return out
+	return grants, out
 }
 
 // setProspectiveGrants records what prospective authority the router read for

@@ -3,8 +3,13 @@ package workflow
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/globulario/sensei-code/internal/derived"
 )
 
 // The gosumcheck-shaped world: one covered surface S at the pinned world, and a
@@ -184,5 +189,88 @@ func TestPostCreationInspectionAcceptsTheAuthorizedShapeOnly(t *testing.T) {
 	// No grant recorded for the declaration: only the role allowance applies.
 	if err := inspectProspectiveSurfaces(good, decl, nil); err == nil || !strings.Contains(err.Error(), `"strings"`) {
 		t.Fatalf("an unauthorized declaration was inspected against imports nobody established: %v", err)
+	}
+}
+
+// derivedAnchorNaming produces a real derived.Anchor, through the only
+// construction site there is, whose subject list names the given files at the
+// pinned world. The fake `sensei derive` answers DERIVED for anything.
+func derivedAnchorNaming(t *testing.T, subjects ...string) []derived.Anchor {
+	t.Helper()
+	var subj []string
+	for _, s := range subjects {
+		subj = append(subj, fmt.Sprintf(`{"file":%q,"entity":"x","role":"subject"}`, s))
+	}
+	receipt := fmt.Sprintf(`{"result":"DERIVED","pinned_commit":%q,"subjects":[%s],"completeness_scope":["nothing"]}`,
+		prospectiveWorld, strings.Join(subj, ","))
+	bin := filepath.Join(t.TempDir(), "sensei")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\ncat <<'RECEIPT'\n"+receipt+"\nRECEIPT\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	anchors, _ := derived.AnchorsFor(context.Background(), derived.CLI{Bin: bin}, t.TempDir(), prospectiveWorld,
+		[]derived.Recipe{{Kind: "command_invocation_confined_to", Command: "go", Owner: "gosumcheck", SearchPaths: []string{"."}}})
+	if len(anchors) != 1 {
+		t.Fatalf("the fake derivation produced %d anchors, want 1", len(anchors))
+	}
+	return anchors
+}
+
+// Engine-level falsifier (cycle 2): a derived Anchor whose subject list names
+// a planned path ABSENT at the pinned world cannot cover that path. Covers
+// compares paths; it does not establish existence, so without partitioning by
+// verified existence first an anchor naming a not-yet-created file would give
+// it ordinary coverage and skip declaration, role, package, dependency and
+// post-creation checks.
+func TestAnAnchorNamingAnAbsentPlannedPathCannotCoverItWithoutADeclaration(t *testing.T) {
+	anchors := derivedAnchorNaming(t, gosumcheckS, gosumcheckF)
+	world := worldOf(map[string]string{gosumcheckS: gosumcheckSrc})
+	planned := []string{gosumcheckS, gosumcheckF}
+
+	// The premise: the anchor DOES name F, and CoveredFiles alone would take it.
+	if c, _ := derived.CoveredFiles(anchors, prospectiveWorld, planned); len(c) != 2 {
+		t.Fatalf("specimen is not a bypass: CoveredFiles over the anchor covers %v", c)
+	}
+
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned, nil, anchors, world)
+	if len(grants) != 0 {
+		t.Fatalf("no declaration, yet prospective grants: %+v", grants)
+	}
+	var files []string
+	for _, a := range out {
+		files = append(files, a.File)
+		if a.File == gosumcheckF {
+			t.Fatalf("the absent planned file was covered by ordinary derived coverage: %+v", a)
+		}
+	}
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("the existing surface should be the only covered file, got %v", files)
+	}
+
+	// With an admissible declaration the same absent path is covered ONLY by
+	// the prospective anchor, which names S and says so.
+	grants, out = coverPlannedAtWorld(context.Background(), prospectiveWorld, planned,
+		[]ProspectiveSurface{gosumcheckDeclaration()}, anchors, world)
+	if len(grants) != 1 || grants[0].Covering != gosumcheckS {
+		t.Fatalf("an admissible declaration did not grant against S: %+v", grants)
+	}
+	n := 0
+	for _, a := range out {
+		if a.File != gosumcheckF {
+			continue
+		}
+		n++
+		if !strings.HasPrefix(a.Describe, "PROSPECTIVE") || a.Requirement != RequirementInvocationConfinement {
+			t.Fatalf("the absent file's coverage is not the prospective anchor: %+v", a)
+		}
+	}
+	if n != 1 {
+		t.Fatalf("the absent file carries %d anchors, want exactly the prospective one", n)
+	}
+
+	// An existence check that cannot be answered is absence, not coverage.
+	dark := func(context.Context, string, string) ([]byte, error) { return nil, errors.New("unreadable world") }
+	if grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned,
+		[]ProspectiveSurface{gosumcheckDeclaration()}, anchors, dark); len(out) != 0 || len(grants) != 0 {
+		t.Fatalf("a world that cannot be read still produced coverage: %v %v", out, grants)
 	}
 }
