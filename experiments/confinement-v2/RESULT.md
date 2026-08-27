@@ -111,8 +111,9 @@ Evidence as it stands:
 - **prospective-new-file authority: a new observed architectural gap** — a plan
   can become more responsible by adding a file and unauthorizable by the same
   act, because coverage exists only for surfaces that already exist. Recorded
-  as a phenomenon; not patched, not assigned yet (Family 3, prospective
-  authority semantics, or a product issue — a decision, not a reflex).
+  as a phenomenon; not patched. Named, by decision: `globulario/sensei#312` —
+  prospective authority for not-yet-existing surfaces. Not #89, not #259, not
+  Family 3.
 
 #91 is **held**. #89 stays **open**: its closing criterion requires both halves,
 and the natural half is unreachable under the unchanged task for a reason that
