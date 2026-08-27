@@ -300,11 +300,11 @@ func buildStubAgent(t *testing.T, root string) string {
 // source-edit candidate; the text diff stays bounded; the run reaches its
 // natural terminal instead of consuming reviewers on an unreadable payload.
 func TestGovernedRunExcludesABuildArtifactFromTheCandidate(t *testing.T) {
-	r := runStubGovernedWith(t, "notes.txt", []string{"--artifact", "notes"})
+	r := runStubGovernedWith(t, "", []string{"--artifact", "stub-build-output"})
 	if r.seen[event.WorkflowAwaitingAuthority] {
 		t.Skip("coverage ceiling reached before implementation; the boundary was not exercised")
 	}
-	reason, ok := r.excluded["notes"]
+	reason, ok := r.excluded["stub-build-output"]
 	if !ok {
 		t.Fatalf("the build artifact entered the candidate unnamed; excluded=%v seen=%v", r.excluded, kinds(r.seen))
 	}
