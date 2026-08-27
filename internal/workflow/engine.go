@@ -64,6 +64,10 @@ type Engine struct {
 	// supplied holds the plan handed in for tasks that entered through
 	// SubmitGovernedWithPlan. Absence means the architect authored the bound.
 	supplied map[string]SuppliedPlan
+	// prospective holds, per task, the prospective grants the router read, so
+	// the post-creation inspection checks the created file against the same
+	// facts about the covering surface that authorized it.
+	prospective map[string][]prospectiveGrant
 	// graphs records, per task, the awareness graph the start gate verified,
 	// as the MCP binding every agent in that task is launched with.
 	//
@@ -424,6 +428,9 @@ type taskContext struct {
 	Mode         string
 	Consequences string
 	Invariants   []string
+	// Prospective is the plan's declared new surfaces. See
+	// architectureDecision.ProspectiveSurfaces.
+	Prospective []ProspectiveSurface
 	// PlanSource and PlanDigest say who authored the bound. See PlanSource.
 	PlanSource PlanSource
 	PlanDigest string
@@ -686,6 +693,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		Mode:            planMode(decision.Mode),
 		Consequences:    decision.Consequences,
 		Invariants:      decision.Invariants,
+		Prospective:     decision.ProspectiveSurfaces,
 		PlanSource:      e.planSource(taskID),
 		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
@@ -1220,6 +1228,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
 
+		// Post-creation inspection of every declared prospective surface
+		// (sensei#312). The authorization was for a shape; a candidate whose
+		// created file has another shape is refuted here, before any review
+		// is asked and with no retry: the authorized shape was not the shape
+		// produced, and nothing downstream may reinterpret that.
+		if len(tc.Prospective) != 0 {
+			facts := map[string]prospectiveFacts{}
+			for _, g := range e.prospectiveGrants(taskID) {
+				facts[g.Anchor.File] = g.Facts
+			}
+			if err := inspectProspectiveSurfaces(diff, tc.Prospective, facts); err != nil {
+				return false, plan, lastReview, lastAudit, err
+			}
+		}
+
 		auditArgs := map[string]any{"diff": diff, "task": task}
 		// Scope the audit to the domain the start gate certified, so the audit
 		// evaluates this candidate against this repository's rules rather than
@@ -1475,6 +1498,12 @@ type architectureDecision struct {
 	// not control. It cannot cover the task that proposed it, and it becomes
 	// coverage only if `sensei derive` answers it against a later world.
 	ProposedRecipe *derived.Recipe `json:"proposed_recipe,omitempty"`
+	// ProspectiveSurfaces declares the files this plan will CREATE, so a file
+	// absent at the pinned world can be covered by prospective authority
+	// (sensei#312). It is a claim the predicate in prospective.go checks
+	// against the covering surface's bytes at the pinned world; an undeclared
+	// new file is uncovered exactly as before.
+	ProspectiveSurfaces []ProspectiveSurface `json:"prospective_surfaces,omitempty"`
 }
 
 // reviewDecision is the reviewer's wire contract. It is deliberately separate
@@ -1969,7 +1998,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
-		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files),
+		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 
@@ -2063,7 +2092,7 @@ func senseiBinary() string {
 // Failure is silence rather than coverage. A missing recipe file, a sensei
 // binary without `derive`, a derivation that refuses — each leaves the region
 // uncovered and the gap intact, which is the direction this must fail in.
-func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string) []CoverageAnchor {
+func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) []CoverageAnchor {
 	if len(planned) == 0 {
 		return nil
 	}
@@ -2106,7 +2135,44 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 			})
 		}
 	}
+
+	// Prospective authority (sensei#312): a planned file ABSENT at world can be
+	// covered only by established facts about a covering surface in its
+	// directory plus the plan's declaration. The covering surfaces are every
+	// subject file a derivation established here, planned or not, read from
+	// the pinned world and never the working tree. Undeclared absent files
+	// stay uncovered.
+	var surfaces []CoverageAnchor
+	for _, a := range anchors {
+		for _, f := range a.Files() {
+			if a.Covers(world, f) {
+				surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
+			}
+		}
+	}
+	grants := prospectiveAnchors(ctx, world, planned, declarations, surfaces, gitShowAt(e.Repo.Root))
+	e.setProspectiveGrants(taskID, grants)
+	for _, g := range grants {
+		out = append(out, g.Anchor)
+	}
 	return out
+}
+
+// setProspectiveGrants records what prospective authority the router read for
+// a task; prospectiveGrants returns it for the post-creation inspection.
+func (e *Engine) setProspectiveGrants(taskID string, grants []prospectiveGrant) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.prospective == nil {
+		e.prospective = make(map[string][]prospectiveGrant)
+	}
+	e.prospective[taskID] = grants
+}
+
+func (e *Engine) prospectiveGrants(taskID string) []prospectiveGrant {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.prospective[taskID]
 }
 
 func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
@@ -2362,11 +2428,15 @@ Return ONLY JSON in this exact shape:
   "files": ["path/the/work/touches.go"],
   "mode": "modify" | "inspect",
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
+  "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]}],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
   "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference"}]
 }
+Declare every file the plan CREATES under "prospective_surfaces" (the only role is
+go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
+imports and "testing"); an undeclared new file stays uncovered.
 MODE IS REQUIRED WHENEVER YOU PROCEED.
   modify   - the plan edits this repository. A worker is expected to produce a diff.
   inspect  - the plan reads and reports and changes nothing: an audit, an
@@ -3459,6 +3529,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Mode:            bound.Mode,
 			Consequences:    bound.Consequences,
 			Invariants:      bound.Invariants,
+			Prospective:     bound.Prospective,
 			PlanSource:      bound.Source,
 			PlanDigest:      task.PlanDigest,
 		}

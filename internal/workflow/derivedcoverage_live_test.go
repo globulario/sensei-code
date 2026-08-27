@@ -52,7 +52,7 @@ func TestLiveTheCommittedRecipeClosesTheGapThroughTheEnginePath(t *testing.T) {
 	e := liveEngine(t)
 	planned := []string{"internal/event/bus.go"}
 
-	covered := e.derivedCoverage(context.Background(), planned)
+	covered := e.derivedCoverage(context.Background(), "", planned, nil)
 	if len(covered) != 1 || covered[0].File != planned[0] {
 		t.Fatalf("the engine path produced no coverage for a file a committed recipe covers: %v", covered)
 	}
@@ -89,7 +89,7 @@ func TestLiveTheCommittedRecipeClosesTheGapThroughTheEnginePath(t *testing.T) {
 func TestLiveAnUncoveredFileStaysUncovered(t *testing.T) {
 	requireDeriveCapable(t)
 	e := liveEngine(t)
-	covered := e.derivedCoverage(context.Background(), []string{"internal/workflow/authority.go"})
+	covered := e.derivedCoverage(context.Background(), "", []string{"internal/workflow/authority.go"}, nil)
 	if len(covered) != 0 {
 		t.Fatalf("a file no committed recipe covers was reported covered: %v", covered)
 	}
@@ -101,7 +101,7 @@ func TestLiveDerivedCoverageDoesNotClearAnApprovalGate(t *testing.T) {
 	requireDeriveCapable(t)
 	e := liveEngine(t)
 	planned := []string{"internal/event/bus.go"}
-	covered := e.derivedCoverage(context.Background(), planned)
+	covered := e.derivedCoverage(context.Background(), "", planned, nil)
 	if len(covered) == 0 {
 		t.Fatal("setup: expected real coverage")
 	}
@@ -119,7 +119,7 @@ func TestLiveDerivedCoverageDoesNotClearAnApprovalGate(t *testing.T) {
 func TestLiveNoRecipesMeansNoCoverage(t *testing.T) {
 	requireDeriveCapable(t)
 	e := &Engine{Repo: gitx.Repo{Root: t.TempDir()}}
-	if covered := e.derivedCoverage(context.Background(), []string{"internal/event/bus.go"}); len(covered) != 0 {
+	if covered := e.derivedCoverage(context.Background(), "", []string{"internal/event/bus.go"}, nil); len(covered) != 0 {
 		t.Fatalf("a repository with no recipes reported coverage: %v", covered)
 	}
 }
