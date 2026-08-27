@@ -51,3 +51,40 @@ Two failures kept distinct on purpose:
 
 - cold because knowledge is insufficient for the plan → correct refusal;
 - candidate structurally unauditable after authority is granted → #89/#91.
+
+## Natural reproducer, Series B — post-#312 instrument, frozen before B1
+
+Instrument changed, so this is a new series, not attempt 4. Instrument:
+sensei-code `main @ 1a385be` (#92 supplied-plan lane, #93 prospective
+authority merged) with #91's candidate boundary rebased on top
+(`fix/89-rebased @ 95369a7`, conflict-free apart from one struct field
+merge), built with `-buildvcs=false`. Same fixture `golang/mod @ 9c7e562`
+(sealed specimen alone), same graph `:10193`, same `SENSEI_BIN`
+(`sensei-main`), same env (`SENSEI_CODE_BENCHMARK=1`). Task byte-for-byte the
+E3 text. Before B1 the fixture's untracked `derived_receipts.jsonl` (a derive
+output left by the earlier attempts) is moved aside, so the start gate sees a
+clean tree; nothing committed to the fixture changes.
+
+Rule: identical to the frozen attempt rule above — at most 3 invocations,
+nothing altered between them, every plan and route preserved as
+`E3-seriesB.N.log`. Two new things are observed, in this order:
+
+1. **Does the architect, told nothing about #312, declare
+   `prospective_surfaces` for the `main_test.go` it keeps wanting?** The JSON
+   contract now carries the field with a one-line instruction and nothing
+   else. If it does and the grant is admissible, coverage should read
+   `2 anchor(s) over 2 planned file(s)` with one PROSPECTIVE anchor and the
+   route should leave the gap. If it plans the file without declaring it,
+   the route stays cold exactly as attempts 1–3 — recorded as the natural
+   path not taken, not reworded.
+2. **If authority is granted, does #91's boundary hold?** Expected: the
+   implementor builds the command, the binary appears, the boundary excludes
+   it (`candidate.artifact_excluded`) or refuses structurally
+   (`candidate.not_auditable`), the two-line diff is reviewed, and no
+   implementor is retried on an unauditable candidate. If the post-creation
+   inspection of `main_test.go` refutes, that is terminal and recorded.
+
+Outcomes and what they mean: route cold (no declaration) → #89 still unmet,
+#312 natural path untested; route granted + boundary holds + review reached →
+#89's natural witness met; route granted + old monster (oversized candidate
+retried) → #91 does not hold, recorded; exit 3 → the question preserved.
