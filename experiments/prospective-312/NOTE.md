@@ -73,3 +73,14 @@ new NOTE section, never into a silent re-try.
 ## Result
 
 (appended after the run; nothing above this line changes)
+
+### B1 — operator precondition failure, not a governance result
+
+19:58:06Z–19:58:16Z, exit 1. The run refused at the start gate: *the canonical
+checkout has uncommitted changes*. The uncommitted file was the run's own
+timestamp stamp, written into `experiments/prospective-312/runs/` by the
+operator before invoking. No task identity was established, no routing ran,
+the supplied plan was never read past the objective. The gate was right.
+Preserved in `runs/B1.jsonl` (7 events). Not counted against the stopping
+rule, which governs the first invocation that reaches routing; the plan and
+its digest are unchanged. B2 writes its outputs outside the tree.
