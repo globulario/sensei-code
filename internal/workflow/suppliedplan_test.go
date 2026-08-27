@@ -186,9 +186,42 @@ func TestASuppliedPlanSurvivesResumeOrFailsClosed(t *testing.T) {
 	if _, err := (&Engine{}).restorePlanBound(session.Interrupted{TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest}); !errors.Is(err, errSuppliedPlanContextUnavailable) {
 		t.Fatalf("wrong refusal: %v", err)
 	}
-	// A record with no source predates the field: the architect's.
-	if b, err := (&Engine{}).restorePlanBound(session.Interrupted{TaskID: "old", Plan: "summary only"}); err != nil || b.Source != PlanByArchitect || b.Plan != "summary only" {
-		t.Fatalf("an old record is not the architect's summary: %v %+v", err, b)
+	// A record with no source is the architect's only when the architect
+	// emitted it; that fact is recorded beside the payload, not inside it.
+	if b, err := (&Engine{}).restorePlanBound(session.Interrupted{TaskID: "old", Plan: "summary only", PlanEventSource: event.SourceArchitect}); err != nil || b.Source != PlanByArchitect || b.Plan != "summary only" {
+		t.Fatalf("an old architect record is not resumed as its summary: %v %+v", err, b)
+	}
+	if _, err := (&Engine{}).restorePlanBound(session.Interrupted{TaskID: "old", Plan: "summary only"}); !errors.Is(err, errSuppliedPlanContextUnavailable) {
+		t.Fatalf("absence of a source alone was read as the architect's: %v", err)
+	}
+}
+
+// The sharp case: a valid supplied record that lost only plan_source must be
+// refused, and must not become the architect's.
+func TestASuppliedRecordThatLostItsSourceIsNotTheArchitects(t *testing.T) {
+	p, _ := ParseSuppliedPlan([]byte(goodPlan))
+	full, _ := json.Marshal(proposedPlan{architectureDecision: p.decision, PlanSource: PlanSupplied, PlanDigest: p.Digest})
+	var m map[string]json.RawMessage
+	json.Unmarshal(full, &m)
+	delete(m, "plan_source")
+	stripped, _ := json.Marshal(m)
+	found := session.FindInterrupted([]event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Summary: "task"},
+		{TaskID: "t", Kind: event.PlanProposed, Source: planEventSource(PlanSupplied), Summary: "plan", Payload: stripped},
+	})
+	if len(found) != 1 || found[0].PlanSource != "" || found[0].PlanDigest != p.Digest {
+		t.Fatalf("precondition: the record lost only plan_source: %+v", found)
+	}
+	e := &Engine{}
+	b, err := e.restorePlanBound(found[0])
+	if !errors.Is(err, errSuppliedPlanContextUnavailable) {
+		t.Fatalf("resumed as %+v (%v); must refuse", b, err)
+	}
+	if e.planSource("t") == PlanSupplied {
+		t.Fatal("a refused resume still registered a supplied plan")
+	}
+	if b.Source == PlanByArchitect {
+		t.Fatal("a supplied record became the architect's by losing a field")
 	}
 }
 

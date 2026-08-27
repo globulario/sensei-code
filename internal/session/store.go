@@ -103,6 +103,12 @@ type Interrupted struct {
 	PlanSource string
 	PlanDigest string
 	PlanRecord json.RawMessage
+	// PlanEventSource is who emitted the PlanProposed event: the architect for
+	// its own plan, the system for a supplied one. It is the independent fact
+	// that lets a record with no plan_source field be told apart from a
+	// supplied record that lost the field; an absent field alone proves
+	// nothing about which it is.
+	PlanEventSource event.Source
 	// Review is the last thing the reviewer said, which is the most useful
 	// thing to hand whoever picks the work up.
 	Review string
@@ -162,6 +168,7 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.Plan = e.Summary
 			p.planned = true
 			p.PlanRecord = e.Payload
+			p.PlanEventSource = e.Source
 			var src struct {
 				Source string `json:"plan_source"`
 				Digest string `json:"plan_digest"`

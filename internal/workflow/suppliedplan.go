@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/session"
 )
 
@@ -137,7 +138,7 @@ func (e *Engine) planDigest(taskID string) string {
 // change who may author the governing plan, which is the invariant
 // resolveArchitectureForRevision exists to hold. The task stays resumable; it
 // waits for a record it can trust.
-var errSuppliedPlanContextUnavailable = errors.New("SUPPLIED_PLAN_CONTEXT_UNAVAILABLE: this task ran under a supplied plan and the session record does not hold that plan intact; it is not resumed under the architect instead")
+var errSuppliedPlanContextUnavailable = errors.New("SUPPLIED_PLAN_CONTEXT_UNAVAILABLE: the session record does not establish who authored this task's plan, or does not hold a supplied plan intact; it is not resumed under the architect instead")
 
 // resumedBound is the executable contract a resumed task continues under.
 type resumedBound struct {
@@ -160,8 +161,13 @@ type resumedBound struct {
 // planSummary's rendering for a person, and when a plan has steps it renders
 // the steps and omits the plan text entirely; a resume that implemented the
 // summary continued under a different contract than the one that was routed.
-// A record that predates the payload has only the summary, and only for an
-// architect's plan is that accepted, as it always was.
+//
+// A record with no plan_source is NOT read as the architect's on that absence
+// alone: a supplied record that lost only that field would then resume as a
+// plan the architect may revise. It is read as the architect's only when the
+// event itself was emitted by the architect -- a fact recorded independently
+// of the payload, and the only emitter of PlanProposed before plan_source
+// existed. Any other absence is refused.
 func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error) {
 	var rec proposedPlan
 	recorded := len(task.PlanRecord) != 0 && json.Unmarshal(task.PlanRecord, &rec) == nil && strings.TrimSpace(rec.Plan) != ""
@@ -171,14 +177,21 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 			return resumedBound{}, errSuppliedPlanContextUnavailable
 		}
 		e.supplyPlan(task.TaskID, SuppliedPlan{decision: rec.architectureDecision, Digest: rec.PlanDigest})
-	case PlanByArchitect, "":
-		// No source recorded means the record predates the field, when only
-		// the architect produced plans.
+	case PlanByArchitect:
+	case "":
+		if task.PlanEventSource != event.SourceArchitect {
+			return resumedBound{}, errSuppliedPlanContextUnavailable
+		}
 		if !recorded {
+			// Predates the payload as well as the field: the summary is all
+			// there is, and it was the architect's.
 			return resumedBound{Source: PlanByArchitect, Plan: task.Plan, Rationale: task.Plan}, nil
 		}
 	default:
 		return resumedBound{}, fmt.Errorf("the session record names a plan source this build does not know: %q", task.PlanSource)
+	}
+	if !recorded {
+		return resumedBound{}, fmt.Errorf("the session record for %s holds no plan to resume under", task.TaskID)
 	}
 	return resumedBound{
 		Source:       e.planSource(task.TaskID),
