@@ -51,3 +51,12 @@ func structuralAuditFailure(v sensei.DiffAuditDecision) string {
 func structuralFailure(reason string) error {
 	return fmt.Errorf("%w: %s", errStructural, reason)
 }
+
+// auditCallFailure names an audit that produced no decodable verdict at all.
+//
+// It is classified structurally for the same reason a structural refusal is:
+// nothing about the change was judged, no reviewer can judge it, and the next
+// executor would submit the identical payload to the identical boundary.
+func auditCallFailure(err error) string {
+	return "CANDIDATE_NOT_AUDITABLE (audit_call_failed): the diff audit returned no verdict for this candidate: " + err.Error()
+}

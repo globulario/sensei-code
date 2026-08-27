@@ -2,6 +2,7 @@ package publish
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,7 +85,14 @@ func TestCommitAndPushReachARealRemote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, args := range CommitArgs("add a thing") {
+	// The #89 shape: a build artifact the worker left beside the reviewed
+	// file. CandidateCapture excluded it from the candidate, so it was never
+	// audited or reviewed; it is still sitting untracked in the worktree.
+	if err := os.WriteFile(filepath.Join(work, "gosumcheck.bin"), []byte("\x7fELF\x00\x00artifact"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range CommitArgs("add a thing", []string{"new.txt"}) {
 		git(work, args...)
 	}
 	git(work, PushArgs("sensei-code/task-1/claude")...)
@@ -92,6 +100,29 @@ func TestCommitAndPushReachARealRemote(t *testing.T) {
 	branches := git(root, "--git-dir", remote, "branch", "--list")
 	if !strings.Contains(branches, "sensei-code/task-1/claude") {
 		t.Fatalf("the candidate branch did not reach the remote: %s", branches)
+	}
+	published := git(root, "--git-dir", remote, "ls-tree", "--name-only", "-r", "sensei-code/task-1/claude")
+	if !strings.Contains(published, "new.txt") {
+		t.Fatalf("the reviewed file did not reach the remote: %s", published)
+	}
+	if strings.Contains(published, "gosumcheck.bin") {
+		t.Fatalf("an artifact excluded from the candidate was published anyway: %s", published)
+	}
+}
+
+// Publication with nothing judged publishes nothing. Sweeping the worktree
+// instead is exactly how an excluded artifact reached a remote.
+func TestPublicationRefusesToSweepTheWorktree(t *testing.T) {
+	_, err := Open(context.Background(), Request{Workspace: t.TempDir(), Branch: "b", Title: "t"}, true, true)
+	if !errors.Is(err, ErrNoReviewedPaths) {
+		t.Fatalf("a publication with no reviewed paths was not refused: %v", err)
+	}
+	for _, args := range CommitArgs("m", []string{"a.go", "b.go"}) {
+		for _, a := range args {
+			if a == "--all" || a == "-A" || a == "." {
+				t.Fatalf("commit args sweep the worktree: %v", args)
+			}
+		}
 	}
 }
 

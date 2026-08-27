@@ -51,3 +51,30 @@ func TestAStructuralFailureNeverReachesTheNextExecutor(t *testing.T) {
 		t.Fatal("the candidate is not captured through the boundary with the plan's intended outputs")
 	}
 }
+
+// An audit that returns no verdict at all -- a transport refusal of the
+// payload, a tool error, an undecodable reply -- is structural too. The
+// second #94 review found the CallTool error path returned an ordinary error
+// before the structural classification could see anything, so the identical
+// candidate went to the next executor.
+func TestAnAuditThatReturnsNoVerdictIsStructuralNotRetried(t *testing.T) {
+	err := structuralFailure(auditCallFailure(errors.New("rpc error: message larger than max")))
+	if !errors.Is(err, errStructural) {
+		t.Fatal("an audit call failure is not classified structurally")
+	}
+	if !strings.Contains(err.Error(), "CANDIDATE_NOT_AUDITABLE (audit_call_failed)") {
+		t.Fatalf("the failure does not name its class: %v", err)
+	}
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	call := strings.Index(body, "sc.CallTool( ")
+	if call < 0 {
+		t.Fatal("runCandidate no longer calls the audit tool")
+	}
+	after := body[call:]
+	if !strings.Contains(after, "auditCallFailure ") {
+		t.Fatal("the audit call's error path does not classify the failure")
+	}
+	if strings.Count(after, "structuralFailure ") < 3 {
+		t.Fatalf("expected the call-error, decode-error and refusal paths all to be structural; found %d", strings.Count(after, "structuralFailure "))
+	}
+}

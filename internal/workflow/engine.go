@@ -765,6 +765,9 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		Base:      e.Config.Workflow.PublishBase,
 		Title:     tc.Task,
 		Report:    tc.Report,
+		// Exactly the paths the accepted candidate changed, as snapshotted at
+		// its last audit. Nothing else in the worktree is published.
+		Paths: tc.EvidenceSnapshot.ChangedPaths,
 	}, e.Config.Permissions.Push, e.Config.Permissions.LocalCommit)
 	if err != nil {
 		// What already reached the remote is stated. A failed publication that
@@ -1298,7 +1301,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		audit, err := sc.CallTool("awareness_audit_diff", auditArgs)
 		if err != nil {
-			return false, plan, lastReview, lastAudit, fmt.Errorf("Sensei diff audit: %w", err)
+			// No verdict was obtained for this candidate. That is structural,
+			// not a worker failure: the transport refused the payload, or the
+			// tool errored, and another executor handed the same candidate
+			// would fail the same way. Returning an ordinary error here sent
+			// it down the handoff path anyway (#89, second review).
+			reason := auditCallFailure(err)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason, nil))
+			return false, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		lastAudit = firstText(audit)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit, audit.Structured))
@@ -1308,7 +1318,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// but the verdict that governs acceptance is the structured one.
 		verdict, err := sensei.DecodeDiffAudit(audit)
 		if err != nil {
-			return false, plan, lastReview, lastAudit, err
+			reason := auditCallFailure(err)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason, audit.Structured))
+			return false, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		// Surface why an audit did not pass at the moment it happens, rather
 		// than only if a reviewer later tries to accept over it. The
