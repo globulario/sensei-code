@@ -389,3 +389,58 @@ func shortWorldID(w string) string {
 	}
 	return w
 }
+
+// renderProspectiveGrants states, for the worker, the CREATE authority the
+// run already established for its declared surfaces.
+//
+// It exists because the grant was a fence and nothing else. Series B of the
+// #89 natural reproducer ran three independent workers under three admissible
+// grants, and all three were refuted after creation for importing "bytes":
+// the router knew the envelope, the inspection enforced it, and the worker --
+// handed the plan and never the grant -- chose its own imports. Authority that
+// constrains execution must be visible at the execution boundary. Showing the
+// grant confers nothing: the worker learns the authority it already operates
+// under, and the post-creation inspection is unchanged.
+func renderProspectiveGrants(grants []prospectiveGrant) string {
+	if len(grants) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, g := range grants {
+		role, known := prospectiveRoles[g.Surface.Role]
+		allowed := map[string]bool{}
+		for imp := range g.Facts.Imports {
+			allowed[imp] = true
+		}
+		if known {
+			for imp := range role.novel {
+				allowed[imp] = true
+			}
+		}
+		imports := make([]string, 0, len(allowed))
+		for imp := range allowed {
+			imports = append(imports, imp)
+		}
+		sort.Strings(imports)
+		reqs := map[string]bool{}
+		for _, a := range g.Anchors {
+			reqs[string(a.Requirement)] = true
+		}
+		if len(g.Anchors) == 0 {
+			reqs[string(g.Anchor.Requirement)] = true
+		}
+		requirements := make([]string, 0, len(reqs))
+		for r := range reqs {
+			requirements = append(requirements, r)
+		}
+		sort.Strings(requirements)
+		fmt.Fprintf(&b, "- CREATE %s\n", path.Clean(strings.TrimSpace(g.Surface.Path)))
+		fmt.Fprintf(&b, "    covering surface: %s\n", g.Covering)
+		fmt.Fprintf(&b, "    package: %s (must equal the covering surface's package)\n", g.Surface.Package)
+		fmt.Fprintf(&b, "    role: %s\n", g.Surface.Role)
+		fmt.Fprintf(&b, "    declared dependencies: %s\n", strings.Join(g.Surface.Dependencies, ", "))
+		fmt.Fprintf(&b, "    EFFECTIVE ALLOWED IMPORTS (covering surface's imports at the pinned world + the role allowance): %s\n", strings.Join(imports, ", "))
+		fmt.Fprintf(&b, "    architectural requirements carried: %s\n", strings.Join(requirements, ", "))
+	}
+	return strings.TrimRight(b.String(), "\n")
+}

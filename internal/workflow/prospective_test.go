@@ -501,3 +501,78 @@ func TestProspectiveFactsAreReadAtThePinnedBase(t *testing.T) {
 		t.Fatal("without a pinned base, prospective declarations are still evaluated")
 	}
 }
+
+// The worker is shown the exact CREATE grant it already operates under: the
+// path, covering surface, package, role, declaration, the EFFECTIVE allowed
+// import set (S's imports at the pinned world plus the role allowance), and the
+// requirements carried -- and is told to report an unsatisfiable envelope
+// rather than widen it. Without a grant the prompt is unchanged.
+func TestTheImplementorIsShownTheProspectiveGrantItOperatesUnder(t *testing.T) {
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()},
+		gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	if len(grants) != 1 {
+		t.Fatalf("premise: one grant, got %d", len(grants))
+	}
+	rendered := renderProspectiveGrants(grants)
+	for _, want := range []string{
+		"CREATE " + gosumcheckF,
+		"covering surface: " + gosumcheckS,
+		"package: gosumcheck",
+		"role: " + roleGoRegressionTest,
+		"EFFECTIVE ALLOWED IMPORTS",
+		"testing",
+		"strings",
+		string(RequirementInvocationConfinement),
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("the rendered grant lacks %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "bytes") {
+		t.Fatal("the effective import set widened beyond S's imports and the role allowance")
+	}
+
+	with := implementationPrompt(taskContext{Task: "t"}, "plan", "", 1, nil, rendered)
+	if !strings.Contains(with, "PROSPECTIVE CREATE GRANTS") || !strings.Contains(with, rendered) {
+		t.Fatal("the grant did not reach the worker's prompt")
+	}
+	for _, want := range []string{"does not widen your scope", "do NOT add one", "architect's decision"} {
+		if !strings.Contains(with, want) {
+			t.Fatalf("the prompt does not say %q", want)
+		}
+	}
+	without := implementationPrompt(taskContext{Task: "t"}, "plan", "", 1, nil, renderProspectiveGrants(nil))
+	if strings.Contains(without, "PROSPECTIVE CREATE GRANTS") {
+		t.Fatal("a plan with no grants carries a grant section")
+	}
+}
+
+// The prompt the engine builds is fed the task's recorded grants, so a resumed
+// or handed-off worker sees the same grant routing issued.
+func TestRunCandidateHandsTheRecordedGrantsToThePrompt(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	if !strings.Contains(body, "renderProspectiveGrants ") || !strings.Contains(body, "e.prospectiveGrants(") {
+		t.Fatal("runCandidate does not pass the recorded grants into the implementation prompt")
+	}
+}
+
+// A revision cycle carries review feedback AND the grant. The first draft
+// assigned the feedback into the prompt's extra section, which overwrote the
+// grant: cycle 1 saw the envelope and cycle 2 -- the cycle that edits the
+// authorized file under a reviewer's instruction -- did not.
+func TestTheGrantSurvivesAReviewFeedbackCycle(t *testing.T) {
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()},
+		gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	rendered := renderProspectiveGrants(grants)
+	const feedback = "the test must also cover the non-verbose path"
+	got := implementationPrompt(taskContext{Task: "t"}, "plan", feedback, 2,
+		[]string{"keep the assertion on one line"}, rendered)
+	for _, want := range []string{"PROSPECTIVE CREATE GRANTS", rendered, "REVIEW FEEDBACK TO RECONCILE", feedback, "GUIDANCE FROM THE HUMAN ARCHITECT", "keep the assertion on one line"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("cycle 2 lost %q", want[:min(40, len(want))])
+		}
+	}
+	if strings.Count(got, "PROSPECTIVE CREATE GRANTS") != 1 {
+		t.Fatal("the grant section is repeated")
+	}
+}
