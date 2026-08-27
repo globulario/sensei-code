@@ -1,7 +1,9 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"go/parser"
 	"go/token"
@@ -49,36 +51,66 @@ var prospectiveRoles = map[string]prospectiveRole{
 // prospectiveFacts is what was read from S at the pinned world: its package
 // clause and its import set. Nothing here comes from the working tree.
 type prospectiveFacts struct {
-	Package string
-	Imports map[string]bool
+	Package string          `json:"package"`
+	Imports map[string]bool `json:"imports"`
 }
 
-// worldReader returns the bytes of a path at the pinned world, or an error
-// when the path is not there. It exists so the predicate can be tested without
-// a repository; the engine supplies gitShowAt.
+// errNotAtWorld is the one read failure that establishes ABSENCE: the pinned
+// world's tree was consulted and holds no entry at the path. Every other
+// failure (git unavailable, an unreadable object, a cancelled context) says
+// nothing about whether the path exists there, and a reader must not let it
+// pass for absence: a file whose existence cannot be established is neither
+// present nor confirmed missing, and it receives no authority of either kind.
+var errNotAtWorld = errors.New("not at the pinned world")
+
+// confirmedMissing reports whether err positively established that the path
+// is absent at the pinned world.
+func confirmedMissing(err error) bool { return errors.Is(err, errNotAtWorld) }
+
+// worldReader returns the bytes of a path at the pinned world. A path the
+// world's tree provably lacks returns an error wrapping errNotAtWorld; any
+// other failure is an unclassified read failure. It exists so the predicate
+// can be tested without a repository; the engine supplies gitShowAt.
 type worldReader func(ctx context.Context, world, file string) ([]byte, error)
 
 // gitShowAt reads `git show <world>:<file>` in root. It never consults the
-// working tree.
+// working tree. When show fails, absence is established separately by listing
+// the world's tree at the path: an empty listing from a tree git could read is
+// the only thing that says "missing"; a listing that fails leaves the read
+// unclassified.
 func gitShowAt(root string) worldReader {
 	return func(ctx context.Context, world, file string) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks", "show", world+":"+file)
 		b, err := cmd.Output()
-		if err != nil {
-			return nil, fmt.Errorf("git show %s:%s: %w", world, file, err)
+		if err == nil {
+			return b, nil
 		}
-		return b, nil
+		ls := exec.CommandContext(ctx, "git", "-C", root, "--no-optional-locks", "ls-tree", "--full-tree", world, "--", file)
+		out, lsErr := ls.Output()
+		if lsErr == nil && len(bytes.TrimSpace(out)) == 0 {
+			return nil, fmt.Errorf("git show %s:%s: %w", world, file, errNotAtWorld)
+		}
+		return nil, fmt.Errorf("git show %s:%s: unclassified read failure: %w", world, file, err)
 	}
 }
 
 // prospectiveGrant is one admissible declaration: the anchor the router reads
 // and the facts about S the post-creation inspection checks the created file
-// against.
+// against. It is recorded verbatim in the session (event.ProspectiveGranted)
+// so a resumed task inspects against the same facts.
 type prospectiveGrant struct {
-	Surface  ProspectiveSurface
-	Covering string
-	Facts    prospectiveFacts
-	Anchor   CoverageAnchor
+	Surface  ProspectiveSurface `json:"surface"`
+	Covering string             `json:"covering"`
+	Facts    prospectiveFacts   `json:"facts"`
+	Anchor   CoverageAnchor     `json:"anchor"`
+}
+
+// prospectiveRecord is the ProspectiveGranted payload: the grants and the
+// world identity they were read at. World is checked against the candidate's
+// pinned base on resume; a record from another world authorizes nothing here.
+type prospectiveRecord struct {
+	World  string             `json:"world"`
+	Grants []prospectiveGrant `json:"grants"`
 }
 
 // parseGoFacts reads a Go file's package clause and imports. Parse failure is
@@ -103,6 +135,8 @@ func parseGoFacts(src []byte) (prospectiveFacts, error) {
 // prospectiveAnchors applies PROSPECTIVE_CREATE_ADMISSIBLE to every planned
 // file absent at world that the plan declared. It returns one grant per
 // admissible file; anything the predicate cannot express stays uncovered.
+// Absence is re-established here for each F rather than trusted from the
+// caller: only a read that wraps errNotAtWorld is a create.
 //
 //	A. F's directory holds a surface S that a derived anchor covers at world;
 //	B. F's declared package equals S's package clause read from S at world;
@@ -134,8 +168,8 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 		if f == "." || !isPlanned[f] {
 			continue // a declaration with no matching planned file
 		}
-		if _, err := read(ctx, world, f); err == nil {
-			continue // F exists at world: it is not a create
+		if _, err := read(ctx, world, f); !confirmedMissing(err) {
+			continue // F exists at world, or its existence could not be established: not a create
 		}
 		// Clause C, read by membership.
 		role, ok := prospectiveRoles[d.Role]

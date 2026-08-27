@@ -121,6 +121,12 @@ type Interrupted struct {
 	// A task holding one is not resumed by continuing the work. It is resumed
 	// by asking it again, and only an explicit answer moves past it.
 	AwaitingAuthority json.RawMessage
+	// ProspectiveRecord is the prospective authorization the router recorded
+	// for this task's declared new surfaces, byte for byte, so a resumed task
+	// inspects a created file against the facts that authorized it. Absent
+	// when the task declared none, or when the record was never written; the
+	// engine tells those apart from the plan and refuses the latter.
+	ProspectiveRecord json.RawMessage
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -176,6 +182,8 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &src) == nil {
 				p.PlanSource, p.PlanDigest = src.Source, src.Digest
 			}
+		case event.ProspectiveGranted:
+			p.ProspectiveRecord = e.Payload
 		case event.WorkflowCompleted, event.WorkflowFailed:
 			p.done = true
 		case event.WorkflowStopped:

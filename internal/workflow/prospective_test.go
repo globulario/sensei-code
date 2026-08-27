@@ -5,11 +5,14 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/derived"
+	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/session"
 )
 
 // The gosumcheck-shaped world: one covered surface S at the pinned world, and a
@@ -41,7 +44,7 @@ func worldOf(files map[string]string) worldReader {
 		}
 		src, ok := files[file]
 		if !ok {
-			return nil, errors.New("not at world: " + file)
+			return nil, fmt.Errorf("not at world %s: %w", file, errNotAtWorld)
 		}
 		return []byte(src), nil
 	}
@@ -267,10 +270,146 @@ func TestAnAnchorNamingAnAbsentPlannedPathCannotCoverItWithoutADeclaration(t *te
 		t.Fatalf("the absent file carries %d anchors, want exactly the prospective one", n)
 	}
 
-	// An existence check that cannot be answered is absence, not coverage.
+	// An existence check that cannot be answered is neither presence nor
+	// absence: nothing is covered.
 	dark := func(context.Context, string, string) ([]byte, error) { return nil, errors.New("unreadable world") }
 	if grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned,
 		[]ProspectiveSurface{gosumcheckDeclaration()}, anchors, dark); len(out) != 0 || len(grants) != 0 {
 		t.Fatalf("a world that cannot be read still produced coverage: %v %v", out, grants)
+	}
+}
+
+// unreadableAt wraps a world so that one path fails with an unclassified read
+// error while everything else, S included, reads as before.
+func unreadableAt(inner worldReader, file string) worldReader {
+	return func(ctx context.Context, world, f string) ([]byte, error) {
+		if f == file {
+			return nil, errors.New("git show: transient failure reading " + f)
+		}
+		return inner(ctx, world, f)
+	}
+}
+
+// Cycle 3, f1: a read of F that fails for any reason other than the world's
+// tree lacking F is not absence. S stays readable and every other clause
+// holds, and F still receives nothing — from the predicate directly and from
+// the partition that feeds it.
+func TestAnUnreadableFWithAReadableSReceivesNoProspectiveAuthority(t *testing.T) {
+	read := unreadableAt(worldOf(map[string]string{gosumcheckS: gosumcheckSrc}), gosumcheckF)
+	planned := []string{gosumcheckS, gosumcheckF}
+	decl := []ProspectiveSurface{gosumcheckDeclaration()}
+
+	if grants := prospectiveAnchors(context.Background(), prospectiveWorld, planned, decl, gosumcheckAnchors(), read); len(grants) != 0 {
+		t.Fatalf("an unclassified read failure for F was taken as absence: %+v", grants)
+	}
+
+	anchors := derivedAnchorNaming(t, gosumcheckS, gosumcheckF)
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned, decl, anchors, read)
+	if len(grants) != 0 {
+		t.Fatalf("the partition sent an unreadable F to prospective authority: %+v", grants)
+	}
+	for _, a := range out {
+		if a.File == gosumcheckF {
+			t.Fatalf("an unreadable planned file was covered: %+v", a)
+		}
+	}
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("S alone should be covered, got %+v", out)
+	}
+}
+
+// The Git reader itself tells the three states apart: present, provably
+// missing from the tree, and unreadable (here: a world that is not an object).
+func TestGitShowAtDistinguishesMissingFromUnreadable(t *testing.T) {
+	root := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q")
+	if err := os.MkdirAll(filepath.Join(root, "gosumcheck"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, gosumcheckS), []byte(gosumcheckSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "s")
+	world := run("rev-parse", "HEAD")
+	// F is in the working tree but not at the world: the reader must not see it.
+	if err := os.WriteFile(filepath.Join(root, gosumcheckF), []byte("package gosumcheck\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read := gitShowAt(root)
+	if b, err := read(context.Background(), world, gosumcheckS); err != nil || string(b) != gosumcheckSrc {
+		t.Fatalf("S should read at world: %v", err)
+	}
+	if _, err := read(context.Background(), world, gosumcheckF); !confirmedMissing(err) {
+		t.Fatalf("F is provably missing from the tree, got %v", err)
+	}
+	if _, err := read(context.Background(), strings.Repeat("0", 40), gosumcheckF); err == nil || confirmedMissing(err) {
+		t.Fatalf("a world that is not an object must be unclassified, got %v", err)
+	}
+}
+
+// Cycle 3, f2: the grants are written to the session as they were read and
+// restored, bound to the world, before an interrupted candidate is inspected.
+func TestInterruptedProspectiveInspectionUsesTheRecordedGrants(t *testing.T) {
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()},
+		gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	if len(grants) != 1 {
+		t.Fatalf("premise: one grant, got %d", len(grants))
+	}
+	ev := event.New("s", "t1", event.SourceSystem, event.ProspectiveGranted, "recorded", prospectiveRecord{World: prospectiveWorld, Grants: grants})
+	found := session.FindInterrupted([]event.Event{
+		event.New("s", "t1", event.SourceSystem, event.TaskCreated, "task", nil),
+		event.New("s", "t1", event.SourceArchitect, event.PlanProposed, "plan", proposedPlan{architectureDecision: architectureDecision{Plan: "p"}}),
+		ev,
+	})
+	if len(found) != 1 || len(found[0].ProspectiveRecord) == 0 {
+		t.Fatalf("the record did not survive the session: %+v", found)
+	}
+	decl := []ProspectiveSurface{gosumcheckDeclaration()}
+
+	e := &Engine{}
+	if err := e.restoreProspectiveGrants(found[0], decl, prospectiveWorld); err != nil {
+		t.Fatal(err)
+	}
+	restored := e.prospectiveGrants("t1")
+	if len(restored) != 1 || restored[0].Covering != gosumcheckS || !restored[0].Facts.Imports["strings"] {
+		t.Fatalf("restored grants differ from the recorded ones: %+v", restored)
+	}
+	facts := map[string]prospectiveFacts{}
+	for _, g := range restored {
+		facts[g.Anchor.File] = g.Facts
+	}
+	// A created test importing one of S's imports is accepted against the
+	// restored facts, and one exceeding them is refuted, exactly as before
+	// the interruption.
+	good := createdDiff(gosumcheckF, "package gosumcheck\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestX(t *testing.T) { _ = strings.ToUpper }\n")
+	if err := inspectProspectiveSurfaces(good, decl, facts); err != nil {
+		t.Fatalf("the authorized shape was refuted after resume: %v", err)
+	}
+	bad := createdDiff(gosumcheckF, "package gosumcheck\n\nimport (\n\t\"net/http\"\n\t\"testing\"\n)\n\nfunc TestX(t *testing.T) { _ = http.Get }\n")
+	if err := inspectProspectiveSurfaces(bad, decl, facts); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+		t.Fatalf("an import outside the allowance survived resume: %v", err)
+	}
+
+	// Fail closed: no record, or a record from another world, does not resume
+	// a task that declared surfaces; a task that declared none needs no record.
+	if err := (&Engine{}).restoreProspectiveGrants(session.Interrupted{TaskID: "t1"}, decl, prospectiveWorld); err == nil {
+		t.Fatal("a declared surface with no recorded authorization was resumed")
+	}
+	if err := (&Engine{}).restoreProspectiveGrants(found[0], decl, strings.Repeat("f", 40)); err == nil {
+		t.Fatal("a record from another world was accepted")
+	}
+	if err := (&Engine{}).restoreProspectiveGrants(session.Interrupted{TaskID: "t2"}, nil, prospectiveWorld); err != nil {
+		t.Fatalf("a task with no declarations needs no record: %v", err)
 	}
 }
