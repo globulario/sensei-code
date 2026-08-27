@@ -61,6 +61,14 @@ type Engine struct {
 	// property of how the task was submitted, and a plan that could set it
 	// would be making a claim rather than carrying a fact.
 	objectives map[string]Objective
+	// graphs records, per task, the awareness graph the start gate verified,
+	// as the MCP binding every agent in that task is launched with.
+	//
+	// Kept on the engine and set only by the gate, so the binding an agent
+	// receives is the one the engine admitted and not one a plan, a prompt or
+	// a user's global config could substitute. The first foreign-repository run
+	// had the engine on one graph and the architect on another, silently.
+	graphs map[string]*agent.GraphBinding
 	// findings holds what each observation established, so a caller may open
 	// repair work from it. Holding evidence is not holding authority: a repair
 	// opened from one enters the ordinary governed path with nothing carried
@@ -93,6 +101,50 @@ type Engine struct {
 // unclosed and the question becomes a human's — honestly, and naming what was
 // attempted.
 const closureBudget = 1
+
+// bindGraph records the graph the start gate verified for a task.
+//
+// Built from the engine's OWN MCP command and the workspace status it just
+// decoded, so by construction it names the graph the engine reached. Every
+// agent request for the task carries it, and each provider is launched so it
+// can reach this graph and no other.
+func (e *Engine) bindGraph(taskID string, ws sensei.WorkspaceStatus) {
+	b := &agent.GraphBinding{
+		Command: e.Config.Sensei.Command,
+		Args:    append([]string(nil), e.Config.Sensei.Args...),
+		Domain:  ws.Binding.RepositoryDomain,
+	}
+	if ws.GraphAuthority != nil {
+		b.Digest = ws.GraphAuthority.GraphBuildCommit
+	}
+	e.mu.Lock()
+	if e.graphs == nil {
+		e.graphs = map[string]*agent.GraphBinding{}
+	}
+	e.graphs[taskID] = b
+	e.mu.Unlock()
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		fmt.Sprintf("graph binding for every agent in this task: domain %s, build %s, via %s %s",
+			b.Domain, short12(b.Digest), b.Command, strings.Join(b.Args, " ")), nil))
+}
+
+// graphFor is the binding an agent request carries. Nil only before the gate
+// has run, which for a governed task is never.
+func (e *Engine) graphFor(taskID string) *agent.GraphBinding {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.graphs[taskID]
+}
+
+func short12(s string) string {
+	if len(s) > 12 {
+		return s[:12]
+	}
+	if s == "" {
+		return "(none)"
+	}
+	return s
+}
 
 // spendClosure records an attempt at one gap and reports whether the budget
 // allowed it.
@@ -496,6 +548,9 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		return
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
+	if ws, derr := sensei.DecodeWorkspaceStatus(workspaceStatus); derr == nil {
+		e.bindGraph(taskID, ws)
+	}
 
 	preflightArgs := map[string]any{"task": task, "files": []string{}, "mode": "compact"}
 	// Scope preflight to the domain Sensei just stated in the workspace identity
@@ -984,7 +1039,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// The worker's own text is the artifact of a read-only plan. Discarding
 		// it left an inspection with nothing to show but a transcript nobody
 		// had judged.
-		result, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit)
+		result, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
@@ -1412,7 +1467,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		if attempt > 1 {
 			p += "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
 		}
-		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p}, e.emit)
+		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1644,7 +1699,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		}
 		result, err := reviewer.Run(ctx, agent.Request{
 			Role: roles.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p,
-			Session: roles.Fresh,
+			Session: roles.Fresh, Graph: e.graphFor(taskID),
 		}, e.emit)
 		if err != nil {
 			return roles.ReviewVerdict{}, err
