@@ -49,6 +49,15 @@ func (r *premiseReceipt) open() bool {
 // naming a receipt this task never issued is ignored: the model cannot close
 // a question nobody asked. An outcome outside the closed vocabulary is read
 // as unresolved, the fail-closed reading.
+//
+// Silence is read the same way. Every receipt this task has issued was asked
+// by the closure prompt of the round that issued it (a new receipt always has
+// budget, so the round always runs), and this is called on the response to
+// that round before any new receipt is issued. A receipt that response did
+// not answer -- premise_resolutions omitted, or naming only receipts nobody
+// issued -- is therefore unresolved, not unasked. Leaving it blank let the
+// same paraphrased premise miss the residue rule and buy a fresh receipt,
+// which is the laundering this file exists to stop (review 5046471526).
 func (e *Engine) applyPremiseResolutions(taskID string, resolutions []PremiseResolution) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -65,6 +74,11 @@ func (e *Engine) applyPremiseResolutions(taskID string, resolutions []PremiseRes
 			default:
 				r.Outcome = premiseUnresolved
 			}
+		}
+	}
+	for _, r := range e.premises[taskID] {
+		if r.Outcome == "" {
+			r.Outcome = premiseUnresolved
 		}
 	}
 }

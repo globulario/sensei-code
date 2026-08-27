@@ -707,3 +707,42 @@ func TestTheClosureBudgetIsSpentAgainstThePremiseReceipt(t *testing.T) {
 		t.Fatal("routePlan does not complete the gap metadata with the pinned base")
 	}
 }
+
+// Review 5046471526: silence is unresolved. A round that omits
+// premise_resolutions entirely, or answers only receipts nobody issued, leaves
+// the receipt it was asked about unresolved -- so the same paraphrased
+// premise, without a claim.gap reference, reuses that receipt and is refused a
+// second round. Left blank, the receipt missed the residue rule and the
+// paraphrase bought a fresh one.
+func TestAnUnansweredReceiptIsUnresolvedNotUnasked(t *testing.T) {
+	_, _, route := premiseFixture(t)
+	for name, answers := range map[string][]PremiseResolution{
+		"resolutions omitted":      nil,
+		"only a forged receipt":    {{Gap: "gap-forged-99", Outcome: "established"}},
+		"only an empty resolution": {{}},
+	} {
+		e := &Engine{}
+		asked := route(Claim{Statement: "the verbose line is written by ReadRemote", About: "gosumcheck/main.go", Source: "inference"})
+		r := e.premiseReceiptFor("task-1", asked, asked.ClaimGap)
+		if !e.spendClosure("task-1", r.ID) {
+			t.Fatalf("%s: first round refused", name)
+		}
+		// The next response arrives; the engine applies whatever it answered
+		// before routing again, exactly as resolveArchitectureIn does.
+		e.applyPremiseResolutions("task-1", answers)
+		if r.Outcome != premiseUnresolved {
+			t.Fatalf("%s: the asked receipt was left %q, not unresolved", name, r.Outcome)
+		}
+		paraphrased := route(Claim{Statement: "ReadRemote is what emits the -v diagnostic", About: "clientOps.ReadRemote", Source: "inference"})
+		if paraphrased.ClaimGap != "" {
+			t.Fatal("precondition: no claim.gap reference")
+		}
+		got := e.premiseReceiptFor("task-1", paraphrased, paraphrased.ClaimGap)
+		if got.ID != r.ID {
+			t.Fatalf("%s: the paraphrase was issued a new receipt %s", name, got.ID)
+		}
+		if e.spendClosure("task-1", got.ID) {
+			t.Fatalf("%s: the paraphrase bought a second round", name)
+		}
+	}
+}
