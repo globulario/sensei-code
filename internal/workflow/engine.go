@@ -1109,7 +1109,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				strings.Join(guidance, "\n"), nil))
 		}
 		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, renderProspectiveGrants(e.prospectiveGrants(taskID)))
-		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
+		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, NoGraph: !worker.ConsumesGraph(), Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
 		// The worker's own text is the artifact of a read-only plan. Discarding
 		// it left an inspection with nothing to show but a transcript nobody
 		// had judged.
@@ -1609,7 +1609,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 // directory, so the observation lane can run the architect somewhere the
 // governed checkout is not.
 func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt, workspace string) (architectureDecision, error) {
-	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
+	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, NoGraph: !e.Config.Architect.ConsumesGraph(), Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	var lastErr error
 	// rounds bounds the whole resolution, which attempt does not.
 	//
@@ -1863,7 +1863,7 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 var errReviewRefused = errors.New("review refused")
 
 func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agent, packet roles.IndependentReviewPacket, binding roles.Binding, implementer string) (roles.ReviewVerdict, error) {
-	reviewer := agent.CLI{Name: cfg.Name, Label: config.DisplayName(cfg.Name), Command: cfg.Command, Args: cfg.Args, Source: event.SourceReviewer, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
+	reviewer := agent.CLI{Name: cfg.Name, Label: config.DisplayName(cfg.Name), Command: cfg.Command, Args: cfg.Args, NoGraph: !cfg.ConsumesGraph(), Source: event.SourceReviewer, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
 	prompt := reviewPrompt(packet)
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {

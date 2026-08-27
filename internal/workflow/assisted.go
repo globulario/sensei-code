@@ -435,7 +435,8 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 
 	conversation := e.conversationSoFar(task, 40)
 	architect := agent.CLI{
-		Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name),
+		NoGraph: !e.Config.Architect.ConsumesGraph(),
+		Name:    e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name),
 		Command: e.Config.Architect.Command, Args: e.Config.Architect.Args,
 		Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv,
 	}

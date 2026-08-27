@@ -193,9 +193,9 @@ func runStubGovernedWith(t *testing.T, target string, implementorArgs []string) 
 	// must also be DIFFERENT providers, because a candidate may not review
 	// itself; one binary serving both roles under one name is excluded by the
 	// same rule that makes review independent.
-	cfg.Architect = config.Agent{Name: "stub-architect", Command: stub, Args: []string{"--role", "architect", "--target", target}}
-	cfg.Implementors = []config.Agent{{Name: "claude", Command: stub, Args: append([]string{"--role", "implementor", "--target", target}, implementorArgs...)}}
-	cfg.Reviewer = config.Agent{Name: "codex", Command: stub, Args: []string{"--role", "reviewer"}}
+	cfg.Architect = config.Agent{Name: "stub-architect", Command: stub, Args: []string{"--role", "architect", "--target", target}, Graph: "none"}
+	cfg.Implementors = []config.Agent{{Name: "claude", Command: stub, Args: append([]string{"--role", "implementor", "--target", target}, implementorArgs...), Graph: "none"}}
+	cfg.Reviewer = config.Agent{Name: "codex", Command: stub, Args: []string{"--role", "reviewer"}, Graph: "none"}
 	cfg.Reviewers = []config.Agent{cfg.Reviewer}
 
 	sessionID := session.ID(time.Now())
@@ -300,7 +300,7 @@ func buildStubAgent(t *testing.T, root string) string {
 // source-edit candidate; the text diff stays bounded; the run reaches its
 // natural terminal instead of consuming reviewers on an unreadable payload.
 func TestGovernedRunExcludesABuildArtifactFromTheCandidate(t *testing.T) {
-	r := runStubGovernedWith(t, "", []string{"--artifact", "stub-build-output"})
+	r := runStubGovernedWith(t, anchoredTarget, []string{"--artifact", "stub-build-output"})
 	if r.seen[event.WorkflowAwaitingAuthority] {
 		t.Skip("coverage ceiling reached before implementation; the boundary was not exercised")
 	}
