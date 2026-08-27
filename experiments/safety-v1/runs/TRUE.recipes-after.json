@@ -1,0 +1,1 @@
+{"recipes":[{"kind":"field_access_under_lock","dir":"semaphore","type":"Weighted","field":"waiters","lock":"mu","why":"safety-v1 TRUE specimen: the investigator proposed this question in coldstart-link5-v2","provenance":{"origin_task":"specimen-true","origin_gap":"safety experiment","region":["semaphore/semaphore.go"],"written_by":"experiment"}}]}
