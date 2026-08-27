@@ -253,3 +253,35 @@ net/http, os, os/exec, strings, sync, testing, time`) is satisfiable for
 this task — stderr can be captured with `os.Pipe` + `io.ReadAll` and
 matched with `strings` — so at least one of three workers should produce
 an admissible candidate.
+
+### Finding recorded mid-C1, before its outcome: closure-budget laundering through paraphrase
+
+Observed during C1's architecture resolution (22:23–22:31Z and continuing):
+three successive `bounded-knowledge-gap` routes, each on an `inference`
+claim about the same evolving uncertainty — *how the regression test will
+drive `ReadRemote` deterministically* — worded differently each round
+(`clientOps.ReadRemote … len(data)` → `regression strategy: replacing the
+default transport …` → `replacing http.DefaultClient.Transport …`), the
+third arriving as an architect `escalate` the engine correctly declined to
+turn into a Level-3 event.
+
+`spendClosure` keys its budget on `taskID + condition`, and the condition
+is the premise's prose. So the intended law — *one closure attempt per
+unresolved architectural premise* — is enforced as *one per exact spelling*.
+A nondeterministic architect re-stating the premise funds a fresh
+investigation each time. What actually bounds the loop is `maxRounds = 8`
+in `resolveArchitectureIn`.
+
+```text
+per-condition closure budget:            porous (identity = wording)
+global architecture-resolution budget:   effective (8 rounds)
+```
+
+The mechanism's identity model is weaker than its stated law: condition
+identity ≠ condition wording. A durable fix needs a stable identity for the
+uncertainty (subject + question kind + scope + pinned world) rather than the
+architect's latest prose. Not touched during Series C: no normalisation, no
+budget change, no steering. The finding stands whichever way C1 ends; the
+three endings read differently — settle-and-route (C1 still measures M2.1),
+human branch (uncertainty survived paraphrase-funded rounds), or round-8
+termination (the local budget did no containment at all).
