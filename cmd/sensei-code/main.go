@@ -144,6 +144,10 @@ Headless governed run:
                                     authority · 4 stopped · 5 timed out
   --json      emit the event stream as JSONL
   --timeout   give up after a duration, leaving the candidate in place
+  --plan      JSON file holding the bounded plan (an architect decision with
+              decision "proceed"); the architect is not asked for one, and the
+              plan is routed, reviewed, and admitted exactly as an architect's
+              would be, recorded as supplied rather than architect-produced
 
 Read-only lanes:
   sensei-code observe --task "..."       exit 6 observed; the repository is unchanged

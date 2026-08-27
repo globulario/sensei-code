@@ -61,6 +61,9 @@ type Engine struct {
 	// property of how the task was submitted, and a plan that could set it
 	// would be making a claim rather than carrying a fact.
 	objectives map[string]Objective
+	// supplied holds the plan handed in for tasks that entered through
+	// SubmitGovernedWithPlan. Absence means the architect authored the bound.
+	supplied map[string]SuppliedPlan
 	// graphs records, per task, the awareness graph the start gate verified,
 	// as the MCP binding every agent in that task is launched with.
 	//
@@ -416,11 +419,14 @@ type taskContext struct {
 	Rationale       string
 	Steps           []string
 	Domain          string
-	// Mode is the architect's declaration of whether this plan changes the
-	// repository. See architectureDecision.Mode.
+	// Mode is the plan's declaration of whether it changes the repository.
+	// See architectureDecision.Mode.
 	Mode         string
 	Consequences string
 	Invariants   []string
+	// PlanSource and PlanDigest say who authored the bound. See PlanSource.
+	PlanSource PlanSource
+	PlanDigest string
 	// Report is the rendered change report, set once the candidate is judged so
 	// the pull request body carries the same evidence the architect saw.
 	Report string
@@ -632,10 +638,17 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// was given is a record rather than an assumption.
 	retrievedEvidence, repositoryEvidence, standingContext, recordedHistory, consulted := e.architecturalContext(ctx, sc, domain, task)
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ContextConsulted, consulted.Render(), consulted))
-	decision, err := e.resolveArchitecture(ctx, sc, start, taskID, task, architecturePrompt(
-		e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
-		firstText(workspaceStatus), firstText(preflight),
-		retrievedEvidence, repositoryEvidence, standingContext, recordedHistory))
+	var decision architectureDecision
+	if supplied, ok := e.suppliedPlan(taskID); ok {
+		// The bound was handed in. It is routed exactly as an architect's
+		// would be; it is not authored here and cannot be revised here.
+		decision, err = e.resolveSuppliedPlan(ctx, sc, start, taskID, task, supplied)
+	} else {
+		decision, err = e.resolveArchitecture(ctx, sc, start, taskID, task, architecturePrompt(
+			e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
+			firstText(workspaceStatus), firstText(preflight),
+			retrievedEvidence, repositoryEvidence, standingContext, recordedHistory))
+	}
 	if err != nil {
 		fail(err)
 		return
@@ -658,7 +671,9 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// The human's "no" did not disappear with it: a running task can be stopped
 	// (see Stop), which costs nothing when unused, where a mandatory prompt
 	// taxed every run.
-	e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.PlanProposed, planSummary(decision), decision))
+	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
+		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)),
+		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID)}))
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -671,6 +686,8 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		Mode:            planMode(decision.Mode),
 		Consequences:    decision.Consequences,
 		Invariants:      decision.Invariants,
+		PlanSource:      e.planSource(taskID),
+		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
 	}
 
@@ -911,11 +928,23 @@ func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision
 			Resolution:  last.Chosen,
 		}
 	}
+	// Who decided and what the human granted are read from what the task
+	// recorded, not from which agent is configured. A supplied plan was decided
+	// by nobody in the run, and a headless submission was granted by nobody a
+	// person is established to be.
+	decidedBy := config.DisplayName(e.Config.Architect.Name)
+	if p, ok := e.suppliedPlan(taskID); ok {
+		decidedBy = "supplied plan sha256 " + p.Digest + " (not architect-produced)"
+	}
+	grant := "none established: " + string(e.objective(taskID).Provenance)
+	if e.objective(taskID).HumanAuthorized() {
+		grant = "task execution via /run"
+	}
 	return decision.Authority{
 		Owner:       decision.Architectural,
 		CertifiedBy: certified,
-		DecidedBy:   config.DisplayName(e.Config.Architect.Name),
-		HumanGrant:  "task execution via /run",
+		DecidedBy:   decidedBy,
+		HumanGrant:  grant,
 	}
 }
 
@@ -960,6 +989,39 @@ func changedPaths(diff string) []string {
 		}
 	}
 	return out
+}
+
+// proposedPlan is the PlanProposed payload: the decision plus who authored it.
+//
+// The source lives on the record and not on architectureDecision itself, so a
+// supplied file cannot carry one (ParseSuppliedPlan refuses unknown fields)
+// while the engine-written record always does. It is what a resume reads to
+// re-establish the bound, so a restart cannot turn a supplied plan back into
+// one the architect may revise.
+type proposedPlan struct {
+	architectureDecision
+	PlanSource PlanSource `json:"plan_source,omitempty"`
+	PlanDigest string     `json:"plan_digest,omitempty"`
+}
+
+// planEventSource is who the PlanProposed event is attributed to. A supplied
+// plan is announced by the system that received it, not by an architect that
+// never spoke.
+func planEventSource(source PlanSource) event.Source {
+	if source == PlanSupplied {
+		return event.SourceSystem
+	}
+	return event.SourceArchitect
+}
+
+// planSummaryFrom is planSummary with the plan's source stated first when it
+// was not the architect. The summary is what a resumed task carries as its
+// plan, so the label has to be in the text itself or a resume drops it.
+func planSummaryFrom(d architectureDecision, source PlanSource, digest string) string {
+	if source != PlanSupplied {
+		return planSummary(d)
+	}
+	return strings.TrimRight("Supplied plan (not architect-produced; sha256 "+digest+")\n"+planSummary(d), "\n")
 }
 
 // planSummary renders the plan as something an architect can read and judge:
@@ -1101,7 +1163,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					// architect, never the human. Failing the run here instead
 					// would let a reviewer end a task by raising a question
 					// nobody was given the chance to answer.
-					revised, err := e.resolveArchitecture(ctx, sc, start, taskID, task, escalationPrompt(task, plan, report, review))
+					revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, escalationPrompt(task, plan, report, review), "the reviewer escalated: "+oneLine(review.Summary))
 					if err != nil {
 						return false, plan, lastReview, lastAudit, err
 					}
@@ -1326,7 +1388,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// that could interrupt a person directly would let one nervous
 			// model manufacture a Level-3 event, which is the mirror image of
 			// letting a confident one skip past it.
-			revised, err := e.resolveArchitecture(ctx, sc, start, taskID, task, escalationPrompt(task, plan, lastAudit, review))
+			revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, escalationPrompt(task, plan, lastAudit, review), "the reviewer escalated: "+oneLine(review.Summary))
 			if err != nil {
 				return false, plan, lastReview, lastAudit, err
 			}
@@ -1429,6 +1491,66 @@ type reviewDecision struct {
 
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
 	return e.resolveArchitectureIn(ctx, sc, start, taskID, task, prompt, e.Repo.Root)
+}
+
+// resolveArchitectureForRevision is resolveArchitecture for a plan that already exists and needs
+// revising: the review-escalation paths. It refuses when the plan was supplied,
+// because the architect revising a supplied bound would put two authors under
+// the one label the receipt carries.
+func (e *Engine) resolveArchitectureForRevision(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt, why string) (architectureDecision, error) {
+	if _, ok := e.suppliedPlan(taskID); ok {
+		return architectureDecision{}, errSuppliedPlanCannotBeRevised(why)
+	}
+	return e.resolveArchitecture(ctx, sc, start, taskID, task, prompt)
+}
+
+// resolveSuppliedPlan routes a supplied plan through the same authority
+// boundary an architect's plan crosses in resolveArchitectureIn's "proceed"
+// branch, with the same router and the same recorded routing.
+//
+// The branches that re-prompt the architect there fail closed here. A bounded
+// knowledge gap is closed by asking the architect to investigate; a human
+// answer is folded into the plan by asking the architect to re-plan under it.
+// Neither is available for a plan nobody in the run authored, and doing either
+// with the architect would make the supplied bound a revised one. The one
+// human path kept is the answer that authorises the plan AS SUPPLIED: the run
+// asks, and proceeds only if the answer covers this exact plan.
+func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, supplied SuppliedPlan) (architectureDecision, error) {
+	d := supplied.decision
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
+	routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
+	if err != nil {
+		return architectureDecision{}, err
+	}
+	e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
+	switch {
+	case routing.Route == RouteCannotEstablish:
+		return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
+	case routing.ClosesGap():
+		return architectureDecision{}, errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + routing.Condition)
+	case routing.RequiresHuman():
+		if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
+			if !authorized {
+				return architectureDecision{}, fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition)
+			}
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
+			return d, nil
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
+		if _, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition); err != nil {
+			return architectureDecision{}, err
+		}
+		// The answer is read back through the same record an architect's
+		// re-plan would consult, so what authorises the run is the recorded
+		// resolution and not the option string the prompt returned.
+		if authorized, _ := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); !authorized {
+			return architectureDecision{}, errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: " + routing.Condition)
+		}
+		return d, nil
+	}
+	return d, nil
 }
 
 // resolveArchitectureIn is resolveArchitecture with an explicit working
@@ -2470,7 +2592,7 @@ SENSEI PREFLIGHT:
 TASK:
 %s
 
-ARCHITECTURAL PLAN:
+ARCHITECTURAL PLAN%s:
 %s
 
 SENSEI DIFF AUDIT:
@@ -2486,7 +2608,17 @@ and proves nothing.
 
 CANDIDATE DIFF:
 %s`, shortDigest(p.Provenance.CandidateDigest), conversationOrNone(p.Conversation), intentOrNone(p.ArchitectIntent),
-		p.WorkspaceAuthority, p.Preflight, p.Task, p.Plan, p.Audit, p.Validation, p.Diff)
+		p.WorkspaceAuthority, p.Preflight, p.Task, planSourceLabel(p), p.Plan, p.Audit, p.Validation, p.Diff)
+}
+
+// planSourceLabel qualifies the plan heading a reviewer reads. An architect's
+// plan is the unmarked case, exactly as before; a supplied plan says so, so the
+// reviewer does not weigh it as the architect's judgement.
+func planSourceLabel(p roles.IndependentReviewPacket) string {
+	if p.PlanSource == string(PlanSupplied) {
+		return " (supplied with the task, not architect-produced; sha256 " + p.PlanDigest + ")"
+	}
+	return ""
 }
 
 // inspectionReviewPrompt judges findings rather than a change.
@@ -2547,12 +2679,12 @@ SENSEI PREFLIGHT:
 TASK:
 %s
 
-THE READ-ONLY PLAN THE WORKER WAS BOUND BY:
+THE READ-ONLY PLAN THE WORKER WAS BOUND BY%s:
 %s
 
 THE FINDINGS REPORTED:
 %s`, conversationOrNone(p.Conversation), p.ArchitectIntent,
-		p.WorkspaceAuthority, p.Preflight, p.Task, p.Plan, p.Report)
+		p.WorkspaceAuthority, p.Preflight, p.Task, planSourceLabel(p), p.Plan, p.Report)
 }
 
 // intentOrNone keeps the reviewer's packet unambiguous the same way the
@@ -3307,14 +3439,28 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			return
 		}
 
+		// Who authored the bound is re-established from the session record
+		// before anything could revise it. A supplied plan whose record cannot
+		// be reconstructed is not resumed under the architect instead.
+		bound, err := e.restorePlanBound(task)
+		if err != nil {
+			fail(err)
+			return
+		}
 		tc := taskContext{
 			Task:            task.Task,
 			Identity:        identity,
 			Conversation:    e.conversationSoFar(task.Task, 40),
 			WorkspaceStatus: firstText(workspaceStatus),
 			Preflight:       firstText(preflight),
-			Rationale:       task.Plan,
+			Rationale:       bound.Rationale,
+			Steps:           bound.Steps,
 			Domain:          start.Domain(),
+			Mode:            bound.Mode,
+			Consequences:    bound.Consequences,
+			Invariants:      bound.Invariants,
+			PlanSource:      bound.Source,
+			PlanDigest:      task.PlanDigest,
 		}
 		carried := ""
 		if r := strings.TrimSpace(task.Review); r != "" {
@@ -3322,7 +3468,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
-		e.implement(ctx, sc, start, task.TaskID, &tc, task.Plan, carried, fail)
+		e.implement(ctx, sc, start, task.TaskID, &tc, bound.Plan, carried, fail)
 	}()
 	return task.TaskID
 }

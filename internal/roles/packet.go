@@ -87,10 +87,18 @@ func (p WorkerHandoffPacket) Render() string {
 type IndependentReviewPacket struct {
 	Provenance Provenance `json:"provenance"`
 	Task       string     `json:"task"`
-	// Plan is the bound the candidate must stay inside. It is the architect's
-	// output, not the worker's: a reviewer must know what was authorised in
-	// order to notice work that exceeds it.
+	// Plan is the bound the candidate must stay inside. It is never the
+	// worker's: a reviewer must know what was authorised in order to notice
+	// work that exceeds it.
 	Plan string `json:"plan,omitempty"`
+	// PlanSource says who authored that bound -- the run's architect, or a
+	// file supplied from outside the run -- and PlanDigest identifies a
+	// supplied one. Both are stamped by the engine from how the plan entered;
+	// the plan itself has no field for either. Without them a reviewer's
+	// packet read every plan as the architect's, and a supplied plan would
+	// have been recorded as a decision the architect never made.
+	PlanSource string `json:"plan_source,omitempty"`
+	PlanDigest string `json:"plan_digest,omitempty"`
 	// Conversation is what the human asked for. It explains the subject and
 	// never lowers the standard of proof.
 	Conversation       string `json:"conversation,omitempty"`

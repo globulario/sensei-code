@@ -169,3 +169,23 @@ func TestHeadlessRunUsesTheSameEngineEntryAsTheTUI(t *testing.T) {
 		}
 	}
 }
+
+// --plan is validated in full before any task exists; a refused file is a
+// usage error and not a failed run.
+func TestASuppliedPlanFileIsValidatedBeforeSubmission(t *testing.T) {
+	dir := t.TempDir()
+	bad := filepath.Join(dir, "bad.json")
+	os.WriteFile(bad, []byte(`{"decision":"proceed","plan":"x","plan_source":"architect"}`), 0o644)
+	if _, err := loadSuppliedPlan(bad); err == nil {
+		t.Fatal("a plan asserting its own provenance was accepted")
+	}
+	if _, err := loadSuppliedPlan(filepath.Join(dir, "missing.json")); err == nil {
+		t.Fatal("a missing plan file was accepted")
+	}
+	good := filepath.Join(dir, "good.json")
+	os.WriteFile(good, []byte(`{"decision":"proceed","plan":"create main_test.go","files":["main_test.go"]}`), 0o644)
+	p, err := loadSuppliedPlan(good)
+	if err != nil || p.Digest == "" {
+		t.Fatalf("a valid plan was refused: %v", err)
+	}
+}

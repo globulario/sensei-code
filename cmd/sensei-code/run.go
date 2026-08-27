@@ -72,6 +72,10 @@ func runObservation(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 func runHeadless(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string, name string, observe bool) int {
 	fs := flag.NewFlagSet(name, flag.ExitOnError)
 	task := fs.String("task", "", "the work to carry out (required)")
+	var planPath *string
+	if !observe {
+		planPath = fs.String("plan", "", "JSON file holding the bounded plan to carry out, instead of asking the architect for one")
+	}
 	timeout := fs.Duration("timeout", 0, "give up after this long; 0 waits indefinitely")
 	asJSON := fs.Bool("json", false, "emit the event stream as JSONL instead of prose")
 	quiet := fs.Bool("quiet", false, "print only terminal outcomes")
@@ -117,11 +121,39 @@ func runHeadless(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 	if observe {
 		submit = engine.SubmitObservation
 	}
+	if planPath != nil && strings.TrimSpace(*planPath) != "" {
+		// The plan is read and validated here, in full, before the task
+		// exists. Its provenance is then the engine's to stamp: the file
+		// supplies a bound and nothing about who is entitled to it.
+		plan, err := loadSuppliedPlan(*planPath)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code "+name+":", err)
+			return exitUsage
+		}
+		submit = func(ctx context.Context, task string) string {
+			return engine.SubmitGovernedWithPlan(ctx, task, plan)
+		}
+	}
 	taskID := submit(ctx, strings.TrimSpace(*task))
 	if !*quiet {
 		fmt.Printf("task %s  session %s\n", taskID, sessionID)
 	}
 	return streamUntilSettled(ctx, engine, events, taskID, *asJSON, *quiet)
+}
+
+// loadSuppliedPlan reads a plan file and validates it as a bound. Anything the
+// validation refuses is a usage error: no task is created for a plan the run
+// would not accept.
+func loadSuppliedPlan(path string) (workflow.SuppliedPlan, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return workflow.SuppliedPlan{}, fmt.Errorf("--plan: %w", err)
+	}
+	plan, err := workflow.ParseSuppliedPlan(raw)
+	if err != nil {
+		return workflow.SuppliedPlan{}, fmt.Errorf("--plan %s: %w", path, err)
+	}
+	return plan, nil
 }
 
 // runControl is the part of the engine a headless run steers: it may withdraw

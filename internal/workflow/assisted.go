@@ -64,6 +64,17 @@ func (e *Engine) SubmitGovernedUnattended(ctx context.Context, task string) stri
 	return e.submit(ctx, task, SubmittedUnattended, false)
 }
 
+// SubmitGovernedWithPlan is a governed run whose plan was handed in.
+//
+// The architect is not consulted for the bound: the supplied decision enters
+// the workflow at the same routing boundary an architect's would, and every
+// gate after that boundary reads it identically. What differs is stamped here
+// and nowhere the plan can reach -- the objective's provenance and the plan's
+// source -- so a receipt never says an architect produced what a file held.
+func (e *Engine) SubmitGovernedWithPlan(ctx context.Context, task string, plan SuppliedPlan) string {
+	return e.submit(ctx, task, SubmittedWithSuppliedPlan, false, func(taskID string) { e.supplyPlan(taskID, plan) })
+}
+
 // SubmitObservation starts a read-only run: read the repository, report what
 // was found, admit nothing.
 //
@@ -74,8 +85,13 @@ func (e *Engine) SubmitObservation(ctx context.Context, task string) string {
 	return e.submit(ctx, task, ObservationUnattended, true)
 }
 
-func (e *Engine) submit(ctx context.Context, task string, how Provenance, observe bool) string {
+// prepare hooks record per-task state before the run starts, so the run can
+// never observe the task without it.
+func (e *Engine) submit(ctx context.Context, task string, how Provenance, observe bool, prepare ...func(taskID string)) string {
 	taskID := fmt.Sprintf("task-%d", time.Now().UTC().UnixNano())
+	for _, p := range prepare {
+		p(taskID)
+	}
 	ctx, cancel := context.WithCancel(ctx)
 	e.mu.Lock()
 	if e.stops == nil {
