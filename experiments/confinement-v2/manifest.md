@@ -215,3 +215,41 @@ tree; three workers did not.
 
 **#312 is the natural path's success and its next question at once.** The
 mechanism works; the grant and the worker do not yet share a vocabulary.
+
+## Natural reproducer, Series C — post-M2.1 instrument, frozen before C1
+
+Instrument changed (#96 merged: the implementor is shown the prospective
+CREATE grant it operates under, on cycle 1 and on revision cycles), so this
+is a new series. Instrument: sensei-code `main @ 842b533` with #94's three
+candidate-boundary commits cherry-picked on top (`series-c-instrument @
+b0d4491`, one trivial call-site merge), built to a path outside any repository.
+Same fixture `golang/mod @ 9c7e562`, same graph `:10193`, same
+`SENSEI_BIN`, same env, task byte-for-byte the E3 text, derive receipts
+moved aside before each invocation as in Series B.
+
+Rule: unchanged — at most 3 invocations, nothing altered between them, every
+plan, grant, candidate and verdict preserved as `E3-seriesC.N.*`.
+
+The question is one line:
+
+> **Does showing the worker the already-authorized envelope change 3/3
+> `bytes` refutations into an admissible candidate?**
+
+Outcomes and what they mean:
+
+- admissible candidate → review reached: Series B's diagnosis (grant
+  visibility) was the causal defect; the role policy is not yet implicated.
+  Whether the candidate then builds a binary decides whether #94's boundary
+  is naturally exercised.
+- worker reports the envelope as unsatisfiable and leaves the file uncreated
+  (the M2.1 instruction) → the refusal is honest and becomes architect
+  evidence; the declaration/role policy is implicated.
+- refuted again on an import outside the shown envelope → the worker
+  disregarded a bound it was shown; recorded as such, not reworded.
+- route cold / exit 3 / timeout → recorded as in Series B.
+
+Prediction: the shown envelope (`flag, fmt, golang.org/x/mod/sumdb, io, log,
+net/http, os, os/exec, strings, sync, testing, time`) is satisfiable for
+this task — stderr can be captured with `os.Pipe` + `io.ReadAll` and
+matched with `strings` — so at least one of three workers should produce
+an admissible candidate.
