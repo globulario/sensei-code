@@ -1,7 +1,10 @@
 # Phase B checkpoint — 2026-08-27
 
 > **Investigator-to-deterministic-evidence boundary demonstrated across TRUE,
-> FALSE and UNRESOLVED outcomes on external fixtures.**
+> FALSE and UNRESOLVED outcomes on external fixtures — and, as of 2026-08-27
+> evening, the governed epistemic mechanism observed end to end across two
+> structurally different deterministic relationship families: lock discipline
+> and external-command invocation confinement.**
 
 ## The claim, at the strength the evidence supports
 
@@ -28,6 +31,13 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
 
 ## What is established
 
+- **Two families, full chain.** `field_access_under_lock` (golang/sync,
+  groupcache) and `command_invocation_confined_to` (golang/mod:
+  `experiments/confinement-v1`, `confinement-v2`) each show
+  `recipe → DERIVED → relevant coverage → routing changed → work proceeds` on a
+  foreign repository, the second with the investigator choosing the family
+  untold. "Perhaps it is just a sophisticated lock analyzer" is falsified by
+  observation. Still not general architectural intelligence; still not §8.3.
 - The safety contract, all three sides, at governed-run level, on natural code.
   The ENVELOPE case is the strongest of the three: the relationship is true by
   inspection, and Sensei said *cannot prove* rather than either *true* or
@@ -66,7 +76,14 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
   reproductions as tests. Under the sounder reader the three checkpoint
   specimens re-derive unchanged: TRUE `DERIVED`, FALSE `REFUTED`, ENVELOPE
   `UNRESOLVED`. Both landed 2026-08-27.
-- Generality (§8.3). Two small, disciplined libraries; one vocabulary family
+- Generality (§8.3) — two families, three fixtures, our own adjudication.
+- **The candidate boundary** (`sensei-code#89`): confinement-v2's run failed
+  *after* links 6–7 because a 9 MB build artifact entered the candidate and
+  audit, edit-check and review all failed on size, and the engine retried the
+  oversized candidate through further executors. A structural refusal was
+  represented as a judgement failure — the delegation pattern again, in a
+  different mechanism. Open, with a regression criterion that forbids raising
+  byte limits as the fix. Two small, disciplined libraries; one vocabulary family
   exercised end to end (`command_invocation_confined_to` not yet run).
 - Anything about the 11-task internal benchmark, whose result stands: governed
   is slower and refuses more on sensei-code's own corpus.
