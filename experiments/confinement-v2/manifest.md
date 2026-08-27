@@ -88,3 +88,34 @@ Outcomes and what they mean: route cold (no declaration) → #89 still unmet,
 #312 natural path untested; route granted + boundary holds + review reached →
 #89's natural witness met; route granted + old monster (oversized candidate
 retried) → #91 does not hold, recorded; exit 3 → the question preserved.
+
+### B1 — 21:54:57Z–21:58:30Z, exit 1
+
+- The architect, told nothing, planned `main.go` + `main_test.go` again **and
+  declared** `prospective_surfaces: [{path: gosumcheck/main_test.go, package:
+  main, role: go-regression-test, dependencies: [fmt, io, net/http, os,
+  strings, testing]}]`. Grant admissible against `main.go` at `9c7e562`:
+  `prospective.granted`, `derived coverage: 2 anchor(s) over 2 planned
+  file(s); route architectural-authority-granted`. Attempts 1–3 read
+  `1 anchor over 2 files → bounded-knowledge-gap` on the same bytes. The gap
+  #312 named is closed on its natural witness; the implementor ran on this
+  task for the first time.
+- Claude produced a 3,985-byte candidate: `main.go` +4/−2 and a 108-line
+  `main_test.go`. It verified with `go vet . && go test .` — **no `go build`,
+  no binary in the tree**, so #91's boundary was not reached.
+- Post-creation inspection: **`prospective surface refuted: main_test.go
+  imports "bytes"`** — the file also imports `net/http/httptest` and
+  `regexp`; none are in `main.go`'s imports or the `testing` allowance. The
+  authorized shape was not the produced shape. Terminal: `workflow.failed`,
+  one implementor only, no review asked. The cycle-3 rule held in the wild.
+- Validation noted `gofmt -l cmd internal` fails identically against the base
+  (fixture has no `cmd`/`internal`): infrastructure, not the candidate.
+- **Product finding (not altered for B2):** `implementationPrompt` never
+  shows the worker the declared prospective shape. The grant bounds the
+  worker; the worker cannot see the bound, so a competent test that reaches
+  for `httptest` is refuted for exceeding a declaration it was never given.
+  Filed as a follow-up, not fixed mid-series.
+- `E3-seriesB.1.log` keeps 25 non-output events (77 dropped);
+  `E3-seriesB.1.candidate.patch` is the refuted candidate.
+
+Under the rule, B2 runs unchanged.
