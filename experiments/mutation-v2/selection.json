@@ -1,0 +1,8 @@
+{
+ "family": "state_mutation_confined_to_owner",
+ "tool": "selection/mutscan/main.go",
+ "tool_sha256": "949ac76c0125211abbe2b4d5e5e553e949754bf282f83439901be9964592a297",
+ "tool_toolchain": "go1.26.0",
+ "sealed_before_scan": true,
+ "scan": null
+}
