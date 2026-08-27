@@ -1,0 +1,38 @@
+{
+  "recipes": [
+    {
+      "kind": "field_access_under_lock",
+      "dir": ".",
+      "type": "cache",
+      "field": "nbytes",
+      "lock": "mu",
+      "why": "envelope-v1 specimen: selected mechanically as the first relation the reader itself reports UNRESOLVED (OnEvicted closure stored in lru.Cache, invoked under the caller's lock -- true by inspection, outside the reader's envelope)",
+      "provenance": {
+        "origin_task": "specimen-envelope",
+        "origin_gap": "envelope experiment",
+        "region": [
+          "groupcache.go"
+        ],
+        "written_by": "experiment"
+      }
+    },
+    {
+      "kind": "field_access_under_lock",
+      "dir": ".",
+      "type": "cache",
+      "field": "lru",
+      "lock": "mu",
+      "why": "The requested change makes non-nil cache.lru a construction invariant, while all subsequent LRU operations remain synchronization-sensitive through cache.mu.",
+      "provenance": {
+        "origin_task": "task-1787800838706250128",
+        "origin_gap": "graph coverage is absent for the planned files: only 1 of 2 requested file(s) are examined in the graph — the rest are unknown to it",
+        "region": [
+          "groupcache.go",
+          "groupcache_test.go"
+        ],
+        "written_at": "2026-08-27T03:26:15Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}
