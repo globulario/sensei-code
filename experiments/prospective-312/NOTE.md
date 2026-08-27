@@ -259,3 +259,11 @@ dropped, original preserved outside the repository.
 
 Next: human review of the candidate diff, then admission as a PR from the
 candidate branch — a human decision, not this run's.
+
+## Custody after C1
+
+Codex's cycle-4 change was committed onto the candidate branch by the operator
+as `684a906` (tests green over the full candidate with `-buildvcs=false`), the
+branch pushed, and PR #93 opened from it against `main`:
+https://github.com/globulario/sensei-code/pull/93. The PR states the run's own
+limitations. Merge is a human decision; nothing here admits it.
