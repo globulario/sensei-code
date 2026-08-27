@@ -65,16 +65,18 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
   base, or an existing governed entry, establishes; no flag), with the posted
   reproductions as tests. Under the sounder reader the three checkpoint
   specimens re-derive unchanged: TRUE `DERIVED`, FALSE `REFUTED`, ENVELOPE
-  `UNRESOLVED`. Landing is review's call.
+  `UNRESOLVED`. Both landed 2026-08-27.
 - Generality (§8.3). Two small, disciplined libraries; one vocabulary family
   exercised end to end (`command_invocation_confined_to` not yet run).
 - Anything about the 11-task internal benchmark, whose result stands: governed
   is slower and refuses more on sensei-code's own corpus.
 - The implementor and reviewer beyond three accepted candidates.
-- That the default product does this. `globulario/sensei#311` (replacing #309) and `#310` (retargeted to `main`;
-  its feature line landed in #306) now carry fixes and tests for the review
-  findings above and await review. Until they land, the demonstrated behaviour
-  lives behind `SENSEI_BIN`.
+- ~~That the default product does this.~~ **Landed 2026-08-27**: `globulario/sensei#311`
+  (candidate closure, entry-as-a-unit parser) and `#310` (tri-state
+  flow-sensitive reader, review counterexamples, evidence gate, §8d
+  establishment gate) are merged to `main`. The demonstrated behaviour is now
+  the default substrate behaviour at `main`; a deployed `sensei` binary must be
+  rebuilt from it to carry it.
 
 ## What it cost — recorded because it is information
 
