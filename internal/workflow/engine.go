@@ -98,6 +98,10 @@ type Engine struct {
 	// all of them would send the second gap straight to a human because the
 	// first one used the attempts.
 	closures map[string]int
+	// premises are the engine-issued receipts for the knowledge gaps each task
+	// has met, the identity the closure budget is spent against. See
+	// premise.go.
+	premises map[string][]*premiseReceipt
 }
 
 // closureBudget is how many rounds one condition gets to close its own gap.
@@ -155,13 +159,17 @@ func short12(s string) string {
 
 // spendClosure records an attempt at one gap and reports whether the budget
 // allowed it.
-func (e *Engine) spendClosure(taskID, condition string) bool {
+//
+// gap is the premise receipt's ID (premise.go): the engine's own identity for
+// the question, carried through the closure loop. Keying on the condition
+// text let a paraphrase buy a fresh round (sensei-code#97).
+func (e *Engine) spendClosure(taskID, gap string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closures == nil {
 		e.closures = map[string]int{}
 	}
-	key := taskID + "\x00" + condition
+	key := taskID + "\x00" + gap
 	if e.closures[key] >= closureBudget {
 		return false
 	}
@@ -1539,6 +1547,9 @@ type architectureDecision struct {
 	// against the covering surface's bytes at the pinned world; an undeclared
 	// new file is uncovered exactly as before.
 	ProspectiveSurfaces []ProspectiveSurface `json:"prospective_surfaces,omitempty"`
+	// PremiseResolutions are the closure round's answers to the premise
+	// receipts it was asked about. See premise.go.
+	PremiseResolutions []PremiseResolution `json:"premise_resolutions,omitempty"`
 }
 
 // reviewDecision is the reviewer's wire contract. It is deliberately separate
@@ -1693,10 +1704,15 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// here binds them to the moment the plan was authorised, rather
 			// than to a preflight taken again further down the loop.
 			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
+			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
+			var receipt *premiseReceipt
+			if routing.ClosesGap() {
+				receipt = e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
+			}
 			switch {
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
-			case routing.ClosesGap() && e.spendClosure(taskID, routing.Condition):
+			case routing.ClosesGap() && e.spendClosure(taskID, receipt.ID):
 				// Bounded epistemic work, not an owner for the decision.
 				// Nothing is granted here: the round establishes what is
 				// knowable and the router runs again over what the graph then
@@ -1704,11 +1720,11 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				// next pass falls through to the human branch below with the
 				// condition intact.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, nil))
+					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
 				if err := newRound("a bounded knowledge gap"); err != nil {
 					return architectureDecision{}, err
 				}
-				prompt = gapClosurePrompt(prompt, d, routing.Condition)
+				prompt = gapClosurePrompt(prompt, d, routing.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
 				attempt = 0
 				continue
 			case routing.ClosesGap():
@@ -1764,6 +1780,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				return architectureDecision{}, err
 			}
 			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
+			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
 			if routing.Granted() {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
@@ -1778,13 +1795,14 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
 			}
 			if routing.ClosesGap() {
-				if e.spendClosure(taskID, routing.Condition) {
+				receipt := e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
+				if e.spendClosure(taskID, receipt.ID) {
 					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, nil))
+						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
 					if err := newRound("a bounded knowledge gap"); err != nil {
 						return architectureDecision{}, err
 					}
-					prompt = gapClosurePrompt(prompt, d, routing.Condition)
+					prompt = gapClosurePrompt(prompt, d, routing.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
 					attempt = 0
 					continue
 				}
@@ -2036,6 +2054,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
+	// The gap's identity is completed with the world it was met in. The
+	// router does not know the pinned base; the budget must, or the same gap
+	// at two bases would share one round.
+	if routing.Gap.Identified() {
+		routing.Gap.World = strings.TrimSpace(e.governedBase(taskID))
+	}
 
 	// Observational only. Nothing below reads it and no decision depends on it.
 	//
@@ -2561,7 +2585,8 @@ Return ONLY JSON in this exact shape:
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
-  "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference"}]
+  "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference","gap":"only the receipt id of an unsettled premise this claim continues"}],
+  "premise_resolutions": [{"gap":"receipt id you were asked to answer","outcome":"established|refuted|unresolved","evidence":"..."}]
 }
 Declare every file the plan CREATES under "prospective_surfaces" (the only role is
 go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
