@@ -44,14 +44,31 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
 
 ## What is not established
 
+- **That the reader is sound over call shapes it never exercised.** Review of
+  `globulario/sensei#310` found, and local reproductions confirmed, three ways
+  a false discipline could still earn `DERIVED`: a package-level (non-method)
+  caller invoking a never-locking helper unlocked is skipped and counts as no
+  call site; `go s.helper()` and `defer s.helper()` inherit the lock state at
+  the statement rather than at the moment the helper runs; and the promotion
+  gate's notion of "the claimant's change" is the commit that added the
+  candidate file, so an uncommitted candidate makes every citation look
+  independent. None of the three shapes appears in the specimens above, so the
+  observed TRUE / FALSE / ENVELOPE results stand for their specimens — but the
+  broader claim "the reader is sound" does not, and must not be read into them.
+  Also: `#309`'s status parser attaches a `status:` that precedes its own `id:`
+  to the *previous* entry, which both re-creates the defect and excuses a
+  canonical invariant — a fail-open in the closure check itself. Both PRs are
+  blocked on tests covering these exact shapes; nothing lands until then.
 - Generality (§8.3). Two small, disciplined libraries; one vocabulary family
   exercised end to end (`command_invocation_confined_to` not yet run).
 - Anything about the 11-task internal benchmark, whose result stands: governed
   is slower and refuses more on sensei-code's own corpus.
 - The implementor and reviewer beyond three accepted candidates.
-- That the default product does this. Until `globulario/sensei#309` and `#310`
-  (with `feat/second-derivation-family`) land, the demonstrated behaviour lives
-  behind `SENSEI_BIN`.
+- That the default product does this. `globulario/sensei#309` and `#310` (with
+  `feat/second-derivation-family`) are open and **blocked on the review
+  findings above**; the reproductions are posted on the PRs as failing shapes
+  to target. Until they land, the demonstrated behaviour lives behind
+  `SENSEI_BIN`, and it lands only after those counterexamples are covered.
 
 ## What it cost — recorded because it is information
 
