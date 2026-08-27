@@ -93,6 +93,16 @@ type Interrupted struct {
 	TaskID string
 	Task   string
 	Plan   string
+	// PlanSource and PlanDigest say who authored the plan, read from the
+	// PlanProposed payload the engine wrote. PlanRecord is that payload, byte
+	// for byte, for the same reason AwaitingAuthority is: a supplied plan is
+	// resumed under the exact bound it was given, and a round trip through a
+	// decoded shape is where a bound quietly becomes a different one. An
+	// event with no source field predates the field, and only the architect
+	// produced plans then.
+	PlanSource string
+	PlanDigest string
+	PlanRecord json.RawMessage
 	// Review is the last thing the reviewer said, which is the most useful
 	// thing to hand whoever picks the work up.
 	Review string
@@ -151,6 +161,14 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// human's yes to it.
 			p.Plan = e.Summary
 			p.planned = true
+			p.PlanRecord = e.Payload
+			var src struct {
+				Source string `json:"plan_source"`
+				Digest string `json:"plan_digest"`
+			}
+			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &src) == nil {
+				p.PlanSource, p.PlanDigest = src.Source, src.Digest
+			}
 		case event.WorkflowCompleted, event.WorkflowFailed:
 			p.done = true
 		case event.WorkflowStopped:

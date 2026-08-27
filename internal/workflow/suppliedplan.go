@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/globulario/sensei-code/internal/session"
 )
 
 // PlanSource says who authored the bound a candidate is judged against.
@@ -126,4 +128,35 @@ func (e *Engine) planSource(taskID string) PlanSource {
 func (e *Engine) planDigest(taskID string) string {
 	p, _ := e.suppliedPlan(taskID)
 	return p.Digest
+}
+
+// errSuppliedPlanContextUnavailable is the resume of a supplied-plan task whose
+// exact bound cannot be re-established from the session record.
+//
+// The alternative -- resuming it as an architect's plan -- would let a restart
+// change who may author the governing plan, which is the invariant
+// resolveArchitectureForRevision exists to hold. The task stays resumable; it
+// waits for a record it can trust.
+var errSuppliedPlanContextUnavailable = errors.New("SUPPLIED_PLAN_CONTEXT_UNAVAILABLE: this task ran under a supplied plan and the session record does not hold that plan intact; it is not resumed under the architect instead")
+
+// restorePlanSource re-establishes who authored a resumed task's bound from the
+// session record, re-registering a supplied plan so every path that refuses to
+// revise one still refuses after a restart.
+func (e *Engine) restorePlanSource(task session.Interrupted) (PlanSource, error) {
+	switch PlanSource(task.PlanSource) {
+	case PlanSupplied:
+		var rec proposedPlan
+		if len(task.PlanRecord) == 0 || json.Unmarshal(task.PlanRecord, &rec) != nil ||
+			strings.TrimSpace(rec.Plan) == "" || rec.PlanDigest == "" || rec.PlanDigest != task.PlanDigest {
+			return "", errSuppliedPlanContextUnavailable
+		}
+		e.supplyPlan(task.TaskID, SuppliedPlan{decision: rec.architectureDecision, Digest: rec.PlanDigest})
+		return PlanSupplied, nil
+	case PlanByArchitect, "":
+		// No source recorded means the record predates the field, when only
+		// the architect produced plans.
+		return PlanByArchitect, nil
+	default:
+		return "", fmt.Errorf("the session record names a plan source this build does not know: %q", task.PlanSource)
+	}
 }

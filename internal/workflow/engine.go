@@ -672,7 +672,8 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// (see Stop), which costs nothing when unused, where a mandatory prompt
 	// taxed every run.
 	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
-		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)), decision))
+		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)),
+		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID)}))
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -976,6 +977,19 @@ func changedPaths(diff string) []string {
 		}
 	}
 	return out
+}
+
+// proposedPlan is the PlanProposed payload: the decision plus who authored it.
+//
+// The source lives on the record and not on architectureDecision itself, so a
+// supplied file cannot carry one (ParseSuppliedPlan refuses unknown fields)
+// while the engine-written record always does. It is what a resume reads to
+// re-establish the bound, so a restart cannot turn a supplied plan back into
+// one the architect may revise.
+type proposedPlan struct {
+	architectureDecision
+	PlanSource PlanSource `json:"plan_source,omitempty"`
+	PlanDigest string     `json:"plan_digest,omitempty"`
 }
 
 // planEventSource is who the PlanProposed event is attributed to. A supplied
@@ -3413,6 +3427,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			return
 		}
 
+		// Who authored the bound is re-established from the session record
+		// before anything could revise it. A supplied plan whose record cannot
+		// be reconstructed is not resumed under the architect instead.
+		source, err := e.restorePlanSource(task)
+		if err != nil {
+			fail(err)
+			return
+		}
 		tc := taskContext{
 			Task:            task.Task,
 			Identity:        identity,
@@ -3421,6 +3443,8 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Preflight:       firstText(preflight),
 			Rationale:       task.Plan,
 			Domain:          start.Domain(),
+			PlanSource:      source,
+			PlanDigest:      task.PlanDigest,
 		}
 		carried := ""
 		if r := strings.TrimSpace(task.Review); r != "" {

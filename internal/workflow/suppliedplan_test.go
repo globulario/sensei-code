@@ -4,10 +4,14 @@ package workflow
 // architect's plan is, and is never recorded as the architect's.
 
 import (
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/session"
 )
 
 const goodPlan = `{"decision":"proceed","summary":"add a regression test","plan":"create gosumcheck/main_test.go","files":["gosumcheck/main_test.go"],"steps":["write the test"],"mode":"modify"}`
@@ -136,5 +140,54 @@ func TestASuppliedPlanAnnouncesItselfAsSupplied(t *testing.T) {
 func TestASuppliedPlanDoesNotEstablishHumanAuthority(t *testing.T) {
 	if (Objective{Text: "x", Provenance: SubmittedWithSuppliedPlan}).HumanAuthorized() {
 		t.Fatal("a file on disk was read as a person")
+	}
+}
+
+// A restart must not change who may author the governing plan. The source is
+// re-established from the session record, and a supplied plan the record does
+// not hold intact is not resumed under the architect instead.
+func TestASuppliedPlanSurvivesResumeOrFailsClosed(t *testing.T) {
+	p, _ := ParseSuppliedPlan([]byte(goodPlan))
+	record, _ := json.Marshal(proposedPlan{architectureDecision: p.decision, PlanSource: PlanSupplied, PlanDigest: p.Digest})
+
+	// The record as the engine wrote it is readable by the session store.
+	found := session.FindInterrupted([]event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Summary: "task"},
+		{TaskID: "t", Kind: event.PlanProposed, Summary: "plan", Payload: record},
+	})
+	if len(found) != 1 || found[0].PlanSource != string(PlanSupplied) || found[0].PlanDigest != p.Digest {
+		t.Fatalf("the session record does not carry the plan source: %+v", found)
+	}
+
+	e := &Engine{}
+	src, err := e.restorePlanSource(found[0])
+	if err != nil || src != PlanSupplied || e.planSource("t") != PlanSupplied {
+		t.Fatalf("a supplied plan was not re-established on resume: %v %q", err, src)
+	}
+	if _, err := e.resolveArchitectureForRevision(nil, nil, certifiedStart{}, "t", "task", "prompt", "escalated"); err == nil {
+		t.Fatal("after a resume the architect may revise the supplied plan")
+	}
+	restored, _ := e.suppliedPlan("t")
+	if restored.decision.Plan != p.decision.Plan || restored.Digest != p.Digest {
+		t.Fatal("the resumed bound is not the supplied one")
+	}
+
+	// Missing, corrupt, or digest-mismatched records fail closed.
+	for name, bad := range map[string]session.Interrupted{
+		"no record":       {TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest},
+		"digest mismatch": {TaskID: "x", PlanSource: "supplied", PlanDigest: "other", PlanRecord: record},
+		"corrupt":         {TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest, PlanRecord: []byte(`{"plan_source":"supplied"`)},
+		"unknown source":  {TaskID: "x", PlanSource: "oracle"},
+	} {
+		if _, err := (&Engine{}).restorePlanSource(bad); err == nil {
+			t.Errorf("%s: resumed anyway", name)
+		}
+	}
+	if _, err := (&Engine{}).restorePlanSource(session.Interrupted{TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest}); !errors.Is(err, errSuppliedPlanContextUnavailable) {
+		t.Fatalf("wrong refusal: %v", err)
+	}
+	// A record with no source predates the field: the architect's.
+	if src, err := (&Engine{}).restorePlanSource(session.Interrupted{TaskID: "old"}); err != nil || src != PlanByArchitect {
+		t.Fatalf("an old record is not the architect's: %v %q", err, src)
 	}
 }
