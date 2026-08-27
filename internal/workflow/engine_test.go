@@ -440,6 +440,7 @@ func TestAStoppedRunIsReportedAsStoppedNotFailed(t *testing.T) {
 func TestDecisionRecordNamesTheRealAuthorityOwner(t *testing.T) {
 	e := &Engine{}
 	e.Config.Architect.Name = "chatgpt"
+	e.recordObjective("task-1", Objective{Text: "t", Provenance: RequestedByHuman})
 
 	// No Level-3 condition was answered during this task.
 	got := e.decisionAuthority("task-1", certifiedStart{})

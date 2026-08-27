@@ -227,3 +227,28 @@ func TestAResumedSuppliedPlanContinuesUnderTheExactBound(t *testing.T) {
 		t.Fatalf("the reviewer packet does not carry the exact supplied bound: %+v", pkt)
 	}
 }
+
+// The durable decision record names who actually decided and what a human
+// actually granted. A supplied plan was decided by nobody in the run, and an
+// unattended submission was granted by nobody a person is established to be.
+func TestASuppliedPlanDecisionIsNotRecordedAsTheArchitects(t *testing.T) {
+	e := &Engine{}
+	e.Config.Architect.Name = "chatgpt"
+	p, _ := ParseSuppliedPlan([]byte(goodPlan))
+	e.supplyPlan("t", p)
+	e.recordObjective("t", Objective{Text: "task", Provenance: SubmittedWithSuppliedPlan})
+	got := e.decisionAuthority("t", certifiedStart{})
+	if strings.Contains(got.DecidedBy, "ChatGPT") || !strings.Contains(got.DecidedBy, p.Digest) {
+		t.Fatalf("the record attributes a supplied plan to the architect: %+v", got)
+	}
+	if strings.Contains(got.HumanGrant, "/run") || !strings.Contains(got.HumanGrant, "none established") {
+		t.Fatalf("the record claims a human grant nobody gave: %+v", got)
+	}
+	// And an unattended architect run is not granted by a person either.
+	a := &Engine{}
+	a.Config.Architect.Name = "chatgpt"
+	a.recordObjective("u", Objective{Text: "task", Provenance: SubmittedUnattended})
+	if g := a.decisionAuthority("u", certifiedStart{}); strings.Contains(g.HumanGrant, "/run") || !strings.Contains(g.DecidedBy, "ChatGPT") {
+		t.Fatalf("an unattended run is recorded as a /run grant: %+v", g)
+	}
+}

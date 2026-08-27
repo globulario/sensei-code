@@ -928,11 +928,23 @@ func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision
 			Resolution:  last.Chosen,
 		}
 	}
+	// Who decided and what the human granted are read from what the task
+	// recorded, not from which agent is configured. A supplied plan was decided
+	// by nobody in the run, and a headless submission was granted by nobody a
+	// person is established to be.
+	decidedBy := config.DisplayName(e.Config.Architect.Name)
+	if p, ok := e.suppliedPlan(taskID); ok {
+		decidedBy = "supplied plan sha256 " + p.Digest + " (not architect-produced)"
+	}
+	grant := "none established: " + string(e.objective(taskID).Provenance)
+	if e.objective(taskID).HumanAuthorized() {
+		grant = "task execution via /run"
+	}
 	return decision.Authority{
 		Owner:       decision.Architectural,
 		CertifiedBy: certified,
-		DecidedBy:   config.DisplayName(e.Config.Architect.Name),
-		HumanGrant:  "task execution via /run",
+		DecidedBy:   decidedBy,
+		HumanGrant:  grant,
 	}
 }
 
