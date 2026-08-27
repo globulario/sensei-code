@@ -72,3 +72,24 @@ is true *and* unprovable here.
 Falsifiers: `1 anchor` on E2 → the reader granted coverage past its envelope
 (worst outcome; halts everything). `REFUTED` on E2 → the reader is wrong about
 a true relationship and should be examined, not the specimen.
+
+## Restart 1 — E1 reworded, and why
+
+The first E1 asked for an item count in the statistics. `CacheStats.Items`
+already exists at the pinned commit; the architect replied *"already
+implemented"* in 70s with no plan, no routing and no closure round, which is
+correct product behaviour and not an encounter. **My error, from an incomplete
+read of the file.** The run is preserved as `E1.void1-task-already-implemented`.
+
+The manifest's no-rewording rule exists to stop tuning a task after seeing how
+the investigator handled it. Nothing about the investigator was observed here —
+it never reached the region — so the rule is not what a rewording would break.
+Recorded rather than argued.
+
+- **E1 (replacement)** — *cache.stats() computes Items by asking the LRU for
+  its length on every call. Track the item count as entries are added and
+  evicted so stats need not consult the LRU, with no change to reported
+  values.*
+
+Written from the code; touches `add`, the `OnEvicted` callback and
+`itemsLocked`; names no lock.
