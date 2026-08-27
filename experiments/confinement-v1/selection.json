@@ -1,0 +1,39 @@
+{
+  "fixture": "github.com/golang/mod",
+  "pinned_sha": "d0a27b2d4a48460806692bf5c87fc157c3c65292",
+  "family": "command_invocation_confined_to",
+  "rule": "stable path order over non-test .go; first literal exec.Command site is the subject; hand-derived here as SEALED pre-registration -- never shown to the investigator; -search . (repository-wide)",
+  "sequence": [
+    {
+      "file": "gosumcheck/main.go",
+      "relation": "command_invocation_confined_to('go' confined to gosumcheck) searched under .",
+      "result": "DERIVED",
+      "detail": "all 1 observable invocation(s) of \"go\" under . originate from gosumcheck, across 1 subject file(s) (22 file(s) were read to compute it)",
+      "verdict": "SELECTED",
+      "subjects": [
+        "gosumcheck/main.go"
+      ]
+    },
+    {
+      "file": "zip/zip.go",
+      "relation": "command_invocation_confined_to('git' confined to zip) searched under .",
+      "result": "DERIVED",
+      "detail": "all 3 observable invocation(s) of \"git\" under . originate from zip, across 1 subject file(s) (22 file(s) were read to compute it)",
+      "subjects": [
+        "zip/zip.go",
+        "zip/zip.go",
+        "zip/zip.go"
+      ]
+    }
+  ],
+  "selected": {
+    "file": "gosumcheck/main.go",
+    "relation": "command_invocation_confined_to('go' confined to gosumcheck) searched under .",
+    "result": "DERIVED",
+    "detail": "all 1 observable invocation(s) of \"go\" under . originate from gosumcheck, across 1 subject file(s) (22 file(s) were read to compute it)",
+    "verdict": "SELECTED",
+    "subjects": [
+      "gosumcheck/main.go"
+    ]
+  }
+}
