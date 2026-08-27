@@ -81,6 +81,13 @@ const (
 	// one nobody resolved.
 	CandidateResolved Kind = "candidate.resolved"
 	CandidateAudited  Kind = "candidate.audited"
+	// CandidateArtifactExcluded records a path the candidate boundary refused:
+	// a build output or oversized file the plan did not name (#89).
+	CandidateArtifactExcluded Kind = "candidate.artifact_excluded"
+	// CandidateNotAuditable is a STRUCTURAL terminal: the candidate cannot be
+	// audited for a reason no reviewer or further implementor can change, and
+	// the run ends with that reason rather than consuming another executor.
+	CandidateNotAuditable Kind = "candidate.not_auditable"
 	// InspectionReported carries the findings of a read-only plan. Such a run
 	// produces no diff, so without this its only result would be whatever a
 	// reader happened to scroll past in the transcript.

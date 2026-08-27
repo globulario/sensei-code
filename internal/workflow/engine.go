@@ -427,7 +427,10 @@ type taskContext struct {
 	// See architectureDecision.Mode.
 	Mode         string
 	Consequences string
-	Invariants   []string
+	// Files are the paths the plan names. The candidate boundary treats them
+	// as the change's intended outputs; a binary anywhere else is an artifact.
+	Files      []string
+	Invariants []string
 	// Prospective is the plan's declared new surfaces. See
 	// architectureDecision.ProspectiveSurfaces.
 	Prospective []ProspectiveSurface
@@ -688,6 +691,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		WorkspaceStatus: firstText(workspaceStatus),
 		Preflight:       firstText(preflight),
 		Rationale:       decision.Summary,
+		Files:           decision.Files,
 		Steps:           decision.Steps,
 		Domain:          sensei.RepositoryDomain(workspaceStatus),
 		Mode:            planMode(decision.Mode),
@@ -1116,9 +1120,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		report := strings.TrimSpace(result.Text)
 
 		candidate := gitx.Repo{Root: workspace}
-		diff, err := candidate.CandidateDiff(ctx, tc.Identity.BaseSHA)
+		capture, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
+		}
+		diff := capture.Diff
+		// Every refusal at the boundary is REPRESENTED, with the path, size
+		// and reason, before anything downstream sees the candidate (#89).
+		for _, a := range capture.Excluded {
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateArtifactExcluded,
+				fmt.Sprintf("excluded from the candidate: %s (%s, %d bytes) — %s", a.Path, a.Class, a.Size, a.Reason),
+				map[string]string{"path": a.Path, "class": a.Class, "size": fmt.Sprint(a.Size), "reason": a.Reason}))
+		}
+		if len(capture.Binaries) != 0 {
+			e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status,
+				"binary members kept as metadata, not transported: "+gitx.Describe(capture.Binaries), nil))
 		}
 		if strings.TrimSpace(diff) == "" {
 			// For read-only work an empty diff is the expected shape, but it is
@@ -1302,6 +1318,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if !verdict.ReviewerMayAccept() {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 				"Sensei audit did not clear this candidate: "+verdict.Diagnostic(), audit.Structured))
+		}
+		// A structural refusal is about the payload, not the change. No
+		// reviewer can judge it and no further implementor can fix it without
+		// a new candidate, so it is named here and the run ends here (#89).
+		if reason := structuralAuditFailure(verdict); reason != "" {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason, audit.Structured))
+			return false, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, audit.Structured))
@@ -3218,6 +3241,15 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
 		}
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
+		if err != nil && errors.Is(err, errStructural) {
+			// The candidate is kept -- it holds real work -- and the run ends
+			// with the structural reason. Another executor would receive the
+			// same unauditable candidate and fail the same way (#89).
+			state.OpenFindings(openFindings(review, audit, err))
+			_ = state.Save(e.Repo.Root)
+			fail(err)
+			return
+		}
 		if err != nil {
 			// A prospective grant authorizes one exact creation shape. Once its
 			// post-creation inspection refutes that shape, the run is terminal:
