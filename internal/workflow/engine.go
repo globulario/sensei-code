@@ -2783,13 +2783,20 @@ authorship. You may not establish that anything is TRUE — how asserted knowled
 enters the graph without the graph becoming a mirror of what you asserted is an
 open question (dq.closure_knowledge_admission), and it is not settled.
 
-IF YOU CANNOT CLOSE THIS GAP, YOU MAY STILL LEAVE A QUESTION BEHIND.
-Return "proposed_recipe": a single CHECKABLE relationship that, if someone
-verified it mechanically, would have helped here. You are choosing WHERE TO
-LOOK. You are not stating what is so, and you gain nothing by writing it: this
-task still stops, and the question cannot cover the run that proposed it. Only a
-later derivation over this region can turn it into coverage, and only if the
-relationship actually holds there.
+WHAT KIND OF GAP THIS IS, AND WHAT CLOSES IT. This gap is GRAPH COVERAGE: the
+graph does not vouch for this region. Verifying your premises from the
+repository is required above, and it does NOT close this gap -- the graph does
+not read your claims. The gap closes only when a mechanical derivation over
+this region succeeds on a later run, and the only thing that causes such a
+derivation is a question left behind now.
+
+SO LEAVE THE CHECKABLE PART BEHIND, WHETHER OR NOT YOU CONSIDER THE GAP CLOSED,
+AND WHETHER YOU PROCEED OR ESCALATE. Return "proposed_recipe": a single
+CHECKABLE relationship you found worth verifying mechanically in this region.
+You are choosing WHERE TO LOOK. You are not stating what is so, and you gain
+nothing by writing it: this task still stops, and the question cannot cover the
+run that proposed it. Only a later derivation can turn it into coverage, and
+only if the relationship actually holds there.
 
 Two kinds are answerable. Anything else derives UNKNOWN forever, which is
 writing nothing while looking like accumulation:

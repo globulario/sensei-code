@@ -55,7 +55,16 @@ const PostProcessingVersion = "closure-recipe/v1"
 // the subject about to be measured -- the selector may know the fixture contains
 // an expressible relationship, the investigator must discover which question is
 // worth asking from its own inputs.
-const FeatureExtractorVersion = "gap-closure-prompt/v3"
+// v4: the closure prompt now states what KIND of gap it is closing and what
+// closes it. Under v3 the investigator, in both arms of the first cold-start
+// run, wrote the field_access_under_lock relationship as a verified repository
+// claim and proposed no recipe -- because the prompt offered a recipe only "IF
+// YOU CANNOT CLOSE THIS GAP", and by the investigator's reading (premises
+// verified) the gap was closed, while by the router's (graph vouches for the
+// region) it never can be by claims. v4 tells it the gap is graph coverage,
+// that claims do not close it, and to propose the checkable part whether or
+// not it considers the gap closed. It does not say what to propose.
+const FeatureExtractorVersion = "gap-closure-prompt/v4"
 
 // InferenceOutcome is what a run produced. Every value is data about the loop,
 // including the ones that produced nothing.
