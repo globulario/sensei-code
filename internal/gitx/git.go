@@ -77,10 +77,14 @@ func (r Repo) Diff(ctx context.Context, base string) (string, error) {
 // the same to the reviewer, which is the only reading that matches what the
 // candidate actually contains.
 func (r Repo) CandidateDiff(ctx context.Context, base string) (string, error) {
-	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
+	// Through the boundary, with no intended outputs: every new binary or
+	// oversized file is an artifact here. Callers that know the plan use
+	// CandidateCapture directly and receive what was excluded.
+	cap, err := r.CandidateCapture(ctx, base, nil)
+	if err != nil {
 		return "", err
 	}
-	return r.Diff(ctx, base)
+	return cap.Diff, nil
 }
 
 // RevList returns commit ids in a range, newest first, bounded by limit.

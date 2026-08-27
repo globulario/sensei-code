@@ -14,6 +14,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 func main() {
 	role := flag.String("role", "", "architect | implementor | reviewer")
 	target := flag.String("target", "", "file the implementor appends to, relative to the workspace")
+	artifact := flag.String("artifact", "", "implementor also leaves a >5 MB ELF-shaped build output at this workspace path (#89)")
 	flag.Parse()
 
 	// The prompt arrives on stdin. It is read and discarded: a deterministic
@@ -61,6 +63,16 @@ func main() {
 		if _, err := f.WriteString("\n// stub-smoke: appended by the deterministic governed-run tripwire\n"); err != nil {
 			fmt.Fprintln(os.Stderr, "stubagent:", err)
 			os.Exit(1)
+		}
+		if *artifact != "" {
+			// A worker that built the command to check its edit, and left the
+			// binary behind. ~6 MB with an ELF magic, well over the audit's
+			// 5 MiB payload limit.
+			body := append([]byte{0x7f, 'E', 'L', 'F', 2, 1, 1, 0}, bytes.Repeat([]byte{0x00, 0xff, 0x13}, 2*1024*1024)...)
+			if err := os.WriteFile(filepath.Join(mustWD(), *artifact), body, 0o755); err != nil {
+				fmt.Fprintln(os.Stderr, "stubagent:", err)
+				os.Exit(1)
+			}
 		}
 		fmt.Println("appended one comment line to " + *target)
 	case "reviewer":
