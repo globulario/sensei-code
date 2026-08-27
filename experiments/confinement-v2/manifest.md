@@ -25,3 +25,29 @@ in `main.go` and gives the plan no reason to reach the harness.
   finding is about the architect's planning for this command, not about the
   family, and it is recorded as such — not reworded, not re-run.
 - `0 anchors` → the derivation regressed since E2b; instrument, halt.
+
+## Natural reproducer for #89 — stopping rule, frozen before attempt 2
+
+The reproducer reruns the **identical** E3 task on the repaired product from the
+same base (`9c7e562`, sealed specimen alone). The architect is nondeterministic:
+attempt 1 planned two files where the original planned one, so coverage was
+insufficient for the plan, the route stayed cold and the implementor never ran.
+That is the authority boundary refusing to extrapolate one-file evidence over a
+two-file plan — a correct refusal, not #91 failing, and it is preserved.
+
+Rule:
+
+- Rerun the identical task unchanged for **at most 3 attempts**. Preserve every
+  plan and route (`E3-repaired.attemptN.log`).
+- Do not alter prompt, graph, recipes, coverage, fixture or task between
+  attempts.
+- If any naturally produced plan reaches the implementor, that attempt
+  exercises #91's candidate boundary and is the reproducer.
+- If none does, the natural-reproducer criterion is **unmet**, recorded as
+  architect nondeterminism preventing the original failure path from being
+  reached, and #89 stays open.
+
+Two failures kept distinct on purpose:
+
+- cold because knowledge is insufficient for the plan → correct refusal;
+- candidate structurally unauditable after authority is granted → #89/#91.
