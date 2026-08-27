@@ -57,10 +57,12 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
   broader claim "the reader is sound" does not, and must not be read into them.
   Also: `#309`'s status parser attaches a `status:` that precedes its own `id:`
   to the *previous* entry, which both re-creates the defect and excuses a
-  canonical invariant — a fail-open in the closure check itself. **Closed in the PRs** (`#309 @ 37ac95cb`: entries parsed as units; `#310 @
-  7a544843`: package-level callers are call sites resolving UNRESOLVED, `go`
+  canonical invariant — a fail-open in the closure check itself. **Closed in the PRs** (`#311 @ 9d30fd19` (clean replacement for #309, two files from `main`): entries parsed as units; `#310 @
+  7a9d1a5e`: package-level callers are call sites resolving UNRESOLVED, `go`
   sites are counterexamples, `defer` sites UNRESOLVED, exit code 4, evidence
-  independent only if already on the promotion base), with the posted
+  independent only if already on the promotion base; and §8d: verified citations
+  do not cross into canonical -- only a derivation re-run against the promotion
+  base, or an existing governed entry, establishes; no flag), with the posted
   reproductions as tests. Under the sounder reader the three checkpoint
   specimens re-derive unchanged: TRUE `DERIVED`, FALSE `REFUTED`, ENVELOPE
   `UNRESOLVED`. Landing is review's call.
@@ -69,8 +71,8 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
 - Anything about the 11-task internal benchmark, whose result stands: governed
   is slower and refuses more on sensei-code's own corpus.
 - The implementor and reviewer beyond three accepted candidates.
-- That the default product does this. `globulario/sensei#309` and `#310` (with
-  `feat/second-derivation-family`) now carry fixes and tests for the review
+- That the default product does this. `globulario/sensei#311` (replacing #309) and `#310` (retargeted to `main`;
+  its feature line landed in #306) now carry fixes and tests for the review
   findings above and await review. Until they land, the demonstrated behaviour
   lives behind `SENSEI_BIN`.
 
