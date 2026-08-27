@@ -3430,7 +3430,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// Who authored the bound is re-established from the session record
 		// before anything could revise it. A supplied plan whose record cannot
 		// be reconstructed is not resumed under the architect instead.
-		source, err := e.restorePlanSource(task)
+		bound, err := e.restorePlanBound(task)
 		if err != nil {
 			fail(err)
 			return
@@ -3441,9 +3441,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Conversation:    e.conversationSoFar(task.Task, 40),
 			WorkspaceStatus: firstText(workspaceStatus),
 			Preflight:       firstText(preflight),
-			Rationale:       task.Plan,
+			Rationale:       bound.Rationale,
+			Steps:           bound.Steps,
 			Domain:          start.Domain(),
-			PlanSource:      source,
+			Mode:            bound.Mode,
+			Consequences:    bound.Consequences,
+			Invariants:      bound.Invariants,
+			PlanSource:      bound.Source,
 			PlanDigest:      task.PlanDigest,
 		}
 		carried := ""
@@ -3452,7 +3456,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
-		e.implement(ctx, sc, start, task.TaskID, &tc, task.Plan, carried, fail)
+		e.implement(ctx, sc, start, task.TaskID, &tc, bound.Plan, carried, fail)
 	}()
 	return task.TaskID
 }

@@ -139,24 +139,54 @@ func (e *Engine) planDigest(taskID string) string {
 // waits for a record it can trust.
 var errSuppliedPlanContextUnavailable = errors.New("SUPPLIED_PLAN_CONTEXT_UNAVAILABLE: this task ran under a supplied plan and the session record does not hold that plan intact; it is not resumed under the architect instead")
 
-// restorePlanSource re-establishes who authored a resumed task's bound from the
-// session record, re-registering a supplied plan so every path that refuses to
-// revise one still refuses after a restart.
-func (e *Engine) restorePlanSource(task session.Interrupted) (PlanSource, error) {
+// resumedBound is the executable contract a resumed task continues under.
+type resumedBound struct {
+	Source       PlanSource
+	Plan         string
+	Rationale    string
+	Steps        []string
+	Mode         string
+	Consequences string
+	Invariants   []string
+}
+
+// restorePlanBound re-establishes, from the session record, both who authored a
+// resumed task's bound and what that bound exactly is, re-registering a
+// supplied plan so every path that refuses to revise one still refuses after a
+// restart.
+//
+// The bound is taken from the PlanProposed payload -- the decision as the
+// engine recorded it -- and never from the event's summary. The summary is
+// planSummary's rendering for a person, and when a plan has steps it renders
+// the steps and omits the plan text entirely; a resume that implemented the
+// summary continued under a different contract than the one that was routed.
+// A record that predates the payload has only the summary, and only for an
+// architect's plan is that accepted, as it always was.
+func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error) {
+	var rec proposedPlan
+	recorded := len(task.PlanRecord) != 0 && json.Unmarshal(task.PlanRecord, &rec) == nil && strings.TrimSpace(rec.Plan) != ""
 	switch PlanSource(task.PlanSource) {
 	case PlanSupplied:
-		var rec proposedPlan
-		if len(task.PlanRecord) == 0 || json.Unmarshal(task.PlanRecord, &rec) != nil ||
-			strings.TrimSpace(rec.Plan) == "" || rec.PlanDigest == "" || rec.PlanDigest != task.PlanDigest {
-			return "", errSuppliedPlanContextUnavailable
+		if !recorded || rec.PlanDigest == "" || rec.PlanDigest != task.PlanDigest {
+			return resumedBound{}, errSuppliedPlanContextUnavailable
 		}
 		e.supplyPlan(task.TaskID, SuppliedPlan{decision: rec.architectureDecision, Digest: rec.PlanDigest})
-		return PlanSupplied, nil
 	case PlanByArchitect, "":
 		// No source recorded means the record predates the field, when only
 		// the architect produced plans.
-		return PlanByArchitect, nil
+		if !recorded {
+			return resumedBound{Source: PlanByArchitect, Plan: task.Plan, Rationale: task.Plan}, nil
+		}
 	default:
-		return "", fmt.Errorf("the session record names a plan source this build does not know: %q", task.PlanSource)
+		return resumedBound{}, fmt.Errorf("the session record names a plan source this build does not know: %q", task.PlanSource)
 	}
+	return resumedBound{
+		Source:       e.planSource(task.TaskID),
+		Plan:         rec.Plan,
+		Rationale:    rec.Summary,
+		Steps:        rec.Steps,
+		Mode:         planMode(rec.Mode),
+		Consequences: rec.Consequences,
+		Invariants:   rec.Invariants,
+	}, nil
 }

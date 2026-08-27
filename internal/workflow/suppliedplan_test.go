@@ -160,9 +160,9 @@ func TestASuppliedPlanSurvivesResumeOrFailsClosed(t *testing.T) {
 	}
 
 	e := &Engine{}
-	src, err := e.restorePlanSource(found[0])
-	if err != nil || src != PlanSupplied || e.planSource("t") != PlanSupplied {
-		t.Fatalf("a supplied plan was not re-established on resume: %v %q", err, src)
+	bound, err := e.restorePlanBound(found[0])
+	if err != nil || bound.Source != PlanSupplied || e.planSource("t") != PlanSupplied {
+		t.Fatalf("a supplied plan was not re-established on resume: %v %+v", err, bound)
 	}
 	if _, err := e.resolveArchitectureForRevision(nil, nil, certifiedStart{}, "t", "task", "prompt", "escalated"); err == nil {
 		t.Fatal("after a resume the architect may revise the supplied plan")
@@ -179,15 +179,51 @@ func TestASuppliedPlanSurvivesResumeOrFailsClosed(t *testing.T) {
 		"corrupt":         {TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest, PlanRecord: []byte(`{"plan_source":"supplied"`)},
 		"unknown source":  {TaskID: "x", PlanSource: "oracle"},
 	} {
-		if _, err := (&Engine{}).restorePlanSource(bad); err == nil {
+		if _, err := (&Engine{}).restorePlanBound(bad); err == nil {
 			t.Errorf("%s: resumed anyway", name)
 		}
 	}
-	if _, err := (&Engine{}).restorePlanSource(session.Interrupted{TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest}); !errors.Is(err, errSuppliedPlanContextUnavailable) {
+	if _, err := (&Engine{}).restorePlanBound(session.Interrupted{TaskID: "x", PlanSource: "supplied", PlanDigest: p.Digest}); !errors.Is(err, errSuppliedPlanContextUnavailable) {
 		t.Fatalf("wrong refusal: %v", err)
 	}
 	// A record with no source predates the field: the architect's.
-	if src, err := (&Engine{}).restorePlanSource(session.Interrupted{TaskID: "old"}); err != nil || src != PlanByArchitect {
-		t.Fatalf("an old record is not the architect's: %v %q", err, src)
+	if b, err := (&Engine{}).restorePlanBound(session.Interrupted{TaskID: "old", Plan: "summary only"}); err != nil || b.Source != PlanByArchitect || b.Plan != "summary only" {
+		t.Fatalf("an old record is not the architect's summary: %v %+v", err, b)
+	}
+}
+
+// A resumed task continues under the exact plan text that was routed, not the
+// rendered summary -- which, when a plan has steps, omits the plan entirely.
+func TestAResumedSuppliedPlanContinuesUnderTheExactBound(t *testing.T) {
+	const raw = `{"decision":"proceed","summary":"implement prospective authority","plan":"THE GOVERNING BOUND: only main_test.go may be created; no dependency outside testing","steps":["modify A","test B"],"mode":"inspect","consequences":"c","related_invariants":["inv.1"]}`
+	p, err := ParseSuppliedPlan([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	summary := planSummaryFrom(p.decision, PlanSupplied, p.Digest)
+	if strings.Contains(summary, "THE GOVERNING BOUND") {
+		t.Fatal("precondition: the summary must be the lossy rendering this test guards against")
+	}
+	record, _ := json.Marshal(proposedPlan{architectureDecision: p.decision, PlanSource: PlanSupplied, PlanDigest: p.Digest})
+	found := session.FindInterrupted([]event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Summary: "task"},
+		{TaskID: "t", Kind: event.PlanProposed, Summary: summary, Payload: record},
+	})
+	bound, err := (&Engine{}).restorePlanBound(found[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound.Plan != p.decision.Plan {
+		t.Fatalf("resumed under %q, not the routed plan", bound.Plan)
+	}
+	if bound.Rationale != "implement prospective authority" || len(bound.Steps) != 2 || bound.Mode != ModeInspect ||
+		bound.Consequences != "c" || len(bound.Invariants) != 1 {
+		t.Fatalf("the bound's semantic fields were not restored: %+v", bound)
+	}
+	// And what the reviewer is then bound to is that exact plan.
+	tc := taskContext{Task: "task", Rationale: bound.Rationale, Steps: bound.Steps, Mode: bound.Mode, PlanSource: bound.Source, PlanDigest: p.Digest}
+	pkt := reviewPacket(tc, roles.Binding{TaskID: "t"}, certifiedStart{}, bound.Plan, "d", "a", "e")
+	if pkt.Plan != p.decision.Plan || pkt.PlanSource != string(PlanSupplied) {
+		t.Fatalf("the reviewer packet does not carry the exact supplied bound: %+v", pkt)
 	}
 }
