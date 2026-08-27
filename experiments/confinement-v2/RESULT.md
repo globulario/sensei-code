@@ -70,6 +70,22 @@ attempt 2  17:45:54Z  plan: gosumcheck/main.go + gosumcheck/main_test.go (NEW)  
 attempt 3  17:50:10Z  plan: gosumcheck/main.go + gosumcheck/main_test.go (NEW)  1 anchor / 2 files  cold  exit 3
 ```
 
+**Escalation, attempt 3, verbatim** (the system isolating the design fork on its
+own; not an incidental coverage miss):
+
+> *Should this wait for authoritative coverage of the regression-test file, or
+> should the requirement for deterministic regression coverage be removed from
+> the change?*
+
+Neither answer may be chosen merely to get #91 merged. The first says the test
+requirement is legitimate and Sensei lacks a principled way to authorize a new
+surface. The second says the test is outside the authorized change, and removing
+it weakens a reasonable engineering requirement solely because governance cannot
+yet represent it. Both sides are behaving correctly under their local
+contracts: **the architect knows what responsible work requires; the authority
+model cannot yet authorize creating the evidence needed to do that work
+responsibly.**
+
 > The original one-file E3 path is no longer naturally reproduced under the
 > unchanged task: 3/3 repaired attempts independently planned a new test file,
 > exposing a systematic prospective-surface authority gap before candidate
