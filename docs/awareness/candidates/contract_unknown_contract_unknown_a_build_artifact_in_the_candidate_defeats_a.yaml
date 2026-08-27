@@ -1,0 +1,10 @@
+contract_unknown:
+  - id: contract_unknown.a_build_artifact_in_the_candidate_defeats_audit_edit_check_a
+    kind: contract_unknown
+    title: A build artifact in the candidate defeats audit, edit-check and review by size
+    description: 'Observed 2026-08-27 on golang/mod (confinement-v2 E3): the implementor built gosumcheck to verify a two-line change; the 9.2 MB binary was swept into the candidate commit. Diff audit refused >5 MB, edit_check exceeded gRPC 4 MB, both reviewers could not bound a review, and the engine retried the same oversized candidate through the next implementor as if review were the hard part. The correct two-line change was never judged.'
+    proposed_contract: 'A candidate contains only the change: untracked build outputs and binaries a worker produces to verify its work are excluded from the candidate before it is committed and judged. A candidate that cannot be audited for a structural reason terminates with that reason and is not retried through further executors. Audit and edit-check judge the text of a diff and name binary members separately rather than refusing the whole payload by byte count.'
+    source_files:
+      - internal/workflow/engine.go
+    evidence:
+      - experiments/confinement-v2/runs/E3.log; E3.candidate.patch (+2 -2); candidate worktree task-1787849857200091471 tracks gosumcheck/gosumcheck (ELF, 9211341 bytes)
