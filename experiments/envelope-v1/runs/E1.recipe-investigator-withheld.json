@@ -1,0 +1,22 @@
+{
+  "recipes": [
+    {
+      "kind": "field_access_under_lock",
+      "dir": ".",
+      "type": "cache",
+      "field": "lru",
+      "lock": "mu",
+      "why": "The repository shows cache.stats, add, get, removeOldest, and itemsLocked accessing cache.lru through methods that acquire cache.mu; mechanically verifying that ownership relationship would provide relevant coverage for replacing the LRU-derived statistic with maintained state.",
+      "provenance": {
+        "origin_task": "task-1787800536037297040",
+        "origin_gap": "graph coverage is absent for the planned files: only 1 of 2 requested file(s) are examined in the graph — the rest are unknown to it",
+        "region": [
+          "groupcache.go",
+          "groupcache_test.go"
+        ],
+        "written_at": "2026-08-27T03:20:12Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}

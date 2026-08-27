@@ -1,0 +1,180 @@
+package tui
+
+// Behavioural contract probe: the transcript can be scrolled.
+//
+// Driven through the ordinary bubbletea surface -- New, Update, View -- so the
+// probe observes what a reader would see. It names no private field and asserts
+// nothing about how the window is computed.
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/globulario/sensei-code/internal/event"
+)
+
+// probeHistory is a conversation long enough that it cannot fit on screen, with
+// every line individually identifiable.
+func probeHistory(n int) []event.Event {
+	out := make([]event.Event, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, event.Event{
+			Time: time.Unix(int64(i), 0), SessionID: "s", TaskID: "t",
+			Source: event.SourceArchitect, Kind: event.ArchitectSpoke,
+			Summary: "TRANSCRIPTLINE" + strings.Repeat("0", 3-len(itoa(i))) + itoa(i),
+		})
+	}
+	return out
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var b []byte
+	for i > 0 {
+		b = append([]byte{byte('0' + i%10)}, b...)
+		i /= 10
+	}
+	return string(b)
+}
+
+func probeModel(t *testing.T, lines int) Model { return probeModelSized(t, lines, 14) }
+
+// probeModelSized builds a model with a chosen window height, because "fits" and
+// "does not fit" are both part of the contract and only the window decides which.
+func probeModelSized(t *testing.T, lines, height int) Model {
+	t.Helper()
+	m := New(context.Background(), nil, nil, probeHistory(lines))
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: height})
+	got, ok := sized.(Model)
+	if !ok {
+		t.Fatalf("Update did not return a Model: %T", sized)
+	}
+	return got
+}
+
+func press(t *testing.T, m Model, key string) Model {
+	t.Helper()
+	next, _ := m.Update(tea.KeyPressMsg{Code: keyCodeFor(key), Text: ""})
+	got, ok := next.(Model)
+	if !ok {
+		t.Fatalf("Update did not return a Model: %T", next)
+	}
+	return got
+}
+
+func keyCodeFor(key string) rune {
+	switch key {
+	case "pgup":
+		return tea.KeyPgUp
+	case "pgdown":
+		return tea.KeyPgDown
+	}
+	return 0
+}
+
+// A transcript longer than the window shows its END, and says earlier lines
+// exist.
+func TestContractALongTranscriptShowsItsEndAndSaysMoreExists(t *testing.T) {
+	m := probeModel(t, 120)
+	view := screen(m)
+	if !strings.Contains(view, "TRANSCRIPTLINE119") {
+		t.Errorf("the newest line is not on screen:\n%s", tailOf(view))
+	}
+	if strings.Contains(view, "TRANSCRIPTLINE000") {
+		t.Error("a transcript far longer than the window showed its first line, so nothing is hidden")
+	}
+	if !strings.Contains(view, "earlier line") {
+		t.Errorf("the reader is not told that earlier lines exist:\n%s", tailOf(view))
+	}
+}
+
+// Scrolling up reveals earlier lines that were hidden.
+func TestContractScrollingUpRevealsEarlierLines(t *testing.T) {
+	m := probeModel(t, 120)
+	before := screen(m)
+	up := press(t, m, "pgup")
+	after := screen(up)
+	if after == before {
+		t.Fatal("scrolling up changed nothing the reader can see")
+	}
+	// Something that was hidden is now visible.
+	revealed := false
+	for i := 0; i < 120; i++ {
+		id := "TRANSCRIPTLINE" + strings.Repeat("0", 3-len(itoa(i))) + itoa(i)
+		if !strings.Contains(before, id) && strings.Contains(after, id) {
+			revealed = true
+			break
+		}
+	}
+	if !revealed {
+		t.Errorf("scrolling up revealed no previously hidden line:\n%s", tailOf(after))
+	}
+}
+
+// Scrolling back down returns to the end of the transcript.
+func TestContractScrollingBackDownReturnsToTheEnd(t *testing.T) {
+	m := probeModel(t, 120)
+	up := press(t, press(t, m, "pgup"), "pgup")
+	if strings.Contains(screen(up), "TRANSCRIPTLINE119") {
+		t.Skip("this window is large enough that scrolling up never hid the newest line")
+	}
+	back := up
+	for i := 0; i < 10; i++ {
+		back = press(t, back, "pgdown")
+	}
+	if !strings.Contains(screen(back), "TRANSCRIPTLINE119") {
+		t.Errorf("scrolling back down did not return to the newest line:\n%s", tailOf(screen(back)))
+	}
+}
+
+// Scrolling past the start rests at the start rather than running off it.
+func TestContractScrollingPastTheStartRestsAtTheStart(t *testing.T) {
+	m := probeModel(t, 120)
+	for i := 0; i < 60; i++ {
+		m = press(t, m, "pgup")
+	}
+	view := screen(m)
+	if strings.TrimSpace(view) == "" {
+		t.Fatal("scrolling past the start emptied the screen")
+	}
+	if !strings.Contains(view, "TRANSCRIPTLINE000") {
+		t.Errorf("scrolling to the top did not reach the first line:\n%s", tailOf(view))
+	}
+}
+
+// A transcript that fits needs no scrolling and claims none is hidden.
+func TestContractAShortTranscriptHidesNothing(t *testing.T) {
+	// A window with room for everything. Each entry renders several rows, so
+	// "short" is a property of the pair, not of the line count alone.
+	m := probeModelSized(t, 2, 60)
+	v := screen(m)
+	if strings.Contains(v, "earlier line") {
+		t.Errorf("a transcript that fits reported hidden lines:\n%s", tailOf(v))
+	}
+	// And everything really is on screen.
+	for _, want := range []string{"TRANSCRIPTLINE000", "TRANSCRIPTLINE001"} {
+		if !strings.Contains(v, want) {
+			t.Errorf("a transcript that fits did not show %s:\n%s", want, tailOf(v))
+		}
+	}
+}
+
+// screen renders a View to the text a reader would see.
+//
+// bubbletea v2 returns a tea.View whose Content carries the styled screen. The
+// probe reads that field rather than the struct, and cares only about the text.
+func screen(m Model) string { return m.View().Content }
+
+func tailOf(s string) string {
+	lines := strings.Split(s, "\n")
+	if len(lines) > 18 {
+		lines = lines[len(lines)-18:]
+	}
+	return strings.Join(lines, "\n")
+}

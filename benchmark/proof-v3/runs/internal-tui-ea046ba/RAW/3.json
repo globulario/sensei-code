@@ -1,0 +1,43 @@
+{
+  "task": "internal-tui-ea046ba",
+  "arm": "RAW",
+  "attempt": 3,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+  "run_base_sha": "6a348a8ce5ad9db62b545c05d3ffe265290d79a6",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T05:32:31Z",
+  "ended": "2026-08-25T05:39:16Z",
+  "wall_seconds": 404,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/tui [github.com/globulario/sensei-code/internal/tui.test]\ninternal/tui/scroll_test.go:28:4: m.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:51:25: m.scroll undefined (type Model has no field or method scroll)\ninternal/tui/scroll_test.go:68:4: m.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:69:25: m.scroll undefined (type Model has no field or method scroll)\ninternal/tui/scroll_test.go:81:22: m.scroll undefined (type Model has no field or method scroll)\ninternal/tui/scroll_test.go:100:22: m.scroll undefined (type Model has no field or method scroll)\ninternal/tui/scroll_test.go:111:4: m.scrollUp undefined (type Model has no field or method scrollUp)\nFAIL\tgithub.com/globulario/sensei-code/internal/tui [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:9c3b4e223cbf3b7908e83465c57410ecb17e9ee29a2148e9d0e848a380e61f16",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "?? benchmark/proof-v3/runs/internal-mcpconfig-110678d/\n?? benchmark/proof-v3/transcripts/internal-mcpconfig-110678d/",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-tui-ea046ba/RAW/3.log",
+    "transcript_tail_sha256": "sha256:81192f8fd2cea3573f14a2597b2dacc3566bdb1fbb2346e2fdaf1d02c903e281"
+  },
+  "notes": "0 event(s) observed"
+}

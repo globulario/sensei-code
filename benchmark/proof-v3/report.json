@@ -1,0 +1,617 @@
+{
+  "benchmark_version": "proof-v3",
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "orphaned_attempts": 0,
+  "primary_tasks": 10,
+  "Arms": {
+    "COLD": {
+      "arm": "COLD",
+      "runs_recorded": 1,
+      "eligible_runs": 1,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      },
+      "verification_failure_rate": {
+        "numerator": 1,
+        "denominator": 1,
+        "proportion": 1,
+        "wilson_low": 0.20654931437723745,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "review_cycles_to_terminal": {
+        "n": 1,
+        "median": 2,
+        "min": 2,
+        "max": 2,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 1,
+        "median": 25,
+        "min": 25,
+        "max": 25,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 1
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 1,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 1,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.7934506856227626,
+        "undefined": false
+      }
+    },
+    "RAW": {
+      "arm": "RAW",
+      "runs_recorded": 6,
+      "eligible_runs": 6,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      },
+      "verification_failure_rate": {
+        "numerator": 6,
+        "denominator": 6,
+        "proportion": 1,
+        "wilson_low": 0.6096657120978346,
+        "wilson_high": 1,
+        "undefined": false
+      },
+      "review_cycles_to_terminal": {
+        "n": 6,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 6,
+        "median": 6.441666666666666,
+        "min": 2.9,
+        "max": 8.916666666666666,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 6
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 6,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 6,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.3903342879021653,
+        "undefined": false
+      }
+    },
+    "WARM": {
+      "arm": "WARM",
+      "runs_recorded": 0,
+      "eligible_runs": 0,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "verification_failure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "review_cycles_to_terminal": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      }
+    }
+  },
+  "per_task": [
+    {
+      "task": "internal-tui-ea046ba",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-tui-be512db",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "COLD",
+        "RAW",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-mcpconfig-110678d",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-mcpconfig-21c5a6b",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "NOT_EXECUTED",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "COLD",
+        "RAW"
+      ]
+    },
+    {
+      "task": "internal-behavioral-a453be8",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-behavioral-055fe6b",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "NOT_EXECUTED",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-doctor-853fbe3",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-doctor-7a56cd2",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "NOT_EXECUTED",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "WARM",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-gitx-a4fa351",
+      "linked": false,
+      "verdict": {
+        "COLD": "INCORRECT",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-gitx-6460efd",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "NOT_EXECUTED",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    }
+  ],
+  "linked_specimens": [
+    {
+      "task": "internal-tui-be512db",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    },
+    {
+      "task": "internal-mcpconfig-21c5a6b",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    },
+    {
+      "task": "internal-behavioral-055fe6b",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    },
+    {
+      "task": "internal-doctor-7a56cd2",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    },
+    {
+      "task": "internal-gitx-6460efd",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    }
+  ],
+  "Calibration": [
+    {
+      "task": "task-1787365451558361320",
+      "expected": "negative / non_convergence",
+      "observed": "non-convergence with a rotating reviewer",
+      "reproduced": true,
+      "detail": "6 cycles, 6 reports, 18 findings, reviewers [Codex Codex Codex Claude Claude Claude], 49 min, terminal workflow.failed"
+    },
+    {
+      "task": "self-repair-79-80",
+      "expected": "positive",
+      "observed": "landed repair with its pinning tests",
+      "reproduced": true,
+      "detail": "2f5ee40e42b4: 2 file(s), 176 insertion(s), tests=true, event stream retained=false — the run's own event stream was not retained: governed runs execute in candidate worktrees whose session stores are discarded with them, so this rests on the landed artifact and the PR record rather than on a replayed stream"
+    }
+  ],
+  "human_technical_interventions": null,
+  "false_grants": null,
+  "false_blocks": null,
+  "no_results": null,
+  "unmeasurable_boundaries": [
+    "internal-gitx-a4fa351/COLD/1"
+  ],
+  "not_executed": [
+    "internal-tui-ea046ba/COLD",
+    "internal-tui-ea046ba/WARM",
+    "internal-tui-be512db/COLD",
+    "internal-tui-be512db/WARM",
+    "internal-mcpconfig-110678d/COLD",
+    "internal-mcpconfig-110678d/WARM",
+    "internal-mcpconfig-21c5a6b/RAW",
+    "internal-mcpconfig-21c5a6b/COLD",
+    "internal-mcpconfig-21c5a6b/WARM",
+    "internal-behavioral-a453be8/COLD",
+    "internal-behavioral-a453be8/WARM",
+    "internal-behavioral-055fe6b/RAW",
+    "internal-behavioral-055fe6b/COLD",
+    "internal-behavioral-055fe6b/WARM",
+    "internal-doctor-853fbe3/COLD",
+    "internal-doctor-853fbe3/WARM",
+    "internal-doctor-7a56cd2/RAW",
+    "internal-doctor-7a56cd2/COLD",
+    "internal-doctor-7a56cd2/WARM",
+    "internal-gitx-a4fa351/WARM",
+    "internal-gitx-6460efd/RAW",
+    "internal-gitx-6460efd/COLD",
+    "internal-gitx-6460efd/WARM"
+  ],
+  "arm_slots": 30,
+  "provider_configuration_mismatch": null,
+  "gates": [
+    {
+      "id": "C0",
+      "gate": "COVERAGE",
+      "claim": "at least 67% of designed arm slots executed",
+      "passed": false,
+      "detail": "7 of 30 executed (23%) — the count-based gates presuppose that the arms ran, so they are not evaluated. A campaign that did not gather the evidence has not shown the product to be anything.",
+      "untestable": false
+    }
+  ],
+  "verdict": "INCOMPLETE",
+  "caveat": "This is an engineering evidence campaign over 10 tasks, not a population estimate. Intervals are wide by construction. Where the data supports only \"promising\" or \"inconclusive\", it does not support \"proven\"."
+}

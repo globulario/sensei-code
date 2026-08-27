@@ -1,0 +1,54 @@
+{
+  "fixture": "github.com/golang/sync",
+  "pinned_sha": "3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f",
+  "predicate": "Subject selection on the pinned external fixture. FROZEN before any encounter.\n\n  Fixture   : golang/sync @ 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f\n  Ordering  : stable lexicographic path order over non-test .go files\n  Predicate : the first file expressible in the ALREADY FROZEN vocabulary --\n              field_access_under_lock or command_invocation_confined_to\n  Rule      : no vocabulary may be added after seeing the result\n\nThe subject is NOT preselected. It is known in advance that at least one\nqualifying relationship exists in this repository, which avoids accidentally\ntesting vocabulary emptiness -- but which file is chosen is decided here, by the\npredicate, not by anyone's judgement about which would read well.\n",
+  "selected": "semaphore/semaphore.go",
+  "files": [
+    {
+      "file": "errgroup/errgroup.go",
+      "expressible_relations": 0,
+      "relations": [],
+      "verdict": "NOT_EXPRESSIBLE"
+    },
+    {
+      "file": "semaphore/semaphore.go",
+      "expressible_relations": 1,
+      "relations": [
+        {
+          "kind": "field_access_under_lock",
+          "dir": "semaphore",
+          "type": "Weighted",
+          "lock": "mu",
+          "candidate_fields": [
+            "size",
+            "cur",
+            "waiters"
+          ]
+        }
+      ],
+      "verdict": "SELECTED"
+    },
+    {
+      "file": "singleflight/singleflight.go",
+      "expressible_relations": 1,
+      "relations": [
+        {
+          "kind": "field_access_under_lock",
+          "dir": "singleflight",
+          "type": "Group",
+          "lock": "mu",
+          "candidate_fields": [
+            "m"
+          ]
+        }
+      ],
+      "verdict": "ELIGIBLE_NOT_FIRST"
+    },
+    {
+      "file": "syncmap/map.go",
+      "expressible_relations": 0,
+      "relations": [],
+      "verdict": "NOT_EXPRESSIBLE"
+    }
+  ]
+}

@@ -1,0 +1,780 @@
+{
+  "benchmark_version": "proof-v5",
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "orphaned_attempts": 0,
+  "primary_tasks": 11,
+  "Arms": {
+    "COLD": {
+      "arm": "COLD",
+      "runs_recorded": 0,
+      "eligible_runs": 0,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "verification_failure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "review_cycles_to_terminal": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      }
+    },
+    "RAW": {
+      "arm": "RAW",
+      "runs_recorded": 11,
+      "eligible_runs": 11,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 8,
+        "denominator": 11,
+        "proportion": 0.7272727272727273,
+        "wilson_low": 0.43435469882387084,
+        "wilson_high": 0.902539407099751,
+        "undefined": false
+      },
+      "autonomous_correct_rate": {
+        "numerator": 8,
+        "denominator": 11,
+        "proportion": 0.7272727272727273,
+        "wilson_low": 0.43435469882387084,
+        "wilson_high": 0.902539407099751,
+        "undefined": false
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 11,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.25883296696803165,
+        "undefined": false
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 11,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.25883296696803165,
+        "undefined": false
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 8,
+        "denominator": 11,
+        "proportion": 0.7272727272727273,
+        "wilson_low": 0.43435469882387084,
+        "wilson_high": 0.902539407099751,
+        "undefined": false
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 11,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.25883296696803165,
+        "undefined": false
+      },
+      "verification_failure_rate": {
+        "numerator": 3,
+        "denominator": 11,
+        "proportion": 0.2727272727272727,
+        "wilson_low": 0.09746059290024889,
+        "wilson_high": 0.5656453011761291,
+        "undefined": false
+      },
+      "review_cycles_to_terminal": {
+        "n": 11,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 11,
+        "median": 4.4,
+        "min": 1.7833333333333334,
+        "max": 10.9,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 11
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 11,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 11,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.25883296696803165,
+        "undefined": false
+      }
+    },
+    "WARM": {
+      "arm": "WARM",
+      "runs_recorded": 0,
+      "eligible_runs": 0,
+      "no_result_runs": 0,
+      "correct_closure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "autonomous_correct_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "human_technical_intervention_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "false_grant_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "correct_candidate_false_block_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "non_convergent_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "verification_failure_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "review_cycles_to_terminal": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "wall_minutes": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "provider_cost_usd": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "closure_yield": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "rediscovery_per_task": {
+        "n": 0,
+        "median": 0,
+        "min": 0,
+        "max": 0,
+        "missing": 0
+      },
+      "durable_knowledge_reuse_rate": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      }
+    }
+  },
+  "per_task": [
+    {
+      "task": "internal-gitx-a4fa351",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-gitx-6460efd",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-tui-ea046ba",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-tui-be512db",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "COLD",
+        "RAW",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-assist-5dfffad",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "RAW",
+        "COLD"
+      ]
+    },
+    {
+      "task": "internal-decision-6cf23e8",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-agent-01f3fe1",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "COLD",
+        "RAW"
+      ]
+    },
+    {
+      "task": "internal-session-4d32937",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-architect-2e095c4",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "RAW",
+        "COLD",
+        "WARM"
+      ]
+    },
+    {
+      "task": "internal-setup-e645669",
+      "linked": false,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "CORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "WARM",
+        "COLD",
+        "RAW"
+      ]
+    },
+    {
+      "task": "internal-setup-16ecbc3",
+      "linked": true,
+      "verdict": {
+        "COLD": "NOT_EXECUTED",
+        "RAW": "INCORRECT",
+        "WARM": "NOT_EXECUTED"
+      },
+      "execution_order": [
+        "COLD",
+        "WARM",
+        "RAW"
+      ]
+    }
+  ],
+  "linked_specimens": [
+    {
+      "task": "internal-gitx-6460efd",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    },
+    {
+      "task": "internal-tui-be512db",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    },
+    {
+      "task": "internal-setup-16ecbc3",
+      "comparable": false,
+      "not_comparable_reason": "one arm has no recorded attempt",
+      "cold_verdict": "",
+      "warm_verdict": "",
+      "cold_rediscovery": 0,
+      "warm_rediscovery": 0,
+      "cold_human_technical": 0,
+      "warm_human_technical": 0,
+      "cold_review_cycles": 0,
+      "warm_review_cycles": 0,
+      "knowledge_reused": null,
+      "behavior_changes": null,
+      "warm_improved": false,
+      "correctness_regressed": false
+    }
+  ],
+  "Calibration": null,
+  "human_technical_interventions": null,
+  "false_grants": null,
+  "false_blocks": [
+    "internal-agent-01f3fe1/RAW/1",
+    "internal-assist-5dfffad/RAW/1",
+    "internal-decision-6cf23e8/RAW/1",
+    "internal-gitx-6460efd/RAW/1",
+    "internal-gitx-a4fa351/RAW/1",
+    "internal-session-4d32937/RAW/1",
+    "internal-setup-e645669/RAW/1",
+    "internal-tui-ea046ba/RAW/1"
+  ],
+  "no_results": null,
+  "unmeasurable_boundaries": null,
+  "not_executed": [
+    "internal-gitx-a4fa351/COLD",
+    "internal-gitx-a4fa351/WARM",
+    "internal-gitx-6460efd/COLD",
+    "internal-gitx-6460efd/WARM",
+    "internal-tui-ea046ba/COLD",
+    "internal-tui-ea046ba/WARM",
+    "internal-tui-be512db/COLD",
+    "internal-tui-be512db/WARM",
+    "internal-assist-5dfffad/COLD",
+    "internal-assist-5dfffad/WARM",
+    "internal-decision-6cf23e8/COLD",
+    "internal-decision-6cf23e8/WARM",
+    "internal-agent-01f3fe1/COLD",
+    "internal-agent-01f3fe1/WARM",
+    "internal-session-4d32937/COLD",
+    "internal-session-4d32937/WARM",
+    "internal-architect-2e095c4/COLD",
+    "internal-architect-2e095c4/WARM",
+    "internal-setup-e645669/COLD",
+    "internal-setup-e645669/WARM",
+    "internal-setup-16ecbc3/COLD",
+    "internal-setup-16ecbc3/WARM"
+  ],
+  "arm_slots": 33,
+  "provider_configuration_mismatch": null,
+  "rates": {
+    "COLD": {
+      "engineering_correctness": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "end_to_end_success": {
+        "numerator": 0,
+        "denominator": 11,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.25883296696803165,
+        "undefined": false
+      },
+      "not_evaluated": 0,
+      "terminals": {},
+      "scheduled_arms": 11,
+      "rows": null
+    },
+    "RAW": {
+      "engineering_correctness": {
+        "numerator": 8,
+        "denominator": 11,
+        "proportion": 0.7272727272727273,
+        "wilson_low": 0.43435469882387084,
+        "wilson_high": 0.902539407099751,
+        "undefined": false
+      },
+      "end_to_end_success": {
+        "numerator": 8,
+        "denominator": 11,
+        "proportion": 0.7272727272727273,
+        "wilson_low": 0.43435469882387084,
+        "wilson_high": 0.902539407099751,
+        "undefined": false
+      },
+      "not_evaluated": 0,
+      "terminals": {
+        "COMPLETED": 11
+      },
+      "scheduled_arms": 11,
+      "rows": [
+        {
+          "attempt": "internal-gitx-a4fa351/RAW/1",
+          "task": "internal-gitx-a4fa351",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 284,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-gitx-6460efd/RAW/1",
+          "task": "internal-gitx-6460efd",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 220,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-tui-ea046ba/RAW/1",
+          "task": "internal-tui-ea046ba",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 370,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-tui-be512db/RAW/1",
+          "task": "internal-tui-be512db",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "INCORRECT",
+          "delivered": false,
+          "wall_seconds": 654,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-assist-5dfffad/RAW/1",
+          "task": "internal-assist-5dfffad",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 110,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-decision-6cf23e8/RAW/1",
+          "task": "internal-decision-6cf23e8",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 156,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-agent-01f3fe1/RAW/1",
+          "task": "internal-agent-01f3fe1",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 107,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-session-4d32937/RAW/1",
+          "task": "internal-session-4d32937",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 111,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-architect-2e095c4/RAW/1",
+          "task": "internal-architect-2e095c4",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "INCORRECT",
+          "delivered": false,
+          "wall_seconds": 472,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-setup-e645669/RAW/1",
+          "task": "internal-setup-e645669",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "CORRECT",
+          "delivered": true,
+          "wall_seconds": 264,
+          "review_cycles": 0
+        },
+        {
+          "attempt": "internal-setup-16ecbc3/RAW/1",
+          "task": "internal-setup-16ecbc3",
+          "arm": "RAW",
+          "workflow_terminal": "COMPLETED",
+          "correctness": "INCORRECT",
+          "delivered": false,
+          "wall_seconds": 314,
+          "review_cycles": 0
+        }
+      ]
+    },
+    "WARM": {
+      "engineering_correctness": {
+        "numerator": 0,
+        "denominator": 0,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0,
+        "undefined": true
+      },
+      "end_to_end_success": {
+        "numerator": 0,
+        "denominator": 11,
+        "proportion": 0,
+        "wilson_low": 0,
+        "wilson_high": 0.25883296696803165,
+        "undefined": false
+      },
+      "not_evaluated": 0,
+      "terminals": {},
+      "scheduled_arms": 11,
+      "rows": null
+    }
+  },
+  "operational_budget": "22m",
+  "gates": [
+    {
+      "id": "R6",
+      "gate": "RED",
+      "claim": "the harness reproduces the known #79/#80 positive and #62 negative shapes",
+      "passed": false,
+      "detail": "positive=false negative=false — an unvalidated instrument invalidates the campaign regardless of coverage",
+      "untestable": false,
+      "not_tested": false
+    },
+    {
+      "id": "C0",
+      "gate": "COVERAGE",
+      "claim": "at least 67% of designed arm slots executed",
+      "passed": false,
+      "detail": "11 of 33 executed (33%) — the count-based gates presuppose that the arms ran, so they are not evaluated. A campaign that did not gather the evidence has not shown the product to be anything.",
+      "untestable": false,
+      "not_tested": false
+    }
+  ],
+  "verdict": "RED",
+  "caveat": "This is an engineering evidence campaign over 11 tasks, not a population estimate. Intervals are wide by construction. Where the data supports only \"promising\" or \"inconclusive\", it does not support \"proven\"."
+}

@@ -1,0 +1,63 @@
+{
+  "task": "internal-agent-01f3fe1",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "da311a56277119d4def7bc7526aadf119e7f96ad",
+  "run_base_sha": "da311a56277119d4def7bc7526aadf119e7f96ad",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T18:23:39Z",
+  "ended": "2026-08-25T18:45:39Z",
+  "wall_seconds": 1320,
+  "terminal_status": "workflow.timed_out",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/agent [github.com/globulario/sensei-code/internal/agent.test]\ninternal/agent/contract_probe_test.go:24:19: undefined: Activity\ninternal/agent/contract_probe_test.go:34:9: undefined: Activity\ninternal/agent/contract_probe_test.go:54:9: undefined: Activity\ninternal/agent/contract_probe_test.go:72:13: undefined: Activity\nFAIL\tgithub.com/globulario/sensei-code/internal/agent [build failed]\nFAIL",
+  "interventions": null,
+  "objections": [
+    {
+      "id": "d make activitypart report recognition validity",
+      "cycle": 1,
+      "status": "new",
+      "text": "\u2026d. \u2192 Make activityPart report recognition/validity separately from rendered text, and have Activity return an empty string if any content block is malformed or unrecognized. Preserve source order only after the envelope is fully accepted."
+    },
+    {
+      "id": "demonstrably bound to the candidate revision",
+      "cycle": 1,
+      "status": "new",
+      "text": "\u2026 demonstrably bound to the candidate revision under review. \u2192 Run the review/audit from a checkout resolving d60801812142, supplying that revision as the audit expected head, then attach its workspace identity and resulting audit receipt."
+    },
+    {
+      "id": "t an adversarial verdict be bound",
+      "cycle": 2,
+      "status": "new",
+      "text": "\u2026t an adversarial verdict be bound to the revision read. A caller-supplied diff audit cannot bridge that identity gap. \u2192 Review and validate a checkout whose resolved revision is 4c0a1da7cbd7, using a Git-generated diff from that checkout."
+    }
+  ],
+  "review_cycles": 3,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-agent-01f3fe1/COLD/1.log",
+    "transcript_tail_sha256": "sha256:c22243860945475604313f86fd03a1369af0039200684523dbec0c04d7ab918c"
+  },
+  "notes": "4077 event(s) observed",
+  "measurement_status": "VOID_MEASUREMENT: oracle evaluated wrong worktree \u2014 this attempt was scored against the ARM checkout, which never receives a governed run's work. The run's real candidate worktree held its code. Preserved untouched as evidence about the INSTRUMENT; it is not evidence about Sensei-code and must not enter any benchmark result."
+}

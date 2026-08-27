@@ -1,0 +1,87 @@
+package gitx
+
+// Behavioural contract probe, written FOR the benchmark.
+//
+// It asserts what the change must make TRUE, through the exported surface the
+// task statement names. It does not mention intent-to-add, ls-files, or any
+// other mechanism, and it never refers to a private helper -- so any correct
+// implementation passes and the oracle can recognise one it did not write.
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func probeGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v %s", args, err, out)
+	}
+}
+
+func probeWrite(t *testing.T, dir, name, body string) {
+	t.Helper()
+	p := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The whole of a candidate's work is visible, including files it created.
+func TestContractCandidateDiffShowsCreatedFiles(t *testing.T) {
+	dir := t.TempDir()
+	probeGit(t, dir, "init", "-q")
+	probeGit(t, dir, "config", "user.email", "probe@example.invalid")
+	probeGit(t, dir, "config", "user.name", "probe")
+	probeWrite(t, dir, "existing.go", "package p\n")
+	probeWrite(t, dir, ".gitignore", "ignored/\n")
+	probeGit(t, dir, "add", ".")
+	probeGit(t, dir, "commit", "-qm", "base")
+
+	// A worker modifies one file, creates another, and creates one more inside
+	// an ignored path.
+	probeWrite(t, dir, "existing.go", "package p\n\nfunc Existing() {}\n")
+	probeWrite(t, dir, "created.go", "package p\n\nfunc Created() {}\n")
+	probeWrite(t, dir, "ignored/secret.go", "package p\n\nfunc Secret() {}\n")
+
+	diff, err := (Repo{Root: dir}).CandidateDiff(context.Background())
+	if err != nil {
+		t.Fatalf("CandidateDiff: %v", err)
+	}
+	if !strings.Contains(diff, "existing.go") || !strings.Contains(diff, "func Existing") {
+		t.Errorf("a modified file is missing from the candidate's work:\n%s", diff)
+	}
+	if !strings.Contains(diff, "created.go") || !strings.Contains(diff, "func Created") {
+		t.Errorf("a file the worker CREATED is invisible to the reviewer, which is the whole "+
+			"defect:\n%s", diff)
+	}
+	if strings.Contains(diff, "secret.go") {
+		t.Errorf(".gitignore was not honoured; an ignored path entered the candidate:\n%s", diff)
+	}
+}
+
+// A clean tree produces no work, and the call does not fail.
+func TestContractCandidateDiffOnACleanTreeIsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	probeGit(t, dir, "init", "-q")
+	probeGit(t, dir, "config", "user.email", "probe@example.invalid")
+	probeGit(t, dir, "config", "user.name", "probe")
+	probeWrite(t, dir, "existing.go", "package p\n")
+	probeGit(t, dir, "add", ".")
+	probeGit(t, dir, "commit", "-qm", "base")
+
+	diff, err := (Repo{Root: dir}).CandidateDiff(context.Background())
+	if err != nil {
+		t.Fatalf("CandidateDiff on a clean tree: %v", err)
+	}
+	if strings.TrimSpace(diff) != "" {
+		t.Errorf("a clean candidate reported work:\n%s", diff)
+	}
+}

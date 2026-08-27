@@ -1,0 +1,43 @@
+{
+  "task": "internal-architect-2e095c4",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "7dbe79e50f150be4e5bf998d4762c5004507e500",
+  "run_base_sha": "d55eafcda138ff26b0803f1e5713667f28a34ed9",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T17:09:37Z",
+  "ended": "2026-08-25T17:17:30Z",
+  "wall_seconds": 472,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "--- FAIL: TestContractAResolvedRuleIsReportedToTheReader (0.00s)\n    contract_probe_test.go:60: RunWhy: Sensei did not answer for \"sensei_code.publication.never_merges\" under every class it records, so whether the graph holds it is unknown (invariant: the reply carried no found flag, so it settles nothing)\n--- FAIL: TestContractARuleOfAnotherKindIsStillFound (0.00s)\n    contract_probe_test.go:79: a rule held under another class was not found: Sensei did not answer for \"sensei_code.some.failure\" under every class it records, so whether the graph holds it is unknown (invariant: nothing under that class)\n--- FAIL: TestContractAPrefixedIDResolvesToTheSameRule (0.00s)\n    contract_probe_test.go:101: RunWhy(\"sensei_code.publication.never_merges\"): Sensei did not answer for \"sensei_code.publication.never_merges\" under every class it records, so whether the graph holds it is unknown (invariant: the reply carried no found flag, so it settles nothing)\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/architect\t0.004s\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:1d71bffe2ffd08995c877ca7e9f3272d911787b690344e847cb4f0f38fda89b2",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-architect-2e095c4/RAW/1.log",
+    "transcript_tail_sha256": "sha256:e792d420b8f9250fd05815717b62700b8114b5b809d9ea4a40b325498da9e287"
+  },
+  "notes": "0 event(s) observed"
+}

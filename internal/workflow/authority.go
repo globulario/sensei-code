@@ -376,10 +376,30 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 					strings.Join(spots.Unrecognised, ", "),
 			}
 		case len(spots.Coverage) != 0:
-			return Routing{
-				Route:     RouteCloseGap,
-				Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", "),
+			// The same question the coverage-absent branch asks, asked here
+			// too: does a derivation over these files RESOLVE this gap?
+			//
+			// It was not asked here. The first cold-start run to reach link 5
+			// -- a true lock discipline, DERIVED inside the governed run, one
+			// anchor over the one planned file -- still routed to bounded work,
+			// because this branch never looked. Two branches for the same
+			// family of gap, "the graph does not vouch for this region", and
+			// only one of them wired to the channel built to close it.
+			//
+			// Same relevance gate, same fail-closed rule: an unrecognised
+			// family resolves nothing, and an unqualified gap is satisfied only
+			// by a family this consumer has named as an answer. When it closes,
+			// the coverage signals are spent and the remaining consequence
+			// signals -- if any -- are judged by the default arm exactly as
+			// they would be on a covered region.
+			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.Files); !closed {
+				return Routing{
+					Route:     RouteCloseGap,
+					Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", "),
+				}
 			}
+			spots.Coverage = nil
+			fallthrough
 		default:
 			// Only consequence signals remain: severity, path class, namespace.
 			// These describe knowledge the graph HAS, not knowledge it lacks,

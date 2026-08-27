@@ -1,0 +1,43 @@
+{
+  "task": "internal-gitx-a4fa351",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+  "run_base_sha": "caf0b7b98cb1f760bdc82b7cddf0d82c150d600c",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T04:33:41Z",
+  "ended": "2026-08-25T04:36:35Z",
+  "wall_seconds": 174,
+  "terminal_status": "raw.failed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/gitx [github.com/globulario/sensei-code/internal/gitx.test]\ninternal/gitx/git_test.go:16:27: not enough arguments in call to repo.WorktreePath\n\thave (string)\n\twant (string, string)\ninternal/gitx/git_test.go:27:24: not enough arguments in call to r.WorktreePath\n\thave (string)\n\twant (string, string)\ninternal/gitx/git_test.go:62:48: too many arguments in call to repo.Diff\n\thave (context.Context, string)\n\twant (context.Context)\ninternal/gitx/git_test.go:69:25: repo.CandidateDiff undefined (type Repo has no field or method CandidateDiff)\ninternal/gitx/git_test.go:100:58: not enough arguments in call to repo.CreateWorktree\n\thave (context.Context, string)\n\twant (context.Context, string, string)\ninternal/gitx/git_test.go:109:59: not enough arguments in call to repo.CreateWorktree\n\thave (context.Context, string)\n\twant (context.Context, string, string)\ninternal/gitx/git_test.go:144:20: repo.CandidateDiff undefined (type Repo has no field or method CandidateDiff)\ninternal/gitx/git_test.go:195:30: repo.CandidateDiff undefined (type Repo has no field or method CandidateDiff)\ninternal/gitx/git_test.go:201:20: repo.CandidateDiff undefined (type Repo has no field or method CandidateDiff)\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-gitx-a4fa351/RAW/1.log",
+    "transcript_tail_sha256": "sha256:63ffb73913c33d70b5b89b15f2dbf6d0108a1e04aacedb032390711da0bd9acb"
+  },
+  "notes": "0 event(s) observed"
+}

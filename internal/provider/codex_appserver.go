@@ -49,12 +49,16 @@ type loginCompleted struct {
 	Error   json.RawMessage `json:"error"`
 }
 
-func startAppServer(ctx context.Context) (*appServer, error) {
+func startAppServer(ctx context.Context, overrides ...string) (*appServer, error) {
 	path, err := exec.LookPath("codex")
 	if err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, path, "app-server", "--listen", "stdio://")
+	// Overrides are global codex flags and must precede the subcommand. They
+	// carry the execution-scoped graph binding, which takes precedence over
+	// whatever ~/.codex/config.toml says.
+	argv := append(append([]string(nil), overrides...), "app-server", "--listen", "stdio://")
+	cmd := exec.CommandContext(ctx, path, argv...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err

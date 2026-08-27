@@ -1,0 +1,41 @@
+{
+  "task": "internal-gitx-a4fa351",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:0c839dc6140532dbe02b8f0ce7209c5fa1af38fd4878359f9e8040dad549c469",
+  "benchmark_version": "proof-v1",
+  "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "unrecorded",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T02:56:26Z",
+  "ended": "2026-08-25T02:56:27Z",
+  "wall_seconds": 1,
+  "terminal_status": "workflow.failed",
+  "oracle_verdict": "NO_RESULT",
+  "oracle_detail": "403",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "M cmd/proofbench/main.go\n?? internal/proofbench/execute.go",
+  "cost_usd": null,
+  "tokens": null,
+  "infrastructure_failure": "403",
+  "artifacts": {
+    "transcript_tail_sha256": "sha256:7260c2219d782aaf3e092360cea9923edf7e01238c13f919a3d2e86e028afa18"
+  },
+  "notes": "5 event(s) observed"
+}

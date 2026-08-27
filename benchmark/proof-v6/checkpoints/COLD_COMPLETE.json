@@ -1,0 +1,222 @@
+{
+  "checkpoint": "COLD_COMPLETE",
+  "status": "VALID \u2014 first measured RAW vs COLD",
+  "manifest_hash": "sha256:65fba801284dfbc123caf4fbe6e45ef410b0329d433d0a0430435bb546c10b6c",
+  "environment": {
+    "authoritative": true,
+    "build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED",
+    "graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+    "seed_state": "SEED_STATE_CURRENT",
+    "certified_awareness_graph_commit": "",
+    "embedded_seed_digest_sha256": "def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912",
+    "composition_state": "complete",
+    "live_store_graph_triple_count": 158349
+  },
+  "arms_scheduled": 11,
+  "arms_executed": 11,
+  "engineering_correctness": {
+    "RAW": "8/11",
+    "COLD": "4/4"
+  },
+  "end_to_end": {
+    "RAW": "8/11",
+    "COLD": "4/11"
+  },
+  "not_evaluated": {
+    "RAW": 0,
+    "COLD": 7
+  },
+  "terminals": {
+    "RAW": {
+      "COMPLETED": 11
+    },
+    "COLD": {
+      "COMPLETED": 4,
+      "REFUSED": 5,
+      "TIMEOUT": 1,
+      "INFRA_FAILURE": 1
+    }
+  },
+  "transition_matrix": {
+    "CORRECT->CORRECT": 4,
+    "CORRECT->NOT_EVALUATED": 4,
+    "INCORRECT->NOT_EVALUATED": 3,
+    "INCORRECT->CORRECT": 0,
+    "CORRECT->INCORRECT": 0,
+    "INCORRECT->INCORRECT": 0
+  },
+  "wall": {
+    "RAW": {
+      "median_s": 264,
+      "total_min": 51
+    },
+    "COLD": {
+      "median_s": 365,
+      "total_min": 108
+    },
+    "ratio": 1.4
+  },
+  "review_cycles_cold": [
+    3,
+    0,
+    1,
+    3,
+    2,
+    3,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "human_technical_interventions_cold": 0,
+  "false_grants_cold": 0,
+  "false_blocks_cold": 0,
+  "cost_usd": "unknown \u2014 no provider reported cost in either arm",
+  "per_task": {
+    "internal-agent-01f3fe1": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 107
+      },
+      "COLD": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 1258,
+        "review_cycles": 3
+      }
+    },
+    "internal-architect-2e095c4": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "INCORRECT",
+        "wall_s": 472
+      },
+      "COLD": {
+        "terminal": "REFUSED",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 378,
+        "review_cycles": 0
+      }
+    },
+    "internal-assist-5dfffad": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 110
+      },
+      "COLD": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 322,
+        "review_cycles": 1
+      }
+    },
+    "internal-decision-6cf23e8": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 156
+      },
+      "COLD": {
+        "terminal": "TIMEOUT",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 1320,
+        "review_cycles": 3
+      }
+    },
+    "internal-gitx-6460efd": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 220
+      },
+      "COLD": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 690,
+        "review_cycles": 2
+      }
+    },
+    "internal-gitx-a4fa351": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 284
+      },
+      "COLD": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 1313,
+        "review_cycles": 3
+      }
+    },
+    "internal-session-4d32937": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 111
+      },
+      "COLD": {
+        "terminal": "INFRA_FAILURE",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 161,
+        "review_cycles": 0
+      }
+    },
+    "internal-setup-16ecbc3": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "INCORRECT",
+        "wall_s": 314
+      },
+      "COLD": {
+        "terminal": "REFUSED",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 332,
+        "review_cycles": 0
+      }
+    },
+    "internal-setup-e645669": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 264
+      },
+      "COLD": {
+        "terminal": "REFUSED",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 365,
+        "review_cycles": 0
+      }
+    },
+    "internal-tui-be512db": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "INCORRECT",
+        "wall_s": 654
+      },
+      "COLD": {
+        "terminal": "REFUSED",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 171,
+        "review_cycles": 0
+      }
+    },
+    "internal-tui-ea046ba": {
+      "RAW": {
+        "terminal": "COMPLETED",
+        "correctness": "CORRECT",
+        "wall_s": 370
+      },
+      "COLD": {
+        "terminal": "REFUSED",
+        "correctness": "NOT_EVALUATED",
+        "wall_s": 140,
+        "review_cycles": 0
+      }
+    }
+  },
+  "no_decision_taken": "Checkpoint only. The interpretation is committed in the report; no production change follows until FINAL_VERDICT exists."
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "task": "task-1787365451558361320",
+    "expected": "negative / non_convergence",
+    "observed": "non-convergence with a rotating reviewer",
+    "reproduced": true,
+    "detail": "6 cycles, 6 reports, 18 findings, reviewers [Codex Codex Codex Claude Claude Claude], 49 min, terminal workflow.failed"
+  },
+  {
+    "task": "self-repair-79-80",
+    "expected": "positive",
+    "observed": "landed repair with its pinning tests",
+    "reproduced": true,
+    "detail": "2f5ee40e42b4: 2 file(s), 176 insertion(s), tests=true, event stream retained=false — the run's own event stream was not retained: governed runs execute in candidate worktrees whose session stores are discarded with them, so this rests on the landed artifact and the PR record rather than on a replayed stream"
+  }
+]

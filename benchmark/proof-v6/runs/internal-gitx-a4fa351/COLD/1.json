@@ -1,0 +1,55 @@
+{
+  "task": "internal-gitx-a4fa351",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:65fba801284dfbc123caf4fbe6e45ef410b0329d433d0a0430435bb546c10b6c",
+  "benchmark_version": "proof-v6",
+  "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+  "run_base_sha": "8ce9ff01fd28477ab4622652f26797bf7307bfec",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T21:43:27Z",
+  "ended": "2026-08-25T22:03:11Z",
+  "wall_seconds": 1183,
+  "terminal_status": "workflow.failed",
+  "oracle_verdict": "NO_RESULT",
+  "oracle_detail": "usage limit",
+  "interventions": null,
+  "objections": [
+    {
+      "id": "revision and produce a binary unified",
+      "cycle": 1,
+      "status": "new",
+      "text": "\u2026revision and produce a binary unified diff from that base after registering untracked non-ignored paths with intent-to-add. Add tests for committed created work and staged tracked work, alongside the existing clean/ignored/raw-output cases."
+    }
+  ],
+  "review_cycles": 2,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:8a14e4374e94a2a1d354c6f094e0cf234a02779b9914ac07f3434dbee7dc275e",
+  "candidate_dir": "/tmp/proofbench/proof-v6/internal-gitx-a4fa351/COLD/.1-worktrees/task-1787694207989598578",
+  "candidate_method": "git-worktree-list",
+  "candidate_head_sha": "8ce9ff01fd28477ab4622652f26797bf7307bfec",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "infrastructure_failure": "usage limit",
+  "artifacts": {
+    "transcript": "benchmark/proof-v6/transcripts/internal-gitx-a4fa351/COLD/1.log",
+    "transcript_tail_sha256": "sha256:50a9116120a957b8d1f13f693fa69615896a3eaaf6377442ac533011d3efbd8d"
+  },
+  "notes": "3849 event(s) observed",
+  "measurement_status": "PRE_RESTORATION: taken while the governed child was reaching a non-authoritative DEV graph, before the environment was identified and restored. Preserved as evidence about the environment; excluded from the quantitative result. The wave is re-run in full."
+}

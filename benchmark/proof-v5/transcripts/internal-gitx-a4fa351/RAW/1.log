@@ -1,0 +1,37 @@
+Done. `go vet ./...` and `go test ./...` are clean, `gofmt -l cmd internal` is empty.
+
+## What I added
+
+**`internal/gitx/git.go:43` — `func (r Repo) CandidateDiff(ctx context.Context) (string, error)`**
+
+It stages the worktree into a *throwaway* index and diffs that against the base:
+
+1. `git read-tree <base>` into a temp `GIT_INDEX_FILE`
+2. `git add --all`
+3. `git diff --cached --no-ext-diff --binary <base>`
+
+Why this shape rather than the obvious alternatives:
+
+- **Throwaway index, not the candidate's own.** `git add -A` + `git diff --cached` on the real index would report correctly but leave the worker's staging area rewritten — a diff must be a report, not a mutation. A test asserts `git status --porcelain` is byte-identical before and after.
+- **Seeded from the base, not empty.** With an empty index, `git add --all` skips a file that is tracked *despite* matching `.gitignore` (this repo has that shape in other projects), which would surface as a deletion the worker never made. Seeding from HEAD keeps such files tracked.
+- **Not `git diff --no-index /dev/null <file>` per untracked file.** That yields mangled `a/`,`b/` paths, an exit-1-on-difference contract, and hand-rolled `.gitignore` filtering. Delegating to `git add` means ignore rules, rename detection and binary handling stay Git's own.
+
+`diffBase` resolves to `HEAD`, falling back to the empty tree (via `git hash-object -t tree`, so it's correct under sha256 too) when the candidate has no commit — an unborn branch now diffs instead of erroring.
+
+`output` was split into `outputEnv` so only this path passes an environment; every other call still inherits.
+
+## Wiring
+
+`internal/workflow/engine.go:470` now calls `CandidateDiff` instead of `Diff`. Leaving the method unwired would have left the reported harm live — the reviewer prompt and `awareness_audit_diff` both read that string. `Diff` is kept.
+
+## Tests
+
+`internal/gitx/git_test.go` — including `TestCandidateDiffIncludesFilesTheWorkerCreated`, which is the exact required test the graph names for `invariant:sensei_code.candidate.reviewer_sees_every_changed_file` [critical]. Coverage: edit + creation + deletion in one candidate, index left undisturbed, `.gitignore` honoured (both directions), clean tree → `""`/nil, unborn branch.
+
+`sensei gate --diff HEAD` and `sensei edit-check` on the changed files: 0 blocked, 0 warnings.
+
+**One thing I did not do:** I did not run `sensei propose` to record the failure mode. `propose` writes `docs/awareness/*.yaml` *and* rebuilds/reloads the shared live store — a write outside this candidate's boundary. The durable knowledge is already in the graph (the invariant and its `requiresTest` edge both exist, and the test they name now exists in code). If you want the failure-mode node added, that's a one-line `sensei propose --kind failure_mode --related-invariant sensei_code.candidate.reviewer_sees_every_changed_file` run from the main checkout.
+
+```
+AWG: briefing(internal/gitx/git.go) | invariants: sensei_code.candidate.reviewer_sees_every_changed_file | uncertainty: an untracked tree that is large and unignored (e.g. a vendored node_modules with no ignore rule) is now hashed and included; ignore rules are the only bound on diff size
+```

@@ -1,0 +1,17 @@
+The transcript is now scrollable.
+
+**How the window is tracked.** `Model.scrollback` holds the transcript back from its foot by that many wrapped rows. `0` means the newest line sits directly above the composer — the old behaviour, unchanged. Everything else is derived at render time from that one integer, so there is no second copy of the transcript to keep in sync.
+
+**The pieces** (`internal/tui/model.go`):
+
+- `bottom()` — extracted from `View`. It renders the status bar, composer/menu and mode line. Both `View` and the scroll keys measure it, so both agree on how tall the transcript is.
+- `transcript(rows, height, offset, width)` — a pure function that picks the visible slice. It replaces the old `rows[len(rows)-available:]` tail-slice. When something is hidden it prepends a header row (`⌃ 39 earlier lines  (pgup to read them)` / `⌃ 17 earlier · 22 newer ⌄  (pgup/pgdn)` / `⌃ start of transcript · 22 newer lines ⌄  (pgdn to return)`). When the whole transcript fits, there is no header at all — nothing is hidden, so nothing is claimed. It always returns exactly `height` rows, keeping the existing top-padding for short conversations.
+- `scroll(pages)` — moves by whole pages and clamps to `[0, len(rows)-(height-1)]`. At the far end the first line is the top row on screen, so paging past the start rests there rather than running off it or emptying the screen.
+- `pgup`/`pgdown` are handled at the top of the `KeyPressMsg` case, before the menu branches, so reading stays available while a menu or a human-authority prompt is up. Each emits `tea.ClearScreen` for the same reason the existing append sites do.
+- `Update` is now a thin wrapper over the old body (`update`). While the reader is paged back, rows appended underneath grow the offset by the same amount, so the lines being read stay put instead of sliding forward as events stream in. It defers when the update moved the window deliberately (a page turn, or `enter` returning the reader to the newest line) or when the terminal resized.
+
+**Tests** (`internal/tui/scroll_test.go`, 7 new): newest-lines-plus-count header; a fitting transcript claiming nothing; PgUp revealing lines that were not previously on screen; resting at `line-000` when paged past the start; the keys moving and clamping at both ends through `Update`; PgUp doing nothing when everything fits; the paged-back window not sliding when an architect event arrives.
+
+`gofmt -w cmd internal`, `go vet ./...`, `go test ./...` — all clean.
+
+AWG: briefing(internal/tui/model.go) | invariants: sensei_code.provider.credentials_remain_provider_owned (untouched — this change has no provider or credential surface); TUI remains a projection of structured events, no governance semantics added | uncertainty: the header row costs one transcript row whenever anything is hidden, and a resize while paged back clamps the offset rather than preserving the reading position.

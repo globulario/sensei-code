@@ -60,6 +60,13 @@ type Recipe struct {
 	// Why records the investigation that produced the question. Provenance for
 	// a human reader; never consulted when deciding anything.
 	Why string `json:"why,omitempty"`
+	// Provenance is stamped by the engine when a closure round proposes this
+	// question. Nil for recipes a human committed.
+	//
+	// Never consulted when deciding whether the question HOLDS -- only the
+	// derivation answers that -- but it is what enforces the future-only rule
+	// and what lets a reader ask why Sensei keeps checking this.
+	Provenance *Provenance `json:"provenance,omitempty"`
 }
 
 func (r Recipe) String() string {
@@ -76,7 +83,18 @@ func (r Recipe) String() string {
 type Outcome string
 
 const (
-	Derived    Outcome = "DERIVED"
+	Derived Outcome = "DERIVED"
+	// Refuted: the derivation found a counterexample it can point at.
+	Refuted Outcome = "REFUTED"
+	// Unresolved: the derivation reached the edge of what it can follow and
+	// found no counterexample. Earns no coverage, exactly like Refuted, and is
+	// never the same finding: "checked and false" and "checked and could not
+	// tell" are different things, and the first cold-start run showed what
+	// happens when one word covers both -- a true discipline reported as six
+	// counterexamples.
+	Unresolved Outcome = "UNRESOLVED"
+	// NotDerived is the pre-v2 word that meant both of the above. Kept so old
+	// receipts still parse; never produced.
 	NotDerived Outcome = "NOT_DERIVED"
 	Unknown    Outcome = "UNKNOWN"
 )

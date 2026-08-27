@@ -1,0 +1,87 @@
+package decision
+
+// Behavioural contract probe.
+//
+// Validate and Args are exported and pure, so the whole contract is observable
+// without running anything. The probe asserts WHICH records are linkable and
+// WHAT reaches Sensei's argv -- never how either is computed.
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+)
+
+func linkable(r Record) Record {
+	if strings.TrimSpace(r.Title) == "" {
+		r.Title = "a title"
+	}
+	if strings.TrimSpace(r.Rationale) == "" {
+		r.Rationale = "a rationale"
+	}
+	return r
+}
+
+// Source files alone do not link a decision.
+//
+// The rule being matched is Sensei's own: a decision connects to a governing
+// invariant or a failure mode. Naming the files it touched is not a connection,
+// and a record that only names files must be reported here rather than sent to
+// be refused.
+func TestContractSourceFilesAloneDoNotLinkADecision(t *testing.T) {
+	r := linkable(Record{SourceFiles: []string{"internal/gitx/git.go"}})
+	if err := r.Validate(); !errors.Is(err, ErrNotLinked) {
+		t.Fatalf("Validate() = %v, want ErrNotLinked: naming files is not a link", err)
+	}
+	// And Write reports it without invoking anything.
+	if err := Write(context.Background(), r); !errors.Is(err, ErrNotLinked) {
+		t.Errorf("Write() = %v, want ErrNotLinked; an unlinkable decision must not be sent", err)
+	}
+}
+
+// An invariant links a decision, and so does a failure mode.
+func TestContractAnInvariantOrAFailureLinksADecision(t *testing.T) {
+	for name, r := range map[string]Record{
+		"invariant": linkable(Record{Invariants: []string{"inv.one"}}),
+		"failure":   linkable(Record{Failures: []string{"fm.one"}}),
+		"both":      linkable(Record{Invariants: []string{"inv.one"}, Failures: []string{"fm.one"}}),
+	} {
+		if err := r.Validate(); err != nil {
+			t.Errorf("%s: Validate() = %v, want nil", name, err)
+		}
+	}
+}
+
+// A linked failure reaches Sensei as a related failure.
+func TestContractFailuresReachSenseiArgv(t *testing.T) {
+	r := linkable(Record{
+		Invariants: []string{"inv.one"},
+		Failures:   []string{"fm.one", "  ", "fm.two"},
+	})
+	args := strings.Join(r.Args(), "\x1f")
+	for _, want := range []string{"--related-failure\x1ffm.one", "--related-failure\x1ffm.two"} {
+		if !strings.Contains(args, want) {
+			t.Errorf("argv does not carry %q: %v", want, r.Args())
+		}
+	}
+	if strings.Count(args, "--related-failure") != 2 {
+		t.Errorf("a blank failure was passed to Sensei: %v", r.Args())
+	}
+	// What was already carried is still carried.
+	if !strings.Contains(args, "--related-invariant\x1finv.one") {
+		t.Errorf("the invariant link was lost: %v", r.Args())
+	}
+}
+
+// A record still needs a title and a rationale, and that failure is not
+// ErrNotLinked.
+func TestContractAnIncompleteRecordIsNotAnUnlinkedOne(t *testing.T) {
+	err := Record{Invariants: []string{"inv.one"}}.Validate()
+	if err == nil {
+		t.Fatal("a record with no title or rationale validated")
+	}
+	if errors.Is(err, ErrNotLinked) {
+		t.Errorf("a missing title was reported as an unlinked decision: %v", err)
+	}
+}

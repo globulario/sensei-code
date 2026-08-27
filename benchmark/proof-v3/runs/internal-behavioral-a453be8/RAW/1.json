@@ -1,0 +1,43 @@
+{
+  "task": "internal-behavioral-a453be8",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "7e02e4e59151c37a1113632c333b6aaece04be75",
+  "run_base_sha": "296e9fa0b40b9a0b74abec7ba49bd020eee2252d",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T04:53:12Z",
+  "ended": "2026-08-25T04:57:10Z",
+  "wall_seconds": 238,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/behavioral [github.com/globulario/sensei-code/internal/behavioral.test]\ninternal/behavioral/behavioral_test.go:15:36: undefined: Config\ninternal/behavioral/behavioral_test.go:21:13: undefined: New\ninternal/behavioral/behavioral_test.go:21:51: undefined: Outcome\ninternal/behavioral/behavioral_test.go:21:96: undefined: ErrNotConfigured\ninternal/behavioral/behavioral_test.go:40:9: undefined: Config\ninternal/behavioral/behavioral_test.go:41:12: undefined: New\ninternal/behavioral/behavioral_test.go:41:50: undefined: Outcome\ninternal/behavioral/behavioral_test.go:71:9: undefined: Config\ninternal/behavioral/behavioral_test.go:72:9: undefined: New\ninternal/behavioral/behavioral_test.go:72:47: undefined: Outcome\ninternal/behavioral/behavioral_test.go:72:47: too many errors\nFAIL\tgithub.com/globulario/sensei-code/internal/behavioral [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "?? benchmark/proof-v3/runs/internal-doctor-853fbe3/\n?? benchmark/proof-v3/runs/internal-gitx-a4fa351/RAW/2.json\n?? benchmark/proof-v3/transcripts/internal-doctor-853fbe3/\n?? benchmark/proof-v3/transcripts/internal-gitx-a4fa351/RAW/2.log",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-behavioral-a453be8/RAW/1.log",
+    "transcript_tail_sha256": "sha256:1bef54bde3af56cbde49e73b3bd61891e01d59c65b19c14ba92f529b0f226d0b"
+  },
+  "notes": "0 event(s) observed"
+}

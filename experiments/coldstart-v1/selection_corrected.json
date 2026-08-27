@@ -1,0 +1,163 @@
+{
+  "predicate": "file granularity; outside corpus; not the instrument; not campaign-authored; expressible in the frozen vocabulary",
+  "uncovered_files": 26,
+  "viable_subjects": 0,
+  "rows": [
+    {
+      "file": "cmd/proofbench/discriminate.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "cmd/proofbench/environment.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "cmd/proofbench/main.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "cmd/proofbench/preflight.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "cmd/sensei-code/commands.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-24); uncovered because new, not because un-indexed"
+    },
+    {
+      "file": "internal/acceptance/testdata/stubagent/main.go",
+      "born": "2026-08-22",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-22); uncovered because new, not because un-indexed"
+    },
+    {
+      "file": "internal/derived/receipt.go",
+      "born": "2026-08-26",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-26); uncovered because new, not because un-indexed"
+    },
+    {
+      "file": "internal/derived/write.go",
+      "born": "2026-08-26",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-26); uncovered because new, not because un-indexed"
+    },
+    {
+      "file": "internal/proofbench/calibrate.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/candidate.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/classify.go",
+      "born": "2026-08-26",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/discriminate.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/environment.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/execute.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/gates.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/ledger.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/manifest.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/metrics.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/quota.go",
+      "born": "2026-08-26",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/report.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/run.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/scoring.go",
+      "born": "2026-08-25",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/proofbench/version.go",
+      "born": "2026-08-26",
+      "verdict": "EXCLUDED",
+      "why": "the measuring instrument, authored by this campaign"
+    },
+    {
+      "file": "internal/sensei/health.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-24); uncovered because new, not because un-indexed"
+    },
+    {
+      "file": "internal/workflow/objective.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-24); uncovered because new, not because un-indexed"
+    },
+    {
+      "file": "internal/workflow/relevance.go",
+      "born": "2026-08-24",
+      "verdict": "EXCLUDED",
+      "why": "authored during this campaign (2026-08-24); uncovered because new, not because un-indexed"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+Done. The transcript now scrolls.
+
+**What changed** — `internal/tui/model.go`:
+
+- `Model` gained `scrolled` / `scrollTop` (model.go:105). The offset is measured **from the head**, not the foot, so output arriving while you read back doesn't slide the lines out from under you.
+- Keys (handled in `Model.scroll`, model.go:565, before the menus, the authority prompt and the composer): `pgup`/`pgdown` by a page with two rows of overlap, `shift+↑`/`shift+↓` by one line, `esc` to jump back to the live foot. Scrolling down to the foot re-attaches, so the view resumes following output on its own.
+- The view geometry that scrolling and rendering must agree on is now one function, `Model.transcript` (model.go:547); `View` was split so the fixed bottom block (status bar + composer + mode bar) is `Model.bottom` and both callers measure the viewport the same way.
+- The mode bar advertises `pgup/pgdn to scroll`, and while detached it says `»  scrolled back (pgdn catches up · esc jumps to the live foot)` — otherwise a reader parked in the backlog would think the session had gone quiet.
+- Re-attaches on submit and on resize (row indices are wrapped to a width that no longer holds).
+
+**Tests** — `internal/tui/scroll_test.go`, 8 cases driven through `Update`/`View`: earlier lines become reachable and pgdn returns to live; the head is reachable and clamps; a transcript that fits doesn't detach on a stray pgup; scrolled rows hold still while five new architect events arrive; shift-arrows step one line; scroll keys work while a decision is pending without answering it and without spending `esc` that the prompt owns; esc and submit return to live.
+
+`gofmt`, `go vet ./...`, `go test ./...` all clean.
+
+Two things I deliberately left out: mouse-wheel scrolling, which would mean enabling mouse capture in `cmd/sensei-code/main.go` and giving up the terminal's own text selection/copy; and `home`/`end` as scroll keys, since the textarea binds them to line-start/line-end in the composer.
+
+Sensei: `briefing --domain github.com/globulario/sensei-code --file internal/tui/model.go` returned DEGRADED with one critical invariant (provider credentials stay provider-owned) and no forbidden fix touching layout — nothing here goes near provider credentials, and no required test was listed for this file. I did not file a `propose` entry: this added a missing capability rather than fixing a durable failure class.
+
+AWG: briefing(internal/tui/model.go) | invariants: transcript is a projection of events only, composer owns the screen foot | uncertainty: briefing status DEGRADED (transaction uncertified), so the invariant set for this file is current-but-uncertified

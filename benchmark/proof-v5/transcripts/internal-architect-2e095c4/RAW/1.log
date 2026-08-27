@@ -1,0 +1,18 @@
+`RunWhy` is in `internal/architect/why.go`, with tests in `why_test.go`.
+
+**What it does.** It sweeps Sensei's typed class vocabulary through `awareness_resolve` until one class answers `found: true`, then reports the node: its statement, the class it was actually held under, severity/status, Sensei's verdict on its own standing, and the neighbours it links to, grouped by class and shown in the bare form that can be pasted straight back in.
+
+Four behaviours I pinned by probing the live graph first, because each one silently turns "held" into "absent":
+
+- **A class-qualified id is refused.** Every other Sensei surface emits `invariant:x`, but resolve holds it under `x` and answers the prefixed form with `found: false`. The prefix is stripped (by membership of the class list, so a `test:` id's own colons survive) and only orders the sweep — it is never sent.
+- **A wrong class is `found: false`, not a correction.** So the class cannot be guessed; `failure.sensei_code.empty_sensei_tool_response…` resolves from the bare id after the sweep passes invariant, meta_principle, contract and decision.
+- **The class list is closed** — an unknown class is `InvalidArgument`, so the list is what resolve accepts, verified one class at a time, not a hopeful superset.
+- **Silence is not absence.** A reply carrying no `found` flag, or a class that could not be reached, leaves the standing *unknown*; the sweep only reports "the graph holds nothing under `<id>`" when every class actually answered. With no domain on this three-domain graph, resolve fails `ambiguous domain scope` for every class, and that surfaces as unknown rather than as an empty graph.
+
+The report ends with what it does not establish: the graph records what a rule is and what it links to, never the argument that produced it — a linked failure mode is the nearest thing to a reason, and it is a record of what broke.
+
+`gofmt`, `go vet ./...` and `go test ./...` all pass, and I ran the function against the live graph for a prefixed invariant, a bare failure-mode id, a source file, and a nonexistent id.
+
+One thing I did not do, since you scoped this to the function: `/why` is not registered in `internal/command` or dispatched in the TUI, so the capability is not yet reachable from the UI. That is a registry entry plus one case in `senseiCommand` — say the word and I'll wire it, including the help summary.
+
+AWG: briefing(preflight internal/architect/why.go, run.go — `PREFLIGHT_STATUS_EMPTY`, blast local, no forbidden fixes) | invariants: an empty or unanswered Sensei reply is never evidence, structured content is the only consumed surface | uncertainty: coverage is thin here (0 direct anchors, 1 of 2 files indexed), so nothing in the graph constrained this package directly — the constraints I applied come from AGENTS.md law 8 and the recorded failure mode `empty_sensei_tool_response_accepted_as_present_evidence`.

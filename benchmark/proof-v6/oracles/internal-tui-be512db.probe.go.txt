@@ -1,0 +1,182 @@
+package tui
+
+// Behavioural contract probe: scrolling responds to what people actually reach
+// for, and one notch moves one line.
+//
+// Driven through Update and View. It asserts which INPUTS scroll and that a
+// single-notch scroll is not clamped straight back -- never how the position is
+// stored.
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	tea "charm.land/bubbletea/v2"
+
+	"github.com/globulario/sensei-code/internal/event"
+)
+
+func probeHistory(n int) []event.Event {
+	out := make([]event.Event, 0, n)
+	for i := 0; i < n; i++ {
+		out = append(out, event.Event{
+			Time: time.Unix(int64(i), 0), SessionID: "s", TaskID: "t",
+			Source: event.SourceArchitect, Kind: event.ArchitectSpoke,
+			Summary: "TRANSCRIPTLINE" + pad3(i),
+		})
+	}
+	return out
+}
+
+func pad3(i int) string {
+	s := itoa(i)
+	for len(s) < 3 {
+		s = "0" + s
+	}
+	return s
+}
+
+func itoa(i int) string {
+	if i == 0 {
+		return "0"
+	}
+	var b []byte
+	for i > 0 {
+		b = append([]byte{byte('0' + i%10)}, b...)
+		i /= 10
+	}
+	return string(b)
+}
+
+func probeModel(t *testing.T, lines int) Model {
+	t.Helper()
+	m := New(context.Background(), nil, nil, probeHistory(lines))
+	sized, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 16})
+	got, ok := sized.(Model)
+	if !ok {
+		t.Fatalf("Update did not return a Model: %T", sized)
+	}
+	return got
+}
+
+func send(t *testing.T, m Model, msg tea.Msg) Model {
+	t.Helper()
+	next, _ := m.Update(msg)
+	got, ok := next.(Model)
+	if !ok {
+		t.Fatalf("Update did not return a Model: %T", next)
+	}
+	return got
+}
+
+func screen(m Model) string { return m.View().Content }
+
+// hiddenCount reads the count the transcript reports, so the probe can observe
+// movement without knowing how the position is stored.
+func hiddenCount(view string) int {
+	i := strings.Index(view, "↑ ")
+	if i < 0 {
+		return -1
+	}
+	rest := view[i+len("↑ "):]
+	n, seen := 0, false
+	for _, r := range rest {
+		if r < '0' || r > '9' {
+			break
+		}
+		n, seen = n*10+int(r-'0'), true
+	}
+	if !seen {
+		return -1
+	}
+	return n
+}
+
+// The keys a reader reaches for first actually scroll.
+//
+// PgUp alone cannot be relied on: terminals and multiplexers routinely capture
+// it for their own scrollback before the program sees it.
+func TestContractTheOrdinaryKeysScroll(t *testing.T) {
+	for _, key := range []string{"up", "shift+up", "ctrl+p"} {
+		m := probeModel(t, 150)
+		before := hiddenCount(screen(m))
+		if before < 0 {
+			t.Fatal("the transcript does not report how many lines are hidden")
+		}
+		after := hiddenCount(screen(send(t, m, tea.KeyPressMsg{Code: keyFor(key), Mod: modFor(key)})))
+		if after >= before {
+			t.Errorf("%q did not scroll back: hidden %d -> %d", key, before, after)
+		}
+	}
+}
+
+// One notch moves one line, and is not clamped straight back.
+//
+// The defect this pins: an earlier version stored the top row and recomputed it
+// with a slightly different formula, so a single-line scroll was undone
+// immediately and the arrow keys appeared dead.
+func TestContractASingleNotchActuallyMoves(t *testing.T) {
+	m := probeModel(t, 150)
+	before := hiddenCount(screen(m))
+	one := send(t, m, tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl})
+	after := hiddenCount(screen(one))
+	if after != before-1 {
+		t.Errorf("one notch moved hidden %d -> %d; a single-line scroll must move exactly one line "+
+			"and must not be clamped back", before, after)
+	}
+}
+
+// The wheel scrolls, because it is what most people try first.
+func TestContractTheWheelScrolls(t *testing.T) {
+	m := probeModel(t, 150)
+	before := hiddenCount(screen(m))
+	up := send(t, m, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	after := hiddenCount(screen(up))
+	if after >= before {
+		t.Errorf("the wheel did not scroll back: hidden %d -> %d", before, after)
+	}
+	down := send(t, up, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	if hiddenCount(screen(down)) <= after {
+		t.Errorf("the wheel did not scroll forward again from hidden %d", after)
+	}
+}
+
+// Scrolling down returns towards the newest output.
+func TestContractScrollingDownReturns(t *testing.T) {
+	m := probeModel(t, 150)
+	up := m
+	for i := 0; i < 5; i++ {
+		up = send(t, up, tea.KeyPressMsg{Code: keyFor("up")})
+	}
+	scrolled := hiddenCount(screen(up))
+	down := send(t, up, tea.KeyPressMsg{Code: keyFor("down")})
+	if hiddenCount(screen(down)) <= scrolled {
+		t.Errorf("scrolling down did not move towards the newest output from hidden %d", scrolled)
+	}
+}
+
+func keyFor(key string) rune {
+	switch key {
+	case "up", "shift+up":
+		return tea.KeyUp
+	case "down", "shift+down":
+		return tea.KeyDown
+	case "ctrl+p":
+		return 'p'
+	case "ctrl+n":
+		return 'n'
+	}
+	return 0
+}
+
+func modFor(key string) tea.KeyMod {
+	switch key {
+	case "shift+up", "shift+down":
+		return tea.ModShift
+	case "ctrl+p", "ctrl+n":
+		return tea.ModCtrl
+	}
+	return 0
+}

@@ -131,12 +131,88 @@ type ConsequenceAssessment struct {
 // This list is a claim-reader, not a safety net. It catches a plan that SAYS it
 // will publish; it cannot catch one that publishes without saying so. What
 // stops that is the stage boundary, which is structural.
+//
+// Only tokens that mean an outward action wherever they appear in English
+// belong here. A token that ALSO names ordinary code must not: the first
+// governed run against a foreign repository was refused as "declares an outward
+// action: release" because the plan said "acquisition and release logic remains
+// unchanged" -- semaphore.Weighted.Release, a method. Same class as "403" inside
+// a commit hash and "backend is unreachable" in prose: a closed vocabulary read
+// by substring against free text, and it failed in the direction of stopping
+// honest work before any knowledge-gap routing could run.
 var outwardVerbs = []string{
-	"deploy", "publish", "release", "push to", "git push",
-	"migrate", "migration", "drop table", "truncate",
-	"upload", "send email", "notify", "post to", "curl -x post",
+	"deploy", "publish", "push to", "git push",
+	"drop table", "truncate",
+	"send email", "post to", "curl -x post",
 	"terraform apply", "kubectl apply", "helm install",
-	"docker push", "npm publish", "production",
+	"docker push", "npm publish",
+}
+
+// outwardPhrases are outward actions whose key word is ambiguous on its own.
+//
+// "release" is Weighted.Release and "cut a release"; "notify" is notifyWaiters
+// and "notify the team"; "migrate" is a struct field and a schema change;
+// "production" is an environment and an adjective. Each is read only in a
+// verb-object shape that means the outward thing, and ambiguous prose that
+// matches none of these does NOT silently become an outward action -- it is
+// left to the stage boundary, which is where an undeclared publish is stopped
+// anyway.
+var outwardPhrases = []string{
+	"cut a release", "create a release", "tag a release", "ship a release",
+	"publish a release", "publish release", "publish the release", "release to ",
+	"push a release", "release v",
+	"to production", "in production", "production deploy", "production environment",
+	"send a notification", "notify the team", "notify users", "notify customers",
+	"notify subscribers",
+	"upload to ", "upload the artifact", "upload artifacts",
+	"run the migration", "apply the migration", "run migrations", "apply migrations",
+	"migrate the database", "database migration", "schema migration",
+}
+
+// declaredOutwardActions reads a plan's own steps and consequences for an
+// outward action it declares.
+//
+// Word-anchored for the bare tokens, so "deploy" does not fire inside
+// "deployment.go" or "redeployable"; phrase-anchored for the ambiguous ones.
+func declaredOutwardActions(steps []string, consequences string) []string {
+	declared := strings.ToLower(strings.Join(append(append([]string{}, steps...), consequences), " \n "))
+	var found []string
+	for _, verb := range outwardVerbs {
+		if containsWord(declared, verb) {
+			found = append(found, verb)
+		}
+	}
+	for _, phrase := range outwardPhrases {
+		if strings.Contains(declared, phrase) {
+			found = append(found, strings.TrimSpace(phrase))
+		}
+	}
+	return found
+}
+
+// containsWord reports a token present at word boundaries.
+func containsWord(text, token string) bool {
+	for i := 0; ; {
+		j := strings.Index(text[i:], token)
+		if j < 0 {
+			return false
+		}
+		start := i + j
+		end := start + len(token)
+		beforeOK := start == 0 || !isWordByte(text[start-1])
+		afterOK := end == len(text) || !isWordByte(text[end])
+		if beforeOK && afterOK {
+			return true
+		}
+		i = start + 1
+		if i >= len(text) {
+			return false
+		}
+	}
+}
+
+func isWordByte(b byte) bool {
+	return b == '_' || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 // outwardSurfaces are repository paths whose CONTENT causes outward effects
@@ -168,13 +244,7 @@ func AssessConsequences(a Action) ConsequenceAssessment {
 
 	// A declared outward action escalates whatever the stage is. This is the
 	// direction a claim is allowed to move an assessment.
-	declared := strings.ToLower(strings.Join(append(append([]string{}, a.DeclaredSteps...), a.DeclaredConsequences), " \n "))
-	var declaredOutward []string
-	for _, verb := range outwardVerbs {
-		if strings.Contains(declared, verb) {
-			declaredOutward = append(declaredOutward, verb)
-		}
-	}
+	declaredOutward := declaredOutwardActions(a.DeclaredSteps, a.DeclaredConsequences)
 	if len(declaredOutward) != 0 {
 		assessment.Result = ConsequenceUnacceptable
 		assessment.Effects = append(assessment.Effects, "the plan declares an outward action: "+strings.Join(declaredOutward, ", "))

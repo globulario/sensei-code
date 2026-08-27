@@ -1,0 +1,43 @@
+{
+  "task": "internal-doctor-853fbe3",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "02b9959d620e0cb793b12cc8a42077f584bf14be",
+  "run_base_sha": "e3cdd6ecd7e28d074300044bf2f0edb1fd4fca5f",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T04:45:33Z",
+  "ended": "2026-08-25T04:53:12Z",
+  "wall_seconds": 459,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/doctor [github.com/globulario/sensei-code/internal/doctor.test]\ninternal/doctor/doctor_test.go:81:9: undefined: remediation\ninternal/doctor/doctor_test.go:85:5: undefined: remediation\ninternal/doctor/doctor_test.go:102:5: undefined: Unproven\ninternal/doctor/doctor_test.go:107:68: undefined: Unproven\ninternal/doctor/doctor_test.go:149:23: undefined: provider.TurnCapability\ninternal/doctor/doctor_test.go:152:13: undefined: provider.CapabilityDemonstrated\ninternal/doctor/doctor_test.go:153:13: undefined: provider.CapabilityRefused\ninternal/doctor/doctor_test.go:154:13: undefined: provider.CapabilityUnknown\ninternal/doctor/doctor_test.go:154:32: undefined: Unproven\ninternal/doctor/doctor_test.go:155:13: undefined: provider.TurnCapability\ninternal/doctor/doctor_test.go:155:13: too many errors\nFAIL\tgithub.com/globulario/sensei-code/internal/doctor [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:8114eb7e906f3d9b04e5dc9e612291bd94ab467ec83744a412ebda6af3fa87df",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "?? benchmark/proof-v3/runs/internal-gitx-a4fa351/RAW/2.json\n?? benchmark/proof-v3/transcripts/internal-gitx-a4fa351/RAW/2.log",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-doctor-853fbe3/RAW/1.log",
+    "transcript_tail_sha256": "sha256:418902df0b2755ebe3c377959b1d094db72121cea4ea25c47ecfeaf9285f700f"
+  },
+  "notes": "0 event(s) observed"
+}

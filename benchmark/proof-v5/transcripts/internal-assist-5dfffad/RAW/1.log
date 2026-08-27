@@ -1,0 +1,13 @@
+Done — `internal/assist/packet.go` only.
+
+**What changed** (`internal/assist/packet.go:76-89`, `:123-136`): the `awareness_preflight` call now builds its arguments as `preflightArgs` and adds `"domain"` only when the `sensei_workspace_status` result Sensei just returned carries a non-empty `binding.repository_domain`. A new helper `repositoryDomain` reads that path out of the receipt's structured content, returning `""` for a missing binding, a wrong-typed value, or an empty/whitespace domain — so an unbound checkout asks unscoped rather than asserting a domain Sensei never bound. Task, files, and mode are unchanged, as is the call ordering.
+
+**Why it matters, concretely**: running the unscoped preflight against this repo's own graph returns `PREFLIGHT_STATUS_DEGRADED`, `risk_class: UNKNOWN_IMPACT`, `confidence: LOW`, blind spot `ambiguous domain scope: graph holds 3 domains`. With `domain=github.com/globulario/sensei-code` the same query returns `PREFLIGHT_STATUS_OK`, `CONFIDENCE_HIGH`, 3 direct anchors, and the two critical invariants for this file. That degraded answer was previously being packaged as `Present` preflight evidence.
+
+**Verification**: `gofmt` clean, `go build ./...`, `go vet ./internal/assist/`, and `go test ./...` all pass. I also wrote a temporary test exercising the bound / empty-string / missing-binding / wrong-type cases — all passed — then deleted it, since this checkout has no `internal/assist` test file and the graph's required tests (`internal/assist/packet_test.go:TestBuildUsesSenseiAndCarriesProvenance` and siblings) are not present here. If you want that coverage kept, say so and I'll add it as a real test file.
+
+Two things I did not touch, flagged rather than fixed:
+- `internal/workflow/engine.go:96` makes the identical unscoped `awareness_preflight` call right after its own `sensei_workspace_status` at `:89`. Same defect, outside the stated scope.
+- This checkout is itself unbound (`repository_domain: ""`, `repository_domain_source: unbound`, blocking limitation `no repository.domain is configured in .sensei/config.yaml`), so in *this* worktree the new code takes the omit branch and behavior is unchanged. The fix only takes effect where a domain is configured.
+
+AWG: briefing(internal/assist/packet.go) | invariants: sensei_code.assisted_context.source_is_sensei, sensei_code.assisted_context.never_claims_admission | uncertainty: required tests named by the graph are absent from this checkout, so the change is proven by build/vet plus an ephemeral test, not by the governed suite.

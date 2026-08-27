@@ -5,6 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/event"
@@ -29,6 +32,66 @@ type Request struct {
 	// "continue", so an adversarial role that nobody remembered to configure
 	// still starts clean.
 	Session roles.Session
+	// Graph is the awareness graph the engine verified for this run, handed to
+	// the agent as an execution-scoped MCP binding.
+	//
+	// The first governed run against a foreign repository had the ENGINE bound
+	// to that repository's graph and the ARCHITECT bound, through its own
+	// global ~/.codex/config.toml, to a different one. The investigator was
+	// reasoning over a substrate the engine had never admitted, and nothing
+	// noticed. So the binding is now part of the request, and each provider is
+	// launched so that it can reach this graph and no other. Nil means the
+	// caller made no claim, and the provider's own configuration applies.
+	Graph *GraphBinding
+}
+
+// GraphBinding is one verified graph, as an MCP server the agent may reach.
+type GraphBinding struct {
+	// Command and Args launch the same MCP the engine itself used.
+	Command string
+	Args    []string
+	// Domain and Digest identify what the engine verified. Recorded so an
+	// agent's output can be checked against the graph it was meant to see.
+	Domain string
+	Digest string
+}
+
+// CodexOverrides renders the binding as `codex -c` overrides, which apply to
+// every codex subcommand including app-server and take precedence over the
+// user's global config.
+func (g GraphBinding) CodexOverrides() []string {
+	args := make([]string, 0, len(g.Args))
+	for _, a := range g.Args {
+		args = append(args, strconv.Quote(a))
+	}
+	return []string{
+		"-c", "mcp_servers.sensei.command=" + strconv.Quote(g.Command),
+		"-c", "mcp_servers.sensei.args=[" + strings.Join(args, ",") + "]",
+	}
+}
+
+// ClaudeMCPConfig renders the binding as the JSON `claude --mcp-config` reads.
+func (g GraphBinding) ClaudeMCPConfig() []byte {
+	b, _ := json.Marshal(map[string]any{"mcpServers": map[string]any{
+		"sensei": map[string]any{"command": g.Command, "args": g.Args}}})
+	return b
+}
+
+// DivergenceIn reports evidence, in an agent's own output, that it reached a
+// graph other than the one bound.
+//
+// The bound graph holds Domain; a graph that answers "unknown domain scope"
+// for it is a different graph. This is the after-the-fact check; the strict
+// per-run configuration is the structural one.
+func (g GraphBinding) DivergenceIn(output string) string {
+	if g.Domain == "" {
+		return ""
+	}
+	if strings.Contains(output, "unknown domain scope \\\""+g.Domain) ||
+		strings.Contains(output, "unknown domain scope \""+g.Domain) {
+		return "the agent reached a graph that does not hold " + g.Domain
+	}
+	return ""
 }
 
 // session resolves the mode actually used, so the caller records what happened
@@ -106,6 +169,11 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 			return Result{}, fmt.Errorf("unknown role %q", req.Role)
 		}
 		session := provider.ChatGPTForWorkspace(req.Workspace)
+		if req.Graph != nil {
+			if err := session.BindGraph(req.Graph.CodexOverrides()); err != nil {
+				return Result{}, err
+			}
+		}
 		var text string
 		var err error
 		if mode := req.session(); mode == roles.Fresh {
@@ -118,6 +186,11 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 		if err != nil {
 			return Result{}, err
 		}
+		if req.Graph != nil {
+			if why := req.Graph.DivergenceIn(text); why != "" {
+				return Result{}, fmt.Errorf("graph binding violated: %s", why)
+			}
+		}
 		for _, line := range strings.Split(text, "\n") {
 			emit(event.New(c.SessionID, req.TaskID, c.Source, event.Output, line, map[string]string{"stream": "assistant"}))
 		}
@@ -125,8 +198,16 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 		return Result{Text: text, Session: req.session()}, nil
 	}
 
+	args := append([]string(nil), c.Args...)
+	if req.Graph != nil {
+		bound, err := c.bindGraphArgs(req, args)
+		if err != nil {
+			return Result{}, err
+		}
+		args = bound
+	}
 	var out strings.Builder
-	_, err := processx.RunWithEnv(ctx, req.Workspace, c.Command, c.Args, c.Env, c.UnsetEnv, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
+	_, err := processx.RunWithEnv(ctx, req.Workspace, c.Command, args, c.Env, c.UnsetEnv, bytes.NewBufferString(req.Prompt), func(line processx.Line) {
 		if line.Stream == "stdout" {
 			out.WriteString(line.Text)
 			out.WriteByte('\n')
@@ -137,6 +218,11 @@ func (c CLI) Run(ctx context.Context, req Request, emit func(event.Event)) (Resu
 		return Result{}, err
 	}
 	text, sid := normalizeOutput(c.Name, out.String())
+	if req.Graph != nil {
+		if why := req.Graph.DivergenceIn(out.String()); why != "" {
+			return Result{}, fmt.Errorf("graph binding violated: %s", why)
+		}
+	}
 	emit(event.New(c.SessionID, req.TaskID, c.Source, event.AgentFinished, c.label()+" finished", nil))
 	// A one-shot CLI turn inherits nothing by construction: the process is new,
 	// and no resume handle is passed to it. That is reported as Fresh rather
@@ -272,4 +358,42 @@ func normalizeOutput(name, raw string) (string, string) {
 		result = fmt.Sprintf("%s completed without text output", name)
 	}
 	return result, sid
+}
+
+// bindGraphArgs launches a CLI provider so it can reach the bound graph and no
+// other.
+//
+// claude: an execution-scoped --mcp-config with --strict-mcp-config, so every
+// other MCP source -- user, project, plugin -- is ignored for this turn.
+// codex exec: -c overrides, which precede the user's config.toml.
+// Anything else: refused, because a provider that cannot be bound would run
+// against whatever it finds, and "unbound" must not look like "bound".
+func (c CLI) bindGraphArgs(req Request, args []string) ([]string, error) {
+	switch strings.ToLower(strings.TrimSpace(c.Name)) {
+	case "claude":
+		dir := filepath.Join(req.Workspace, ".sensei-code")
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			return nil, err
+		}
+		path := filepath.Join(dir, "mcp-"+sanitize(req.TaskID)+".json")
+		if err := os.WriteFile(path, req.Graph.ClaudeMCPConfig(), 0o644); err != nil {
+			return nil, err
+		}
+		return append(args, "--mcp-config", path, "--strict-mcp-config"), nil
+	case "codex":
+		return append(req.Graph.CodexOverrides(), args...), nil
+	}
+	return nil, fmt.Errorf("provider %q cannot be bound to the verified graph; refusing to run it unbound", c.Name)
+}
+
+func sanitize(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('-')
+		}
+	}
+	return b.String()
 }

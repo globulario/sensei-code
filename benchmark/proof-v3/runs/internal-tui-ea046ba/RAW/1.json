@@ -1,0 +1,43 @@
+{
+  "task": "internal-tui-ea046ba",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "a47612c67219c111e1bfcbe1d348f25091c3fc5b",
+  "run_base_sha": "86c7a07501dfb8170ac35e9119ab3360bddd2a46",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T04:57:03Z",
+  "ended": "2026-08-25T05:05:27Z",
+  "wall_seconds": 504,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/tui [github.com/globulario/sensei-code/internal/tui.test]\ninternal/tui/scroll_test.go:28:4: m.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:55:14: scrolled.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:68:4: m.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:70:26: returned.scrollUp undefined (type Model has no field or method scrollUp)\ninternal/tui/scroll_test.go:111:4: m.scrollUp undefined (type Model has no field or method scrollUp)\nFAIL\tgithub.com/globulario/sensei-code/internal/tui [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e2b711bac92f2d47aff3c26376b66260ab66011e4498a11faca60f0a7134c36c",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "M benchmark/proof-v3/transcripts/internal-gitx-a4fa351/COLD/1.log\n?? benchmark/proof-v3/runs/internal-behavioral-a453be8/\n?? benchmark/proof-v3/runs/internal-doctor-853fbe3/\n?? benchmark/proof-v3/runs/internal-gitx-a4fa351/RAW/2.json\n?? benchmark/proof-v3/transcripts/internal-behavioral-a453be8/\n?? benchmark/proof-v3/transcripts/internal-doctor-853fbe3/\n?? benchmark/proof-v3/transcripts/internal-gitx-a4fa351/RAW/2.log",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-tui-ea046ba/RAW/1.log",
+    "transcript_tail_sha256": "sha256:7d26192115d61a18942cc26ec503fdb284d0bcc20e91b1854a2b88743685abd8"
+  },
+  "notes": "0 event(s) observed"
+}

@@ -1,0 +1,20 @@
+diff --git a/semaphore/semaphore.go b/semaphore/semaphore.go
+index 96a035a..2ebc7e6 100644
+--- a/semaphore/semaphore.go
++++ b/semaphore/semaphore.go
+@@ -140,12 +140,9 @@ func (s *Weighted) Release(n int64) {
+ }
+ 
+ func (s *Weighted) notifyWaiters() {
+-	for {
+-		next := s.waiters.Front()
+-		if next == nil {
+-			break // No more waiters blocked.
+-		}
+-
++	// Walk the queue in FIFO order until it is empty or the next waiter cannot
++	// be satisfied.
++	for next := s.waiters.Front(); next != nil; next = s.waiters.Front() {
+ 		w := next.Value.(waiter)
+ 		if s.size-s.cur < w.n {
+ 			// Not enough tokens for the next waiter. We could keep going (to try to

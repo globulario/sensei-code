@@ -1,0 +1,43 @@
+{
+  "task": "internal-mcpconfig-110678d",
+  "arm": "RAW",
+  "attempt": 2,
+  "manifest_hash": "sha256:bd8ac1395f697f79f922f04ef87d6e8b79bbeaf7dbec8f141500a910ef3059b3",
+  "benchmark_version": "proof-v3",
+  "base_sha": "98197c1dceeeca9319bd1d093f277166a8e7cbda",
+  "run_base_sha": "1e4914f447ff378dcc6785854a7492d51f9b69de",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T05:45:34Z",
+  "ended": "2026-08-25T05:50:43Z",
+  "wall_seconds": 309,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/mcpconfig [github.com/globulario/sensei-code/internal/mcpconfig.test]\ninternal/mcpconfig/mcpconfig_test.go:23:16: undefined: codexServerCommand\ninternal/mcpconfig/mcpconfig_test.go:33:17: undefined: codexServerCommand\ninternal/mcpconfig/mcpconfig_test.go:43:12: undefined: describeClaude\ninternal/mcpconfig/mcpconfig_test.go:43:57: undefined: Missing\ninternal/mcpconfig/mcpconfig_test.go:44:40: undefined: Missing\ninternal/mcpconfig/mcpconfig_test.go:54:13: undefined: Configure\ninternal/mcpconfig/mcpconfig_test.go:54:28: undefined: Claude\ninternal/mcpconfig/mcpconfig_test.go:58:17: undefined: Configured\ninternal/mcpconfig/mcpconfig_test.go:59:50: undefined: Configured\ninternal/mcpconfig/mcpconfig_test.go:77:15: undefined: Configure\ninternal/mcpconfig/mcpconfig_test.go:77:15: too many errors\nFAIL\tgithub.com/globulario/sensei-code/internal/mcpconfig [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:a2af92714bc95266cbd643dfc10a8237accdcdf00a9143598d274abd3a87ebd5",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "M internal/proofbench/report.go\n?? benchmark/proof-v3/runs/internal-mcpconfig-110678d/\n?? benchmark/proof-v3/runs/internal-tui-be512db/RAW/2.json\n?? benchmark/proof-v3/runs/internal-tui-ea046ba/RAW/3.json\n?? benchmark/proof-v3/transcripts/internal-mcpconfig-110678d/\n?? benchmark/proof-v3/transcripts/internal-tui-be512db/RAW/2.log\n?? benchmark/proof-v3/transcripts/internal-tui-ea046ba/RAW/3.log",
+  "boundary_measurable": false,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v3/transcripts/internal-mcpconfig-110678d/RAW/2.log",
+    "transcript_tail_sha256": "sha256:cd71deac1d83df34f8d18a3ac907736bbefdc8aba171a8dd717f197786c9ed06"
+  },
+  "notes": "0 event(s) observed"
+}

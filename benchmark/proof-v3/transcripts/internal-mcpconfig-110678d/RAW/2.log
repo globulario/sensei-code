@@ -1,0 +1,23 @@
+`internal/mcpconfig` didn't exist — I created it with the model rather than extending one.
+
+**`internal/mcpconfig/mcpconfig.go`** — the configuration model:
+
+- `Server{Command, Args, Env}` — one MCP server as a **direct argv** launch, the only shape Sensei Code starts (AGENTS.md: no shell routing). `Env` is documented as never carrying provider credentials, which stay owned by the provider's native client (`sensei_code.provider.credentials_remain_provider_owned`).
+- `Document{Servers map[string]Server}` — the canonical `mcpServers` object, the same shape as the repo's own `.mcp.json`.
+- `SenseiName = "sensei"` — the name is load-bearing, not cosmetic: agents address the tools as `mcp__sensei__<tool>`, so renaming the entry renames every tool the architect was told it has.
+- `Architect(sensei Server) (Document, error)` — the architect's one required surface is Sensei, so a description that can't carry it is an **error, not a document with fewer servers in it**. Symmetric `Document.ValidateArchitect()` checks a parsed document the same way.
+- `Parse` / `Encode` — both fail closed, and every refusal names the server and the reason (`sensei_code.sensei_boundary.refusal_carries_its_reason`). A non-stdio entry (`type: http`) is refused as "does not describe a stdio launch: no command", which is honest about the model's bound rather than silently launching nothing. `Encode` validates before rendering so an unusable config is never written.
+
+Validation is limited to what has an architectural reason: shell metacharacters in a command (someone expected interpretation that will never happen), server names that can't form an `mcp__<server>__<tool>` identifier, and env keys that aren't variable names. Args are unvalidated — they go straight into argv, where metacharacters are literal and legitimate.
+
+14 tests cover the failure/authority semantics AGENTS.md asks for. `gofmt`, `go vet ./...`, `go test ./...` all pass.
+
+Two things worth flagging:
+
+1. **Nothing calls it yet.** The model describes the document; no code writes it for a provider, so the architect still gets Sensei evidence only as prompt text in `internal/workflow/engine.go:437`. Delivery is per-provider (Codex `config.toml` vs `.mcp.json`) and is M3 work — I left it out rather than guess a provider surface. I recorded that gap explicitly in `docs/implementation-status.md` under "Intentionally not yet claimed" so the package can't read as a delivered capability, and added the package to the tree in `docs/architecture.md`.
+
+2. **`config.Config.Sensei{Command, Args}` is already an MCP server description** and now duplicates `mcpconfig.Server`. I left `internal/config` untouched — collapsing them is a real change to a config file shape with existing readers (`doctor`, `assist`), not part of this ask. The caller bridges in one line: `mcpconfig.Architect(mcpconfig.Server{Command: cfg.Sensei.Command, Args: cfg.Sensei.Args})`.
+
+I did not commit.
+
+AWG: briefing(internal/mcpconfig) | invariants: refusal_carries_its_reason, credentials_remain_provider_owned | uncertainty: no provider delivery surface exists yet, so the model's fitness against Codex's actual MCP config format is unverified against a running architect

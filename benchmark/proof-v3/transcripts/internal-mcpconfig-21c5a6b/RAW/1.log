@@ -1,0 +1,21 @@
+Done. `internal/mcpconfig` now reports the tool allowlist each agent's configuration actually records, instead of reporting `configured` and leaving the tool surface to be assumed.
+
+**What changed** (`internal/mcpconfig/mcpconfig.go:67`)
+
+- `Status` gains `Tools []string` — the allowlist the agent's own config records, in file order. `nil` means *the file records no allowlist*, which is deliberately distinct from an allowlist that permits nothing, and is not a claim about what the server exposes.
+- `Status.ToolAccess()` renders that distinction in one line so no caller has to reason about nil-vs-empty: `no tool allowlist configured` / `tool allowlist configured and empty: no Sensei tool is allowed` / `N tools configured: …`.
+- **Codex** (`codexServerTools`): reads `enabled_tools` from `[mcp_servers.sensei]` (single- and multi-line arrays, trailing comments stripped) plus the tools the file scopes one at a time with `[mcp_servers.sensei.tools.<name>]` tables — the tables the existing reader already knew about and walked past. Quoted names like `"awareness.review_service"` are unquoted; another server's tool tables are not counted as Sensei's.
+- **Claude** (`.mcp.json`): reports a `tools` array if the sensei entry records one.
+- `cmd/sensei-code/mcp.go` and the TUI `/mcp` panel print the line.
+
+Verified against the real configs on this machine: it reports exactly the 11 `[mcp_servers.sensei.tools.*]` tables in `~/.codex/config.toml`, in file order, and reports the repo's `.mcp.json` as recording no allowlist. `go build ./... && go vet ./... && go test ./...` all pass.
+
+**One adjacent fix I did make, and why:** `configureClaude` decoded every server in `.mcp.json` through a two-field struct and re-marshalled it, so adding the Sensei entry silently rewrote every *other* server into `{command, args}` — destroying `type`, `url`, `env`, and any allowlist they carried. Since the package now reports allowlists, it could not also be the thing that deletes them. Other servers are now kept as `json.RawMessage` and re-emitted byte for byte. This does not weaken `configuration_only_adds_what_is_missing`; an existing Sensei entry is still left untouched.
+
+**Two things I left alone, deliberately:**
+- Codex's `disabled_tools` (a denylist) is not reported. The ask was the allowlist, and a file with only a denylist truthfully reports "no allowlist configured".
+- Claude Code gates MCP tools through `permissions.allow` in settings, not through `.mcp.json`; reading that is a different file and a different concern, so this reports what `.mcp.json` records and nothing more.
+
+I did not run `sensei propose` — `docs/awareness/*.yaml` is not present in this checkout, so there is no source for it to append to. The relevant class is already carried by `failure.diagnostic_elevates_a_configured_default_into_a_claim_of_cer`, which the briefing surfaced for this file. Changes are in the working tree, uncommitted.
+
+AWG: briefing(internal/mcpconfig/mcpconfig.go) | invariants: sensei_code.mcp.configuration_only_adds_what_is_missing, no-fake-green (absence is never rendered as a surface) | uncertainty: whether Claude Code honours a `tools` key inside a `.mcp.json` server entry — the report states what the file records, not what the agent will enforce.

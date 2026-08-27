@@ -1,0 +1,33 @@
+{
+  "derivation_id": "derive.field_access_under_lock",
+  "derivation_version": "v1",
+  "proposition": {
+    "kind": "field_access_under_lock",
+    "dir": "semaphore",
+    "type": "Weighted",
+    "field": "cur",
+    "lock": "mu"
+  },
+  "repository": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-sync",
+  "pinned_commit": "de8f24f778659c901821af668c8689a1e8014f5e",
+  "independently_observed_inputs": [
+    "semaphore/semaphore.go"
+  ],
+  "result": "NOT_DERIVED",
+  "detail": "6 of 10 access(es) are not under mu: Acquire accesses s.cur without holding s.mu (semaphore/semaphore.go:55:12); Acquire accesses s.cur without holding s.mu (semaphore/semaphore.go:84:4); Acquire accesses s.cur without holding s.mu (semaphore/semaphore.go:90:27); Release accesses s.cur without holding s.mu (semaphore/semaphore.go:134:5); notifyWaiters accesses s.cur without holding s.mu (semaphore/semaphore.go:150:13); notifyWaiters accesses s.cur without holding s.mu (semaphore/semaphore.go:165:3)",
+  "produced_at": "2026-08-27T02:15:41Z",
+  "completeness_scope": [
+    "access through an alias or a local copy of the receiver",
+    "access from a helper the receiver is passed to",
+    "access from a goroutine whose lock state this cannot follow",
+    "access from a file outside the package directory read",
+    "access through reflection, embedding, or an interface method set",
+    "lock acquisition or release performed by a called function rather than in the same body"
+  ],
+  "invalidated_by": [
+    "the pinned revision is superseded and the derivation is not re-run",
+    "the derivation no longer succeeds over the same inputs",
+    "a registered derivation of the same family changes version",
+    "contradictory evidence is recorded against the proposition"
+  ]
+}

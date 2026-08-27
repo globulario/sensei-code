@@ -1,0 +1,21 @@
+{
+  "recipes": [
+    {
+      "kind": "field_access_under_lock",
+      "dir": "semaphore",
+      "type": "Weighted",
+      "field": "cur",
+      "lock": "mu",
+      "why": "Immediate acquisition, queued handoff, cancellation rollback, and release all use cur as semaphore state under mu, making that ownership relationship the mechanically checkable boundary relevant to this refactor.",
+      "provenance": {
+        "origin_task": "task-1787795996581328092",
+        "origin_gap": "Sensei reported missing coverage in the planned region: graph indexes this area but no anchored rules apply to the request",
+        "region": [
+          "semaphore/semaphore.go"
+        ],
+        "written_at": "2026-08-27T02:03:34Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}

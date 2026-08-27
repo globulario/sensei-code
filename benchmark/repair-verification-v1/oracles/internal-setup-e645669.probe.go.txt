@@ -1,0 +1,139 @@
+package setup
+
+// Behavioural contract probe: abandoned candidate worktrees are reported.
+//
+// Inspect is exported and the check is computed from the repository root alone,
+// so the probe builds a repository and reads the named check out of the Report.
+// Other checks in that Report look at the machine and are deliberately ignored:
+// this contract is about one check, and it is repo-local.
+
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+const probeCheckName = "candidate worktrees"
+
+func probeCheck(t *testing.T, repoRoot string) Check {
+	t.Helper()
+	report := Inspect(context.Background(), Options{RepoRoot: repoRoot})
+	for _, c := range report.Checks {
+		if c.Name == probeCheckName {
+			return c
+		}
+	}
+	t.Fatalf("Inspect reported no %q check; the report has %d checks", probeCheckName, len(report.Checks))
+	return Check{}
+}
+
+// probeRepo builds a repository whose worktree root is a sibling directory, the
+// way this tool lays them out.
+func probeRepo(t *testing.T) (repoRoot, worktreeRoot string) {
+	t.Helper()
+	parent := t.TempDir()
+	repoRoot = filepath.Join(parent, "project")
+	if err := os.MkdirAll(repoRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "probe@example.invalid"},
+		{"config", "user.name", "probe"},
+	} {
+		if out, err := exec.Command("git", append([]string{"-C", repoRoot}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "."}, {"commit", "-qm", "base"}} {
+		if out, err := exec.Command("git", append([]string{"-C", repoRoot}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+	return repoRoot, filepath.Join(parent, ".project-worktrees")
+}
+
+// A repository with no leftover worktrees is reported clean.
+func TestContractNoLeftoversIsOK(t *testing.T) {
+	repoRoot, _ := probeRepo(t)
+	if got := probeCheck(t, repoRoot).State; got != OK {
+		t.Errorf("a repository with no leftover worktrees reported %q", got)
+	}
+}
+
+// An empty leftover directory is reported, and can be repaired automatically.
+//
+// Nothing is lost by removing it, so the check offers to do it rather than
+// leaving the reader to work out what is safe.
+func TestContractAnEmptyLeftoverIsReportedAndRepairable(t *testing.T) {
+	repoRoot, worktrees := probeRepo(t)
+	leftover := filepath.Join(worktrees, "task-1")
+	if err := os.MkdirAll(leftover, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	c := probeCheck(t, repoRoot)
+	if c.State == OK {
+		t.Fatalf("an abandoned directory beside the repository was not reported: %+v", c)
+	}
+	if c.Repair == nil {
+		t.Fatal("an empty leftover offers no repair, so the reader must work out what is safe to delete")
+	}
+	if err := c.Repair(context.Background()); err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
+		t.Errorf("the repair did not remove %s", leftover)
+	}
+	if got := probeCheck(t, repoRoot).State; got != OK {
+		t.Errorf("after repair the check still reports %q", got)
+	}
+}
+
+// A leftover HOLDING files is reported and is not deleted automatically.
+//
+// The distinction is the point: an empty directory is litter, and one holding
+// work is somebody's unfinished candidate.
+func TestContractALeftoverHoldingWorkIsNotRemovedAutomatically(t *testing.T) {
+	repoRoot, worktrees := probeRepo(t)
+	holding := filepath.Join(worktrees, "task-2")
+	if err := os.MkdirAll(holding, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(holding, "work.go"), []byte("package p\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := probeCheck(t, repoRoot)
+	if c.State == OK {
+		t.Fatalf("an abandoned candidate holding files was not reported: %+v", c)
+	}
+	if c.Repair != nil {
+		if err := c.Repair(context.Background()); err != nil {
+			t.Fatalf("repair: %v", err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(holding, "work.go")); err != nil {
+		t.Error("a candidate holding files was deleted automatically; unfinished work is not litter")
+	}
+	// And the reader is told where it is.
+	if !strings.Contains(c.Fix+c.Detail, "task-2") {
+		t.Errorf("the check does not say which directory holds work: detail=%q fix=%q", c.Detail, c.Fix)
+	}
+}
+
+// A LIVE worktree is not an abandoned one.
+func TestContractALiveWorktreeIsNotAbandoned(t *testing.T) {
+	repoRoot, worktrees := probeRepo(t)
+	live := filepath.Join(worktrees, "task-live")
+	if out, err := exec.Command("git", "-C", repoRoot, "worktree", "add", "--detach", "-q", live).CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %v %s", err, out)
+	}
+	if got := probeCheck(t, repoRoot); got.State != OK {
+		t.Errorf("a live worktree was reported as abandoned: %+v", got)
+	}
+}

@@ -1,0 +1,18 @@
+Done. Both the package change and the one producer that feeds it.
+
+**`internal/decision/record.go`**
+- `Failures []string` added to `Record`, emitted as one `--related-failure` per non-empty entry, alongside the existing `--related-invariant` loop.
+- `ErrNotLinked` now says "an invariant or a failure mode", and `Validate` requires one of those two — source files alone no longer satisfy it.
+- A `links` helper shared by `Validate` and `Args`, so a whitespace-only id is read the same way by both. Without it, `Invariants: []string{"  "}` would pass validation but emit no flag — the exact bug being fixed, one level down.
+- `Write` already validated before `exec.LookPath`, so the unlinked case returns `ErrNotLinked` with no CLI invocation; a test now pins that ordering against a stub `sensei` that fails if run.
+- Missing title/rationale still returns its own plain error, not `ErrNotLinked`.
+
+**`internal/workflow/engine.go`** — the architect is the only producer of these links, so I wired `related_failures` through `architectureDecision` and its prompt schema. Without this the new field would be unreachable in production and file-only decisions would silently stop recording. The prompt also now states that a decision is recorded only if linked to a real invariant or failure mode, keeping the existing "do not invent an id" instruction.
+
+I confirmed the premise and the fix against the real CLI with `--dry-run`: a decision carrying only `--source-file` is rejected with *"contract-first: link a related_invariant or related_failure"*, while one carrying only `--related-failure` validates and appends as `mitigates:`.
+
+`gofmt`, `go vet ./...`, and `go test ./...` all pass; `internal/decision` gained `record_test.go` covering the accept/refuse cases above.
+
+One thing I did **not** do: file this as a Sensei scar with `sensei propose`. This repo has no `docs/awareness/` directory, and the default `--target-repo` is the separate awareness-graph repo — either target means writing outside the bounded candidate, which isn't mine to do. Worth a follow-up from you if you want the failure class recorded.
+
+AWG: briefing(internal/decision/record.go) | invariants: sensei_code.learning.never_promotes_its_own_lessons (preserved — `--no-rebuild` untouched, nothing promoted) | uncertainty: scar not proposed; awareness target repo is outside this worktree

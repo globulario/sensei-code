@@ -1,0 +1,50 @@
+{
+  "task": "internal-gitx-6460efd",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:2e4f11645fc212027739a02adc7da8c40c00553833df7ee5c4581fe0d78c6ca3",
+  "benchmark_version": "proof-v4",
+  "base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+  "run_base_sha": "23c76e2601f657f64a022f397395c637b18bea3e",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T11:45:55Z",
+  "ended": "2026-08-25T12:07:55Z",
+  "wall_seconds": 1320,
+  "terminal_status": "workflow.timed_out",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "--- FAIL: TestContractTheCleanlinessCheckDoesNotWriteTheIndex (0.03s)\n    contract_probe_test.go:93: the read-only cleanliness check touched .git/index (2026-08-25 08:07:55.762915573 -0400 EDT -\u003e 2026-08-25 08:07:55.765917126 -0400 EDT)\n--- FAIL: TestContractWorktreeIsCleanAlsoDoesNotWrite (0.03s)\n    contract_probe_test.go:117: WorktreeIsClean rewrote .git/index while reporting on it\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx\t0.062s\nFAIL",
+  "interventions": null,
+  "objections": [
+    {
+      "id": "g go checks do not repair",
+      "cycle": 1,
+      "status": "new",
+      "text": "…g Go checks do not repair this architectural-proof failure. → Provide a full, resolvable candidate SHA and an authoritative Sensei audit of its exact unified diff, plus the required edit-check evidence for the changed implementation file."
+    }
+  ],
+  "review_cycles": 2,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "?? benchmark/proof-v4/runs/\n?? benchmark/proof-v4/transcripts/",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v4/transcripts/internal-gitx-6460efd/COLD/1.log",
+    "transcript_tail_sha256": "sha256:45d2f9deb5682df69ca33d9b6e3a7a46035b6374c3e00ce5f5e798b3e86c62e5"
+  },
+  "notes": "5584 event(s) observed"
+}

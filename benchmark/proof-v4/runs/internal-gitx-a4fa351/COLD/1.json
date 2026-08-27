@@ -1,0 +1,43 @@
+{
+  "task": "internal-gitx-a4fa351",
+  "arm": "COLD",
+  "attempt": 1,
+  "manifest_hash": "sha256:2e4f11645fc212027739a02adc7da8c40c00553833df7ee5c4581fe0d78c6ca3",
+  "benchmark_version": "proof-v4",
+  "base_sha": "853fbe3f3801277ae09457c1a91b10750dc96530",
+  "run_base_sha": "d45118d51826ff5e1de0495acb800c79a25f164f",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T11:40:16Z",
+  "ended": "2026-08-25T11:42:34Z",
+  "wall_seconds": 137,
+  "terminal_status": "workflow.failed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "# github.com/globulario/sensei-code/internal/gitx [github.com/globulario/sensei-code/internal/gitx.test]\ninternal/gitx/contract_probe_test.go:54:33: (Repo{…}).CandidateDiff undefined (type Repo has no field or method CandidateDiff)\ninternal/gitx/contract_probe_test.go:80:33: (Repo{…}).CandidateDiff undefined (type Repo has no field or method CandidateDiff)\nFAIL\tgithub.com/globulario/sensei-code/internal/gitx [build failed]\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "governed_checkout_clean": false,
+  "governed_checkout_state": "?? benchmark/proof-v4/runs/\n?? benchmark/proof-v4/transcripts/",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v4/transcripts/internal-gitx-a4fa351/COLD/1.log",
+    "transcript_tail_sha256": "sha256:927f04584350ea645c4af62bb040f2a0d0a861c79b7fd3ee7a7b497942f8e496"
+  },
+  "notes": "65 event(s) observed"
+}

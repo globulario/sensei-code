@@ -1,0 +1,22 @@
+{
+  "recipes": [
+    {
+      "kind": "field_access_under_lock",
+      "dir": "semaphore",
+      "type": "Weighted",
+      "field": "cur",
+      "lock": "mu",
+      "why": "Weighted operations coordinate cur with the waiter queue under mu, and the proposed State snapshot must observe held weight consistently with waiters.Len().",
+      "provenance": {
+        "origin_task": "task-1787795752297356223",
+        "origin_gap": "graph coverage is absent for the planned files: only 1 of 2 requested file(s) are examined in the graph — the rest are unknown to it",
+        "region": [
+          "semaphore/semaphore.go",
+          "semaphore/semaphore_test.go"
+        ],
+        "written_at": "2026-08-27T01:59:35Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}

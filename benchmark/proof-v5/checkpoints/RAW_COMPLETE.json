@@ -1,0 +1,80 @@
+{
+  "checkpoint": "RAW_COMPLETE",
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "arms_scheduled": 11,
+  "arms_executed": 11,
+  "terminals": {
+    "COMPLETED": 11
+  },
+  "correct": 8,
+  "incorrect": 3,
+  "not_evaluated": 0,
+  "infrastructure_failures": 0,
+  "boundary_unmeasurable": 0,
+  "boundary_violations": 0,
+  "wall_seconds": {
+    "median": 264,
+    "min": 107,
+    "max": 654,
+    "total": 3062
+  },
+  "cost_usd": "unknown \u2014 the RAW provider reported none",
+  "per_task": {
+    "internal-agent-01f3fe1": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 107
+    },
+    "internal-architect-2e095c4": {
+      "terminal": "raw.completed",
+      "oracle": "INCORRECT",
+      "wall_s": 472
+    },
+    "internal-assist-5dfffad": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 110
+    },
+    "internal-decision-6cf23e8": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 156
+    },
+    "internal-gitx-6460efd": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 220
+    },
+    "internal-gitx-a4fa351": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 284
+    },
+    "internal-session-4d32937": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 111
+    },
+    "internal-setup-16ecbc3": {
+      "terminal": "raw.completed",
+      "oracle": "INCORRECT",
+      "wall_s": 314
+    },
+    "internal-setup-e645669": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 264
+    },
+    "internal-tui-be512db": {
+      "terminal": "raw.completed",
+      "oracle": "INCORRECT",
+      "wall_s": 654
+    },
+    "internal-tui-ea046ba": {
+      "terminal": "raw.completed",
+      "oracle": "CORRECT",
+      "wall_s": 370
+    }
+  },
+  "no_decision_taken": "This checkpoint exists so evidence survives a later catastrophe. No conclusion is drawn from it and the schedule is unchanged: COLD_WAVE runs next against the same corpus, and the comparison is the result."
+}

@@ -1,0 +1,18 @@
+The transcript scrolls now.
+
+**What changed** (`internal/tui/model.go`, plus `internal/tui/scroll_test.go`):
+
+The view was hard-anchored to the foot of the transcript — it sliced `rows[len(rows)-available:]` every frame, so anything above that window was unreachable, and with `AltScreen` on there is no terminal scrollback to fall back to. I replaced that fixed slice with a windowed one:
+
+- **Two new fields.** `scrolled` says the human is reading older output; `offset` is the first transcript row on screen. The zero value follows the newest line, so existing behaviour is unchanged until a scroll key is pressed.
+- **`transcript()`** now returns the wrapped rows, the height available for them, and the bottom block. `View()` and the scroll handler both call it, so they cannot disagree about what fits on screen.
+- **Keys:** `pgup`/`pgdn` move a page (with one row of overlap), `shift+↑`/`shift+↓` move a line, `esc` returns to following. They are handled before the menu and authority branches, so you can read a plan back while an authority prompt is up — which is when you most want to. `esc` is only claimed while scrolled back; otherwise it stays the composer's key. Sending a line also returns to following, since you want to see the reply.
+- **Anchoring:** while scrolled back, output arriving lands below the fold instead of yanking the page — the offset is pinned to a row, not to a distance from the bottom. The status bar then says `↑ scrolled back · esc to follow`, so an off-screen newest line does not read as a stalled session. `/help` lists the keys.
+
+**Tests** (`scroll_test.go`, all passing): the newest line is still shown by default; pgup reaches earlier rows and paging up arrives at line 0; the page holds still while new output arrives; returning to the foot resumes following; esc and sending both re-follow; a bare `↑` still goes to the composer; and every frame — following or scrolled — fills the terminal exactly, which is the arithmetic that leaves stale rows on screen when it is wrong.
+
+`gofmt -w cmd internal`, `go vet ./...`, `go test ./...` all clean. `sensei edit-check --file internal/tui/model.go` tripped no rule.
+
+Two things I deliberately did not do: **mouse wheel** scrolling would need the program to capture the mouse, which breaks terminal text selection and copy/paste over the transcript — say the word if you want it anyway. And I left an unrelated pre-existing off-by-one alone: an entirely empty `lines` renders one row too tall. `New()` always seeds a banner, so it cannot occur in the app, and fixing it was outside this change.
+
+AWG: briefing(internal/tui/model.go) | invariants: provider credentials remain provider-owned (untouched — no provider or authority path changed), TUI stays a projection of structured events (scrolling is view state only, it cannot alter what the workflow does or skip an authority rendezvous) | uncertainty: the briefing came back DEGRADED with an uncertified transaction and zero anchors for this file, so it is not proof of safety; the graph already names a `Model.scroll` symbol that does not exist in this checkout.

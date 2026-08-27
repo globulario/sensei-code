@@ -1,0 +1,1 @@
+{"recipes":[{"kind":"field_access_under_lock","dir":"errgroup","type":"Group","field":"err","lock":"errOnce","why":"safety-v1 FALSE specimen: plausible because errOnce guards the write, false because Wait reads it unguarded","provenance":{"origin_task":"specimen-false","origin_gap":"safety experiment","region":["errgroup/errgroup.go"],"written_by":"experiment"}}]}

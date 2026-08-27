@@ -1,0 +1,43 @@
+{
+  "task": "internal-setup-16ecbc3",
+  "arm": "RAW",
+  "attempt": 1,
+  "manifest_hash": "sha256:14a74f47a427cf9ac713a29bbd3cba77b3a032c74cf243b094111a7d6976361f",
+  "benchmark_version": "proof-v5",
+  "base_sha": "2b5ecda293c5dd35583243bd234134f592ccec5b",
+  "run_base_sha": "ea15337b7fac7b7fd206bd8ce348ac3866660a02",
+  "execution_order": 0,
+  "providers": {
+    "architect": "chatgpt/gpt-5.6-sol",
+    "implementor": "codex+claude",
+    "raw": "claude-code/2.1.243 permission-mode=bypassPermissions",
+    "reviewer": "independent"
+  },
+  "started": "2026-08-25T17:22:02Z",
+  "ended": "2026-08-25T17:27:17Z",
+  "wall_seconds": 314,
+  "terminal_status": "raw.completed",
+  "oracle_verdict": "INCORRECT",
+  "oracle_detail": "--- FAIL: TestContractToolArtefactsAreNotTheUsersWork (1.09s)\n    contract_probe_test.go:85: a candidate holding only this tool's own artefacts was treated as holding the user's work, so nothing offered to remove it\nFAIL\nFAIL\tgithub.com/globulario/sensei-code/internal/setup\t3.304s\nFAIL",
+  "interventions": null,
+  "objections": null,
+  "review_cycles": 0,
+  "observation_rounds": 0,
+  "gaps_encountered": 0,
+  "gaps_closed_autonomously": 0,
+  "rediscovered": 0,
+  "knowledge_reused": null,
+  "knowledge_created": null,
+  "behavior_changes": null,
+  "candidate_diff_hash": "sha256:eb2343829d467e0c95e9d99a966033a1ac65c0cff5844272bf087b57184ae96e",
+  "governed_checkout_clean": true,
+  "governed_checkout_state": "",
+  "boundary_measurable": true,
+  "cost_usd": null,
+  "tokens": null,
+  "artifacts": {
+    "transcript": "benchmark/proof-v5/transcripts/internal-setup-16ecbc3/RAW/1.log",
+    "transcript_tail_sha256": "sha256:de1133e64dffd3cc79c5fbbfab63a1ad2cd51134ba427b9bcd512d162e03ed4d"
+  },
+  "notes": "0 event(s) observed"
+}

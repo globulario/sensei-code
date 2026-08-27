@@ -52,6 +52,35 @@ type ChatGPTSession struct {
 	// with no rollout cannot be forked.
 	hasHistory  bool
 	personality bool
+	// overrides are `codex -c` arguments the app-server is started with -- the
+	// execution-scoped graph binding. A running session bound one way cannot
+	// be handed a different binding: that is refused rather than restarted,
+	// because a conversation that changed substrate mid-way would carry
+	// conclusions drawn over a graph it no longer reaches.
+	overrides []string
+}
+
+// BindGraph sets the app-server overrides for this session.
+func (s *ChatGPTSession) BindGraph(overrides []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.server != nil && !equalStrings(s.overrides, overrides) {
+		return errors.New("ChatGPT session is already bound to a different graph; refusing to rebind a live conversation")
+	}
+	s.overrides = append([]string(nil), overrides...)
+	return nil
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 var (
@@ -176,7 +205,7 @@ func (s *ChatGPTSession) ensureStarted(ctx context.Context) error {
 		return nil
 	}
 
-	c, err := startAppServer(ctx)
+	c, err := startAppServer(ctx, s.overrides...)
 	if err != nil {
 		return fmt.Errorf("start ChatGPT app-server: %w", err)
 	}

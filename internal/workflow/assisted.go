@@ -314,6 +314,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 			workspaceEvidence = firstText(workspaceStatus)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, workspaceEvidence, workspaceStatus.Structured))
 			if status, decodeErr := sensei.DecodeWorkspaceStatus(workspaceStatus); decodeErr == nil {
+				e.bindGraph(taskID, status)
 				domain = status.Binding.RepositoryDomain
 				if !status.Permits() {
 					observations = append(observations, "workspace identity is incomplete: "+status.Diagnostic())
@@ -423,7 +424,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv,
 	}
 	result, err := architect.Run(ctx, agent.Request{
-		Role: roles.Architect, TaskID: taskID, Workspace: e.Repo.Root,
+		Role: roles.Architect, TaskID: taskID, Workspace: e.Repo.Root, Graph: e.graphFor(taskID),
 		Prompt: assistedPrompt(e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
 			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved),
 			repoEvidence.Render(), standing.Render()),

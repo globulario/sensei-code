@@ -1,0 +1,22 @@
+`internal/mcpconfig` now exists with the configuration model the architect needs.
+
+**What I did first:** preflight on the (then non-existent) file matched two direct anchors in the awareness graph, which set the design constraints:
+
+- invariant `sensei_code.mcp.configuration_only_adds_what_is_missing` (high) — *"Repairing an agent's Sensei access never rewrites configuration the user wrote"*, with required test `TestConfigureLeavesAnExistingEntryAlone`
+- failure mode — *"Diagnostic elevates a configured default into a claim of certified repository authority"*
+
+**The model** (`internal/mcpconfig/mcpconfig.go`):
+
+- `Server{Name, Command, Args}` — one stdio MCP server entry. No env/credential material: provider credentials stay owned by the native client per `docs/provider-auth.md`. `Name` is validated as a bare identifier so it can't close a TOML table header or escape a JSON key.
+- `Agent` — the closed vocabulary of configuration surfaces (`Codex`, `Claude`, `Antigravity`), read by membership via `AgentFor(command)`. This is the gap the task named: the architect is configured as `chatgpt` but executes `codex`, so the surface resolves from the command the account runs, not the account name. An unknown CLI is refused, not guessed.
+- `Sensei(cfg)` derives the entry from `cfg.Sensei` rather than restating it, so the architect can never be pointed at a different Sensei than the one `doctor` verifies; it fails closed on an empty command instead of handing over an entry that silently starts without Sensei.
+- `ForArchitect(cfg)` returns the surface + entry the architect needs.
+- `Configured` / `Configure` — presence check and add-only repair. Codex is appended as a `[mcp_servers.<name>]` table (a TOML round-trip would rewrite every line the user wrote); Claude's JSON keeps every sibling as `json.RawMessage` so nothing is re-derived, and the swap goes through a temp file + rename so a partial write can't destroy the file. An existing entry is never rewritten, reconciled, or removed — `Configure` returns `AlreadyPresent` without touching the file.
+
+Honesty boundary against the failure mode: `Configured` reports that an *entry exists* and the doc comments say so explicitly — not that the server starts, reaches the graph, or returns certified evidence. `Outcome` is `added` / `already-present`, never "ready".
+
+**Tests** (13, all passing) include the graph-required `TestConfigureLeavesAnExistingEntryAlone` for both surfaces, plus five TOML spellings of an existing entry (a duplicate table would invalidate the user's whole codex config, so ambiguity reads as declared), sibling preservation, alias safety, and the fail-closed cases.
+
+`gofmt -l`, `go vet ./...`, `go test ./...` all clean. `sensei edit-check` tripped no rule. I recorded the package in `docs/implementation-status.md` with its own limits stated — no command drives it yet, so nothing is wired into the workflow engine. Not committed.
+
+AWG: briefing(internal/mcpconfig/mcpconfig.go) | invariants: sensei_code.mcp.configuration_only_adds_what_is_missing, sensei_code.provider.credentials_remain_provider_owned | uncertainty: Antigravity publishes no MCP configuration contract, so its surface is a named member with no path rather than a guessed file.

@@ -1,0 +1,21 @@
+Added `internal/session/interrupted.go` plus tests. Everything builds, vets, and passes (`go test ./...` all green).
+
+**Implementation** (`internal/session/interrupted.go:26`)
+
+A single pass over the events, keyed by `TaskID`:
+
+- `task.created` with non-blank summary creates the record and fixes the output order (first appearance). A blank summary — or an event for a task ID never created — is never tracked, so it can never be returned.
+- `plan.proposed` fills `Plan` from the rendered plan summary.
+- `authority.resolved` sets the resumable gate.
+- `status` from `SourceReviewer` overwrites `Review`, so the last verdict wins.
+- `workflow.completed` / `workflow.failed` marks the task terminal.
+
+Emitted at the end: records that are resolved and not terminal, in creation order.
+
+The gate is deliberately `authority.resolved`, not `plan.proposed`, per the spec — the decline path (`engine.go:253`) and the "Stop this task" path both emit `authority.resolved` too, but each is immediately followed by a terminal event, so they drop out correctly.
+
+**One assumption to flag:** `awaitChoice` (`engine.go:786`) is shared by plan approval *and* architectural escalation (`awaitHuman`), so both emit `authority.resolved`. A task interrupted after an escalation was answered but before any plan was proposed therefore comes back with an empty `Plan`. That follows the rule as stated — RESOLVED is the gate — and it is arguably right: the human has already invested a decision in that task. If you'd rather require an actual proposed plan, the change is one added condition.
+
+Tests cover: plan+latest-review carry, proposed-but-unresolved exclusion, both terminal outcomes, first-appearance ordering, missing/blank request text, and non-reviewer `status` events not polluting `Review`.
+
+AWG: briefing(none — no `docs/awareness/high_risk_files.yaml` in this checkout, `internal/session` unprotected) | invariants: local session record is a projection and never a Sensei receipt, reviewer acceptance is not admission — `FindInterrupted` only reads the event stream and asserts nothing about governance state | uncertainty: whether escalation-only authority resolution should count as resumable

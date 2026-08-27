@@ -61,6 +61,14 @@ type Engine struct {
 	// property of how the task was submitted, and a plan that could set it
 	// would be making a claim rather than carrying a fact.
 	objectives map[string]Objective
+	// graphs records, per task, the awareness graph the start gate verified,
+	// as the MCP binding every agent in that task is launched with.
+	//
+	// Kept on the engine and set only by the gate, so the binding an agent
+	// receives is the one the engine admitted and not one a plan, a prompt or
+	// a user's global config could substitute. The first foreign-repository run
+	// had the engine on one graph and the architect on another, silently.
+	graphs map[string]*agent.GraphBinding
 	// findings holds what each observation established, so a caller may open
 	// repair work from it. Holding evidence is not holding authority: a repair
 	// opened from one enters the ordinary governed path with nothing carried
@@ -93,6 +101,50 @@ type Engine struct {
 // unclosed and the question becomes a human's — honestly, and naming what was
 // attempted.
 const closureBudget = 1
+
+// bindGraph records the graph the start gate verified for a task.
+//
+// Built from the engine's OWN MCP command and the workspace status it just
+// decoded, so by construction it names the graph the engine reached. Every
+// agent request for the task carries it, and each provider is launched so it
+// can reach this graph and no other.
+func (e *Engine) bindGraph(taskID string, ws sensei.WorkspaceStatus) {
+	b := &agent.GraphBinding{
+		Command: e.Config.Sensei.Command,
+		Args:    append([]string(nil), e.Config.Sensei.Args...),
+		Domain:  ws.Binding.RepositoryDomain,
+	}
+	if ws.GraphAuthority != nil {
+		b.Digest = ws.GraphAuthority.GraphBuildCommit
+	}
+	e.mu.Lock()
+	if e.graphs == nil {
+		e.graphs = map[string]*agent.GraphBinding{}
+	}
+	e.graphs[taskID] = b
+	e.mu.Unlock()
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+		fmt.Sprintf("graph binding for every agent in this task: domain %s, build %s, via %s %s",
+			b.Domain, short12(b.Digest), b.Command, strings.Join(b.Args, " ")), nil))
+}
+
+// graphFor is the binding an agent request carries. Nil only before the gate
+// has run, which for a governed task is never.
+func (e *Engine) graphFor(taskID string) *agent.GraphBinding {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.graphs[taskID]
+}
+
+func short12(s string) string {
+	if len(s) > 12 {
+		return s[:12]
+	}
+	if s == "" {
+		return "(none)"
+	}
+	return s
+}
 
 // spendClosure records an attempt at one gap and reports whether the budget
 // allowed it.
@@ -496,6 +548,9 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		return
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
+	if ws, derr := sensei.DecodeWorkspaceStatus(workspaceStatus); derr == nil {
+		e.bindGraph(taskID, ws)
+	}
 
 	preflightArgs := map[string]any{"task": task, "files": []string{}, "mode": "compact"}
 	// Scope preflight to the domain Sensei just stated in the workspace identity
@@ -984,7 +1039,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// The worker's own text is the artifact of a read-only plan. Discarding
 		// it left an inspection with nothing to show but a transcript nobody
 		// had judged.
-		result, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt}, e.emit)
+		result, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
@@ -1349,6 +1404,15 @@ type architectureDecision struct {
 	// router reads, not a verdict: a premise the architect marks "inference" is
 	// the model telling us nothing checked it.
 	Claims []Claim `json:"claims,omitempty"`
+	// ProposedRecipe is a checkable QUESTION a closure round found worth asking
+	// about the region it investigated. It is not knowledge and it establishes
+	// nothing.
+	//
+	// The architect stage is read-only and stays that way: it PROPOSES here and
+	// the engine writes, so provenance is stamped by something the agent does
+	// not control. It cannot cover the task that proposed it, and it becomes
+	// coverage only if `sensei derive` answers it against a later world.
+	ProposedRecipe *derived.Recipe `json:"proposed_recipe,omitempty"`
 }
 
 // reviewDecision is the reviewer's wire contract. It is deliberately separate
@@ -1403,7 +1467,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		if attempt > 1 {
 			p += "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
 		}
-		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p}, e.emit)
+		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			lastErr = err
 			continue
@@ -1434,7 +1498,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
-			routing, scoped, err := e.routePlan(sc, start, taskID, task, d)
+			routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1468,6 +1532,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				// whether to proceed with the gap still open.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
 				routing.Route = RouteHuman
 				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 				fallthrough
@@ -1508,7 +1573,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, scoped, err := e.routePlan(sc, start, taskID, task, d)
+			routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1539,6 +1604,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
 				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
 			}
 			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
@@ -1633,7 +1699,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		}
 		result, err := reviewer.Run(ctx, agent.Request{
 			Role: roles.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p,
-			Session: roles.Fresh,
+			Session: roles.Fresh, Graph: e.graphFor(taskID),
 		}, e.emit)
 		if err != nil {
 			return roles.ReviewVerdict{}, err
@@ -1728,7 +1794,7 @@ func shortDigest(d string) string {
 // This is the first preflight in the workflow that can name files: the start
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
-func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
+func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
@@ -1757,13 +1823,64 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task
 	if e.observes(taskID) {
 		stage = StageObserve
 	}
+	// Machine-derived coverage, revalidated in THIS world over THESE files.
+	//
+	// This was absent, and the absence was silent. The router's only coverage
+	// input was the graph's own, so a bounded knowledge gap could be reported,
+	// a closure round could run, the architect could investigate -- and no
+	// channel existed by which any of that reached the decision. The gap could
+	// not close, so it escalated to a human every time. Measured: three of five
+	// governed refusals in the proof-v6 campaign were unclosed coverage gaps
+	// whose closure round ran and failed for exactly this reason.
+	//
+	// Nothing is granted by supplying it. derivationClosesGap decides whether a
+	// derivation RESOLVES this gap, not merely whether it is true over the same
+	// files, and a derivation that does not resolve it leaves the region
+	// uncovered and the refusal intact. The approval gate is checked before
+	// coverage and is unaffected.
+	//
+	// Failure is silence: a missing recipe file, a sensei binary without
+	// `derive`, or a derivation that refuses each leave the list empty, which is
+	// the direction this must fail in.
 	action := Action{
 		Stage:                stage,
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
+		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
+
+	// Observational only. Nothing below reads it and no decision depends on it.
+	//
+	// The routing decision above is already made. This records WHAT REACHED the
+	// router, because the event stream could not answer that question: a reader
+	// could see the condition a gap produced and not whether any derivation was
+	// available to close it. Distinguishing "the channel carried nothing" from
+	// "it carried evidence that did not resolve the gap" is the difference
+	// between two unrelated repairs.
+	//
+	// Emitted after the routing so it cannot influence it, and carrying counts
+	// and identities rather than a verdict.
+	if len(action.DerivedCoverage) != 0 || routing.ClosesGap() {
+		files := make([]string, 0, len(action.DerivedCoverage))
+		for _, c := range action.DerivedCoverage {
+			files = append(files, c.File+" ["+string(c.Requirement)+"]")
+		}
+		summary := fmt.Sprintf("derived coverage: %d anchor(s) over %d planned file(s); route %s",
+			len(action.DerivedCoverage), len(d.Files), routing.Route)
+		if len(files) != 0 {
+			summary += "\n  " + strings.Join(files, "\n  ")
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
+			map[string]any{
+				"derived_coverage_anchors": len(action.DerivedCoverage),
+				"planned_files":            len(d.Files),
+				"route":                    string(routing.Route),
+				"closes_gap":               routing.ClosesGap(),
+				"anchors":                  files,
+			}))
+	}
 
 	// What sensei-code can now SAY about this plan: which part came from the
 	// requested objective, which are technical claims still needing evidence,
@@ -1782,6 +1899,14 @@ func (e *Engine) routePlan(sc *sensei.Client, start certifiedStart, taskID, task
 // derivedRecipesPath is where the durable questions live.
 const derivedRecipesPath = "docs/awareness/derived_recipes.json"
 
+// derivedReceiptsPath is the append-only log of investigator runs.
+//
+// Separate from the recipes, and append-only, because V2 §6.3 requires a
+// receipt per inference RUN. A run that proposed a duplicate or proposed
+// nothing still ran, and those are the recurrence and decline signals; storing
+// receipts inside recipes would discard exactly the ones that carry them.
+const derivedReceiptsPath = "docs/awareness/derived_receipts.jsonl"
+
 // senseiBinary is the CLI that performs derivations.
 //
 // Separate from Config.Sensei, which names the MCP server. SENSEI_BIN exists so
@@ -1797,13 +1922,16 @@ func senseiBinary() string {
 // assessed and returns the planned files a derivation established THERE, each
 // with the architectural question that derivation can answer.
 //
-// NOT REACHED BY THE GOVERNED RUN. routePlan builds its Action without
-// DerivedCoverage, so nothing in production calls this; the only caller is the
-// derivelive test. That is recorded here rather than quietly fixed, because
-// wiring it up WIDENS autonomy and is a decision to take deliberately, with the
-// relevance relation already in place, rather than as a side effect of writing
-// about it. TestTheGovernedRunDoesNotYetSupplyDerivedCoverage pins the current
-// state so connecting it is a visible change.
+// Reached by the governed run: routePlan supplies it on every routing decision.
+//
+// It was NOT, and the comment here said so, correctly, for as long as that was
+// true. The wiring was deliberately deferred because connecting it WIDENS
+// autonomy, and the evidence that justified connecting it arrived from the
+// proof-v6 campaign: three of five governed refusals were coverage gaps whose
+// closure round ran and could not close, because no channel carried a
+// derivation to the router. TestTheGovernedRunSuppliesDerivedCoverage now pins
+// the channel, and five sibling tests pin that insufficient evidence still
+// refuses.
 //
 // The only thing reaching the router is a list of files a derivation just
 // succeeded over. Recipes do not reach it, and neither does any earlier
@@ -1813,7 +1941,7 @@ func senseiBinary() string {
 // Failure is silence rather than coverage. A missing recipe file, a sensei
 // binary without `derive`, a derivation that refuses — each leaves the region
 // uncovered and the gap intact, which is the direction this must fail in.
-func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []CoverageAnchor {
+func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string) []CoverageAnchor {
 	if len(planned) == 0 {
 		return nil
 	}
@@ -1829,6 +1957,13 @@ func (e *Engine) derivedCoverage(ctx context.Context, planned []string) []Covera
 	if world == "" {
 		return nil
 	}
+	// The future-only rule, applied before any derivation is spent.
+	//
+	// A closure round that writes a question must not be covered by it. If it
+	// were, a run that could not establish its own authority would have
+	// established it by writing something down -- the self-approval this design
+	// exists to refuse. Encounter 1 writes; encounter 2 benefits.
+	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	covered, _ := derived.CoveredFiles(anchors, world, planned)
 
@@ -2511,6 +2646,91 @@ func renderScope(files []string) string {
 // certification as evidence and is asked to decide on it, because the useful
 // behaviour to reinforce is asking when unsure, not staying quiet — what must
 // not happen is the asking alone interrupting a human.
+// recordClosureQuestion durably records what a failed closure round found worth
+// checking.
+//
+// Called ONLY where a gap could not be closed, so this is not a general-purpose
+// recipe generator: no gap, no question. It records a QUESTION and never a rule,
+// an invariant, a contract, a decision, a derived fact or an authority grant --
+// those still need a human, correctly, until dq.closure_knowledge_admission is
+// answered.
+//
+// Nothing about the CURRENT task changes. The escalation proceeds exactly as it
+// would have; the run that writes the question is excluded from its coverage by
+// ExcludingTask, so the only thing this can affect is a LATER encounter with the
+// same region, and only if the derivation succeeds there.
+//
+// Every outcome is emitted, including refusal and duplication. A round that
+// writes nothing must be as visible as one that writes something, or the
+// experiment measuring this loop would only ever see its successes.
+func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureDecision,
+	start certifiedStart, model string, round int) {
+
+	graph := map[string]string{}
+	if a := start.workspace.GraphAuthority; a != nil {
+		graph = map[string]string{
+			"verdict": a.Verdict, "state": a.State,
+			"freshness": string(a.GraphFreshnessState), "seed": string(a.SeedState),
+			"provenance":         a.BuildProvenanceState,
+			"graph_build_commit": a.GraphBuildCommit, "source_repo_commit": a.SourceRepoCommit,
+		}
+	}
+	receipt := derived.InferenceReceipt{
+		ModelName:        model,
+		InputGraphDigest: derived.GraphDigest(graph),
+		InputGraphState:  graph["graph_build_commit"],
+		OriginTask:       taskID,
+		OriginGap:        condition,
+		Round:            round,
+		Region:           append([]string(nil), d.Files...),
+		ClosureBudget:    closureBudget,
+		Nondeterminism:   derived.LLMNondeterminism,
+	}
+	defer func() {
+		if err := derived.AppendReceipt(filepath.Join(e.Repo.Root, derivedReceiptsPath), receipt); err != nil {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+				"could not record the inference receipt: "+err.Error(), nil))
+		}
+	}()
+
+	if d.ProposedRecipe == nil {
+		receipt.Outcome = derived.OutcomeNoProposal
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"the closure round proposed no checkable question for this region", nil))
+		return
+	}
+	r := *d.ProposedRecipe
+	// Provenance is stamped HERE, never taken from the provider: an agent that
+	// could author its own provenance could make an invented question look like
+	// the product of an investigation that never happened.
+	r.Provenance = nil
+	receipt.CandidateDigest = derived.DigestOf(r)
+	receipt.CandidateID = r.Identity()
+
+	added, err := derived.Append(
+		filepath.Join(e.Repo.Root, derivedRecipesPath), r,
+		derived.Provenance{
+			OriginTask: taskID,
+			OriginGap:  condition,
+			Region:     append([]string(nil), d.Files...),
+			WrittenBy:  "closure_round",
+		}, d.Files)
+	switch {
+	case err != nil:
+		receipt.Outcome, receipt.Detail = derived.OutcomeRefused, err.Error()
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"the proposed question was refused: "+err.Error(), nil))
+	case !added:
+		receipt.Outcome = derived.OutcomeDuplicate
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"this question is already recorded; not duplicating it: "+r.String(), nil))
+	default:
+		receipt.Outcome = derived.OutcomeRecorded
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"recorded a question for the next encounter with this region: "+r.String(), nil))
+	}
+}
+
 // gapClosurePrompt turns a bounded knowledge gap into work instead of an
 // interruption.
 //
@@ -2559,12 +2779,42 @@ DO THIS, IN THIS ORDER:
 
 YOU ARE READ-ONLY IN THIS STAGE. Do not try to write a proposal: this role runs
 without write permission, deliberately, so that investigation cannot become
-authorship. Establishing DURABLE knowledge — an anchor that survives this task
-and spares the next one — needs a write path this stage does not have, and how
-that knowledge may enter the graph without the graph becoming a mirror of what
-you asserted is an open question (dq.closure_knowledge_admission). Until it is
-settled, a coverage gap you cannot close by verification is reported, not
-papered over.
+authorship. You may not establish that anything is TRUE — how asserted knowledge
+enters the graph without the graph becoming a mirror of what you asserted is an
+open question (dq.closure_knowledge_admission), and it is not settled.
+
+WHAT KIND OF GAP THIS IS, AND WHAT CLOSES IT. This gap is GRAPH COVERAGE: the
+graph does not vouch for this region. Verifying your premises from the
+repository is required above, and it does NOT close this gap -- the graph does
+not read your claims. The gap closes only when a mechanical derivation over
+this region succeeds on a later run, and the only thing that causes such a
+derivation is a question left behind now.
+
+SO LEAVE THE CHECKABLE PART BEHIND, WHETHER OR NOT YOU CONSIDER THE GAP CLOSED,
+AND WHETHER YOU PROCEED OR ESCALATE. Return "proposed_recipe": a single
+CHECKABLE relationship you found worth verifying mechanically in this region.
+You are choosing WHERE TO LOOK. You are not stating what is so, and you gain
+nothing by writing it: this task still stops, and the question cannot cover the
+run that proposed it. Only a later derivation can turn it into coverage, and
+only if the relationship actually holds there.
+
+Two kinds are answerable. Anything else derives UNKNOWN forever, which is
+writing nothing while looking like accumulation:
+
+  {"kind":"field_access_under_lock","dir":"<pkg dir>","type":"<type name>",
+   "field":"<field name>","lock":"<lock field name>",
+   "why":"<what you read that made this worth asking>"}
+
+  {"kind":"command_invocation_confined_to","command":"<exe>","owner":"<pkg dir>",
+   "search_paths":["<dir>","<dir>"],"why":"..."}
+
+The question must be about the region you were asked to investigate.
+
+A WRONG QUESTION IS SAFE AND A DISHONEST ONE IS NOT. If the relationship turns
+out not to hold, the derivation says so and nothing is anchored — that costs one
+derivation and misleads no one. So propose the check you actually think matters,
+not the one most likely to pass. Omit the field entirely if nothing mechanical
+would have helped; proposing nothing is a legitimate and common outcome.
 
 DO NOT:
  - invent a rule so that the warning goes away. A claim that is not supported by

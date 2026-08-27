@@ -1,0 +1,10 @@
+{
+  "authoritative": true,
+  "build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED",
+  "graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+  "seed_state": "SEED_STATE_CURRENT",
+  "certified_awareness_graph_commit": "",
+  "embedded_seed_digest_sha256": "def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912",
+  "composition_state": "complete",
+  "live_store_graph_triple_count": 158349
+}

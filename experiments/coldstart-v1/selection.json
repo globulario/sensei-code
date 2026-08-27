@@ -1,0 +1,323 @@
+{
+  "predicate": "Deterministic, pre-declared subject selection for the cold-start experiment.\n\nFrozen BEFORE any encounter is run and before any outcome is inspected.\n\nPREDICATE\n  Select the FIRST package, in lexicographic order of package directory, that is\n  (a) outside the 11-task benchmark corpus,\n  (b) not internal/event (holds the only pre-existing recipe),\n  (c) genuinely uncovered by the awareness graph, and\n  (d) expressible in the ALREADY FROZEN recipe vocabulary --\n      field_access_under_lock or command_invocation_confined_to.\n\nNothing about benchmark outcomes enters this. (d) is checked because the\nexperiment tests the CLOSURE LOOP, not arbitrary repository understanding: a\npackage the frozen vocabulary cannot express would measure the vocabulary's\nnarrowness instead. If NO package satisfies (d), that is itself the finding --\nthe vocabulary is too narrow -- and no vocabulary may be added in response.\n",
+  "ordering": "lexicographic by package directory",
+  "selected": "cmd/proofbench",
+  "candidates": [
+    {
+      "package": "cmd/proofbench",
+      "files": 4,
+      "files_named_in_graph": 0,
+      "lock_questions": 0,
+      "command_questions": 1,
+      "verdict": "SELECTED",
+      "example_questions": [
+        {
+          "kind": "command_invocation_confined_to",
+          "command": "git"
+        }
+      ]
+    },
+    {
+      "package": "cmd/sensei-code",
+      "files": 10,
+      "files_named_in_graph": 9,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "9 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/acceptance/testdata/stubagent",
+      "files": 1,
+      "files_named_in_graph": 0,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_EXPRESSIBLE",
+      "why": "no field_access_under_lock or command_invocation_confined_to relation found"
+    },
+    {
+      "package": "internal/admission",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/agent",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/architect",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/assist",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/authority",
+      "files": 2,
+      "files_named_in_graph": 2,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "2 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/behavioral",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/broker",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/candidate",
+      "files": 2,
+      "files_named_in_graph": 2,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "2 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/command",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/config",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/continuity",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/decision",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/derived",
+      "files": 3,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/doctor",
+      "files": 2,
+      "files_named_in_graph": 2,
+      "lock_questions": 0,
+      "command_questions": 1,
+      "verdict": "NOT_UNCOVERED",
+      "why": "2 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/event",
+      "verdict": "EXCLUDED",
+      "why": "holds the only pre-existing recipe"
+    },
+    {
+      "package": "internal/finding",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/gitx",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/history",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/investigate",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 1,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/mcpconfig",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/processx",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/project",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/proofbench",
+      "files": 15,
+      "files_named_in_graph": 0,
+      "lock_questions": 0,
+      "command_questions": 1,
+      "verdict": "ELIGIBLE",
+      "example_questions": [
+        {
+          "kind": "command_invocation_confined_to",
+          "command": "git"
+        }
+      ]
+    },
+    {
+      "package": "internal/provider",
+      "files": 3,
+      "files_named_in_graph": 3,
+      "lock_questions": 1,
+      "command_questions": 4,
+      "verdict": "NOT_UNCOVERED",
+      "why": "3 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/publish",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/report",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/retrieval",
+      "files": 2,
+      "files_named_in_graph": 2,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "2 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/roles",
+      "files": 6,
+      "files_named_in_graph": 6,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "6 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/sensei",
+      "files": 3,
+      "files_named_in_graph": 2,
+      "lock_questions": 2,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "2 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/session",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/setup",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/taskstate",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/tui",
+      "verdict": "EXCLUDED",
+      "why": "benchmark corpus"
+    },
+    {
+      "package": "internal/validation",
+      "files": 1,
+      "files_named_in_graph": 1,
+      "lock_questions": 0,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "1 file(s) named in awareness sources"
+    },
+    {
+      "package": "internal/workflow",
+      "files": 14,
+      "files_named_in_graph": 12,
+      "lock_questions": 1,
+      "command_questions": 0,
+      "verdict": "NOT_UNCOVERED",
+      "why": "12 file(s) named in awareness sources"
+    }
+  ]
+}
