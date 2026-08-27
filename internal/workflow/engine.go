@@ -155,13 +155,17 @@ func short12(s string) string {
 
 // spendClosure records an attempt at one gap and reports whether the budget
 // allowed it.
-func (e *Engine) spendClosure(taskID, condition string) bool {
+//
+// gap is Routing.GapKey(): the gap's mechanical identity, or the condition
+// text only for a route the router did not identify. Keying on the condition
+// for identified gaps let a paraphrase buy a fresh round (sensei-code#97).
+func (e *Engine) spendClosure(taskID, gap string) bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.closures == nil {
 		e.closures = map[string]int{}
 	}
-	key := taskID + "\x00" + condition
+	key := taskID + "\x00" + gap
 	if e.closures[key] >= closureBudget {
 		return false
 	}
@@ -1696,7 +1700,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			switch {
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
-			case routing.ClosesGap() && e.spendClosure(taskID, routing.Condition):
+			case routing.ClosesGap() && e.spendClosure(taskID, routing.GapKey()):
 				// Bounded epistemic work, not an owner for the decision.
 				// Nothing is granted here: the round establishes what is
 				// knowable and the router runs again over what the graph then
@@ -1704,7 +1708,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				// next pass falls through to the human branch below with the
 				// condition intact.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, nil))
+					"bounded knowledge gap; closing it before governance runs again: "+routing.Condition, map[string]any{"gap": routing.GapKey(), "gap_identity": routing.Gap}))
 				if err := newRound("a bounded knowledge gap"); err != nil {
 					return architectureDecision{}, err
 				}
@@ -1778,9 +1782,9 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this question: %s", routing.Condition)
 			}
 			if routing.ClosesGap() {
-				if e.spendClosure(taskID, routing.Condition) {
+				if e.spendClosure(taskID, routing.GapKey()) {
 					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, nil))
+						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, map[string]any{"gap": routing.GapKey(), "gap_identity": routing.Gap}))
 					if err := newRound("a bounded knowledge gap"); err != nil {
 						return architectureDecision{}, err
 					}
@@ -2036,6 +2040,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
+	// The gap's identity is completed with the world it was met in. The
+	// router does not know the pinned base; the budget must, or the same gap
+	// at two bases would share one round.
+	if routing.Gap.Identified() {
+		routing.Gap.World = strings.TrimSpace(e.governedBase(taskID))
+	}
 
 	// Observational only. Nothing below reads it and no decision depends on it.
 	//
