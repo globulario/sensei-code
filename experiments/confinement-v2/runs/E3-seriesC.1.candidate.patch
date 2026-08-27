@@ -1,0 +1,172 @@
+diff --git a/gosumcheck/main.go b/gosumcheck/main.go
+index 668b46c..71b4d7a 100644
+--- a/gosumcheck/main.go
++++ b/gosumcheck/main.go
+@@ -16,7 +16,8 @@
+ //
+ // The -v flag enables verbose output.
+ // In particular, it causes gosumcheck to report
+-// the URL and elapsed time for each server request.
++// the elapsed time, the number of bytes received,
++// and the URL for each server request.
+ //
+ // WARNING! WARNING! WARNING!
+ //
+@@ -205,7 +206,7 @@ func (*clientOps) ReadRemote(path string) ([]byte, error) {
+ 		return nil, err
+ 	}
+ 	if *vflag {
+-		fmt.Fprintf(os.Stderr, "%.3fs %s\n", time.Since(start).Seconds(), target)
++		fmt.Fprintf(os.Stderr, "%.3fs %d bytes %s\n", time.Since(start).Seconds(), len(data), target)
+ 	}
+ 	return data, nil
+ }
+diff --git a/gosumcheck/main_test.go b/gosumcheck/main_test.go
+new file mode 100644
+index 0000000..1191ab7
+--- /dev/null
++++ b/gosumcheck/main_test.go
+@@ -0,0 +1,143 @@
++// Copyright 2026 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package main
++
++import (
++	"fmt"
++	"io"
++	"net/http"
++	"os"
++	"strings"
++	"testing"
++)
++
++// roundTripFunc lets tests intercept http.DefaultClient without a network.
++type roundTripFunc func(*http.Request) (*http.Response, error)
++
++func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
++
++// errReader fails on the first read of a response body.
++type errReader struct{}
++
++func (errReader) Read([]byte) (int, error) { return 0, fmt.Errorf("body read failed") }
++
++// captureReadRemote runs ReadRemote with the given transport and flag
++// settings and returns the result together with everything written to stderr.
++func captureReadRemote(t *testing.T, verbose bool, rt roundTripFunc) (data []byte, err error, stderr string) {
++	t.Helper()
++
++	oldTransport := http.DefaultClient.Transport
++	http.DefaultClient.Transport = rt
++	defer func() { http.DefaultClient.Transport = oldTransport }()
++
++	oldV, oldURL := *vflag, *url
++	*vflag = verbose
++	*url = "http://example.invalid"
++	defer func() { *vflag, *url = oldV, oldURL }()
++
++	r, w, perr := os.Pipe()
++	if perr != nil {
++		t.Fatal(perr)
++	}
++	oldStderr := os.Stderr
++	os.Stderr = w
++	done := make(chan string)
++	go func() {
++		b, _ := io.ReadAll(r)
++		done <- string(b)
++	}()
++
++	data, err = new(clientOps).ReadRemote("/lookup/x")
++
++	os.Stderr = oldStderr
++	w.Close()
++	stderr = <-done
++	r.Close()
++	return data, err, stderr
++}
++
++func okResponse(body string) roundTripFunc {
++	return func(r *http.Request) (*http.Response, error) {
++		return &http.Response{
++			StatusCode: 200,
++			Status:     "200 OK",
++			Body:       io.NopCloser(strings.NewReader(body)),
++			Request:    r,
++		}, nil
++	}
++}
++
++func TestReadRemoteVerboseReportsBytes(t *testing.T) {
++	body := "hello sumdb"
++	data, err, stderr := captureReadRemote(t, true, okResponse(body))
++	if err != nil {
++		t.Fatalf("ReadRemote: %v", err)
++	}
++	if string(data) != body {
++		t.Fatalf("data = %q, want %q", data, body)
++	}
++	want := fmt.Sprintf(" %d bytes http://example.invalid/lookup/x\n", len(body))
++	if !strings.HasSuffix(stderr, want) {
++		t.Fatalf("stderr = %q, want suffix %q", stderr, want)
++	}
++	if !strings.HasSuffix(strings.Fields(stderr)[0], "s") {
++		t.Fatalf("stderr = %q, want leading elapsed seconds", stderr)
++	}
++}
++
++func TestReadRemoteNonVerboseSilent(t *testing.T) {
++	data, err, stderr := captureReadRemote(t, false, okResponse("abc"))
++	if err != nil {
++		t.Fatalf("ReadRemote: %v", err)
++	}
++	if string(data) != "abc" {
++		t.Fatalf("data = %q, want %q", data, "abc")
++	}
++	if stderr != "" {
++		t.Fatalf("stderr = %q, want empty", stderr)
++	}
++}
++
++func TestReadRemoteErrorsAreSilent(t *testing.T) {
++	cases := []struct {
++		name string
++		rt   roundTripFunc
++		want string
++	}{
++		{"transport", func(*http.Request) (*http.Response, error) {
++			return nil, fmt.Errorf("dial failed")
++		}, "dial failed"},
++		{"status", func(r *http.Request) (*http.Response, error) {
++			return &http.Response{
++				StatusCode: 404,
++				Status:     "404 Not Found",
++				Body:       io.NopCloser(strings.NewReader("")),
++				Request:    r,
++			}, nil
++		}, "GET http://example.invalid/lookup/x: 404 Not Found"},
++		{"body", func(r *http.Request) (*http.Response, error) {
++			return &http.Response{
++				StatusCode: 200,
++				Status:     "200 OK",
++				Body:       io.NopCloser(errReader{}),
++				Request:    r,
++			}, nil
++		}, "body read failed"},
++	}
++	for _, tc := range cases {
++		t.Run(tc.name, func(t *testing.T) {
++			data, err, stderr := captureReadRemote(t, true, tc.rt)
++			if err == nil || !strings.Contains(err.Error(), tc.want) {
++				t.Fatalf("err = %v, want containing %q", err, tc.want)
++			}
++			if data != nil {
++				t.Fatalf("data = %q, want nil", data)
++			}
++			if stderr != "" {
++				t.Fatalf("stderr = %q, want empty", stderr)
++			}
++		})
++	}
++}

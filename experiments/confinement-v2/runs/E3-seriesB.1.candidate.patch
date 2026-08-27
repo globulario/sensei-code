@@ -1,0 +1,136 @@
+diff --git a/gosumcheck/main.go b/gosumcheck/main.go
+index 668b46c..2f3f080 100644
+--- a/gosumcheck/main.go
++++ b/gosumcheck/main.go
+@@ -16,7 +16,7 @@
+ //
+ // The -v flag enables verbose output.
+ // In particular, it causes gosumcheck to report
+-// the URL and elapsed time for each server request.
++// the URL, elapsed time, and number of bytes received for each server request.
+ //
+ // WARNING! WARNING! WARNING!
+ //
+@@ -205,7 +205,7 @@ func (*clientOps) ReadRemote(path string) ([]byte, error) {
+ 		return nil, err
+ 	}
+ 	if *vflag {
+-		fmt.Fprintf(os.Stderr, "%.3fs %s\n", time.Since(start).Seconds(), target)
++		fmt.Fprintf(os.Stderr, "%.3fs %s %d bytes\n", time.Since(start).Seconds(), target, len(data))
+ 	}
+ 	return data, nil
+ }
+diff --git a/gosumcheck/main_test.go b/gosumcheck/main_test.go
+new file mode 100644
+index 0000000..8dc5e05
+--- /dev/null
++++ b/gosumcheck/main_test.go
+@@ -0,0 +1,108 @@
++// Copyright 2026 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package main
++
++import (
++	"bytes"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"regexp"
++	"strings"
++	"testing"
++)
++
++// captureStderr runs f while os.Stderr is redirected to a pipe and returns what was written.
++func captureStderr(t *testing.T, f func()) string {
++	t.Helper()
++	r, w, err := os.Pipe()
++	if err != nil {
++		t.Fatal(err)
++	}
++	old := os.Stderr
++	os.Stderr = w
++	defer func() { os.Stderr = old }()
++	done := make(chan string)
++	go func() {
++		var buf bytes.Buffer
++		buf.ReadFrom(r)
++		done <- buf.String()
++	}()
++	f()
++	w.Close()
++	return <-done
++}
++
++func TestReadRemote(t *testing.T) {
++	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		switch r.URL.Path {
++		case "/ok":
++			w.Write([]byte("hello world"))
++		case "/notfound":
++			http.Error(w, "nope", http.StatusNotFound)
++		case "/truncated":
++			w.Header().Set("Content-Length", "100")
++			w.Write([]byte("short"))
++		}
++	}))
++	defer srv.Close()
++
++	oldURL, oldV := *url, *vflag
++	defer func() { *url, *vflag = oldURL, oldV }()
++	*url = srv.URL
++
++	verboseRE := regexp.MustCompile(`^[0-9]+\.[0-9]{3}s ` + regexp.QuoteMeta(srv.URL+"/ok") + ` 11 bytes\n$`)
++
++	// Verbose success: one line with elapsed time, target, and byte count.
++	*vflag = true
++	var data []byte
++	var err error
++	out := captureStderr(t, func() { data, err = (*clientOps)(nil).ReadRemote("/ok") })
++	if err != nil || string(data) != "hello world" {
++		t.Fatalf("ReadRemote(/ok) = %q, %v", data, err)
++	}
++	if !verboseRE.MatchString(out) {
++		t.Errorf("verbose output = %q, want match for %v", out, verboseRE)
++	}
++
++	// Non-verbose success: no output.
++	*vflag = false
++	out = captureStderr(t, func() { data, err = (*clientOps)(nil).ReadRemote("/ok") })
++	if err != nil || string(data) != "hello world" {
++		t.Fatalf("ReadRemote(/ok) = %q, %v", data, err)
++	}
++	if out != "" {
++		t.Errorf("non-verbose output = %q, want empty", out)
++	}
++
++	// Error paths: error returned, nothing printed even in verbose mode.
++	*vflag = true
++	errors := []struct{ path, want string }{
++		{"/notfound", "404"},
++		{"/truncated", "unexpected EOF"},
++	}
++	for _, tt := range errors {
++		out = captureStderr(t, func() { data, err = (*clientOps)(nil).ReadRemote(tt.path) })
++		if err == nil || !strings.Contains(err.Error(), tt.want) {
++			t.Errorf("ReadRemote(%s) err = %v, want containing %q", tt.path, err, tt.want)
++		}
++		if data != nil {
++			t.Errorf("ReadRemote(%s) data = %q, want nil", tt.path, data)
++		}
++		if out != "" {
++			t.Errorf("ReadRemote(%s) output = %q, want empty", tt.path, out)
++		}
++	}
++
++	// Transport failure: server closed.
++	srv.Close()
++	out = captureStderr(t, func() { data, err = (*clientOps)(nil).ReadRemote("/ok") })
++	if err == nil || data != nil {
++		t.Errorf("ReadRemote after close = %q, %v; want nil, error", data, err)
++	}
++	if out != "" {
++		t.Errorf("transport failure output = %q, want empty", out)
++	}
++}

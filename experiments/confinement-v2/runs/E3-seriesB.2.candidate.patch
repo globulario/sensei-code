@@ -1,0 +1,140 @@
+diff --git a/gosumcheck/main.go b/gosumcheck/main.go
+index 668b46c..341146e 100644
+--- a/gosumcheck/main.go
++++ b/gosumcheck/main.go
+@@ -16,7 +16,7 @@
+ //
+ // The -v flag enables verbose output.
+ // In particular, it causes gosumcheck to report
+-// the URL and elapsed time for each server request.
++// the elapsed time, URL, and number of bytes received for each server request.
+ //
+ // WARNING! WARNING! WARNING!
+ //
+@@ -205,7 +205,7 @@ func (*clientOps) ReadRemote(path string) ([]byte, error) {
+ 		return nil, err
+ 	}
+ 	if *vflag {
+-		fmt.Fprintf(os.Stderr, "%.3fs %s\n", time.Since(start).Seconds(), target)
++		fmt.Fprintf(os.Stderr, "%.3fs %s (%d bytes)\n", time.Since(start).Seconds(), target, len(data))
+ 	}
+ 	return data, nil
+ }
+diff --git a/gosumcheck/main_test.go b/gosumcheck/main_test.go
+new file mode 100644
+index 0000000..9757498
+--- /dev/null
++++ b/gosumcheck/main_test.go
+@@ -0,0 +1,112 @@
++// Copyright 2019 The Go Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style
++// license that can be found in the LICENSE file.
++
++package main
++
++import (
++	"bytes"
++	"errors"
++	"io"
++	"net/http"
++	"os"
++	"regexp"
++	"strings"
++	"testing"
++)
++
++type stubTransport struct {
++	resp *http.Response
++	err  error
++}
++
++func (t *stubTransport) RoundTrip(*http.Request) (*http.Response, error) {
++	return t.resp, t.err
++}
++
++type errReader struct{ err error }
++
++func (r errReader) Read([]byte) (int, error) { return 0, r.err }
++
++// readRemote runs ReadRemote with the given transport and flags,
++// returning the data, error, and captured stderr.
++func readRemote(t *testing.T, tr http.RoundTripper, verbose bool) ([]byte, error, string) {
++	t.Helper()
++	oldTransport, oldURL, oldV := http.DefaultTransport, *url, *vflag
++	http.DefaultTransport = tr
++	*url = "http://stub"
++	*vflag = verbose
++	defer func() { http.DefaultTransport, *url, *vflag = oldTransport, oldURL, oldV }()
++
++	r, w, err := os.Pipe()
++	if err != nil {
++		t.Fatal(err)
++	}
++	oldStderr := os.Stderr
++	os.Stderr = w
++	defer func() { os.Stderr = oldStderr }()
++	var buf bytes.Buffer
++	done := make(chan struct{})
++	go func() { io.Copy(&buf, r); close(done) }()
++
++	data, rerr := new(clientOps).ReadRemote("/lookup/x")
++	w.Close()
++	<-done
++	r.Close()
++	return data, rerr, buf.String()
++}
++
++func okResp(body string) *http.Response {
++	return &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(strings.NewReader(body))}
++}
++
++func TestReadRemoteVerbose(t *testing.T) {
++	data, err, stderr := readRemote(t, &stubTransport{resp: okResp("hello world")}, true)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if string(data) != "hello world" {
++		t.Fatalf("data = %q", data)
++	}
++	re := regexp.MustCompile(`^\d+\.\d{3}s http://stub/lookup/x \(11 bytes\)\n$`)
++	if !re.MatchString(stderr) {
++		t.Fatalf("stderr = %q, want match %v", stderr, re)
++	}
++}
++
++func TestReadRemoteNonVerbose(t *testing.T) {
++	data, err, stderr := readRemote(t, &stubTransport{resp: okResp("hello")}, false)
++	if err != nil || string(data) != "hello" {
++		t.Fatalf("data, err = %q, %v", data, err)
++	}
++	if stderr != "" {
++		t.Fatalf("stderr = %q, want empty", stderr)
++	}
++}
++
++func TestReadRemoteErrors(t *testing.T) {
++	boom := errors.New("boom")
++	tests := []struct {
++		name string
++		tr   *stubTransport
++		want string
++	}{
++		{"transport", &stubTransport{err: boom}, "boom"},
++		{"status", &stubTransport{resp: &http.Response{StatusCode: 404, Status: "404 Not Found", Body: io.NopCloser(strings.NewReader(""))}}, "GET http://stub/lookup/x: 404 Not Found"},
++		{"body", &stubTransport{resp: &http.Response{StatusCode: 200, Status: "200 OK", Body: io.NopCloser(errReader{boom})}}, "boom"},
++	}
++	for _, tt := range tests {
++		for _, verbose := range []bool{false, true} {
++			data, err, stderr := readRemote(t, tt.tr, verbose)
++			if err == nil || !strings.Contains(err.Error(), tt.want) {
++				t.Errorf("%s (v=%v): err = %v, want containing %q", tt.name, verbose, err, tt.want)
++			}
++			if data != nil {
++				t.Errorf("%s (v=%v): data = %q, want nil", tt.name, verbose, data)
++			}
++			if stderr != "" {
++				t.Errorf("%s (v=%v): stderr = %q, want empty", tt.name, verbose, stderr)
++			}
++		}
++	}
++}
