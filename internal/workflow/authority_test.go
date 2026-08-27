@@ -568,59 +568,13 @@ func plannedEdit(files ...string) Action {
 // evidence for.
 func unclassifiedAction() Action { return Action{} }
 
-// sensei-code#97. Series C1 re-stated one unverified premise three ways and
-// each wording bought a fresh closure round, because the budget was keyed on
-// the condition text. The budget now spends against the gap's mechanical
-// identity: kind + the planned file the premise concerns + scope + world.
-func TestAParaphrasedPremiseDoesNotBuyAFreshClosureRound(t *testing.T) {
-	scoped := scopedPreflight(t, `{
-		"status": "PREFLIGHT_STATUS_OK",
-		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
-		`+healthyAuthority+`
-	}`)
-	action := plannedEdit("gosumcheck/main.go", "gosumcheck/main_test.go")
-	// The three wordings C1 actually produced for the test-strategy premise.
-	wordings := []Claim{
-		{Statement: "Replacing the default HTTP transport during the test can exercise ReadRemote deterministically", About: "gosumcheck/main_test.go regression strategy", Source: "inference"},
-		{Statement: "Replacing http.DefaultClient.Transport in a test will intercept ReadRemote's request", About: "prospective gosumcheck/main_test.go regression strategy", Source: "inference"},
-		{Statement: "A package test can isolate ReadRemote with a stub transport using only imports already present in main.go plus testing", About: "gosumcheck/main_test.go", Source: "inference"},
-	}
-	var routings []Routing
-	for _, c := range wordings {
-		r := routeAuthorityForAction(scoped, []Claim{c}, action)
-		if !r.ClosesGap() || !r.Gap.Identified() {
-			t.Fatalf("an inferred premise did not route to an identified gap: %+v", r)
-		}
-		r.Gap.World = "9c7e562"
-		routings = append(routings, r)
-	}
-	if routings[0].Condition == routings[1].Condition || routings[1].Condition == routings[2].Condition {
-		t.Fatal("precondition: the wordings must differ as conditions")
-	}
-	for i := 1; i < len(routings); i++ {
-		if routings[i].GapKey() != routings[0].GapKey() {
-			t.Fatalf("wording %d has a different identity:\n%s\n%s", i, routings[0].GapKey(), routings[i].GapKey())
-		}
-	}
-	if routings[0].Gap.Subject != "gosumcheck/main_test.go" || routings[0].Gap.Kind != "unverified-premise" {
-		t.Fatalf("identity is not mechanical: %+v", routings[0].Gap)
-	}
+// sensei-code#97. The closure budget is spent against an engine-issued premise
+// receipt carried through the closure loop, not against the condition's
+// wording and not against a file bucket. Fixtures below route real claims
+// through the router and drive receipts the way resolveArchitectureIn does.
 
-	e := &Engine{}
-	if !e.spendClosure("t", routings[0].GapKey()) {
-		t.Fatal("the first round was refused")
-	}
-	for i := 1; i < len(routings); i++ {
-		if e.spendClosure("t", routings[i].GapKey()) {
-			t.Fatalf("wording %d bought a fresh closure round", i)
-		}
-	}
-}
-
-// The falsifier: two genuinely distinct gaps in one task -- different planned
-// files, or an unlocated premise versus a located one -- keep separate budgets.
-// So do the same gap at two different worlds.
-func TestDistinctGapsInOneTaskKeepSeparateBudgets(t *testing.T) {
+func premiseFixture(t *testing.T) (sensei.PreflightDecision, Action, func(Claim) Routing) {
+	t.Helper()
 	scoped := scopedPreflight(t, `{
 		"status": "PREFLIGHT_STATUS_OK",
 		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
@@ -629,49 +583,127 @@ func TestDistinctGapsInOneTaskKeepSeparateBudgets(t *testing.T) {
 	action := plannedEdit("gosumcheck/main.go", "gosumcheck/main_test.go")
 	route := func(c Claim) Routing {
 		r := routeAuthorityForAction(scoped, []Claim{c}, action)
+		if !r.ClosesGap() {
+			t.Fatalf("an inferred premise did not route to closure: %+v", r)
+		}
 		r.Gap.World = "9c7e562"
 		return r
 	}
-	aboutTest := route(Claim{Statement: "s1", About: "gosumcheck/main_test.go", Source: "inference"})
-	aboutMain := route(Claim{Statement: "s2", About: "gosumcheck/main.go", Source: "inference"})
-	unlocated := route(Claim{Statement: "s3", About: "clientOps.ReadRemote", Source: "inference"})
-	if aboutTest.GapKey() == aboutMain.GapKey() || aboutTest.GapKey() == unlocated.GapKey() || aboutMain.GapKey() == unlocated.GapKey() {
-		t.Fatalf("distinct gaps collapsed:\n%s\n%s\n%s", aboutTest.GapKey(), aboutMain.GapKey(), unlocated.GapKey())
-	}
-	if aboutMain.Gap.Subject != "gosumcheck/main.go" || unlocated.Gap.Subject != "" {
-		t.Fatalf("subject resolution is wrong: %+v / %+v", aboutMain.Gap, unlocated.Gap)
-	}
+	return scoped, action, route
+}
+
+// Series C1's three wordings of one unsettled premise: three conditions, one
+// receipt, one round. The second and third arrive after the round reported
+// the receipt unresolved, and are its residue whether they name the file or
+// nothing at all.
+func TestAParaphrasedPremiseDoesNotBuyAFreshClosureRound(t *testing.T) {
+	_, _, route := premiseFixture(t)
 	e := &Engine{}
-	for _, r := range []Routing{aboutTest, aboutMain, unlocated} {
-		if !e.spendClosure("t", r.GapKey()) {
-			t.Fatalf("a distinct gap was refused its own round: %+v", r.Gap)
+	first := route(Claim{Statement: "Replacing the default HTTP transport during the test can exercise ReadRemote deterministically", About: "gosumcheck/main_test.go regression strategy", Source: "inference"})
+	r1 := e.premiseReceiptFor("task-1", first, first.ClaimGap)
+	if !e.spendClosure("task-1", r1.ID) {
+		t.Fatal("the first round was refused")
+	}
+	// The round did not settle it, and said so.
+	e.applyPremiseResolutions("task-1", []PremiseResolution{{Gap: r1.ID, Outcome: "unresolved"}})
+	for _, c := range []Claim{
+		{Statement: "Replacing http.DefaultClient.Transport in a test will intercept ReadRemote's request", About: "prospective gosumcheck/main_test.go regression strategy", Source: "inference"},
+		{Statement: "A stub transport can isolate ReadRemote using only main.go's imports plus testing", About: "clientOps.ReadRemote", Source: "inference"}, // a symbol, not a path
+	} {
+		r := route(c)
+		if r.Condition == first.Condition {
+			t.Fatal("precondition: the wording must differ")
+		}
+		got := e.premiseReceiptFor("task-1", r, r.ClaimGap)
+		if got.ID != r1.ID {
+			t.Fatalf("a re-worded unsettled premise was issued a new receipt %s (about %q)", got.ID, c.About)
+		}
+		if e.spendClosure("task-1", got.ID) {
+			t.Fatalf("a re-worded unsettled premise bought a fresh round (about %q)", c.About)
 		}
 	}
-	elsewhere := aboutTest
-	elsewhere.Gap.World = "0000000"
-	if !e.spendClosure("t", elsewhere.GapKey()) {
-		t.Fatal("the same gap at another world shared a budget")
-	}
-	// Coverage-absent gaps are identified too, and a route the router did not
-	// identify still keys on its condition rather than spending nothing.
-	unidentified := Routing{Route: RouteCloseGap, Condition: "something the router has no reading for"}
-	if unidentified.GapKey() != unidentified.Condition {
-		t.Fatal("an unidentified gap lost its key")
+	if len(r1.Wordings) != 3 {
+		t.Fatalf("the receipt does not keep the wordings as evidence: %v", r1.Wordings)
 	}
 }
 
-// The identity is consulted where the budget is spent, and completed with the
-// pinned base where the plan is routed.
-func TestTheClosureBudgetIsSpentAgainstTheGapIdentity(t *testing.T) {
-	src := rawSource(t, "internal/workflow/engine.go")
-	if strings.Contains(src, "spendClosure(taskID, routing.Condition)") {
-		t.Fatal("a call site still spends the budget against the condition wording")
+// Review falsifier 1: two unrelated inference gaps about the SAME planned
+// file, same scope, same world each receive one round.
+func TestTwoUnrelatedPremisesAboutOneFileEachGetARound(t *testing.T) {
+	_, _, route := premiseFixture(t)
+	e := &Engine{}
+	a := route(Claim{Statement: "ReadRemote writes the verbose line only after a successful body read", About: "gosumcheck/main.go", Source: "inference"})
+	ra := e.premiseReceiptFor("task-1", a, a.ClaimGap)
+	if !e.spendClosure("task-1", ra.ID) {
+		t.Fatal("gap A was refused its round")
 	}
-	if n := strings.Count(src, "spendClosure(taskID, routing.GapKey())"); n != 2 {
-		t.Fatalf("%d of 2 call sites spend against the identity", n)
+	// The round answered the question it was asked: A is established.
+	e.applyPremiseResolutions("task-1", []PremiseResolution{{Gap: ra.ID, Outcome: "established", Evidence: "main.go ReadRemote"}})
+	b := route(Claim{Statement: "the -v flag is parsed before any network call", About: "gosumcheck/main.go", Source: "inference"})
+	rb := e.premiseReceiptFor("task-1", b, b.ClaimGap)
+	if rb.ID == ra.ID {
+		t.Fatal("a different premise about the same file was folded into an answered receipt")
+	}
+	if !e.spendClosure("task-1", rb.ID) {
+		t.Fatal("gap B, unrelated to gap A, was denied its own round")
+	}
+	// A receipt the round refuted is closed the same way.
+	e.applyPremiseResolutions("task-1", []PremiseResolution{{Gap: rb.ID, Outcome: "refuted"}})
+	c := route(Claim{Statement: "yet another premise", About: "gosumcheck/main.go", Source: "inference"})
+	if rc := e.premiseReceiptFor("task-1", c, c.ClaimGap); rc.ID == rb.ID || !e.spendClosure("task-1", rc.ID) {
+		t.Fatal("a premise after a refuted receipt did not get its own round")
+	}
+}
+
+// Review falsifier 2: one premise whose About changes from a file path to a
+// symbol does not acquire another round -- neither by residue after an
+// unresolved round, nor by explicit reference.
+func TestAPremiseRestatedAsASymbolIsStillTheSamePremise(t *testing.T) {
+	_, _, route := premiseFixture(t)
+	e := &Engine{}
+	byPath := route(Claim{Statement: "the verbose line is written by ReadRemote", About: "gosumcheck/main.go", Source: "inference"})
+	r := e.premiseReceiptFor("task-1", byPath, byPath.ClaimGap)
+	if !e.spendClosure("task-1", r.ID) {
+		t.Fatal("first round refused")
+	}
+	// (a) The round did not answer at all: read as unresolved. The re-worded
+	// premise, now a symbol, is the residue.
+	bySymbol := route(Claim{Statement: "the verbose line is written by ReadRemote", About: "clientOps.ReadRemote", Source: "inference"})
+	e.applyPremiseResolutions("task-1", []PremiseResolution{{Gap: r.ID, Outcome: "something not in the vocabulary"}})
+	if got := e.premiseReceiptFor("task-1", bySymbol, bySymbol.ClaimGap); got.ID != r.ID || e.spendClosure("task-1", got.ID) {
+		t.Fatal("a premise re-stated as a symbol acquired another round by residue")
+	}
+	// (b) The architect references the receipt explicitly; wording and
+	// subject are irrelevant.
+	referenced := route(Claim{Statement: "completely new words", About: "somewhere/else.go", Source: "inference", Gap: r.ID})
+	if got := e.premiseReceiptFor("task-1", referenced, referenced.ClaimGap); got.ID != r.ID || e.spendClosure("task-1", got.ID) {
+		t.Fatal("a claim referencing the receipt acquired another round")
+	}
+	// A resolution naming a receipt this task never issued closes nothing.
+	e.applyPremiseResolutions("task-1", []PremiseResolution{{Gap: "gap-forged-99", Outcome: "established"}})
+	if !r.open() {
+		t.Fatal("a forged resolution closed a receipt")
+	}
+}
+
+// The identity is consulted where the budget is spent, and the closure round
+// is asked to answer it.
+func TestTheClosureBudgetIsSpentAgainstThePremiseReceipt(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	if strings.Contains(src, "spendClosure(taskID, routing.Condition)") || strings.Contains(src, "spendClosure(taskID, routing.GapKey())") {
+		t.Fatal("a call site still spends the budget against the condition or a location bucket")
+	}
+	if n := strings.Count(src, "spendClosure(taskID, receipt.ID)"); n != 2 {
+		t.Fatalf("%d of 2 call sites spend against the receipt", n)
+	}
+	if n := strings.Count(src, "e.applyPremiseResolutions(taskID, d.PremiseResolutions)"); n != 2 {
+		t.Fatalf("%d of 2 branches apply the round's answers", n)
+	}
+	if n := strings.Count(src, "premiseReceiptNote(receipt.ID)"); n != 2 {
+		t.Fatalf("%d of 2 closure prompts ask the round to answer the receipt", n)
 	}
 	body := funcBody(t, "internal/workflow/engine.go", "routePlan")
 	if !strings.Contains(body, "e.governedBase(") || !strings.Contains(body, "routing.Gap.World") {
-		t.Fatal("routePlan does not complete the identity with the pinned base")
+		t.Fatal("routePlan does not complete the gap metadata with the pinned base")
 	}
 }

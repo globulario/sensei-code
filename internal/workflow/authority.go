@@ -78,6 +78,10 @@ type Claim struct {
 	Statement string `json:"statement"`
 	About     string `json:"about"`
 	Source    string `json:"source"` // graph | repository | inference
+	// Gap references the engine-issued premise receipt this claim continues,
+	// when a closure round could not settle it. It is a reference to an
+	// identity the engine owns, not an identity the model authored.
+	Gap string `json:"gap,omitempty"`
 }
 
 // Routing is the router's decision plus the reason a human can act on.
@@ -87,12 +91,14 @@ type Routing struct {
 	// It is the explanation a person reads and the evidence a record keeps; it
 	// is not the gap's identity.
 	Condition string
-	// Gap is the mechanical identity of a bounded knowledge gap, set when the
-	// route is RouteCloseGap. The closure budget is spent against it, not
-	// against Condition: Series C1 of experiments/confinement-v2 showed one
-	// uncertainty re-stated three ways buying three investigations because
-	// the budget key was the prose (sensei-code#97).
+	// Gap classifies and locates a bounded knowledge gap, set when the route
+	// is RouteCloseGap. It is metadata for the premise receipt (premise.go),
+	// which is the identity the closure budget is spent against: class and
+	// location are not the question -- two premises about one file share
+	// them, and one premise re-stated as a symbol does not (sensei-code#97).
 	Gap GapIdentity
+	// ClaimGap is the receipt the routing claim referenced, if any.
+	ClaimGap string
 	// Blast and Gate are Sensei's structured change-risk verdict, carried
 	// forward rather than consumed here.
 	//
@@ -134,17 +140,6 @@ func (g GapIdentity) Key() string {
 
 // Identified reports whether the router classified this gap at all.
 func (g GapIdentity) Identified() bool { return strings.TrimSpace(g.Kind) != "" }
-
-// GapKey is what spendClosure is handed: the mechanical identity when the
-// router established one, else the condition itself -- which is the old key,
-// kept only for a route the router did not identify, so nothing spends less
-// budget than before.
-func (r Routing) GapKey() string {
-	if r.Gap.Identified() {
-		return r.Gap.Key()
-	}
-	return r.Condition
-}
 
 // gapSubject resolves what a premise is about to a planned file, by path.
 //
@@ -531,6 +526,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 				Route:     RouteCloseGap,
 				Condition: "the plan rests on an unverified premise" + about + ": " + statement,
 				Gap:       GapIdentity{Kind: "unverified-premise", Subject: gapSubject(c.About, action.Files), Scope: action.Files},
+				ClaimGap:  c.Gap,
 			}
 		}
 		// The provenance is named, because the work this route asks for is not
@@ -540,7 +536,8 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 			Route: RouteCloseGap,
 			Condition: "the plan rests on an unverified premise" + about +
 				" (" + declaredSource(c.Source) + "): " + statement,
-			Gap: GapIdentity{Kind: "unrecognised-premise-source", Subject: gapSubject(c.About, action.Files), Scope: action.Files},
+			Gap:      GapIdentity{Kind: "unrecognised-premise-source", Subject: gapSubject(c.About, action.Files), Scope: action.Files},
+			ClaimGap: c.Gap,
 		}
 	}
 
