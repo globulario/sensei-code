@@ -21,10 +21,10 @@
     "sensei_branch": "fix/candidate-status-domain-closure"
   },
   "instrument": {
-    "sensei_code_commit": "99319fb",
+    "sensei_code_commit": "1249652",
     "harness_version": "v2",
     "classifier_version": "v2-anchored",
-    "feature_extractor_version": "gap-closure-prompt/v3",
+    "feature_extractor_version": "gap-closure-prompt/v4",
     "post_processing_version": "closure-recipe/v1",
     "recipe_vocabulary": [
       "field_access_under_lock",
@@ -49,6 +49,15 @@
       "n": 1,
       "voided": "Encounter 1 (control) attempt 1, 01:05:22Z",
       "reason": "investigator never reached: consequence-lane false positive on the word release; architect bound to the wrong graph via global codex config",
+      "fixture_unchanged": true,
+      "subject_sha256_unchanged": true,
+      "vocabulary_unchanged": true,
+      "recipes": 0
+    },
+    {
+      "n": 2,
+      "voided": "nothing voided: v3 Encounter 1 results stand (NO_PROPOSAL x2) and are preserved under runs/v3-prompt/",
+      "reason": "prompt v3 -> v4: tell the investigator the gap is graph coverage, that claims do not close it, and to propose the checkable part regardless",
       "fixture_unchanged": true,
       "subject_sha256_unchanged": true,
       "vocabulary_unchanged": true,
