@@ -1404,7 +1404,8 @@
       }
      ]
     }
-   }
+   },
+   "scan1_void": "loader error; superseded by scan 2"
   },
   {
    "fixture": "github.com/golang/sync",
@@ -1452,7 +1453,8 @@
      "detail": "package load errors: /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-sync/errgroup/errgroup.go:10:1: package requires newer Go version go1.26 (application built with go1.25); /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-sync/semaphore/semaphore.go:6:1: package requires newer Go version go1.26 (application built with go1.25); /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-sync/singleflight/singleflight.go:7:1: package requires newer Go version go1.26 (application built with go1.25); /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-sync/syncmap/map.go:8:1: package requires newer Go version go1.26 (application built with go1.25)",
      "mutations": 0
     }
-   }
+   },
+   "scan1_void": "loader error; superseded by scan 2"
   }
  ],
  "selected_fixture": "github.com/golang/groupcache",
@@ -1478,5 +1480,1051 @@
   },
   "positive": "NO_SUBJECT",
   "envelope": "NO_SUBJECT"
+ },
+ "scans": [
+  {
+   "scan": 1,
+   "tool_binary_go": "go1.25.0",
+   "valid_for": [
+    "github.com/golang/groupcache"
+   ],
+   "void_for": {
+    "github.com/golang/mod": "loader: package requires newer Go version go1.26",
+    "github.com/golang/sync": "loader: package requires newer Go version go1.26"
+   }
+  },
+  {
+   "scan": 2,
+   "tool_binary_go": "go1.26.0",
+   "note": "same main.go (sha256 unchanged); go.mod go directive 1.22->1.26 to build the type checker with the toolchain the fixtures require",
+   "fixtures": {
+    "github.com/golang/mod": {
+     "subjects": 111,
+     "counts": {
+      "REFUTED": 34,
+      "DERIVED": 75,
+      "UNRESOLVED": 2
+     },
+     "sequence": [
+      {
+       "file": "modfile/read.go",
+       "type": "Position",
+       "field": "Line",
+       "result": "REFUTED",
+       "detail": "1 of 2 mutation site(s) lie outside methods of Position",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Position",
+       "field": "LineRune",
+       "result": "REFUTED",
+       "detail": "2 of 4 mutation site(s) lie outside methods of Position",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Position",
+       "field": "Byte",
+       "result": "REFUTED",
+       "detail": "1 of 2 mutation site(s) lie outside methods of Position",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Comment",
+       "field": "Start",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Comment",
+       "field": "Token",
+       "result": "REFUTED",
+       "detail": "3 of 3 mutation site(s) lie outside methods of Comment",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Comment",
+       "field": "Suffix",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Comments",
+       "field": "Before",
+       "result": "REFUTED",
+       "detail": "9 of 9 mutation site(s) lie outside methods of Comments",
+       "mutations": 9
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Comments",
+       "field": "Suffix",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Comments",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Comments",
+       "field": "After",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "FileSyntax",
+       "field": "Name",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of FileSyntax",
+       "mutations": 1
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "FileSyntax",
+       "field": "Stmt",
+       "result": "REFUTED",
+       "detail": "10 of 14 mutation site(s) lie outside methods of FileSyntax",
+       "mutations": 14
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "CommentBlock",
+       "field": "Start",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Line",
+       "field": "Start",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Line",
+       "field": "Token",
+       "result": "REFUTED",
+       "detail": "5 of 6 mutation site(s) lie outside methods of Line",
+       "mutations": 6
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Line",
+       "field": "InBlock",
+       "result": "REFUTED",
+       "detail": "3 of 3 mutation site(s) lie outside methods of Line",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "Line",
+       "field": "End",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "LineBlock",
+       "field": "Start",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "LineBlock",
+       "field": "LParen",
+       "result": "UNRESOLVED",
+       "detail": "address of LineBlock.LParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/print.go:156:11; address of LineBlock.LParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:661:13",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "LineBlock",
+       "field": "Token",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "LineBlock",
+       "field": "Line",
+       "result": "REFUTED",
+       "detail": "7 of 7 mutation site(s) lie outside methods of LineBlock",
+       "mutations": 7
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "LineBlock",
+       "field": "RParen",
+       "result": "UNRESOLVED",
+       "detail": "address of LineBlock.RParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/print.go:164:11; address of LineBlock.RParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:665:13",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "LParen",
+       "field": "Pos",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/read.go",
+       "type": "RParen",
+       "field": "Pos",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of RParen",
+       "mutations": 1
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Module",
+       "result": "DERIVED",
+       "detail": "all 2 mutation site(s) lie inside methods of File",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Go",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of File",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Toolchain",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of File",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Godebug",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of File",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Require",
+       "result": "DERIVED",
+       "detail": "all 4 mutation site(s) lie inside methods of File",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Exclude",
+       "result": "DERIVED",
+       "detail": "all 4 mutation site(s) lie inside methods of File",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Replace",
+       "result": "DERIVED",
+       "detail": "all 4 mutation site(s) lie inside methods of File",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Retract",
+       "result": "DERIVED",
+       "detail": "all 2 mutation site(s) lie inside methods of File",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Tool",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of File",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Ignore",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of File",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of File",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Module",
+       "field": "Mod",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Module",
+       "mutations": 1
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Module",
+       "field": "Deprecated",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Module",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Go",
+       "field": "Version",
+       "result": "REFUTED",
+       "detail": "4 of 4 mutation site(s) lie outside methods of Go",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Go",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Toolchain",
+       "field": "Name",
+       "result": "REFUTED",
+       "detail": "4 of 4 mutation site(s) lie outside methods of Toolchain",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Toolchain",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Godebug",
+       "field": "Key",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Godebug",
+       "field": "Value",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Godebug",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Godebug",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Exclude",
+       "field": "Mod",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Exclude",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Replace",
+       "field": "Old",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Replace",
+       "field": "New",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Replace",
+       "mutations": 1
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Replace",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Retract",
+       "field": "Rationale",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Retract",
+       "field": "Syntax",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Retract",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Tool",
+       "field": "Path",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Tool",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Ignore",
+       "field": "Path",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Ignore",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "VersionInterval",
+       "field": "Low",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "VersionInterval",
+       "field": "High",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Require",
+       "field": "Mod",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Require",
+       "field": "Indirect",
+       "result": "DERIVED",
+       "detail": "all 1 mutation site(s) lie inside methods of Require",
+       "mutations": 1
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Require",
+       "field": "Syntax",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Require",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Error",
+       "field": "Filename",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Error",
+       "field": "Pos",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Error",
+       "field": "Verb",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Error",
+       "field": "ModPath",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/rule.go",
+       "type": "Error",
+       "field": "Err",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "WorkFile",
+       "field": "Go",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of WorkFile",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "WorkFile",
+       "field": "Toolchain",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of WorkFile",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "WorkFile",
+       "field": "Godebug",
+       "result": "DERIVED",
+       "detail": "all 2 mutation site(s) lie inside methods of WorkFile",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "WorkFile",
+       "field": "Use",
+       "result": "DERIVED",
+       "detail": "all 3 mutation site(s) lie inside methods of WorkFile",
+       "mutations": 3
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "WorkFile",
+       "field": "Replace",
+       "result": "DERIVED",
+       "detail": "all 4 mutation site(s) lie inside methods of WorkFile",
+       "mutations": 4
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "WorkFile",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "Use",
+       "field": "Path",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "Use",
+       "field": "ModulePath",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Use",
+       "mutations": 2
+      },
+      {
+       "file": "modfile/work.go",
+       "type": "Use",
+       "field": "Syntax",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "Version",
+       "field": "Path",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Version",
+       "mutations": 1
+      },
+      {
+       "file": "module/module.go",
+       "type": "Version",
+       "field": "Version",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Version",
+       "mutations": 2
+      },
+      {
+       "file": "module/module.go",
+       "type": "ModuleError",
+       "field": "Path",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "ModuleError",
+       "field": "Version",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "ModuleError",
+       "field": "Err",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "InvalidVersionError",
+       "field": "Version",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "InvalidVersionError",
+       "field": "Pseudo",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "InvalidVersionError",
+       "field": "Err",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "InvalidPathError",
+       "field": "Kind",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "InvalidPathError",
+       "field": "Path",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "module/module.go",
+       "type": "InvalidPathError",
+       "field": "Err",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "UnknownVerifierError",
+       "field": "Name",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "UnknownVerifierError",
+       "field": "KeyHash",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "Note",
+       "field": "Text",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "Note",
+       "field": "Sigs",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Note",
+       "mutations": 1
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "Note",
+       "field": "UnverifiedSigs",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Note",
+       "mutations": 1
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "Signature",
+       "field": "Name",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "Signature",
+       "field": "Hash",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "Signature",
+       "field": "Base64",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "UnverifiedNoteError",
+       "field": "Note",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "InvalidSignatureError",
+       "field": "Name",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/note/note.go",
+       "type": "InvalidSignatureError",
+       "field": "Hash",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/storage/storage.go",
+       "type": "Write",
+       "field": "Key",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/storage/storage.go",
+       "type": "Write",
+       "field": "Value",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/tlog/note.go",
+       "type": "Tree",
+       "field": "N",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "sumdb/tlog/note.go",
+       "type": "Tree",
+       "field": "Hash",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Tree",
+       "mutations": 1
+      },
+      {
+       "file": "sumdb/tlog/tile.go",
+       "type": "Tile",
+       "field": "H",
+       "result": "REFUTED",
+       "detail": "1 of 1 mutation site(s) lie outside methods of Tile",
+       "mutations": 1
+      },
+      {
+       "file": "sumdb/tlog/tile.go",
+       "type": "Tile",
+       "field": "L",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Tile",
+       "mutations": 2
+      },
+      {
+       "file": "sumdb/tlog/tile.go",
+       "type": "Tile",
+       "field": "N",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of Tile",
+       "mutations": 2
+      },
+      {
+       "file": "sumdb/tlog/tile.go",
+       "type": "Tile",
+       "field": "W",
+       "result": "REFUTED",
+       "detail": "4 of 4 mutation site(s) lie outside methods of Tile",
+       "mutations": 4
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "CheckedFiles",
+       "field": "Valid",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of CheckedFiles",
+       "mutations": 2
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "CheckedFiles",
+       "field": "Omitted",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of CheckedFiles",
+       "mutations": 2
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "CheckedFiles",
+       "field": "Invalid",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of CheckedFiles",
+       "mutations": 2
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "CheckedFiles",
+       "field": "SizeError",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of CheckedFiles",
+       "mutations": 2
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "FileError",
+       "field": "Path",
+       "result": "REFUTED",
+       "detail": "2 of 2 mutation site(s) lie outside methods of FileError",
+       "mutations": 2
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "FileError",
+       "field": "Err",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "zip/zip.go",
+       "type": "UnrecognizedVCSError",
+       "field": "RepoRoot",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      }
+     ],
+     "roles": {
+      "violated": {
+       "file": "modfile/read.go",
+       "type": "Position",
+       "field": "Line",
+       "owner": "golang.org/x/mod/modfile",
+       "relation": "state_mutated_only_by_owner(Position.Line in golang.org/x/mod/modfile)",
+       "result": "REFUTED",
+       "detail": "1 of 2 mutation site(s) lie outside methods of Position",
+       "mutations": 2,
+       "sites": [
+        {
+         "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:31:3",
+         "package": "golang.org/x/mod/modfile",
+         "kind": "opassign",
+         "in_owner_method": true,
+         "in_owner_package": true
+        },
+        {
+         "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:435:3",
+         "package": "golang.org/x/mod/modfile",
+         "kind": "incdec",
+         "in_owner_method": false,
+         "in_owner_package": true
+        }
+       ]
+      },
+      "positive": {
+       "file": "modfile/rule.go",
+       "type": "File",
+       "field": "Module",
+       "owner": "golang.org/x/mod/modfile",
+       "relation": "state_mutated_only_by_owner(File.Module in golang.org/x/mod/modfile)",
+       "result": "DERIVED",
+       "detail": "all 2 mutation site(s) lie inside methods of File",
+       "mutations": 2,
+       "sites": [
+        {
+         "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/rule.go:211:3",
+         "package": "golang.org/x/mod/modfile",
+         "kind": "assign",
+         "in_owner_method": true,
+         "in_owner_package": true
+        },
+        {
+         "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/rule.go:426:3",
+         "package": "golang.org/x/mod/modfile",
+         "kind": "assign",
+         "in_owner_method": true,
+         "in_owner_package": true
+        }
+       ]
+      },
+      "envelope": {
+       "file": "modfile/read.go",
+       "type": "LineBlock",
+       "field": "LParen",
+       "owner": "golang.org/x/mod/modfile",
+       "relation": "state_mutated_only_by_owner(LineBlock.LParen in golang.org/x/mod/modfile)",
+       "result": "UNRESOLVED",
+       "detail": "address of LineBlock.LParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/print.go:156:11; address of LineBlock.LParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:661:13",
+       "mutations": 2,
+       "sites": [
+        {
+         "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/print.go:156:11",
+         "package": "golang.org/x/mod/modfile",
+         "kind": "address",
+         "in_owner_method": false,
+         "in_owner_package": true
+        },
+        {
+         "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:661:13",
+         "package": "golang.org/x/mod/modfile",
+         "kind": "address",
+         "in_owner_method": false,
+         "in_owner_package": true
+        }
+       ],
+       "unresolved": [
+        "address of LineBlock.LParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/print.go:156:11",
+        "address of LineBlock.LParen taken outside its methods at /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/read.go:661:13"
+       ]
+      }
+     }
+    },
+    "github.com/golang/sync": {
+     "subjects": 3,
+     "counts": {
+      "DERIVED": 3
+     },
+     "sequence": [
+      {
+       "file": "singleflight/singleflight.go",
+       "type": "Result",
+       "field": "Val",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "singleflight/singleflight.go",
+       "type": "Result",
+       "field": "Err",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      },
+      {
+       "file": "singleflight/singleflight.go",
+       "type": "Result",
+       "field": "Shared",
+       "result": "DERIVED",
+       "detail": "no mutation site in the repository (true and useless: not a subject)",
+       "mutations": 0
+      }
+     ],
+     "roles": {
+      "violated": null,
+      "positive": null,
+      "envelope": null
+     }
+    }
+   }
+  }
+ ],
+ "rule_applied_literally": {
+  "selected_fixture": "github.com/golang/groupcache",
+  "violated": "http.go HTTPPoolOptions.BasePath (in-package constructor default, outside methods)",
+  "positive": "NO_SUBJECT",
+  "envelope": "NO_SUBJECT",
+  "note": "the rule reads: all three sought in the first fixture yielding a violated subject; whether absent roles may be sought in later fixtures is ambiguous in the frozen text and is the user's decision, recorded in the manifest"
  }
 }

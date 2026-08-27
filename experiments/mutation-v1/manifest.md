@@ -88,3 +88,48 @@ computed before the scan and matches the committed file); nothing in the
 manifest or the tool was edited after seeing a result. Recorded rather than
 re-ordered, per the standing rule that a completed step is amended with a
 disclosure, never rewritten.
+
+## Scan 1 and scan 2
+
+Scan 1 (tool built with go1.25.0): `groupcache` 55 subjects — 53 DERIVED all
+with **zero** mutation sites (groupcache sets exported fields by composite
+literal, which is construction, not a write), 2 REFUTED
+(`HTTPPoolOptions.BasePath`, `.Replicas`: assigned in `http.go:105/108`,
+inside the owner package, outside any method — a constructor filling option
+defaults). `mod` and `sync` returned 111/3 UNRESOLVED with detail
+`package load errors: package requires newer Go version go1.26` — a loader
+failure of the tool binary, not a verdict; **void**.
+
+Scan 2 (same `main.go`, sha256 unchanged; tool rebuilt with go1.26.0, the
+`go` directive in the tool's own `go.mod` raised 1.22 → 1.26 to do so):
+`mod` 111 subjects — 75 DERIVED, 34 REFUTED, 2 UNRESOLVED; `sync` 3
+subjects, all DERIVED with zero mutations.
+
+## The frozen rule, read literally, and the decision it leaves open
+
+Literal reading: the first fixture in name order yielding a violated
+subject is `groupcache`; all three roles are sought there; positive and
+envelope are absent there; `NO_SUBJECT` for both.
+
+The same rule text also says a role is `NO_SUBJECT` "if absent across all
+fixtures", which reads as permission to seek an absent role in later
+fixtures. The frozen wording is ambiguous between the two readings, and the
+ambiguity was noticed only after the results were seen — so the choice is not
+the tool's, and not mine after the fact. Under the second reading, `mod`
+supplies all three roles from one fixture:
+
+```
+violated   modfile/read.go   Position.Line        1 of 2 sites outside methods of Position
+positive   modfile/rule.go   File.Module          all 2 sites inside methods of File
+envelope   modfile/read.go   LineBlock.LParen     address taken outside its methods
+```
+
+A second observation for the same decision: the groupcache violation is a
+constructor in the owner package writing defaults into an options struct.
+Under the frozen relation — authority = methods of T — that is REFUTED, and
+the tool says so faithfully. Whether the owner *package* should count as
+authority (in which case that subject is not a violation, and only
+cross-package writes are) is a question about the relation, not the tool. It
+is recorded here and not changed: a relation adjusted after seeing which
+fixture it selects is the tuning this campaign forbids. If the relation is
+to change, this label restarts.
