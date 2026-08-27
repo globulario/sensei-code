@@ -25,6 +25,18 @@ bound authored outside a run and asked to carry it out under its own governance.
   inspection REFUTES a created file that does not match; a refutation ends
   the run, it is not retried.
 
+## Preconditions observed before invocation
+
+- \`sensei-code doctor\`: MCP surface PASS (24 tools); providers connected.
+- FAIL \`sensei:task_binding\`: \`task.defect.b165d8e2088a\` is bound to
+  \`b571bac2\`, not HEAD. This is a doctor finding, not part of the \`run\`
+  readiness gate, so it does not refuse the invocation; its consequence is
+  that Sensei refuses \`task_briefing\` during the run and the implementor
+  and reviewer work from \`awareness_briefing\`/preflight only. Repairing it
+  needs a \`.sensei/project/graph.nt\` this checkout does not hold. Recorded
+  as an instrument limitation of this series rather than repaired out of
+  band; any reviewer verdict is read with that in mind.
+
 ## Stopping rule (frozen before invocation)
 
 One invocation. Whatever it does is the result:
