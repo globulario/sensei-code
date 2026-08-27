@@ -1,0 +1,96 @@
+{
+  "fixture": "github.com/golang/groupcache",
+  "pinned_sha": "2c02b8208cf8c02a3e358cb1d9b60950647543fc",
+  "reader": "sensei-derive-v3 (sensei@0c95dc08 reader v2)",
+  "rule": "stable path order; frozen expressibility predicate; current reader evaluates each relation; select the FIRST UNRESOLVED whose own detail names an eligible proof-envelope boundary; NO_SUBJECT otherwise; nothing changed in response",
+  "eligible_boundaries": [
+    "closure",
+    "goroutine",
+    "not through a receiver",
+    "alias",
+    "loop iterations",
+    "inside an expression",
+    "method value",
+    "recursive",
+    "deeper than",
+    "no call site"
+  ],
+  "sequence": [
+    {
+      "file": "groupcache.go",
+      "relation": "cache.nbytes under cache.mu",
+      "result": "UNRESOLVED",
+      "detail": "could not establish the lock state for 1 of 4 access(es); no counterexample found: add accesses c.nbytes and this reader cannot establish the lock state (groupcache.go:427:5): inside a closure that is stored, deferred, or run as a goroutine, and the closure does not acquire the lock itself",
+      "eligible_boundary": [
+        "closure",
+        "goroutine"
+      ],
+      "verdict": "SELECTED"
+    },
+    {
+      "file": "groupcache.go",
+      "relation": "cache.lru under cache.mu",
+      "result": "DERIVED",
+      "detail": "all 9 access(es) to cache.lru occur while cache.mu is held, across 1 subject file(s) (5 file(s) were read to compute it)"
+    },
+    {
+      "file": "groupcache.go",
+      "relation": "cache.nevict under cache.mu",
+      "result": "UNRESOLVED",
+      "detail": "could not establish the lock state for 1 of 2 access(es); no counterexample found: add accesses c.nevict and this reader cannot establish the lock state (groupcache.go:428:5): inside a closure that is stored, deferred, or run as a goroutine, and the closure does not acquire the lock itself"
+    },
+    {
+      "file": "http.go",
+      "relation": "HTTPPool.Context under HTTPPool.mu",
+      "result": "REFUTED",
+      "detail": "2 of 4 access(es) occur while mu is not held: ServeHTTP accesses p.Context while p.mu is not held (http.go:162:5): exported and never acquires the lock itself, so the type's API permits an unlocked call; ServeHTTP accesses p.Context while p.mu is not held (http.go:163:9): exported and never acquires the lock itself, so the type's API permits an unlocked call"
+    },
+    {
+      "file": "http.go",
+      "relation": "HTTPPool.Transport under HTTPPool.mu",
+      "result": "DERIVED",
+      "detail": "all 1 access(es) to HTTPPool.Transport occur while HTTPPool.mu is held, across 1 subject file(s) (5 file(s) were read to compute it)"
+    },
+    {
+      "file": "http.go",
+      "relation": "HTTPPool.self under HTTPPool.mu",
+      "result": "DERIVED",
+      "detail": "all 1 access(es) to HTTPPool.self occur while HTTPPool.mu is held, across 1 subject file(s) (5 file(s) were read to compute it)"
+    },
+    {
+      "file": "http.go",
+      "relation": "HTTPPool.opts under HTTPPool.mu",
+      "result": "REFUTED",
+      "detail": "2 of 13 access(es) occur while mu is not held: ServeHTTP accesses p.opts while p.mu is not held (http.go:144:36): exported and never acquires the lock itself, so the type's API permits an unlocked call; ServeHTTP accesses p.opts while p.mu is not held (http.go:147:41): exported and never acquires the lock itself, so the type's API permits an unlocked call"
+    },
+    {
+      "file": "http.go",
+      "relation": "HTTPPool.peers under HTTPPool.mu",
+      "result": "UNRESOLVED",
+      "detail": "could not establish the lock state for 4 of 8 access(es); no counterexample found: NewHTTPPoolOpts accesses p.peers not through a receiver of HTTPPool (http.go:110:2); initPeers accesses g.peers not through a receiver of HTTPPool (groupcache.go:207:5); initPeers accesses g.peers not through a receiver of HTTPPool (groupcache.go:208:3); load accesses g.peers not through a receiver of HTTPPool (grou"
+    },
+    {
+      "file": "http.go",
+      "relation": "HTTPPool.httpGetters under HTTPPool.mu",
+      "result": "DERIVED",
+      "detail": "all 3 access(es) to HTTPPool.httpGetters occur while HTTPPool.mu is held, across 1 subject file(s) (5 file(s) were read to compute it)"
+    },
+    {
+      "file": "singleflight/singleflight.go",
+      "relation": "Group.m under Group.mu",
+      "result": "DERIVED",
+      "detail": "all 5 access(es) to Group.m occur while Group.mu is held, across 1 subject file(s) (1 file(s) were read to compute it)"
+    }
+  ],
+  "selected": {
+    "file": "groupcache.go",
+    "relation": "cache.nbytes under cache.mu",
+    "result": "UNRESOLVED",
+    "detail": "could not establish the lock state for 1 of 4 access(es); no counterexample found: add accesses c.nbytes and this reader cannot establish the lock state (groupcache.go:427:5): inside a closure that is stored, deferred, or run as a goroutine, and the closure does not acquire the lock itself",
+    "eligible_boundary": [
+      "closure",
+      "goroutine"
+    ],
+    "verdict": "SELECTED"
+  }
+}
