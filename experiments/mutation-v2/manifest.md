@@ -110,3 +110,36 @@ Read plainly:
 - Every verdict, including the 165 passed over, is in `selection.json`.
 
 The recipe is designed after this point.
+
+## The recipe, designed after sealing, and the gate
+
+Sensei `feat/derive-mutation-confinement` (`eebe3d3a`):
+`state_mutation_confined_to_owner`
+(`golang/architecture/derive/mutationconfinement.go`). No type checker — a
+derivation reads pinned bytes — so a written selector's receiver is bound
+syntactically (receiver, parameter, `var`/`:=` with a stated or literal
+type, `new(T)`, field chains through struct declarations parsed in scope,
+qualified names through the pinned `go.mod`); a receiver it cannot bind is
+the completeness boundary and is UNRESOLVED by name.
+
+Gate, `sensei derive` from that branch against the sealed subjects at their
+pinned commits:
+
+```
+violated   module.Version.Path         @ mod 9c7e562        REFUTED
+           counterexample to confinement: 1 of 1 observable write(s) originate
+           outside module: modfile/rule.go:216 in modfile
+           (bound through the field chain f.Module.Mod across files)
+positive   HTTPPoolOptions.BasePath    @ groupcache 7477803  DERIVED
+           all 1 observable write(s) originate from the owner; http.go:105
+```
+
+Both sealed verdicts reproduced by a recipe written after they were sealed.
+Controls, not sealed: `modfile.File.Module` DERIVED (as the tool said);
+`modfile.Position.Line` **UNRESOLVED** — five writes whose receiver (`stmt`,
+a value from a type switch) the recipe cannot bind, two it can, no
+counterexample. That is the recipe's own envelope appearing on a natural
+control: wider than the `go/types` hand-tool's, exactly where a syntactic
+binder stops. It is not promoted to the sealed envelope role — that role was
+`NO_SUBJECT` under the frozen rule and stays so — but it is the first
+natural UNRESOLVED of the family and is recorded as such.
