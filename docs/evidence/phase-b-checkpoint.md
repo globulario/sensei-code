@@ -57,18 +57,22 @@ independent usefulness review. We wrote the tasks and adjudicated the answers.
   broader claim "the reader is sound" does not, and must not be read into them.
   Also: `#309`'s status parser attaches a `status:` that precedes its own `id:`
   to the *previous* entry, which both re-creates the defect and excuses a
-  canonical invariant — a fail-open in the closure check itself. Both PRs are
-  blocked on tests covering these exact shapes; nothing lands until then.
+  canonical invariant — a fail-open in the closure check itself. **Closed in the PRs** (`#309 @ 37ac95cb`: entries parsed as units; `#310 @
+  7a544843`: package-level callers are call sites resolving UNRESOLVED, `go`
+  sites are counterexamples, `defer` sites UNRESOLVED, exit code 4, evidence
+  independent only if already on the promotion base), with the posted
+  reproductions as tests. Under the sounder reader the three checkpoint
+  specimens re-derive unchanged: TRUE `DERIVED`, FALSE `REFUTED`, ENVELOPE
+  `UNRESOLVED`. Landing is review's call.
 - Generality (§8.3). Two small, disciplined libraries; one vocabulary family
   exercised end to end (`command_invocation_confined_to` not yet run).
 - Anything about the 11-task internal benchmark, whose result stands: governed
   is slower and refuses more on sensei-code's own corpus.
 - The implementor and reviewer beyond three accepted candidates.
 - That the default product does this. `globulario/sensei#309` and `#310` (with
-  `feat/second-derivation-family`) are open and **blocked on the review
-  findings above**; the reproductions are posted on the PRs as failing shapes
-  to target. Until they land, the demonstrated behaviour lives behind
-  `SENSEI_BIN`, and it lands only after those counterexamples are covered.
+  `feat/second-derivation-family`) now carry fixes and tests for the review
+  findings above and await review. Until they land, the demonstrated behaviour
+  lives behind `SENSEI_BIN`.
 
 ## What it cost — recorded because it is information
 
