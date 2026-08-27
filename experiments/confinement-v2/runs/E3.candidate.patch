@@ -1,0 +1,22 @@
+diff --git a/gosumcheck/main.go b/gosumcheck/main.go
+index 668b46c..cb66453 100644
+--- a/gosumcheck/main.go
++++ b/gosumcheck/main.go
+@@ -16,7 +16,7 @@
+ //
+ // The -v flag enables verbose output.
+ // In particular, it causes gosumcheck to report
+-// the URL and elapsed time for each server request.
++// the URL, elapsed time, and received byte count for each server request.
+ //
+ // WARNING! WARNING! WARNING!
+ //
+@@ -205,7 +205,7 @@ func (*clientOps) ReadRemote(path string) ([]byte, error) {
+ 		return nil, err
+ 	}
+ 	if *vflag {
+-		fmt.Fprintf(os.Stderr, "%.3fs %s\n", time.Since(start).Seconds(), target)
++		fmt.Fprintf(os.Stderr, "%.3fs %d bytes %s\n", time.Since(start).Seconds(), len(data), target)
+ 	}
+ 	return data, nil
+ }
