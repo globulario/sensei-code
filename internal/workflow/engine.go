@@ -3187,6 +3187,14 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
 		if err != nil {
+			// A prospective grant authorizes one exact creation shape. Once its
+			// post-creation inspection refutes that shape, the run is terminal:
+			// a later implementor has no authority to reinterpret or retry it.
+			// All other candidate failures retain the ordinary handoff path.
+			if isProspectiveSurfaceRefutation(err) {
+				fail(err)
+				return
+			}
 			failures = append(failures, worker.Name+": "+err.Error())
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
@@ -3304,6 +3312,10 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 		"no bounded implementor converged and the candidate holds no work")
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
+}
+
+func isProspectiveSurfaceRefutation(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "prospective surface refuted:")
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
