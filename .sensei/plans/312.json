@@ -24,9 +24,20 @@
     "sensei_code.workflow.execution_is_authorized_once_at_run"
   ],
   "claims": [
-    {"statement": "derivedCoverage marks a planned file covered only if a derived anchor Covers(world, f); a file absent at world is never covered", "about": "internal/workflow/engine.go derivedCoverage; internal/derived/derived.go CoveredFiles", "source": "repository"},
-    {"statement": "derivationClosesGap requires every planned file to be covered; one anchor over two planned files is not coverage", "about": "internal/workflow/relevance.go derivationClosesGap", "source": "repository"},
-    {"statement": "the confinement-v2 natural task planned gosumcheck/main.go plus a nonexistent gosumcheck/main_test.go three times and routed cold each time", "about": "experiments/confinement-v2/RESULT.md; sensei#312", "source": "repository"},
-    {"statement": "a single closed role with a single novel allowance is sufficient to let the confinement-v2 natural task reach the candidate boundary", "about": "gosumcheck/main_test.go", "source": "inference"}
+    {
+      "statement": "derivedCoverage marks a planned file covered only if a derived anchor Covers(world, f); a file absent at world is never covered",
+      "about": "internal/workflow/engine.go derivedCoverage; internal/derived/derived.go CoveredFiles",
+      "source": "repository"
+    },
+    {
+      "statement": "derivationClosesGap requires every planned file to be covered; one anchor over two planned files is not coverage",
+      "about": "internal/workflow/relevance.go derivationClosesGap",
+      "source": "repository"
+    },
+    {
+      "statement": "the confinement-v2 natural task planned gosumcheck/main.go plus a nonexistent gosumcheck/main_test.go three times and routed cold each time",
+      "about": "experiments/confinement-v2/RESULT.md; sensei#312",
+      "source": "repository"
+    }
   ]
 }
