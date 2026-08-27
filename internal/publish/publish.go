@@ -31,7 +31,20 @@ type Request struct {
 	// evidence-backed change report, including what it does not establish.
 	Title  string
 	Report string
+	// Paths are the repository-relative files the reviewed candidate changed,
+	// and they are the only thing publication stages. Publication used to run
+	// `git add --all`, which re-swept the worktree: a build artifact that
+	// CandidateCapture had excluded from the candidate -- and that therefore
+	// never appeared in the audit or the reviewer's packet -- was still
+	// untracked in the worktree, and --all committed and pushed it (#89). What
+	// is published is exactly what was judged, or nothing.
+	Paths []string
 }
+
+// ErrNoReviewedPaths reports a publication with nothing judged to publish.
+// It is a refusal: sweeping the worktree instead would publish what no
+// reviewer saw.
+var ErrNoReviewedPaths = errors.New("publication names no reviewed candidate paths, so nothing is staged; the worktree is not swept")
 
 // ErrPushNotGranted reports that publication was attempted without the
 // capability. It is a refusal, not a failure: the configuration says this
@@ -56,10 +69,16 @@ func (r Request) Body() string {
 	return b.String()
 }
 
-// CommitArgs is the argv that commits the candidate's work.
-func CommitArgs(message string) [][]string {
+// CommitArgs is the argv that commits exactly the reviewed candidate paths.
+//
+// `add --all` is deliberately absent: it stages whatever is in the worktree,
+// and the worktree can hold what the candidate does not (an excluded
+// artifact, a worker's scratch file). Staging is by explicit path, so what
+// reaches the commit is what reached the review.
+func CommitArgs(message string, paths []string) [][]string {
+	add := append([]string{"add", "--"}, paths...)
 	return [][]string{
-		{"add", "--all"},
+		add,
 		{"commit", "--message", message},
 	}
 }
@@ -132,7 +151,16 @@ func Open(ctx context.Context, r Request, pushGranted, commitGranted bool) (Resu
 	if strings.TrimSpace(r.Branch) == "" || strings.TrimSpace(r.Workspace) == "" {
 		return done, errors.New("publication needs a candidate branch and workspace")
 	}
-	for _, args := range CommitArgs(r.Title) {
+	paths := make([]string, 0, len(r.Paths))
+	for _, p := range r.Paths {
+		if p = strings.TrimSpace(p); p != "" {
+			paths = append(paths, p)
+		}
+	}
+	if len(paths) == 0 {
+		return done, ErrNoReviewedPaths
+	}
+	for _, args := range CommitArgs(r.Title, paths) {
 		if out, err := run(ctx, r.Workspace, "git", args); err != nil {
 			return done, fmt.Errorf("git %s: %s", args[0], out)
 		}

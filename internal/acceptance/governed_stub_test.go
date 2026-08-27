@@ -22,6 +22,7 @@ package acceptance
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -116,6 +117,10 @@ func TestGovernedRunStubProviders(t *testing.T) {
 }
 
 type stubRun struct {
+	// excluded maps a refused artifact path to the boundary's reason (#89).
+	excluded map[string]string
+	// diffBytes is the size of the transported candidate diff.
+	diffBytes  int
 	seen       map[event.Kind]bool
 	mode       string
 	failure    string
@@ -148,6 +153,12 @@ func isCoverageCeiling(condition string) bool {
 
 // runStubGoverned drives one governed task with deterministic providers.
 func runStubGoverned(t *testing.T, target string) stubRun {
+	return runStubGovernedWith(t, target, nil)
+}
+
+// runStubGovernedWith lets a test hand the stub implementor extra arguments --
+// the #89 regression uses --artifact to leave a >5 MB build output behind.
+func runStubGovernedWith(t *testing.T, target string, implementorArgs []string) stubRun {
 	t.Helper()
 	root := repoRoot(t)
 	repo := gitx.Repo{Root: root}
@@ -182,9 +193,9 @@ func runStubGoverned(t *testing.T, target string) stubRun {
 	// must also be DIFFERENT providers, because a candidate may not review
 	// itself; one binary serving both roles under one name is excluded by the
 	// same rule that makes review independent.
-	cfg.Architect = config.Agent{Name: "stub-architect", Command: stub, Args: []string{"--role", "architect", "--target", target}}
-	cfg.Implementors = []config.Agent{{Name: "claude", Command: stub, Args: []string{"--role", "implementor", "--target", target}}}
-	cfg.Reviewer = config.Agent{Name: "codex", Command: stub, Args: []string{"--role", "reviewer"}}
+	cfg.Architect = config.Agent{Name: "stub-architect", Command: stub, Args: []string{"--role", "architect", "--target", target}, Graph: "none"}
+	cfg.Implementors = []config.Agent{{Name: "claude", Command: stub, Args: append([]string{"--role", "implementor", "--target", target}, implementorArgs...), Graph: "none"}}
+	cfg.Reviewer = config.Agent{Name: "codex", Command: stub, Args: []string{"--role", "reviewer"}, Graph: "none"}
 	cfg.Reviewers = []config.Agent{cfg.Reviewer}
 
 	sessionID := session.ID(time.Now())
@@ -203,7 +214,7 @@ func runStubGoverned(t *testing.T, target string) stubRun {
 	taskID := engine.SubmitGoverned(ctx, "Append one trailing comment line to "+target+" and change nothing else.")
 	t.Logf("governed task: %s  target: %s", taskID, target)
 
-	out := stubRun{seen: map[event.Kind]bool{}}
+	out := stubRun{seen: map[event.Kind]bool{}, excluded: map[string]string{}}
 	var modePayload struct {
 		Mode string `json:"mode"`
 	}
@@ -217,6 +228,19 @@ func runStubGoverned(t *testing.T, target string) stubRun {
 				continue
 			}
 			out.seen[ev.Kind] = true
+			if ev.Kind == event.CandidateArtifactExcluded {
+				var p struct {
+					Path, Reason string
+				}
+				_ = json.Unmarshal(ev.Payload, &p)
+				out.excluded[p.Path] = p.Reason
+			}
+			if ev.Kind == event.CandidateChanged {
+				var n int
+				if _, err := fmt.Sscanf(ev.Summary, "candidate diff %d bytes", &n); err == nil {
+					out.diffBytes = n
+				}
+			}
 			t.Logf("[%-24s] %s", ev.Kind, oneLine(ev.Summary))
 			switch ev.Kind {
 			case event.ModeSelected:
@@ -269,4 +293,31 @@ func buildStubAgent(t *testing.T, root string) string {
 		t.Fatalf("build stub agent: %v: %s", err, out)
 	}
 	return bin
+}
+
+// Regression for #89, end to end: two changed lines plus a >5 MB build artifact
+// left in the worktree. The artifact cannot silently enter an ordinary
+// source-edit candidate; the text diff stays bounded; the run reaches its
+// natural terminal instead of consuming reviewers on an unreadable payload.
+func TestGovernedRunExcludesABuildArtifactFromTheCandidate(t *testing.T) {
+	r := runStubGovernedWith(t, anchoredTarget, []string{"--artifact", "stub-build-output"})
+	if r.seen[event.WorkflowAwaitingAuthority] {
+		t.Skip("coverage ceiling reached before implementation; the boundary was not exercised")
+	}
+	reason, ok := r.excluded["stub-build-output"]
+	if !ok {
+		t.Fatalf("the build artifact entered the candidate unnamed; excluded=%v seen=%v", r.excluded, kinds(r.seen))
+	}
+	if !strings.Contains(reason, "binary") {
+		t.Fatalf("the exclusion does not say why: %q", reason)
+	}
+	if r.diffBytes <= 0 || r.diffBytes > 64<<10 {
+		t.Fatalf("transported candidate diff is %d bytes; a one-line change beside a 6 MB artifact must stay bounded", r.diffBytes)
+	}
+	if r.seen[event.CandidateNotAuditable] {
+		t.Fatal("an excluded artifact must not also surface as a structural refusal")
+	}
+	if !r.seen[event.WorkflowCompleted] {
+		t.Fatalf("the run did not reach its natural terminal: %v", kinds(r.seen))
+	}
 }

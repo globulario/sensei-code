@@ -32,6 +32,20 @@ type Agent struct {
 	Name    string   `json:"name"`
 	Command string   `json:"command"`
 	Args    []string `json:"args"`
+	// Graph declares how this provider reaches the awareness graph. Empty or
+	// "mcp": the engine binds it to the graph it verified, per provider, and
+	// refuses to run a provider it cannot bind -- "unbound" must never look
+	// like "bound". "none": the provider consumes no graph at all (a
+	// deterministic stub, a tool with no MCP), so there is nothing to bind and
+	// nothing to diverge. A declaration, so the exception is visible in config
+	// rather than inferred from a command name.
+	Graph string `json:"graph,omitempty"`
+}
+
+// ConsumesGraph reports whether the engine must bind this provider to the
+// verified graph before running it.
+func (a Agent) ConsumesGraph() bool {
+	return !strings.EqualFold(strings.TrimSpace(a.Graph), "none")
 }
 
 type Workflow struct {
