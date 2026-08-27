@@ -123,3 +123,24 @@ the kind of change this whole campaign exists to refuse.
 File upstream against the Sensei graph builder with this trace attached. Until
 then, the two `internal/tui` refusals remain a known, understood, and
 correctly-classified delivery cost.
+
+## Correction (2026-08-27) — the "surviving hypothesis" was wrong
+
+The anchor was **not** derived at query time. Two errors in this trace, both
+mine:
+
+1. The SPARQL filtered `?s` on the invariant and `?o` on the file. The stored
+   edge runs the other way — `<file model.go> aw:implements <invariant>` — and
+   `ImpactForFile` reads exactly that arm. The "no stored triple" result was a
+   query in the wrong direction.
+2. The served dev graph was built 2026-08-18, before `45e484f` removed
+   `model.go` from the invariant's `protects.files`. A fresh isolated build of
+   today's corpus (28,788 triples, closure PROVEN 36/36) has **no** credentials
+   edge on `model.go`; the live store still has it. Stale publication, not
+   derivation.
+
+`globulario/sensei#308` is closed with this finding. The real gap it exposes is
+freshness semantics: a store built from an older corpus reports
+`GRAPH_FRESHNESS_STATE_CURRENT` because freshness is measured against the
+published artifact rather than the corpus it was built from. That is why a
+removed anchor kept refusing tasks for a week.
