@@ -8,7 +8,12 @@
     "canonical_governed_identities": 0,
     "closure": "PROVEN 0/0",
     "authority": "authoritative",
-    "extraction_depth": "basic (deterministic structural only)"
+    "extraction_depth": "basic (deterministic structural only)",
+    "setup_commits_over_pin": [
+      "deterministic import artifacts + graph binding",
+      "control: empty recipe view",
+      ".gitignore for sensei-code runtime state (foreign repo cannot run governed otherwise)"
+    ]
   },
   "substrate": {
     "sensei_repo": "github.com/globulario/sensei",
@@ -16,7 +21,7 @@
     "sensei_branch": "fix/candidate-status-domain-closure"
   },
   "instrument": {
-    "sensei_code_commit": "f4ebfbb79e49b01b5b7d7eda81129bb40a7e766a",
+    "sensei_code_commit": "99319fb",
     "harness_version": "v2",
     "classifier_version": "v2-anchored",
     "feature_extractor_version": "gap-closure-prompt/v3",
@@ -25,7 +30,11 @@
       "field_access_under_lock",
       "command_invocation_confined_to"
     ],
-    "recipes_present_in_fixture": 0
+    "recipes_present_in_fixture": 0,
+    "product_fixes_since_freeze": [
+      "#15 consequence lane classifies declared actions (release-as-method false positive)",
+      "#16 execution-scoped graph binding for every agent"
+    ]
   },
   "invariants_of_the_experiment": [
     "no vocabulary may be added after seeing what the investigator proposes",
@@ -34,5 +43,16 @@
     "the subject may not be re-selected",
     "semaphore/semaphore.go may not be altered",
     "any change to substrate semantics, subject, vocabulary, fixture SHA or graph initialisation costs a restart of the experiment"
+  ],
+  "restarts": [
+    {
+      "n": 1,
+      "voided": "Encounter 1 (control) attempt 1, 01:05:22Z",
+      "reason": "investigator never reached: consequence-lane false positive on the word release; architect bound to the wrong graph via global codex config",
+      "fixture_unchanged": true,
+      "subject_sha256_unchanged": true,
+      "vocabulary_unchanged": true,
+      "recipes": 0
+    }
   ]
 }
