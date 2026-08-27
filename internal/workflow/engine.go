@@ -2100,13 +2100,23 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	if err != nil || len(recipes) == 0 {
 		return nil
 	}
-	world, err := e.Repo.Head(ctx)
-	if err != nil {
-		return nil
-	}
-	world = strings.TrimSpace(world)
+	// The world is the candidate's pinned base, not the canonical HEAD. The
+	// worktree is cut from that base; facts read from a HEAD that advanced
+	// between establishing the identity and finishing routing would authorize
+	// a creation against a package and import set the candidate does not
+	// contain. Only before an identity exists (the observation lane) does
+	// HEAD stand in, and no grant can be issued there.
+	world := strings.TrimSpace(e.governedBase(taskID))
 	if world == "" {
-		return nil
+		head, err := e.Repo.Head(ctx)
+		if err != nil {
+			return nil
+		}
+		world = strings.TrimSpace(head)
+		if world == "" {
+			return nil
+		}
+		declarations = nil
 	}
 	// The future-only rule, applied before any derivation is spent.
 	//
@@ -2151,6 +2161,12 @@ func (e *Engine) restoreProspectiveGrants(task session.Interrupted, declared []P
 	}
 	if strings.TrimSpace(rec.World) == "" || rec.World != strings.TrimSpace(world) {
 		return fmt.Errorf("cannot resume %s: the recorded prospective authorization was read at world %s, not the candidate's pinned base %s", task.TaskID, shortWorldID(rec.World), shortWorldID(world))
+	}
+	// A record at the right world is not yet the receipt. The grants must be
+	// exactly the authorization for these declarations, or nothing is
+	// restored and the resume refuses before implementation.
+	if err := matchGrantsToDeclarations(declared, rec.Grants); err != nil {
+		return fmt.Errorf("cannot resume %s: %w", task.TaskID, err)
 	}
 	e.setProspectiveGrants(task.TaskID, rec.Grants)
 	return nil
@@ -2227,7 +2243,11 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 	}
 	grants := prospectiveAnchors(ctx, world, missing, declarations, surfaces, read)
 	for _, g := range grants {
-		out = append(out, g.Anchor)
+		if len(g.Anchors) == 0 {
+			out = append(out, g.Anchor)
+			continue
+		}
+		out = append(out, g.Anchors...)
 	}
 	return grants, out
 }

@@ -102,7 +102,69 @@ type prospectiveGrant struct {
 	Surface  ProspectiveSurface `json:"surface"`
 	Covering string             `json:"covering"`
 	Facts    prospectiveFacts   `json:"facts"`
-	Anchor   CoverageAnchor     `json:"anchor"`
+	// Anchor is the first admissible anchor over the covering surface, and
+	// Anchors is every one of them. A covering surface may carry several
+	// derivations with different requirements; keeping only the first let the
+	// filename order decide which requirement the prospective file reported,
+	// and a plan could then read as uncovered for a gap a later anchor
+	// answered. All are emitted, and the consumer selects by requirement.
+	Anchor  CoverageAnchor   `json:"anchor"`
+	Anchors []CoverageAnchor `json:"anchors,omitempty"`
+}
+
+// matchGrantsToDeclarations proves a recorded grant set is exactly the
+// authorization for these declarations: one grant per declared path, each
+// bound to that declaration, naming a covering surface, and carrying the
+// pinned-world facts. No missing grants, no duplicates, no extras.
+//
+// It exists because a record that parses and names the right world is not
+// yet a receipt. An empty or stale grant list would otherwise be restored
+// intact, and a declaration with no facts behind it would then be inspected
+// against nothing but the role allowance -- role alone made sufficient by a
+// damaged record, which is the predicate changing across a restart.
+func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospectiveGrant) error {
+	byPath := map[string]prospectiveGrant{}
+	for _, g := range grants {
+		f := path.Clean(strings.TrimSpace(g.Anchor.File))
+		if _, dup := byPath[f]; dup {
+			return fmt.Errorf("the recorded prospective authorization holds two grants for %s", f)
+		}
+		byPath[f] = g
+	}
+	if len(byPath) != len(declared) {
+		return fmt.Errorf("the recorded prospective authorization holds %d grant(s) for %d declared surface(s)", len(byPath), len(declared))
+	}
+	for _, d := range declared {
+		f := path.Clean(strings.TrimSpace(d.Path))
+		g, ok := byPath[f]
+		if !ok {
+			return fmt.Errorf("the recorded prospective authorization holds no grant for declared surface %s", f)
+		}
+		if !sameSurface(g.Surface, d) {
+			return fmt.Errorf("the recorded grant for %s was issued for a different declaration", f)
+		}
+		if strings.TrimSpace(g.Covering) == "" || strings.TrimSpace(g.Facts.Package) == "" || g.Facts.Imports == nil {
+			return fmt.Errorf("the recorded grant for %s names no covering surface or carries no pinned-world facts", f)
+		}
+	}
+	return nil
+}
+
+// sameSurface compares declarations field by field, dependencies as a set.
+func sameSurface(a, b ProspectiveSurface) bool {
+	if path.Clean(strings.TrimSpace(a.Path)) != path.Clean(strings.TrimSpace(b.Path)) || a.Package != b.Package || a.Role != b.Role || len(a.Dependencies) != len(b.Dependencies) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, d := range a.Dependencies {
+		seen[d] = true
+	}
+	for _, d := range b.Dependencies {
+		if !seen[d] {
+			return false
+		}
+	}
+	return true
 }
 
 // prospectiveRecord is the ProspectiveGranted payload: the grants and the
@@ -194,16 +256,27 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 			if reason := admissibleAgainst(d, facts, role); reason != "" {
 				continue
 			}
+			// Every anchor over this covering surface is carried, so the
+			// consumer can select by the requirement its gap names rather
+			// than by whichever derivation sorted first.
+			var carried []CoverageAnchor
+			for _, a := range byDir[path.Dir(f)] {
+				if a.File != s.File {
+					continue
+				}
+				carried = append(carried, CoverageAnchor{
+					File:        f,
+					Requirement: a.Requirement,
+					Describe: fmt.Sprintf("PROSPECTIVE %s %s: create authorized by %s at %s; %s",
+						d.Role, f, s.File, shortWorldID(world), a.Describe),
+				})
+			}
 			grants = append(grants, prospectiveGrant{
 				Surface:  d,
 				Covering: s.File,
 				Facts:    facts,
-				Anchor: CoverageAnchor{
-					File:        f,
-					Requirement: s.Requirement,
-					Describe: fmt.Sprintf("PROSPECTIVE %s %s: create authorized by %s at %s; %s",
-						d.Role, f, s.File, shortWorldID(world), s.Describe),
-				},
+				Anchor:   carried[0],
+				Anchors:  carried,
 			})
 			break
 		}
@@ -227,8 +300,11 @@ func admissibleAgainst(d ProspectiveSurface, s prospectiveFacts, role prospectiv
 
 // inspectProspectiveSurfaces checks every declared surface against what the
 // candidate actually created. facts is keyed by declared path and holds the
-// covering surface's facts at the pinned world; a declaration with no entry
-// was authorized by nothing, so only the role's own allowance applies to it.
+// covering surface's facts at the pinned world. A declaration with no entry
+// was authorized by nothing and is REFUTED: the earlier reading -- "only the
+// role's allowance applies" -- let a role alone stand in for a grant whenever
+// the facts were missing, which is exactly the shape a damaged resume record
+// takes.
 //
 // The first mismatch is returned as an error beginning "prospective surface
 // refuted:". Nothing is reinterpreted.
@@ -257,7 +333,11 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 		if actual.Package != d.Package {
 			return fmt.Errorf("prospective surface refuted: %s has package %q, the declaration said %q", f, actual.Package, d.Package)
 		}
-		allowed := facts[f].Imports
+		recorded, ok := facts[f]
+		if !ok || recorded.Imports == nil {
+			return fmt.Errorf("prospective surface refuted: %s was declared but no recorded grant carries its covering surface's facts", f)
+		}
+		allowed := recorded.Imports
 		imports := make([]string, 0, len(actual.Imports))
 		for imp := range actual.Imports {
 			imports = append(imports, imp)

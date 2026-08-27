@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -189,9 +190,10 @@ func TestPostCreationInspectionAcceptsTheAuthorizedShapeOnly(t *testing.T) {
 	if err := inspectProspectiveSurfaces(wrongPkg, decl, gosumcheckFacts(t)); err == nil || !strings.Contains(err.Error(), "package") {
 		t.Fatalf("a wrong package clause was not refuted: %v", err)
 	}
-	// No grant recorded for the declaration: only the role allowance applies.
-	if err := inspectProspectiveSurfaces(good, decl, nil); err == nil || !strings.Contains(err.Error(), `"strings"`) {
-		t.Fatalf("an unauthorized declaration was inspected against imports nobody established: %v", err)
+	// No grant recorded for the declaration: refused outright. The role
+	// allowance is never a substitute for a grant.
+	if err := inspectProspectiveSurfaces(good, decl, nil); err == nil || !strings.Contains(err.Error(), "no recorded grant") {
+		t.Fatalf("an unauthorized declaration was inspected against the role allowance alone: %v", err)
 	}
 }
 
@@ -411,5 +413,91 @@ func TestInterruptedProspectiveInspectionUsesTheRecordedGrants(t *testing.T) {
 	}
 	if err := (&Engine{}).restoreProspectiveGrants(session.Interrupted{TaskID: "t2"}, nil, prospectiveWorld); err != nil {
 		t.Fatalf("a task with no declarations needs no record: %v", err)
+	}
+}
+
+// The sharp case from review: a record at the correct world whose grant for F
+// was lost must not resume. Role alone is not a receipt.
+func TestAResumeRecordMissingTheGrantForADeclaredSurfaceIsRefused(t *testing.T) {
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()},
+		gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	if len(grants) != 1 {
+		t.Fatalf("premise: one grant, got %d", len(grants))
+	}
+	decl := []ProspectiveSurface{gosumcheckDeclaration()}
+	record := func(gs []prospectiveGrant) session.Interrupted {
+		raw, _ := json.Marshal(prospectiveRecord{World: prospectiveWorld, Grants: gs})
+		return session.Interrupted{TaskID: "t", ProspectiveRecord: raw}
+	}
+	other := grants[0]
+	other.Anchor.File = "gosumcheck/other_test.go"
+	stale := grants[0]
+	stale.Surface.Package = "somethingelse"
+	noFacts := grants[0]
+	noFacts.Covering, noFacts.Facts = "", prospectiveFacts{}
+	for name, gs := range map[string][]prospectiveGrant{
+		"grant removed, world correct":  {},
+		"grant for another path":        {other},
+		"grant for another declaration": {stale},
+		"grant without covering facts":  {noFacts},
+		"duplicate grants":              {grants[0], grants[0]},
+		"an extra grant":                {grants[0], other},
+	} {
+		e := &Engine{}
+		if err := e.restoreProspectiveGrants(record(gs), decl, prospectiveWorld); err == nil {
+			t.Errorf("%s: resumed", name)
+		}
+		if len(e.prospectiveGrants("t")) != 0 {
+			t.Errorf("%s: a refused resume registered grants", name)
+		}
+	}
+	// And the intact record still resumes.
+	if err := (&Engine{}).restoreProspectiveGrants(record(grants), decl, prospectiveWorld); err != nil {
+		t.Fatalf("the intact record was refused: %v", err)
+	}
+
+	// Inspection itself refuses a declaration with no recorded facts, so even
+	// a path that bypassed restore cannot be judged by the role allowance alone.
+	good := createdDiff(gosumcheckF, "package gosumcheck\n\nimport \"testing\"\n\nfunc TestX(t *testing.T) {}\n")
+	if err := inspectProspectiveSurfaces(good, decl, map[string]prospectiveFacts{}); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+		t.Fatalf("a declaration with no recorded grant passed on the role allowance alone: %v", err)
+	}
+}
+
+// A covering surface with several derivations carries every one of them, so
+// the consumer selects by requirement rather than by filename order.
+func TestEveryAdmissibleAnchorOverTheCoveringSurfaceIsCarried(t *testing.T) {
+	anchors := append(gosumcheckAnchors(), CoverageAnchor{File: gosumcheckS, Requirement: RequirementLockDiscipline, Describe: "lock discipline over gosumcheck"})
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()},
+		anchors, map[string]string{gosumcheckS: gosumcheckSrc})
+	if len(grants) != 1 || len(grants[0].Anchors) != 2 {
+		t.Fatalf("expected one grant carrying two anchors, got %+v", grants)
+	}
+	reqs := map[Requirement]bool{}
+	for _, a := range grants[0].Anchors {
+		if a.File != gosumcheckF || !strings.HasPrefix(a.Describe, "PROSPECTIVE") {
+			t.Fatalf("a carried anchor is not a prospective anchor over F: %+v", a)
+		}
+		reqs[a.Requirement] = true
+	}
+	if !reqs[RequirementInvocationConfinement] || !reqs[RequirementLockDiscipline] {
+		t.Fatalf("a requirement was dropped: %+v", reqs)
+	}
+}
+
+// Grant facts are read at the candidate's pinned base, never at a HEAD that
+// may have moved since the identity was established.
+func TestProspectiveFactsAreReadAtThePinnedBase(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
+	// funcBody renders selector paths as "e.governedBase( " tokens.
+	base, head := strings.Index(body, "e.governedBase("), strings.Index(body, "e.Repo.Head(")
+	if base < 0 {
+		t.Fatal("derivedCoverage does not read the pinned base")
+	}
+	if head >= 0 && head < base {
+		t.Fatal("derivedCoverage consults HEAD before the pinned base")
+	}
+	if !strings.Contains(body, "declarations nil") {
+		t.Fatal("without a pinned base, prospective declarations are still evaluated")
 	}
 }
