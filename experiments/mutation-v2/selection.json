@@ -4,5 +4,1600 @@
  "tool_sha256": "949ac76c0125211abbe2b4d5e5e553e949754bf282f83439901be9964592a297",
  "tool_toolchain": "go1.26.0",
  "sealed_before_scan": true,
- "scan": null
+ "scan": {
+  "fixtures": {
+   "github.com/golang/groupcache": {
+    "pinned_sha": "7477803",
+    "subjects": 55,
+    "counts": {
+     "DERIVED": 55
+    },
+    "loader_stderr": ""
+   },
+   "github.com/golang/mod": {
+    "pinned_sha": "9c7e562",
+    "subjects": 111,
+    "counts": {
+     "DERIVED": 107,
+     "REFUTED": 4
+    },
+    "loader_stderr": ""
+   },
+   "github.com/golang/sync": {
+    "pinned_sha": "2efa68e",
+    "subjects": 3,
+    "counts": {
+     "DERIVED": 3
+    },
+    "loader_stderr": ""
+   }
+  },
+  "sequence": [
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Group",
+    "field": "Stats",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "Gets",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "CacheHits",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "PeerLoads",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "PeerErrors",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "Loads",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "LoadsDeduped",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "LocalLoads",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "LocalLoadErrs",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "Stats",
+    "field": "ServerRequests",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "CacheStats",
+    "field": "Bytes",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "CacheStats",
+    "field": "Items",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "CacheStats",
+    "field": "Gets",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "CacheStats",
+    "field": "Hits",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcache.go",
+    "type": "CacheStats",
+    "field": "Evictions",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcachepb/groupcache.pb.go",
+    "type": "GetRequest",
+    "field": "Group",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcachepb/groupcache.pb.go",
+    "type": "GetRequest",
+    "field": "Key",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcachepb/groupcache.pb.go",
+    "type": "GetRequest",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcachepb/groupcache.pb.go",
+    "type": "GetResponse",
+    "field": "Value",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcachepb/groupcache.pb.go",
+    "type": "GetResponse",
+    "field": "MinuteQps",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "groupcachepb/groupcache.pb.go",
+    "type": "GetResponse",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "http.go",
+    "type": "HTTPPool",
+    "field": "Context",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "http.go",
+    "type": "HTTPPool",
+    "field": "Transport",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "http.go",
+    "type": "HTTPPoolOptions",
+    "field": "BasePath",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package github.com/golang/groupcache",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "http.go",
+    "type": "HTTPPoolOptions",
+    "field": "Replicas",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package github.com/golang/groupcache",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "http.go",
+    "type": "HTTPPoolOptions",
+    "field": "HashFn",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "lru/lru.go",
+    "type": "Cache",
+    "field": "MaxEntries",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "lru/lru.go",
+    "type": "Cache",
+    "field": "OnEvicted",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestMessage",
+    "field": "Name",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestMessage",
+    "field": "City",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestMessage",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestRequest",
+    "field": "Lower",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestRequest",
+    "field": "RepeatCount",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestRequest",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestResponse",
+    "field": "Value",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "TestResponse",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "CacheStats",
+    "field": "Items",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "CacheStats",
+    "field": "Bytes",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "CacheStats",
+    "field": "Gets",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "CacheStats",
+    "field": "Hits",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "CacheStats",
+    "field": "Evicts",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "CacheStats",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "Gets",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "CacheHits",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "Fills",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "TotalAlloc",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "MainCache",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "HotCache",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "ServerIn",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "Loads",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "PeerLoads",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "PeerErrors",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "LocalLoads",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "StatsResponse",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/groupcache",
+    "file": "testpb/test.pb.go",
+    "type": "Empty",
+    "field": "XXX_unrecognized",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Position",
+    "field": "Line",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Position",
+    "field": "LineRune",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Position",
+    "field": "Byte",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Comment",
+    "field": "Start",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Comment",
+    "field": "Token",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Comment",
+    "field": "Suffix",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Comments",
+    "field": "Before",
+    "result": "DERIVED",
+    "detail": "all 9 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 9
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Comments",
+    "field": "Suffix",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Comments",
+    "field": "After",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "FileSyntax",
+    "field": "Name",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "FileSyntax",
+    "field": "Stmt",
+    "result": "DERIVED",
+    "detail": "all 14 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 14
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "CommentBlock",
+    "field": "Start",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Line",
+    "field": "Start",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Line",
+    "field": "Token",
+    "result": "DERIVED",
+    "detail": "all 6 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 6
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Line",
+    "field": "InBlock",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "Line",
+    "field": "End",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "LineBlock",
+    "field": "Start",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "LineBlock",
+    "field": "LParen",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "LineBlock",
+    "field": "Token",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "LineBlock",
+    "field": "Line",
+    "result": "DERIVED",
+    "detail": "all 7 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 7
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "LineBlock",
+    "field": "RParen",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "LParen",
+    "field": "Pos",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/read.go",
+    "type": "RParen",
+    "field": "Pos",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Module",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Go",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Toolchain",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Godebug",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Require",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Exclude",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Replace",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Retract",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Tool",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Ignore",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "File",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Module",
+    "field": "Mod",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Module",
+    "field": "Deprecated",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Module",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Go",
+    "field": "Version",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Go",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Toolchain",
+    "field": "Name",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Toolchain",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Godebug",
+    "field": "Key",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Godebug",
+    "field": "Value",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Godebug",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Exclude",
+    "field": "Mod",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Exclude",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Replace",
+    "field": "Old",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Replace",
+    "field": "New",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Replace",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Retract",
+    "field": "Rationale",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Retract",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Tool",
+    "field": "Path",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Tool",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Ignore",
+    "field": "Path",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Ignore",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "VersionInterval",
+    "field": "Low",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "VersionInterval",
+    "field": "High",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Require",
+    "field": "Mod",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Require",
+    "field": "Indirect",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Require",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Error",
+    "field": "Filename",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Error",
+    "field": "Pos",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Error",
+    "field": "Verb",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Error",
+    "field": "ModPath",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/rule.go",
+    "type": "Error",
+    "field": "Err",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "WorkFile",
+    "field": "Go",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "WorkFile",
+    "field": "Toolchain",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "WorkFile",
+    "field": "Godebug",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "WorkFile",
+    "field": "Use",
+    "result": "DERIVED",
+    "detail": "all 3 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 3
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "WorkFile",
+    "field": "Replace",
+    "result": "DERIVED",
+    "detail": "all 4 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "WorkFile",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "Use",
+    "field": "Path",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "Use",
+    "field": "ModulePath",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/modfile",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "modfile/work.go",
+    "type": "Use",
+    "field": "Syntax",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "Version",
+    "field": "Path",
+    "result": "REFUTED",
+    "detail": "counterexample to confinement: 1 of 1 mutation site(s) lie outside the owner package golang.org/x/mod/module",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "Version",
+    "field": "Version",
+    "result": "REFUTED",
+    "detail": "counterexample to confinement: 2 of 2 mutation site(s) lie outside the owner package golang.org/x/mod/module",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "ModuleError",
+    "field": "Path",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "ModuleError",
+    "field": "Version",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "ModuleError",
+    "field": "Err",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "InvalidVersionError",
+    "field": "Version",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "InvalidVersionError",
+    "field": "Pseudo",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "InvalidVersionError",
+    "field": "Err",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "InvalidPathError",
+    "field": "Kind",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "InvalidPathError",
+    "field": "Path",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "module/module.go",
+    "type": "InvalidPathError",
+    "field": "Err",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "UnknownVerifierError",
+    "field": "Name",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "UnknownVerifierError",
+    "field": "KeyHash",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "Note",
+    "field": "Text",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "Note",
+    "field": "Sigs",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/sumdb/note",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "Note",
+    "field": "UnverifiedSigs",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/sumdb/note",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "Signature",
+    "field": "Name",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "Signature",
+    "field": "Hash",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "Signature",
+    "field": "Base64",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "UnverifiedNoteError",
+    "field": "Note",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "InvalidSignatureError",
+    "field": "Name",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/note/note.go",
+    "type": "InvalidSignatureError",
+    "field": "Hash",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/storage/storage.go",
+    "type": "Write",
+    "field": "Key",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/storage/storage.go",
+    "type": "Write",
+    "field": "Value",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/tlog/note.go",
+    "type": "Tree",
+    "field": "N",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/tlog/note.go",
+    "type": "Tree",
+    "field": "Hash",
+    "result": "REFUTED",
+    "detail": "counterexample to confinement: 1 of 1 mutation site(s) lie outside the owner package golang.org/x/mod/sumdb/tlog",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/tlog/tile.go",
+    "type": "Tile",
+    "field": "H",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package golang.org/x/mod/sumdb/tlog",
+    "mutations": 1
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/tlog/tile.go",
+    "type": "Tile",
+    "field": "L",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/sumdb/tlog",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/tlog/tile.go",
+    "type": "Tile",
+    "field": "N",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/sumdb/tlog",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "sumdb/tlog/tile.go",
+    "type": "Tile",
+    "field": "W",
+    "result": "REFUTED",
+    "detail": "counterexample to confinement: 1 of 4 mutation site(s) lie outside the owner package golang.org/x/mod/sumdb/tlog",
+    "mutations": 4
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "CheckedFiles",
+    "field": "Valid",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/zip",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "CheckedFiles",
+    "field": "Omitted",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/zip",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "CheckedFiles",
+    "field": "Invalid",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/zip",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "CheckedFiles",
+    "field": "SizeError",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/zip",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "FileError",
+    "field": "Path",
+    "result": "DERIVED",
+    "detail": "all 2 mutation site(s) lie inside the owner package golang.org/x/mod/zip",
+    "mutations": 2
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "FileError",
+    "field": "Err",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/mod",
+    "file": "zip/zip.go",
+    "type": "UnrecognizedVCSError",
+    "field": "RepoRoot",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/sync",
+    "file": "singleflight/singleflight.go",
+    "type": "Result",
+    "field": "Val",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/sync",
+    "file": "singleflight/singleflight.go",
+    "type": "Result",
+    "field": "Err",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   },
+   {
+    "fixture": "github.com/golang/sync",
+    "file": "singleflight/singleflight.go",
+    "type": "Result",
+    "field": "Shared",
+    "result": "DERIVED",
+    "detail": "no mutation site in the repository (true and useless: not a subject)",
+    "mutations": 0
+   }
+  ],
+  "rule": "global sequence in fixture name order then stable path/decl/field order; each role = first natural match across the entire corpus; NO_SUBJECT if absent",
+  "selected": {
+   "violated": {
+    "file": "module/module.go",
+    "type": "Version",
+    "field": "Path",
+    "owner": "golang.org/x/mod/module",
+    "relation": "state_mutation_confined_to_owner(Version.Path in golang.org/x/mod/module)",
+    "result": "REFUTED",
+    "detail": "counterexample to confinement: 1 of 1 mutation site(s) lie outside the owner package golang.org/x/mod/module",
+    "mutations": 1,
+    "sites": [
+     {
+      "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-mod/modfile/rule.go:216:3",
+      "package": "golang.org/x/mod/modfile",
+      "kind": "assign",
+      "in_owner_method": false,
+      "in_owner_package": false
+     }
+    ],
+    "fixture": "github.com/golang/mod"
+   },
+   "positive": {
+    "file": "http.go",
+    "type": "HTTPPoolOptions",
+    "field": "BasePath",
+    "owner": "github.com/golang/groupcache",
+    "relation": "state_mutation_confined_to_owner(HTTPPoolOptions.BasePath in github.com/golang/groupcache)",
+    "result": "DERIVED",
+    "detail": "all 1 mutation site(s) lie inside the owner package github.com/golang/groupcache",
+    "mutations": 1,
+    "sites": [
+     {
+      "pos": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/10d09a92-3a0a-4639-a82b-6dbcdcb7a55e/scratchpad/fixture-groupcache/http.go:105:3",
+      "package": "github.com/golang/groupcache",
+      "kind": "assign",
+      "in_owner_method": false,
+      "in_owner_package": true
+     }
+    ],
+    "fixture": "github.com/golang/groupcache"
+   },
+   "envelope": "NO_SUBJECT"
+  }
+ }
 }

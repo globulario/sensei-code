@@ -68,3 +68,45 @@ reproduces the sealed verdicts on the sealed subjects, and the full chain
 (question → recipe → derivation → coverage → routing → execution
 consequence) is then observed on a governed task. A recipe rewritten until
 the violated subject derives is a campaign failure, recorded as such.
+
+## The scan (one run, tool built with go1.26.0, sealed at `5f72ab8`)
+
+| fixture | subjects | DERIVED | REFUTED | UNRESOLVED |
+|---|---|---|---|---|
+| groupcache @ 7477803 | 55 | 55 | 0 | 0 |
+| mod @ 9c7e562 | 111 | 107 | 4 | 0 |
+| sync @ 2efa68e | 3 | 3 | 0 | 0 |
+
+Global independent selection over the ordered corpus:
+
+```
+violated   mod         module/module.go   Version.Path
+           counterexample to confinement: its 1 mutation site is
+           modfile/rule.go:216 (package modfile), outside owner package module
+positive   groupcache  http.go            HTTPPoolOptions.BasePath
+           all 1 mutation site(s) inside the owner package (http.go:105)
+envelope   NO_SUBJECT
+```
+
+Read plainly:
+
+- The v1 "violation" (`HTTPPoolOptions.BasePath`) is v2's first positive
+  subject: the constructor default is the owner package exercising its own
+  authority. That is the counterexample v1 closed on, now on the right side.
+- `module.Version.Path` written from `modfile` is a counterexample to
+  confinement and is not called a defect here: `module.Version` is a plain
+  exported value type that `modfile` fills in while parsing a `go.mod`; it
+  may well be intentionally caller-mutable. The relation is false for it;
+  whether the design is wrong is a separate, human question.
+- Envelope `NO_SUBJECT`: no field address is taken outside its owner package
+  anywhere in the corpus, and all packages load. **Tool limit, stated:** the
+  hand-derivation detects only address-escape and load failure as
+  UNRESOLVED; it has no detector for reflection, `unsafe`, or writes reached
+  through an interface. Their absence from the scan is the absence of a
+  detector, not evidence of their absence in the corpus. The envelope side
+  of the triangle therefore has no natural specimen in this corpus under
+  this tool, and none is fabricated; the recipe must still declare those
+  limits in its own `Limits()`.
+- Every verdict, including the 165 passed over, is in `selection.json`.
+
+The recipe is designed after this point.
