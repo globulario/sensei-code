@@ -63,3 +63,21 @@ Falsifiers: `REFUTED` on a confinement that holds → reader defect;
 The user's scan found `zip/zip.go`; mine also found `gosumcheck/main.go`, which
 sorts first. The rule is path order, so `gosumcheck` is the subject. Not
 re-selected to match the earlier scan.
+
+## E1 result and the E2 arms, decided before E2 runs
+
+E1: `RECORDED` — `command_invocation_confined_to("gosumcheck.exe" confined to
+gosumcheck) searched under gosumcheck`. The family was chosen untold; the
+executable is the one `gosumcheck/test.bash` builds and runs, which is a real
+invocation on the uncovered test path — but a shell-script invocation is outside
+this reader's envelope (it reads Go source for literal `exec.Command`).
+Pre-derived and sealed: **`UNKNOWN`** — *no literal invocation found; nothing
+to establish*.
+
+- **E2a — faithful**: the investigator's recipe alone. Prediction: `UNKNOWN` →
+  0 anchors → cold. A grounded question the family cannot answer earns nothing.
+- **E2b — mechanism**: the sealed specimen alone (`go` confined to
+  `gosumcheck`, searched repository-wide), labelled `written_by: experiment`.
+  Prediction: `DERIVED` → 1 anchor → route granted → task proceeds.
+
+Same base, same E2 task, sequential, artefacts preserved per arm.
