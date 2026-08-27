@@ -115,7 +115,7 @@ retried) → #91 does not hold, recorded; exit 3 → the question preserved.
   worker; the worker cannot see the bound, so a competent test that reaches
   for `httptest` is refuted for exceeding a declaration it was never given.
   Filed as a follow-up, not fixed mid-series.
-- `E3-seriesB.1.log` keeps 25 non-output events (77 dropped);
+- `E3-seriesB.1.log` keeps 19 non-output events (77 dropped);
   `E3-seriesB.1.candidate.patch` is the refuted candidate.
 
 Under the rule, B2 runs unchanged.
