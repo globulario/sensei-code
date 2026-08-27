@@ -153,3 +153,65 @@ Under the rule, B2 runs unchanged.
   `E3-seriesB.2.candidate.patch` is the refuted candidate.
 
 Under the rule, B3 runs unchanged; it is the last.
+
+### B3 — 22:06:30Z–22:09:35Z, exit 1
+
+- Declared naturally, 3/3, with the tightest list yet (`io, net/http, os,
+  strings, testing`); plan step 2 says *intercepted HTTP transport and
+  captured stderr*. Granted on the first route, no closure round.
+- Claude: 3,548-byte candidate, `main.go` +4/−2, `main_test.go` 102 lines,
+  verified with `go vet . && go test .` — no build, no binary, #91 not
+  reached.
+- **`prospective surface refuted: main_test.go imports "bytes"`** — plus
+  `errors`, `regexp`; `var buf bytes.Buffer` at line 59 captures stderr.
+  Terminal, one implementor, no review.
+- `E3-seriesB.3.log` keeps 19 non-output events (76 dropped);
+  `E3-seriesB.3.candidate.patch` is the refuted candidate.
+
+## Series B result
+
+Three invocations, nothing altered between them, rule frozen before B1.
+
+| | attempts 1–3 (pre-#312) | B1 | B2 | B3 |
+|---|---|---|---|---|
+| architect declares `prospective_surfaces` | n/a (field absent) | yes | yes | yes |
+| derived coverage | 1/2 → gap | 2/2 | 2/2 (after one closure round) | 2/2 |
+| route | cold, exit 3 | granted | granted | granted |
+| implementor ran | never | yes | yes | yes |
+| built a binary / #91 boundary reached | — | no | no | no |
+| post-creation inspection | — | REFUTED `bytes` | REFUTED `bytes` | REFUTED `bytes` |
+| retried / reviewed after refutation | — | no | no | no |
+
+**Established.** The natural #312 mechanism, end to end and three times: the
+architect, told only the contract line, declares the surface it needs; the
+predicate grants CREATE authority against the covering file's facts at the
+pinned world; ordinary routing accepts it; the implementor runs; the created
+file is inspected against the original grant; a mismatch is terminal, with
+no reinterpretation and no second implementor. Every one of those is the
+repaired instrument behaving as designed on a foreign repository.
+
+**Observed, systematically.** Three independent natural plans, three grants,
+three independent worker sessions, three identical refutations on `bytes`
+(with `regexp` and `errors`/`httptest` alongside): the dependency
+envelope the architect authorizes is not the dependency set the worker
+selects, because the worker is handed the plan and not the grant. The
+authorization currently acts as a post-hoc fence — and the fence held all
+three times — rather than also as an implementation constraint. This is a
+missing relationship between architectural authorization and implementation
+context, not worker noise.
+
+**Not established.** That no output-capturing test can exist inside
+`S imports + testing` (nobody has tried to write one); which of the three
+diagnoses is right — the worker lacks the grant, the declaration is too
+narrow, or the role's dependency policy is underspecified — is the next
+decision, taken after the series, not inside it.
+
+**#89.** The natural reproducer is still **unmet, not failed**, for a new
+reason: the implementor now runs, but all three workers verified with
+`go vet`/`go test` and never built the binary, so the candidate boundary
+#91 repairs was never reached. #91's synthetic regression remains the only
+witness. The original monster required a worker that runs `go build` in the
+tree; three workers did not.
+
+**#312 is the natural path's success and its next question at once.** The
+mechanism works; the grant and the worker do not yet share a vocabulary.
