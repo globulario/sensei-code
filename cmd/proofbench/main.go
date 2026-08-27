@@ -614,6 +614,9 @@ func capacity(args []string) int {
 	arms := fs.Int("arms", 0, "arms remaining (default: every arm the manifest schedules)")
 	perArm := fs.Float64("per-arm", 0,
 		"fraction of the binding window one arm consumes (default: the worst observed in this ledger)")
+	byRole := fs.Bool("by-role", false, "establish capacity per configured role rather than one global reading")
+	acceptProven := fs.Bool("accept-proven", false,
+		"admit a role that answers but reports no limits, on availability alone; the admission records it")
 	if err := fs.Parse(args); err != nil || strings.TrimSpace(*manifest) == "" {
 		fs.Usage()
 		return exitUsage
@@ -640,6 +643,35 @@ func capacity(args []string) int {
 				*perArm, source = observed, "worst observed in this ledger"
 			}
 		}
+	}
+	// Per role, or not at all (instrument defect #14).
+	if *byRole {
+		ctx := context.Background()
+		roles := []proofbench.RoleCapacity{
+			proofbench.ProveArchitectCapacity(ctx, binaryPath(root), root),
+			proofbench.ReadClaudeCapacity(ctx),
+		}
+		for _, r := range roles {
+			state := "UNREADABLE"
+			if r.Readable {
+				state = fmt.Sprintf("%.1f%% of %s available", r.Available*100, r.Window)
+			} else if r.Proven {
+				state = "proven available, no limits reported"
+			}
+			fmt.Printf("  %-12s %-8s %s %s\n", r.Role, r.Provider, state, r.Detail)
+		}
+		fmt.Printf("  arms         %d scheduled, per arm %.2f%%\n", *arms, *perArm*100)
+		if err := proofbench.AdmitCampaignByRole(roles, *arms, *perArm, *acceptProven); err != nil {
+			fmt.Fprintln(os.Stderr, "\n"+err.Error())
+			return exitFailed
+		}
+		if *acceptProven {
+			fmt.Println("\n  ADMITTED — the architect on PROOF OF AVAILABILITY only (--accept-proven); " +
+				"the implementor on a quantitative reading")
+		} else {
+			fmt.Println("\n  ADMITTED — every required role has provable capacity")
+		}
+		return exitOK
 	}
 	q, err := proofbench.ReadQuota(context.Background(), binaryPath(root), root)
 	origin := "live probe"
