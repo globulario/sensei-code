@@ -121,3 +121,13 @@ Seven onboarding and product defects surfaced before a single link was
 measured, four fixed upstream, two by `.gitignore`, one recorded. The eighth —
 `derive` absent from the branch carrying the closure fix — cost one voided
 launch and is recorded in `frozen.json`.
+
+## Receipt ledger note
+
+The treatment receipt log holds three entries: `RECORDED` (Encounter 1) and
+**two** `DUPLICATE`. One `DUPLICATE` belongs to the voided Encounter 2 launch
+that ran without a derive binary — it reached its closure round before being
+stopped. It is preserved because the log is append-only by design (§6.3: a run
+that happened is not un-happened by being voided), and it is excluded from the
+result. It is also, incidentally, a fifth independent proposal of the same
+question.
