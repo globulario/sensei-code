@@ -58,3 +58,50 @@ the reviewer's verdict on the change, which it never got to give.
 ## E3.log trimmed
 
 The committed `E3.log` keeps every non-`output` event (routing, coverage, audit, review, git, terminal). Worker/reviewer stream-json `output` events -- 104,600 of them, 34353534 bytes, carrying the 9 MB binary through the review transcripts -- are dropped. Untrimmed original: sha256 a0da2009b9ad27128e6160d72c7d82d063fb39a1078daf1a2399b45b471149ae, preserved outside the repository.
+
+## #89 natural reproducer — unmet, not failed (3/3)
+
+Identical task, unchanged; base `9c7e562` (sealed specimen alone);
+`sensei-code @ d373d5d` carrying #91. Stopping rule frozen before attempt 2.
+
+```
+attempt 1  17:40:39Z  plan: gosumcheck/main.go + gosumcheck/main_test.go (NEW)  1 anchor / 2 files  cold  exit 3
+attempt 2  17:45:54Z  plan: gosumcheck/main.go + gosumcheck/main_test.go (NEW)  1 anchor / 2 files  cold  exit 3
+attempt 3  17:50:10Z  plan: gosumcheck/main.go + gosumcheck/main_test.go (NEW)  1 anchor / 2 files  cold  exit 3
+```
+
+> The original one-file E3 path is no longer naturally reproduced under the
+> unchanged task: 3/3 repaired attempts independently planned a new test file,
+> exposing a systematic prospective-surface authority gap before candidate
+> capture.
+
+`gosumcheck/main_test.go` does not exist. A file that does not exist has no
+anchor, no anchor can cover it, and one anchor over a two-file plan is not
+coverage — so the route stayed cold and the implementor never ran. All three
+refusals are **correct under the coverage law**: authority earned on `main.go`
+was not smuggled across to an unborn file because the architect thought the
+addition sensible. Attempt 3's own escalation states the gap exactly: *"Should
+this wait for authoritative coverage of the regression-test file, or should
+the requirement for deterministic regression coverage be removed from the
+change?"*
+
+Evidence as it stands:
+
+- **#91 synthetic regression: green** at three levels, including the stub-driven
+  e2e (6,291,464-byte artifact excluded and named; 334-byte diff; audit pass;
+  review ACCEPT; `workflow.completed`).
+- **original #89 natural failure path: not reached.**
+- **three natural reruns: correctly blocked, all for the same new reason.**
+- **prospective-new-file authority: a new observed architectural gap** — a plan
+  can become more responsible by adding a file and unauthorizable by the same
+  act, because coverage exists only for surfaces that already exist. Recorded
+  as a phenomenon; not patched, not assigned yet (Family 3, prospective
+  authority semantics, or a product issue — a decision, not a reflex).
+
+#91 is **held**. #89 stays **open**: its closing criterion requires both halves,
+and the natural half is unreachable under the unchanged task for a reason that
+is itself architecturally meaningful. Nothing was bent to manufacture a green
+witness.
+
+Logs: `runs/E3-repaired.attempt{1,2,3}.log`, trimmed of worker stream-json as
+`E3.log` was; untrimmed hashes in the commit.
