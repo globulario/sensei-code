@@ -144,6 +144,10 @@ type CLI struct {
 	// UnsetEnv are variables removed from the agent's environment so it
 	// authenticates with its own stored session.
 	UnsetEnv []string
+	// ConsumesGraph is false only for a provider whose config declares
+	// graph: none. Such a provider runs unbound because it has no graph to
+	// diverge from; every other provider must be bound or refused.
+	NoGraph bool
 }
 
 func (c CLI) label() string {
@@ -369,6 +373,9 @@ func normalizeOutput(name, raw string) (string, string) {
 // Anything else: refused, because a provider that cannot be bound would run
 // against whatever it finds, and "unbound" must not look like "bound".
 func (c CLI) bindGraphArgs(req Request, args []string) ([]string, error) {
+	if c.NoGraph {
+		return args, nil
+	}
 	switch strings.ToLower(strings.TrimSpace(c.Name)) {
 	case "claude":
 		dir := filepath.Join(req.Workspace, ".sensei-code")
