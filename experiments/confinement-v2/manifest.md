@@ -141,10 +141,14 @@ Under the rule, B2 runs unchanged.
   file imports `bytes`, `errors`, `regexp` beyond the envelope;
   `var buf bytes.Buffer` captures stderr, the canonical idiom. Terminal, one
   implementor, no review. Two independent worker sessions, identical
-  refutation: the finding is about the instrument, not the worker. The
-  `go-regression-test` allowance (`testing` only) plus an envelope the
-  worker is never shown cannot admit a real output-capturing test of this
-  command. Recorded, not altered.
+  refutation: the finding is about the instrument, not the worker. What is
+  established is an information asymmetry — the architect knows the bound,
+  the grant is issued against it, the worker is shown only the plan and
+  chooses its own imports, and the fence catches the excess. NOT established:
+  that no output-capturing test can exist inside the envelope; the workers
+  have simply not produced one. Diagnosis (worker lacks the grant / the
+  declaration is too narrow / the role's dependency policy is
+  underspecified) waits for B3. Recorded, not altered.
 - `E3-seriesB.2.log` keeps 25 non-output events (150 dropped);
   `E3-seriesB.2.candidate.patch` is the refuted candidate.
 
