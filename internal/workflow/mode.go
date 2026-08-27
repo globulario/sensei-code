@@ -60,6 +60,11 @@ const (
 	// be exactly the forgeable claim this replaces. Human provenance comes from
 	// the interactive session, where the evidence is the interaction.
 	SubmittedUnattended Provenance = "submitted unattended; no human presence was established"
+	// SubmittedWithSuppliedPlan is a headless run whose bound was handed in
+	// from outside rather than produced by the architect. Like
+	// SubmittedUnattended it establishes no human presence; what it adds is
+	// that the plan's author is also outside the run. See PlanSupplied.
+	SubmittedWithSuppliedPlan Provenance = "submitted unattended with an externally supplied plan; no human presence was established"
 	// ObservationUnattended is an unattended read-only observation run.
 	ObservationUnattended Provenance = "observation submitted unattended; reads only, admits nothing"
 )

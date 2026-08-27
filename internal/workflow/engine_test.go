@@ -1058,8 +1058,10 @@ func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
 	// Every caller must supply the scope; one that does not would silently key
 	// on "(no scope recorded)" and never match a real answer.
 	src := rawSource(t, "internal/workflow/engine.go")
-	if n := strings.Count(src, "applyAnsweredCondition(taskID, routing.Condition, d.Files...)"); n != 2 {
-		t.Fatalf("%d of 2 call sites pass the plan's files", n)
+	// Two in the architect's proceed/escalate branches, two in the supplied
+	// plan's routing (the earlier answer, and the answer just given).
+	if n := strings.Count(src, "applyAnsweredCondition(taskID, routing.Condition, d.Files...)"); n != 4 {
+		t.Fatalf("%d of 4 call sites pass the plan's files", n)
 	}
 	if strings.Contains(src, "applyAnsweredCondition(taskID, routing.Condition)") {
 		t.Fatal("a call site still asks without naming the plan")
