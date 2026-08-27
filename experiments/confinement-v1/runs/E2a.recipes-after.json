@@ -1,0 +1,23 @@
+{
+  "recipes": [
+    {
+      "kind": "command_invocation_confined_to",
+      "command": "gosumcheck.exe",
+      "owner": "gosumcheck",
+      "search_paths": [
+        "gosumcheck"
+      ],
+      "why": "gosumcheck/test.bash builds and invokes gosumcheck.exe as the command's existing verification harness; deriving that relationship would examine the currently uncovered test path.",
+      "provenance": {
+        "origin_task": "task-1787844080757599143",
+        "origin_gap": "graph coverage is absent for the planned files: only 1 of 2 requested file(s) are examined in the graph — the rest are unknown to it",
+        "region": [
+          "gosumcheck/main.go",
+          "gosumcheck/test.bash"
+        ],
+        "written_at": "2026-08-27T15:26:28Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}
