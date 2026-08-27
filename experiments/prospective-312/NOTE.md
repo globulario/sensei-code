@@ -141,3 +141,121 @@ invocation, same stopping rule. Prediction added: with no inference premise,
 the router's next answer is about coverage of three files that do not exist
 in a region the graph holds thin — the crack this plan repairs, possibly
 refusing the plan that repairs it.
+
+### C1 — the supplied bound reached admission's doorstep and the reviewer sharpened the design
+
+Started 19:59:54Z. Preserved in `runs/C1.jsonl` (worker/reviewer `output` events trimmed as in confinement-v2).
+
+- Routing: `architectural-authority-granted`. Prediction 1's pessimistic branch did
+  not occur: with no inference premise, the graph's direct invariants over
+  `internal/workflow` certified the region although derived coverage was
+  `0 anchor(s) over 3 planned file(s)` and preflight was thin. Candidate cut
+  from `29322a2`, clean.
+- Reviewer packet: the plan heading carried *supplied with the task, not
+  architect-produced; sha256 4e416500…* (prediction 2 held).
+- Cycle 1 (Claude → `6bbbdb4c21d4`): audit pass, validation pass (gofmt, vet,
+  build, test — executed by the broker). Codex, fresh session: **REVISE**, one
+  blocking finding — ordinary derived coverage was computed over absent
+  planned files before the prospective rule, so an anchor naming an absent
+  path could cover it *without* declaration, role, package, dependency or
+  post-creation checks. "An authority bypass, not a test-only defect." This
+  was a hole in the frozen plan's own wording: it said absent files are
+  covered *only* prospectively but never said ordinary coverage must be
+  denied to them first.
+- Cycle 2 (Claude → `98524291c9e0`): the first finding resolved (existence
+  partitioning). Codex: **REVISE**, two new blocking findings, both citing the
+  Sensei principle `meta.silence_is_not_valid_for_unexpected`:
+  1. a failed read of F was treated as proof F is absent — so a read failure
+     could *grant* prospective authority. Existence must be tri-state; only a
+     positively established MISSING may enter authorization.
+  2. post-creation inspection re-read the authorization facts instead of
+     inspecting against facts persisted at grant time, and nothing survived
+     Resume. The prospective grant must be a durable receipt — F, covering S,
+     package, dependency envelope, role, world identity — restored exactly on
+     resume and inspected against.
+- Cycle 3: in progress at the time of this draft.
+
+**What this established.** The governed loop, given a bound authored outside
+it, produced the next two semantics #312 needs on its own, and both are the
+same constitutional pressure #92 just went through: absence is not safety
+(read-failed ≠ missing) and a predicate survives restart (the grant is a
+receipt, not a recomputation). #312 has moved from "authorize a nonexistent
+file" to "issue a bounded, receipt-backed authorization to create a surface
+under facts established in world W, then verify the created surface against
+exactly that authorization."
+
+**Cycle 3 (Claude → `2e35d0bee112`, 20:14:44): REVISE.** Both cycle-2 findings
+resolved — tri-state existence (`present / errNotAtWorld / unclassified`) and
+prospective grants recorded as a `ProspectiveGranted` event, carried on
+`session.Interrupted`, restored on Resume. One new blocking finding: the
+refutation was returned as an ordinary `runCandidate` error, and `implement`
+treats every such error as a recoverable worker failure — so a refuted
+candidate would be handed to the next implementor, violating the plan's
+no-retry rule. Claude's cycle budget was spent by this REVISE and the ordinary
+handoff ran: *Codex is continuing the existing candidate, not starting over.*
+
+**Cycle 4 (Codex → `4bb26994d3d0`, 20:18:55): ACCEPT, by Claude as the
+independent reviewer** (the provider swap kept the reviewer independent of the
+implementor). The refutation now goes through `fail()` and stops;
+`TestAProspectiveSurfaceRefutationStopsBeforeHandoff` proves a second
+implementor is never invoked. The reviewer confirmed each clause of the
+predicate against the plan by digest, and stated its own limits verbatim:
+Sensei's evidence was *thin rather than contrary* (preflight EMPTY,
+`anchors=0`, audit pass with 0 findings), and it could not re-run preflight
+per file — MCP blocked in its session and the CLI refused on an endpoint
+mismatch (`localhost:10120` vs configured `:10122`). Its three "minor findings"
+are affirmations, not defects.
+
+Terminal: `workflow.completed — candidate ready for governed admission`,
+exit 0 at 20:18:57Z. Sensei diff audit `pass`, digest `1da3645c…`, 8 files,
+0 findings. No pull request (push not granted). **Not admitted, not merged**:
+the report itself says admission was not requested and reviewer acceptance
+is not proof.
+
+Candidate: worktree `.sensei-code-worktrees/task-1787860802380664460`,
+branch `sensei-code/task-1787860802380664460`, base `29322a2`. Three commits
+(`0b814ed`, `e4a8265`, `6a785a7` — cycles 1–3) plus Codex's cycle-4 change
+**left uncommitted in the worktree** (`engine.go`, `engine_test.go`). The
+accepted digest is over the diff, so the review is bound to the right bytes,
+but the candidate is not a revision — the same custody gap
+[[commit-the-candidate-before-handing-off]] names. 8 files, +941/−8:
+`prospective.go` (311), `prospective_test.go` (415), `engine.go` (+173),
+`event.go`, `store.go`, `suppliedplan.go`, `engine_test.go`,
+`derivedcoverage_live_test.go`.
+
+`runs/C1.log` keeps all 77 non-`output` events; 13,458 worker/reviewer
+`output` events (5,033,561 bytes untrimmed, sha256
+`6558f11be377a646c7d8590cf0e17e176568314d23aeced92b714633d8f1e168`) are
+dropped, original preserved outside the repository.
+
+## Result
+
+- **Milestone 1 exercised for real.** A bound authored outside the run was
+  validated, digested, routed, implemented, audited, reviewed across four
+  cycles and two implementors, and accepted — with provenance `supplied` on
+  every surface a reviewer or a resume reads. No architect was consulted at
+  any point.
+- **The governed loop sharpened #312 on its own.** Three successive review
+  findings, each a constitutional law made executable: ordinary coverage must
+  be *denied* to absent files before prospective evaluation; `read failed` is
+  UNKNOWN, never MISSING; a prospective grant is a durable receipt restored
+  exactly on resume; a refutation is terminal, not a worker failure. None of
+  these were in the frozen plan. #312 is now: *issue a bounded,
+  receipt-backed authorization to create a surface under facts established
+  in world W, then verify the created surface against exactly that
+  authorization.*
+- **Predictions:** 1 wrong in the good direction (route granted, not
+  refused); 2 and 3 held; 4 (working-tree shortcut for S) did not occur — the
+  implementor read `git show <world>:S` from cycle 1.
+- **Not established:** correctness of the candidate beyond reviewer
+  acceptance and green tests; Sensei graph evidence for the new files
+  (thin); the natural (architect-declared) path — no architect ran, so
+  whether an architect will emit `prospective_surfaces` is untested and is
+  what Series B of #89 will show.
+- **Instrument findings:** the last implementor's work is left uncommitted
+  in the candidate; the reviewer could not reach Sensei per-file (endpoint
+  mismatch in its session); a supplied plan cannot carry an inference
+  premise (B2).
+
+Next: human review of the candidate diff, then admission as a PR from the
+candidate branch — a human decision, not this run's.

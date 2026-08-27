@@ -58,3 +58,22 @@ decisions:
     source_files:
       - internal/workflow/authority.go
       - internal/workflow/authority_test.go
+  - id: decision.sensei_code.prospective_authority_for_a_new_surface_existing_governed_fa
+    title: 'Prospective authority for a new surface: existing governed facts authorize a bounded CREATE operation, decided by a closed predicate, inspected after creation, never an anchor for a file that does not exist (sensei#312)'
+    status: accepted
+    architectural_plane: intended
+    rationale: Implement prospective authority for new surfaces from sensei#312 under the supplied plan.
+    context: 'decision_authority: architectural; certified_by: github.com/globulario/sensei-code @ fac399f8225f; decided_by: supplied plan sha256 4e4165005627fb7847d0b165b50b81cad5774ef10c8d8c32663b3fe291b6b2f7 (not architect-produced); human_authorization: none established: submitted unattended with an externally supplied plan; no human presence was established'
+    consequences: 'A responsible plan that needs a new regression test beside a covered file can earn coverage for that file without any anchor pretending the file was observed. Every other new file is exactly as uncovered as today. After this lands the confinement-v2 natural task can reach the candidate boundary, which is what the #89 Series B reproducer needs.'
+    related_invariants:
+      - sensei_code.workflow.context_never_widens_worker_scope
+      - sensei_code.workflow.execution_is_authorized_once_at_run
+    source_files:
+      - internal/event/event.go
+      - internal/session/store.go
+      - internal/workflow/derivedcoverage_live_test.go
+      - internal/workflow/engine.go
+      - internal/workflow/engine_test.go
+      - internal/workflow/prospective.go
+      - internal/workflow/prospective_test.go
+      - internal/workflow/suppliedplan.go
