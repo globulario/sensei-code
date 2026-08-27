@@ -86,7 +86,7 @@ func testContext() taskContext {
 }
 
 func TestImplementationPromptCarriesContextWithoutWideningScope(t *testing.T) {
-	got := implementationPrompt(testContext(), "edit main.go", "", 1, nil)
+	got := implementationPrompt(testContext(), "edit main.go", "", 1, nil, "")
 	for _, want := range []string{
 		"can we version this?",             // the conversation
 		"conventional flag, no governance", // the architect's reasoning
@@ -123,7 +123,7 @@ func TestTaskContextIntentIsExplicitWhenEmpty(t *testing.T) {
 
 func TestGuidanceReachesTheWorkerWithoutEnlargingThePlan(t *testing.T) {
 	got := implementationPrompt(testContext(), "edit main.go", "", 2,
-		[]string{"use the existing version constant, do not add a package"})
+		[]string{"use the existing version constant, do not add a package"}, "")
 	if !strings.Contains(got, "use the existing version constant") {
 		t.Fatal("the human's guidance did not reach the worker")
 	}
@@ -184,7 +184,7 @@ func TestHandoverTellsTheNextWorkerWhatWasLeftBehind(t *testing.T) {
 }
 
 func TestHandoverEntersTheNextWorkerAsUnansweredFeedback(t *testing.T) {
-	got := implementationPrompt(testContext(), "plan", "the previous worker left this unresolved", 1, nil)
+	got := implementationPrompt(testContext(), "plan", "the previous worker left this unresolved", 1, nil, "")
 	if !strings.Contains(got, "the previous worker left this unresolved") {
 		t.Fatal("a handover did not reach the next worker's first cycle")
 	}
@@ -240,7 +240,7 @@ func TestEveryRoleIsToldItCanReadTheSameGraph(t *testing.T) {
 	// it can ask forms its own view of the code instead.
 	prompts := map[string]string{
 		"architect": architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "", ""),
-		"worker":    implementationPrompt(testContext(), "plan", "", 1, nil),
+		"worker":    implementationPrompt(testContext(), "plan", "", 1, nil, ""),
 		"reviewer":  reviewPrompt(testReviewPacket(testContext(), "plan", "diff", "audit", "evidence")),
 	}
 	for role, prompt := range prompts {
@@ -994,7 +994,7 @@ func TestTheInspectionReviewerIsNotTheWorker(t *testing.T) {
 // audit that edited was caught only afterwards -- by refusing a candidate the
 // worker had been invited to produce.
 func TestAReadOnlyWorkerIsToldNotToEdit(t *testing.T) {
-	inspect := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil)
+	inspect := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil, "")
 	for _, want := range []string{"THIS PLAN IS READ-ONLY", "Do not edit", "unverified", "did NOT cover", "independent reviewer"} {
 		if !strings.Contains(inspect, want) {
 			t.Errorf("the read-only worker prompt is missing %q", want)
@@ -1003,7 +1003,7 @@ func TestAReadOnlyWorkerIsToldNotToEdit(t *testing.T) {
 	if strings.Contains(inspect, "You may inspect, edit, build, and test") {
 		t.Error("a read-only worker is still invited to edit")
 	}
-	modify := implementationPrompt(taskContext{Mode: ModeModify, Task: "build"}, "plan", "", 1, nil)
+	modify := implementationPrompt(taskContext{Mode: ModeModify, Task: "build"}, "plan", "", 1, nil, "")
 	if !strings.Contains(modify, "You may inspect, edit, build, and test") {
 		t.Error("a modify worker lost its editing instruction")
 	}
@@ -1291,7 +1291,7 @@ func max0(i int) int {
 // Sensei already draws this line: EmptyProven is "I looked here and there was
 // nothing"; Absent is "nothing exists".
 func TestAReadOnlyWorkerIsToldNotToProveAbsenceFromASearch(t *testing.T) {
-	prompt := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil)
+	prompt := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil, "")
 	for _, want := range []string{
 		"A SEARCH THAT FOUND NOTHING HAS NOT PROVEN ANYTHING ABSENT",
 		"EmptyProven",
@@ -1303,7 +1303,7 @@ func TestAReadOnlyWorkerIsToldNotToProveAbsenceFromASearch(t *testing.T) {
 		}
 	}
 	// The modify worker must not inherit it: it is not writing findings.
-	if strings.Contains(implementationPrompt(taskContext{Mode: ModeModify}, "p", "", 1, nil),
+	if strings.Contains(implementationPrompt(taskContext{Mode: ModeModify}, "p", "", 1, nil, ""),
 		"A SEARCH THAT FOUND NOTHING") {
 		t.Error("a modify worker is given inspection-report guidance it has no use for")
 	}
@@ -1314,7 +1314,7 @@ func TestAReadOnlyWorkerIsToldNotToProveAbsenceFromASearch(t *testing.T) {
 // "every field of admission.Request except Repo is produced by steps 1-2"
 // conflicting with the report's own Finding 5.
 func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
-	prompt := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil)
+	prompt := implementationPrompt(taskContext{Mode: ModeInspect, Task: "audit"}, "plan", "", 1, nil, "")
 	for _, want := range []string{"CHECK YOUR FINDINGS AGAINST EACH OTHER", "at least one is wrong", "less sure of"} {
 		if !strings.Contains(prompt, want) {
 			t.Errorf("the prompt does not require internal consistency: missing %q", want)

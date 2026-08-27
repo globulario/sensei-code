@@ -1104,7 +1104,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
 				strings.Join(guidance, "\n"), nil))
 		}
-		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance)
+		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, renderProspectiveGrants(e.prospectiveGrants(taskID)))
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
 		// The worker's own text is the artifact of a read-only plan. Discarding
 		// it left an inspection with nothing to show but a transcript nobody
@@ -2616,8 +2616,20 @@ func orNone(value, absent string) string {
 	return value
 }
 
-func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guidance []string) string {
+func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guidance []string, grants string) string {
 	extra := ""
+	if strings.TrimSpace(grants) != "" {
+		extra += `
+
+PROSPECTIVE CREATE GRANTS -- the authority you already operate under for files this plan creates.
+This section does not widen your scope; it states the exact shape the run authorized so you can
+build inside it instead of discovering it afterwards. Each created file is inspected against its
+grant before any review, and a file whose package or imports fall outside the grant ends the run
+with no retry. If the plan cannot be implemented honestly inside these imports, do NOT add one:
+leave that file uncreated and say in your output exactly which import the plan needs and why,
+so the architect can decide. Widening the envelope is the architect's decision, not yours.
+` + grants
+	}
 	if strings.TrimSpace(feedback) != "" {
 		extra = "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback
 	}
