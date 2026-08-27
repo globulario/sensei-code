@@ -1,0 +1,22 @@
+{
+  "recipes": [
+    {
+      "kind": "field_access_under_lock",
+      "dir": "semaphore",
+      "type": "Weighted",
+      "field": "cur",
+      "lock": "mu",
+      "why": "A state-observation API would read cur concurrently with acquisition and release transitions, and the source indicates mu is the synchronization authority for that state.",
+      "provenance": {
+        "origin_task": "task-1787796232363441216",
+        "origin_gap": "graph coverage is absent for the planned files: only 1 of 2 requested file(s) are examined in the graph — the rest are unknown to it",
+        "region": [
+          "semaphore/semaphore.go",
+          "semaphore/semaphore_test.go"
+        ],
+        "written_at": "2026-08-27T02:08:30Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}

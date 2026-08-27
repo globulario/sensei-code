@@ -18,7 +18,12 @@
   "substrate": {
     "sensei_repo": "github.com/globulario/sensei",
     "sensei_commit": "80392aaf2aaf3349fe144a2ca3ee5b3a9457c882",
-    "sensei_branch": "fix/candidate-status-domain-closure"
+    "sensei_branch": "fix/candidate-status-domain-closure",
+    "derivation_binary": {
+      "built_from": "globulario/sensei feat/derive-completeness-and-cli @ c87da8a3",
+      "why": "the branch carrying the closure fix (80392aaf) has no derive command; derive lives on the unmerged feat/derive-* branches. The graph is served by the fixed build; SENSEI_BIN for derivation is this one. Recorded because two sensei builds participate.",
+      "smoke": "DERIVED on sensei-code internal/event Bus.subs under mu (known-good), not on the fixture recipe"
+    }
   },
   "instrument": {
     "sensei_code_commit": "1249652",
@@ -63,5 +68,17 @@
       "vocabulary_unchanged": true,
       "recipes": 0
     }
-  ]
+  ],
+  "result": {
+    "control": {
+      "E1": "RECORDED (withheld)",
+      "E2": "RECORDED (withheld); cold"
+    },
+    "treatment": {
+      "E1": "RECORDED (persisted)",
+      "E2": "DUPLICATE; derivation NOT_DERIVED; 0 anchors; cold"
+    },
+    "loop_closed_at": "link 5 -- derivation false negative on a true question",
+    "compounding": "NOT ESTABLISHED"
+  }
 }
