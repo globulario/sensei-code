@@ -119,3 +119,33 @@ retried) → #91 does not hold, recorded; exit 3 → the question preserved.
   `E3-seriesB.1.candidate.patch` is the refuted candidate.
 
 Under the rule, B2 runs unchanged.
+
+### B2 — 22:00:12Z–22:05:48Z, exit 1
+
+- The architect declared the same surface again (2/2 naturally), with the
+  same dependency list. Route first read `bounded-knowledge-gap` on full
+  coverage (`2 anchor(s) over 2 planned file(s)`) because the plan carried
+  one `inference` claim: *a package test can isolate ReadRemote … using only
+  imports already present in main.go plus testing* — the envelope the
+  contract line states, turned into a premise the architect admitted it had
+  not verified. No architect thread exists in the fixture; B1 was not
+  remembered. The closure round ran one read-only investigation
+  (22:02–22:04), the re-plan carried no inference claim, the grant was
+  re-issued, and the route became `architectural-authority-granted`. The
+  architect-lane closure the supplied-plan lane deliberately lacks, seen
+  working on the natural task.
+- Claude produced a 4,190-byte candidate: `main.go` +4/−2, `main_test.go`
+  112 lines. Verified with `go vet ./ && go test ./` — again **no build, no
+  binary, #91 not reached**.
+- **`prospective surface refuted: main_test.go imports "bytes"`** — the
+  file imports `bytes`, `errors`, `regexp` beyond the envelope;
+  `var buf bytes.Buffer` captures stderr, the canonical idiom. Terminal, one
+  implementor, no review. Two independent worker sessions, identical
+  refutation: the finding is about the instrument, not the worker. The
+  `go-regression-test` allowance (`testing` only) plus an envelope the
+  worker is never shown cannot admit a real output-capturing test of this
+  command. Recorded, not altered.
+- `E3-seriesB.2.log` keeps 25 non-output events (150 dropped);
+  `E3-seriesB.2.candidate.patch` is the refuted candidate.
+
+Under the rule, B3 runs unchanged; it is the last.
