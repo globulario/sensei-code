@@ -267,3 +267,14 @@ as `684a906` (tests green over the full candidate with `-buildvcs=false`), the
 branch pushed, and PR #93 opened from it against `main`:
 https://github.com/globulario/sensei-code/pull/93. The PR states the run's own
 limitations. Merge is a human decision; nothing here admits it.
+
+Human review of #93 (2026-08-27) found three defects the machine's four
+cycles had not: a resume record at the correct world with the grant for F
+removed still resumed, and inspection then judged F by the role allowance
+alone (receipt integrity); grant facts were read at canonical HEAD rather
+than the candidate's pinned base; and only the first anchor over the covering
+surface was kept. All three resolved in `e7d763f` on the candidate branch
+with regressions, the sharp one being *correct world, F's grant removed →
+refused, nothing registered*. The pattern is the same constitutional pressure
+#92 went through — the receipt must remain a receipt under partial loss —
+now applied to the object the run had just invented.
