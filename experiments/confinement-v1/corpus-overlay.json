@@ -1,0 +1,22 @@
+{
+ "E1": {
+  "fixture": "github.com/golang/mod",
+  "note": "pinned SHA d0a27b2d4a48460806692bf5c87fc157c3c65292 (selection.json); graph :10193; prompt gap-closure-prompt/v4; recipes at start 0 (manifest); reader SHA not named in the manifest"
+ },
+ "E1.void1-domain-mismatch": {
+  "fixture": "github.com/golang/mod",
+  "note": "pinned SHA d0a27b2d4a48460806692bf5c87fc157c3c65292 (selection.json); graph :10193; prompt gap-closure-prompt/v4; recipes at start 0 (manifest); reader SHA not named in the manifest"
+ },
+ "E2": {
+  "fixture": "github.com/golang/mod",
+  "note": "pinned SHA d0a27b2d4a48460806692bf5c87fc157c3c65292 (selection.json); graph :10193; prompt gap-closure-prompt/v4; recipes at start 0 (manifest); reader SHA not named in the manifest"
+ },
+ "E2a": {
+  "fixture": "github.com/golang/mod",
+  "note": "pinned SHA d0a27b2d4a48460806692bf5c87fc157c3c65292 (selection.json); graph :10193; prompt gap-closure-prompt/v4; recipes at start 0 (manifest); reader SHA not named in the manifest"
+ },
+ "E2b": {
+  "fixture": "github.com/golang/mod",
+  "note": "pinned SHA d0a27b2d4a48460806692bf5c87fc157c3c65292 (selection.json); graph :10193; prompt gap-closure-prompt/v4; recipes at start 0 (manifest); reader SHA not named in the manifest"
+ }
+}

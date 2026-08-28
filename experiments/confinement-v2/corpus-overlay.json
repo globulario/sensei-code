@@ -1,0 +1,56 @@
+{
+ "E3-seriesB.1": {
+  "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
+  "sensei_sha": "e81d7bed",
+  "fixture": "github.com/golang/mod",
+  "human_review": [
+   "PR #95: numstats corrected to the attached patch (+2/-2); untrimmed sha256 recorded"
+  ],
+  "note": "architect declared prospective_surfaces naturally; refuted on bytes; worker never shown the grant"
+ },
+ "E3-seriesB.2": {
+  "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
+  "sensei_sha": "e81d7bed",
+  "fixture": "github.com/golang/mod",
+  "human_review": [
+   "PR #95: record corrected to state the producer/authority information asymmetry, not a diagnosis"
+  ],
+  "note": "one closure round on an honest inference claim, then granted; refuted on bytes"
+ },
+ "E3-seriesB.3": {
+  "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
+  "sensei_sha": "e81d7bed",
+  "fixture": "github.com/golang/mod",
+  "note": "3/3 refuted on bytes; series closed; diagnosis left open until Series C"
+ },
+ "E3-seriesC.1": {
+  "sensei_code_sha": "b0d4491 (main 842b533 + #94 cherry-picked)",
+  "sensei_sha": "e81d7bed",
+  "fixture": "github.com/golang/mod",
+  "human_review": [
+   "closure-budget laundering through paraphrase recorded before the outcome (became #97/#98)",
+   "PR #95 merged 3bbf036"
+  ],
+  "note": "worker shown the grant: imports exactly inside the envelope; ACCEPT; grant visibility was the causal defect"
+ },
+ "E3": {
+  "sensei_sha": "e81d7bed (manifest)",
+  "fixture": "github.com/golang/mod",
+  "note": "base 9c7e562 (E2b, sealed specimen alone); the 9.2 MB build artifact run that became #89"
+ },
+ "E3-repaired.attempt1": {
+  "sensei_sha": "e81d7bed (manifest)",
+  "fixture": "github.com/golang/mod",
+  "note": "natural reproducer on the #91 candidate-boundary branch; route cold 1 anchor over 2 files (nonexistent main_test.go); became sensei#312"
+ },
+ "E3-repaired.attempt2": {
+  "sensei_sha": "e81d7bed (manifest)",
+  "fixture": "github.com/golang/mod",
+  "note": "natural reproducer on the #91 candidate-boundary branch; route cold 1 anchor over 2 files (nonexistent main_test.go); became sensei#312"
+ },
+ "E3-repaired.attempt3": {
+  "sensei_sha": "e81d7bed (manifest)",
+  "fixture": "github.com/golang/mod",
+  "note": "natural reproducer on the #91 candidate-boundary branch; route cold 1 anchor over 2 files (nonexistent main_test.go); became sensei#312"
+ }
+}

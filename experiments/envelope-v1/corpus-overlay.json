@@ -1,0 +1,17 @@
+{
+ "E1": {
+  "sensei_sha": "0c95dc08 (reader v2 = sensei-derive-v3, manifest)",
+  "fixture": "github.com/golang/groupcache",
+  "note": "pinned SHA 2c02b8208cf8c02a3e358cb1d9b60950647543fc; graph :10191; prompt gap-closure-prompt/v4; recipes at start 0 (manifest)"
+ },
+ "E1.void1-task-already-implemented": {
+  "sensei_sha": "0c95dc08 (reader v2 = sensei-derive-v3, manifest)",
+  "fixture": "github.com/golang/groupcache",
+  "note": "pinned SHA 2c02b8208cf8c02a3e358cb1d9b60950647543fc; graph :10191; prompt gap-closure-prompt/v4; recipes at start 0 (manifest)"
+ },
+ "E2": {
+  "sensei_sha": "0c95dc08 (reader v2 = sensei-derive-v3, manifest)",
+  "fixture": "github.com/golang/groupcache",
+  "note": "pinned SHA 2c02b8208cf8c02a3e358cb1d9b60950647543fc; graph :10191; prompt gap-closure-prompt/v4; recipes at start 0 (manifest)"
+ }
+}
