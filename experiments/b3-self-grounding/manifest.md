@@ -145,3 +145,41 @@ reached the thing the encounter measures. Recorded as
 failure, and **not counted against N1's single invocation** — N1's invocation
 is the first one that reaches the architect. N2 is not run against the same
 exhausted provider. Nothing in the subject, the freeze, or the tasks changes.
+
+### N1 — 03:01:08Z–03:09:31Z, exit 3, subject `7ae7236e`
+
+- Round 1: plan `internal/workflow/premise.go` alone; `derived coverage:
+  0 anchor(s) over 1 planned file(s); route bounded-knowledge-gap` (the
+  subject's sole recipe is over `internal/event`). Closure round, receipt
+  `gap-…-1`.
+- Round 2: the re-plan added `internal/workflow/authority_test.go`. M2.2
+  answered as designed — *no test-edit authority: … no planned file in its
+  directory holds architectural coverage at the pinned world* — because
+  `premise.go` has no anchor yet; `0 anchor(s) over 2 planned file(s)`. The
+  architect asked to escalate; the engine closed instead (receipt `gap-…-2`,
+  a distinct gap: the scope changed). **In this round the investigator,
+  told nothing, proposed and recorded**
+  `field_access_under_lock(internal/workflow Engine.premises mu)` — *"applyPremiseResolutions
+  and premiseReceiptFor access the receipt collection while holding …"* — the
+  proposition the sealed Family 1 sweep marks DERIVED across `engine.go`
+  and `premise.go`. Identity
+  `field_access_under_lock|internal/workflow|engine|premises|mu`, region
+  `[premise.go, authority_test.go]`.
+- Round 3: future-only — the recipe cannot cover the run that proposed it;
+  the gap did not close within budget; escalated with the question
+  preserved: *Should this change wait for Sensei to derive coverage over the
+  proposed relationship, or proceed through an explicit authorization while
+  the coverage gap remains open?* Options: wait / authorize open gap /
+  require another design / stop. Exit 3.
+- Predictions held: cold → closure → a Family 1 question over
+  `internal/workflow` → recorded → future-only ends N1 at the human.
+- `runs/N1.log` keeps the non-output events; untrimmed sha256 in
+  `runs/N1.run`; receipts and recipes-after preserved. The recorded recipe
+  is persisted in the subject as `209c5c6` (Go sources byte-identical to
+  `7ae7236e`; only `docs/awareness/derived_recipes.json` differs) — the
+  base for N2 and for any later encounter over `premise.go`.
+
+Reading: the first self-grounding witness. Sensei, pointed at its own engine
+with no control document in sight, asked the lock-discipline question about
+the receipt map that S1 must preserve. The anchor it earns benefits the next
+encounter over that region, by the future-only rule.
