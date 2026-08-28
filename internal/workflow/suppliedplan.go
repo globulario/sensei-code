@@ -143,6 +143,7 @@ var errSuppliedPlanContextUnavailable = errors.New("SUPPLIED_PLAN_CONTEXT_UNAVAI
 // resumedBound is the executable contract a resumed task continues under.
 type resumedBound struct {
 	Source       PlanSource
+	Files        []string
 	Plan         string
 	Rationale    string
 	Steps        []string
@@ -196,6 +197,7 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 	}
 	return resumedBound{
 		Source:       e.planSource(task.TaskID),
+		Files:        rec.Files,
 		Plan:         rec.Plan,
 		Rationale:    rec.Summary,
 		Steps:        rec.Steps,

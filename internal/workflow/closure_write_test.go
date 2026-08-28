@@ -63,16 +63,16 @@ func TestTheQuestionWriterIsReachableOnlyFromAnUnclosedGap(t *testing.T) {
 // The current task must never be covered by what it wrote.
 func TestDerivedCoverageExcludesTheWritingTask(t *testing.T) {
 	src := rawSource(t, "internal/workflow/engine.go")
-	i := strings.Index(src, "func (e *Engine) derivedCoverage")
+	i := strings.Index(src, "func (e *Engine) coverageAtWorld")
 	if i < 0 {
-		t.Fatal("derivedCoverage not found")
+		t.Fatal("coverageAtWorld not found")
 	}
 	body := src[i:]
 	if j := strings.Index(body, "\nfunc "); j > 0 {
 		body = body[:j]
 	}
 	if !strings.Contains(body, "ExcludingTask") {
-		t.Fatal("derivedCoverage does not exclude the writing task; a run could establish its " +
+		t.Fatal("coverageAtWorld does not exclude the writing task; a run could establish its " +
 			"own authority by writing a question down")
 	}
 	if strings.Index(body, "ExcludingTask") > strings.Index(body, "AnchorsFor") {

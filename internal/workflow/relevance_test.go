@@ -362,7 +362,7 @@ func TestClosureSynthesisesNoHumanAnswer(t *testing.T) {
 		}
 	}
 	// And the coverage it supplies is revalidated, not read from a store.
-	derived := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
+	derived := funcBody(t, "internal/workflow/engine.go", "coverageAtWorld")
 	if !strings.Contains(derived, "AnchorsFor") {
 		t.Error("derived coverage no longer comes from a revalidation in the assessed world")
 	}
