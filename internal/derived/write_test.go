@@ -161,3 +161,54 @@ type stubRevalidator struct{ outcome Outcome }
 func (s stubRevalidator) Revalidate(_ context.Context, _, _ string, r Recipe) Result {
 	return Result{Recipe: r, Outcome: s.outcome}
 }
+
+// #99 review, P1: the closure path must be able to RECORD the third family,
+// not only propose it. answerableKinds names its terms; a proposal missing
+// search_paths is refused, because scope is a term of the proposition.
+func TestTheClosurePathCanRecordAMutationConfinementQuestion(t *testing.T) {
+	region := []string{"modfile/rule.go"}
+	q := Recipe{Kind: "state_mutation_confined_to_owner", Dir: "modfile", Type: "File", Field: "Module", SearchPaths: []string{"."}}
+	added, err := Append(tmpRecipes(t), q, prov(), region)
+	if err != nil || !added {
+		t.Fatalf("the third family cannot be recorded: added=%v err=%v", added, err)
+	}
+	unscoped := q
+	unscoped.SearchPaths = nil
+	if err := Validate(unscoped, region); err == nil {
+		t.Fatal("a mutation-confinement question without search_paths was accepted; scope is a term of the proposition")
+	}
+}
+
+// #99 review, P1: identity carries the scope. The same field asked about
+// package-locally and repository-wide are two questions; the same paths in
+// another order are one.
+func TestMutationConfinementIdentityCarriesItsScope(t *testing.T) {
+	local := Recipe{Kind: "state_mutation_confined_to_owner", Dir: "modfile", Type: "File", Field: "Module", SearchPaths: []string{"modfile"}}
+	wide := local
+	wide.SearchPaths = []string{"."}
+	if local.Identity() == wide.Identity() {
+		t.Fatalf("a package-local and a repository-wide question collapsed: %s", local.Identity())
+	}
+	two := local
+	two.SearchPaths = []string{"module", "modfile"}
+	reordered := local
+	reordered.SearchPaths = []string{"modfile/", "module"}
+	if two.Identity() != reordered.Identity() {
+		t.Fatalf("the same scope in another order is a different identity:\n%s\n%s", two.Identity(), reordered.Identity())
+	}
+	// And through Append: the wide question is not a duplicate of the local one.
+	p := tmpRecipes(t)
+	region := []string{"modfile/rule.go"}
+	if added, err := Append(p, local, prov(), region); err != nil || !added {
+		t.Fatalf("local: %v %v", added, err)
+	}
+	if added, err := Append(p, wide, Provenance{OriginTask: "task-2"}, region); err != nil || !added {
+		t.Fatalf("the repository-wide question was treated as the package-local one: added=%v err=%v", added, err)
+	}
+	if added, err := Append(p, two, Provenance{OriginTask: "task-3"}, region); err != nil || !added {
+		t.Fatalf("two-path scope: %v %v", added, err)
+	}
+	if added, _ := Append(p, reordered, Provenance{OriginTask: "task-4"}, region); added {
+		t.Fatal("a reordered identical scope was recorded as a new question")
+	}
+}

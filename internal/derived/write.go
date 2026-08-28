@@ -56,8 +56,9 @@ type Provenance struct {
 // it derives UNKNOWN forever, which is a quiet way of writing nothing while
 // looking like accumulation.
 var answerableKinds = map[string][]string{
-	"field_access_under_lock":        {"dir", "type", "field", "lock"},
-	"command_invocation_confined_to": {"command", "owner", "search_paths"},
+	"field_access_under_lock":          {"dir", "type", "field", "lock"},
+	"command_invocation_confined_to":   {"command", "owner", "search_paths"},
+	"state_mutation_confined_to_owner": {"dir", "type", "field", "search_paths"},
 }
 
 // Identity is a recipe's canonical key, computed from the QUESTION only.
@@ -72,6 +73,17 @@ func (r Recipe) Identity() string {
 		sort.Strings(paths)
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s",
 			r.Kind, r.Command, clean(r.Owner), strings.Join(paths, ",")))
+	case "state_mutation_confined_to_owner":
+		// Scope is a term of the proposition: the same field asked about
+		// package-locally and repository-wide are two questions, and a
+		// narrower one is a weaker claim, not the same claim (#99 review).
+		paths := make([]string, 0, len(r.SearchPaths))
+		for _, p := range r.SearchPaths {
+			paths = append(paths, clean(p))
+		}
+		sort.Strings(paths)
+		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s",
+			r.Kind, clean(r.Dir), r.Type, r.Field, strings.Join(paths, ",")))
 	default:
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s",
 			r.Kind, clean(r.Dir), r.Type, r.Field, r.Lock))

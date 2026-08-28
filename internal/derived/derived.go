@@ -227,6 +227,12 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
 		for _, p := range r.SearchPaths {
 			args = append(args, "-search", p)
 		}
+	case "state_mutation_confined_to_owner":
+		// Dir is the DECLARING package; SearchPaths is a term of the question.
+		args = append(args, "-dir", r.Dir, "-type", r.Type, "-field", r.Field)
+		for _, p := range r.SearchPaths {
+			args = append(args, "-search", p)
+		}
 	default:
 		args = append(args, "-dir", r.Dir, "-type", r.Type, "-field", r.Field, "-lock", r.Lock)
 	}

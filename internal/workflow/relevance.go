@@ -59,6 +59,11 @@ const (
 	// from the package claimed to own it. Answered by
 	// command_invocation_confined_to.
 	RequirementInvocationConfinement Requirement = "invocation confinement"
+	// RequirementMutationConfinement: whether an exported field is written
+	// only from the package that declares its type. Answered by
+	// state_mutation_confined_to_owner. A composition family: state identity,
+	// ownership, mutation sites and the authorized boundary, related.
+	RequirementMutationConfinement Requirement = "mutation confinement"
 )
 
 // requirementOfFamily says what a derivation family is able to answer.
@@ -78,6 +83,8 @@ func requirementOfFamily(kind string) Requirement {
 		return RequirementLockDiscipline
 	case "command_invocation_confined_to":
 		return RequirementInvocationConfinement
+	case "state_mutation_confined_to_owner":
+		return RequirementMutationConfinement
 	default:
 		return RequirementUnrecognised
 	}
@@ -221,6 +228,7 @@ func satisfies(anchor, gap Requirement) bool {
 var resolvable = map[Requirement]bool{
 	RequirementLockDiscipline:        true,
 	RequirementInvocationConfinement: true,
+	RequirementMutationConfinement:   true,
 }
 
 func dedupe(in []string) []string {

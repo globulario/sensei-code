@@ -431,3 +431,18 @@ func TestRoutingIsUnchangedByObservation(t *testing.T) {
 		})
 	}
 }
+
+// The third family is taught to the consumer explicitly, and resolves exactly
+// its own requirement. A recipe cannot declare what it resolves; this switch
+// does, and a family it has not been taught resolves nothing.
+func TestMutationConfinementIsARecognisedFamily(t *testing.T) {
+	if got := requirementOfFamily("state_mutation_confined_to_owner"); got != RequirementMutationConfinement {
+		t.Fatalf("got %q", got)
+	}
+	if !satisfies(RequirementMutationConfinement, RequirementUnqualified) || !satisfies(RequirementMutationConfinement, RequirementMutationConfinement) {
+		t.Fatal("a recognised mutation-confinement derivation does not resolve its own gap")
+	}
+	if satisfies(RequirementMutationConfinement, RequirementLockDiscipline) || satisfies(RequirementInvocationConfinement, RequirementMutationConfinement) {
+		t.Fatal("a family resolved a gap another family names")
+	}
+}
