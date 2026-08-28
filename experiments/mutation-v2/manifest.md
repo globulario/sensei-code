@@ -100,10 +100,18 @@ Read plainly:
   whether the design is wrong is a separate, human question.
 - Envelope `NO_SUBJECT`: no field address is taken outside its owner package
   anywhere in the corpus, and all packages load. **Tool limit, stated:** the
-  hand-derivation detects only address-escape and load failure as
-  UNRESOLVED; it has no detector for reflection, `unsafe`, or writes reached
-  through an interface. Their absence from the scan is the absence of a
-  detector, not evidence of their absence in the corpus. The envelope side
+  hand-derivation detects only address-escape-outside-owner and load failure
+  as UNRESOLVED; it has no detector for reflection, `unsafe`, or writes
+  reached through an interface. **A further limit, found in review after
+  sealing (5046864821):** an address taken *inside* the owner and returned
+  or stored — `func Expose(x *T) *string { return &x.F }` — is counted as an
+  owner-side site, although write authority can escape from it afterwards;
+  the scanner does not follow where the pointer goes. The sealed tool is not
+  changed: that would rewrite the experiment. The selected verdicts do not
+  depend on it — `HTTPPoolOptions.BasePath` and `module.Version.Path` are
+  direct assignments — but `NO_SUBJECT` for the envelope is **relative to
+  the scanner's detectors**, not evidence that no such escape exists in the
+  corpus. The envelope side
   of the triangle therefore has no natural specimen in this corpus under
   this tool, and none is fabricated; the recipe must still declare those
   limits in its own `Limits()`.
@@ -194,6 +202,15 @@ env                  SENSEI_CODE_BENCHMARK=1, derive receipts moved aside before
 Tasks: **E1** and **E2** exactly as drafted above, byte for byte. E1 runs
 first; E2 runs only if E1 leaves the family's question unasked, and never
 as a retry of E1.
+
+> **Disclosure (review 5046864821, after the runs).** This sentence and
+> prediction 3 below contradict each other: this says E2 runs only if E1
+> left the question *unasked*; prediction 3 says E2 is the next bridge
+> encounter if E1 *did* record the recipe. The contradiction was present in
+> the freeze commit `69494ef` before E1 ran. E1 recorded the recipe and E2
+> was run on the prediction-3 reading. E2 is therefore **strong observed
+> evidence, not a clean preregistered confirmation** of the bridge. The
+> text is left as frozen; this note is the correction.
 
 Stopping rule (frozen before invocation): one invocation per task; whatever
 it does is the result; nothing altered between E1 and E2; every plan,
@@ -316,7 +333,23 @@ gaps got two receipts, and no paraphrase bought a round. The investigator
 proposed the family twice on its own (`File.Module`, then `File.Syntax`),
 each recorded with a distinct scope-bearing identity (#99).
 
-**Family 3 gate:** recipe reproduced the sealed verdicts (REFUTED /
-DERIVED) — met. Full chain to execution consequence — met through coverage
-and routing, not through execution; the missing link is the existing-test
-coverage wall, not the family.
+**Family 3 gate, as frozen** (question → recipe → derivation → coverage →
+routing → execution consequence), classified link by link:
+
+```text
+sealed verdict reproduction        MET
+natural question generation        OBSERVED   (E1, untold; E2 round 2 again)
+future-only boundary               OBSERVED   (E1 could not cover its own run)
+derivation                         OBSERVED   (DERIVED at 989c621)
+coverage                           OBSERVED   (1 anchor over 1 planned file, mutation confinement)
+routing consequence                OBSERVED   (coverage no longer blocked the route)
+execution consequence              NOT OBSERVED (the implementor never ran)
+
+FULL FROZEN FAMILY-3 GATE          OPEN
+```
+
+Not a Family 3 failure: the family's semantic mechanism works through
+routing. What is open is the full system execution gate, and the reason is
+the existing-test wall below. E2's trace is direct evidence of every link it
+reached; it is not a preregistered confirmation (see the disclosure under
+the frozen rule).
