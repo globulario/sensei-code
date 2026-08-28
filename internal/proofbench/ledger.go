@@ -213,6 +213,27 @@ type Attempt struct {
 	// the instrument -- and must never enter a benchmark result. Attempts
 	// carrying it are excluded from every rate and listed in the report.
 	MeasurementStatus string `json:"measurement_status,omitempty"`
+
+	// proof-v7 per-encounter record (all optional; absent = not observed,
+	// never "none"). Filled from the run's event stream, not from a worker.
+	//
+	// Route is the authority route the run took; GapIdentity the closure
+	// receipt identities it issued; ContradictionKind/Stage name a mechanical
+	// contradiction (coverage, authority, review) and where it surfaced
+	// (route, inspection, review); RefusalCause is the closed-vocabulary cause
+	// of a terminal refusal; ClosureAttempted/Succeeded count closure rounds;
+	// ReviewAttempts is the encounter-level review sequence length;
+	// CandidateDigest and EvidenceIdentity are the identities H2 is scored on.
+	Route              string   `json:"route,omitempty"`
+	GapIdentity        []string `json:"gap_identity,omitempty"`
+	ContradictionKind  string   `json:"contradiction_kind,omitempty"`
+	ContradictionStage string   `json:"contradiction_stage,omitempty"`
+	RefusalCause       string   `json:"refusal_cause,omitempty"`
+	ClosureAttempted   int      `json:"closure_attempted,omitempty"`
+	ClosureSucceeded   int      `json:"closure_succeeded,omitempty"`
+	ReviewAttempts     int      `json:"review_attempts,omitempty"`
+	CandidateDigest    string   `json:"candidate_digest,omitempty"`
+	EvidenceIdentity   string   `json:"evidence_identity,omitempty"`
 }
 
 // ID is the attempt's identity, and it is what makes the ledger append-only.
