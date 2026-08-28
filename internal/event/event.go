@@ -71,6 +71,12 @@ const (
 	ReviewStarted   Kind = "review.started"
 	ReviewFinding   Kind = "review.finding"
 	ReviewCompleted Kind = "review.completed"
+	// ReviewContradiction records two independent verdicts on the same
+	// candidate digest and the same executed evidence that disagree: one did
+	// not accept, the next accepted, and nothing changed but the reviewer. It
+	// is emitted by the engine, never by a reviewer, and it is always followed
+	// by an adjudication or a failure -- never by a silent conclusion.
+	ReviewContradiction Kind = "review.contradiction"
 	// ArchitectReconciliation is the orchestration receipt for a disagreement:
 	// what was disputed, what evidence decided it, and what is still open. It
 	// explains why the loop branched. It is never a governance receipt.
