@@ -2201,9 +2201,9 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// The scoped answer cannot say: it is one verdict for the region, proven
 	// the moment one planned file carries anchors, so an ungrounded file
 	// planned beside an anchored one inherited the region's coverage (M25
-	// §1). Asked only when the region itself reports fewer examined files
-	// than planned; a per-file answer that cannot be obtained is unexamined,
-	// which is the direction this must fail in.
+	// §1). Asked for every architectural file whenever a grant is on the
+	// table: the region's counts cannot carry each file's own published
+	// sufficiency, so there is no shortcut on them (see unexaminedFiles).
 	// A per-file answer that cannot be obtained is returned as the error it
 	// is, never represented as an unexamined file: that would be a gap a
 	// recognised derivation may close, and Sensei going away between the
