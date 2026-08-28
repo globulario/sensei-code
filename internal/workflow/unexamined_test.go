@@ -467,3 +467,31 @@ func TestAPostAuthorizationGapCarriesThePinnedWorld(t *testing.T) {
 		t.Fatal("afterHumanAuthorization does not complete the gap identity with the pinned world")
 	}
 }
+
+// A region that claims more files examined than it was asked about is not an
+// answer about this plan; it fails closed rather than skipping the probes on
+// an impossible count (#115, tenth pass).
+func TestImpossibleAggregateCountsFailClosed(t *testing.T) {
+	region := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":3},`+identifiedAuthority+`}`)
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
+		t.Fatal("an impossible region answer was probed instead of refused")
+		return sensei.PreflightDecision{}, nil
+	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, region)
+	if err == nil {
+		t.Fatalf("impossible counts were read as evidence: unexamined=%v", got)
+	}
+}
+
+// An exhausted post-authorization gap reaches the human like every exhausted
+// gap: it is recorded as a closure question and escalated, never turned into
+// an abort (#115, tenth pass).
+func TestAnExhaustedPostAuthorizationGapEscalates(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	if n := strings.Count(src, "e.recordClosureQuestion(taskID"); n != 3 {
+		t.Fatalf("%d of 3 exhausted-gap sites record the closure question for the human", n)
+	}
+	if strings.Contains(src, "stayed open: %s") {
+		t.Fatal("an exhausted post-authorization gap still aborts instead of escalating")
+	}
+}

@@ -1851,7 +1851,36 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 					if open {
 						receipt := e.premiseReceiptFor(taskID, gap, gap.ClaimGap)
 						if !e.spendClosure(taskID, receipt.ID) {
-							return architectureDecision{}, fmt.Errorf("the human authorised the consequence, and a knowledge gap the answer did not cover stayed open: %s", gap.Condition)
+							// The budget is spent and the gap the answer did not
+							// cover is still open. The same human-owned boundary
+							// every exhausted gap reaches: whether to proceed with
+							// it open is the human's, asked once and honoured.
+							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+								"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
+							e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds)
+							stillOpen := gap
+							stillOpen.Route = RouteHuman
+							stillOpen.Condition = "a bounded knowledge gap was not closed by investigation: " + gap.Condition
+							if authorized, asked := e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...); asked {
+								if !authorized {
+									return architectureDecision{}, fmt.Errorf(
+										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition)
+								}
+								e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
+								return d, nil
+							}
+							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
+							choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition)
+							if err != nil {
+								return architectureDecision{}, err
+							}
+							if err := newRound("a human authority answer"); err != nil {
+								return architectureDecision{}, err
+							}
+							prompt = humanResolutionPrompt(prompt, d, choice)
+							attempt = 0
+							continue
 						}
 						e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 							"authorised, and a bounded knowledge gap the answer did not cover remains; closing it before governance runs again: "+gap.Condition, map[string]any{"gap": receipt.ID, "gap_identity": gap.Gap}))
@@ -2294,7 +2323,14 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	// asked about, would satisfy indexed >= file_count on default zeros and
 	// skip every probe; its counts describe something else, so every file is
 	// asked. Probing is the safe direction; skipping is the one to earn.
-	if c := scoped.Coverage; c.FileCount > 0 && c.FileCount == requested && c.IndexedFileCount >= c.FileCount {
+	c := scoped.Coverage
+	if c.IndexedFileCount > c.FileCount {
+		// More files examined than were asked about is not an answer about
+		// this plan; it is a malformed one, and Proven() would read it as
+		// coverage. Fail closed rather than probe or skip.
+		return nil, fmt.Errorf("region preflight counts are impossible: %d indexed of %d file(s)", c.IndexedFileCount, c.FileCount)
+	}
+	if c.FileCount > 0 && c.FileCount == requested && c.IndexedFileCount == c.FileCount {
 		return nil, nil
 	}
 	var out []string
