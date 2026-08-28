@@ -215,3 +215,18 @@ longer the sole open question: the stopping rule's `anchors > 0` is a
 preflight notion that derived recipes never lift, so the rule as worded
 cannot be met by encounters alone — that reading is the owner's, recorded.
 Neither S1 nor Family 4 is authorized by this slice.
+
+## DISPOSITIONS — M25 (GPT-5.6 Sol, 2026-08-28), M24 confirmed
+
+1. N3 is a **finding**: authority was granted from region-level planning
+   evidence (a neighbour's anchor) while file-level relevance for
+   `suppliedplan.go` was never established. Authority is not inherited from
+   a neighbour without a deterministic relation binding the law to the
+   changed surface.
+2. The stopping rule is split (`b3-self-grounding.md`): encounter
+   convergence reads recipe derivability; self-coverage reads preflight
+   anchors. Preflight is not changed to read recipes.
+3. N4 stays retained and unpublished; it does not land through this PR. Any
+   adoption is a fresh governed change on current main.
+4. Slice 2 is complete. N3/N4 are not rerun; the interpretation changed, the
+   evidence did not.

@@ -129,13 +129,23 @@ relation; the investigator never shown a selection; each encounter enters
 the B2 corpus with its graph identity, so a run at the same source SHA
 against a later graph is a distinct record.
 
-Stopping rule: the campaign stops when every S1 surface reads
-`direct_anchor_count > 0` with at least one anchor from each family that is
-applicable to it, and every obligation above is a graph invariant bound to
-its test — or when all three families are inapplicable to an EMPTY S1
-surface, which is the only condition under which a fourth family may be
-considered. Whichever comes first is recorded; S1 is not started on a
-partial reading.
+Stopping rule — split by M25 (2026-08-28), after slice 2 showed the two
+instruments disagree (`docs/work/b3-remeasure-6c36961/`):
+
+- **Encounter-convergence criterion (B3 proper):** every S1 surface some
+  family can reach holds a persisted recipe that *derives DERIVED* at the
+  pinned base, from each family applicable to it — read by `sensei derive`,
+  not by preflight.
+- **Self-coverage criterion (production authority):** every S1 surface reads
+  `direct_anchor_count > 0` in `sensei preflight`, and every obligation above
+  is a graph invariant bound to its test. Only governed invariants/claims
+  lift this; recipes are never promoted into canonical anchors to satisfy it.
+
+Recipe DERIVED ≠ canonical preflight coverage. Encounter learning may improve
+routing before it improves canonical self-coverage; that is a result, not a
+failure. A fourth family may be considered only when all three families are
+inapplicable (NO_SUBJECT) to a reachable-by-none surface. S1 is not started
+on a partial reading of either criterion.
 
 ## Not this campaign
 
