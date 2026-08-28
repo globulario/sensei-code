@@ -257,3 +257,149 @@ committer timestamp was necessarily rewritten. No retroactive merge was
 manufactured to make the graph look continuous: the pre-run freeze is
 proven by the original commit's timestamp and the unchanged blob, and this
 note is the record of the rewrite.
+
+## N1b and N2b — FROZEN (cleared by the #107 merge, 4b92bc67)
+
+The second encounters. Same tasks byte for byte, same producer, same
+consumer, same graph, same env as N1/N2; the only variable is that each
+region's relation is now a **persisted question that deterministically
+derives DERIVED** (mechanical check above).
+
+```
+subjects     TWO independent detached copies of 6c36961 (= 7ae7236e + the three investigator
+             recipes; Go sources byte-identical to 7ae7236e), one per encounter, so neither
+             run's knowledge writes reach the other; each seeded only with .sensei-code/config.json
+             (sha256 94ed3b17…); each clean at start
+consumer     sensei-code f4038b76  (sensei-code-b3)      producer  sensei f79f96f9 (sensei-f3)
+graph        :10122 (read by both; neither run rebuilds it)
+recipes      3 at start in each copy: Bus.subs, Engine.premises, Result.Anchor
+tasks        N1b = N1's text; N2b = N2's text (byte for byte)
+order        N1b, then N2b, sequentially; nothing altered between
+```
+
+Stopping rule: one invocation each; whatever it does is the result; every
+plan, coverage line, route, grant, candidate, validation, audit, review and
+terminal preserved as `runs/N1b.*`, `runs/N2b.*` and entered in the B2
+corpus; exit 3 preserves the question; timeout or crash is an instrument
+finding. **No candidate is admitted or merged**: B3 measures whether Sensei
+can govern a self-change to judgement, not whether it may land one.
+
+Predictions:
+- If the architect plans only `premise.go` (N1b) / `derived.go` (N2b):
+  `derived coverage: 1 anchor(s) over 1 planned file(s); route
+  architectural-authority-granted` on the first routing, unless an
+  inference premise opens a closure round first, then granted.
+- If the architect adds a file, the existing rules decide: an existing
+  test beside the now-covered subject may receive an M2.2 grant (operational
+  authority, printed beside coverage, never summed); any other file is a
+  coverage gap and the run routes cold or to the human. Nothing is forced
+  to 1/1.
+- Granted → implementor → validation → Sensei audit → independent review →
+  terminal. A refutation or a REVISE cycle is ordinary and recorded.
+
+### N1b — 03:44:38Z–04:09:38Z, exit 5 (timeout), subject copy `6c36961` (n1b)
+
+Eight architect turns, zero implementor turns; the 25-minute timeout and
+the 8-round ceiling coincided. No candidate. Two product defects found, one
+loop shape observed, the second encounter's authority confirmed on the way:
+
+- **Authority carried.** Every routing read `internal/workflow/premise.go
+  [lock discipline]` — the fact the investigator discovered in N1, untold,
+  derived at this base and carried into routing. And M2.2 issued its **first
+  natural grant**: `existing-test edit authority recorded for
+  internal/workflow/authority_test.go beside internal/workflow/premise.go
+  (operational, not coverage)`, printed beside coverage and never summed.
+- **Defect (a): the blind-spot coverage branch ignores operational
+  authority.** With `premise.go` covered and the test granted, the route
+  read `1 anchor(s) over 2 planned file(s); route bounded-knowledge-gap` —
+  the branch asked the derivation to cover the granted test file. M2.2's
+  subtraction had been wired into the `coverageAbsent` branch only; the
+  comment above this branch already described this exact defect from an
+  earlier instance. Fix: #109(a) `architecturalFiles()` + a
+  `coverage-blind-spot` gap identity.
+- **Defect (b): an unidentified gap buys a fresh round every time.** The
+  condition text was identical on every round; under the pre-#98 wording
+  key the second attempt would have been refused and the run escalated.
+  Under #98 an unidentified gap matched no receipt and was issued a new one
+  — and a new budget — each round. #98 spent *more* budget than the rule it
+  replaced on every branch it did not identify. Fix: #109(b) the wording
+  floor for unidentified gaps.
+- **The loop.** The architect alternated: plan `{premise.go}` → *escalate*
+  → "Sensei certifies this region, so it is resolved architecturally" → the
+  question handed back; plan `{premise.go, authority_test.go}` → *proceed*
+  → defect (a) → cold → closure. Eight turns, then the timeout. The
+  implementor never ran.
+- Neither fix is in N2b's frozen binary. N2b runs unchanged on its own copy.
+- `runs/N1b.log` keeps the non-output events; untrimmed sha256 in
+  `runs/N1b.run`. Terminal is the CLI's timeout (exit 5), an instrument
+  finding by the rule: the run was stopped, not judged.
+
+Reading: the second encounter proved the point it was for — Sensei's own
+knowledge about itself reached routing as architectural authority — and was
+then denied execution by two defects in the machinery that carries that
+authority, both found by the run itself and both reproduced exactly by the
+regressions on #109. A fourth and fifth instance of the shape the proof-v7
+hypothesis names (a class collapsed into the first plausible one; a rule
+replaced by a stronger-looking rule that is weaker on the cases it did not
+name), both excluded from proof-v7 evidence as discovery instances.
+
+### N2b — 04:12:33Z–04:20:09Z, exit 0, subject copy `6c36961` (n2b)
+
+Route `architectural-authority-granted`: `internal/derived/derived.go
+[mutation confinement]` — the Family 3 recipe the untold investigator
+proposed in N2, derived at this base, carried into routing as the whole
+authority for a one-file plan. The implementor ran. Candidate
+`8f58b4c0783b` (diff digest `cb7c47a4…`, 2768 bytes, `runs/N2b.candidate.diff`):
+an unexported positional constructor `newResult(Recipe, Outcome, string,
+*Anchor)` with all five `CLI.Revalidate` exits routed through it. Terminal:
+ACCEPT, `retained: accepted by review and unpublished; landing it is the
+human's decision`. **Not admitted.** The copy is left as it stands.
+
+Findings, in order of weight:
+
+- **The verdict flipped on identical bytes and identical evidence, and the
+  reviewer changed underneath it.** Cycle 1 (04:17:07, `via codex`):
+  REVISE — the plan required a scoped Sensei edit check, validation recorded
+  only gofmt/vet/build/tests, and the diff audit is `input_trust:
+  caller_supplied`. Cycle 2 (04:20:08, `Claude takes the reviewer role in a
+  session that inherits nothing`): ACCEPT, on the same digest, the same
+  three-times-identical validation block, the same caller-supplied audit,
+  and still no edit check — the cycle-2 review does not mention the proof
+  cycle 1 refused on. Nothing the revision did addressed the finding: the
+  diff did not change, the evidence did not change; the reviewer did. The
+  run reports this as a candidate ready for admission. The instrument
+  recorded every fact needed to see it; nothing in the engine compared
+  them.
+- **The inner cycle counter reset.** `candidate.changed … cycle 2` at
+  04:17:48, then `… cycle 1` at 04:19:25 for the same candidate: the
+  revision's counter restarts, so a reader of the label alone would count
+  two candidates where there was one.
+- **A recipe can route a run it cannot let record a decision.** At the end:
+  `decision not recorded: no governing invariant to link the decision to,
+  so it was not recorded; govern these files first` — on a file whose
+  derived recipe just served as the run's whole architectural authority.
+  Coverage-by-recipe and decision-recording-by-invariant are two vocabularies
+  for "governed", and this file is in one and not the other.
+- `production_deploy` reported `declared but not mechanically enforced`
+  every cycle; unchanged from earlier series.
+
+Reading beside N1b: the two second encounters are the two sides of the same
+fact. Sensei's own knowledge of itself reached routing as architectural
+authority in both. On `premise.go` the machinery carrying that authority
+denied execution (two defects, #109). On `derived.go` it granted execution
+and then accepted a candidate on a reviewer substitution that no rule
+noticed. Neither is a Family finding; both are findings about what the
+authority is connected to once it exists. The proof-v7 hypothesis predicted
+contradictions *before* review; N2b's is the case it does not name — a
+contradiction between two reviews, mechanical in every input, not checked.
+Excluded from proof-v7 evidence as a discovery instance; it becomes a
+prediction to freeze.
+
+### Knowledge publication — 2026-08-28, after #108 merged at `fbc8870`
+
+Both B3 invariants live on `:10122` (digest `42e6e12c…`, 164,506 triples,
+authoritative): FUTURE_ONLY raised on `internal/derived/write.go` and
+REPEATED_RESUME_CANNOT_MINT on `internal/workflow/testedit.go`, each with its
+two exact required tests attached. Verification transcript on #108. B3
+knowledge publication is closed as an observed fact; S1 remains blocked on
+the mediator's gate, not on coverage.
