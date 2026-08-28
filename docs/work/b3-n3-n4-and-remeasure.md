@@ -245,3 +245,14 @@ events and no closure round. The empty artifacts are preserved and the
 evidence-contract wording above now says empty is required. M25's
 confirmation (relayed 2026-08-28) is folded into this same correction.
 Observed, not fixed here: N1b/N2b (#110) also lack receipt artifacts.
+
+## Codex exact-head review of `e328547` — P1, provenance defect, fixed
+
+Finding: the N3/N4 corpus overlays were cloned from N2's and kept N2's
+`review_findings` (`PR #107 review …: evidence PASS`) and merge
+provenance, so the corpus attributed to N3/N4 a review that predates them
+and a merge that never happened. Reproduced in `corpus-overlay.json` and
+the regenerated `encounters.jsonl`. Repaired: `review_findings` now lists
+the two #113 exact-head reviews and their repairs; `merge_provenance` says
+not merged. Law: never infer provenance — copying a record's provenance is
+inferring it.
