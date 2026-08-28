@@ -1,15 +1,16 @@
-# proof-v7 — UNFROZEN DRAFT
+# proof-v7 — FROZEN 2026-08-28
 
-Status: **UNFROZEN**. This file freezes when the product and graph identity
-below are filled in from the post-#111 `main` and the commit is labelled
-`freeze`. Until then nothing here binds, no task is labelled, no arm runs.
+Status: **FROZEN** at the commit labelled `freeze` on this branch. Hypotheses,
+labelling rule, scoring and exclusions below bind as written; any change
+restarts the experiment (instrument-change rule). No task has been labelled
+and no arm has run at the freeze.
 
 Snapshot (filled at freeze):
-- product: `main` @ `<sha>` (contains #108, #109, #111)
-- graph: domain `github.com/globulario/sensei-code`, live digest `<sha256>`,
+- product: `main` @ `a623105` (contains #108, #109, #111; #110 is evidence-only and may land after)
+- graph: domain `github.com/globulario/sensei-code`, live digest `42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64` (164506 triples),
   published slice exposes FUTURE_ONLY and REPEATED_RESUME_CANNOT_MINT with
   their exact required tests (verified by `sensei preflight`, output kept)
-- harness: `cmd/proofbench` @ the same `<sha>`
+- harness: `cmd/proofbench` @ `a623105` plus this branch (Task.Flags, Attempt fields)
 
 ## Two hypotheses, scored separately
 
