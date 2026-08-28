@@ -176,3 +176,49 @@ and cold — recorded as the architect's planning, not the family. The
 violated subject `module.Version.Path` cannot cover anything (REFUTED earns
 no coverage by design) and is not the E-series target; it is the court's
 answer if the investigator asks about it.
+
+## E-series, FROZEN
+
+Instrument pair, published and exact:
+
+```
+Sensei producer      f79f96f9faf542b73d5053bcf5e48603a68e2c74   built as sensei-f3 (SENSEI_BIN)
+sensei-code consumer 267e82297970c579152624be3021ab8d5d2f5ed7   built as sensei-code-f3
+target               golang/mod E-base 7deaa1e = 9c7e562 with docs/awareness/derived_recipes.json
+                     emptied; every Go source byte-identical to 9c7e562 (the sealed world)
+graph                :10193, unchanged
+recipes at start     0
+env                  SENSEI_CODE_BENCHMARK=1, derive receipts moved aside before each invocation
+```
+
+Tasks: **E1** and **E2** exactly as drafted above, byte for byte. E1 runs
+first; E2 runs only if E1 leaves the family's question unasked, and never
+as a retry of E1.
+
+Stopping rule (frozen before invocation): one invocation per task; whatever
+it does is the result; nothing altered between E1 and E2; every plan,
+proposed recipe, derivation receipt, coverage line, route and terminal event
+preserved as `E1.*` / `E2.*`; exit 3 preserves the question; timeout or
+crash is an instrument finding. The investigator is never shown
+`selection.json` or this section.
+
+Predictions, finalised:
+
+1. Encounter 1 is cold: `0 anchor(s)` → `bounded-knowledge-gap` on graph
+   coverage → closure round. The investigator, told only that three kinds
+   are answerable, may propose a `state_mutation_confined_to_owner` question
+   over `modfile` — or a confinement/lock question, or nothing; each is
+   preserved.
+2. If it proposes this family over `modfile` with `File.Module` (or any
+   field the tool sealed DERIVED there) the derivation writes a receipt and
+   the recipe is recorded; by the future-only rule it cannot cover the run
+   that proposed it, so E1 still routes cold or to the human (exit 3).
+3. The bridge is then observed on the NEXT encounter over the same region:
+   `1 anchor over 1 planned file → route granted` → implementor → candidate
+   → review. That encounter is E2 if E1 recorded a recipe; if E1 recorded
+   none, E2 is a second cold encounter and the bridge is not reached in this
+   series — recorded as such.
+4. A plan that reaches `module/` as well is `1 anchor over 2 files` and
+   cold, recorded as the architect's planning, not the family.
+5. A proposed question about `module.Version.Path` derives REFUTED, records
+   a receipt, earns no coverage, and is preserved as the court's answer.
