@@ -381,32 +381,74 @@ func TestAProbeMustDescribeExactlyOneFile(t *testing.T) {
 	}
 }
 
-// Probes run only where the router would otherwise grant. A plan that
-// declares an outward action, one under an approval gate, or one on an
-// uncertifiable graph is already refused or human-owned, and a probe
-// failure must not abort it before it reaches that boundary (#115, seventh
-// pass: the general form of the gate and observation rules).
-func TestProbesRunOnlyWhereTheRouterWouldGrant(t *testing.T) {
+// Probes run only where the next step is a worker: a grant, or a human-owned
+// route whose condition the human has already authorised. A refusal, an
+// observation, or a human question not yet answered is returned as it is, so
+// a probe failure never aborts a plan before it reaches its boundary (#115).
+func TestProbesRunOnlyWhereTheNextStepIsAWorker(t *testing.T) {
 	region := scopedPreflight(t, neighbourCovered)
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
-	if !probeNeeded(region, nil, plannedEdit(files...)) {
+	route := func(scoped sensei.PreflightDecision, a Action) Routing {
+		return routeAuthorityForAction(scoped, nil, a)
+	}
+	if !probeNeeded(route(region, plannedEdit(files...)), false) {
 		t.Fatal("the neighbour-covered edit is the case the probes exist for")
 	}
 	outward := Action{Stage: StageCandidateEdit, Files: files, DeclaredSteps: []string{"git push origin main", "deploy to production"}}
-	if probeNeeded(region, nil, outward) {
+	if probeNeeded(route(region, outward), false) {
 		t.Fatal("a plan declaring an outward action was probed ahead of its human-owned boundary")
 	}
 	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},`+
 		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
 		identifiedAuthority+`}`)
-	if probeNeeded(gated, nil, plannedEdit(files...)) {
-		t.Fatal("a gated plan was probed")
+	if probeNeeded(route(gated, plannedEdit(files...)), false) {
+		t.Fatal("a gated plan was probed before the human answered")
 	}
-	if probeNeeded(sensei.PreflightDecision{Status: sensei.PreflightDegraded}, nil, plannedEdit(files...)) {
+	// Once the human has authorised the gate, the next step is a worker, and
+	// the files the graph never examined are asked about before it runs.
+	if !probeNeeded(route(gated, plannedEdit(files...)), true) {
+		t.Fatal("an authorised gate was not probed before handing the plan to a worker")
+	}
+	if probeNeeded(route(sensei.PreflightDecision{Status: sensei.PreflightDegraded}, plannedEdit(files...)), true) {
 		t.Fatal("a plan on an uncertifiable graph was probed")
 	}
-	if probeNeeded(region, nil, observeAction(files...)) {
+	if probeNeeded(route(region, observeAction(files...)), true) {
 		t.Fatal("an observation was probed")
+	}
+}
+
+// A human's authorisation of a consequence does not admit a file the graph
+// never examined: the question was about the gate, not about coverage, and
+// the router asks the gate first, so the unexamined files are asked after the
+// answer and before the worker (#115, eighth pass).
+func TestAnAuthorisedConsequenceDoesNotAdmitAnUnexaminedFile(t *testing.T) {
+	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
+		identifiedAuthority+`}`)
+	anchored, unexamined := "internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"
+	files := []string{anchored, unexamined}
+	spots := readBlindSpots(gated.BlindSpots)
+	with := Action{Stage: StageCandidateEdit, Files: files, Unexamined: []string{unexamined}}
+
+	human := routeAuthorityForAction(gated, nil, with)
+	if !human.RequiresHuman() {
+		t.Fatalf("the gate must be asked before coverage: %+v", human)
+	}
+	if got := afterAuthorization(human, false, with, spots); !got.RequiresHuman() {
+		t.Fatalf("an unanswered gate was displaced: %+v", got)
+	}
+	got := afterAuthorization(human, true, with, spots)
+	if got.Granted() || got.RequiresHuman() || !got.ClosesGap() || got.Gap.Kind != "coverage-unexamined" {
+		t.Fatalf("an authorised consequence admitted an unexamined file: %+v", got)
+	}
+	closed := with
+	closed.DerivedCoverage = lockAnchors(files...)
+	if got := afterAuthorization(human, true, closed, spots); !got.RequiresHuman() {
+		t.Fatalf("a closed gap displaced the authorised route: %+v", got)
+	}
+	if got := afterAuthorization(human, true, plannedEdit(files...), spots); !got.RequiresHuman() {
+		t.Fatalf("a fully examined plan was displaced: %+v", got)
 	}
 }

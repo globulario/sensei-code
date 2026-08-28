@@ -2147,7 +2147,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// adds nothing but a way for a transient failure to abort the plan
 	// before it reaches that boundary (#115 review). Decided by the router
 	// itself on the same inputs, so the ordering cannot drift from it.
-	if probeNeeded(scoped, d.Claims, action) {
+	pre := routeAuthorityForAction(scoped, d.Claims, action)
+	authorized := false
+	if pre.RequiresHuman() {
+		authorized, _ = e.applyAnsweredCondition(taskID, pre.Condition, d.Files...)
+	}
+	if probeNeeded(pre, authorized) {
 		unexamined, err := unexaminedFiles(stage, len(d.Files), func(f string) (sensei.PreflightDecision, error) {
 			args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
 			if domain := start.Domain(); domain != "" {
@@ -2164,7 +2169,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		action.Unexamined = unexamined
 	}
-	routing := routeAuthorityForAction(scoped, d.Claims, action)
+	routing := afterAuthorization(routeAuthorityForAction(scoped, d.Claims, action), authorized, action, readBlindSpots(scoped.BlindSpots))
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
 	// at two bases would share one round.
@@ -2316,12 +2321,30 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	return out, nil
 }
 
-// probeNeeded reports whether per-file coverage probes can change the route:
-// only a plan the router would grant on the region answer alone can be made
-// stricter by them. A route that already refuses, or already belongs to a
-// human, is returned as it is.
-func probeNeeded(scoped sensei.PreflightDecision, claims []Claim, action Action) bool {
-	return routeAuthorityForAction(scoped, claims, action).Granted()
+// probeNeeded reports whether per-file coverage probes can change the route.
+// Only two routes can: a grant the region answer alone would give, and a
+// human-owned route whose condition the human has already authorised -- the
+// next step for both is a worker. A route that refuses, or a human question
+// not yet answered, is returned as it is: the gate is asked first, and a
+// probe failure must not abort a plan before it reaches its boundary.
+func probeNeeded(pre Routing, authorized bool) bool {
+	return pre.Granted() || (pre.RequiresHuman() && authorized)
+}
+
+// afterAuthorization is the router's answer once a human has authorised the
+// consequence it asked about. The answer was about the consequence -- a gate,
+// an outward action -- and not about coverage, and the router asks the gate
+// before coverage, so a human-owned route says nothing about files the graph
+// never examined. Those are asked here, with the same relation the router
+// uses, before the plan can reach a worker (#115 review).
+func afterAuthorization(routing Routing, authorized bool, action Action, spots blindSpotReading) Routing {
+	if !authorized || !routing.RequiresHuman() {
+		return routing
+	}
+	if gap, open := unexaminedCoverageGap(action, spots); open {
+		return gap
+	}
+	return routing
 }
 
 // sameGraphGeneration reports that two preflight answers name the same graph
