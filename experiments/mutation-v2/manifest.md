@@ -143,3 +143,36 @@ control: wider than the `go/types` hand-tool's, exactly where a syntactic
 binder stops. It is not promoted to the sealed envelope role — that role was
 `NO_SUBJECT` under the frozen rule and stays so — but it is the first
 natural UNRESOLVED of the family and is recorded as such.
+
+## E-series, drafted from the code, NOT FROZEN
+
+Frozen only once the instrument exists on `main` (sensei #313 + sensei-code
+#99 merged); the instrument SHA, the recipes-at-start state, and the
+stopping rule are recorded then. Drafted now so the task text is written
+from the code and not from the results.
+
+Same shape as confinement-v1/v2: the investigator receives only the cold
+gap and the source; the sealed relation is never in its context; it must
+decide on its own that ownership of mutation is worth asking about, or ask
+something else, which is preserved and reported. Recipes at start: 0
+(cold), so encounter 1 proposes and encounter 2 may benefit (future-only
+rule). The plan must stay inside `modfile/` for one derivation to cover it.
+
+- **E1** — *`AddModuleStmt` accepts any string as the module path, so a
+  `go.mod` can be written with a path `module.CheckPath` would reject.
+  Return an error for an invalid path and leave the file unchanged, with no
+  change in behaviour for valid paths.* (Written from `modfile/rule.go:206`;
+  `modfile/rule_test.go` exists, so no new file is needed.)
+- **E2** — *`AddComment` on a `File` whose `Syntax` is nil allocates a
+  `FileSyntax` and then appends; `AddModuleStmt` does the same allocation
+  inline. Factor the nil-`Syntax` initialisation into one place used by
+  both, with no change in behaviour.* (Written from `rule.go:206–225`.)
+
+Predictions, to be finalised at freeze: the region is `modfile/rule.go`;
+`File.Module` derives DERIVED there (control above), so a proposed recipe of
+this family over `modfile` can yield `1 anchor over 1 planned file → route
+granted`; a plan that reaches `module/` as well is `1 anchor over 2 files`
+and cold — recorded as the architect's planning, not the family. The
+violated subject `module.Version.Path` cannot cover anything (REFUTED earns
+no coverage by design) and is not the E-series target; it is the court's
+answer if the investigator asks about it.
