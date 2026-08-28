@@ -244,3 +244,16 @@ closed rather than raised.
 field_access_under_lock DERIVED | subjects: ['internal/workflow/engine.go', 'internal/workflow/premise.go'] | all 6 access(es) to Engine.premises occur while Engine.mu is held, across 2 subject file(s) (19 file(s) were r
 state_mutation_confined_to_owner DERIVED | subjects: ['internal/derived/derived.go'] | all 1 observable write(s) to Result.Anchor under . originate from internal/derived, across 1 subject file(s) (
 ```
+
+## Chronology disclosure (review 5047711145)
+
+The freeze that preceded N1 was committed as
+`6e077f8d51285546ec6560082bb6bb52165bb2cc` at `2026-08-27T22:16:08-04:00`, before N1
+began at 03:01:08Z. This branch was later rebased onto `main` after #106
+(the provenance-schema change), which rewrote that commit as `93f7478`; the
+frozen `manifest.md` blob is identical in both (`8e435d67c498…`), but the
+original freeze commit is no longer an ancestor of this branch and its
+committer timestamp was necessarily rewritten. No retroactive merge was
+manufactured to make the graph look continuous: the pre-run freeze is
+proven by the original commit's timestamp and the unchanged blob, and this
+note is the record of the rewrite.
