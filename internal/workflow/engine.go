@@ -105,6 +105,13 @@ type Engine struct {
 	// testEdits are the existing-test edit grants the router read per task
 	// (M2.2): operational authority, kept apart from coverage by type.
 	testEdits map[string][]testEditGrant
+	// openReviews is, per task, the unanswered part of the last non-accepting
+	// verdict, bound to the candidate digest and evidence it was raised on.
+	// It survives a worker handoff, which is the moment the reviewer changes.
+	openReviews map[string]openReview
+	// reviewAttempts counts reviews per task across every worker, so the
+	// record has one sequence a handoff does not restart.
+	reviewAttempts map[string]int
 }
 
 // closureBudget is how many rounds one condition gets to close its own gap.
@@ -1241,7 +1248,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				"the plan was read-only and the candidate changed %d file(s): %s",
 				len(changedPaths(diff)), strings.Join(changedPaths(diff), ", "))
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), nil))
+		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), map[string]int{"cycle": cycle, "review_attempt": e.reviewAttempt(taskID) + 1}))
 
 		// The missing edge: worker → change → validation → typed evidence →
 		// reviewer. Without it the reviewer correctly refuses to accept on
@@ -1418,8 +1425,43 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return false, plan, lastReview, lastAudit, err
 		}
 		lastReview = review.Summary
+		evidenceID := evidenceIdentity(evidence, verdict)
 		switch review.Decision {
 		case roles.Accept:
+			// A verdict that did not accept this exact candidate on this exact
+			// evidence is still open. An ACCEPT on the same bytes and the same
+			// outcomes does not answer it; it contradicts it, and the
+			// contradiction goes to the architect on the record. Observed on
+			// B3 N2b, where a handoff swapped worker and reviewer and the
+			// second review accepted what the first had refused, unchanged.
+			if open, ok := e.openReview(taskID); ok && open.contradicts(review, evidence.DiffDigest, evidenceID) {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ReviewContradiction, open.describe(review), open))
+				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, contradictionPrompt(task, plan, lastAudit, open, review), "two reviews of the unchanged candidate disagree: "+oneLine(open.Summary))
+				if err != nil {
+					return false, plan, lastReview, lastAudit, err
+				}
+				if strings.TrimSpace(revised.Plan) == "" {
+					return false, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan for the review contradiction")
+				}
+				e.recordReconciliation(taskID, binding, roles.Reconciliation{
+					Disputed: "two independent reviews of the same candidate on the same evidence disagree: " + oneLine(open.Summary),
+					Inputs: []roles.Claim{
+						{Agent: open.Reviewer, Role: roles.Reviewer, Position: open.Summary},
+						{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
+						{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+					},
+					Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
+					Decision:  revised.Plan,
+					Authority: roles.ArchitectAuthority,
+					Remaining: revised.Consequences,
+				})
+				e.clearOpenReview(taskID)
+				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+				plan = revised.Plan
+				feedback = "The architect adjudicated a contradiction between two reviews of this candidate. Reconcile the current candidate with the revised plan."
+				continue
+			}
+			e.clearOpenReview(taskID)
 			// Sensei owns this transition. A reviewer that accepts over a
 			// refusal does not conclude the candidate; the refusal becomes the
 			// next revision instruction instead.
@@ -1458,9 +1500,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
 			return true, plan, lastReview, lastAudit, nil
 		case roles.Revise:
+			e.setOpenReview(taskID, openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID))
 			feedback = review.Instruction()
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case roles.Escalate:
+			// The architect's resolution is the adjudication; nothing stays open.
+			e.clearOpenReview(taskID)
 			// The reviewer reaches the architect, never the human. A reviewer
 			// that could interrupt a person directly would let one nervous
 			// model manufacture a Level-3 event, which is the mirror image of
@@ -1864,6 +1909,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 // person's attention: being out of quota is not an architectural finding.
 func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment roles.Assignment, packet roles.IndependentReviewPacket, implementer string) (roles.ReviewVerdict, error) {
 	binding := packet.Provenance.Binding()
+	attempt := e.nextReviewAttempt(taskID)
 	var lastErr error
 	for current, ok := assignment, true; ok; current, ok = current.Fallback(current.Provider) {
 		cfg, found := e.reviewAgent(current.Provider)
@@ -1875,10 +1921,11 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			fmt.Sprintf("%s takes the reviewer role in a session that inherits nothing", config.DisplayName(cfg.Name)),
 			map[string]any{
 				"role": roles.Reviewer, "provider": cfg.Name, "session": roles.Fresh,
-				"excluded": implementer, "candidate": packet.Provenance.CandidateDigest,
+				"excluded": implementer, "candidate": packet.Provenance.CandidateDigest, "review_attempt": attempt,
 			}))
 		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewStarted,
-			"independent review of candidate "+shortDigest(packet.Provenance.CandidateDigest), nil))
+			"independent review of candidate "+shortDigest(packet.Provenance.CandidateDigest),
+			map[string]any{"candidate": packet.Provenance.CandidateDigest, "review_attempt": attempt}))
 
 		verdict, err := e.askReviewer(ctx, taskID, cfg, packet, binding, implementer)
 		if err == nil {
