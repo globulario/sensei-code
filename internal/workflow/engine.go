@@ -2135,7 +2135,26 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// §1). Asked only when the region itself reports fewer examined files
 	// than planned; a per-file answer that cannot be obtained is unexamined,
 	// which is the direction this must fail in.
-	action.Unexamined = e.unexaminedFiles(sc, start, task, action.architecturalFiles(), scoped)
+	// A per-file answer that cannot be obtained is returned as the error it
+	// is, never represented as an unexamined file: that would be a gap a
+	// recognised derivation may close, and Sensei going away between the
+	// region call and the per-file call would then be a way to a grant
+	// (#115 review). The region call above fails the same way.
+	unexamined, err := unexaminedFiles(func(f string) (sensei.PreflightDecision, error) {
+		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
+		if domain := start.Domain(); domain != "" {
+			args["domain"] = domain
+		}
+		result, err := sc.CallTool("awareness_preflight", args)
+		if err != nil {
+			return sensei.PreflightDecision{}, err
+		}
+		return sensei.DecodePreflight(result)
+	}, action.architecturalFiles(), scoped)
+	if err != nil {
+		return Routing{}, sensei.PreflightDecision{}, fmt.Errorf("Sensei per-file preflight: %w", err)
+	}
+	action.Unexamined = unexamined
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
@@ -2198,34 +2217,33 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	return routing, scoped, nil
 }
 
-// unexaminedFiles asks Sensei about each architectural planned file on its own
-// and returns the ones it has no facts about: no direct anchor and not indexed.
+// unexaminedFiles asks about each architectural planned file on its own and
+// returns the ones the graph has no facts about: no direct anchor and not
+// indexed.
 //
 // A region answer with every planned file examined needs no second question.
 // Otherwise each file is asked separately, because the region's counts say how
 // many files were examined and never which -- and a file under an operational
 // grant, which is not asked to be covered, may be the unexamined one.
-func (e *Engine) unexaminedFiles(sc *sensei.Client, start certifiedStart, task string, files []string, scoped sensei.PreflightDecision) []string {
+//
+// An answer that cannot be obtained is an error, not an unexamined file. The
+// two are different worlds: one is a fact about the graph's coverage, the
+// other is an instrument that did not answer, and only the first is evidence.
+func unexaminedFiles(ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
 	if len(files) == 0 || scoped.Coverage.IndexedFileCount >= scoped.Coverage.FileCount {
-		return nil
+		return nil, nil
 	}
 	var out []string
 	for _, f := range files {
-		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
-		if domain := start.Domain(); domain != "" {
-			args["domain"] = domain
-		}
-		result, err := sc.CallTool("awareness_preflight", args)
+		one, err := ask(f)
 		if err != nil {
-			out = append(out, f)
-			continue
+			return nil, fmt.Errorf("%s: %w", f, err)
 		}
-		one, err := sensei.DecodePreflight(result)
-		if err != nil || (one.Coverage.DirectAnchorCount == 0 && one.Coverage.IndexedFileCount == 0) {
+		if one.Coverage.DirectAnchorCount == 0 && one.Coverage.IndexedFileCount == 0 {
 			out = append(out, f)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // derivedRecipesPath is where the durable questions live.

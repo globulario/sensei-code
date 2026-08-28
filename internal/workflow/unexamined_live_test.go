@@ -57,11 +57,10 @@ func TestUnexaminedFilesAgainstTheLiveGraph(t *testing.T) {
 		t.Fatalf("the region claims every planned file examined, including one that does not exist: %+v", region.Coverage)
 	}
 
-	var start certifiedStart
-	start.workspace.Binding.RepositoryDomain = domain
-	got := (&Engine{}).unexaminedFiles(sc, start, "edit these files", []string{anchored, ghost}, region)
-	if len(got) != 1 || got[0] != ghost {
-		t.Fatalf("unexamined = %v, want only %s", got, ghost)
+	got, err := unexaminedFiles(func(f string) (sensei.PreflightDecision, error) { return preflight(f), nil },
+		[]string{anchored, ghost}, region)
+	if err != nil || len(got) != 1 || got[0] != ghost {
+		t.Fatalf("unexamined = %v, %v; want only %s", got, err, ghost)
 	}
 
 	// And the router, on the live region answer plus the live per-file fact.

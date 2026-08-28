@@ -22,8 +22,11 @@ package workflow
 // EVERY architectural file -- the same rule the cold path already applies.
 
 import (
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/globulario/sensei-code/internal/sensei"
 )
 
 // neighbourCovered is the live answer above: the region proven by one file.
@@ -105,5 +108,55 @@ func TestAnUnexaminedFileUnderAnOperationalGrantOpensNoGap(t *testing.T) {
 		OperationalAuthority: []string{test}, Unexamined: []string{test}})
 	if !got.Granted() {
 		t.Fatalf("a granted, unexamined test file must not open a coverage gap: %+v", got)
+	}
+}
+
+// A per-file answer that cannot be obtained is not a coverage gap.
+//
+// Found by the #115 review: the first cut turned a failed or unreadable
+// per-file preflight into Unexamined, which is a gap a recognised derivation
+// may close -- so Sensei becoming unavailable between the region call and the
+// per-file call was a way to a grant. An instrument that will not answer is
+// not one to reason from; the failure is returned and routePlan refuses.
+func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	calls := 0
+	ask := func(f string) (sensei.PreflightDecision, error) {
+		calls++
+		if f == files[1] {
+			return sensei.PreflightDecision{}, errors.New("Sensei went away")
+		}
+		return region, nil
+	}
+	got, err := unexaminedFiles(ask, files, region)
+	if err == nil {
+		t.Fatalf("a failed per-file preflight was represented as evidence: unexamined=%v", got)
+	}
+	if calls != 2 {
+		t.Fatalf("every architectural file is asked once: %d call(s)", calls)
+	}
+
+	// And the honest answers still classify: examined stays out, unexamined
+	// goes in, and a region that already examined every file asks nothing.
+	answered := func(f string) (sensei.PreflightDecision, error) {
+		if f == files[1] {
+			return scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+
+				`"coverage":{"sufficient":false,"direct_anchor_count":0,"file_count":1,"indexed_file_count":0},`+
+				healthyAuthority+`}`), nil
+		}
+		return region, nil
+	}
+	got, err = unexaminedFiles(answered, files, region)
+	if err != nil || len(got) != 1 || got[0] != files[1] {
+		t.Fatalf("unexamined = %v, %v; want only %s", got, err, files[1])
+	}
+	all := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+healthyAuthority+`}`)
+	if got, err := unexaminedFiles(func(string) (sensei.PreflightDecision, error) {
+		t.Fatal("a fully examined region must ask nothing per file")
+		return sensei.PreflightDecision{}, nil
+	}, files, all); err != nil || len(got) != 0 {
+		t.Fatalf("unexamined = %v, %v on a fully examined region", got, err)
 	}
 }
