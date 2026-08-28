@@ -1,13 +1,41 @@
 {
- "control": {
+ "control/E1": {
   "fixture": "github.com/golang/sync",
   "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
  },
- "treatment": {
+ "control/E2": {
   "fixture": "github.com/golang/sync",
   "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
  },
- "v3-prompt": {
+ "treatment/E1": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "treatment/E2": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "treatment/E2.void-no-derive-binary": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "v3-prompt/control/E1.attempt0-selfdirty": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "v3-prompt/control/E1": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "v3-prompt/control/E1.void1-consequence-and-graph": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "v3-prompt/control/E1.void1b-selfdirty-candidates": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "v3-prompt/treatment/E1": {
   "fixture": "github.com/golang/sync",
   "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
  }
