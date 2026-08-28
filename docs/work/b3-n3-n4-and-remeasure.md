@@ -149,3 +149,54 @@ slice, one `sensei propose` per obligation, human-committed). Not V2
 schemas, baselines or families beyond the three proven ones — the program
 proposal of 2026-08-28 is answered by this campaign's records, not by new
 machinery.
+
+## FROZEN — 2026-08-28, before N3 starts
+
+Decision record: M23 (mediation ledger) held N3 pending #108 → #109 → the
+N2b review-consistency repair (#111) → the v7 freeze as H1+H2 (#112). All
+four are on `main` at `c5c0ef991719941c934daac61d562cc73eeef37f`. The owner instructed "freeze N3/N4 and run
+them"; recorded as M24, `confirmed_by: unconfirmed` until the owner confirms
+the ledger line. The `prospective.go` control keeps the name C1 and stays held.
+
+```text
+subject         sensei-code 6c36961 (N2's recipes persisted; Go sources byte-identical to 7ae7236e), detached, clean,
+                seeded only with .sensei-code/config.json (sha256 94ed3b1723e3f9bd…); no docs/work/b3-*, s1-*, no corpus
+graph           github.com/globulario/sensei-code at :10122, combined digest 42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64,
+                164,506 triples, GRAPH_FRESHNESS_STATE_CURRENT (b3runs/graph.metadata.pre-N3.json) — the post-#108 graph, NOT N1/N2's def94857…
+consumer        sensei-code c5c0ef991719941c934daac61d562cc73eeef37f (main at freeze; carries the #109/#111 repairs found by N1b/N2b) -> sensei-code-b3c
+                sha256 6987c3c725a124bb8aa65570647ff0f5f95214076d4a3d18d25ce10059a16f48. INSTRUMENT CHANGE from N1/N2's f4038b76: recorded, so
+                N3/N4 are comparable to N1/N2 only with this difference stated.
+producer        sensei f79f96f9 -> sensei-f3, sha256 13d4bfada3a458b8ea92b550cc307338b4f542c81446d6b365daf35c01a64ac9, unchanged
+recipes         3 at start: Bus.subs, Engine.premises, Result.Anchor
+env             SENSEI_CODE_BENCHMARK=1; derive receipts moved aside before each invocation; --json --timeout 25m
+```
+
+Counterexample re-observed at the subject against this graph, before any run:
+
+```text
+internal/workflow/suppliedplan.go   PREFLIGHT_STATUS_EMPTY            (as at baseline)
+internal/workflow/testedit.go       PREFLIGHT_STATUS_OK, MEDIUM       (NOT as at baseline: #108 raised REPEATED_RESUME_CANNOT_MINT
+                                                                        on this file; 1 direct invariant, no derived recipe)
+```
+
+Disclosure: the draft above listed `testedit.go` as EMPTY. It was, at the
+baseline graph. On the frozen graph it holds one invariant anchor and no
+Family 1 anchor. N4 therefore no longer tests "cold → closure → question"; it
+tests whether the investigator, routed on an invariant that is not about lock
+discipline, still records the Family 1 question the sweep marks DERIVED
+(`Engine.testEdits` under `mu`), or proceeds on the invariant alone. Both
+outcomes are results. The claim's clause (1) for `testedit.go` is read as
+"holds a persisted Family 1 recipe", since anchors > 0 is already true by #108.
+
+Tasks, byte for byte, written from the subject's code, naming no relation:
+
+- **N3** (`internal/workflow/suppliedplan.go`): `planSource and planDigest each look the supplied plan up separately; make one lookup serve both, with no change in behaviour.`
+- **N4** (`internal/workflow/testedit.go`, run at the base N3 persists): `restoreTestEditGrants keys recomputed grants by path.Clean while matchTestEditGrants trims the path first; make that normalisation one helper used by both, with no change in behaviour.`
+
+Predictions, revised only for the testedit.go fact above:
+- N3: cold (`0 anchors over 1 planned file`) → closure round → may record
+  `field_access_under_lock(Engine.supplied, mu)` → FUTURE_ONLY ends N3 at the human.
+- N4: `1 anchor over 1 planned file` from the invariant → routes on
+  architectural authority → implementor → validation → audit → review → terminal
+  (as N2b did); a Family 1 question may or may not be recorded along the way.
+  No candidate is admitted or merged.
