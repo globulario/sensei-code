@@ -6,21 +6,59 @@ handed to the loop until the surfaces it touches hold mechanically established
 coverage and the obligations it must preserve are mechanically visible. B3
 produces that. It is a measurement campaign with a target, not a repair.
 
-## Baseline, measured 2026-08-28 (`sensei preflight -addr localhost:10122`)
+## Baseline — machine-bound (`b3-baseline/`, sha256 per file in its README)
+
+Measured on the **subject world**, not on a working tree: sensei-code source
+`7ae7236e218480c0779a2960c01d41027e169e1b` (main before any Phase-B control
+document existed), checked out detached; producer sensei `f79f96f9`; graph
+`github.com/globulario/sensei-code` at `localhost:10122`, combined digest
+`def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912`,
+158,349 triples, `BUILD_PROVENANCE_STATE_STAMPED`, freshness CURRENT
+(`b3-baseline/graph.metadata.json`). Each row quotes its
+`b3-baseline/<file>.preflight.json`:
 
 ```text
-internal/workflow/engine.go          OK      ARCHITECTURE_SENSITIVE   anchors=3
-internal/session/store.go            OK      ARCHITECTURE_SENSITIVE   anchors=2
-internal/workflow/suppliedplan.go    EMPTY   UNKNOWN_IMPACT           anchors=0
-internal/workflow/prospective.go     EMPTY   UNKNOWN_IMPACT           anchors=0
-internal/workflow/testedit.go        EMPTY   UNKNOWN_IMPACT           anchors=0
-internal/workflow/premise.go         EMPTY   UNKNOWN_IMPACT           anchors=0
-internal/derived/derived.go          EMPTY   UNKNOWN_IMPACT           anchors=0
-self recipes at start                1: field_access_under_lock(internal/event Bus.subs)
+surface                            status   risk                    confidence   direct_anchor_count  direct_invariants
+internal/workflow/engine.go        OK       ARCHITECTURE_SENSITIVE  HIGH         3                    3
+internal/session/store.go          OK       ARCHITECTURE_SENSITIVE  MEDIUM       2                    2
+internal/workflow/suppliedplan.go  EMPTY    UNKNOWN_IMPACT          LOW          (none fired)         0
+internal/workflow/prospective.go   EMPTY    UNKNOWN_IMPACT          LOW          (none fired)         0
+internal/workflow/testedit.go      EMPTY    UNKNOWN_IMPACT          LOW          (none fired)         0
+internal/workflow/premise.go       EMPTY    UNKNOWN_IMPACT          LOW          (none fired)         0
+internal/derived/derived.go        EMPTY    UNKNOWN_IMPACT          LOW          (none fired)         0
+self recipes at start              1: field_access_under_lock(internal/event Bus.subs)
 ```
 
-Every surface S1 would touch except two returns empty knowledge. The V2
-constitution forbids self-simplification on exactly that reading.
+Five of seven S1 surfaces return empty knowledge. The V2 constitution
+forbids self-simplification on exactly that reading. A later measurement is
+comparable to this one only at the same source SHA and graph digest, or with
+both differences recorded.
+
+## Controller and subject are separate checkouts
+
+In the foreign campaigns the protocol lived outside the repository under
+investigation. Here it would not: once this note, the S1 design, the corpus
+and the selections are on `main`, an investigator reading its workspace could
+read what the families are meant to discover, and "untold" is no longer
+proven. So:
+
+```text
+controller checkout (this branch and its successors on main)
+    B2 corpus · B3 protocol · S1 design · selections · predictions · overlays
+        │  not visible
+        ▼
+subject checkout: detached at the PRE-CONTROL source world 7ae7236e
+    pinned sensei-code source · graph built from the subject only
+    no docs/work/b3-*, s1-*, docs/evidence/corpus, experiments/*/selection*
+        │
+        ▼
+    investigator (architect, workers, reviewers) -- sees the subject only
+```
+
+The baseline above was measured on that subject world, which is what makes
+it the baseline of the thing the investigator will see. Runs use the subject
+worktree as `--repo-root`; their records are written to the controller. When
+S1 eventually runs, its facts are re-derived against S1's own pinned base.
 
 ## Target
 
@@ -53,24 +91,51 @@ premise identity is engine-owned             TestAParaphrasedPremiseDoesNotBuyAF
 Each enters the graph through `sensei propose` (invariant + required_test),
 reviewed and committed by the human — never promoted by a run.
 
-## How the runs go
+## How the runs go — preregistered order, applicability first
 
-Same shape as the foreign campaigns, on this repository at `:10122`:
-- selection is mechanical and pre-declared per family (stable path order,
-  frozen predicate) over the S1 surfaces; every passed-over verdict recorded;
-  `NO_SUBJECT` reported rather than fabricated;
-- the hand-derivation tool for Family 3 (`experiments/mutation-v2/selection/
-  mutscan`) is reused unchanged, sealed by sha256;
-- governed tasks written from the code, naming no relation; the investigator
-  is never shown the selection;
-- each encounter enters the corpus (B2) like any other.
+```text
+frozen S1 surface list (the seven above)
+        │
+        ▼
+Family 1 applicability sweep   lock discipline: every (type, field, lock) in the surfaces, stable order
+        │
+        ▼
+Family 2 applicability sweep   command confinement: every literal exec.Command executable under the surfaces
+        │
+        ▼
+Family 3 applicability sweep   mutation confinement: every exported (T.F) with >=1 write, the sealed
+                               mutscan reused unchanged (sha256 949ac76c…)
+        │
+        ▼
+record every DERIVED / REFUTED / UNRESOLVED / NO_SUBJECT, per family, per surface
+        │
+        ▼
+natural governed encounters, only where a family is mechanically applicable
+```
 
-Stopping rule: the campaign stops when every S1 surface reads `anchors > 0`
-with at least one anchor per family that applies to it, and every obligation
-above is a graph invariant bound to its test — or when a family cannot express
-a relation an S1 surface needs, which is the only condition under which a
-fourth family may be considered. Whichever comes first is recorded; S1 is
-not started on a partial reading.
+The order is 1 → 2 → 3 by construction, not by expectation: the family is
+never chosen because it is expected to work. Note the mechanical fact that
+shapes it: Family 3's sealed predicate admits only exported structs with
+exported fields, and M2.2's grant machinery (`testEditFacts`,
+`testEditGrant`, `testEditRecord`) is unexported, while `session.Interrupted`
+and its receipt fields are exported — so Family 3 has plausible subjects in
+`internal/session`, not necessarily in `testedit.go`. Whatever the sweeps
+say is the answer.
+
+Discipline as in the foreign campaigns: selection mechanical and
+pre-declared per family; every passed-over verdict recorded; `NO_SUBJECT`
+reported rather than fabricated; tasks written from the code, naming no
+relation; the investigator never shown a selection; each encounter enters
+the B2 corpus with its graph identity, so a run at the same source SHA
+against a later graph is a distinct record.
+
+Stopping rule: the campaign stops when every S1 surface reads
+`direct_anchor_count > 0` with at least one anchor from each family that is
+applicable to it, and every obligation above is a graph invariant bound to
+its test — or when all three families are inapplicable to an EMPTY S1
+surface, which is the only condition under which a fourth family may be
+considered. Whichever comes first is recorded; S1 is not started on a
+partial reading.
 
 ## Not this campaign
 
