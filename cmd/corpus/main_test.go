@@ -102,3 +102,52 @@ func TestAnUnreadableLogFailsTheCorpusClosed(t *testing.T) {
 		t.Fatal("an unreadable log was skipped rather than failing the corpus")
 	}
 }
+
+// #103 review, P1 x3: receipts of another task are not this encounter's;
+// a malformed event line fails the corpus rather than vanishing; a run
+// nested beneath `runs` is discovered and named by its depth.
+func TestReceiptsAreAttributedByTaskMalformedLinesFailAndNestedRunsAreFound(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "z-v1", "runs", "seriesQ")
+	os.MkdirAll(runs, 0o755)
+	log := strings.Join([]string{
+		`task task-9  session s`,
+		`{"time":"t","task_id":"task-9","source":"system","kind":"task.created","summary":"do"}`,
+		`{"time":"t","task_id":"task-9","source":"system","kind":"workflow.completed","summary":"done"}`,
+	}, "\n")
+	os.WriteFile(filepath.Join(runs, "Q1.log"), []byte(log), 0o644)
+	os.WriteFile(filepath.Join(runs, "Q1.receipts.jsonl"), []byte(
+		`{"origin_task":"task-9","closure_round":1,"outcome":"RECORDED","output_candidate_identity":"mine"}`+"\n"+
+			`{"origin_task":"task-OTHER","closure_round":1,"outcome":"RECORDED","output_candidate_identity":"theirs"}`+"\n"), 0o644)
+	logs, err := discover(dir)
+	if err != nil || len(logs) != 1 || !strings.HasSuffix(logs[0], "seriesQ/Q1.log") {
+		t.Fatalf("nested run not discovered: %v %v", logs, err)
+	}
+	rec, err := extract(logs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Encounter != "z-v1/seriesQ/Q1" {
+		t.Fatalf("encounter name lost its depth: %s", rec.Encounter)
+	}
+	if len(rec.QuestionOrigin) != 1 || rec.QuestionOrigin[0]["identity"] != "mine" || rec.ReceiptsOtherTasks != 1 {
+		t.Fatalf("receipt attribution: %+v other=%d", rec.QuestionOrigin, rec.ReceiptsOtherTasks)
+	}
+	// The CLI's own terminal message is kept as evidence; a truncated event
+	// line is fatal.
+	os.WriteFile(filepath.Join(runs, "Q1.log"), []byte(log+"\n"+`sensei-code run: a human-owned decision was reached and no human is present; the question is preserved, not answered`), 0o644)
+	rec, err = extract(logs[0])
+	if err != nil || len(rec.CLILines) != 1 {
+		t.Fatalf("the CLI's terminal line was not kept: %v %v", err, rec.CLILines)
+	}
+	os.WriteFile(filepath.Join(runs, "Q1.log"), []byte(log+"\n"+`{"time":"t","kind":"candidate.audited","payload":{"decision":"pa`), 0o644)
+	if _, err := extract(logs[0]); err == nil || !strings.Contains(err.Error(), "line 4 is not an event") {
+		t.Fatalf("a malformed event line did not fail the corpus: %v", err)
+	}
+	// And a receipts file whose task cannot be established attributes nothing.
+	os.WriteFile(filepath.Join(runs, "Q1.log"), []byte(`{"time":"t","kind":"workflow.completed","summary":"done"}`), 0o644)
+	rec, _ = extract(logs[0])
+	if len(rec.QuestionOrigin) != 0 || rec.ReceiptsOtherTasks != 2 {
+		t.Fatalf("receipts attributed without a task id: %+v", rec.QuestionOrigin)
+	}
+}

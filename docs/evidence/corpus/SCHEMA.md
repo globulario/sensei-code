@@ -13,6 +13,17 @@ what Phase C will rank.
 
 - **Fail closed.** A log that cannot be read, parsed, or encoded is an
   error, never a skipped record (`generate` returns it; the command exits 1).
+  Inside a stream, exactly two non-JSON line shapes are permitted, because
+  the run itself writes them: the header `task <id>  session <id>`, and
+  the CLI's terminal message `sensei-code <command>: …` (kept in
+  `cli_lines`). Any other non-event line is an error.
+- **Attributed by task.** A receipt beside a stream is this encounter's only
+  if its `origin_task` is this encounter's task id; others are counted in
+  `receipts_other_tasks` and never merged.
+- **Discovered by rule.** Every `*.log` / `*.jsonl` under a directory named
+  `runs`, at any depth beneath an experiment, is an encounter (the run name
+  keeps its depth); `*.receipts.jsonl` is excluded; nothing outside `runs`
+  is read.
 - **Fresh or wrong.** `go run ./cmd/corpus -check` regenerates in memory and
   fails unless the committed `encounters.jsonl` is byte-identical;
   `TestCommittedCorpusIsFresh` does the same under `go test ./...`, which CI
@@ -27,6 +38,8 @@ what Phase C will rank.
 ```text
 encounter             experiment/run                                         from the log's path
 source_log            path relative to the repository                        (so regeneration is root-independent)
+receipts_other_tasks  receipt lines beside the stream that named another task and were not merged
+cli_lines             the CLI's own terminal messages found in the stream    evidence of the exit's stated reason
 instrument            sensei_sha, sensei_code_sha, fixture                   OVERLAY; world from `candidate … from base` or the .run stamp
 graph                 domain, build, address                                 the `graph binding` status line
                       audit_graph_commit                                     candidate.audited payload

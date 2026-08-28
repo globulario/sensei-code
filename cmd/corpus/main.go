@@ -26,8 +26,13 @@ type event struct {
 }
 
 type record struct {
-	Encounter         string           `json:"encounter"`
-	SourceLog         string           `json:"source_log"`
+	Encounter string `json:"encounter"`
+	SourceLog string `json:"source_log"`
+	// ReceiptsOtherTasks counts receipt lines beside this log that belong to
+	// another task and were therefore NOT attributed to this encounter.
+	ReceiptsOtherTasks int `json:"receipts_other_tasks"`
+	// CLILines are the CLI\'s own terminal messages found in the stream.
+	CLILines          []string         `json:"cli_lines,omitempty"`
 	Instrument        map[string]any   `json:"instrument"`
 	Graph             map[string]any   `json:"graph"`
 	Task              map[string]any   `json:"task"`
@@ -55,6 +60,14 @@ var (
 	bindingLine   = regexp.MustCompile(`^graph binding for every agent in this task: domain (\S+), build (\S+), via (.+)$`)
 	candidateLine = regexp.MustCompile(`^candidate diff (\d+) bytes · cycle (\d+)`)
 	anchorLine    = regexp.MustCompile(`^(\S+) \[(.+)\]$`)
+	// headerLine is the one non-JSON line a run writes: `sensei-code run`
+	// prints "task <id>  session <id>" before the event stream. Nothing else
+	// is allowed to be non-JSON.
+	headerLine = regexp.MustCompile(`^task \S+\s+session \S+\s*$`)
+	// cliLine is the other thing a run writes outside the event stream: the
+	// CLI's own terminal message on stderr, merged into the log by the
+	// runner's 2>&1. It is evidence (the exit's stated reason) and is kept.
+	cliLine = regexp.MustCompile(`^sensei-code (run|observe|audit-repair): `)
 )
 
 func main() {
@@ -91,17 +104,10 @@ func main() {
 // read, parsed, or encoded is an error, never a skipped record: a corpus that
 // silently omits an encounter misreports the campaign.
 func generate(root string) ([]byte, int, error) {
-	logs, _ := filepath.Glob(filepath.Join(root, "*", "runs", "*.log"))
-	// Some early encounters were preserved as untrimmed .jsonl event streams
-	// rather than trimmed .log files; they are encounters all the same.
-	// Receipt files share the suffix and are not event streams.
-	streams, _ := filepath.Glob(filepath.Join(root, "*", "runs", "*.jsonl"))
-	for _, s := range streams {
-		if !strings.HasSuffix(s, ".receipts.jsonl") {
-			logs = append(logs, s)
-		}
+	logs, err := discover(root)
+	if err != nil {
+		return nil, 0, err
 	}
-	sort.Strings(logs)
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	for _, log := range logs {
@@ -122,8 +128,10 @@ func generate(root string) ([]byte, int, error) {
 }
 
 func extract(log string) (record, error) {
-	exp := filepath.Base(filepath.Dir(filepath.Dir(log)))
-	run := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(log), ".log"), ".jsonl")
+	// The experiment is the first path segment beneath the experiments root;
+	// the run is the stream's path beneath its `runs` directory, so a nested
+	// run keeps its depth in its name.
+	exp, run := encounterName(log)
 	rec := record{Encounter: exp + "/" + run, SourceLog: log,
 		Instrument: map[string]any{"sensei_sha": "unrecorded", "sensei_code_sha": "unrecorded", "fixture": "unrecorded", "world": "unrecorded"},
 		Graph:      map[string]any{"domain": "unrecorded", "build": "unrecorded", "address": "unrecorded", "audit_graph_commit": "unrecorded", "input_graph_digest": "unrecorded", "authority": "unrecorded"},
@@ -136,10 +144,26 @@ func extract(log string) (record, error) {
 	sc := bufio.NewScanner(fh)
 	sc.Buffer(make([]byte, 1<<20), 64<<20)
 	var first, last string
+	lineNo := 0
 	for sc.Scan() {
-		var e event
-		if json.Unmarshal(sc.Bytes(), &e) != nil || e.Kind == "" {
+		lineNo++
+		raw := strings.TrimSpace(sc.Text())
+		if raw == "" || headerLine.MatchString(raw) {
 			continue
+		}
+		if cliLine.MatchString(raw) {
+			rec.CLILines = append(rec.CLILines, raw)
+			continue
+		}
+		var e event
+		if err := json.Unmarshal([]byte(raw), &e); err != nil {
+			// A line that is neither the header nor an event is evidence
+			// that cannot be read. Skipping it would let a truncated
+			// validation, audit or terminal event vanish silently.
+			return rec, fmt.Errorf("line %d is not an event: %v", lineNo, err)
+		}
+		if e.Kind == "" {
+			return rec, fmt.Errorf("line %d is an event with no kind", lineNo)
 		}
 		if first == "" {
 			first = e.Time
@@ -244,9 +268,17 @@ func extract(log string) (record, error) {
 		}
 	}
 	if b, err := os.ReadFile(base + ".receipts.jsonl"); err == nil {
+		taskID, _ := rec.Task["id"].(string)
 		for _, line := range strings.Split(string(b), "\n") {
 			var r map[string]any
 			if json.Unmarshal([]byte(line), &r) == nil && r["outcome"] != nil {
+				// A receipt is this encounter's only if it names this task.
+				// The receipts file beside a log can hold rounds of another
+				// run that shared the fixture; those are counted, not merged.
+				if origin, _ := r["origin_task"].(string); taskID == "" || origin != taskID {
+					rec.ReceiptsOtherTasks++
+					continue
+				}
 				rec.QuestionOrigin = append(rec.QuestionOrigin, map[string]any{"round": r["closure_round"], "outcome": r["outcome"], "identity": r["output_candidate_identity"], "gap": r["origin_gap"], "region": r["region"]})
 				if d, ok := r["input_graph_digest"]; ok && rec.Graph["input_graph_digest"] == "unrecorded" {
 					rec.Graph["input_graph_digest"] = d
@@ -298,6 +330,50 @@ func extract(log string) (record, error) {
 	return rec, nil
 }
 
+// discover walks every experiment for event streams at any depth beneath a
+// `runs` directory. The rule is explicit so an omission is a decision and
+// not an accident of directory shape:
+//
+//   - included: any file under a directory named `runs`, at any depth, with
+//     suffix .log (trimmed stream) or .jsonl (untrimmed stream);
+//   - excluded: *.receipts.jsonl (receipts, read beside their stream), and
+//     anything outside a `runs` directory.
+func discover(root string) ([]string, error) {
+	var logs []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, path)
+		parts := strings.Split(filepath.ToSlash(rel), "/")
+		underRuns := false
+		for _, seg := range parts[:len(parts)-1] {
+			if seg == "runs" {
+				underRuns = true
+			}
+		}
+		if !underRuns {
+			return nil
+		}
+		name := d.Name()
+		switch {
+		case strings.HasSuffix(name, ".receipts.jsonl"):
+			return nil
+		case strings.HasSuffix(name, ".log"), strings.HasSuffix(name, ".jsonl"):
+			logs = append(logs, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("discover: %w", err)
+	}
+	sort.Strings(logs)
+	return logs, nil
+}
+
 // recipeIdentity mirrors derived.Recipe.Identity for the three families, so a
 // receipt's output_candidate_identity can be matched against a recipe.
 func recipeIdentity(r map[string]any) string {
@@ -317,4 +393,23 @@ func recipeIdentity(r map[string]any) string {
 	default:
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s", str("kind"), strings.Trim(str("dir"), "/"), str("type"), str("field"), str("lock")))
 	}
+}
+
+// encounterName splits a stream path into experiment and run: the run keeps
+// any depth beneath `runs` so nested streams do not collide.
+func encounterName(log string) (exp, run string) {
+	parts := strings.Split(filepath.ToSlash(log), "/")
+	for i, seg := range parts {
+		if seg == "runs" && i > 0 && i < len(parts)-1 {
+			exp = parts[i-1]
+			run = strings.Join(parts[i+1:], "/")
+			break
+		}
+	}
+	if exp == "" {
+		exp = filepath.Base(filepath.Dir(filepath.Dir(log)))
+		run = filepath.Base(log)
+	}
+	run = strings.TrimSuffix(strings.TrimSuffix(run, ".log"), ".jsonl")
+	return exp, run
 }
