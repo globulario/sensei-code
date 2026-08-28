@@ -2140,7 +2140,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// recognised derivation may close, and Sensei going away between the
 	// region call and the per-file call would then be a way to a grant
 	// (#115 review). The region call above fails the same way.
-	unexamined, err := unexaminedFiles(func(f string) (sensei.PreflightDecision, error) {
+	unexamined, err := unexaminedFiles(stage, func(f string) (sensei.PreflightDecision, error) {
 		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
 		if domain := start.Domain(); domain != "" {
 			args["domain"] = domain
@@ -2226,11 +2226,19 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 // many files were examined and never which -- and a file under an operational
 // grant, which is not asked to be covered, may be the unexamined one.
 //
-// An answer that cannot be obtained is an error, not an unexamined file. The
-// two are different worlds: one is a fact about the graph's coverage, the
-// other is an instrument that did not answer, and only the first is evidence.
-func unexaminedFiles(ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
-	if len(files) == 0 || scoped.Coverage.IndexedFileCount >= scoped.Coverage.FileCount {
+// An answer that cannot be obtained, or that the graph cannot vouch for, is an
+// error, not an unexamined file. The two are different worlds: one is a fact
+// about the graph's coverage, the other is an instrument that did not answer
+// (or answered from a graph that is not certifiable), and only the first is
+// evidence. A decoded answer is read only when its authority is certifiable
+// and its status is one whose coverage counters mean something -- OK, EMPTY
+// or DEGRADED, the same three the region router reads (#115 review).
+//
+// An observation asks nothing: the lane grants no authority, and its contract
+// is that an unusable graph must not prevent the investigation that could
+// diagnose it (TestObservationSurvivesAnUncertifiableGraph).
+func unexaminedFiles(stage ActionStage, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
+	if stage == StageObserve || len(files) == 0 || scoped.Coverage.IndexedFileCount >= scoped.Coverage.FileCount {
 		return nil, nil
 	}
 	var out []string
@@ -2238,6 +2246,14 @@ func unexaminedFiles(ask func(file string) (sensei.PreflightDecision, error), fi
 		one, err := ask(f)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		if !one.Authority.Certifiable() {
+			return nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
+		}
+		switch one.Status {
+		case sensei.PreflightOK, sensei.PreflightEmpty, sensei.PreflightDegraded:
+		default:
+			return nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
 		}
 		if one.Coverage.DirectAnchorCount == 0 && one.Coverage.IndexedFileCount == 0 {
 			out = append(out, f)

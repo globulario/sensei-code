@@ -129,7 +129,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		}
 		return region, nil
 	}
-	got, err := unexaminedFiles(ask, files, region)
+	got, err := unexaminedFiles(StageCandidateEdit, ask, files, region)
 	if err == nil {
 		t.Fatalf("a failed per-file preflight was represented as evidence: unexamined=%v", got)
 	}
@@ -147,16 +147,54 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		}
 		return region, nil
 	}
-	got, err = unexaminedFiles(answered, files, region)
+	got, err = unexaminedFiles(StageCandidateEdit, answered, files, region)
 	if err != nil || len(got) != 1 || got[0] != files[1] {
 		t.Fatalf("unexamined = %v, %v; want only %s", got, err, files[1])
 	}
 	all := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+healthyAuthority+`}`)
-	if got, err := unexaminedFiles(func(string) (sensei.PreflightDecision, error) {
+	if got, err := unexaminedFiles(StageCandidateEdit, func(string) (sensei.PreflightDecision, error) {
 		t.Fatal("a fully examined region must ask nothing per file")
 		return sensei.PreflightDecision{}, nil
 	}, files, all); err != nil || len(got) != 0 {
 		t.Fatalf("unexamined = %v, %v on a fully examined region", got, err)
+	}
+}
+
+// A decoded answer the graph cannot vouch for is the same failure. A stale or
+// non-authoritative per-file answer, or a status whose counters mean nothing,
+// must not be classified by its coverage counters (#115 review, second pass).
+func TestAnUncertifiablePerFilePreflightIsNotEvidence(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	for name, bad := range map[string]sensei.PreflightDecision{
+		"authority not certifiable": {Status: sensei.PreflightOK},
+		"status unspecified":        func() sensei.PreflightDecision { d := region; d.Status = sensei.PreflightUnspecified; return d }(),
+		"status refused":            func() sensei.PreflightDecision { d := region; d.Status = "PREFLIGHT_STATUS_REFUSED"; return d }(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := unexaminedFiles(StageCandidateEdit, func(f string) (sensei.PreflightDecision, error) {
+				if f == files[1] {
+					return bad, nil
+				}
+				return region, nil
+			}, files, region)
+			if err == nil {
+				t.Fatalf("an uncertifiable per-file answer was read as evidence: unexamined=%v", got)
+			}
+		})
+	}
+}
+
+// An observation asks nothing per file: the lane grants no authority, and an
+// unusable graph must not prevent the investigation that could diagnose it.
+func TestAnObservationAsksNothingPerFile(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	got, err := unexaminedFiles(StageObserve, func(string) (sensei.PreflightDecision, error) {
+		t.Fatal("an observation asked the graph per file")
+		return sensei.PreflightDecision{}, nil
+	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, region)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("observation: unexamined=%v err=%v", got, err)
 	}
 }

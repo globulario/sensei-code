@@ -57,7 +57,7 @@ func TestUnexaminedFilesAgainstTheLiveGraph(t *testing.T) {
 		t.Fatalf("the region claims every planned file examined, including one that does not exist: %+v", region.Coverage)
 	}
 
-	got, err := unexaminedFiles(func(f string) (sensei.PreflightDecision, error) { return preflight(f), nil },
+	got, err := unexaminedFiles(StageCandidateEdit, func(f string) (sensei.PreflightDecision, error) { return preflight(f), nil },
 		[]string{anchored, ghost}, region)
 	if err != nil || len(got) != 1 || got[0] != ghost {
 		t.Fatalf("unexamined = %v, %v; want only %s", got, err, ghost)
