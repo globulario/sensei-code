@@ -60,9 +60,16 @@ type record struct {
 	ReviewProvenance any `json:"review_provenance"`
 	// MergeProvenance says who executed the merge of the evidence or repair
 	// and under whose account and authority. Overlay only.
-	MergeProvenance any            `json:"merge_provenance"`
-	Terminal        map[string]any `json:"terminal"`
-	Note            any            `json:"note,omitempty"`
+	MergeProvenance any `json:"merge_provenance"`
+	// History is the append-only list of corrections and later events about
+	// this record. A correction never rewrites review_findings,
+	// review_provenance or merge_provenance -- those stay the observation as
+	// first committed -- it is appended here naming what it supersedes.
+	// Overlay only. Declared because the SCHEMA promised "appended, never
+	// rewritten" with no field to hold an appended correction (#114 review).
+	History  any            `json:"history"`
+	Terminal map[string]any `json:"terminal"`
+	Note     any            `json:"note,omitempty"`
 }
 
 var (
@@ -147,7 +154,7 @@ func extract(log string) (record, error) {
 	rec := record{Encounter: exp + "/" + run, SourceLog: log,
 		Instrument: map[string]any{"sensei_sha": "unrecorded", "sensei_code_sha": "unrecorded", "fixture": "unrecorded", "world": "unrecorded"},
 		Graph:      map[string]any{"domain": "unrecorded", "build": "unrecorded", "address": "unrecorded", "audit_graph_commit": "unrecorded", "input_graph_digest": "unrecorded", "authority": "unrecorded"},
-		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, ReviewFindings: "unrecorded", ReviewProvenance: "unrecorded", MergeProvenance: "unrecorded"}
+		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, ReviewFindings: "unrecorded", ReviewProvenance: "unrecorded", MergeProvenance: "unrecorded", History: "unrecorded"}
 	fh, err := os.Open(log)
 	if err != nil {
 		return rec, err
@@ -340,6 +347,9 @@ func extract(log string) (record, error) {
 				}
 				if v, ok := o["merge_provenance"]; ok {
 					rec.MergeProvenance = v
+				}
+				if v, ok := o["history"]; ok {
+					rec.History = v
 				}
 				if v, ok := o["note"]; ok {
 					rec.Note = v

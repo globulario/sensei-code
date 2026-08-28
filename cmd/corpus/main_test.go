@@ -154,3 +154,37 @@ func TestReceiptsAreAttributedByTaskMalformedLinesFailAndNestedRunsAreFound(t *t
 		t.Fatalf("receipts attributed without a task id: %+v", rec.QuestionOrigin)
 	}
 }
+
+// A correction is appended to history and never rewrites the observation.
+func TestHistoryIsOverlayOnlyAndAppended(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(runs, "X.log")
+	if err := os.WriteFile(log, []byte("task task-1  session s\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := extract(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.History != "unrecorded" {
+		t.Fatalf("history without an overlay: %v", rec.History)
+	}
+	overlay := `{"X": {"merge_provenance": {"merge_executed_by": "not merged"}, "history": [{"recorded": "later", "event": "merged", "supersedes": "merge_provenance.merge_executed_by = 'not merged'"}]}}`
+	if err := os.WriteFile(filepath.Join(dir, "corpus-overlay.json"), []byte(overlay), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err = extract(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mp, ok := rec.MergeProvenance.(map[string]any); !ok || mp["merge_executed_by"] != "not merged" {
+		t.Fatalf("the observation was rewritten: %v", rec.MergeProvenance)
+	}
+	if h, ok := rec.History.([]any); !ok || len(h) != 1 || h[0].(map[string]any)["event"] != "merged" {
+		t.Fatalf("history: %v", rec.History)
+	}
+}
