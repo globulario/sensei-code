@@ -1,0 +1,65 @@
+{
+ "N1.void1-provider-quota": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "f4038b76f13428b1b1e0e6b35bd04fde5a25ac71",
+  "fixture": "github.com/globulario/sensei-code (self; detached subject, controller documents not visible; only .sensei-code/config.json seeded, sha256 94ed3b17...)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois -- GitHub connector executes under this account",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "note": "subject 7ae7236e; the architect provider's usage limit; no plan produced; not counted against N1"
+ },
+ "N1": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "f4038b76f13428b1b1e0e6b35bd04fde5a25ac71",
+  "fixture": "github.com/globulario/sensei-code (self; detached subject, controller documents not visible; only .sensei-code/config.json seeded, sha256 94ed3b17...)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois -- GitHub connector executes under this account",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "PR #107 review 5047672245: evidence PASS; integration hold (rebase, corpus 40, overlay, wording)"
+  ],
+  "note": "subject 7ae7236e; investigator untold proposed field_access_under_lock(Engine.premises under Engine.mu); recorded; future-only; exit 3"
+ },
+ "N2": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "f4038b76f13428b1b1e0e6b35bd04fde5a25ac71",
+  "fixture": "github.com/globulario/sensei-code (self; detached subject, controller documents not visible; only .sensei-code/config.json seeded, sha256 94ed3b17...)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois -- GitHub connector executes under this account",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "PR #107 review 5047672245: evidence PASS"
+  ],
+  "note": "subject 209c5c6 (N1's recipe persisted); investigator untold proposed state_mutation_confined_to_owner(Result.Anchor in internal/derived); recorded; future-only; exit 3"
+ }
+}

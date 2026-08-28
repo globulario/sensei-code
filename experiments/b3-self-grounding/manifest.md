@@ -95,3 +95,165 @@ code, naming no relation; instrument SHAs and predictions written at freeze:
 - **N3** (`internal/workflow/prospective.go`, no family applicable — a
   control): *`gitShowAt` runs `git show` and then `git ls-tree` on failure;
   make the absence check one call, with no change in behaviour.*
+
+## N1 and N2 — FROZEN (decision of 2026-08-28; N3 held, Family 4 not justified)
+
+```
+subject         sensei-code 7ae7236e218480c0779a2960c01d41027e169e1b, detached worktree, pre-control;
+                tree clean; docs/work holds no B2/B3/S1 document; experiments/ holds no selection of this campaign
+                the ONLY addition: .sensei-code/config.json (the :10122 endpoint), byte-identical to the
+                controller's (sha256 prefix recorded in runs/N*.run); nothing else is seeded
+graph           github.com/globulario/sensei-code at :10122 (digest def94857… at baseline; recorded per run)
+consumer        sensei-code f4038b76f13428b1b1e0e6b35bd04fde5a25ac71 (main; last product change d6fcd11c)  -> sensei-code-b3
+producer        sensei f79f96f9  -> sensei-f3 (SENSEI_BIN)
+recipes         1 at start, the subject's own: field_access_under_lock(internal/event Bus.subs)
+env             SENSEI_CODE_BENCHMARK=1; derive receipts moved aside before each invocation
+```
+
+Tasks, byte for byte, written from the subject's code and naming no relation:
+
+- **N1** — *`applyPremiseResolutions` walks every receipt for every resolution; make the lookup by receipt id direct, with no change in behaviour.*
+- **N2** — *`Result` is built field by field in `CLI.Derive`; return it through one constructor so a missing field cannot be left zero, with no change in behaviour.*
+
+Stopping rule: one invocation each, N1 then N2, nothing altered between; every
+plan, proposed recipe, receipt, coverage line, route and terminal preserved as
+`runs/N1.*`, `runs/N2.*` and entered in the B2 corpus with graph identity;
+exit 3 preserves the question; timeout or crash is an instrument finding. The
+investigator is never shown the sweeps or this section.
+
+Predictions:
+- N1: cold (`0 anchors`, the sole recipe is over `internal/event`) → closure
+  round → the untold investigator may propose a Family 1 question over
+  `internal/workflow` (the sweep shows `Engine.premises` under `Engine.mu`
+  derives DERIVED and spans `premise.go`); if recorded, the future-only rule
+  ends N1 cold or at the human; the anchor benefits the next encounter.
+- N2: cold → closure → a Family 3 question over `internal/derived` may appear
+  (the sweep shows `Result.{Outcome,Detail,Anchor}` DERIVED); same future-only
+  consequence. A question about `Recipe.Provenance` derives REFUTED and is
+  preserved as the court's answer.
+- Either encounter may propose a question of another family, or none; each
+  outcome is preserved and reported, not steered.
+
+### N1 void 1 — provider quota (instrument), no plan produced
+
+The architect provider (ChatGPT via Codex app-server) refused both attempts
+with a usage limit: *You've hit your usage limit … try again at 11:00 PM.*
+`workflow.failed: architect could not produce a bounded decision`. No plan,
+no routing, no closure round, no investigator question: the run never
+reached the thing the encounter measures. Recorded as
+`runs/N1.void1-provider-quota.*`, entered in the corpus as an instrument
+failure, and **not counted against N1's single invocation** — N1's invocation
+is the first one that reaches the architect. N2 is not run against the same
+exhausted provider. Nothing in the subject, the freeze, or the tasks changes.
+
+### N1 — 03:01:08Z–03:09:31Z, exit 3, subject `7ae7236e`
+
+- Round 1: plan `internal/workflow/premise.go` alone; `derived coverage:
+  0 anchor(s) over 1 planned file(s); route bounded-knowledge-gap` (the
+  subject's sole recipe is over `internal/event`). Closure round, receipt
+  `gap-…-1`.
+- Round 2: the re-plan added `internal/workflow/authority_test.go`. M2.2
+  answered as designed — *no test-edit authority: … no planned file in its
+  directory holds architectural coverage at the pinned world* — because
+  `premise.go` has no anchor yet; `0 anchor(s) over 2 planned file(s)`. The
+  architect asked to escalate; the engine closed instead (receipt `gap-…-2`,
+  a distinct gap: the scope changed). **In this round the investigator,
+  told nothing, proposed and recorded**
+  `field_access_under_lock(internal/workflow Engine.premises mu)` — *"applyPremiseResolutions
+  and premiseReceiptFor access the receipt collection while holding …"* — the
+  proposition the sealed Family 1 sweep marks DERIVED across `engine.go`
+  and `premise.go`. Identity
+  `field_access_under_lock|internal/workflow|engine|premises|mu`, region
+  `[premise.go, authority_test.go]`.
+- Round 3: future-only — the recipe cannot cover the run that proposed it;
+  the gap did not close within budget; escalated with the question
+  preserved: *Should this change wait for Sensei to derive coverage over the
+  proposed relationship, or proceed through an explicit authorization while
+  the coverage gap remains open?* Options: wait / authorize open gap /
+  require another design / stop. Exit 3.
+- Predictions held: cold → closure → a Family 1 question over
+  `internal/workflow` → recorded → future-only ends N1 at the human.
+- `runs/N1.log` keeps the non-output events; untrimmed sha256 in
+  `runs/N1.run`; receipts and recipes-after preserved. The recorded recipe
+  is persisted in the subject as `209c5c6` (Go sources byte-identical to
+  `7ae7236e`; only `docs/awareness/derived_recipes.json` differs) — the
+  base for N2 and for any later encounter over `premise.go`.
+
+Reading: the first self-grounding witness. Sensei, pointed at its own engine
+with no control document in sight, asked the lock-discipline question about
+the receipt map that S1 must preserve. The anchor it earns benefits the next
+encounter over that region, by the future-only rule.
+
+### N2 — 03:10:35Z–03:20:01Z, exit 3, subject `209c5c6` (N1's recipe persisted)
+
+- Round 1: plan `internal/derived/derived.go` alone; `0 anchor(s) over 1
+  planned file(s); route bounded-knowledge-gap` (the persisted recipes cover
+  `internal/event` and `internal/workflow`, not `internal/derived`).
+  Receipt `gap-…-1`.
+- Round 2: the architect asked to escalate with no files in the plan
+  (`0 anchor(s) over 0 planned file(s)`); the engine closed instead (receipt
+  `gap-…-2`). **In this round the investigator, told nothing, proposed and
+  recorded** `state_mutation_confined_to_owner(Result.Anchor in
+  internal/derived, search .)` — *"CLI.Revalidate currently builds Result
+  incrementally and assigns the authority-bearing Anchor only after a
+  DERIVED…"* Identity
+  `state_mutation_confined_to_owner|internal/derived|result|anchor|.`, region
+  `[internal/derived/derived.go]`. The sealed Family 3 sweep marks
+  `Result.Anchor` DERIVED with one write inside the owner.
+- Round 3: future-only; the gap did not close; escalated with the question
+  preserved: *Should Sensei Code retry this bounded constructor refactor
+  after a later mechanical derivation, or leave the implementation
+  unchanged?* Exit 3.
+- Predictions held: cold → closure → a Family 3 question over
+  `internal/derived` → recorded → future-only ends N2 at the human. The
+  recipe is persisted in the subject as `6c36961` (three recipes: Bus.subs,
+  Engine.premises, Result.Anchor; Go sources byte-identical to `7ae7236e`).
+
+## N1 + N2 reading
+
+Two encounters, two different epistemic species, both rediscovered by the
+investigator against Sensei's own engine with no control document in its
+world:
+
+```
+N1  premise.go   Family 1  field_access_under_lock(Engine.premises under Engine.mu)     RECORDED
+N2  derived.go   Family 3  state_mutation_confined_to_owner(Result.Anchor in derived)   RECORDED
+```
+
+Each is a proposition the sealed sweeps had marked DERIVED over that
+surface, and neither was shown to the investigator. Each run ended at the
+human branch by the future-only rule, which is the rule doing its job: the
+anchors these questions earn belong to the *next* encounter over
+`premise.go` and `derived.go`, which — if the recipes derive DERIVED at the
+persisted base — would read `1 anchor over 1 planned file` and route on
+architectural authority, as Family 3's E3 did on golang/mod. That is the
+next measurable step toward the B3 stopping rule for two of the five EMPTY
+surfaces. Not established by the encounters themselves: whether the persisted
+recipes derive at `6c36961` under the producer. Subsequently established by
+the read-only mechanical check below: both derive DERIVED, with subjects
+spanning `premise.go` and `derived.go`.
+Also observed: M2.2 refused a test-edit grant in N1 for the right reason
+(no covered sibling yet), and every escalation the architect asked for was
+closed rather than raised.
+
+### Mechanical check (not an encounter): do the persisted recipes derive at `6c36961`?
+
+`sensei-f3 derive` at the subject HEAD, read-only, no run:
+
+```
+field_access_under_lock DERIVED | subjects: ['internal/workflow/engine.go', 'internal/workflow/premise.go'] | all 6 access(es) to Engine.premises occur while Engine.mu is held, across 2 subject file(s) (19 file(s) were r
+state_mutation_confined_to_owner DERIVED | subjects: ['internal/derived/derived.go'] | all 1 observable write(s) to Result.Anchor under . originate from internal/derived, across 1 subject file(s) (
+```
+
+## Chronology disclosure (review 5047711145)
+
+The freeze that preceded N1 was committed as
+`6e077f8d51285546ec6560082bb6bb52165bb2cc` at `2026-08-27T22:16:08-04:00`, before N1
+began at 03:01:08Z. This branch was later rebased onto `main` after #106
+(the provenance-schema change), which rewrote that commit as `93f7478`; the
+frozen `manifest.md` blob is identical in both (`8e435d67c498…`), but the
+original freeze commit is no longer an ancestor of this branch and its
+committer timestamp was necessarily rewritten. No retroactive merge was
+manufactured to make the graph look continuous: the pre-run freeze is
+proven by the original commit's timestamp and the unchanged blob, and this
+note is the record of the rewrite.
