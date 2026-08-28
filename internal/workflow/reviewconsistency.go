@@ -125,7 +125,32 @@ EARLIER REVIEW (%s, did not accept):
 ACCEPTING REVIEW (%s):
 %s
 
-Return ONLY the same architecture JSON contract as before.`, task, plan, audit, o.Reviewer, o.Summary, findings.String(), accepting.Provenance.Provider, accepting.Summary)
+Return ONLY the same architecture JSON contract as before, with one additional field: "adjudication": "revise" if the earlier finding applies and the revised plan says what is still owed, or "adjudication": "accepting_review_stands" if the earlier finding does not apply to this candidate and no edit is owed.`, task, plan, audit, o.Reviewer, o.Summary, findings.String(), accepting.Provenance.Provider, accepting.Summary)
+}
+
+// Adjudication vocabulary. The architect answers a review contradiction with
+// exactly one of these; the engine reads the answer by membership.
+const (
+	// adjudicationRevise: the earlier finding applies; the revised plan says
+	// what the candidate still owes.
+	adjudicationRevise = "revise"
+	// adjudicationStands: the earlier finding does not apply to this
+	// candidate; the accepting review stands and no edit is owed.
+	adjudicationStands = "accepting_review_stands"
+)
+
+// adjudicationStands reads the architect's answer. Silence is "revise": an
+// architect that did not say the accepting review stands has not said it,
+// and the conservative reading keeps the candidate in revision.
+func adjudicationStands(d architectureDecision) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(d.Adjudication)) {
+	case "", adjudicationRevise:
+		return false, nil
+	case adjudicationStands:
+		return true, nil
+	default:
+		return false, fmt.Errorf("the architect answered the review contradiction with %q, which is neither %q nor %q", d.Adjudication, adjudicationRevise, adjudicationStands)
+	}
 }
 
 // Engine-side state. Per task, not per worker: the whole point is that it

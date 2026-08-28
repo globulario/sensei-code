@@ -1457,11 +1457,23 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				})
 				e.clearOpenReview(taskID)
 				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
-				plan = revised.Plan
-				feedback = "The architect adjudicated a contradiction between two reviews of this candidate. Reconcile the current candidate with the revised plan."
-				continue
+				stands, err := adjudicationStands(revised)
+				if err != nil {
+					return false, plan, lastReview, lastAudit, err
+				}
+				if !stands {
+					plan = revised.Plan
+					feedback = "The architect adjudicated a contradiction between two reviews of this candidate. Reconcile the current candidate with the revised plan."
+					continue
+				}
+				// The accepting review stands: the earlier finding does not
+				// apply, on the architect's authority and on the record. No
+				// edit is owed, so none is manufactured -- forcing a worker
+				// cycle here produced an identical diff and a failed run on
+				// the last implementor (review of #111).
+			} else {
+				e.clearOpenReview(taskID)
 			}
-			e.clearOpenReview(taskID)
 			// Sensei owns this transition. A reviewer that accepts over a
 			// refusal does not conclude the candidate; the refusal becomes the
 			// next revision instruction instead.
@@ -1580,6 +1592,10 @@ type architectureDecision struct {
 	// decision resting on prose.
 	Mode           string             `json:"mode,omitempty"`
 	Invariants     []string           `json:"related_invariants,omitempty"`
+	// Adjudication is the architect's answer to a review contradiction, from
+	// the closed vocabulary in adjudicationStands. Read by membership: an
+	// unknown value is refused, not read as either answer.
+	Adjudication string `json:"adjudication,omitempty"`
 	Plan           string             `json:"plan"`
 	HumanQuestion  string             `json:"human_question,omitempty"`
 	Recommendation string             `json:"recommendation,omitempty"`

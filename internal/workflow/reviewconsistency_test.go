@@ -110,3 +110,23 @@ func TestTheContradictionPromptCarriesBothVerdictsAndTheFindings(t *testing.T) {
 		}
 	}
 }
+
+func TestAnAdjudicationIsReadByMembership(t *testing.T) {
+	for _, c := range []struct {
+		in     string
+		stands bool
+		err    bool
+	}{{"", false, false}, {"revise", false, false}, {"accepting_review_stands", true, false}, {" Accepting_Review_Stands ", true, false}, {"stands", false, true}, {"accept", false, true}} {
+		got, err := adjudicationStands(architectureDecision{Adjudication: c.in})
+		if (err != nil) != c.err || got != c.stands {
+			t.Fatalf("%q: got stands=%v err=%v; want stands=%v err=%v", c.in, got, err, c.stands, c.err)
+		}
+	}
+}
+
+func TestTheContradictionPromptAsksForTheAdjudication(t *testing.T) {
+	p := contradictionPrompt("task", "plan", "audit", openReview{}, accept("claude"))
+	if !strings.Contains(p, `"adjudication"`) || !strings.Contains(p, adjudicationStands) {
+		t.Fatal("the prompt must ask for the closed adjudication answer")
+	}
+}
