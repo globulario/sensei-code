@@ -131,3 +131,17 @@ failure_modes:
       - internal/finding/finding_test.go:TestAFindingAboutAFileTheObservationNeverReadIsNotWork
     evidence:
       - 'Instance 1: internal/workflow/authority.go decideRouteForAction checked only EqualFold(Source, ''inference''), so every other value including '''' reached a grant. Fixed in sensei-code#80 by a closed vocabulary, but ''graph'' and ''repository'' are still accepted on the word alone. Instance 2: internal/finding/finding.go Classify read the same field to decide Eligible(), so a finding claiming source ''repository'' about a file the observation never opened could open a governed repair. Fixed in sensei-code#79 by requiring every file a finding names to appear in the files the observation actually read. Both found by sensei-code auditing itself.'
+  - id: sensei_code.workflow.region_coverage_granted_an_unexamined_planned_file
+    title: Region-level coverage granted a planned file the graph never examined
+    severity: critical
+    description: The router read coverage once for the whole planned region (coverageAbsent := !scoped.Coverage.Proven()). Sensei's region verdict is sufficient=true as soon as one planned file carries anchors, so a planned file the graph had never examined -- real and unindexed, or nonexistent -- was granted architectural-authority-granted on its neighbour's invariants. Found by re-measuring B3 N3 per file (slice 3, 2026-08-28); the specimen TestAnUnexaminedPlannedFileIsNotCoveredByItsNeighbour granted before the repair.
+    protects:
+      files:
+        - internal/workflow/authority.go
+    related_invariants:
+      - sensei_code.workflow.unexamined_planned_file_is_not_covered_by_its_neighbour
+    required_tests:
+      - internal/workflow/unexamined_test.go:TestAnUnexaminedPlannedFileIsNotCoveredByItsNeighbour
+    evidence:
+      - 'live preflight over [internal/workflow/engine.go, internal/workflow/zz_not_in_graph.go] on graph 42e6e12c: status OK, sufficient=true, direct_anchor_count=3, file_count=2, indexed_file_count=1'
+      - 'same over [engine.go, internal/workflow/relevance.go] (real, unindexed): identical counts; relevance.go alone: sufficient=false indexed=0'

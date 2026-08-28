@@ -2128,6 +2128,14 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
+	// Which planned files the graph has NOT examined, established per file.
+	// The scoped answer cannot say: it is one verdict for the region, proven
+	// the moment one planned file carries anchors, so an ungrounded file
+	// planned beside an anchored one inherited the region's coverage (M25
+	// §1). Asked only when the region itself reports fewer examined files
+	// than planned; a per-file answer that cannot be obtained is unexamined,
+	// which is the direction this must fail in.
+	action.Unexamined = e.unexaminedFiles(sc, start, task, action.architecturalFiles(), scoped)
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
@@ -2161,6 +2169,9 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 			// Stated as its own kind, beside coverage and never summed with it.
 			summary += fmt.Sprintf("\n  operational authority (existing-test edit): %d file(s): %s", len(op), strings.Join(op, ", "))
 		}
+		if un := action.unexaminedArchitecturalFiles(); len(un) != 0 {
+			summary += fmt.Sprintf("\n  unexamined by the graph: %d file(s): %s", len(un), strings.Join(un, ", "))
+		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
 			map[string]any{
 				"derived_coverage_anchors": len(action.DerivedCoverage),
@@ -2169,6 +2180,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 				"closes_gap":               routing.ClosesGap(),
 				"anchors":                  files,
 				"operational_authority":    action.OperationalAuthority,
+				"unexamined":               action.unexaminedArchitecturalFiles(),
 			}))
 	}
 
@@ -2184,6 +2196,36 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing.Route, d).Render(), nil))
 
 	return routing, scoped, nil
+}
+
+// unexaminedFiles asks Sensei about each architectural planned file on its own
+// and returns the ones it has no facts about: no direct anchor and not indexed.
+//
+// A region answer with every planned file examined needs no second question.
+// Otherwise each file is asked separately, because the region's counts say how
+// many files were examined and never which -- and a file under an operational
+// grant, which is not asked to be covered, may be the unexamined one.
+func (e *Engine) unexaminedFiles(sc *sensei.Client, start certifiedStart, task string, files []string, scoped sensei.PreflightDecision) []string {
+	if len(files) == 0 || scoped.Coverage.IndexedFileCount >= scoped.Coverage.FileCount {
+		return nil
+	}
+	var out []string
+	for _, f := range files {
+		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
+		if domain := start.Domain(); domain != "" {
+			args["domain"] = domain
+		}
+		result, err := sc.CallTool("awareness_preflight", args)
+		if err != nil {
+			out = append(out, f)
+			continue
+		}
+		one, err := sensei.DecodePreflight(result)
+		if err != nil || (one.Coverage.DirectAnchorCount == 0 && one.Coverage.IndexedFileCount == 0) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // derivedRecipesPath is where the durable questions live.

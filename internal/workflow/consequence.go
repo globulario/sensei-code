@@ -103,6 +103,40 @@ type Action struct {
 	// entry is computed by the consumer from the anchor's family and is never
 	// read off the wire.
 	DerivedCoverage []CoverageAnchor
+	// Unexamined are planned files the graph has no facts about at plan time:
+	// a per-file preflight found no anchor and no indexed file for each.
+	//
+	// Engine-owned, established per file, never read off the scoped answer.
+	// The scoped preflight is one answer for the whole region, and its
+	// coverage is proven the moment ONE planned file carries anchors --
+	// live, over [engine.go, a file that does not exist]: sufficient=true,
+	// direct_anchor_count=3, file_count=2, indexed_file_count=1. Read at the
+	// region, the second file inherited the first one's coverage, and a plan
+	// could carry any ungrounded file into an anchored region and launder the
+	// region's authority onto it (M25 §1). A file under an operational grant
+	// is not asked to be examined and is ignored here by the router.
+	Unexamined []string
+}
+
+// unexaminedArchitecturalFiles are the planned files the graph has not
+// examined and no operational grant covers: the ones whose coverage the
+// scoped answer cannot vouch for. Canonicalised like architecturalFiles, and
+// in plan order, so the gap identity built from them is stable.
+func (a Action) unexaminedArchitecturalFiles() []string {
+	if len(a.Unexamined) == 0 {
+		return nil
+	}
+	unexamined := map[string]bool{}
+	for _, f := range a.Unexamined {
+		unexamined[path.Clean(strings.TrimSpace(f))] = true
+	}
+	var out []string
+	for _, f := range a.architecturalFiles() {
+		if unexamined[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // architecturalFiles are the planned files the coverage question is about:
