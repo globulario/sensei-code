@@ -326,24 +326,28 @@ func TestAProbePublishedInsufficientIsUnexamined(t *testing.T) {
 	}
 }
 
-// An explicit approval gate is asked before any epistemic question, so a
-// gated plan is not probed: a probe failure must not abort a plan before it
-// reaches its human-owned boundary.
-func TestAGatedPlanIsNotProbed(t *testing.T) {
+// A gated plan is probed like any other once the caller decides to probe it
+// (after the human's answer); the probe itself does not read the gate, or an
+// authorised gated plan could never be probed (#115 review).
+func TestAGatedPlanIsProbedWhenAsked(t *testing.T) {
 	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},`+
 		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
 		identifiedAuthority+`}`)
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
-		t.Fatal("a gated plan was probed")
-		return sensei.PreflightDecision{}, nil
-	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, gated)
-	if err != nil || len(got) != 0 {
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+		d := probeOf(gated)
+		if f == files[1] {
+			d.Status = sensei.PreflightEmpty
+			d.Coverage = sensei.Coverage{FileCount: 1}
+		}
+		return d, nil
+	}, files, gated)
+	if err != nil || len(got) != 1 || got[0] != files[1] {
 		t.Fatalf("gated: unexamined=%v err=%v", got, err)
 	}
-	// And the router still sends it to the human, unexamined or not.
-	r := routeAuthorityForAction(gated, nil, plannedEdit("internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"))
-	if r.Route != RouteHuman {
+	// Before the answer the router sends it to the human, unexamined or not.
+	if r := routeAuthorityForAction(gated, nil, plannedEdit(files...)); r.Route != RouteHuman {
 		t.Fatalf("a gated plan routed to %s", r.Route)
 	}
 }

@@ -2285,14 +2285,9 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	if stage == StageObserve || len(files) == 0 {
 		return nil, nil
 	}
-	// An explicit approval gate outranks every epistemic question, and the
-	// router asks it first. Probing coverage ahead of it would let a
-	// transient probe failure abort a plan before it reached its genuine
-	// human-owned boundary; a gated plan cannot be granted autonomously, so
-	// nothing here would change its route. Not probed.
-	if scoped.ChangeRisk.Classified() && scoped.ChangeRisk.Gate() != "none" {
-		return nil, nil
-	}
+	// Whether a gated plan is probed is decided by the caller (probeNeeded):
+	// not before the human answers the gate, and always after. Deciding it
+	// here too made an authorised gated plan unprobeable (#115 review).
 	// The shortcut -- every planned file examined, nothing to ask -- is taken
 	// only when the region's counts are about the plan that was requested. A
 	// region answer that omits file_count, or counts fewer files than were
