@@ -8,10 +8,18 @@
    "PR #100 review 5046864821: the frozen rule and prediction 3 contradicted each other (present in the freeze commit); E2 is strong observed evidence, not a preregistered confirmation; the sealed scanner's owner-side address-escape limit stated"
   ],
   "review_provenance": {
-   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
-   "mediated_by": "human (direction, interpretation refusals, merge)",
-   "merge_authority": "human",
-   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
   }
  },
  "E2": {
@@ -23,10 +31,18 @@
    "PR #100 review 5046864821: gate classified OPEN link by link; execution NOT OBSERVED; the existing-test coverage wall named as the next piece (became M2.2, #101)"
   ],
   "review_provenance": {
-   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
-   "mediated_by": "human (direction, interpretation refusals, merge)",
-   "merge_authority": "human",
-   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
   }
  },
  "E3": {
@@ -38,10 +54,18 @@
    "PR #102 merged 7ae7236e: freeze chronology verified (f7fd92f at 01:18:24Z before the 01:18:35Z start); FULL FROZEN FAMILY-3 GATE MET; M2.2 not naturally witnessed"
   ],
   "review_provenance": {
-   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
-   "mediated_by": "human (direction, interpretation refusals, merge)",
-   "merge_authority": "human",
-   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
   }
  }
 }

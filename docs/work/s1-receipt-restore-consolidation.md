@@ -77,7 +77,7 @@ and S1 must not extend their lifetime as a side effect.
 mechanisms                 3 → 1   (payload types, session fields, event kinds, FindInterrupted cases, restore entry points)
 duplicated lifecycle code  lines removed, by diff
 falsifiers                 unchanged in number and in what each fails for (no test edited to pass)
-review findings            independent model review + mediated re-review count; a consolidation that ships a hole is a failure
+review findings            independent automated review (Codex) + architectural re-review (GPT-5.6 Sol) findings count; a consolidation that ships a hole is a failure
 proof strength             unchanged: no falsifier weakened, none deleted
 ```
 
@@ -89,7 +89,7 @@ anchors > 0 over internal/workflow/{suppliedplan,prospective,testedit,premise}.g
 the obligations above represented in the graph as invariants / required tests bound by exact name
              (sensei preflight names them; a renamed test satisfies nothing)
 a frozen S1 plan (supplied-plan lane) with no inference claim
-independent review by a different provider, mediated by the human; human merge authority
+independent review by a different provider and architectural re-review by GPT-5.6 Sol; merge executed via the GitHub connector under the project owner's account, the owner holding ultimate authority
 ```
 
 If B3 cannot ground one of these surfaces, that is the finding, and S1 waits.

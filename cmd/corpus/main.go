@@ -51,13 +51,18 @@ type record struct {
 	// ReviewFindings are the findings of the independent review of the
 	// evidence or repair, and ReviewProvenance says who produced them and who
 	// mediated and merged. Both come only from the overlay. The field used to
-	// be called human_review, and the reviews it recorded were produced by a
-	// model (ChatGPT 5.6) with a human mediating and holding merge authority;
-	// the old name was an inferred label, exactly what this corpus forbids.
-	ReviewFindings   any            `json:"review_findings"`
-	ReviewProvenance any            `json:"review_provenance"`
-	Terminal         map[string]any `json:"terminal"`
-	Note             any            `json:"note,omitempty"`
+	// be called human_review. Neither that name nor the first correction
+	// ("a model reviewed, a human mediated") was right: the reasoning was
+	// GPT-5.6 Sol's, Codex reviewed separately, the GitHub account that
+	// executed it belongs to the project owner, and the owner is the ultimate
+	// authority. Actors are named, never collapsed into an account.
+	ReviewFindings   any `json:"review_findings"`
+	ReviewProvenance any `json:"review_provenance"`
+	// MergeProvenance says who executed the merge of the evidence or repair
+	// and under whose account and authority. Overlay only.
+	MergeProvenance any            `json:"merge_provenance"`
+	Terminal        map[string]any `json:"terminal"`
+	Note            any            `json:"note,omitempty"`
 }
 
 var (
@@ -142,7 +147,7 @@ func extract(log string) (record, error) {
 	rec := record{Encounter: exp + "/" + run, SourceLog: log,
 		Instrument: map[string]any{"sensei_sha": "unrecorded", "sensei_code_sha": "unrecorded", "fixture": "unrecorded", "world": "unrecorded"},
 		Graph:      map[string]any{"domain": "unrecorded", "build": "unrecorded", "address": "unrecorded", "audit_graph_commit": "unrecorded", "input_graph_digest": "unrecorded", "authority": "unrecorded"},
-		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, ReviewFindings: "unrecorded", ReviewProvenance: "unrecorded"}
+		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, ReviewFindings: "unrecorded", ReviewProvenance: "unrecorded", MergeProvenance: "unrecorded"}
 	fh, err := os.Open(log)
 	if err != nil {
 		return rec, err
@@ -332,6 +337,9 @@ func extract(log string) (record, error) {
 				}
 				if v, ok := o["review_provenance"]; ok {
 					rec.ReviewProvenance = v
+				}
+				if v, ok := o["merge_provenance"]; ok {
+					rec.MergeProvenance = v
 				}
 				if v, ok := o["note"]; ok {
 					rec.Note = v

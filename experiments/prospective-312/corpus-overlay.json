@@ -6,10 +6,18 @@
    "operator error: an untracked stamp file dirtied the tree before invocation; start gate refused; not counted"
   ],
   "review_provenance": {
-   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
-   "mediated_by": "human (direction, interpretation refusals, merge)",
-   "merge_authority": "human",
-   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
   }
  },
  "B2": {
@@ -19,10 +27,18 @@
    "supplied plan refused at routing on its one inference claim; a supplied plan may carry no inference premise (documented on --plan)"
   ],
   "review_provenance": {
-   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
-   "mediated_by": "human (direction, interpretation refusals, merge)",
-   "merge_authority": "human",
-   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
   }
  },
  "C1": {
@@ -33,10 +49,18 @@
    "four review cycles produced three constitutional findings the plan lacked: deny ordinary coverage to absent files; read-failed is UNKNOWN not MISSING and the grant is a durable receipt; refutation is terminal"
   ],
   "review_provenance": {
-   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
-   "mediated_by": "human (direction, interpretation refusals, merge)",
-   "merge_authority": "human",
-   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
   }
  }
 }

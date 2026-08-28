@@ -30,9 +30,12 @@ what Phase C will rank.
   runs, so a log or overlay changed without regeneration fails CI.
 - **Nothing inferred.** A field the run did not write and the overlay does
   not supply is `"unrecorded"`. `review_findings` and `review_provenance` are
-  only ever overlay text. (The field was first named `human_review`; the
-  reviews it held were produced by ChatGPT 5.6 with a human mediating and
-  merging — an inferred label, corrected on 2026-08-28.)
+  only ever overlay text. (The field was first named `human_review`, then
+  corrected to "model reviews, human mediated"; both were wrong. The actors
+  are distinct and are named: `reasoning_author` GPT-5.6 Sol,
+  `independent_automated_reviewer` Codex, `account_principal` and
+  `project_owner` davecourtois, `ledger_recorder` Claude. An account that
+  executes a merge does not author the reasoning behind it.)
 - **Appended, never rewritten.** A correction is a new record naming the
   old one in `supersedes`.
 
@@ -67,7 +70,9 @@ validation            per run: diff_digest, checks                          vali
 audit                 per run: decision, digest, findings, reason_codes     candidate.audited payload
 review                per run: provider, candidate_digest, decision, summary, findings   review.completed
 review_findings       OVERLAY only; else "unrecorded"          findings of the independent review of the evidence/repair
-review_provenance     OVERLAY only; else "unrecorded"          {provider, mediated_by, merge_authority, recorded_by}
+review_provenance     OVERLAY only; else "unrecorded"          {reasoning_author, independent_automated_reviewer, implementation_and_reconstruction,
+                                                               account_principal, project_owner, ledger_recorder, note}
+merge_provenance      OVERLAY only; else "unrecorded"          {merge_executed_by, authorized_account, ultimate_authority}
 terminal              kind, summary, question, first_event, last_event, start, end, exit, world
 note                  OVERLAY only
 ```
@@ -82,5 +87,6 @@ reviews of the evidence, with who produced them stated. Anything reconstructed f
 
 ```json
 {"E3": {"sensei_sha": "f79f96f9…", "sensei_code_sha": "d6fcd11c…", "fixture": "github.com/golang/mod",
-        "review_findings": ["…"], "review_provenance": {"provider": "…", "mediated_by": "…", "merge_authority": "…"}, "note": "…"}}
+        "review_findings": ["…"], "review_provenance": {"reasoning_author": "…", "account_principal": "…", "project_owner": "…", "ledger_recorder": "…"},
+        "merge_provenance": {"merge_executed_by": "…", "authorized_account": "…", "ultimate_authority": "…"}, "note": "…"}}
 ```
