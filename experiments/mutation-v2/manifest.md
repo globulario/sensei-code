@@ -373,3 +373,104 @@ post-edit inspection of `rule_test.go` against its grant → audit → review �
 terminal. A refutation at inspection (novel import, package change) ends the
 run and is the result; an inspection pass followed by review is the FULL
 Family 3 gate.
+
+## E3 — FROZEN
+
+```
+producer      sensei      f79f96f9faf542b73d5053bcf5e48603a68e2c74   sensei-f3 (unchanged from E1/E2)
+consumer      sensei-code d6fcd11cfc6327e00e5feb84979dbce520554e35   sensei-code-e3 (#101 M2.2 merged)
+fixture       golang/mod  3b6be68 = 9c7e562 + both investigator recipes persisted
+                          (File.Module from E1, File.Syntax from E2); Go sources byte-identical to 9c7e562
+recipes       2, both the investigator's own; nothing sealed, nothing authored
+graph         :10193, unchanged · env SENSEI_CODE_BENCHMARK=1 · derive receipts moved aside before invocation
+task          E2's text, byte for byte
+```
+
+Stopping rule: one invocation; whatever it does is the result; every plan,
+grant, coverage line, route, candidate, inspection, review and terminal
+event preserved as `E3.*`; exit 3 preserves the question; timeout or crash
+is an instrument finding. Nothing is altered after this section is
+committed. The investigator is never shown `selection.json` or this file.
+
+Predictions, finalised before invocation:
+
+1. Plan `modfile/rule.go` + `modfile/rule_test.go` (as E2's rounds ended)
+   or `rule.go` alone. With both: `derived coverage: 1 anchor(s) over 2
+   planned file(s) [mutation confinement]` **plus** `operational authority
+   (existing-test edit): 1 file(s): modfile/rule_test.go` — the two kinds
+   printed side by side, never summed — and the coverage question, asked
+   over `rule.go` alone, is answered. Route is granted unless an inference
+   premise opens a closure round first (E2 round 1's shape), in which case
+   one round then granted.
+2. `TestEditGranted` recorded with `rule_test.go`'s base hash, package
+   `modfile`, its imports at `3b6be68`; the worker's prompt carries both
+   grant kinds under separate headings.
+3. Implementor runs (the first time for Family 3). Post-edit inspection of
+   `rule_test.go`: passes if the edit stays inside its imports, package and
+   constraints; a novel import (the M2.1-era shape) is `test edit refuted:`
+   and terminal — recorded as the result, not retried.
+4. If inspection passes: audit → validation → independent review →
+   terminal. `workflow.completed` closes the FULL Family 3 gate; a REVISE
+   cycle is ordinary; a refutation or refusal names the next structural
+   boundary.
+5. A plan that reaches `module/` reads `1 anchor over 2 architectural files`
+   and is cold — the architect's planning, not the seam.
+
+### E3 — 01:18:35Z–01:22:17Z, exit 0, ACCEPTED, base `3b6be68`
+
+- Architect, one turn (01:18–01:19): plan **`modfile/rule.go` alone** —
+  *Centralize lazy File.Syntax initialization for AddModuleStmt and
+  AddComment without changing observable behavior.* Every claim
+  evidence-bearing; no inference premise; no closure round.
+- `derived coverage: 2 anchor(s) over 1 planned file(s); route
+  architectural-authority-granted — modfile/rule.go [mutation confinement]
+  ×2`: both investigator recipes (`File.Module` from E1, `File.Syntax`
+  from E2) derived DERIVED over `rule.go` at `3b6be68` and were mapped to
+  *mutation confinement*. Granted on the first route.
+- Claude, 18 s: a 1,016-byte candidate, `rule.go` +9/−5 — an unexported
+  `(*File).syntax()` lazy initialiser used by both methods; mutation order
+  preserved. Broker validation: vet/build/test pass (`gofmt -l cmd internal`
+  infrastructure-failure identical against base, as in every run on this
+  fixture). Sensei diff audit `pass`, 1 file, 0 findings.
+- Independent review (Codex, fresh session, bound to `bcfe2cac6b51`):
+  **ACCEPT** — *"implements the planned single lazy File.Syntax initializer
+  and preserves both public methods' mutation order and behavior … source
+  inspection confirms equivalent initialization and subsequent mutations;
+  validation includes passing go test ./..."*
+- `decision.recorded`: not recorded (no governing invariant on
+  `rule.go`) — correct. Candidate retained, unpublished, **not admitted**:
+  landing it is the human's decision. `workflow.completed`.
+- `E3.log` keeps 31 non-output events (1,173 dropped); untrimmed sha256 in
+  `runs/E3.run`; `E3.candidate.patch` is the accepted diff.
+
+## Family 3 gate — CLOSED
+
+```text
+question                 investigator, untold, proposed the family twice (E1: File.Module; E2: File.Syntax)
+recipe                   both recorded with scope-bearing identities; neither sealed, neither authored
+derivation               DERIVED at the pinned base, by the recipe written after sealing
+coverage                 2 anchors over 1 planned file [mutation confinement]
+routing consequence      architectural-authority-granted, first route, no closure round
+execution consequence    implementor ran; candidate; validation; audit pass; independent review ACCEPT
+
+FULL FROZEN FAMILY-3 GATE    MET   (E3, sensei f79f96f9 + sensei-code d6fcd11c, golang/mod 3b6be68)
+```
+
+Read plainly. The chain the frozen gate named ran end to end on a foreign
+repository, on a natural task, with the investigator told nothing, and the
+only architectural authority the route rested on was the family's own
+derivation. The sealed verdicts were never touched. Prediction 1 held on
+its second branch (`rule.go` alone); 3 and 4 held; 2 and 5 did not arise.
+
+**What E3 did not witness.** The plan named no test file, so M2.2's
+existing-test edit grant was never issued: `no test-edit authority` events
+absent, no `testedit.granted`. The seam is implemented and falsified in
+unit tests; its first natural witness is still owed — it arises whenever an
+architect's plan reaches an existing test beside a covered subject, as E2's
+did. The gate closed without it because the architect's plan this time did
+not need it; that is the architect's variance, recorded, not a property of
+the seam.
+
+**Not established.** Correctness of the candidate beyond reviewer acceptance
+and green tests; that the refactor is wanted by golang/mod's maintainers
+(not asked); anything about compounding beyond two recipes.

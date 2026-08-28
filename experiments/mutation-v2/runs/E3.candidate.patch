@@ -1,0 +1,35 @@
+diff --git a/modfile/rule.go b/modfile/rule.go
+index 5b2466f..7cef59e 100644
+--- a/modfile/rule.go
++++ b/modfile/rule.go
+@@ -203,10 +203,16 @@ func isIndirect(line *Line) bool {
+ 	return (len(f) == 1 && f[0] == "indirect" || len(f) > 1 && f[0] == "indirect;")
+ }
+ 
+-func (f *File) AddModuleStmt(path string) error {
++// syntax returns f.Syntax, allocating an empty FileSyntax if it is nil.
++func (f *File) syntax() *FileSyntax {
+ 	if f.Syntax == nil {
+ 		f.Syntax = new(FileSyntax)
+ 	}
++	return f.Syntax
++}
++
++func (f *File) AddModuleStmt(path string) error {
++	f.syntax()
+ 	if f.Module == nil {
+ 		f.Module = &Module{
+ 			Mod:    module.Version{Path: path},
+@@ -220,10 +226,8 @@ func (f *File) AddModuleStmt(path string) error {
+ }
+ 
+ func (f *File) AddComment(text string) {
+-	if f.Syntax == nil {
+-		f.Syntax = new(FileSyntax)
+-	}
+-	f.Syntax.Stmt = append(f.Syntax.Stmt, &CommentBlock{
++	syntax := f.syntax()
++	syntax.Stmt = append(syntax.Stmt, &CommentBlock{
+ 		Comments: Comments{
+ 			Before: []Comment{
+ 				{
