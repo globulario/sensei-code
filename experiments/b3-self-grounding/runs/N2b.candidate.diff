@@ -1,0 +1,60 @@
+diff --git a/internal/derived/derived.go b/internal/derived/derived.go
+index 0b803a2..717ec80 100644
+--- a/internal/derived/derived.go
++++ b/internal/derived/derived.go
+@@ -164,6 +164,12 @@ type Result struct {
+ 	Anchor  *Anchor
+ }
+ 
++// newResult is the one Result constructor. Positional so that adding a field
++// to Result fails to compile here rather than leaving it zero at some site.
++func newResult(r Recipe, outcome Outcome, detail string, anchor *Anchor) Result {
++	return Result{r, outcome, detail, anchor}
++}
++
+ // Revalidator recomputes a recipe against a world.
+ type Revalidator interface {
+ 	Revalidate(ctx context.Context, repoRoot, revision string, r Recipe) Result
+@@ -239,17 +245,16 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
+ 	cmd := exec.CommandContext(ctx, bin, args...)
+ 	out, err := cmd.Output()
+ 	if len(out) == 0 {
+-		return Result{Recipe: r, Outcome: Unknown,
+-			Detail: fmt.Sprintf("sensei derive produced no receipt: %v", err)}
++		return newResult(r, Unknown,
++			fmt.Sprintf("sensei derive produced no receipt: %v", err), nil)
+ 	}
+ 	var rec receipt
+ 	if jsonErr := json.Unmarshal(out, &rec); jsonErr != nil {
+-		return Result{Recipe: r, Outcome: Unknown,
+-			Detail: fmt.Sprintf("sensei derive returned an unreadable receipt: %v", jsonErr)}
++		return newResult(r, Unknown,
++			fmt.Sprintf("sensei derive returned an unreadable receipt: %v", jsonErr), nil)
+ 	}
+-	res := Result{Recipe: r, Outcome: Outcome(rec.Result), Detail: rec.Detail}
+-	if res.Outcome != Derived {
+-		return res
++	if Outcome(rec.Result) != Derived {
++		return newResult(r, Outcome(rec.Result), rec.Detail, nil)
+ 	}
+ 	// The one construction site. Everything above is inert until here, and this
+ 	// runs only on a DERIVED receipt from the world being assessed.
+@@ -258,13 +263,12 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
+ 	// nothing rather than falling back to everything it read.
+ 	subjects := rec.subjectFiles()
+ 	if len(subjects) == 0 {
+-		res.Outcome = Unknown
+-		res.Detail = "the derivation named no subjects, so there is nothing this proposition is about; " +
+-			"coverage may not fall back to the files it read — " + rec.Detail
+-		return res
++		return newResult(r, Unknown,
++			"the derivation named no subjects, so there is nothing this proposition is about; "+
++				"coverage may not fall back to the files it read — "+rec.Detail, nil)
+ 	}
+-	res.Anchor = &Anchor{recipe: r, world: rec.Commit, files: subjects, scope: rec.CompletenessScope}
+-	return res
++	return newResult(r, Derived, rec.Detail,
++		&Anchor{recipe: r, world: rec.Commit, files: subjects, scope: rec.CompletenessScope})
+ }
+ 
+ // LoadRecipes reads the committed questions. A missing file is no recipes,
