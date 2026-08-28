@@ -1,0 +1,12 @@
+{
+ "E2": {
+  "sensei_sha": "7db7c3c8 (derivation, fix/derive-tristate-and-flow-sensitive-lock-reader) / graph sensei@80392aaf (manifest)",
+  "sensei_code_sha": "fec4586 (manifest)",
+  "fixture": "github.com/golang/sync"
+ },
+ "E2.void2-subjects-contract-mismatch": {
+  "sensei_sha": "7db7c3c8 (derivation, fix/derive-tristate-and-flow-sensitive-lock-reader) / graph sensei@80392aaf (manifest)",
+  "sensei_code_sha": "fec4586 (manifest)",
+  "fixture": "github.com/golang/sync"
+ }
+}

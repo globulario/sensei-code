@@ -21,7 +21,11 @@ func TestARecordIsExtractedFromTheLogAndNeverInferred(t *testing.T) {
 		`{"time":"2026-08-28T01:00:00Z","task_id":"task-1","source":"system","kind":"task.created","summary":"do the thing"}`,
 		`{"time":"2026-08-28T01:00:01Z","task_id":"task-1","source":"system","kind":"mode.selected","summary":"governed · submitted unattended"}`,
 		`{"time":"2026-08-28T01:00:02Z","task_id":"task-1","source":"system","kind":"status","summary":"derived coverage: 2 anchor(s) over 1 planned file(s); route architectural-authority-granted\n  a.go [mutation confinement]","payload":{"anchors":["a.go [mutation confinement]"],"operational_authority":["a_test.go"]}}`,
+		`{"time":"2026-08-28T01:00:02Z","task_id":"task-1","source":"sensei","kind":"status","summary":"graph binding for every agent in this task: domain example.com/m, build (none), via awareness-mcp --awareness-addr localhost:1"}`,
 		`{"time":"2026-08-28T01:00:03Z","task_id":"task-1","source":"git","kind":"status","summary":"candidate task-1 on b from base 3b6be68abc (clean)"}`,
+		`{"time":"2026-08-28T01:00:03Z","task_id":"task-1","source":"git","kind":"candidate.changed","summary":"candidate diff 1016 bytes · cycle 1"}`,
+		`{"time":"2026-08-28T01:00:03Z","task_id":"task-1","source":"system","kind":"validation.run","summary":"v","payload":{"diff_digest":"bcfe2cac","checks":[]}}`,
+		`{"time":"2026-08-28T01:00:04Z","task_id":"task-1","source":"sensei","kind":"candidate.audited","summary":"a","payload":{"decision":"pass","digest":"x","graph_commit":"f56f5a305798"}}`,
 		`{"time":"2026-08-28T01:00:04Z","task_id":"task-1","source":"reviewer","kind":"review.completed","summary":"ACCEPT","payload":{"decision":"accept","summary":"fine","provenance":{"provider":"codex","candidate_digest":"d1"}}}`,
 		`{"time":"2026-08-28T01:00:05Z","task_id":"task-1","source":"system","kind":"workflow.completed","summary":"candidate ready for governed admission"}`,
 	}, "\n")
@@ -43,6 +47,15 @@ func TestARecordIsExtractedFromTheLogAndNeverInferred(t *testing.T) {
 	if rec.Review[0]["provider"] != "codex" || rec.Terminal["kind"] != "workflow.completed" || rec.Terminal["exit"] != "0" {
 		t.Fatalf("review/terminal: %+v %+v", rec.Review, rec.Terminal)
 	}
+	if rec.Graph["domain"] != "example.com/m" || rec.Graph["audit_graph_commit"] != "f56f5a305798" || rec.Graph["input_graph_digest"] != "unrecorded" {
+		t.Fatalf("graph identity: %+v", rec.Graph)
+	}
+	if rec.Candidate[0]["bytes"] != "1016" || rec.Candidate[0]["cycle"] != "1" || rec.Candidate[0]["digest"] != "bcfe2cac" {
+		t.Fatalf("candidate: %+v", rec.Candidate)
+	}
+	if len(rec.Derivation) != 1 || rec.Derivation[0]["file"] != "a.go" || rec.Derivation[0]["requirement"] != "mutation confinement" {
+		t.Fatalf("derivation: %+v", rec.Derivation)
+	}
 	// The overlay supplies what no event carries, and only that.
 	os.WriteFile(filepath.Join(dir, "x-v1", "corpus-overlay.json"), []byte(`{"E9":{"sensei_sha":"f79f96f9","human_review":["one hole"]}}`), 0o644)
 	rec, _ = extract(filepath.Join(runs, "E9.log"))
@@ -51,5 +64,41 @@ func TestARecordIsExtractedFromTheLogAndNeverInferred(t *testing.T) {
 	}
 	if hr, ok := rec.HumanReview.([]any); !ok || hr[0] != "one hole" {
 		t.Fatalf("human review: %v", rec.HumanReview)
+	}
+}
+
+// The committed corpus is exactly what regeneration from the logs and the
+// overlays produces. This is the freshness gate: CI runs go test ./..., so a
+// log or overlay changed without regenerating fails here.
+func TestCommittedCorpusIsFresh(t *testing.T) {
+	if _, err := os.Stat("../../experiments"); err != nil {
+		t.Skip("no experiments directory beside this package")
+	}
+	generated, n, err := generate("../../experiments")
+	if err != nil {
+		t.Fatalf("regeneration failed: %v", err)
+	}
+	committed, err := os.ReadFile("../../docs/evidence/corpus/encounters.jsonl")
+	if err != nil {
+		t.Fatalf("no committed corpus: %v", err)
+	}
+	if string(committed) != string(generated) {
+		t.Fatalf("docs/evidence/corpus/encounters.jsonl is stale (%d encounters regenerated); run `go run ./cmd/corpus`", n)
+	}
+}
+
+// A log that cannot be read is an error, never a silently skipped record.
+func TestAnUnreadableLogFailsTheCorpusClosed(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "y-v1", "runs")
+	os.MkdirAll(runs, 0o755)
+	os.WriteFile(filepath.Join(runs, "E1.log"), []byte(`{"kind":"task.created","summary":"ok"}`+"\n"), 0o644)
+	if _, n, err := generate(dir); err != nil || n != 1 {
+		t.Fatalf("a readable log failed: %v", err)
+	}
+	os.Chmod(filepath.Join(runs, "E1.log"), 0o000)
+	defer os.Chmod(filepath.Join(runs, "E1.log"), 0o644)
+	if _, _, err := generate(dir); err == nil {
+		t.Fatal("an unreadable log was skipped rather than failing the corpus")
 	}
 }

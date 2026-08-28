@@ -1,0 +1,11 @@
+{
+ "FALSE": {
+  "note": "manifest names the reader as 'sensei@ this commit' and prompt v4; no SHA or fixture stated verbatim on the manifest header -> unrecorded"
+ },
+ "TRUE": {
+  "note": "manifest names the reader as 'sensei@ this commit' and prompt v4; no SHA or fixture stated verbatim on the manifest header -> unrecorded"
+ },
+ "safety": {
+  "note": "manifest names the reader as 'sensei@ this commit' and prompt v4; no SHA or fixture stated verbatim on the manifest header -> unrecorded"
+ }
+}

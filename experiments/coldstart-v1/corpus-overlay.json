@@ -1,0 +1,14 @@
+{
+ "control": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "treatment": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ },
+ "v3-prompt": {
+  "fixture": "github.com/golang/sync",
+  "note": "pinned SHA 3ffd83cb522e5ef49bd2fa50f0c0d63dc152ad1f (manifest); graph NONE by design (cold start); sensei/sensei-code SHAs not named in the manifest"
+ }
+}
