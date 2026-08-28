@@ -415,3 +415,62 @@ Predictions, finalised before invocation:
    boundary.
 5. A plan that reaches `module/` reads `1 anchor over 2 architectural files`
    and is cold — the architect's planning, not the seam.
+
+### E3 — 01:18:35Z–01:22:17Z, exit 0, ACCEPTED, base `3b6be68`
+
+- Architect, one turn (01:18–01:19): plan **`modfile/rule.go` alone** —
+  *Centralize lazy File.Syntax initialization for AddModuleStmt and
+  AddComment without changing observable behavior.* Every claim
+  evidence-bearing; no inference premise; no closure round.
+- `derived coverage: 2 anchor(s) over 1 planned file(s); route
+  architectural-authority-granted — modfile/rule.go [mutation confinement]
+  ×2`: both investigator recipes (`File.Module` from E1, `File.Syntax`
+  from E2) derived DERIVED over `rule.go` at `3b6be68` and were mapped to
+  *mutation confinement*. Granted on the first route.
+- Claude, 18 s: a 1,016-byte candidate, `rule.go` +9/−5 — an unexported
+  `(*File).syntax()` lazy initialiser used by both methods; mutation order
+  preserved. Broker validation: vet/build/test pass (`gofmt -l cmd internal`
+  infrastructure-failure identical against base, as in every run on this
+  fixture). Sensei diff audit `pass`, 1 file, 0 findings.
+- Independent review (Codex, fresh session, bound to `bcfe2cac6b51`):
+  **ACCEPT** — *"implements the planned single lazy File.Syntax initializer
+  and preserves both public methods' mutation order and behavior … source
+  inspection confirms equivalent initialization and subsequent mutations;
+  validation includes passing go test ./..."*
+- `decision.recorded`: not recorded (no governing invariant on
+  `rule.go`) — correct. Candidate retained, unpublished, **not admitted**:
+  landing it is the human's decision. `workflow.completed`.
+- `E3.log` keeps 31 non-output events (1,173 dropped); untrimmed sha256 in
+  `runs/E3.run`; `E3.candidate.patch` is the accepted diff.
+
+## Family 3 gate — CLOSED
+
+```text
+question                 investigator, untold, proposed the family twice (E1: File.Module; E2: File.Syntax)
+recipe                   both recorded with scope-bearing identities; neither sealed, neither authored
+derivation               DERIVED at the pinned base, by the recipe written after sealing
+coverage                 2 anchors over 1 planned file [mutation confinement]
+routing consequence      architectural-authority-granted, first route, no closure round
+execution consequence    implementor ran; candidate; validation; audit pass; independent review ACCEPT
+
+FULL FROZEN FAMILY-3 GATE    MET   (E3, sensei f79f96f9 + sensei-code d6fcd11c, golang/mod 3b6be68)
+```
+
+Read plainly. The chain the frozen gate named ran end to end on a foreign
+repository, on a natural task, with the investigator told nothing, and the
+only architectural authority the route rested on was the family's own
+derivation. The sealed verdicts were never touched. Prediction 1 held on
+its second branch (`rule.go` alone); 3 and 4 held; 2 and 5 did not arise.
+
+**What E3 did not witness.** The plan named no test file, so M2.2's
+existing-test edit grant was never issued: `no test-edit authority` events
+absent, no `testedit.granted`. The seam is implemented and falsified in
+unit tests; its first natural witness is still owed — it arises whenever an
+architect's plan reaches an existing test beside a covered subject, as E2's
+did. The gate closed without it because the architect's plan this time did
+not need it; that is the architect's variance, recorded, not a property of
+the seam.
+
+**Not established.** Correctness of the candidate beyond reviewer acceptance
+and green tests; that the refactor is wanted by golang/mod's maintainers
+(not asked); anything about compounding beyond two recipes.
