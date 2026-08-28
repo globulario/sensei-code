@@ -396,8 +396,13 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	// over the same files -- subject overlap alone let a wide irrelevant truth
 	// manufacture coverage. See relevance.go.
 	if coverageAbsent && len(action.Files) != 0 {
-		if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.Files); closed {
-			coverageAbsent = false
+		// Files holding an operational grant are not asked to be covered:
+		// they are authorised to be edited, which is a different thing, and
+		// the question put to the derivations is about the rest.
+		if arch := action.architecturalFiles(); len(arch) != 0 {
+			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, arch); closed {
+				coverageAbsent = false
+			}
 		}
 	}
 	if coverageAbsent {

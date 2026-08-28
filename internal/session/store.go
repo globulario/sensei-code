@@ -127,6 +127,9 @@ type Interrupted struct {
 	// when the task declared none, or when the record was never written; the
 	// engine tells those apart from the plan and refuses the latter.
 	ProspectiveRecord json.RawMessage
+	// TestEditRecord is the existing-test edit authorization the router
+	// recorded (M2.2), carried byte for byte for the same reason.
+	TestEditRecord json.RawMessage
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -184,6 +187,8 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			}
 		case event.ProspectiveGranted:
 			p.ProspectiveRecord = e.Payload
+		case event.TestEditGranted:
+			p.TestEditRecord = e.Payload
 		case event.WorkflowCompleted, event.WorkflowFailed:
 			p.done = true
 		case event.WorkflowStopped:

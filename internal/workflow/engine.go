@@ -102,6 +102,9 @@ type Engine struct {
 	// has met, the identity the closure budget is spent against. See
 	// premise.go.
 	premises map[string][]*premiseReceipt
+	// testEdits are the existing-test edit grants the router read per task
+	// (M2.2): operational authority, kept apart from coverage by type.
+	testEdits map[string][]testEditGrant
 }
 
 // closureBudget is how many rounds one condition gets to close its own gap.
@@ -1119,7 +1122,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
 				strings.Join(guidance, "\n"), nil))
 		}
-		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, renderProspectiveGrants(e.prospectiveGrants(taskID)))
+		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
 		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, NoGraph: !worker.ConsumesGraph(), Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
 		// The worker's own text is the artifact of a read-only plan. Discarding
 		// it left an inspection with nothing to show but a transcript nobody
@@ -1266,6 +1269,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				facts[g.Anchor.File] = g.Facts
 			}
 			if err := inspectProspectiveSurfaces(diff, tc.Prospective, facts); err != nil {
+				return false, plan, lastReview, lastAudit, err
+			}
+		}
+		// Post-edit inspection of every granted existing test (M2.2): the
+		// candidate's file against the exact grant, before any review, with
+		// no retry -- the same discipline as a prospective refutation.
+		if edits := e.testEditGrants(taskID); len(edits) != 0 {
+			if err := inspectTestEdits(diff, edits, func(p string) ([]byte, error) { return os.ReadFile(filepath.Join(workspace, p)) }); err != nil {
 				return false, plan, lastReview, lastAudit, err
 			}
 		}
@@ -2053,6 +2064,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DeclaredConsequences: d.Consequences,
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
+	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
@@ -2082,6 +2094,10 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		if len(files) != 0 {
 			summary += "\n  " + strings.Join(files, "\n  ")
 		}
+		if op := action.OperationalAuthority; len(op) != 0 {
+			// Stated as its own kind, beside coverage and never summed with it.
+			summary += fmt.Sprintf("\n  operational authority (existing-test edit): %d file(s): %s", len(op), strings.Join(op, ", "))
+		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
 			map[string]any{
 				"derived_coverage_anchors": len(action.DerivedCoverage),
@@ -2089,6 +2105,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 				"route":                    string(routing.Route),
 				"closes_gap":               routing.ClosesGap(),
 				"anchors":                  files,
+				"operational_authority":    action.OperationalAuthority,
 			}))
 	}
 
@@ -2187,6 +2204,23 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
 	e.setProspectiveGrants(taskID, grants)
+	// Existing-test edit authority (M2.2), computed from the same world and
+	// the anchors just established, recorded like a prospective grant, and
+	// never added to the coverage list returned below.
+	edits, reasons := testEditGrants(ctx, world, planned, out, gitShowAt(e.Repo.Root))
+	e.setTestEditGrants(taskID, edits)
+	if len(edits) != 0 {
+		names := make([]string, 0, len(edits))
+		for _, g := range edits {
+			names = append(names, g.Path+" beside "+g.Covering)
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
+			"existing-test edit authority recorded for "+strings.Join(names, ", ")+" (operational, not coverage)",
+			testEditRecord{World: world, Grants: edits}))
+	}
+	for _, r := range reasons {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no test-edit authority: "+r, nil))
+	}
 	if len(grants) != 0 {
 		// The authorization is recorded verbatim, bound to the world it was
 		// read at, so a task resumed after a restart inspects its created
@@ -3419,7 +3453,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 }
 
 func isProspectiveSurfaceRefutation(err error) bool {
-	return err != nil && strings.HasPrefix(err.Error(), "prospective surface refuted:")
+	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") || strings.HasPrefix(err.Error(), "test edit refuted:"))
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
@@ -3711,6 +3745,10 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// written to, bound to the candidate's pinned base. Routing does not
 		// re-run on resume, so it is the only source of the facts the
 		// post-creation inspection checks against (sensei#312 cycle 3).
+		if err := e.restoreTestEditGrants(task, bound.Files, identity.BaseSHA); err != nil {
+			fail(err)
+			return
+		}
 		if err := e.restoreProspectiveGrants(task, bound.Prospective, identity.BaseSHA); err != nil {
 			fail(err)
 			return

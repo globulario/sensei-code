@@ -133,6 +133,10 @@ const (
 	// resumed task inspects against the facts that authorized it rather than
 	// against whatever is readable after a restart.
 	ProspectiveGranted Kind = "prospective.granted"
+	// TestEditGranted records the existing-test edit authority the router
+	// read (M2.2): operational, never coverage. Restored on resume and
+	// inspected against after the candidate is produced.
+	TestEditGranted Kind = "testedit.granted"
 )
 
 type Event struct {

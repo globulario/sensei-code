@@ -77,6 +77,12 @@ type Action struct {
 	// it will do. Claims: they may escalate an assessment, never clear one.
 	DeclaredSteps        []string
 	DeclaredConsequences string
+	// OperationalAuthority are planned files a bounded operational grant
+	// authorizes -- today, existing test files beside a covered subject
+	// (M2.2). They are subtracted from the ARCHITECTURAL coverage question
+	// and never enter DerivedCoverage: an edited test earns permission to be
+	// edited, not architectural coverage, and the two are kept apart by type.
+	OperationalAuthority []string
 	// DerivedCoverage are planned files a machine-derived fact covers in THIS
 	// world, established by re-running a derivation rather than by a record
 	// existing, each carrying what that derivation is able to ANSWER.
@@ -94,6 +100,22 @@ type Action struct {
 	// entry is computed by the consumer from the anchor's family and is never
 	// read off the wire.
 	DerivedCoverage []CoverageAnchor
+}
+
+// architecturalFiles are the planned files the coverage question is about:
+// every planned file not under an operational grant.
+func (a Action) architecturalFiles() []string {
+	skip := map[string]bool{}
+	for _, f := range a.OperationalAuthority {
+		skip[f] = true
+	}
+	var out []string
+	for _, f := range a.Files {
+		if !skip[f] {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // ConsequenceResult is the answer, and there are only three.
