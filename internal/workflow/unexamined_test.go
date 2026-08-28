@@ -456,3 +456,14 @@ func TestAnAuthorisedConsequenceDoesNotAdmitAnUnexaminedFile(t *testing.T) {
 		t.Fatalf("a fully examined plan was displaced: %+v", got)
 	}
 }
+
+// The gap a human's answer leaves open carries the pinned world, as the gap
+// routePlan builds does: the closure budget is keyed on the identity, and an
+// identity without its world would buy the same question a fresh receipt
+// (#115 review, ninth pass).
+func TestAPostAuthorizationGapCarriesThePinnedWorld(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "afterHumanAuthorization")
+	if !strings.Contains(body, "e.governedBase(") || !strings.Contains(body, "Gap.World") {
+		t.Fatal("afterHumanAuthorization does not complete the gap identity with the pinned world")
+	}
+}

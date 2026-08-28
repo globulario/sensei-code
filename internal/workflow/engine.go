@@ -1675,7 +1675,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	// supplied plan naming a file the graph never examined is refused after
 	// the answer exactly as it would be refused before a gate existed.
 	unexaminedAfterAnswer := func() error {
-		gap, open, err := e.afterHumanAuthorization(sc, start, task, routing, action, scoped)
+		gap, open, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped)
 		if err != nil {
 			return err
 		}
@@ -1844,7 +1844,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 					// The answer was about the consequence. Files the graph
 					// never examined are asked about now, and an open gap
 					// takes the same closure round any coverage gap takes.
-					gap, open, err := e.afterHumanAuthorization(sc, start, task, routing, action, scoped)
+					gap, open, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped)
 					if err != nil {
 						return architectureDecision{}, err
 					}
@@ -2404,7 +2404,7 @@ func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart,
 // the consequence, and the router asks the gate before coverage, so the
 // planned files the graph never examined are asked about now, before the
 // plan reaches a worker. Returns the open coverage gap, if any.
-func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, task string, routing Routing, action Action, scoped sensei.PreflightDecision) (Routing, bool, error) {
+func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision) (Routing, bool, error) {
 	if !probeNeeded(routing, true) {
 		return routing, false, nil
 	}
@@ -2414,6 +2414,12 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 	}
 	action.Unexamined = unexamined
 	after := afterAuthorization(routing, true, action, readBlindSpots(scoped.BlindSpots))
+	// The same gap identity routePlan would have built: completed with the
+	// pinned world, or the closure budget would treat the question this
+	// answer left open as a new one and issue a fresh receipt for it.
+	if after.Gap.Identified() {
+		after.Gap.World = strings.TrimSpace(e.governedBase(taskID))
+	}
 	return after, after.ClosesGap(), nil
 }
 
