@@ -462,10 +462,22 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 			// the coverage signals are spent and the remaining consequence
 			// signals -- if any -- are judged by the default arm exactly as
 			// they would be on a covered region.
-			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.Files); !closed {
+			//
+			// And the same subtraction as that branch: a planned file under an
+			// operational grant is not asked to be covered. B3's N1b found
+			// this branch asking the derivation to cover a granted test file
+			// -- one anchor over the covered source plus one grant over the
+			// test read as "1 anchor over 2 files" and routed cold -- the
+			// two-branches-one-wired defect this comment already describes,
+			// recurring one seam over (M2.2 had been wired into the other
+			// branch only). The identity below is what keeps its closure
+			// budget honest.
+			arch := action.architecturalFiles()
+			if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, arch); len(arch) == 0 || !closed {
 				return Routing{
 					Route:     RouteCloseGap,
 					Condition: "Sensei reported missing coverage in the planned region: " + strings.Join(spots.Coverage, ", "),
+					Gap:       GapIdentity{Kind: "coverage-blind-spot", Scope: arch},
 				}
 			}
 			spots.Coverage = nil
