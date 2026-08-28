@@ -790,3 +790,29 @@ func TestTheBlindSpotCoverageBranchHonoursOperationalAuthority(t *testing.T) {
 		t.Fatalf("a plan of only granted files was read as covered: %+v", r)
 	}
 }
+
+// B3 N1b: an unidentified gap with an identical condition every round was
+// issued a fresh receipt -- and a fresh closure budget -- each time, running
+// to the round ceiling. The receipt design must never spend more budget than
+// the wording-keyed rule it replaced: same condition, same receipt.
+func TestAnUnidentifiedGapRepeatingItsConditionDoesNotBuyAFreshRound(t *testing.T) {
+	e := &Engine{}
+	cold := Routing{Route: RouteCloseGap, Condition: "Sensei reported missing coverage in the planned region: coverage_insufficient: no direct anchors"}
+	r1 := e.premiseReceiptFor("t", cold, "")
+	if !e.spendClosure("t", r1.ID) {
+		t.Fatal("first round refused")
+	}
+	e.applyPremiseResolutions("t", nil) // the round answered nothing: unresolved
+	r2 := e.premiseReceiptFor("t", cold, "")
+	if r2.ID != r1.ID {
+		t.Fatalf("an identical unidentified condition was issued a new receipt %s", r2.ID)
+	}
+	if e.spendClosure("t", r2.ID) {
+		t.Fatal("an identical unidentified condition bought a second round")
+	}
+	// A different unidentified condition is a different gap, as before.
+	other := Routing{Route: RouteCloseGap, Condition: "something else entirely"}
+	if r3 := e.premiseReceiptFor("t", other, ""); r3.ID == r1.ID || !e.spendClosure("t", r3.ID) {
+		t.Fatal("a different condition was denied its own round")
+	}
+}

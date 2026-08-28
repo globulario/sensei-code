@@ -114,6 +114,20 @@ func (e *Engine) premiseReceiptFor(taskID string, routing Routing, claimRef stri
 			}
 		}
 	}
+	if !routing.Gap.Identified() {
+		// A gap the router did not identify keeps the pre-receipt floor: the
+		// same condition text continues the same receipt. Without this, an
+		// unidentified gap was issued a fresh receipt -- and a fresh budget
+		// -- every round: B3's N1b spent every round to the ceiling on one
+		// identical condition (a blind-spot coverage gap), where the old
+		// wording-keyed budget would have refused the second attempt. #98
+		// must never spend MORE budget than the rule it replaced.
+		for _, r := range receipts {
+			if r.open() && len(r.Wordings) != 0 && r.Wordings[0] == routing.Condition {
+				return r
+			}
+		}
+	}
 	if routing.Gap.Identified() {
 		for _, r := range receipts {
 			if !r.open() || r.Outcome != premiseUnresolved {
