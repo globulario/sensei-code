@@ -309,7 +309,9 @@ func extract(log string) (record, error) {
 			}
 		}
 	}
-	if b, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Dir(log)), "corpus-overlay.json")); err == nil {
+	// The overlay belongs to the experiment, however deep the stream sits
+	// beneath its runs/ directory.
+	if b, err := os.ReadFile(filepath.Join(experimentDir(log), "corpus-overlay.json")); err == nil {
 		var overlay map[string]map[string]any
 		if json.Unmarshal(b, &overlay) == nil {
 			if o, ok := overlay[run]; ok {
@@ -412,4 +414,20 @@ func encounterName(log string) (exp, run string) {
 	}
 	run = strings.TrimSuffix(strings.TrimSuffix(run, ".log"), ".jsonl")
 	return exp, run
+}
+
+// experimentDir is the experiment directory that owns a stream: the parent
+// of the first `runs` segment on its path.
+func experimentDir(log string) string {
+	dir := log
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return filepath.Dir(filepath.Dir(log))
+		}
+		if filepath.Base(dir) == "runs" {
+			return parent
+		}
+		dir = parent
+	}
 }
