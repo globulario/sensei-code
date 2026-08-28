@@ -394,3 +394,12 @@ contradictions *before* review; N2b's is the case it does not name — a
 contradiction between two reviews, mechanical in every input, not checked.
 Excluded from proof-v7 evidence as a discovery instance; it becomes a
 prediction to freeze.
+
+### Knowledge publication — 2026-08-28, after #108 merged at `fbc8870`
+
+Both B3 invariants live on `:10122` (digest `42e6e12c…`, 164,506 triples,
+authoritative): FUTURE_ONLY raised on `internal/derived/write.go` and
+REPEATED_RESUME_CANNOT_MINT on `internal/workflow/testedit.go`, each with its
+two exact required tests attached. Verification transcript on #108. B3
+knowledge publication is closed as an observed fact; S1 remains blocked on
+the mediator's gate, not on coverage.
