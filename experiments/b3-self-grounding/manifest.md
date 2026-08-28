@@ -257,3 +257,42 @@ committer timestamp was necessarily rewritten. No retroactive merge was
 manufactured to make the graph look continuous: the pre-run freeze is
 proven by the original commit's timestamp and the unchanged blob, and this
 note is the record of the rewrite.
+
+## N1b and N2b — FROZEN (cleared by the #107 merge, 4b92bc67)
+
+The second encounters. Same tasks byte for byte, same producer, same
+consumer, same graph, same env as N1/N2; the only variable is that each
+region's relation is now a **persisted question that deterministically
+derives DERIVED** (mechanical check above).
+
+```
+subjects     TWO independent detached copies of 6c36961 (= 7ae7236e + the three investigator
+             recipes; Go sources byte-identical to 7ae7236e), one per encounter, so neither
+             run's knowledge writes reach the other; each seeded only with .sensei-code/config.json
+             (sha256 94ed3b17…); each clean at start
+consumer     sensei-code f4038b76  (sensei-code-b3)      producer  sensei f79f96f9 (sensei-f3)
+graph        :10122 (read by both; neither run rebuilds it)
+recipes      3 at start in each copy: Bus.subs, Engine.premises, Result.Anchor
+tasks        N1b = N1's text; N2b = N2's text (byte for byte)
+order        N1b, then N2b, sequentially; nothing altered between
+```
+
+Stopping rule: one invocation each; whatever it does is the result; every
+plan, coverage line, route, grant, candidate, validation, audit, review and
+terminal preserved as `runs/N1b.*`, `runs/N2b.*` and entered in the B2
+corpus; exit 3 preserves the question; timeout or crash is an instrument
+finding. **No candidate is admitted or merged**: B3 measures whether Sensei
+can govern a self-change to judgement, not whether it may land one.
+
+Predictions:
+- If the architect plans only `premise.go` (N1b) / `derived.go` (N2b):
+  `derived coverage: 1 anchor(s) over 1 planned file(s); route
+  architectural-authority-granted` on the first routing, unless an
+  inference premise opens a closure round first, then granted.
+- If the architect adds a file, the existing rules decide: an existing
+  test beside the now-covered subject may receive an M2.2 grant (operational
+  authority, printed beside coverage, never summed); any other file is a
+  coverage gap and the run routes cold or to the human. Nothing is forced
+  to 1/1.
+- Granted → implementor → validation → Sensei audit → independent review →
+  terminal. A refutation or a REVISE cycle is ordinary and recorded.
