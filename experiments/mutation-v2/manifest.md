@@ -222,3 +222,33 @@ Predictions, finalised:
    cold, recorded as the architect's planning, not the family.
 5. A proposed question about `module.Version.Path` derives REFUTED, records
    a receipt, earns no coverage, and is preserved as the court's answer.
+
+### E1 — 00:20:37Z–00:25:21Z, exit 3, base `7deaa1e`
+
+- Plan: `modfile/rule.go` + `modfile/rule_test.go`, every claim
+  evidence-bearing. `derived coverage: 0 anchor(s) over 2 planned file(s);
+  route bounded-knowledge-gap` (graph coverage: 1 of 2 files indexed).
+- Closure round 1: the investigator, told only that three kinds are
+  answerable and never shown `selection.json`, proposed
+  `state_mutation_confined_to_owner(File.Module in modfile, search .)` —
+  *"AddModuleStmt mutates File.Module, while the requested error path must
+  preserve it; repository-wide mutation ownership is worth verifying
+  mechanically."* Outcome `RECORDED`, identity
+  `state_mutation_confined_to_owner|modfile|file|module|.`. The family
+  chosen untold; the subject is one the sealed tool marks DERIVED in this
+  region (a v2 control, not the sealed positive, which lives in groupcache).
+- Future-only rule: the recipe cannot cover the run that proposed it. Second
+  routing: still `0 anchor(s)`; the gap did not close; escalated to the
+  human with the question preserved: *Should Sensei derive coverage for this
+  region and then reconsider the bounded change, or should the change remain
+  deferred?* Exit 3.
+- Predictions 1 and 2 held exactly. `E1.log` keeps the non-output events;
+  untrimmed sha256 recorded in `runs/E1.run`'s sibling note below;
+  `E1.recipes-after.json` and `E1.receipts.jsonl` preserved.
+
+Encounter 2's base: the recorded recipe committed into the fixture as
+`989c621` (recipes: 1, the investigator's own; Go sources still byte-identical
+to `9c7e562`). E2 runs next as the second encounter over `modfile`, per
+prediction 3. Its plan's shape decides the bridge: the family's deriver reads
+non-test files only, so a plan that touches `rule_test.go` again reads
+`1 anchor over 2 files` and stays cold — recorded as the plan's shape if so.
