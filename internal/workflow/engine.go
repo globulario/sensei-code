@@ -2241,6 +2241,14 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	if stage == StageObserve || len(files) == 0 {
 		return nil, nil
 	}
+	// An explicit approval gate outranks every epistemic question, and the
+	// router asks it first. Probing coverage ahead of it would let a
+	// transient probe failure abort a plan before it reached its genuine
+	// human-owned boundary; a gated plan cannot be granted autonomously, so
+	// nothing here would change its route. Not probed.
+	if scoped.ChangeRisk.Classified() && scoped.ChangeRisk.Gate() != "none" {
+		return nil, nil
+	}
 	// The shortcut -- every planned file examined, nothing to ask -- is taken
 	// only when the region's counts are about the plan that was requested. A
 	// region answer that omits file_count, or counts fewer files than were
@@ -2281,7 +2289,11 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		default:
 			return nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
 		}
-		if one.Coverage.DirectAnchorCount == 0 && one.Coverage.IndexedFileCount == 0 {
+		// The file is examined only when its OWN answer proves coverage:
+		// Sensei's published sufficiency, narrowed to an analysis basis,
+		// exactly as the region is read. Counts never override a published
+		// sufficient=false (TestSufficiencyIsTakenAsPublishedAndNarrowedNotRecomputed).
+		if !one.Coverage.Proven() {
 			out = append(out, f)
 		}
 	}

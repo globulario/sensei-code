@@ -293,3 +293,45 @@ func TestAggregateCountsMustDescribeTheRequestedPlanToSkipProbes(t *testing.T) {
 		})
 	}
 }
+
+// A probe's published sufficiency is honoured. Nonzero counts beside
+// sufficient=false are a valid answer shape, and they do not make the file
+// examined (#115, fifth pass; the routine tier pins the same reading).
+func TestAProbePublishedInsufficientIsUnexamined(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+		if f == files[1] {
+			d := region
+			d.Status = sensei.PreflightEmpty
+			d.Coverage = sensei.Coverage{Sufficient: false, DirectAnchorCount: 1, FileCount: 1, IndexedFileCount: 1}
+			return d, nil
+		}
+		return region, nil
+	}, files, region)
+	if err != nil || len(got) != 1 || got[0] != files[1] {
+		t.Fatalf("counts overrode a published insufficiency: unexamined=%v err=%v", got, err)
+	}
+}
+
+// An explicit approval gate is asked before any epistemic question, so a
+// gated plan is not probed: a probe failure must not abort a plan before it
+// reaches its human-owned boundary.
+func TestAGatedPlanIsNotProbed(t *testing.T) {
+	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
+		identifiedAuthority+`}`)
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
+		t.Fatal("a gated plan was probed")
+		return sensei.PreflightDecision{}, nil
+	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, gated)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("gated: unexamined=%v err=%v", got, err)
+	}
+	// And the router still sends it to the human, unexamined or not.
+	r := routeAuthorityForAction(gated, nil, plannedEdit("internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"))
+	if r.Route != RouteHuman {
+		t.Fatalf("a gated plan routed to %s", r.Route)
+	}
+}
