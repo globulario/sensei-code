@@ -183,3 +183,53 @@ Reading: the first self-grounding witness. Sensei, pointed at its own engine
 with no control document in sight, asked the lock-discipline question about
 the receipt map that S1 must preserve. The anchor it earns benefits the next
 encounter over that region, by the future-only rule.
+
+### N2 — 03:10:35Z–03:20:01Z, exit 3, subject `209c5c6` (N1's recipe persisted)
+
+- Round 1: plan `internal/derived/derived.go` alone; `0 anchor(s) over 1
+  planned file(s); route bounded-knowledge-gap` (the persisted recipes cover
+  `internal/event` and `internal/workflow`, not `internal/derived`).
+  Receipt `gap-…-1`.
+- Round 2: the architect asked to escalate with no files in the plan
+  (`0 anchor(s) over 0 planned file(s)`); the engine closed instead (receipt
+  `gap-…-2`). **In this round the investigator, told nothing, proposed and
+  recorded** `state_mutation_confined_to_owner(Result.Anchor in
+  internal/derived, search .)` — *"CLI.Revalidate currently builds Result
+  incrementally and assigns the authority-bearing Anchor only after a
+  DERIVED…"* Identity
+  `state_mutation_confined_to_owner|internal/derived|result|anchor|.`, region
+  `[internal/derived/derived.go]`. The sealed Family 3 sweep marks
+  `Result.Anchor` DERIVED with one write inside the owner.
+- Round 3: future-only; the gap did not close; escalated with the question
+  preserved: *Should Sensei Code retry this bounded constructor refactor
+  after a later mechanical derivation, or leave the implementation
+  unchanged?* Exit 3.
+- Predictions held: cold → closure → a Family 3 question over
+  `internal/derived` → recorded → future-only ends N2 at the human. The
+  recipe is persisted in the subject as `6c36961` (three recipes: Bus.subs,
+  Engine.premises, Result.Anchor; Go sources byte-identical to `7ae7236e`).
+
+## N1 + N2 reading
+
+Two encounters, two different epistemic species, both rediscovered by the
+investigator against Sensei's own engine with no control document in its
+world:
+
+```
+N1  premise.go   Family 1  field_access_under_lock(Engine.premises under Engine.mu)     RECORDED
+N2  derived.go   Family 3  state_mutation_confined_to_owner(Result.Anchor in derived)   RECORDED
+```
+
+Each is a proposition the sealed sweeps had marked DERIVED over that
+surface, and neither was shown to the investigator. Each run ended at the
+human branch by the future-only rule, which is the rule doing its job: the
+anchors these questions earn belong to the *next* encounter over
+`premise.go` and `derived.go`, which — if the recipes derive DERIVED at the
+persisted base — would read `1 anchor over 1 planned file` and route on
+architectural authority, as Family 3's E3 did on golang/mod. That is the
+next measurable step toward the B3 stopping rule for two of the five EMPTY
+surfaces. Not established: whether the persisted recipes derive at
+`6c36961` under the producer (the seal says they should; a run says so).
+Also observed: M2.2 refused a test-edit grant in N1 for the right reason
+(no covered sibling yet), and every escalation the architect asked for was
+closed rather than raised.
