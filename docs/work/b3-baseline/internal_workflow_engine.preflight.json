@@ -1,0 +1,113 @@
+{
+  "status": "PREFLIGHT_STATUS_OK",
+  "risk_class": "ARCHITECTURE_SENSITIVE",
+  "confidence": "CONFIDENCE_HIGH",
+  "direct_invariants": [
+    {
+      "iri": "https://globular.io/awareness#invariant/sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary",
+      "id": "sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary",
+      "class": "invariant",
+      "label": "The human may stop computation at any time, but only an explicit authority decision can satisfy an authority boundary",
+      "severity": "critical",
+      "status": "active",
+      "related_ids": [
+        "test:internal/workflow/engine_test.go:TestDeferralCallsNoOneAfterwards",
+        "test:internal/workflow/engine_test.go:TestResumeRestoresTheDeferredQuestionWithoutRerouting",
+        "test:internal/session/interrupted_test.go:TestDeferredAuthorityIsResumableAndCarriesItsQuestion",
+        "test:internal/workflow/engine_test.go:TestDeferredAuthorityIsItsOwnTransition",
+        "test:internal/workflow/engine_test.go:TestOnlyAChosenOptionSatisfiesAnAuthorityBoundary",
+        "source_file:internal/session/store.go",
+        "source_file:internal/workflow/",
+        "source_file:internal/workflow/engine.go"
+      ],
+      "facts": [
+        {
+          "predicate": "status",
+          "value": "active"
+        }
+      ]
+    },
+    {
+      "iri": "https://globular.io/awareness#invariant/sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal",
+      "id": "sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal",
+      "class": "invariant",
+      "label": "A candidate is kept or removed by decision, and its evidence is recorded before anything is removed",
+      "severity": "critical",
+      "status": "active",
+      "related_ids": [
+        "test:internal/candidate/disposition_test.go:TestRemovalRequiresEvidenceThatOutlivesTheCandidate",
+        "test:internal/candidate/disposition_test.go:TestRetentionStatesItsReason",
+        "test:internal/candidate/disposition_test.go:TestDispositionVocabularyIsClosed",
+        "test:internal/workflow/engine_test.go:TestOnlyAnEmptyCandidateIsRemovedAutomatically",
+        "source_file:internal/candidate/",
+        "source_file:internal/candidate/disposition.go",
+        "source_file:internal/workflow/engine.go"
+      ],
+      "facts": [
+        {
+          "predicate": "status",
+          "value": "active"
+        }
+      ]
+    },
+    {
+      "iri": "https://globular.io/awareness#invariant/sensei_code.workflow.context_never_widens_worker_scope",
+      "id": "sensei_code.workflow.context_never_widens_worker_scope",
+      "class": "invariant",
+      "label": "Shared context explains why a change was asked for and never enlarges what may be changed",
+      "severity": "critical",
+      "status": "active",
+      "related_ids": [
+        "test:internal/workflow/engine_test.go:TestReviewPromptCarriesContextWithoutLoweringTheBar",
+        "test:internal/workflow/engine_test.go:TestGuidanceReachesTheWorkerWithoutEnlargingThePlan",
+        "test:internal/workflow/engine_test.go:TestImplementationPromptCarriesContextWithoutWideningScope",
+        "source_file:internal/workflow/",
+        "source_file:internal/workflow/engine.go"
+      ],
+      "facts": [
+        {
+          "predicate": "status",
+          "value": "active"
+        }
+      ]
+    }
+  ],
+  "required_actions": [
+    "Change risk: blast=local, approval=none",
+    "Verify invariant still holds: The human may stop computation at any time, but only an explicit authority decision can satisfy an authority boundary",
+    "Verify invariant still holds: A candidate is kept or removed by decision, and its evidence is recorded before anything is removed",
+    "Verify invariant still holds: Shared context explains why a change was asked for and never enlarges what may be changed",
+    "Re-read CLAUDE.md hard rules; call awareness.briefing(file=...) per the rule R2 contract"
+  ],
+  "blind_spots": [
+    "anchor with severity=critical",
+    "file path under high-risk directory"
+  ],
+  "coverage": {
+    "direct_anchor_count": 3,
+    "file_count": 1,
+    "indexed_file_count": 1,
+    "sufficient": true,
+    "note": "3 direct anchor(s) matched"
+  },
+  "generated_in_ms": "604",
+  "authority": {
+    "authoritative": true,
+    "graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+    "graph_freshness_detail": "live store matches expected validated graph artifact",
+    "build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED",
+    "seed_state": "SEED_STATE_CURRENT",
+    "graph_build_commit": "fac399f8225f",
+    "graph_build_time_unix": "1787418755",
+    "source_repo_commit": "f56f5a305798",
+    "embedded_seed_digest_sha256": "def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912",
+    "live_store_graph_digest_sha256": "def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912",
+    "live_store_graph_triple_count": "158349",
+    "embedded_transaction_detail": "runtime transaction stamp missing: .sensei/graph-authority.transaction.tsv",
+    "verdict": "AUTHORITY_VERDICT_AUTHORITATIVE"
+  },
+  "change_risk": {
+    "blast_radius": "BLAST_RADIUS_LOCAL",
+    "approval_gate": "APPROVAL_GATE_NONE"
+  }
+}

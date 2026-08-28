@@ -1,0 +1,36 @@
+{
+  "status": "PREFLIGHT_STATUS_EMPTY",
+  "risk_class": "UNKNOWN_IMPACT",
+  "confidence": "CONFIDENCE_LOW",
+  "required_actions": [
+    "Change risk: blast=local, approval=none",
+    "Coverage is thin — read the surrounding code, then re-run preflight with --file to narrow"
+  ],
+  "blind_spots": [
+    "coverage_insufficient: no direct anchors and no indexed files — a pattern match is guidance, not coverage"
+  ],
+  "coverage": {
+    "file_count": 1,
+    "note": "no anchors fired, no files examined — coverage thin for this area"
+  },
+  "generated_in_ms": "419",
+  "authority": {
+    "authoritative": true,
+    "graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+    "graph_freshness_detail": "live store matches expected validated graph artifact",
+    "build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED",
+    "seed_state": "SEED_STATE_CURRENT",
+    "graph_build_commit": "fac399f8225f",
+    "graph_build_time_unix": "1787418755",
+    "source_repo_commit": "f56f5a305798",
+    "embedded_seed_digest_sha256": "def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912",
+    "live_store_graph_digest_sha256": "def94857a06a997412c56c682c39481b226f1834f93a4173425852965367b912",
+    "live_store_graph_triple_count": "158349",
+    "embedded_transaction_detail": "runtime transaction stamp missing: .sensei/graph-authority.transaction.tsv",
+    "verdict": "AUTHORITY_VERDICT_AUTHORITATIVE"
+  },
+  "change_risk": {
+    "blast_radius": "BLAST_RADIUS_LOCAL",
+    "approval_gate": "APPROVAL_GATE_NONE"
+  }
+}
