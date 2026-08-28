@@ -245,6 +245,31 @@ type Task struct {
 	// is simply not yet benchmark-eligible, and discriminate says so rather
 	// than failing to load the manifest.
 	Contract *ContractOracle `json:"contract,omitempty"`
+	// Flags are the proof-v7 task labels, assigned from the statement text
+	// alone before any arm runs, from the closed vocabulary in TaskFlags.
+	// They are hypothesis inputs, never outcomes: a flag that was assigned
+	// after seeing what a run did is not a label, it is a result.
+	Flags []string `json:"flags,omitempty"`
+}
+
+// TaskFlags is the closed proof-v7 label vocabulary. Read by membership.
+var TaskFlags = map[string]bool{
+	"LOCAL_POSITIVE":     true, // straightforward positive change, no boundary in the statement
+	"MULTI_STATE":        true, // completeness across more than one state/branch is required
+	"OWNERSHIP_BOUNDARY": true, // an owner/authority boundary is named
+	"NEGATIVE_CONDITION": true, // something must NOT happen / must be refused
+	"EXCEPTION_CASE":     true, // an exception to the general rule is named
+}
+
+// ValidateFlags refuses a label outside the vocabulary. Silence (no flags)
+// is unlabelled, not LOCAL_POSITIVE.
+func (t Task) ValidateFlags() error {
+	for _, f := range t.Flags {
+		if !TaskFlags[f] {
+			return fmt.Errorf("task %s carries flag %q outside the closed proof-v7 vocabulary", t.ID, f)
+		}
+	}
+	return nil
 }
 
 // Linked reports whether this task can carry earlier experience.
@@ -351,6 +376,9 @@ func (m Manifest) Validate() error {
 		}
 	}
 	for _, t := range m.Tasks {
+		if err := t.ValidateFlags(); err != nil {
+			return err
+		}
 		for _, dep := range t.DependsOn {
 			if !seen[dep] {
 				add("%s depends on %q, which is not in this manifest", t.ID, dep)
