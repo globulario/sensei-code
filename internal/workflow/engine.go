@@ -2317,21 +2317,18 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	// Whether a gated plan is probed is decided by the caller (probeNeeded):
 	// not before the human answers the gate, and always after. Deciding it
 	// here too made an authorised gated plan unprobeable (#115 review).
-	// The shortcut -- every planned file examined, nothing to ask -- is taken
-	// only when the region's counts are about the plan that was requested. A
-	// region answer that omits file_count, or counts fewer files than were
-	// asked about, would satisfy indexed >= file_count on default zeros and
-	// skip every probe; its counts describe something else, so every file is
-	// asked. Probing is the safe direction; skipping is the one to earn.
+	// There is no shortcut on the region's counts. A region that says every
+	// planned file is indexed can still hold a file that, asked alone,
+	// publishes sufficient=false -- a shape the router treats as meaningful
+	// -- and the aggregate cannot say which. Per-file sufficiency is the
+	// property; the only way to read it is to ask per file, every time a
+	// grant is on the table. What the region's counts CAN say is that the
+	// answer is not about this plan at all: more files examined than were
+	// asked about is malformed, and Proven() would read it as coverage, so
+	// it fails closed rather than being probed around.
 	c := scoped.Coverage
-	if c.IndexedFileCount > c.FileCount {
-		// More files examined than were asked about is not an answer about
-		// this plan; it is a malformed one, and Proven() would read it as
-		// coverage. Fail closed rather than probe or skip.
-		return nil, fmt.Errorf("region preflight counts are impossible: %d indexed of %d file(s)", c.IndexedFileCount, c.FileCount)
-	}
-	if c.FileCount > 0 && c.FileCount == requested && c.IndexedFileCount == c.FileCount {
-		return nil, nil
+	if c.IndexedFileCount > c.FileCount || (c.FileCount > 0 && c.FileCount != requested) {
+		return nil, fmt.Errorf("region preflight counts do not describe this plan: %d indexed of %d file(s), %d requested", c.IndexedFileCount, c.FileCount, requested)
 	}
 	var out []string
 	for _, f := range files {

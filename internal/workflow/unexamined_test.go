@@ -162,13 +162,17 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 	if err != nil || len(got) != 1 || got[0] != files[1] {
 		t.Fatalf("unexamined = %v, %v; want only %s", got, err, files[1])
 	}
+	// A region that says every file is indexed is still asked per file: the
+	// aggregate cannot carry each file's own published sufficiency
+	// (TestFullyIndexedRegionDoesNotHidePerFileInsufficiency).
 	all := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+identifiedAuthority+`}`)
+	asked := 0
 	if got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
-		t.Fatal("a fully examined region must ask nothing per file")
-		return sensei.PreflightDecision{}, nil
-	}, files, all); err != nil || len(got) != 0 {
-		t.Fatalf("unexamined = %v, %v on a fully examined region", got, err)
+		asked++
+		return probeOf(all), nil
+	}, files, all); err != nil || len(got) != 0 || asked != 2 {
+		t.Fatalf("unexamined = %v, %v, %d probe(s) on a fully examined region", got, err, asked)
 	}
 }
 
@@ -270,39 +274,36 @@ func TestACoverageShapedDegradedProbeIsRead(t *testing.T) {
 	}
 }
 
-// The shortcut is earned by counts that describe the requested plan. A region
-// answer that omits file_count, or counts fewer files than were asked about,
-// does not skip the probes on its default zeros (#115, fourth pass).
-func TestAggregateCountsMustDescribeTheRequestedPlanToSkipProbes(t *testing.T) {
+// Region counts that do not describe the requested plan are not an answer
+// about it. A region that omits file_count is probed (nothing is claimed);
+// one that counts a different number of files than were asked about, or
+// more indexed than counted, fails closed (#115, fourth and eleventh pass).
+func TestAggregateCountsMustDescribeTheRequestedPlan(t *testing.T) {
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
-	for name, body := range map[string]string{
-		"file_count omitted": `{"status":"PREFLIGHT_STATUS_OK","coverage":{"sufficient":true,"direct_anchor_count":3},` + identifiedAuthority + `}`,
-		"fewer files than requested": `{"status":"PREFLIGHT_STATUS_OK",` +
-			`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":1,"indexed_file_count":1},` + identifiedAuthority + `}`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			region := scopedPreflight(t, body)
-			if !region.Coverage.Proven() {
-				t.Fatalf("the specimen must be a region the router would call proven: %+v", region.Coverage)
-			}
-			asked := 0
-			got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
-				asked++
-				if f == files[1] {
-					d := region
-					d.Status = sensei.PreflightEmpty
-					d.Coverage = sensei.Coverage{FileCount: 1}
-					return d, nil
-				}
-				return probeOf(region), nil
-			}, files, region)
-			if asked != 2 {
-				t.Fatalf("the shortcut was taken on counts that do not describe the plan: %d probe(s)", asked)
-			}
-			if err != nil || len(got) != 1 || got[0] != files[1] {
-				t.Fatalf("unexamined = %v, %v", got, err)
-			}
-		})
+	omitted := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK","coverage":{"sufficient":true,"direct_anchor_count":3},`+identifiedAuthority+`}`)
+	if !omitted.Coverage.Proven() {
+		t.Fatalf("the specimen must be a region the router would call proven: %+v", omitted.Coverage)
+	}
+	asked := 0
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+		asked++
+		d := probeOf(omitted)
+		if f == files[1] {
+			d.Status = sensei.PreflightEmpty
+			d.Coverage = sensei.Coverage{FileCount: 1}
+		}
+		return d, nil
+	}, files, omitted)
+	if asked != 2 || err != nil || len(got) != 1 || got[0] != files[1] {
+		t.Fatalf("file_count omitted: %d probe(s), unexamined=%v err=%v", asked, got, err)
+	}
+	fewer := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":1,"indexed_file_count":1},`+identifiedAuthority+`}`)
+	if got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
+		t.Fatal("a region counting a different number of files than requested was probed instead of refused")
+		return sensei.PreflightDecision{}, nil
+	}, files, fewer); err == nil {
+		t.Fatalf("counts about a different plan were read as evidence: unexamined=%v", got)
 	}
 }
 
@@ -493,5 +494,36 @@ func TestAnExhaustedPostAuthorizationGapEscalates(t *testing.T) {
 	}
 	if strings.Contains(src, "stayed open: %s") {
 		t.Fatal("an exhausted post-authorization gap still aborts instead of escalating")
+	}
+}
+
+// A fully indexed region does not substitute for each file's own published
+// sufficiency. The aggregate can say 2/2 indexed and sufficient while one
+// file, asked alone, publishes sufficient=false -- a shape the fifth pass
+// established as meaningful. Skipping the probes on the aggregate count was
+// the one trapdoor left: per-file sufficiency was authoritative except when
+// the aggregate stopped us asking (owner review of 67f68f9).
+func TestFullyIndexedRegionDoesNotHidePerFileInsufficiency(t *testing.T) {
+	region := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+identifiedAuthority+`}`)
+	if !region.Coverage.Proven() {
+		t.Fatalf("the specimen must be a region the router would call proven: %+v", region.Coverage)
+	}
+	a, b := "internal/workflow/engine.go", "internal/workflow/zz_examined_but_insufficient.go"
+	asked := 0
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+		asked++
+		d := probeOf(region)
+		if f == b {
+			d.Status = sensei.PreflightEmpty
+			d.Coverage = sensei.Coverage{Sufficient: false, DirectAnchorCount: 1, FileCount: 1, IndexedFileCount: 1}
+		}
+		return d, nil
+	}, []string{a, b}, region)
+	if asked != 2 {
+		t.Fatalf("the aggregate count stopped the per-file question: %d probe(s)", asked)
+	}
+	if err != nil || len(got) != 1 || got[0] != b {
+		t.Fatalf("a file publishing sufficient=false was hidden by the region's indexed count: unexamined=%v err=%v", got, err)
 	}
 }
