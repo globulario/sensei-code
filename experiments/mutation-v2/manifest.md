@@ -353,3 +353,23 @@ routing. What is open is the full system execution gate, and the reason is
 the existing-test wall below. E2's trace is direct evidence of every link it
 reached; it is not a preregistered confirmation (see the disclosure under
 the frozen rule).
+
+## E3, proposed — NOT FROZEN until M2.2 (#101) is merged
+
+The witness for the full gate is E2's own task, byte for byte: it is the
+task whose plan naturally reached `rule_test.go`, and re-running it on an
+instrument carrying M2.2 asks exactly one new question — does the existing
+test's edit grant let the plan route on `rule.go`'s architectural authority
+alone, and does the implementor then run? Nothing else changes: fixture
+base is E2's end state (E1's and E2's recipes both persisted, `File.Module`
+and `File.Syntax`), graph `:10193`, same env. Instrument SHAs, the base
+commit, and finalised predictions are written here at freeze time.
+
+Predictions to finalise then: round 1 plan `rule.go` (+ `rule_test.go`) →
+`derived coverage: 1 anchor over 1 architectural file [mutation confinement]`
++ `operational authority (existing-test edit): 1 file` → route granted (or a
+closure round on an inference premise, then granted) → implementor →
+post-edit inspection of `rule_test.go` against its grant → audit → review →
+terminal. A refutation at inspection (novel import, package change) ends the
+run and is the result; an inspection pass followed by review is the FULL
+Family 3 gate.
