@@ -61,5 +61,53 @@
    "PR #107 review 5047672245: evidence PASS"
   ],
   "note": "subject 209c5c6 (N1's recipe persisted); investigator untold proposed state_mutation_confined_to_owner(Result.Anchor in internal/derived); recorded; future-only; exit 3"
+ },
+ "N3": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "c5c0ef991719941c934daac61d562cc73eeef37f",
+  "fixture": "github.com/globulario/sensei-code (self; detached subject, controller documents not visible; only .sensei-code/config.json seeded, sha256 94ed3b17...)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois -- GitHub connector executes under this account",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "not merged at record time (#113 open)",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "PR #113 Codex exact-head review of 3236caf (2026-08-28 18:25Z): P1 -- N3/N4 receipt artifacts not preserved; repaired records-only at e328547 (empty N*.receipts.jsonl with verification)",
+   "PR #113 Codex exact-head review of e328547 (2026-08-28 19:13Z): P1 -- N3/N4 overlays copied N2's #107 review PASS and merge provenance; repaired in this commit",
+   "PR #113: not yet merged at record time; a later review of the exact final head is the merge condition"
+  ],
+  "note": "subject 6c36961 (copy n3); consumer main c5c0ef991719941c934daac61d562cc73eeef37f (sensei-code-b3c, instrument change from N1/N2 recorded); graph 42e6e12c; no question recorded; authority carried by a neighbouring anchor (engine.go, Engine.premises); Codex REVISE x2, reviewer-substitution ACCEPT caught by the #111 guard; workflow.failed, retained resumable, not admitted"
+ },
+ "N4": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "c5c0ef991719941c934daac61d562cc73eeef37f",
+  "fixture": "github.com/globulario/sensei-code (self; detached subject, controller documents not visible; only .sensei-code/config.json seeded, sha256 94ed3b17...)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois -- GitHub connector executes under this account",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "not merged at record time (#113 open)",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "PR #113 Codex exact-head review of 3236caf (2026-08-28 18:25Z): P1 -- N3/N4 receipt artifacts not preserved; repaired records-only at e328547 (empty N*.receipts.jsonl with verification)",
+   "PR #113 Codex exact-head review of e328547 (2026-08-28 19:13Z): P1 -- N3/N4 overlays copied N2's #107 review PASS and merge provenance; repaired in this commit",
+   "PR #113: not yet merged at record time; a later review of the exact final head is the merge condition"
+  ],
+  "note": "subject 6c36961 (copy n4); consumer main c5c0ef991719941c934daac61d562cc73eeef37f; graph 42e6e12c; testedit.go OK by the #108 invariant; routed architectural-authority-granted on graph evidence, no derived-coverage branch; one cycle, Codex ACCEPT, workflow.completed, retained unpublished, not admitted; no question recorded"
  }
 }

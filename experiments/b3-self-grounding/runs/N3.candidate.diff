@@ -1,0 +1,151 @@
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index 12c4a61..6daaaba 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -692,9 +692,10 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
+ 	// The human's "no" did not disappear with it: a running task can be stopped
+ 	// (see Stop), which costs nothing when unused, where a mandatory prompt
+ 	// taxed every run.
+-	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
+-		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)),
+-		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID)}))
++	planSource, planDigest := e.planProvenance(taskID)
++	e.emit(event.New(e.SessionID, taskID, planEventSource(planSource), event.PlanProposed,
++		planSummaryFrom(decision, planSource, planDigest),
++		proposedPlan{architectureDecision: decision, PlanSource: planSource, PlanDigest: planDigest}))
+ 	plan := decision.Plan
+ 	tc := taskContext{
+ 		Task:            task,
+@@ -709,8 +710,8 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
+ 		Consequences:    decision.Consequences,
+ 		Invariants:      decision.Invariants,
+ 		Prospective:     decision.ProspectiveSurfaces,
+-		PlanSource:      e.planSource(taskID),
+-		PlanDigest:      e.planDigest(taskID),
++		PlanSource:      planSource,
++		PlanDigest:      planDigest,
+ 		Identity:        identity,
+ 	}
+ 
+@@ -3802,7 +3803,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
+ 			Invariants:      bound.Invariants,
+ 			Prospective:     bound.Prospective,
+ 			PlanSource:      bound.Source,
+-			PlanDigest:      task.PlanDigest,
++			PlanDigest:      bound.PlanDigest,
+ 		}
+ 		carried := ""
+ 		if r := strings.TrimSpace(task.Review); r != "" {
+diff --git a/internal/workflow/suppliedplan.go b/internal/workflow/suppliedplan.go
+index 648507b..4e68746 100644
+--- a/internal/workflow/suppliedplan.go
++++ b/internal/workflow/suppliedplan.go
+@@ -117,18 +117,14 @@ func (e *Engine) suppliedPlan(taskID string) (SuppliedPlan, bool) {
+ 	return p, ok
+ }
+ 
+-// planSource is who authored the bound for this task.
+-func (e *Engine) planSource(taskID string) PlanSource {
+-	if _, ok := e.suppliedPlan(taskID); ok {
+-		return PlanSupplied
++// planProvenance is who authored the bound for this task and, for a supplied
++// plan, its digest ("" for an architect's plan). Both come from one lookup so
++// the pair always describes the same plan.
++func (e *Engine) planProvenance(taskID string) (PlanSource, string) {
++	if p, ok := e.suppliedPlan(taskID); ok {
++		return PlanSupplied, p.Digest
+ 	}
+-	return PlanByArchitect
+-}
+-
+-// planDigest is the supplied plan's digest, or "" for an architect's plan.
+-func (e *Engine) planDigest(taskID string) string {
+-	p, _ := e.suppliedPlan(taskID)
+-	return p.Digest
++	return PlanByArchitect, ""
+ }
+ 
+ // errSuppliedPlanContextUnavailable is the resume of a supplied-plan task whose
+@@ -143,6 +139,7 @@ var errSuppliedPlanContextUnavailable = errors.New("SUPPLIED_PLAN_CONTEXT_UNAVAI
+ // resumedBound is the executable contract a resumed task continues under.
+ type resumedBound struct {
+ 	Source       PlanSource
++	PlanDigest   string
+ 	Files        []string
+ 	Plan         string
+ 	Rationale    string
+@@ -195,8 +192,10 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
+ 	if !recorded {
+ 		return resumedBound{}, fmt.Errorf("the session record for %s holds no plan to resume under", task.TaskID)
+ 	}
++	source, digest := e.planProvenance(task.TaskID)
+ 	return resumedBound{
+-		Source:       e.planSource(task.TaskID),
++		Source:       source,
++		PlanDigest:   digest,
+ 		Files:        rec.Files,
+ 		Plan:         rec.Plan,
+ 		Rationale:    rec.Summary,
+diff --git a/internal/workflow/suppliedplan_test.go b/internal/workflow/suppliedplan_test.go
+index 282e985..c5e94ff 100644
+--- a/internal/workflow/suppliedplan_test.go
++++ b/internal/workflow/suppliedplan_test.go
+@@ -115,8 +115,11 @@ func TestASuppliedPlanIsNeverRevisedByTheArchitect(t *testing.T) {
+ 	if _, err := e.resolveArchitectureForRevision(nil, nil, certifiedStart{}, "t1", "task", "prompt", "the reviewer escalated"); err == nil || !strings.Contains(err.Error(), "supply a revised plan") {
+ 		t.Fatalf("a supplied plan was handed to the architect for revision: %v", err)
+ 	}
+-	if e.planSource("t1") != PlanSupplied || e.planSource("t2") != PlanByArchitect {
+-		t.Fatal("plan source is not derived from how the task entered")
++	if src, digest := e.planProvenance("t1"); src != PlanSupplied || digest != p.Digest {
++		t.Fatalf("plan provenance is not derived from how the task entered: %v %q", src, digest)
++	}
++	if src, digest := e.planProvenance("t2"); src != PlanByArchitect || digest != "" {
++		t.Fatalf("an architect's task carries a supplied provenance: %v %q", src, digest)
+ 	}
+ }
+ 
+@@ -161,8 +164,9 @@ func TestASuppliedPlanSurvivesResumeOrFailsClosed(t *testing.T) {
+ 
+ 	e := &Engine{}
+ 	bound, err := e.restorePlanBound(found[0])
+-	if err != nil || bound.Source != PlanSupplied || e.planSource("t") != PlanSupplied {
+-		t.Fatalf("a supplied plan was not re-established on resume: %v %+v", err, bound)
++	src, digest := e.planProvenance("t")
++	if err != nil || bound.Source != PlanSupplied || bound.PlanDigest != p.Digest || src != PlanSupplied || digest != p.Digest {
++		t.Fatalf("a supplied plan was not re-established on resume as one source/digest pair: %v %+v (%v %q)", err, bound, src, digest)
+ 	}
+ 	if _, err := e.resolveArchitectureForRevision(nil, nil, certifiedStart{}, "t", "task", "prompt", "escalated"); err == nil {
+ 		t.Fatal("after a resume the architect may revise the supplied plan")
+@@ -217,8 +221,8 @@ func TestASuppliedRecordThatLostItsSourceIsNotTheArchitects(t *testing.T) {
+ 	if !errors.Is(err, errSuppliedPlanContextUnavailable) {
+ 		t.Fatalf("resumed as %+v (%v); must refuse", b, err)
+ 	}
+-	if e.planSource("t") == PlanSupplied {
+-		t.Fatal("a refused resume still registered a supplied plan")
++	if src, digest := e.planProvenance("t"); src == PlanSupplied || digest != "" {
++		t.Fatalf("a refused resume still registered a supplied plan: %v %q", src, digest)
+ 	}
+ 	if b.Source == PlanByArchitect {
+ 		t.Fatal("a supplied record became the architect's by losing a field")
+@@ -246,17 +250,17 @@ func TestAResumedSuppliedPlanContinuesUnderTheExactBound(t *testing.T) {
+ 	if err != nil {
+ 		t.Fatal(err)
+ 	}
+-	if bound.Plan != p.decision.Plan {
+-		t.Fatalf("resumed under %q, not the routed plan", bound.Plan)
++	if bound.Plan != p.decision.Plan || bound.PlanDigest != p.Digest {
++		t.Fatalf("resumed under %q / %q, not the routed plan", bound.Plan, bound.PlanDigest)
+ 	}
+ 	if bound.Rationale != "implement prospective authority" || len(bound.Steps) != 2 || bound.Mode != ModeInspect ||
+ 		bound.Consequences != "c" || len(bound.Invariants) != 1 {
+ 		t.Fatalf("the bound's semantic fields were not restored: %+v", bound)
+ 	}
+ 	// And what the reviewer is then bound to is that exact plan.
+-	tc := taskContext{Task: "task", Rationale: bound.Rationale, Steps: bound.Steps, Mode: bound.Mode, PlanSource: bound.Source, PlanDigest: p.Digest}
++	tc := taskContext{Task: "task", Rationale: bound.Rationale, Steps: bound.Steps, Mode: bound.Mode, PlanSource: bound.Source, PlanDigest: bound.PlanDigest}
+ 	pkt := reviewPacket(tc, roles.Binding{TaskID: "t"}, certifiedStart{}, bound.Plan, "d", "a", "e")
+-	if pkt.Plan != p.decision.Plan || pkt.PlanSource != string(PlanSupplied) {
++	if pkt.Plan != p.decision.Plan || pkt.PlanSource != string(PlanSupplied) || pkt.PlanDigest != p.Digest || tc.PlanDigest != p.Digest {
+ 		t.Fatalf("the reviewer packet does not carry the exact supplied bound: %+v", pkt)
+ 	}
+ }

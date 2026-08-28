@@ -403,3 +403,101 @@ REPEATED_RESUME_CANNOT_MINT on `internal/workflow/testedit.go`, each with its
 two exact required tests attached. Verification transcript on #108. B3
 knowledge publication is closed as an observed fact; S1 remains blocked on
 the mediator's gate, not on coverage.
+
+## N3 and N4 — FROZEN at f8686b6 (slice 2, `docs/work/b3-n3-n4-and-remeasure.md`)
+
+Freeze block, tasks byte for byte, instrument change (consumer = main at
+freeze, `sensei-code-b3c`), graph `42e6e12c…` (post-#108), and the
+`testedit.go`-now-OK disclosure are in that brief; `runs/N3.graph.metadata.pre.json`
+is the graph identity. Owner decision recorded as M24.
+
+### N3 — 17:49:12Z–18:02:57Z, exit 1, subject copy `6c36961` (n3)
+
+- Preflight at start: `suppliedplan.go` EMPTY. The architect planned three
+  files: `suppliedplan.go`, `engine.go`, `suppliedplan_test.go`.
+- Routing: `derived coverage: 1 anchor(s) over 3 planned file(s); route
+  architectural-authority-granted — internal/workflow/engine.go [lock
+  discipline]` (N1's persisted `Engine.premises` recipe), plus the first
+  M2.2 grant of this slice: `suppliedplan_test.go` beside `engine.go`
+  (operational, printed beside coverage). **Prediction "cold → closure"
+  failed**: the neighbour the architect added carried the anchor. No closure
+  round opened, so the investigator was never asked; **no question was
+  recorded** (`grep -c "recorded a question"` = 0; recipes unchanged at 3;
+  no `derived_receipts.jsonl` written).
+- Implement → validation pass → audit pass → Codex REVISE (f1 blocking:
+  `restorePlanBound` discarded the paired digest on resume — an invariant
+  the reviewer cited by name, REPEATED_RESUME_CANNOT_MINT) → cycle 2 →
+  Codex REVISE (f1 major: `gofmt -w` demanded, `gofmt -l` executed — a
+  validation-wording finding, not a code one) → cycle 3 identical bytes →
+  reviewer substituted to Claude → ACCEPT on the same digest `5acb9363b801`
+  → `review.contradiction` fired (#111's guard: *nothing changed but the
+  reviewer*) → re-routed, Claude produced the identical diff again →
+  `workflow.failed: no bounded implementor produced an acceptable
+  candidate`; handoff created; candidate retained resumable. Not admitted.
+- Preserved: `runs/N3.log` (sha256 in `runs/N3.run`, 4,562,556 bytes),
+  `runs/N3.recipes-after.json`, `runs/N3.candidate.diff` (two commits on the
+  task branch, sha256 prefix `5acb9363b801` = the reviewed digest).
+
+Reading, not adjudicated here: (a) the change to `suppliedplan.go` was
+authorized by an anchor on a *neighbouring* planned file; whether that
+satisfies "derived coverage must be relevant" is a question for the owner,
+recorded as such. (b) The #111 guard did its job: an ACCEPT that appeared only
+because the reviewer changed did not complete the run. (c) The loop then
+could not converge on a REVISE whose only remaining finding was a
+`gofmt -w`/`-l` wording — the same shape as N1b's eight-turn loop, on a
+different trigger. Discovery instance; not proof-v7 evidence.
+
+### N4 — 18:04:11Z–18:08:38Z, exit 0, subject copy `6c36961` (n4, independent of n3's writes)
+
+- Preflight at start on the task text: EMPTY (task-only, no file). The
+  architect planned `testedit.go` alone. Routing: `routed:
+  architectural-authority-granted` on **graph** evidence — the #108
+  invariant REPEATED_RESUME_CANNOT_MINT and its two exact tests, cited in
+  the authority lane — with **no derived-coverage line at all**: the
+  derived branch is only entered when graph coverage is absent. Revised
+  prediction held. **No question recorded**; recipes unchanged at 3.
+- Implement (one cycle, 1,961-byte diff, `testedit.go` only) → validation
+  pass → audit pass → level-1 dark run refused as not routine (critical
+  invariant governs) → Codex ACCEPT (the helper wraps only `path.Clean`;
+  each caller keeps its own TrimSpace behaviour) → change report and
+  architectural decision recorded → `workflow.completed: candidate ready for
+  governed admission` → retained, unpublished. Not admitted; landing is the
+  human's decision. Preserved: `runs/N4.*`, `runs/N4.candidate.diff`
+  (`f123b87ae0c6` = the reviewed digest).
+
+### Mechanical check after N4 (read-only): the three persisted recipes at `6c36961`
+
+```
+field_access_under_lock          Bus.subs         exit 0 DERIVED  subjects internal/event/bus.go
+field_access_under_lock          Engine.premises  exit 0 DERIVED  subjects internal/workflow/engine.go, premise.go
+state_mutation_confined_to_owner Result.Anchor    exit 0 DERIVED  subjects internal/derived/derived.go
+```
+
+## N3 + N4 reading (slice 2)
+
+Neither encounter asked. The claim's clause (2) holds for both, and the
+record says what each did instead:
+
+```
+N3  suppliedplan.go  no question  authority from a NEIGHBOUR's anchor (engine.go, Family 1 from N1)   failed to converge
+N4  testedit.go      no question  authority from an INVARIANT published by #108                        ACCEPT, retained
+```
+
+Two mechanisms by which a surface that no family has covered still gets
+governed authority: a planned neighbour that carries an anchor, and a
+constitutional invariant raised on the file by the human. In both, the
+closure round — the only place the investigator is asked — never opens,
+so the Family 1 propositions the sweep marks DERIVED for `Engine.supplied`
+and `Engine.testEdits` are not recorded by any run. The re-measurement
+(`docs/work/b3-remeasure-6c36961/`) shows the same fact from the other
+side: `sensei preflight` never sees derived recipes at all — `premise.go`
+still reads EMPTY though its recipe derives DERIVED and routed N1b — while
+the surfaces that moved to OK moved because of #108's invariants. Two
+instruments, two coverage notions; the stopping rule's `anchors > 0` is
+the preflight notion and is not lifted by recipes.
+
+Discovery instances, not proof-v7 evidence. Nothing here justifies Family 4
+(the surfaces were reachable; the runs did not reach the asking step).
+Not adjudicated here: whether a neighbour's anchor satisfies "derived
+coverage must be relevant" for the file actually changed (N3), and whether
+the stopping rule should read recipes or preflight anchors.
