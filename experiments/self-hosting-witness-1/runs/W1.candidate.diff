@@ -1,0 +1,370 @@
+diff --git a/internal/workflow/adversarial_test.go b/internal/workflow/adversarial_test.go
+index 74dd89a..bb8c209 100644
+--- a/internal/workflow/adversarial_test.go
++++ b/internal/workflow/adversarial_test.go
+@@ -157,7 +157,7 @@ func TestAnUnrecordedRiskReadingFailsClosed(t *testing.T) {
+ 		t.Fatalf("a task with no recorded risk reading was judged cheaply: %+v", p)
+ 	}
+ 
+-	e.setRouting("task-1", roles.PolicyFor("local", "none"), sensei.PreflightDecision{}, nil, nil)
++	e.setRouting("task-1", roles.PolicyFor("local", "none"), sensei.PreflightDecision{}, nil, nil, Action{})
+ 	if got := e.policyFor("task-1"); got.CrossProviderReview {
+ 		t.Fatal("a local change was forced through cross-provider review")
+ 	}
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index 2ba26ec..3f6f2f1 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -195,16 +195,23 @@ type routingRecord struct {
+ 	// Planned is what the approved plan named, so a later widening is
+ 	// detectable against the decision rather than against the diff.
+ 	Planned []string
++	// Unexamined is the router's per-file fact: the planned architectural
++	// files the graph had no facts about when the plan was routed. The
++	// scoped preflight is one answer for the whole region and is proven the
++	// moment one planned file carries anchors, so the region cannot say
++	// which file was never examined; only this can.
++	Unexamined []string
+ }
+ 
+ // setRouting records what the router read when it decided this task.
+-func (e *Engine) setRouting(taskID string, p roles.Policy, scoped sensei.PreflightDecision, claims []Claim, planned []string) {
++func (e *Engine) setRouting(taskID string, p roles.Policy, scoped sensei.PreflightDecision, claims []Claim, planned []string, action Action) {
+ 	e.mu.Lock()
+ 	defer e.mu.Unlock()
+ 	if e.routings == nil {
+ 		e.routings = map[string]routingRecord{}
+ 	}
+-	e.routings[taskID] = routingRecord{Policy: p, Scoped: scoped, Claims: claims, Planned: planned}
++	e.routings[taskID] = routingRecord{Policy: p, Scoped: scoped, Claims: claims, Planned: planned,
++		Unexamined: action.unexaminedArchitecturalFiles()}
+ }
+ 
+ // routingFor returns what was recorded, and whether anything was.
+@@ -1670,7 +1677,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
+ 	if err != nil {
+ 		return architectureDecision{}, err
+ 	}
+-	e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
++	e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files, action)
+ 	// The human's answer is about the consequence, never about coverage: a
+ 	// supplied plan naming a file the graph never examined is refused after
+ 	// the answer exactly as it would be refused before a gate existed.
+@@ -1794,7 +1801,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
+ 			// judged later, and whether it is routine at all. Recording both
+ 			// here binds them to the moment the plan was authorised, rather
+ 			// than to a preflight taken again further down the loop.
+-			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
++			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files, action)
+ 			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
+ 			var receipt *premiseReceipt
+ 			if routing.ClosesGap() {
+@@ -1916,11 +1923,11 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
+ 			// architect decides architecturally. A nervous model must not be
+ 			// able to manufacture Level-3 events, for the same reason a
+ 			// confident one must not be able to skip them.
+-			routing, scoped, _, err := e.routePlan(ctx, sc, start, taskID, task, d)
++			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
+ 			if err != nil {
+ 				return architectureDecision{}, err
+ 			}
+-			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
++			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files, action)
+ 			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
+ 			if routing.Granted() {
+ 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+diff --git a/internal/workflow/protection_live_test.go b/internal/workflow/protection_live_test.go
+index bd507e0..9a78d63 100644
+--- a/internal/workflow/protection_live_test.go
++++ b/internal/workflow/protection_live_test.go
+@@ -70,7 +70,7 @@ func TestEverythingSenseiProtectsIsRefused(t *testing.T) {
+ 			if err != nil {
+ 				t.Fatalf("decode preflight: %v", err)
+ 			}
+-			d := classifyRoutine(scoped, nil, sensei.EditCheckResult{Answered: true}, []string{file},
++			d := classifyRoutine(scoped, nil, nil, sensei.EditCheckResult{Answered: true}, []string{file},
+ 				CandidateShape{
+ 					Files:         []report.FileChange{{Path: file, Status: report.Modified}},
+ 					TestLineDelta: map[string]int{},
+diff --git a/internal/workflow/routine.go b/internal/workflow/routine.go
+index 0716f5d..7eb3ad1 100644
+--- a/internal/workflow/routine.go
++++ b/internal/workflow/routine.go
+@@ -157,11 +157,13 @@ func isTestPath(path string) bool {
+ 
+ // classifyRoutine decides whether a change is routine, from evidence only.
+ //
+-// scoped is a file-scoped preflight for the planned files. claims are the
++// scoped is a file-scoped preflight for the planned files. unexamined is the
++// router's per-file fact: the planned files the graph had no facts about at
++// routing, which the region-level answer cannot express. claims are the
+ // architect's stated premises. edit is the edit-check result for the candidate.
+ // planned is what the approved plan named; changed is what the candidate
+ // actually touched.
+-func classifyRoutine(scoped sensei.PreflightDecision, claims []Claim, edit sensei.EditCheckResult, planned []string, shape CandidateShape) RoutineDecision {
++func classifyRoutine(scoped sensei.PreflightDecision, unexamined []string, claims []Claim, edit sensei.EditCheckResult, planned []string, shape CandidateShape) RoutineDecision {
+ 	var held []string
+ 	changed := shape.Paths()
+ 	block := func(reason string) RoutineDecision {
+@@ -218,6 +220,18 @@ func classifyRoutine(scoped sensei.PreflightDecision, claims []Claim, edit sense
+ 	}
+ 	held = append(held, "coverage is proven rather than absent")
+ 
++	// 3b. Every planned file was examined, not just the region.
++	//
++	// The region's coverage is proven the moment one planned file carries
++	// anchors, so condition 3 cannot see a second file the graph has never
++	// heard of riding in beside it. The router asks about each architectural
++	// file on its own and records the ones that came back unexamined; that
++	// per-file fact is what decides here, and it names the file.
++	if len(unexamined) != 0 {
++		return block("the plan names a file the graph never examined: " + strings.Join(unexamined, ", "))
++	}
++	held = append(held, "every planned file was examined by the graph")
++
+ 	// 4. Nothing governing is in scope.
+ 	for _, inv := range scoped.DirectInvariants {
+ 		switch strings.ToLower(strings.TrimSpace(inv.Severity)) {
+@@ -334,7 +348,7 @@ func (e *Engine) classifyForDarkRun(sc *sensei.Client, start certifiedStart, tas
+ 			"edit check could not run for the routine classification: "+err.Error(), nil))
+ 	}
+ 
+-	decision := classifyRoutine(record.Scoped, record.Claims, edit, record.Planned, shape)
++	decision := classifyRoutine(record.Scoped, record.Unexamined, record.Claims, edit, record.Planned, shape)
+ 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoutineClassified,
+ 		"level-1 dark run — "+decision.Describe()+" (nothing was skipped)", decision))
+ }
+@@ -526,6 +540,7 @@ func generalise(reason string) string {
+ 		return "coverage is not proven for these files"
+ 	}
+ 	for _, prefix := range []string{
++		"the plan names a file the graph never examined",
+ 		"a critical invariant governs this region",
+ 		"a high invariant governs this region",
+ 		"Sensei reported blind spots",
+diff --git a/internal/workflow/routine_live_test.go b/internal/workflow/routine_live_test.go
+index 6d41b14..796af41 100644
+--- a/internal/workflow/routine_live_test.go
++++ b/internal/workflow/routine_live_test.go
+@@ -78,7 +78,7 @@ func TestRoutineClassificationAgainstTheLiveGraph(t *testing.T) {
+ 				t.Logf("edit check undecodable: %v", err)
+ 			}
+ 
+-			d := classifyRoutine(scoped, nil, edit, []string{file},
++			d := classifyRoutine(scoped, nil, nil, edit, []string{file},
+ 				CandidateShape{Files: []report.FileChange{{Path: file, Status: report.Modified}}, TestLineDelta: map[string]int{}})
+ 			t.Logf("status=%s invariants=%d coverage_sufficient=%v blind_spots=%d blast=%s gate=%s edit_answered=%v",
+ 				scoped.Status, len(scoped.DirectInvariants), scoped.Coverage.Proven(), len(scoped.BlindSpots),
+diff --git a/internal/workflow/routine_scan.go b/internal/workflow/routine_scan.go
+index a5eb88d..7320ae4 100644
+--- a/internal/workflow/routine_scan.go
++++ b/internal/workflow/routine_scan.go
+@@ -76,7 +76,10 @@ func ClassifyCounterfactual(ref string, scoped sensei.PreflightDecision, edit se
+ 	shape := shapeOf(diff)
+ 	paths := shape.Paths()
+ 
+-	var assumed []string
++	// No routing record exists here, so the router's per-file fact -- which
++	// planned files the graph never examined -- is not available and cannot
++	// be counted as tested.
++	assumed := []string{"3b: every planned file was examined (no routing record carries the per-file fact)"}
+ 	if planned == nil {
+ 		planned = paths
+ 		assumed = append(assumed, "8: scope did not widen (no plan existed to widen from)")
+@@ -87,7 +90,7 @@ func ClassifyCounterfactual(ref string, scoped sensei.PreflightDecision, edit se
+ 
+ 	return Counterfactual{
+ 		Ref:      ref,
+-		Decision: classifyRoutine(scoped, claims, edit, planned, shape),
++		Decision: classifyRoutine(scoped, nil, claims, edit, planned, shape),
+ 		Assumed:  assumed,
+ 		Paths:    paths,
+ 	}
+diff --git a/internal/workflow/routine_test.go b/internal/workflow/routine_test.go
+index 740cc1c..d1cc994 100644
+--- a/internal/workflow/routine_test.go
++++ b/internal/workflow/routine_test.go
+@@ -54,13 +54,13 @@ func cleanEditCheck() sensei.EditCheckResult {
+ }
+ 
+ func TestARoutineChangeQualifiesOnEvidenceAlone(t *testing.T) {
+-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(),
++	d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(),
+ 		[]string{"internal/tui/model_test.go"}, modifying("internal/tui/model_test.go"))
+ 	if !d.Routine {
+ 		t.Fatalf("this change should qualify; blocked by %q", d.Blocking)
+ 	}
+-	if len(d.Qualifying) != 9 {
+-		t.Fatalf("expected all nine conditions recorded, got %d: %v", len(d.Qualifying), d.Qualifying)
++	if len(d.Qualifying) != 10 {
++		t.Fatalf("expected all ten conditions recorded, got %d: %v", len(d.Qualifying), d.Qualifying)
+ 	}
+ }
+ 
+@@ -164,7 +164,7 @@ func TestEveryConditionCanBlockOnItsOwn(t *testing.T) {
+ 			if changed == nil {
+ 				changed = planned
+ 			}
+-			d := classifyRoutine(scoped, tc.claims, edit, planned, modifying(changed...))
++			d := classifyRoutine(scoped, nil, tc.claims, edit, planned, modifying(changed...))
+ 			if d.Routine {
+ 				t.Fatalf("this change must not qualify")
+ 			}
+@@ -187,7 +187,7 @@ func TestTheRoutineTierCannotFastPathItsOwnGovernance(t *testing.T) {
+ 		"internal/candidate/identity.go",
+ 		"internal/authority/authority.go",
+ 	} {
+-		d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, modifying(path))
++		d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(), []string{path}, modifying(path))
+ 		if d.Routine {
+ 			t.Fatalf("%s was classified routine; the tier can widen itself", path)
+ 		}
+@@ -201,7 +201,7 @@ func TestTheRoutineTierCannotFastPathItsOwnGovernance(t *testing.T) {
+ // overrides it — including a plan that named the file.
+ func TestCleanEvidenceDoesNotOverrideACategoricalExclusion(t *testing.T) {
+ 	path := "internal/broker/broker.go"
+-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, modifying(path))
++	d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(), []string{path}, modifying(path))
+ 	if d.Routine {
+ 		t.Fatal("a categorical exclusion was overridden by clean evidence")
+ 	}
+@@ -299,7 +299,7 @@ func TestDeletingATestIsNeverRoutine(t *testing.T) {
+ 		Files:         []report.FileChange{{Path: path, Status: report.Deleted}},
+ 		TestLineDelta: map[string]int{},
+ 	}
+-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, shape)
++	d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(), []string{path}, shape)
+ 	if d.Routine {
+ 		t.Fatal("a candidate that deletes a test was classified routine")
+ 	}
+@@ -319,7 +319,7 @@ func TestWeakeningATestIsNeverRoutine(t *testing.T) {
+ 		Files:         []report.FileChange{{Path: path, Status: report.Modified}},
+ 		TestLineDelta: map[string]int{path: -12},
+ 	}
+-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, shrunk)
++	d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(), []string{path}, shrunk)
+ 	if d.Routine {
+ 		t.Fatal("a candidate that shrank a test was classified routine")
+ 	}
+@@ -332,7 +332,7 @@ func TestWeakeningATestIsNeverRoutine(t *testing.T) {
+ 		Files:         []report.FileChange{{Path: path, Status: report.Modified}},
+ 		TestLineDelta: map[string]int{path: 30},
+ 	}
+-	if d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{path}, grown); !d.Routine {
++	if d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(), []string{path}, grown); !d.Routine {
+ 		t.Fatalf("adding to a test should not disqualify it: %q", d.Blocking)
+ 	}
+ }
+@@ -353,7 +353,7 @@ func TestTheCandidateShapeIsReadFromTheDiff(t *testing.T) {
+ 	if got := shape.TestLineDelta["internal/x/x_test.go"]; got >= 0 {
+ 		t.Fatalf("a test that lost three lines and gained one should read negative, got %d", got)
+ 	}
+-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), []string{"internal/x/x_test.go"}, shape)
++	d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(), []string{"internal/x/x_test.go"}, shape)
+ 	if d.Routine {
+ 		t.Fatal("a diff that shrinks a test qualified as routine")
+ 	}
+@@ -398,7 +398,7 @@ func TestCoverageIsReadStructurallyNotParsed(t *testing.T) {
+ 	// And a note wording change must not flip the verdict.
+ 	scoped := qualifyingPreflight()
+ 	scoped.Coverage.Note = "some entirely different wording"
+-	if d := classifyRoutine(scoped, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
++	if d := classifyRoutine(scoped, nil, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
+ 		t.Fatalf("rewording the coverage note changed the classification: %q", d.Blocking)
+ 	}
+ }
+@@ -417,7 +417,7 @@ func TestCoverageFromAPatternAloneIsNotCoverage(t *testing.T) {
+ 		Note:       "strong-tier implementation pattern match — recipe identified",
+ 	} // ...on no anchors and no indexed file.
+ 
+-	d := classifyRoutine(scoped, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
++	d := classifyRoutine(scoped, nil, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+ 	if d.Routine {
+ 		t.Fatal("coverage asserted from a pattern recipe alone was accepted as evidence")
+ 	}
+@@ -428,13 +428,13 @@ func TestCoverageFromAPatternAloneIsNotCoverage(t *testing.T) {
+ 	// The two analysis-backed bases still count.
+ 	anchored := qualifyingPreflight()
+ 	anchored.Coverage = sensei.Coverage{DirectAnchorCount: 4, FileCount: 1, IndexedFileCount: 1, Sufficient: true}
+-	if d := classifyRoutine(anchored, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
++	if d := classifyRoutine(anchored, nil, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
+ 		t.Fatalf("anchor-backed coverage should qualify: %q", d.Blocking)
+ 	}
+ 	indexed := qualifyingPreflight()
+ 	indexed.Coverage = sensei.Coverage{FileCount: 1, IndexedFileCount: 1, Sufficient: true,
+ 		Note: "1/1 file(s) indexed in graph (no rules apply)"}
+-	if d := classifyRoutine(indexed, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
++	if d := classifyRoutine(indexed, nil, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); !d.Routine {
+ 		t.Fatalf("indexed-file coverage with no rules applying is the EmptyProven case: %q", d.Blocking)
+ 	}
+ }
+@@ -455,7 +455,7 @@ func TestSufficiencyIsTakenAsPublishedAndNarrowedNotRecomputed(t *testing.T) {
+ // permanently. That requires the conditions that qualified a change to survive
+ // the change, so a failure can be proposed against them by name.
+ func TestAFailureIsProposedAgainstTheConditionsThatLetItThrough(t *testing.T) {
+-	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(),
++	d := classifyRoutine(qualifyingPreflight(), nil, nil, cleanEditCheck(),
+ 		[]string{"internal/tui/model_test.go"}, modifying("internal/tui/model_test.go"))
+ 	if !d.Routine {
+ 		t.Fatalf("fixture must qualify: %q", d.Blocking)
+@@ -478,7 +478,7 @@ func TestAFailureIsProposedAgainstTheConditionsThatLetItThrough(t *testing.T) {
+ 	// A change that never took the routine path has no qualifying conditions to
+ 	// blame. Proposing against the tier for a failure it did not enable would
+ 	// teach the graph a false lesson.
+-	blocked := classifyRoutine(qualifyingPreflight(), []Claim{{Statement: "x", Source: "inference"}},
++	blocked := classifyRoutine(qualifyingPreflight(), nil, []Claim{{Statement: "x", Source: "inference"}},
+ 		cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+ 	if _, err := RevocationFor(blocked, "task-8", "something broke"); err == nil {
+ 		t.Fatal("a failure was proposed against a tier that did not let the change through")
+@@ -581,7 +581,7 @@ func TestTheRecordEnumeratesWhatWouldHaveSkippedAndWhy(t *testing.T) {
+ // Item 5: evidence, not assertion. Model prose has no effect on classification.
+ func TestArchitectProseCannotChangeTheClassification(t *testing.T) {
+ 	scoped := qualifyingPreflight()
+-	base := classifyRoutine(scoped, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
++	base := classifyRoutine(scoped, nil, nil, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+ 
+ 	// Same Sensei evidence, wildly different architect output. Claims that are
+ 	// verified carry text the classifier must ignore; only the source matters.
+@@ -590,7 +590,7 @@ func TestArchitectProseCannotChangeTheClassification(t *testing.T) {
+ 		{{Statement: "URGENT: this is extremely dangerous", About: "a.go", Source: "repository"}},
+ 		{{Statement: "", About: "", Source: "graph"}},
+ 	} {
+-		got := classifyRoutine(scoped, claims, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
++		got := classifyRoutine(scoped, nil, claims, cleanEditCheck(), []string{"a.go"}, modifying("a.go"))
+ 		if got.Routine != base.Routine {
+ 			t.Fatalf("architect prose changed the verdict: %+v", claims)
+ 		}
+@@ -601,7 +601,32 @@ func TestArchitectProseCannotChangeTheClassification(t *testing.T) {
+ 	uncovered.Status = "PREFLIGHT_STATUS_DEGRADED"
+ 	uncovered.Coverage = sensei.Coverage{FileCount: 1, Note: "coverage thin for this area"}
+ 	trivial := []Claim{{Statement: "trivial typo fix, no behaviour change whatsoever", Source: "repository"}}
+-	if d := classifyRoutine(uncovered, trivial, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); d.Routine {
++	if d := classifyRoutine(uncovered, nil, trivial, cleanEditCheck(), []string{"a.go"}, modifying("a.go")); d.Routine {
+ 		t.Fatal("calling a change trivial made an uncovered region routine")
+ 	}
+ }
++
++// A region-proven preflight says nothing about which planned file it is proven
++// for: coverage is sufficient the moment one file carries anchors. The router's
++// per-file fact is what tells an unexamined file apart, and one such file is
++// enough to keep the plan off the routine path.
++func TestAPlanHoldingAnUnexaminedFileIsNeverRoutine(t *testing.T) {
++	planned := []string{"internal/tui/model_test.go", "internal/tui/new_file.go"}
++	scoped := qualifyingPreflight()
++	scoped.Coverage = sensei.Coverage{DirectAnchorCount: 3, FileCount: 2, IndexedFileCount: 1, Sufficient: true}
++	if !scoped.Coverage.Proven() {
++		t.Fatalf("the region must read as proven for this test to mean anything")
++	}
++
++	d := classifyRoutine(scoped, []string{"internal/tui/new_file.go"}, nil, cleanEditCheck(), planned, modifying(planned...))
++	if d.Routine {
++		t.Fatalf("a plan holding a file the graph never examined must not be routine")
++	}
++	if !strings.Contains(d.Blocking, "never examined") || !strings.Contains(d.Blocking, "internal/tui/new_file.go") {
++		t.Fatalf("blocked by %q, want the unexamined file named", d.Blocking)
++	}
++
++	if d := classifyRoutine(scoped, nil, nil, cleanEditCheck(), planned, modifying(planned...)); !d.Routine {
++		t.Fatalf("with no unexamined file the same preflight should classify as before; blocked by %q", d.Blocking)
++	}
++}

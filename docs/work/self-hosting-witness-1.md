@@ -80,3 +80,15 @@ Governor X = `f01592b0f0828605ed254047fc064f41dacc78f2` (owner's instruction: th
 `experiments/self-hosting-witness-1/plan.json` (sha256 `3cc668d80a8b603ca81828aecb4697d71472b7c16898332bd1af741bd17349f0`);
 governor binary sha256 `7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea`. The change is the one named above:
 the routine classifier reads the per-file unexamined fact, not the region.
+
+## RESULT — 2026-08-28 (records in `experiments/self-hosting-witness-1/runs/`)
+
+Claim held. Governor `f01592b` (binary sha256 equal at start and end)
+governed a supplied-plan change to sensei-code: routed on graph anchors,
+worker confined to the candidate worktree, validated, audited, Codex ACCEPT,
+`ready for governed admission`, retained and **not admitted**. Candidate
+`00ffbfd` ≠ X; X at the end = X at the start. Discovery instance: the
+candidate widened the plan by three one-line test-caller edits and nothing
+in the governed path refused it — recorded in the manifest, owner's reading.
+One operator void (exit 2, no session) precedes the counted invocation and
+is preserved. Corpus 44 → 46.
