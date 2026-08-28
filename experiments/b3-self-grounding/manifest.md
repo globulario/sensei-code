@@ -296,3 +296,49 @@ Predictions:
   to 1/1.
 - Granted → implementor → validation → Sensei audit → independent review →
   terminal. A refutation or a REVISE cycle is ordinary and recorded.
+
+### N1b — 03:44:38Z–04:09:38Z, exit 5 (timeout), subject copy `6c36961` (n1b)
+
+Eight architect turns, zero implementor turns; the 25-minute timeout and
+the 8-round ceiling coincided. No candidate. Two product defects found, one
+loop shape observed, the second encounter's authority confirmed on the way:
+
+- **Authority carried.** Every routing read `internal/workflow/premise.go
+  [lock discipline]` — the fact the investigator discovered in N1, untold,
+  derived at this base and carried into routing. And M2.2 issued its **first
+  natural grant**: `existing-test edit authority recorded for
+  internal/workflow/authority_test.go beside internal/workflow/premise.go
+  (operational, not coverage)`, printed beside coverage and never summed.
+- **Defect (a): the blind-spot coverage branch ignores operational
+  authority.** With `premise.go` covered and the test granted, the route
+  read `1 anchor(s) over 2 planned file(s); route bounded-knowledge-gap` —
+  the branch asked the derivation to cover the granted test file. M2.2's
+  subtraction had been wired into the `coverageAbsent` branch only; the
+  comment above this branch already described this exact defect from an
+  earlier instance. Fix: #109(a) `architecturalFiles()` + a
+  `coverage-blind-spot` gap identity.
+- **Defect (b): an unidentified gap buys a fresh round every time.** The
+  condition text was identical on every round; under the pre-#98 wording
+  key the second attempt would have been refused and the run escalated.
+  Under #98 an unidentified gap matched no receipt and was issued a new one
+  — and a new budget — each round. #98 spent *more* budget than the rule it
+  replaced on every branch it did not identify. Fix: #109(b) the wording
+  floor for unidentified gaps.
+- **The loop.** The architect alternated: plan `{premise.go}` → *escalate*
+  → "Sensei certifies this region, so it is resolved architecturally" → the
+  question handed back; plan `{premise.go, authority_test.go}` → *proceed*
+  → defect (a) → cold → closure. Eight turns, then the timeout. The
+  implementor never ran.
+- Neither fix is in N2b's frozen binary. N2b runs unchanged on its own copy.
+- `runs/N1b.log` keeps the non-output events; untrimmed sha256 in
+  `runs/N1b.run`. Terminal is the CLI's timeout (exit 5), an instrument
+  finding by the rule: the run was stopped, not judged.
+
+Reading: the second encounter proved the point it was for — Sensei's own
+knowledge about itself reached routing as architectural authority — and was
+then denied execution by two defects in the machinery that carries that
+authority, both found by the run itself and both reproduced exactly by the
+regressions on #109. A fourth and fifth instance of the shape the proof-v7
+hypothesis names (a class collapsed into the first plausible one; a rule
+replaced by a stronger-looking rule that is weaker on the cases it did not
+name), both excluded from proof-v7 evidence as discovery instances.
