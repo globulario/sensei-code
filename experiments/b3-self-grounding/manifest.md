@@ -228,8 +228,10 @@ anchors these questions earn belong to the *next* encounter over
 persisted base — would read `1 anchor over 1 planned file` and route on
 architectural authority, as Family 3's E3 did on golang/mod. That is the
 next measurable step toward the B3 stopping rule for two of the five EMPTY
-surfaces. Not established: whether the persisted recipes derive at
-`6c36961` under the producer (the seal says they should; a run says so).
+surfaces. Not established by the encounters themselves: whether the persisted
+recipes derive at `6c36961` under the producer. Subsequently established by
+the read-only mechanical check below: both derive DERIVED, with subjects
+spanning `premise.go` and `derived.go`.
 Also observed: M2.2 refused a test-edit grant in N1 for the right reason
 (no covered sibling yet), and every escalation the architect asked for was
 closed rather than raised.
