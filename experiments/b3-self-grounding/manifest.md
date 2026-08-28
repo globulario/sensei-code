@@ -233,3 +233,12 @@ surfaces. Not established: whether the persisted recipes derive at
 Also observed: M2.2 refused a test-edit grant in N1 for the right reason
 (no covered sibling yet), and every escalation the architect asked for was
 closed rather than raised.
+
+### Mechanical check (not an encounter): do the persisted recipes derive at `6c36961`?
+
+`sensei-f3 derive` at the subject HEAD, read-only, no run:
+
+```
+field_access_under_lock DERIVED | subjects: ['internal/workflow/engine.go', 'internal/workflow/premise.go'] | all 6 access(es) to Engine.premises occur while Engine.mu is held, across 2 subject file(s) (19 file(s) were r
+state_mutation_confined_to_owner DERIVED | subjects: ['internal/derived/derived.go'] | all 1 observable write(s) to Result.Anchor under . originate from internal/derived, across 1 subject file(s) (
+```
