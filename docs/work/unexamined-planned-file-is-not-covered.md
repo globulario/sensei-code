@@ -40,11 +40,19 @@ establishes it.
 
 ## The change
 
-- `Action.Unexamined` — engine-owned, established per file in
-  `Engine.unexaminedFiles`: when the region reports fewer examined files than
-  planned, each architectural planned file is asked on its own; no anchor and
-  not indexed, or an answer that cannot be obtained, is unexamined. Never read
-  off the scoped answer, never supplied by a provider.
+- `Action.Unexamined` — engine-owned, established per file by
+  `unexaminedFiles`: whenever a grant is on the table (a route the region
+  answer alone would grant, or a human-owned route the human has authorised),
+  every architectural planned file is asked on its own, and a file is
+  examined only when its **own** answer's `Coverage.Proven()` is true. There
+  is no shortcut on the region's counts — a fully indexed region can still
+  hold a file that alone publishes `sufficient=false` (found by the owner's
+  review of `67f68f9`). A per-file answer that cannot be obtained, is not
+  certifiable, names a different graph generation, is DEGRADED for a
+  non-coverage reason, or does not describe exactly one file, is an error the
+  run refuses on — never an unexamined file. Region counts that describe a
+  different plan fail closed. Never read off the scoped answer, never
+  supplied by a provider.
 - Router (`authority.go`): unexamined architectural files are a coverage gap,
   `Kind: coverage-unexamined`, scope = those files, closed only by the existing
   relation `derivationClosesGap` over **every** architectural file. Files under
@@ -64,6 +72,14 @@ establishes it.
   routing as it did.
 - `TestUnexaminedFilesAgainstTheLiveGraph` (`-tags acceptance`) — the same
   region against the real deployment.
+
+## Governance provenance
+
+Hand-governed self-repair (M26): Sensei's evidence tools governed every
+edit; sensei-code's execution loop did not own the change's lifecycle. Merged
+at `f01592b0f082` after eleven exact-head Codex rounds, one owner-found P1,
+and the owner's review of `b8349be` (synthetic merge into `549a583`, Go
+tests/vet/build, Sensei enforcing gate: 0 blocking, 0 advisory).
 
 ## Not this slice
 
