@@ -1,3 +1,7 @@
 START 17:49:12Z subject 6c36961 config 94ed3b1723e3f9bd
 EXIT 1 18:02:57Z
 N3 untrimmed sha256 3c5d4ba3718cfbdaaf684a2368a2442e466040db0fe8f276d607886e83d1d429, 4562556 bytes; no derived_receipts.jsonl written; recipes unchanged (3)
+RECEIPTS N3.receipts.jsonl preserved EMPTY (0 bytes) -- Codex P1 on #113 (3236caf), verified 2026-08-28 on the frozen record, no rerun:
+  subject copy n3 still holds no docs/awareness/derived_receipts.jsonl; no pre-run file was moved aside (no pre-N3.receipts.jsonl);
+  N3.log holds 0 derive/receipt events and no closure round (receipts are written only by the closure round, cf. N1/N2);
+  so zero receipts is the run's truth, not a capture failure.

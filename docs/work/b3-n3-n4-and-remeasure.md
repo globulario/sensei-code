@@ -56,7 +56,9 @@ must be re-observed at the pinned base before N3 runs.
   promoting any recorded recipe by a run; considering Family 4 before the
   stopping-rule clause is read off a preserved record.
 - Evidence required per run: `runs/N*.run` (sha256 of untrimmed log),
-  `N*.log`, `N*.receipts.jsonl`, `N*.recipes-after.json`, graph digest at
+  `N*.log`, `N*.receipts.jsonl` (preserved even when empty: a run that opens
+  no closure round writes no receipts, and the empty artifact is what tells
+  zero receipts apart from a failed capture), `N*.recipes-after.json`, graph digest at
   run time, corpus entry in `docs/evidence/corpus` by task with graph
   identity.
 
@@ -230,3 +232,16 @@ Neither S1 nor Family 4 is authorized by this slice.
    adoption is a fresh governed change on current main.
 4. Slice 2 is complete. N3/N4 are not rerun; the interpretation changed, the
    evidence did not.
+
+## Codex exact-head review of `3236caf` — P1, record defect, fixed without rerun
+
+Finding: N3/N4 preserved no `N*.receipts.jsonl`, so the record could not
+tell zero receipts from a failed capture. Reproduced: the run script's
+`cp docs/awareness/derived_receipts.jsonl` found nothing and was silenced.
+Verified on the frozen evidence (details appended to `runs/N3.run`,
+`runs/N4.run`): both subject copies still hold no receipts file, nothing
+was moved aside before either run, both logs hold zero derive/receipt
+events and no closure round. The empty artifacts are preserved and the
+evidence-contract wording above now says empty is required. M25's
+confirmation (relayed 2026-08-28) is folded into this same correction.
+Observed, not fixed here: N1b/N2b (#110) also lack receipt artifacts.
