@@ -274,7 +274,7 @@ non-test files only, so a plan that touches `rule_test.go` again reads
 - The coverage gap did not close within budget; escalated with the question
   preserved: *Should Sensei mechanically derive coverage for File.Syntax
   mutation ownership and then reconsider this refactor?* Exit 3.
-- `E2.log` keeps 20+ non-output events (191 dropped); untrimmed sha256 in
+- `E2.log` keeps 25 non-output events (191 dropped); untrimmed sha256 in
   `runs/E2.run`; `E2.recipes-after.json` holds both recipes;
   `E2.receipts.jsonl` the round-2 receipt.
 
