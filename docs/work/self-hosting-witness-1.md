@@ -71,3 +71,12 @@ exists in shape.
 
 X+1 (the admitted successor) becomes the governor of Witness 2. The chain
 is the deliverable; one link is the witness.
+
+## FROZEN — 2026-08-28
+
+Governor X = `f01592b0f0828605ed254047fc064f41dacc78f2` (owner's instruction: the #115 merge, not #117's
+`5f02225`). Facts, plan bytes, falsifiers and predictions are in
+`experiments/self-hosting-witness-1/manifest.md`; the plan is
+`experiments/self-hosting-witness-1/plan.json` (sha256 `3cc668d80a8b603ca81828aecb4697d71472b7c16898332bd1af741bd17349f0`);
+governor binary sha256 `7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea`. The change is the one named above:
+the routine classifier reads the per-file unexamined fact, not the region.
