@@ -55,6 +55,15 @@ func main() {
 	out := flag.String("out", "docs/evidence/corpus/encounters.jsonl", "output JSONL")
 	flag.Parse()
 	logs, _ := filepath.Glob(filepath.Join(*root, "*", "runs", "*.log"))
+	// Some early encounters were preserved as untrimmed .jsonl event streams
+	// rather than trimmed .log files; they are encounters all the same.
+	// Receipt files share the suffix and are not event streams.
+	streams, _ := filepath.Glob(filepath.Join(*root, "*", "runs", "*.jsonl"))
+	for _, s := range streams {
+		if !strings.HasSuffix(s, ".receipts.jsonl") {
+			logs = append(logs, s)
+		}
+	}
 	sort.Strings(logs)
 	var records []record
 	for _, log := range logs {
@@ -80,7 +89,7 @@ func main() {
 
 func extract(log string) (record, error) {
 	exp := filepath.Base(filepath.Dir(filepath.Dir(log)))
-	run := strings.TrimSuffix(filepath.Base(log), ".log")
+	run := strings.TrimSuffix(strings.TrimSuffix(filepath.Base(log), ".log"), ".jsonl")
 	rec := record{Encounter: exp + "/" + run, SourceLog: log,
 		Instrument: map[string]any{"sensei_sha": "unrecorded", "sensei_code_sha": "unrecorded", "fixture": "unrecorded", "world": "unrecorded"},
 		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, HumanReview: "unrecorded"}
@@ -154,7 +163,7 @@ func extract(log string) (record, error) {
 		}
 	}
 	rec.Terminal["first_event"], rec.Terminal["last_event"] = first, last
-	base := strings.TrimSuffix(log, ".log")
+	base := strings.TrimSuffix(strings.TrimSuffix(log, ".log"), ".jsonl")
 	if b, err := os.ReadFile(base + ".run"); err == nil {
 		for _, m := range runStamp.FindAllStringSubmatch(string(b), -1) {
 			if m[1] != "" {
