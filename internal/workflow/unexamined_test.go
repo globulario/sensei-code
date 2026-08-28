@@ -33,7 +33,18 @@ import (
 const neighbourCovered = `{"status":"PREFLIGHT_STATUS_OK",` +
 	`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},` +
 	`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},` +
-	healthyAuthority + `}`
+	identifiedAuthority + `}`
+
+// identifiedAuthority is a healthy authority block that also names its graph
+// generation, as live answers do; the per-file probes must be bound to it.
+const identifiedAuthority = `"authority": {
+	"authoritative": true,
+	"verdict": "authoritative",
+	"graph_freshness_state": "GRAPH_FRESHNESS_STATE_CURRENT",
+	"seed_state": "SEED_STATE_CURRENT",
+	"graph_build_commit": "fac399f8225f",
+	"source_repo_commit": "f56f5a305798"
+}`
 
 func TestAnUnexaminedPlannedFileIsNotCoveredByItsNeighbour(t *testing.T) {
 	scoped := scopedPreflight(t, neighbourCovered)
@@ -143,7 +154,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		if f == files[1] {
 			return scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+
 				`"coverage":{"sufficient":false,"direct_anchor_count":0,"file_count":1,"indexed_file_count":0},`+
-				healthyAuthority+`}`), nil
+				identifiedAuthority+`}`), nil
 		}
 		return region, nil
 	}
@@ -152,7 +163,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		t.Fatalf("unexamined = %v, %v; want only %s", got, err, files[1])
 	}
 	all := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
-		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+healthyAuthority+`}`)
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+identifiedAuthority+`}`)
 	if got, err := unexaminedFiles(StageCandidateEdit, func(string) (sensei.PreflightDecision, error) {
 		t.Fatal("a fully examined region must ask nothing per file")
 		return sensei.PreflightDecision{}, nil
@@ -171,6 +182,12 @@ func TestAnUncertifiablePerFilePreflightIsNotEvidence(t *testing.T) {
 		"authority not certifiable": {Status: sensei.PreflightOK},
 		"status unspecified":        func() sensei.PreflightDecision { d := region; d.Status = sensei.PreflightUnspecified; return d }(),
 		"status refused":            func() sensei.PreflightDecision { d := region; d.Status = "PREFLIGHT_STATUS_REFUSED"; return d }(),
+		// The graph was rebuilt between the region call and this probe: each
+		// answer is certifiable on its own and no single generation examined
+		// what the two together would claim (#115 review, third pass).
+		"different graph build":   func() sensei.PreflightDecision { d := region; d.Authority.GraphBuildCommit = "0123456789ab"; return d }(),
+		"different source commit": func() sensei.PreflightDecision { d := region; d.Authority.SourceRepoCommit = "0123456789ab"; return d }(),
+		"graph identity absent":   func() sensei.PreflightDecision { d := region; d.Authority.GraphBuildCommit = ""; return d }(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := unexaminedFiles(StageCandidateEdit, func(f string) (sensei.PreflightDecision, error) {
@@ -196,5 +213,16 @@ func TestAnObservationAsksNothingPerFile(t *testing.T) {
 	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, region)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("observation: unexamined=%v err=%v", got, err)
+	}
+}
+
+// A region answer that names no graph generation cannot bind any probe.
+func TestARegionWithoutGraphIdentityBindsNoProbe(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	region.Authority.SourceRepoCommit = ""
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	got, err := unexaminedFiles(StageCandidateEdit, func(string) (sensei.PreflightDecision, error) { return region, nil }, files, region)
+	if err == nil {
+		t.Fatalf("probes were bound to a region with no graph identity: unexamined=%v", got)
 	}
 }

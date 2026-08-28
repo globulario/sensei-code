@@ -2250,6 +2250,15 @@ func unexaminedFiles(stage ActionStage, ask func(file string) (sensei.PreflightD
 		if !one.Authority.Certifiable() {
 			return nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
 		}
+		// One graph generation for the region answer and every probe. The
+		// calls are sequential; a rebuild between them could answer the
+		// region from generation A and a probe from generation B, and no
+		// single graph would have examined what the two answers together
+		// claim. Identity absent on either side is not identity.
+		if !sameGraphGeneration(scoped.Authority, one.Authority) {
+			return nil, fmt.Errorf("%s: preflight answered from a different graph generation (%s/%s) than the region (%s/%s)", f,
+				one.Authority.GraphBuildCommit, one.Authority.SourceRepoCommit, scoped.Authority.GraphBuildCommit, scoped.Authority.SourceRepoCommit)
+		}
 		switch one.Status {
 		case sensei.PreflightOK, sensei.PreflightEmpty, sensei.PreflightDegraded:
 		default:
@@ -2260,6 +2269,13 @@ func unexaminedFiles(stage ActionStage, ask func(file string) (sensei.PreflightD
 		}
 	}
 	return out, nil
+}
+
+// sameGraphGeneration reports that two preflight answers name the same graph
+// build and source commit, both present. Absent identity fails closed.
+func sameGraphGeneration(a, b sensei.Authority) bool {
+	return strings.TrimSpace(a.GraphBuildCommit) != "" && strings.TrimSpace(a.SourceRepoCommit) != "" &&
+		a.GraphBuildCommit == b.GraphBuildCommit && a.SourceRepoCommit == b.SourceRepoCommit
 }
 
 // derivedRecipesPath is where the durable questions live.
