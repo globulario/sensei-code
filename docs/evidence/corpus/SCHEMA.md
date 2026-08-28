@@ -36,8 +36,12 @@ what Phase C will rank.
   `independent_automated_reviewer` Codex, `account_principal` and
   `project_owner` davecourtois, `ledger_recorder` Claude. An account that
   executes a merge does not author the reasoning behind it.)
-- **Appended, never rewritten.** A correction is a new record naming the
-  old one in `supersedes`.
+- **Appended, never rewritten.** `review_findings`, `review_provenance` and
+  `merge_provenance` are the observation as first committed. A correction or
+  a later event (a review that came back clean, a merge) is appended to
+  `history` as an entry naming what it supersedes; nothing above it is
+  edited. `review_findings` holds findings only -- a clean review is a
+  `history` entry, not a finding.
 
 ## Record (exactly the fields emitted)
 
@@ -73,6 +77,7 @@ review_findings       OVERLAY only; else "unrecorded"          findings of the i
 review_provenance     OVERLAY only; else "unrecorded"          {reasoning_author, independent_automated_reviewer, implementation_and_reconstruction,
                                                                account_principal, project_owner, ledger_recorder, note}
 merge_provenance      OVERLAY only; else "unrecorded"          {merge_executed_by, authorized_account, ultimate_authority}
+history               OVERLAY only; else "unrecorded"          append-only [{recorded, event, supersedes, ...facts}]; corrections and later events, never edits
 terminal              kind, summary, question, first_event, last_event, start, end, exit, world
 note                  OVERLAY only
 ```
@@ -88,5 +93,6 @@ reviews of the evidence, with who produced them stated. Anything reconstructed f
 ```json
 {"E3": {"sensei_sha": "f79f96f9…", "sensei_code_sha": "d6fcd11c…", "fixture": "github.com/golang/mod",
         "review_findings": ["…"], "review_provenance": {"reasoning_author": "…", "account_principal": "…", "project_owner": "…", "ledger_recorder": "…"},
-        "merge_provenance": {"merge_executed_by": "…", "authorized_account": "…", "ultimate_authority": "…"}, "note": "…"}}
+        "merge_provenance": {"merge_executed_by": "…", "authorized_account": "…", "ultimate_authority": "…"},
+        "history": [{"recorded": "…", "event": "…", "supersedes": "…"}], "note": "…"}}
 ```

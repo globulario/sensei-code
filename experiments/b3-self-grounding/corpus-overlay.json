@@ -77,10 +77,24 @@
   "merge_provenance": {
    "merge_executed_by": "not merged at record time (#113 open)",
    "authorized_account": "davecourtois",
-   "ultimate_authority": "project owner (human)",
-   "correction": {
-    "supersedes": "merge_executed_by: not merged at record time (#113 open)",
-    "recorded": "2026-08-28, PR #114, after #113 merged",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "PR #113 Codex exact-head review of 3236caf (2026-08-28 18:25Z): P1 -- N3/N4 receipt artifacts not preserved; repaired records-only at e328547 (empty N*.receipts.jsonl with verification)",
+   "PR #113 Codex exact-head review of e328547 (2026-08-28 19:13Z): P1 -- N3/N4 overlays copied N2's #107 review PASS and merge provenance; repaired in this commit"
+  ],
+  "note": "subject 6c36961 (copy n3); consumer main c5c0ef991719941c934daac61d562cc73eeef37f (sensei-code-b3c, instrument change from N1/N2 recorded); graph 42e6e12c; no question recorded; authority carried by a neighbouring anchor (engine.go, Engine.premises); Codex REVISE x2, reviewer-substitution ACCEPT caught by the #111 guard; workflow.failed, retained resumable, not admitted",
+  "history": [
+   {
+    "recorded": "2026-08-28, PR #114",
+    "event": "review clean",
+    "supersedes": "review_findings entry 'PR #113: not yet merged at record time; a later review of the exact final head is the merge condition' (a non-finding, moved out of the findings array)",
+    "review": "PR #113 Codex exact-head review of 28a04c0 (2026-08-28 19:18Z): clean, thumbs-up reaction, no findings"
+   },
+   {
+    "recorded": "2026-08-28, PR #114",
+    "event": "merged",
+    "supersedes": "merge_provenance.merge_executed_by = 'not merged at record time (#113 open)'",
     "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
     "authorized_account": "davecourtois",
     "ultimate_authority": "project owner (human)",
@@ -88,15 +102,7 @@
     "merged_head": "28a04c0d65dcbf90a9f2fa856143bedc7b5291bd",
     "merge_method": "merge commit"
    }
-  },
-  "review_findings": [
-   "PR #113 Codex exact-head review of 3236caf (2026-08-28 18:25Z): P1 -- N3/N4 receipt artifacts not preserved; repaired records-only at e328547 (empty N*.receipts.jsonl with verification)",
-   "PR #113 Codex exact-head review of e328547 (2026-08-28 19:13Z): P1 -- N3/N4 overlays copied N2's #107 review PASS and merge provenance; repaired in this commit",
-   "PR #113: not yet merged at record time; a later review of the exact final head is the merge condition",
-   "PR #113 Codex exact-head review of 28a04c0 (2026-08-28 19:18Z): clean (thumbs-up reaction, no findings)",
-   "PR #113 merged 2026-08-28 at e238d7624217 from 28a04c0 (merge commit; GPT-5.6 Sol via the GitHub connector, account davecourtois) -- supersedes the 'not yet merged at record time' line above; recorded in PR #114"
-  ],
-  "note": "subject 6c36961 (copy n3); consumer main c5c0ef991719941c934daac61d562cc73eeef37f (sensei-code-b3c, instrument change from N1/N2 recorded); graph 42e6e12c; no question recorded; authority carried by a neighbouring anchor (engine.go, Engine.premises); Codex REVISE x2, reviewer-substitution ACCEPT caught by the #111 guard; workflow.failed, retained resumable, not admitted"
+  ]
  },
  "N4": {
   "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
@@ -113,10 +119,24 @@
   "merge_provenance": {
    "merge_executed_by": "not merged at record time (#113 open)",
    "authorized_account": "davecourtois",
-   "ultimate_authority": "project owner (human)",
-   "correction": {
-    "supersedes": "merge_executed_by: not merged at record time (#113 open)",
-    "recorded": "2026-08-28, PR #114, after #113 merged",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "PR #113 Codex exact-head review of 3236caf (2026-08-28 18:25Z): P1 -- N3/N4 receipt artifacts not preserved; repaired records-only at e328547 (empty N*.receipts.jsonl with verification)",
+   "PR #113 Codex exact-head review of e328547 (2026-08-28 19:13Z): P1 -- N3/N4 overlays copied N2's #107 review PASS and merge provenance; repaired in this commit"
+  ],
+  "note": "subject 6c36961 (copy n4); consumer main c5c0ef991719941c934daac61d562cc73eeef37f; graph 42e6e12c; testedit.go OK by the #108 invariant; routed architectural-authority-granted on graph evidence, no derived-coverage branch; one cycle, Codex ACCEPT, workflow.completed, retained unpublished, not admitted; no question recorded",
+  "history": [
+   {
+    "recorded": "2026-08-28, PR #114",
+    "event": "review clean",
+    "supersedes": "review_findings entry 'PR #113: not yet merged at record time; a later review of the exact final head is the merge condition' (a non-finding, moved out of the findings array)",
+    "review": "PR #113 Codex exact-head review of 28a04c0 (2026-08-28 19:18Z): clean, thumbs-up reaction, no findings"
+   },
+   {
+    "recorded": "2026-08-28, PR #114",
+    "event": "merged",
+    "supersedes": "merge_provenance.merge_executed_by = 'not merged at record time (#113 open)'",
     "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
     "authorized_account": "davecourtois",
     "ultimate_authority": "project owner (human)",
@@ -124,14 +144,6 @@
     "merged_head": "28a04c0d65dcbf90a9f2fa856143bedc7b5291bd",
     "merge_method": "merge commit"
    }
-  },
-  "review_findings": [
-   "PR #113 Codex exact-head review of 3236caf (2026-08-28 18:25Z): P1 -- N3/N4 receipt artifacts not preserved; repaired records-only at e328547 (empty N*.receipts.jsonl with verification)",
-   "PR #113 Codex exact-head review of e328547 (2026-08-28 19:13Z): P1 -- N3/N4 overlays copied N2's #107 review PASS and merge provenance; repaired in this commit",
-   "PR #113: not yet merged at record time; a later review of the exact final head is the merge condition",
-   "PR #113 Codex exact-head review of 28a04c0 (2026-08-28 19:18Z): clean (thumbs-up reaction, no findings)",
-   "PR #113 merged 2026-08-28 at e238d7624217 from 28a04c0 (merge commit; GPT-5.6 Sol via the GitHub connector, account davecourtois) -- supersedes the 'not yet merged at record time' line above; recorded in PR #114"
-  ],
-  "note": "subject 6c36961 (copy n4); consumer main c5c0ef991719941c934daac61d562cc73eeef37f; graph 42e6e12c; testedit.go OK by the #108 invariant; routed architectural-authority-granted on graph evidence, no derived-coverage branch; one cycle, Codex ACCEPT, workflow.completed, retained unpublished, not admitted; no question recorded"
+  ]
  }
 }
