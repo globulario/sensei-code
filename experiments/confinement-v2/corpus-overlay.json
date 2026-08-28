@@ -3,19 +3,47 @@
   "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
   "sensei_sha": "e81d7bed",
   "fixture": "github.com/golang/mod",
-  "human_review": [
+  "note": "architect declared prospective_surfaces naturally; refuted on bytes; worker never shown the grant",
+  "review_findings": [
    "PR #95: numstats corrected to the attached patch (+2/-2); untrimmed sha256 recorded"
   ],
-  "note": "architect declared prospective_surfaces naturally; refuted on bytes; worker never shown the grant"
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  }
  },
  "E3-seriesB.2": {
   "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
   "sensei_sha": "e81d7bed",
   "fixture": "github.com/golang/mod",
-  "human_review": [
+  "note": "one closure round on an honest inference claim, then granted; refuted on bytes",
+  "review_findings": [
    "PR #95: record corrected to state the producer/authority information asymmetry, not a diagnosis"
   ],
-  "note": "one closure round on an honest inference claim, then granted; refuted on bytes"
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  }
  },
  "E3-seriesB.3": {
   "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
@@ -27,11 +55,25 @@
   "sensei_code_sha": "b0d4491 (main 842b533 + #94 cherry-picked)",
   "sensei_sha": "e81d7bed",
   "fixture": "github.com/golang/mod",
-  "human_review": [
+  "note": "worker shown the grant: imports exactly inside the envelope; ACCEPT; grant visibility was the causal defect",
+  "review_findings": [
    "closure-budget laundering through paraphrase recorded before the outcome (became #97/#98)",
    "PR #95 merged 3bbf036"
   ],
-  "note": "worker shown the grant: imports exactly inside the envelope; ACCEPT; grant visibility was the causal defect"
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  }
  },
  "E3": {
   "sensei_sha": "e81d7bed (manifest)",

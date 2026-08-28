@@ -1,11 +1,71 @@
 {
-  "E1": {"sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74", "sensei_code_sha": "267e82297970c579152624be3021ab8d5d2f5ed7", "fixture": "github.com/golang/mod",
-         "human_review": ["PR #100 review 5046864821: the frozen rule and prediction 3 contradicted each other (present in the freeze commit); E2 is strong observed evidence, not a preregistered confirmation; the sealed scanner's owner-side address-escape limit stated"],
-         "note": "recipes at start 0; investigator untold proposed File.Module; exit 3 by the future-only rule"},
-  "E2": {"sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74", "sensei_code_sha": "267e82297970c579152624be3021ab8d5d2f5ed7", "fixture": "github.com/golang/mod",
-         "human_review": ["PR #100 review 5046864821: gate classified OPEN link by link; execution NOT OBSERVED; the existing-test coverage wall named as the next piece (became M2.2, #101)"],
-         "note": "coverage 1/1 [mutation confinement] then the plan widened to rule_test.go; second recipe File.Syntax recorded"},
-  "E3": {"sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74", "sensei_code_sha": "d6fcd11cfc6327e00e5feb84979dbce520554e35", "fixture": "github.com/golang/mod",
-         "human_review": ["PR #102 merged 7ae7236e: freeze chronology verified (f7fd92f at 01:18:24Z before the 01:18:35Z start); FULL FROZEN FAMILY-3 GATE MET; M2.2 not naturally witnessed"],
-         "note": "plan rule.go alone; 2 anchors over 1 file; granted first route; Codex ACCEPT; candidate retained, not admitted"}
+ "E1": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "267e82297970c579152624be3021ab8d5d2f5ed7",
+  "fixture": "github.com/golang/mod",
+  "note": "recipes at start 0; investigator untold proposed File.Module; exit 3 by the future-only rule",
+  "review_findings": [
+   "PR #100 review 5046864821: the frozen rule and prediction 3 contradicted each other (present in the freeze commit); E2 is strong observed evidence, not a preregistered confirmation; the sealed scanner's owner-side address-escape limit stated"
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  }
+ },
+ "E2": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "267e82297970c579152624be3021ab8d5d2f5ed7",
+  "fixture": "github.com/golang/mod",
+  "note": "coverage 1/1 [mutation confinement] then the plan widened to rule_test.go; second recipe File.Syntax recorded",
+  "review_findings": [
+   "PR #100 review 5046864821: gate classified OPEN link by link; execution NOT OBSERVED; the existing-test coverage wall named as the next piece (became M2.2, #101)"
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  }
+ },
+ "E3": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "d6fcd11cfc6327e00e5feb84979dbce520554e35",
+  "fixture": "github.com/golang/mod",
+  "note": "plan rule.go alone; 2 anchors over 1 file; granted first route; Codex ACCEPT; candidate retained, not admitted",
+  "review_findings": [
+   "PR #102 merged 7ae7236e: freeze chronology verified (f7fd92f at 01:18:24Z before the 01:18:35Z start); FULL FROZEN FAMILY-3 GATE MET; M2.2 not naturally witnessed"
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- architect, re-reviewer, experimental mediator, stop/go decisions (in conversation)",
+   "independent_automated_reviewer": "Codex -- separate automated PR review",
+   "implementation_and_reconstruction": "Claude -- implementation; this record reconstructed from the transcript",
+   "account_principal": "davecourtois -- the GitHub connector executes reviews and merges under this account; the account does not author the reasoning",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate project authority; sets and refines the objective",
+   "ledger_recorder": "Claude",
+   "note": "first recorded as 'model reviews, human mediated'; corrected 2026-08-28 (review 5047630344): the mediation reasoning was GPT-5.6 Sol's, executed under the owner's account"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "GPT-5.6 Sol via the GitHub connector",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  }
+ }
 }

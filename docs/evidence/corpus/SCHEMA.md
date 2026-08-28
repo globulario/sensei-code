@@ -29,7 +29,13 @@ what Phase C will rank.
   `TestCommittedCorpusIsFresh` does the same under `go test ./...`, which CI
   runs, so a log or overlay changed without regeneration fails CI.
 - **Nothing inferred.** A field the run did not write and the overlay does
-  not supply is `"unrecorded"`. `human_review` is only ever overlay text.
+  not supply is `"unrecorded"`. `review_findings` and `review_provenance` are
+  only ever overlay text. (The field was first named `human_review`, then
+  corrected to "model reviews, human mediated"; both were wrong. The actors
+  are distinct and are named: `reasoning_author` GPT-5.6 Sol,
+  `independent_automated_reviewer` Codex, `account_principal` and
+  `project_owner` davecourtois, `ledger_recorder` Claude. An account that
+  executes a merge does not author the reasoning behind it.)
 - **Appended, never rewritten.** A correction is a new record naming the
   old one in `supersedes`.
 
@@ -63,7 +69,10 @@ candidate             per cycle: time, bytes, cycle, digest                 cand
 validation            per run: diff_digest, checks                          validation.run payload
 audit                 per run: decision, digest, findings, reason_codes     candidate.audited payload
 review                per run: provider, candidate_digest, decision, summary, findings   review.completed
-human_review          OVERLAY only; else "unrecorded"
+review_findings       OVERLAY only; else "unrecorded"          findings of the independent review of the evidence/repair
+review_provenance     OVERLAY only; else "unrecorded"          {reasoning_author, independent_automated_reviewer, implementation_and_reconstruction,
+                                                               account_principal, project_owner, ledger_recorder, note}
+merge_provenance      OVERLAY only; else "unrecorded"          {merge_executed_by, authorized_account, ultimate_authority}
 terminal              kind, summary, question, first_event, last_event, start, end, exit, world
 note                  OVERLAY only
 ```
@@ -73,10 +82,11 @@ note                  OVERLAY only
 `experiments/<name>/corpus-overlay.json`, hand-written, keyed by run name.
 Permitted sources: exact facts committed in that experiment's own files
 (manifest header lines naming a SHA, a port, a reader commit) and the PR
-reviews of the evidence. Anything reconstructed from memory is left
+reviews of the evidence, with who produced them stated. Anything reconstructed from memory is left
 `"unrecorded"`.
 
 ```json
 {"E3": {"sensei_sha": "f79f96f9…", "sensei_code_sha": "d6fcd11c…", "fixture": "github.com/golang/mod",
-        "human_review": ["…"], "note": "…"}}
+        "review_findings": ["…"], "review_provenance": {"reasoning_author": "…", "account_principal": "…", "project_owner": "…", "ledger_recorder": "…"},
+        "merge_provenance": {"merge_executed_by": "…", "authorized_account": "…", "ultimate_authority": "…"}, "note": "…"}}
 ```

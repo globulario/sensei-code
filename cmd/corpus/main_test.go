@@ -41,8 +41,8 @@ func TestARecordIsExtractedFromTheLogAndNeverInferred(t *testing.T) {
 	if rec.Coverage[0]["anchors"] != "2" || rec.Coverage[0]["planned_files"] != "1" {
 		t.Fatalf("coverage: %+v", rec.Coverage)
 	}
-	if rec.Instrument["world"] != "3b6be68" || rec.Instrument["sensei_sha"] != "unrecorded" || rec.HumanReview != "unrecorded" {
-		t.Fatalf("instrument/human: %+v %v", rec.Instrument, rec.HumanReview)
+	if rec.Instrument["world"] != "3b6be68" || rec.Instrument["sensei_sha"] != "unrecorded" || rec.ReviewFindings != "unrecorded" || rec.ReviewProvenance != "unrecorded" {
+		t.Fatalf("instrument/human: %+v %v", rec.Instrument, rec.ReviewFindings)
 	}
 	if rec.Review[0]["provider"] != "codex" || rec.Terminal["kind"] != "workflow.completed" || rec.Terminal["exit"] != "0" {
 		t.Fatalf("review/terminal: %+v %+v", rec.Review, rec.Terminal)
@@ -57,13 +57,16 @@ func TestARecordIsExtractedFromTheLogAndNeverInferred(t *testing.T) {
 		t.Fatalf("derivation: %+v", rec.Derivation)
 	}
 	// The overlay supplies what no event carries, and only that.
-	os.WriteFile(filepath.Join(dir, "x-v1", "corpus-overlay.json"), []byte(`{"E9":{"sensei_sha":"f79f96f9","human_review":["one hole"]}}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "x-v1", "corpus-overlay.json"), []byte(`{"E9":{"sensei_sha":"f79f96f9","review_findings":["one hole"],"review_provenance":{"provider":"model","mediated_by":"human"}}}`), 0o644)
 	rec, _ = extract(filepath.Join(runs, "E9.log"))
 	if rec.Instrument["sensei_sha"] != "f79f96f9" || rec.Instrument["sensei_code_sha"] != "unrecorded" {
 		t.Fatalf("overlay: %+v", rec.Instrument)
 	}
-	if hr, ok := rec.HumanReview.([]any); !ok || hr[0] != "one hole" {
-		t.Fatalf("human review: %v", rec.HumanReview)
+	if hr, ok := rec.ReviewFindings.([]any); !ok || hr[0] != "one hole" {
+		t.Fatalf("review findings: %v", rec.ReviewFindings)
+	}
+	if rp, ok := rec.ReviewProvenance.(map[string]any); !ok || rp["provider"] != "model" {
+		t.Fatalf("review provenance: %v", rec.ReviewProvenance)
 	}
 }
 
