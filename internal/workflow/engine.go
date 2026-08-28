@@ -2140,21 +2140,30 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// recognised derivation may close, and Sensei going away between the
 	// region call and the per-file call would then be a way to a grant
 	// (#115 review). The region call above fails the same way.
-	unexamined, err := unexaminedFiles(stage, len(d.Files), func(f string) (sensei.PreflightDecision, error) {
-		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
-		if domain := start.Domain(); domain != "" {
-			args["domain"] = domain
-		}
-		result, err := sc.CallTool("awareness_preflight", args)
+	// Probed only where the router would otherwise GRANT. Every other route
+	// -- an explicit gate, a declared outward action, an uncertifiable
+	// graph, an open premise -- is already a refusal or a human-owned
+	// boundary that the probes can only make stricter, so probing there
+	// adds nothing but a way for a transient failure to abort the plan
+	// before it reaches that boundary (#115 review). Decided by the router
+	// itself on the same inputs, so the ordering cannot drift from it.
+	if probeNeeded(scoped, d.Claims, action) {
+		unexamined, err := unexaminedFiles(stage, len(d.Files), func(f string) (sensei.PreflightDecision, error) {
+			args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
+			if domain := start.Domain(); domain != "" {
+				args["domain"] = domain
+			}
+			result, err := sc.CallTool("awareness_preflight", args)
+			if err != nil {
+				return sensei.PreflightDecision{}, err
+			}
+			return sensei.DecodePreflight(result)
+		}, action.architecturalFiles(), scoped)
 		if err != nil {
-			return sensei.PreflightDecision{}, err
+			return Routing{}, sensei.PreflightDecision{}, fmt.Errorf("Sensei per-file preflight: %w", err)
 		}
-		return sensei.DecodePreflight(result)
-	}, action.architecturalFiles(), scoped)
-	if err != nil {
-		return Routing{}, sensei.PreflightDecision{}, fmt.Errorf("Sensei per-file preflight: %w", err)
+		action.Unexamined = unexamined
 	}
-	action.Unexamined = unexamined
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
@@ -2305,6 +2314,14 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		}
 	}
 	return out, nil
+}
+
+// probeNeeded reports whether per-file coverage probes can change the route:
+// only a plan the router would grant on the region answer alone can be made
+// stricter by them. A route that already refuses, or already belongs to a
+// human, is returned as it is.
+func probeNeeded(scoped sensei.PreflightDecision, claims []Claim, action Action) bool {
+	return routeAuthorityForAction(scoped, claims, action).Granted()
 }
 
 // sameGraphGeneration reports that two preflight answers name the same graph

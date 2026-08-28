@@ -380,3 +380,33 @@ func TestAProbeMustDescribeExactlyOneFile(t *testing.T) {
 		})
 	}
 }
+
+// Probes run only where the router would otherwise grant. A plan that
+// declares an outward action, one under an approval gate, or one on an
+// uncertifiable graph is already refused or human-owned, and a probe
+// failure must not abort it before it reaches that boundary (#115, seventh
+// pass: the general form of the gate and observation rules).
+func TestProbesRunOnlyWhereTheRouterWouldGrant(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	if !probeNeeded(region, nil, plannedEdit(files...)) {
+		t.Fatal("the neighbour-covered edit is the case the probes exist for")
+	}
+	outward := Action{Stage: StageCandidateEdit, Files: files, DeclaredSteps: []string{"git push origin main", "deploy to production"}}
+	if probeNeeded(region, nil, outward) {
+		t.Fatal("a plan declaring an outward action was probed ahead of its human-owned boundary")
+	}
+	gated := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
+		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":1},`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
+		identifiedAuthority+`}`)
+	if probeNeeded(gated, nil, plannedEdit(files...)) {
+		t.Fatal("a gated plan was probed")
+	}
+	if probeNeeded(sensei.PreflightDecision{Status: sensei.PreflightDegraded}, nil, plannedEdit(files...)) {
+		t.Fatal("a plan on an uncertifiable graph was probed")
+	}
+	if probeNeeded(region, nil, observeAction(files...)) {
+		t.Fatal("an observation was probed")
+	}
+}
