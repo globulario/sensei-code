@@ -133,3 +133,15 @@ Predictions:
   preserved as the court's answer.
 - Either encounter may propose a question of another family, or none; each
   outcome is preserved and reported, not steered.
+
+### N1 void 1 — provider quota (instrument), no plan produced
+
+The architect provider (ChatGPT via Codex app-server) refused both attempts
+with a usage limit: *You've hit your usage limit … try again at 11:00 PM.*
+`workflow.failed: architect could not produce a bounded decision`. No plan,
+no routing, no closure round, no investigator question: the run never
+reached the thing the encounter measures. Recorded as
+`runs/N1.void1-provider-quota.*`, entered in the corpus as an instrument
+failure, and **not counted against N1's single invocation** — N1's invocation
+is the first one that reaches the architect. N2 is not run against the same
+exhausted provider. Nothing in the subject, the freeze, or the tasks changes.
