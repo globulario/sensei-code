@@ -252,3 +252,71 @@ to `9c7e562`). E2 runs next as the second encounter over `modfile`, per
 prediction 3. Its plan's shape decides the bridge: the family's deriver reads
 non-test files only, so a plan that touches `rule_test.go` again reads
 `1 anchor over 2 files` and stays cold — recorded as the plan's shape if so.
+
+### E2 — 00:26:15Z–00:32:13Z, exit 3, base `989c621` (recipes at start: 1, the investigator's own)
+
+- Round 1 plan: `modfile/rule.go` alone. **`derived coverage: 1 anchor(s)
+  over 1 planned file(s) — modfile/rule.go [mutation confinement]`.** The
+  investigator's recipe from E1 derived DERIVED at this base, the consumer's
+  relevance gate mapped the family to *mutation confinement*, and the
+  planned file was covered: coverage 1/1 for the first time in Family 3.
+  Route `bounded-knowledge-gap` — not for coverage, but for one `inference`
+  claim: *the modfile package tests are proportionate regression proof for
+  this local refactor.* Premise receipt `gap-…-1` issued.
+- Round 2 (closure): the inference was **replaced by evidence** — the
+  architect read `rule_test.go`'s `TestAddOnEmptyFile` and cited it; no
+  `[NEEDS EVIDENCE]` claim remained. But the re-plan now named
+  `modfile/rule_test.go` as well: `1 anchor over 2 planned file(s)`, route
+  `bounded-knowledge-gap` on graph coverage — a genuinely distinct gap,
+  receipt `gap-…-2` (kind coverage-absent), not a paraphrase of `-1`. The
+  closure round proposed and recorded a second question of the family,
+  `state_mutation_confined_to_owner(File.Syntax in modfile, search .)`.
+- The coverage gap did not close within budget; escalated with the question
+  preserved: *Should Sensei mechanically derive coverage for File.Syntax
+  mutation ownership and then reconsider this refactor?* Exit 3.
+- `E2.log` keeps 20+ non-output events (191 dropped); untrimmed sha256 in
+  `runs/E2.run`; `E2.recipes-after.json` holds both recipes;
+  `E2.receipts.jsonl` the round-2 receipt.
+
+## Result
+
+Two invocations, nothing altered between them, rule frozen before E1.
+
+**Established — the Family 3 bridge through coverage into routing.** On a
+foreign repository, in a natural governed task, told nothing:
+
+```text
+investigator question        state_mutation_confined_to_owner(File.Module in modfile)   [E1, untold]
+→ deterministic derivation   DERIVED at the pinned base                                  [E2 round 1]
+→ relevance                  mapped to "mutation confinement" by the consumer's closed switch
+→ architectural coverage     1 anchor over 1 planned file
+→ routing consequence        the route no longer turned on coverage; it turned on one
+                             inference premise, which one closure round replaced with evidence
+```
+
+That is question → recipe → derivation → coverage → routing, the chain
+Family 2 showed, now shown for a composition family whose deriver relates
+state identity, ownership, mutation sites and the authorised boundary. The
+sealed verdicts held throughout; nothing was tuned.
+
+**Not reached — execution.** The implementor never ran. When the closure
+round answered the regression-proof premise it did so by adding the existing
+test file to the plan, and the family's deriver reads non-test files only, so
+`rule_test.go` can never be its subject: `1 anchor over 2 files` is not
+coverage, by tested design. Family 2 met the same wall at `test.bash`; #312
+opened it for *new* test files (prospective surfaces); an *existing* test
+file edited alongside a covered source file is still uncovered by every
+family. That is the finding this series produced about the instrument, and
+it is structural, not a defect in the family: a governed change that
+responsibly edits its own test cannot earn coverage from a source-only
+derivation. It is recorded, not evaded, and it names the next piece.
+
+**Also observed.** #98's premise receipts on a natural run: two distinct
+gaps got two receipts, and no paraphrase bought a round. The investigator
+proposed the family twice on its own (`File.Module`, then `File.Syntax`),
+each recorded with a distinct scope-bearing identity (#99).
+
+**Family 3 gate:** recipe reproduced the sealed verdicts (REFUTED /
+DERIVED) — met. Full chain to execution consequence — met through coverage
+and routing, not through execution; the missing link is the existing-test
+coverage wall, not the family.
