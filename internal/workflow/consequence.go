@@ -37,7 +37,10 @@ package workflow
 // accepted silence as safety would be the escape hatch this whole design
 // refuses, one level up from the retrieval silence it already refuses.
 
-import "strings"
+import (
+	"path"
+	"strings"
+)
 
 // ActionStage is what the authority decision actually covers.
 //
@@ -105,14 +108,21 @@ type Action struct {
 // architecturalFiles are the planned files the coverage question is about:
 // every planned file not under an operational grant.
 func (a Action) architecturalFiles() []string {
+	// Grants are recorded canonical (path.Clean of the trimmed plan
+	// spelling); the plan's own spelling is whatever the architect wrote,
+	// "./pkg/x_test.go" included. Comparing the two raw would leave a
+	// validly granted test in the architectural set and ask the derivations
+	// to cover it -- the same file, two representations, one of them
+	// handled. Both sides are canonicalised here, and the scope returned is
+	// the canonical one, so the gap identity built from it is stable too.
 	skip := map[string]bool{}
 	for _, f := range a.OperationalAuthority {
-		skip[f] = true
+		skip[path.Clean(strings.TrimSpace(f))] = true
 	}
 	var out []string
 	for _, f := range a.Files {
-		if !skip[f] {
-			out = append(out, f)
+		if c := path.Clean(strings.TrimSpace(f)); !skip[c] {
+			out = append(out, c)
 		}
 	}
 	return out
