@@ -200,3 +200,18 @@ Predictions, revised only for the testedit.go fact above:
   architectural authority → implementor → validation → audit → review → terminal
   (as N2b did); a Family 1 question may or may not be recorded along the way.
   No candidate is admitted or merged.
+
+## RESULT — 2026-08-28, read off the records
+
+Success criterion outcome **(2)** for both encounters: the investigator did
+not ask, and the record says what it did instead (manifest, "N3 + N4
+reading"). N3: authority from a neighbouring planned file's anchor; no
+convergence; retained. N4: authority from the #108 invariant; ACCEPT;
+retained, not admitted. Mechanical check: all three persisted recipes
+DERIVED at `6c36961`. Re-measurement: `docs/work/b3-remeasure-6c36961/` —
+`suppliedplan.go` and `premise.go` still EMPTY; every surface that moved,
+moved by an invariant. Clause (1) was not reached. `prospective.go` is no
+longer the sole open question: the stopping rule's `anchors > 0` is a
+preflight notion that derived recipes never lift, so the rule as worded
+cannot be met by encounters alone — that reading is the owner's, recorded.
+Neither S1 nor Family 4 is authorized by this slice.

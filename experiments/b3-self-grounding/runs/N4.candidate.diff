@@ -1,0 +1,45 @@
+diff --git a/internal/workflow/testedit.go b/internal/workflow/testedit.go
+index c88d106..37793ac 100644
+--- a/internal/workflow/testedit.go
++++ b/internal/workflow/testedit.go
+@@ -243,11 +243,11 @@ func diffFileStates(diff string) (touched, created, deleted, renamed map[string]
+ func matchTestEditGrants(planned []string, grants []testEditGrant, world string) error {
+ 	isPlanned := map[string]bool{}
+ 	for _, f := range planned {
+-		isPlanned[path.Clean(strings.TrimSpace(f))] = true
++		isPlanned[cleanTestEditPath(strings.TrimSpace(f))] = true
+ 	}
+ 	seen := map[string]bool{}
+ 	for _, g := range grants {
+-		f := path.Clean(strings.TrimSpace(g.Path))
++		f := cleanTestEditPath(strings.TrimSpace(g.Path))
+ 		if !isPlanned[f] {
+ 			return fmt.Errorf("the recorded test-edit authorization names %s, which the plan does not", f)
+ 		}
+@@ -350,13 +350,13 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
+ 	}
+ 	fresh := map[string]testEditGrant{}
+ 	for _, g := range recomputed {
+-		fresh[path.Clean(g.Path)] = g
++		fresh[cleanTestEditPath(g.Path)] = g
+ 	}
+ 	if len(fresh) != len(rec.Grants) {
+ 		return fmt.Errorf("cannot resume %s: the pinned world authorises %d existing-test edit(s) and the record holds %d; the record is not re-established", task.TaskID, len(fresh), len(rec.Grants))
+ 	}
+ 	for _, g := range rec.Grants {
+-		f, ok := fresh[path.Clean(g.Path)]
++		f, ok := fresh[cleanTestEditPath(g.Path)]
+ 		switch {
+ 		case !ok:
+ 			return fmt.Errorf("cannot resume %s: the pinned world does not authorise the recorded edit of %s", task.TaskID, g.Path)
+@@ -396,3 +396,10 @@ func joinGrants(prospective, edits string) string {
+ 	}
+ 	return strings.Join(parts, "\n\n")
+ }
++
++// cleanTestEditPath is the single path normalisation shared by grant matching
++// and grant restoration. It performs path.Clean only; callers decide whether
++// to TrimSpace first.
++func cleanTestEditPath(p string) string {
++	return path.Clean(p)
++}

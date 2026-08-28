@@ -446,3 +446,58 @@ because the reviewer changed did not complete the run. (c) The loop then
 could not converge on a REVISE whose only remaining finding was a
 `gofmt -w`/`-l` wording — the same shape as N1b's eight-turn loop, on a
 different trigger. Discovery instance; not proof-v7 evidence.
+
+### N4 — 18:04:11Z–18:08:38Z, exit 0, subject copy `6c36961` (n4, independent of n3's writes)
+
+- Preflight at start on the task text: EMPTY (task-only, no file). The
+  architect planned `testedit.go` alone. Routing: `routed:
+  architectural-authority-granted` on **graph** evidence — the #108
+  invariant REPEATED_RESUME_CANNOT_MINT and its two exact tests, cited in
+  the authority lane — with **no derived-coverage line at all**: the
+  derived branch is only entered when graph coverage is absent. Revised
+  prediction held. **No question recorded**; recipes unchanged at 3.
+- Implement (one cycle, 1,961-byte diff, `testedit.go` only) → validation
+  pass → audit pass → level-1 dark run refused as not routine (critical
+  invariant governs) → Codex ACCEPT (the helper wraps only `path.Clean`;
+  each caller keeps its own TrimSpace behaviour) → change report and
+  architectural decision recorded → `workflow.completed: candidate ready for
+  governed admission` → retained, unpublished. Not admitted; landing is the
+  human's decision. Preserved: `runs/N4.*`, `runs/N4.candidate.diff`
+  (`f123b87ae0c6` = the reviewed digest).
+
+### Mechanical check after N4 (read-only): the three persisted recipes at `6c36961`
+
+```
+field_access_under_lock          Bus.subs         exit 0 DERIVED  subjects internal/event/bus.go
+field_access_under_lock          Engine.premises  exit 0 DERIVED  subjects internal/workflow/engine.go, premise.go
+state_mutation_confined_to_owner Result.Anchor    exit 0 DERIVED  subjects internal/derived/derived.go
+```
+
+## N3 + N4 reading (slice 2)
+
+Neither encounter asked. The claim's clause (2) holds for both, and the
+record says what each did instead:
+
+```
+N3  suppliedplan.go  no question  authority from a NEIGHBOUR's anchor (engine.go, Family 1 from N1)   failed to converge
+N4  testedit.go      no question  authority from an INVARIANT published by #108                        ACCEPT, retained
+```
+
+Two mechanisms by which a surface that no family has covered still gets
+governed authority: a planned neighbour that carries an anchor, and a
+constitutional invariant raised on the file by the human. In both, the
+closure round — the only place the investigator is asked — never opens,
+so the Family 1 propositions the sweep marks DERIVED for `Engine.supplied`
+and `Engine.testEdits` are not recorded by any run. The re-measurement
+(`docs/work/b3-remeasure-6c36961/`) shows the same fact from the other
+side: `sensei preflight` never sees derived recipes at all — `premise.go`
+still reads EMPTY though its recipe derives DERIVED and routed N1b — while
+the surfaces that moved to OK moved because of #108's invariants. Two
+instruments, two coverage notions; the stopping rule's `anchors > 0` is
+the preflight notion and is not lifted by recipes.
+
+Discovery instances, not proof-v7 evidence. Nothing here justifies Family 4
+(the surfaces were reachable; the runs did not reach the asking step).
+Not adjudicated here: whether a neighbour's anchor satisfies "derived
+coverage must be relevant" for the file actually changed (N3), and whether
+the stopping rule should read recipes or preflight anchors.

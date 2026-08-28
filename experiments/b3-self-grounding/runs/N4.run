@@ -1,0 +1,3 @@
+START 18:04:11Z subject 6c36961 config 94ed3b1723e3f9bd
+EXIT 0 18:08:38Z
+N4 untrimmed sha256 4f28c6a90ccde97e0d9c3f9a186071f6cf10264d148e04cb33fbc1af62c84830, 648937 bytes; no derived_receipts.jsonl written; recipes unchanged (3)
