@@ -104,3 +104,25 @@ new file mode 100644
 		t.Fatal("report warned about missing tests when a test was added")
 	}
 }
+
+// #101 review: `diff --git a/P b/P` was split on whitespace, so a path with
+// a space was lost. The header is parsed by its shape now; renames come from
+// the rename lines, whole.
+func TestDiffPathsWithWhitespaceAndRenamesAreReadWhole(t *testing.T) {
+	diff := "diff --git a/dir/a b.go b/dir/a b.go\nindex 1..2\n--- a/dir/a b.go\n+++ b/dir/a b.go\n@@ -1 +1 @@\n-x\n+y\n" +
+		"diff --git a/old name.go b/new name.go\nsimilarity index 90%\nrename from old name.go\nrename to new name.go\n" +
+		"diff --git a/plain.go b/plain.go\nnew file mode 100644\n"
+	files := FromDiff(diff).Files
+	if len(files) != 3 {
+		t.Fatalf("files = %+v", files)
+	}
+	if files[0].Path != "dir/a b.go" || files[0].Status != Modified {
+		t.Fatalf("whitespace path: %+v", files[0])
+	}
+	if files[1].Path != "new name.go" || files[1].OldPath != "old name.go" || files[1].Status != Renamed {
+		t.Fatalf("rename: %+v", files[1])
+	}
+	if files[2].Path != "plain.go" || files[2].Status != Added {
+		t.Fatalf("plain: %+v", files[2])
+	}
+}

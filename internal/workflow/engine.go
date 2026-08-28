@@ -3745,7 +3745,12 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// written to, bound to the candidate's pinned base. Routing does not
 		// re-run on resume, so it is the only source of the facts the
 		// post-creation inspection checks against (sensei#312 cycle 3).
-		if err := e.restoreTestEditGrants(task, bound.Files, identity.BaseSHA); err != nil {
+		// Existing-test edit authority is RE-ESTABLISHED, not restored: the
+		// grants are recomputed from the pinned world through the same
+		// derivation and predicate routing used, and the record must match
+		// them exactly, or the resume refuses (sensei-code#101 review).
+		e.derivedCoverage(ctx, task.TaskID, bound.Files, bound.Prospective)
+		if err := e.restoreTestEditGrants(task, e.testEditGrants(task.TaskID), bound.Files, identity.BaseSHA); err != nil {
 			fail(err)
 			return
 		}

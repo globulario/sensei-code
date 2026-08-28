@@ -22,12 +22,15 @@ const (
 	Added    Status = "added"
 	Modified Status = "modified"
 	Deleted  Status = "deleted"
+	Renamed  Status = "renamed"
 )
 
 // FileChange is one file the candidate touched.
 type FileChange struct {
 	Path   string `json:"path"`
 	Status Status `json:"status"`
+	// OldPath is the path a renamed file had before the change.
+	OldPath string `json:"old_path,omitempty"`
 }
 
 // Change is the architectural shape of a candidate.
@@ -64,24 +67,33 @@ var awarenessKinds = map[string]string{
 // itself rather than asking the worker what it did.
 func FromDiff(diff string) Change {
 	change := Change{Awareness: map[string]int{}}
-	var current string
+	var current, old string
 	status := Modified
 	flush := func() {
 		if current == "" {
 			return
 		}
-		change.Files = append(change.Files, FileChange{Path: current, Status: status})
+		change.Files = append(change.Files, FileChange{Path: current, Status: status, OldPath: old})
 	}
 	for _, line := range strings.Split(diff, "\n") {
 		switch {
 		case strings.HasPrefix(line, "diff --git "):
 			flush()
-			current = diffPath(line)
+			current, old = diffPath(line), ""
 			status = Modified
 		case strings.HasPrefix(line, "new file mode"):
 			status = Added
 		case strings.HasPrefix(line, "deleted file mode"):
 			status = Deleted
+		case strings.HasPrefix(line, "rename from "):
+			old = strings.TrimPrefix(line, "rename from ")
+			status = Renamed
+		case strings.HasPrefix(line, "rename to "):
+			// The rename lines carry both paths whole, however many spaces
+			// they hold; they outrank the header's guess.
+			current = strings.TrimPrefix(line, "rename to ")
+		case strings.HasPrefix(line, "+++ b/") && current == "":
+			current = strings.TrimSuffix(strings.TrimPrefix(line, "+++ b/"), "\t")
 		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
 			if kind := awarenessKind(current); kind != "" && isEntryStart(line) {
 				change.Awareness[kind]++
@@ -92,14 +104,30 @@ func FromDiff(diff string) Change {
 	return change
 }
 
-// diffPath takes the b-side path, which is the file as it stands after the
-// change, and is correct for additions and renames alike.
+// diffPath takes the b-side path from a `diff --git a/P b/P` header.
+//
+// It used to split the line on whitespace, which lost every path containing
+// a space -- and a granted test file at such a path then read as untouched
+// and skipped inspection (sensei-code#101 review). Git does not quote spaces
+// in this header, so the line is parsed by its shape instead: for an
+// unrenamed file both halves are the same path, and the one split that makes
+// them equal is the answer. A header whose halves differ (a rename) yields
+// "" here and is completed by the `rename to` line that follows it.
 func diffPath(line string) string {
-	fields := strings.Fields(line)
-	if len(fields) < 4 {
+	rest := strings.TrimPrefix(line, "diff --git ")
+	if !strings.HasPrefix(rest, "a/") {
 		return ""
 	}
-	return strings.TrimPrefix(fields[3], "b/")
+	for i := len(rest) - 1; i > 0; i-- {
+		if !strings.HasPrefix(rest[i:], " b/") {
+			continue
+		}
+		left, right := strings.TrimPrefix(rest[:i], "a/"), strings.TrimPrefix(rest[i+1:], "b/")
+		if left == right {
+			return right
+		}
+	}
+	return ""
 }
 
 func awarenessKind(file string) string {

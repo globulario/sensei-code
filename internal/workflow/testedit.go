@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/session"
 )
 
@@ -211,27 +212,24 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 	return nil
 }
 
-// diffFileStates reads the file headers of a unified diff.
+// diffFileStates reads the candidate diff through the repository's one
+// Git-aware parser, so a granted path containing a space is seen exactly as
+// Git wrote it and cannot slip past inspection by failing to match.
 func diffFileStates(diff string) (touched, created, deleted, renamed map[string]bool) {
 	touched, created, deleted, renamed = map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
-	current := ""
-	for _, line := range strings.Split(diff, "\n") {
-		switch {
-		case strings.HasPrefix(line, "diff --git "):
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				current = strings.TrimPrefix(parts[3], "b/")
-				touched[current] = true
+	for _, f := range report.FromDiff(diff).Files {
+		touched[f.Path] = true
+		switch f.Status {
+		case report.Added:
+			created[f.Path] = true
+		case report.Deleted:
+			deleted[f.Path] = true
+		case report.Renamed:
+			renamed[f.Path] = true
+			if f.OldPath != "" {
+				renamed[f.OldPath] = true
+				touched[f.OldPath] = true
 			}
-		case strings.HasPrefix(line, "new file mode"):
-			created[current] = true
-		case strings.HasPrefix(line, "deleted file mode"):
-			deleted[current] = true
-		case strings.HasPrefix(line, "rename from "):
-			old := strings.TrimPrefix(line, "rename from ")
-			renamed[old] = true
-			touched[old] = true
-			renamed[current] = true
 		}
 	}
 	return touched, created, deleted, renamed
@@ -320,10 +318,24 @@ func operationalFiles(grants []testEditGrant) []string {
 }
 
 // restoreTestEditGrants re-establishes recorded test-edit grants on resume,
-// or refuses: a task that recorded grants and cannot restore them exactly is
-// not resumed with the fence down.
-func (e *Engine) restoreTestEditGrants(task session.Interrupted, planned []string, world string) error {
+// or refuses.
+//
+// The record alone is not authority: routing does not re-run on resume, so a
+// stale, damaged or edited local record would otherwise become operational
+// authority by being present. The grants are therefore RECOMPUTED from the
+// pinned world by the same predicate routing used -- F and S planned, same
+// directory and package at W, S covered by a derived anchor at W, F's bytes
+// and facts at W -- and the record must match the recomputation exactly:
+// same paths, same covering subjects, same base hashes, same facts. Any
+// difference, in either direction, refuses the resume (sensei-code#101
+// review).
+func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []testEditGrant, planned []string, world string) error {
 	if len(task.TestEditRecord) == 0 {
+		if len(recomputed) != 0 {
+			// The world now authorises what the run never recorded: the run
+			// did not operate under it, so neither does its resumption.
+			e.setTestEditGrants(task.TaskID, nil)
+		}
 		return nil
 	}
 	var rec testEditRecord
@@ -336,8 +348,40 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, planned []strin
 	if err := matchTestEditGrants(planned, rec.Grants, world); err != nil {
 		return fmt.Errorf("cannot resume %s: %w", task.TaskID, err)
 	}
-	e.setTestEditGrants(task.TaskID, rec.Grants)
+	fresh := map[string]testEditGrant{}
+	for _, g := range recomputed {
+		fresh[path.Clean(g.Path)] = g
+	}
+	if len(fresh) != len(rec.Grants) {
+		return fmt.Errorf("cannot resume %s: the pinned world authorises %d existing-test edit(s) and the record holds %d; the record is not re-established", task.TaskID, len(fresh), len(rec.Grants))
+	}
+	for _, g := range rec.Grants {
+		f, ok := fresh[path.Clean(g.Path)]
+		switch {
+		case !ok:
+			return fmt.Errorf("cannot resume %s: the pinned world does not authorise the recorded edit of %s", task.TaskID, g.Path)
+		case f.Covering != g.Covering:
+			return fmt.Errorf("cannot resume %s: the record says %s is covered beside %s; the pinned world says %s", task.TaskID, g.Path, g.Covering, f.Covering)
+		case f.BaseHash != g.BaseHash:
+			return fmt.Errorf("cannot resume %s: the recorded base hash of %s does not match its bytes at the pinned world", task.TaskID, g.Path)
+		case !sameTestFacts(f.Facts, g.Facts):
+			return fmt.Errorf("cannot resume %s: the recorded facts of %s do not match the pinned world", task.TaskID, g.Path)
+		}
+	}
+	e.setTestEditGrants(task.TaskID, recomputed)
 	return nil
+}
+
+func sameTestFacts(a, b testEditFacts) bool {
+	if a.Package != b.Package || len(a.Imports) != len(b.Imports) || strings.Join(a.Constraints, "\n") != strings.Join(b.Constraints, "\n") {
+		return false
+	}
+	for imp := range a.Imports {
+		if !b.Imports[imp] {
+			return false
+		}
+	}
+	return true
 }
 
 // joinGrants renders both grant kinds for the worker, each under its own

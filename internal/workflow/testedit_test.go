@@ -180,24 +180,91 @@ func TestATestEditGrantReachesTheWorkerAndSurvivesResume(t *testing.T) {
 	if len(found) != 1 || len(found[0].TestEditRecord) == 0 {
 		t.Fatalf("the record did not survive the session: %+v", found)
 	}
+	planned := []string{teS, teF}
+	// Resume RE-ESTABLISHES the grant from the pinned world and requires the
+	// record to match it exactly; the intact record does.
 	e := &Engine{}
-	if err := e.restoreTestEditGrants(found[0], []string{teS, teF}, teWorld); err != nil || len(e.testEditGrants("t")) != 1 {
-		t.Fatalf("an intact record was not restored: %v", err)
-	}
-	for name, bad := range map[string]struct {
-		planned []string
-		world   string
-	}{
-		"grant names a file the plan does not": {[]string{teS}, teWorld},
-		"another world":                        {[]string{teS, teF}, "0000000"},
-	} {
-		if err := (&Engine{}).restoreTestEditGrants(found[0], bad.planned, bad.world); err == nil {
-			t.Errorf("%s: resumed", name)
-		}
-	}
-	dup, _ := json.Marshal(testEditRecord{World: teWorld, Grants: append(grants, grants[0])})
-	if err := (&Engine{}).restoreTestEditGrants(session.Interrupted{TaskID: "t", TestEditRecord: dup}, []string{teS, teF}, teWorld); err == nil {
-		t.Error("duplicate grants resumed")
+	if err := e.restoreTestEditGrants(found[0], grants, planned, teWorld); err != nil || len(e.testEditGrants("t")) != 1 {
+		t.Fatalf("an intact record was not re-established: %v", err)
 	}
 	_ = roles.Reviewer
+}
+
+// #101 review, P2: a record is not authority. Each of these records parses,
+// names the right world and the right planned file, and would have restored
+// under a matcher that only checks fields are present. The pinned world
+// disagrees with every one, and the resume refuses.
+func TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused(t *testing.T) {
+	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
+	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), world)
+	if len(fresh) != 1 {
+		t.Fatal("premise: one fresh grant")
+	}
+	record := func(g testEditGrant) session.Interrupted {
+		raw, _ := json.Marshal(testEditRecord{World: teWorld, Grants: []testEditGrant{g}})
+		return session.Interrupted{TaskID: "t", TestEditRecord: raw}
+	}
+	forgedCovering := fresh[0]
+	forgedCovering.Covering = "modfile/other.go"
+	forgedHash := fresh[0]
+	forgedHash.BaseHash = "0000"
+	forgedFacts := fresh[0]
+	forgedFacts.Facts = testEditFacts{Package: "modfile", Imports: map[string]bool{"testing": true, "bytes": true}, Constraints: forgedFacts.Facts.Constraints}
+	for name, g := range map[string]testEditGrant{"forged covering": forgedCovering, "forged base hash": forgedHash, "forged facts": forgedFacts} {
+		e := &Engine{}
+		if err := e.restoreTestEditGrants(record(g), fresh, []string{teS, teF}, teWorld); err == nil || len(e.testEditGrants("t")) != 0 {
+			t.Errorf("%s: resumed (%v)", name, err)
+		}
+	}
+	// S no longer planned, or no longer covered: the world recomputes NO
+	// grant, and a record holding one is refused.
+	for name, c := range map[string]struct {
+		planned []string
+		covered []CoverageAnchor
+	}{
+		"S no longer planned": {[]string{teF}, teCovered()},
+		"S no longer covered": {[]string{teS, teF}, nil},
+	} {
+		recomputed, _ := testEditGrants(context.Background(), teWorld, c.planned, c.covered, world)
+		e := &Engine{}
+		if err := e.restoreTestEditGrants(record(fresh[0]), recomputed, c.planned, teWorld); err == nil || len(e.testEditGrants("t")) != 0 {
+			t.Errorf("%s: resumed (%v)", name, err)
+		}
+	}
+	// And a world that authorises what the run never recorded does not hand
+	// the resumed run that authority.
+	e := &Engine{}
+	if err := e.restoreTestEditGrants(session.Interrupted{TaskID: "t"}, fresh, []string{teS, teF}, teWorld); err != nil || len(e.testEditGrants("t")) != 0 {
+		t.Fatalf("an unrecorded grant became authority on resume: %v %d", err, len(e.testEditGrants("t")))
+	}
+}
+
+// #101 review, P2: a granted path containing whitespace is seen as Git
+// wrote it, so an illegal change to that file is caught rather than skipped.
+func TestAGrantedTestPathWithWhitespaceIsStillInspected(t *testing.T) {
+	const f = "modfile/a b_test.go"
+	src := strings.Replace(teFSrc, "TestX", "TestSpace", 1)
+	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, f}, teCovered(), teRead(map[string]string{teS: teSSrc, f: src}))
+	if len(grants) != 1 || grants[0].Path != f {
+		t.Fatalf("premise: a grant for the whitespace path: %+v", grants)
+	}
+	diff := "diff --git a/" + f + " b/" + f + "\nindex 1..2 100644\n--- a/" + f + "\n+++ b/" + f + "\n@@ -9 +9 @@\n-x\n+y\n"
+	touched, _, _, _ := diffFileStates(diff)
+	if !touched[f] {
+		t.Fatalf("the whitespace path was not seen as touched: %v", touched)
+	}
+	novel := strings.Replace(src, "\"strings\"\n", "\"strings\"\n\t\"bytes\"\n", 1)
+	err := inspectTestEdits(diff, grants, func(string) ([]byte, error) { return []byte(novel), nil })
+	if err == nil || !strings.Contains(err.Error(), "novel import") {
+		t.Fatalf("an illegal import change on a whitespace path slipped past inspection: %v", err)
+	}
+	pkg := strings.Replace(src, "package modfile", "package modfile_test", 1)
+	if err := inspectTestEdits(diff, grants, func(string) ([]byte, error) { return []byte(pkg), nil }); err == nil || !strings.Contains(err.Error(), "package clause") {
+		t.Fatalf("an illegal package change on a whitespace path slipped past inspection: %v", err)
+	}
+	// A rename of the whitespace path is seen too.
+	ren := "diff --git a/" + f + " b/modfile/c d_test.go\nrename from " + f + "\nrename to modfile/c d_test.go\n"
+	if err := inspectTestEdits(ren, grants, func(string) ([]byte, error) { return []byte(src), nil }); err == nil || !strings.Contains(err.Error(), "renames it") {
+		t.Fatalf("a rename of a whitespace path was not refuted: %v", err)
+	}
 }
