@@ -449,7 +449,7 @@ invariants:
       - 'experiments/b3-self-grounding/runs/N1.receipts.jsonl: recorded in round 2, run exited 3 with 0 anchors'
       - 'experiments/b3-self-grounding/runs/N2.receipts.jsonl: same'
       - 'experiments/b3-self-grounding/manifest.md: mechanical check -- both recipes derive DERIVED at 6c36961'
-    contract: A closure round may leave a checkable question behind; that question becomes coverage only if a later derivation answers it against a later world. Coverage for the writing task is computed over recipes excluding that task's own.
+    contract: A closure round may leave a checkable question behind; that question becomes coverage only if a later task or encounter derives it -- which may be against the same pinned world. Coverage for the writing task is computed over recipes excluding that task's own.
   - id: sensei_code.workflow.repeated_resume_cannot_mint_authority
     title: Resume revalidates recorded authority and never mints new authority
     severity: critical
@@ -466,4 +466,4 @@ invariants:
       - internal/workflow/testedit_test.go:TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused
     evidence:
       - 'sensei-code #101 review 5047003424: repeated resume minted authority; fixed e61cee1'
-    contract: Routing computes and records authority; resume recomputes only to revalidate what the original routing decision recorded, and refuses on any mismatch.
+    contract: "Routing computes and records authority; resume recomputes only to revalidate what the original routing decision recorded: it refuses when recorded authority cannot be re-established exactly, and it discards -- without failing -- any authority the recomputation would grant that routing never recorded, leaving the run ungranted."
