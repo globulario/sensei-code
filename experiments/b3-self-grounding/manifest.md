@@ -95,3 +95,41 @@ code, naming no relation; instrument SHAs and predictions written at freeze:
 - **N3** (`internal/workflow/prospective.go`, no family applicable — a
   control): *`gitShowAt` runs `git show` and then `git ls-tree` on failure;
   make the absence check one call, with no change in behaviour.*
+
+## N1 and N2 — FROZEN (decision of 2026-08-28; N3 held, Family 4 not justified)
+
+```
+subject         sensei-code 7ae7236e218480c0779a2960c01d41027e169e1b, detached worktree, pre-control;
+                tree clean; docs/work holds no B2/B3/S1 document; experiments/ holds no selection of this campaign
+                the ONLY addition: .sensei-code/config.json (the :10122 endpoint), byte-identical to the
+                controller's (sha256 prefix recorded in runs/N*.run); nothing else is seeded
+graph           github.com/globulario/sensei-code at :10122 (digest def94857… at baseline; recorded per run)
+consumer        sensei-code f4038b76f13428b1b1e0e6b35bd04fde5a25ac71 (main; last product change d6fcd11c)  -> sensei-code-b3
+producer        sensei f79f96f9  -> sensei-f3 (SENSEI_BIN)
+recipes         1 at start, the subject's own: field_access_under_lock(internal/event Bus.subs)
+env             SENSEI_CODE_BENCHMARK=1; derive receipts moved aside before each invocation
+```
+
+Tasks, byte for byte, written from the subject's code and naming no relation:
+
+- **N1** — *`applyPremiseResolutions` walks every receipt for every resolution; make the lookup by receipt id direct, with no change in behaviour.*
+- **N2** — *`Result` is built field by field in `CLI.Derive`; return it through one constructor so a missing field cannot be left zero, with no change in behaviour.*
+
+Stopping rule: one invocation each, N1 then N2, nothing altered between; every
+plan, proposed recipe, receipt, coverage line, route and terminal preserved as
+`runs/N1.*`, `runs/N2.*` and entered in the B2 corpus with graph identity;
+exit 3 preserves the question; timeout or crash is an instrument finding. The
+investigator is never shown the sweeps or this section.
+
+Predictions:
+- N1: cold (`0 anchors`, the sole recipe is over `internal/event`) → closure
+  round → the untold investigator may propose a Family 1 question over
+  `internal/workflow` (the sweep shows `Engine.premises` under `Engine.mu`
+  derives DERIVED and spans `premise.go`); if recorded, the future-only rule
+  ends N1 cold or at the human; the anchor benefits the next encounter.
+- N2: cold → closure → a Family 3 question over `internal/derived` may appear
+  (the sweep shows `Result.{Outcome,Detail,Anchor}` DERIVED); same future-only
+  consequence. A question about `Recipe.Provenance` derives REFUTED and is
+  preserved as the court's answer.
+- Either encounter may propose a question of another family, or none; each
+  outcome is preserved and reported, not steered.
