@@ -441,8 +441,10 @@ invariants:
       files:
         - internal/workflow/engine.go
         - internal/derived/derived.go
+        - internal/derived/write.go
     required_tests:
       - internal/workflow/closure_write_test.go:TestDerivedCoverageExcludesTheWritingTask
+      - internal/derived/write_test.go:TestARecipeCannotCoverTheRunThatWroteIt
     evidence:
       - 'experiments/b3-self-grounding/runs/N1.receipts.jsonl: recorded in round 2, run exited 3 with 0 anchors'
       - 'experiments/b3-self-grounding/runs/N2.receipts.jsonl: same'
