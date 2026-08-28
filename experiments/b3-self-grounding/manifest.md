@@ -342,3 +342,55 @@ regressions on #109. A fourth and fifth instance of the shape the proof-v7
 hypothesis names (a class collapsed into the first plausible one; a rule
 replaced by a stronger-looking rule that is weaker on the cases it did not
 name), both excluded from proof-v7 evidence as discovery instances.
+
+### N2b — 04:12:33Z–04:20:09Z, exit 0, subject copy `6c36961` (n2b)
+
+Route `architectural-authority-granted`: `internal/derived/derived.go
+[mutation confinement]` — the Family 3 recipe the untold investigator
+proposed in N2, derived at this base, carried into routing as the whole
+authority for a one-file plan. The implementor ran. Candidate
+`8f58b4c0783b` (diff digest `cb7c47a4…`, 2768 bytes, `runs/N2b.candidate.diff`):
+an unexported positional constructor `newResult(Recipe, Outcome, string,
+*Anchor)` with all five `CLI.Revalidate` exits routed through it. Terminal:
+ACCEPT, `retained: accepted by review and unpublished; landing it is the
+human's decision`. **Not admitted.** The copy is left as it stands.
+
+Findings, in order of weight:
+
+- **The verdict flipped on identical bytes and identical evidence, and the
+  reviewer changed underneath it.** Cycle 1 (04:17:07, `via codex`):
+  REVISE — the plan required a scoped Sensei edit check, validation recorded
+  only gofmt/vet/build/tests, and the diff audit is `input_trust:
+  caller_supplied`. Cycle 2 (04:20:08, `Claude takes the reviewer role in a
+  session that inherits nothing`): ACCEPT, on the same digest, the same
+  three-times-identical validation block, the same caller-supplied audit,
+  and still no edit check — the cycle-2 review does not mention the proof
+  cycle 1 refused on. Nothing the revision did addressed the finding: the
+  diff did not change, the evidence did not change; the reviewer did. The
+  run reports this as a candidate ready for admission. The instrument
+  recorded every fact needed to see it; nothing in the engine compared
+  them.
+- **The inner cycle counter reset.** `candidate.changed … cycle 2` at
+  04:17:48, then `… cycle 1` at 04:19:25 for the same candidate: the
+  revision's counter restarts, so a reader of the label alone would count
+  two candidates where there was one.
+- **A recipe can route a run it cannot let record a decision.** At the end:
+  `decision not recorded: no governing invariant to link the decision to,
+  so it was not recorded; govern these files first` — on a file whose
+  derived recipe just served as the run's whole architectural authority.
+  Coverage-by-recipe and decision-recording-by-invariant are two vocabularies
+  for "governed", and this file is in one and not the other.
+- `production_deploy` reported `declared but not mechanically enforced`
+  every cycle; unchanged from earlier series.
+
+Reading beside N1b: the two second encounters are the two sides of the same
+fact. Sensei's own knowledge of itself reached routing as architectural
+authority in both. On `premise.go` the machinery carrying that authority
+denied execution (two defects, #109). On `derived.go` it granted execution
+and then accepted a candidate on a reviewer substitution that no rule
+noticed. Neither is a Family finding; both are findings about what the
+authority is connected to once it exists. The proof-v7 hypothesis predicted
+contradictions *before* review; N2b's is the case it does not name — a
+contradiction between two reviews, mechanical in every input, not checked.
+Excluded from proof-v7 evidence as a discovery instance; it becomes a
+prediction to freeze.
