@@ -488,14 +488,16 @@ func TestEveryAdmissibleAnchorOverTheCoveringSurfaceIsCarried(t *testing.T) {
 // Grant facts are read at the candidate's pinned base, never at a HEAD that
 // may have moved since the identity was established.
 func TestProspectiveFactsAreReadAtThePinnedBase(t *testing.T) {
-	body := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
+	// The world is chosen in coverageAtWorld, the pure computation both the
+	// routing path (derivedCoverage) and resume share.
+	body := funcBody(t, "internal/workflow/engine.go", "coverageAtWorld")
 	// funcBody renders selector paths as "e.governedBase( " tokens.
 	base, head := strings.Index(body, "e.governedBase("), strings.Index(body, "e.Repo.Head(")
 	if base < 0 {
-		t.Fatal("derivedCoverage does not read the pinned base")
+		t.Fatal("coverageAtWorld does not read the pinned base")
 	}
 	if head >= 0 && head < base {
-		t.Fatal("derivedCoverage consults HEAD before the pinned base")
+		t.Fatal("coverageAtWorld consults HEAD before the pinned base")
 	}
 	if !strings.Contains(body, "declarations nil") {
 		t.Fatal("without a pinned base, prospective declarations are still evaluated")

@@ -268,3 +268,62 @@ func TestAGrantedTestPathWithWhitespaceIsStillInspected(t *testing.T) {
 		t.Fatalf("a rename of a whitespace path was not refuted: %v", err)
 	}
 }
+
+// #101 review 5047003424: re-establishment must not write. The routing path
+// records; the resume path only computes and compares. Two resumes of a task
+// whose original run recorded no grant must leave it ungranted both times --
+// including when the pinned world would grant it today.
+func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
+	// The pure computation records nothing: no engine state, no event.
+	body := funcBody(t, "internal/workflow/engine.go", "coverageAtWorld")
+	for _, forbidden := range []string{"e.emit(", "e.setTestEditGrants(", "e.setProspectiveGrants("} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("coverageAtWorld has a side effect: %s", forbidden)
+		}
+	}
+	resume := funcBody(t, "internal/workflow/engine.go", "Resume")
+	if strings.Contains(resume, "e.derivedCoverage(") || !strings.Contains(resume, "e.coverageAtWorld(") {
+		t.Fatal("Resume re-establishes through the recording path")
+	}
+	routing := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
+	if !strings.Contains(routing, "e.setTestEditGrants(") || !strings.Contains(routing, "TestEditGranted") {
+		t.Fatal("the routing path no longer records what it acts on")
+	}
+
+	// The two-resume scenario at the level of records. The original run
+	// recorded nothing. The world would grant today.
+	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
+	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), world)
+	if len(fresh) != 1 {
+		t.Fatal("premise: the world grants today")
+	}
+	original := []event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Summary: "task"},
+		{TaskID: "t", Kind: event.PlanProposed, Source: event.SourceArchitect, Summary: "plan", Payload: json.RawMessage(`{"plan":"p","files":["` + teS + `","` + teF + `"]}`)},
+	}
+	first := session.FindInterrupted(original)[0]
+	e := &Engine{}
+	if err := e.restoreTestEditGrants(first, fresh, []string{teS, teF}, teWorld); err != nil || len(e.testEditGrants("t")) != 0 {
+		t.Fatalf("first resume: %v, grants=%d", err, len(e.testEditGrants("t")))
+	}
+	// The first resume wrote nothing a session could read back: the events
+	// the task holds are exactly the original run's. A second interruption
+	// and resume therefore sees the same absent record and installs nothing.
+	afterFirstResume := append([]event.Event(nil), original...) // nothing appended by the resume path
+	second := session.FindInterrupted(afterFirstResume)[0]
+	if len(second.TestEditRecord) != 0 {
+		t.Fatal("the first resume left a test-edit record behind")
+	}
+	e2 := &Engine{}
+	if err := e2.restoreTestEditGrants(second, fresh, []string{teS, teF}, teWorld); err != nil || len(e2.testEditGrants("t")) != 0 {
+		t.Fatalf("second resume minted authority: %v, grants=%d", err, len(e2.testEditGrants("t")))
+	}
+	// Had the first resume recorded (the defect), the second would have been
+	// handed the grant: pin that this is the difference.
+	minted, _ := json.Marshal(testEditRecord{World: teWorld, Grants: fresh})
+	tainted := session.FindInterrupted(append(afterFirstResume, event.Event{TaskID: "t", Kind: event.TestEditGranted, Payload: minted}))[0]
+	e3 := &Engine{}
+	if err := e3.restoreTestEditGrants(tainted, fresh, []string{teS, teF}, teWorld); err != nil || len(e3.testEditGrants("t")) != 1 {
+		t.Fatal("precondition: a written record would have been honoured, which is exactly why resume must not write one")
+	}
+}
