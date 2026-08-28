@@ -138,7 +138,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		if f == files[1] {
 			return sensei.PreflightDecision{}, errors.New("Sensei went away")
 		}
-		return region, nil
+		return probeOf(region), nil
 	}
 	got, err := unexaminedFiles(StageCandidateEdit, 2, ask, files, region)
 	if err == nil {
@@ -156,7 +156,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 				`"coverage":{"sufficient":false,"direct_anchor_count":0,"file_count":1,"indexed_file_count":0},`+
 				identifiedAuthority+`}`), nil
 		}
-		return region, nil
+		return probeOf(region), nil
 	}
 	got, err = unexaminedFiles(StageCandidateEdit, 2, answered, files, region)
 	if err != nil || len(got) != 1 || got[0] != files[1] {
@@ -180,30 +180,42 @@ func TestAnUncertifiablePerFilePreflightIsNotEvidence(t *testing.T) {
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
 	for name, bad := range map[string]sensei.PreflightDecision{
 		"authority not certifiable": {Status: sensei.PreflightOK},
-		"status unspecified":        func() sensei.PreflightDecision { d := region; d.Status = sensei.PreflightUnspecified; return d }(),
-		"status refused":            func() sensei.PreflightDecision { d := region; d.Status = "PREFLIGHT_STATUS_REFUSED"; return d }(),
+		"status unspecified": func() sensei.PreflightDecision {
+			d := probeOf(region)
+			d.Status = sensei.PreflightUnspecified
+			return d
+		}(),
+		"status refused": func() sensei.PreflightDecision { d := probeOf(region); d.Status = "PREFLIGHT_STATUS_REFUSED"; return d }(),
 		// The graph was rebuilt between the region call and this probe: each
 		// answer is certifiable on its own and no single generation examined
 		// what the two together would claim (#115 review, third pass).
-		"different graph build":   func() sensei.PreflightDecision { d := region; d.Authority.GraphBuildCommit = "0123456789ab"; return d }(),
-		"different source commit": func() sensei.PreflightDecision { d := region; d.Authority.SourceRepoCommit = "0123456789ab"; return d }(),
-		"graph identity absent":   func() sensei.PreflightDecision { d := region; d.Authority.GraphBuildCommit = ""; return d }(),
+		"different graph build": func() sensei.PreflightDecision {
+			d := probeOf(region)
+			d.Authority.GraphBuildCommit = "0123456789ab"
+			return d
+		}(),
+		"different source commit": func() sensei.PreflightDecision {
+			d := probeOf(region)
+			d.Authority.SourceRepoCommit = "0123456789ab"
+			return d
+		}(),
+		"graph identity absent": func() sensei.PreflightDecision { d := probeOf(region); d.Authority.GraphBuildCommit = ""; return d }(),
 		// DEGRADED for a reason that is not a coverage gap: the region router
 		// refuses to reason from it, and so does the probe (#115, fourth pass).
 		"degraded, unrecognised blind spot": func() sensei.PreflightDecision {
-			d := region
+			d := probeOf(region)
 			d.Status = sensei.PreflightDegraded
 			d.BlindSpots = []string{"backend unhealthy: oxigraph did not answer"}
 			return d
 		}(),
-		"degraded, no blind spot at all": func() sensei.PreflightDecision { d := region; d.Status = sensei.PreflightDegraded; return d }(),
+		"degraded, no blind spot at all": func() sensei.PreflightDecision { d := probeOf(region); d.Status = sensei.PreflightDegraded; return d }(),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 				if f == files[1] {
 					return bad, nil
 				}
-				return region, nil
+				return probeOf(region), nil
 			}, files, region)
 			if err == nil {
 				t.Fatalf("an uncertifiable per-file answer was read as evidence: unexamined=%v", got)
@@ -230,7 +242,7 @@ func TestARegionWithoutGraphIdentityBindsNoProbe(t *testing.T) {
 	region := scopedPreflight(t, neighbourCovered)
 	region.Authority.SourceRepoCommit = ""
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) { return region, nil }, files, region)
+	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) { return probeOf(region), nil }, files, region)
 	if err == nil {
 		t.Fatalf("probes were bound to a region with no graph identity: unexamined=%v", got)
 	}
@@ -244,14 +256,14 @@ func TestACoverageShapedDegradedProbeIsRead(t *testing.T) {
 	files := []string{"internal/workflow/engine.go", "internal/workflow/authority_test.go"}
 	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		if f == files[1] {
-			d := region
+			d := probeOf(region)
 			d.Status = sensei.PreflightDegraded
 			d.BlindSpots = []string{"high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply",
 				"this is NOT proof of safety — the graph has no facts about this file"}
 			d.Coverage = sensei.Coverage{Sufficient: true, FileCount: 1, IndexedFileCount: 1}
 			return d, nil
 		}
-		return region, nil
+		return probeOf(region), nil
 	}, files, region)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("an examined, coverage-degraded file was not read: unexamined=%v err=%v", got, err)
@@ -279,10 +291,10 @@ func TestAggregateCountsMustDescribeTheRequestedPlanToSkipProbes(t *testing.T) {
 				if f == files[1] {
 					d := region
 					d.Status = sensei.PreflightEmpty
-					d.Coverage = sensei.Coverage{}
+					d.Coverage = sensei.Coverage{FileCount: 1}
 					return d, nil
 				}
-				return region, nil
+				return probeOf(region), nil
 			}, files, region)
 			if asked != 2 {
 				t.Fatalf("the shortcut was taken on counts that do not describe the plan: %d probe(s)", asked)
@@ -302,12 +314,12 @@ func TestAProbePublishedInsufficientIsUnexamined(t *testing.T) {
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
 	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		if f == files[1] {
-			d := region
+			d := probeOf(region)
 			d.Status = sensei.PreflightEmpty
 			d.Coverage = sensei.Coverage{Sufficient: false, DirectAnchorCount: 1, FileCount: 1, IndexedFileCount: 1}
 			return d, nil
 		}
-		return region, nil
+		return probeOf(region), nil
 	}, files, region)
 	if err != nil || len(got) != 1 || got[0] != files[1] {
 		t.Fatalf("counts overrode a published insufficiency: unexamined=%v err=%v", got, err)
@@ -333,5 +345,38 @@ func TestAGatedPlanIsNotProbed(t *testing.T) {
 	r := routeAuthorityForAction(gated, nil, plannedEdit("internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"))
 	if r.Route != RouteHuman {
 		t.Fatalf("a gated plan routed to %s", r.Route)
+	}
+}
+
+// probeOf is the answer a single-file preflight gives for an examined,
+// anchored file: the region's authority and status, coverage about ONE file.
+func probeOf(region sensei.PreflightDecision) sensei.PreflightDecision {
+	d := region
+	d.Coverage = sensei.Coverage{Sufficient: true, DirectAnchorCount: 3, FileCount: 1, IndexedFileCount: 1}
+	return d
+}
+
+// A probe that does not describe exactly the file asked about is not that
+// file's answer, however proven its counts look (#115, sixth pass).
+func TestAProbeMustDescribeExactlyOneFile(t *testing.T) {
+	region := scopedPreflight(t, neighbourCovered)
+	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
+	for name, cov := range map[string]sensei.Coverage{
+		"file_count omitted":  {Sufficient: true, DirectAnchorCount: 3, IndexedFileCount: 1},
+		"two files":           {Sufficient: true, DirectAnchorCount: 3, FileCount: 2, IndexedFileCount: 1},
+		"more indexed than 1": {Sufficient: true, DirectAnchorCount: 3, FileCount: 1, IndexedFileCount: 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+				d := probeOf(region)
+				if f == files[1] {
+					d.Coverage = cov
+				}
+				return d, nil
+			}, files, region)
+			if err == nil {
+				t.Fatalf("a mis-scoped probe was read as this file's answer: unexamined=%v", got)
+			}
+		})
 	}
 }

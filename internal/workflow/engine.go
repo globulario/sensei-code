@@ -2289,6 +2289,13 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		default:
 			return nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
 		}
+		// A probe describes exactly the one file it asked about, or it is
+		// not this file's answer: a mis-scoped or older payload with no
+		// file_count, or more than one, could be Proven() on counts that
+		// belong to some other region (#115 review, sixth pass).
+		if c := one.Coverage; c.FileCount != 1 || c.IndexedFileCount > 1 {
+			return nil, fmt.Errorf("%s: preflight answered about %d file(s) (%d indexed), not this one", f, c.FileCount, c.IndexedFileCount)
+		}
 		// The file is examined only when its OWN answer proves coverage:
 		// Sensei's published sufficiency, narrowed to an analysis basis,
 		// exactly as the region is read. Counts never override a published
