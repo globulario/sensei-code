@@ -61,7 +61,13 @@ tool said, to be checked when the recipe runs). Other surfaces: NO_SUBJECT.
 ## Per-surface applicability (what a recipe could anchor)
 
 ```
-
+internal/workflow/engine.go          F1 {'REFUTED': 4, 'UNRESOLVED': 2, 'DERIVED': 12}   F2 NO_SUBJECT                               F3 {'DERIVED': 2}
+internal/workflow/suppliedplan.go    F1 {'DERIVED': 1}                                   F2 NO_SUBJECT                               F3 NO_SUBJECT
+internal/workflow/prospective.go     F1 NO_SUBJECT                                       F2 REFUTED(git, owner internal/workflow)    F3 NO_SUBJECT
+internal/workflow/testedit.go        F1 {'DERIVED': 1}                                   F2 NO_SUBJECT                               F3 NO_SUBJECT
+internal/workflow/premise.go         F1 {'DERIVED': 1}                                   F2 NO_SUBJECT                               F3 NO_SUBJECT
+internal/session/store.go            F1 {'REFUTED': 1}                                   F2 NO_SUBJECT                               F3 NO_SUBJECT
+internal/derived/derived.go          F1 NO_SUBJECT                                       F2 variable exe: unobservable               F3 {'REFUTED': 1, 'DERIVED': 3}
 ```
 
 ## Reading
