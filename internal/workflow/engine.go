@@ -2140,7 +2140,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// recognised derivation may close, and Sensei going away between the
 	// region call and the per-file call would then be a way to a grant
 	// (#115 review). The region call above fails the same way.
-	unexamined, err := unexaminedFiles(stage, func(f string) (sensei.PreflightDecision, error) {
+	unexamined, err := unexaminedFiles(stage, len(d.Files), func(f string) (sensei.PreflightDecision, error) {
 		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
 		if domain := start.Domain(); domain != "" {
 			args["domain"] = domain
@@ -2237,8 +2237,17 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 // An observation asks nothing: the lane grants no authority, and its contract
 // is that an unusable graph must not prevent the investigation that could
 // diagnose it (TestObservationSurvivesAnUncertifiableGraph).
-func unexaminedFiles(stage ActionStage, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
-	if stage == StageObserve || len(files) == 0 || scoped.Coverage.IndexedFileCount >= scoped.Coverage.FileCount {
+func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
+	if stage == StageObserve || len(files) == 0 {
+		return nil, nil
+	}
+	// The shortcut -- every planned file examined, nothing to ask -- is taken
+	// only when the region's counts are about the plan that was requested. A
+	// region answer that omits file_count, or counts fewer files than were
+	// asked about, would satisfy indexed >= file_count on default zeros and
+	// skip every probe; its counts describe something else, so every file is
+	// asked. Probing is the safe direction; skipping is the one to earn.
+	if c := scoped.Coverage; c.FileCount > 0 && c.FileCount == requested && c.IndexedFileCount >= c.FileCount {
 		return nil, nil
 	}
 	var out []string
@@ -2260,7 +2269,15 @@ func unexaminedFiles(stage ActionStage, ask func(file string) (sensei.PreflightD
 				one.Authority.GraphBuildCommit, one.Authority.SourceRepoCommit, scoped.Authority.GraphBuildCommit, scoped.Authority.SourceRepoCommit)
 		}
 		switch one.Status {
-		case sensei.PreflightOK, sensei.PreflightEmpty, sensei.PreflightDegraded:
+		case sensei.PreflightOK, sensei.PreflightEmpty:
+		case sensei.PreflightDegraded:
+			// The region router's own reading: DEGRADED is an uninformed
+			// graph only when every blind spot is a coverage marker.
+			// Otherwise the instrument did not say why, and its coverage
+			// counters are not read.
+			if !readBlindSpots(one.BlindSpots).degradedIsCoverageShaped() {
+				return nil, fmt.Errorf("%s: preflight degraded and the reason is not a coverage gap: %s", f, degradedReason(one.BlindSpots))
+			}
 		default:
 			return nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
 		}

@@ -289,7 +289,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		// unrecognised blind spot, a consequence-shaped one, or NO blind spots
 		// at all tells us nothing about WHY, and an instrument that will not
 		// say why it is degraded is not one to reason from.
-		if len(spots.Coverage) == 0 || len(spots.Unrecognised) != 0 || len(spots.Consequence) != 0 {
+		if !spots.degradedIsCoverageShaped() {
 			return Routing{
 				Route: RouteCannotEstablish,
 				Condition: "preflight degraded and the reason is not a coverage gap: " +

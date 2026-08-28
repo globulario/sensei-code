@@ -133,6 +133,17 @@ type blindSpotReading struct {
 	Unrecognised []string
 }
 
+// degradedIsCoverageShaped is the one reading under which a DEGRADED answer
+// is an uninformed graph rather than a broken instrument: every blind spot is
+// a recognised coverage marker, and there is at least one. Anything else --
+// an unrecognised spot, a consequence-shaped one, or none at all -- says
+// nothing about WHY, and an instrument that will not say why it is degraded
+// is not one to reason from. Shared by the region router and the per-file
+// probe so the two cannot drift.
+func (r blindSpotReading) degradedIsCoverageShaped() bool {
+	return len(r.Coverage) != 0 && len(r.Unrecognised) == 0 && len(r.Consequence) == 0
+}
+
 func readBlindSpots(spots []string) blindSpotReading {
 	var r blindSpotReading
 	for _, s := range spots {
