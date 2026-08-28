@@ -126,7 +126,7 @@ func TestAnAdjudicationIsReadByMembership(t *testing.T) {
 
 func TestTheContradictionPromptAsksForTheAdjudication(t *testing.T) {
 	p := contradictionPrompt("task", "plan", "audit", openReview{}, accept("claude"))
-	if !strings.Contains(p, `"adjudication"`) || !strings.Contains(p, adjudicationStands) {
+	if !strings.Contains(p, `"adjudication"`) || !strings.Contains(p, adjudicationAcceptingStands) {
 		t.Fatal("the prompt must ask for the closed adjudication answer")
 	}
 }

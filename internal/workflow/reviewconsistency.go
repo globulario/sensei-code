@@ -136,7 +136,7 @@ const (
 	adjudicationRevise = "revise"
 	// adjudicationStands: the earlier finding does not apply to this
 	// candidate; the accepting review stands and no edit is owed.
-	adjudicationStands = "accepting_review_stands"
+	adjudicationAcceptingStands = "accepting_review_stands"
 )
 
 // adjudicationStands reads the architect's answer. Silence is "revise": an
@@ -146,10 +146,10 @@ func adjudicationStands(d architectureDecision) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(d.Adjudication)) {
 	case "", adjudicationRevise:
 		return false, nil
-	case adjudicationStands:
+	case adjudicationAcceptingStands:
 		return true, nil
 	default:
-		return false, fmt.Errorf("the architect answered the review contradiction with %q, which is neither %q nor %q", d.Adjudication, adjudicationRevise, adjudicationStands)
+		return false, fmt.Errorf("the architect answered the review contradiction with %q, which is neither %q nor %q", d.Adjudication, adjudicationRevise, adjudicationAcceptingStands)
 	}
 }
 

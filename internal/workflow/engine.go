@@ -1590,12 +1590,12 @@ type architectureDecision struct {
 	// audit touches many files without changing one, so the file list cannot
 	// answer this, and inferring it from the summary would be a governance
 	// decision resting on prose.
-	Mode           string             `json:"mode,omitempty"`
-	Invariants     []string           `json:"related_invariants,omitempty"`
+	Mode       string   `json:"mode,omitempty"`
+	Invariants []string `json:"related_invariants,omitempty"`
 	// Adjudication is the architect's answer to a review contradiction, from
 	// the closed vocabulary in adjudicationStands. Read by membership: an
 	// unknown value is refused, not read as either answer.
-	Adjudication string `json:"adjudication,omitempty"`
+	Adjudication   string             `json:"adjudication,omitempty"`
 	Plan           string             `json:"plan"`
 	HumanQuestion  string             `json:"human_question,omitempty"`
 	Recommendation string             `json:"recommendation,omitempty"`
