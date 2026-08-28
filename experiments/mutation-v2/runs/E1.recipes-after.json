@@ -1,0 +1,24 @@
+{
+  "recipes": [
+    {
+      "kind": "state_mutation_confined_to_owner",
+      "dir": "modfile",
+      "type": "File",
+      "field": "Module",
+      "search_paths": [
+        "."
+      ],
+      "why": "AddModuleStmt mutates File.Module, while the requested error path must preserve it; repository-wide mutation ownership is worth verifying mechanically.",
+      "provenance": {
+        "origin_task": "task-1787876437890915383",
+        "origin_gap": "graph coverage is absent for the planned files: only 1 of 2 requested file(s) are examined in the graph — the rest are unknown to it",
+        "region": [
+          "modfile/rule.go",
+          "modfile/rule_test.go"
+        ],
+        "written_at": "2026-08-28T00:25:21Z",
+        "written_by": "closure_round"
+      }
+    }
+  ]
+}
