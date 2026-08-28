@@ -3,19 +3,31 @@
   "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
   "sensei_sha": "e81d7bed",
   "fixture": "github.com/golang/mod",
-  "human_review": [
+  "note": "architect declared prospective_surfaces naturally; refuted on bytes; worker never shown the grant",
+  "review_findings": [
    "PR #95: numstats corrected to the attached patch (+2/-2); untrimmed sha256 recorded"
   ],
-  "note": "architect declared prospective_surfaces naturally; refuted on bytes; worker never shown the grant"
+  "review_provenance": {
+   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
+   "mediated_by": "human (direction, interpretation refusals, merge)",
+   "merge_authority": "human",
+   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+  }
  },
  "E3-seriesB.2": {
   "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
   "sensei_sha": "e81d7bed",
   "fixture": "github.com/golang/mod",
-  "human_review": [
+  "note": "one closure round on an honest inference claim, then granted; refuted on bytes",
+  "review_findings": [
    "PR #95: record corrected to state the producer/authority information asymmetry, not a diagnosis"
   ],
-  "note": "one closure round on an honest inference claim, then granted; refuted on bytes"
+  "review_provenance": {
+   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
+   "mediated_by": "human (direction, interpretation refusals, merge)",
+   "merge_authority": "human",
+   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+  }
  },
  "E3-seriesB.3": {
   "sensei_code_sha": "611ae02 (main 1a385be + #91 rebased)",
@@ -27,11 +39,17 @@
   "sensei_code_sha": "b0d4491 (main 842b533 + #94 cherry-picked)",
   "sensei_sha": "e81d7bed",
   "fixture": "github.com/golang/mod",
-  "human_review": [
+  "note": "worker shown the grant: imports exactly inside the envelope; ACCEPT; grant visibility was the causal defect",
+  "review_findings": [
    "closure-budget laundering through paraphrase recorded before the outcome (became #97/#98)",
    "PR #95 merged 3bbf036"
   ],
-  "note": "worker shown the grant: imports exactly inside the envelope; ACCEPT; grant visibility was the causal defect"
+  "review_provenance": {
+   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
+   "mediated_by": "human (direction, interpretation refusals, merge)",
+   "merge_authority": "human",
+   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+  }
  },
  "E3": {
   "sensei_sha": "e81d7bed (manifest)",

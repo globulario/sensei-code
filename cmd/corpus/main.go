@@ -48,9 +48,16 @@ type record struct {
 	Validation        []map[string]any `json:"validation"`
 	Audit             []map[string]any `json:"audit"`
 	Review            []map[string]any `json:"review"`
-	HumanReview       any              `json:"human_review"`
-	Terminal          map[string]any   `json:"terminal"`
-	Note              any              `json:"note,omitempty"`
+	// ReviewFindings are the findings of the independent review of the
+	// evidence or repair, and ReviewProvenance says who produced them and who
+	// mediated and merged. Both come only from the overlay. The field used to
+	// be called human_review, and the reviews it recorded were produced by a
+	// model (ChatGPT 5.6) with a human mediating and holding merge authority;
+	// the old name was an inferred label, exactly what this corpus forbids.
+	ReviewFindings   any            `json:"review_findings"`
+	ReviewProvenance any            `json:"review_provenance"`
+	Terminal         map[string]any `json:"terminal"`
+	Note             any            `json:"note,omitempty"`
 }
 
 var (
@@ -135,7 +142,7 @@ func extract(log string) (record, error) {
 	rec := record{Encounter: exp + "/" + run, SourceLog: log,
 		Instrument: map[string]any{"sensei_sha": "unrecorded", "sensei_code_sha": "unrecorded", "fixture": "unrecorded", "world": "unrecorded"},
 		Graph:      map[string]any{"domain": "unrecorded", "build": "unrecorded", "address": "unrecorded", "audit_graph_commit": "unrecorded", "input_graph_digest": "unrecorded", "authority": "unrecorded"},
-		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, HumanReview: "unrecorded"}
+		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, ReviewFindings: "unrecorded", ReviewProvenance: "unrecorded"}
 	fh, err := os.Open(log)
 	if err != nil {
 		return rec, err
@@ -320,8 +327,11 @@ func extract(log string) (record, error) {
 						rec.Instrument[k] = v
 					}
 				}
-				if v, ok := o["human_review"]; ok {
-					rec.HumanReview = v
+				if v, ok := o["review_findings"]; ok {
+					rec.ReviewFindings = v
+				}
+				if v, ok := o["review_provenance"]; ok {
+					rec.ReviewProvenance = v
 				}
 				if v, ok := o["note"]; ok {
 					rec.Note = v

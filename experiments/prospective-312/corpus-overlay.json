@@ -1,9 +1,42 @@
 {
-  "B1": {"sensei_code_sha": "1090792 (main after #92)", "fixture": "github.com/globulario/sensei-code (self)",
-         "human_review": ["operator error: an untracked stamp file dirtied the tree before invocation; start gate refused; not counted"]},
-  "B2": {"sensei_code_sha": "1090792 (main after #92)", "fixture": "github.com/globulario/sensei-code (self)",
-         "human_review": ["supplied plan refused at routing on its one inference claim; a supplied plan may carry no inference premise (documented on --plan)"]},
-  "C1": {"sensei_code_sha": "29322a2 (plan rev 2 sha256 4e416500)", "fixture": "github.com/globulario/sensei-code (self)",
-         "human_review": ["PR #93 reviews: three receipt-integrity holes found after acceptance (empty-grant resume, HEAD-not-base facts, first-anchor-only), fixed in e7d763f before merge",
-                          "four review cycles produced three constitutional findings the plan lacked: deny ordinary coverage to absent files; read-failed is UNKNOWN not MISSING and the grant is a durable receipt; refutation is terminal"]}
+ "B1": {
+  "sensei_code_sha": "1090792 (main after #92)",
+  "fixture": "github.com/globulario/sensei-code (self)",
+  "review_findings": [
+   "operator error: an untracked stamp file dirtied the tree before invocation; start gate refused; not counted"
+  ],
+  "review_provenance": {
+   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
+   "mediated_by": "human (direction, interpretation refusals, merge)",
+   "merge_authority": "human",
+   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+  }
+ },
+ "B2": {
+  "sensei_code_sha": "1090792 (main after #92)",
+  "fixture": "github.com/globulario/sensei-code (self)",
+  "review_findings": [
+   "supplied plan refused at routing on its one inference claim; a supplied plan may carry no inference premise (documented on --plan)"
+  ],
+  "review_provenance": {
+   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
+   "mediated_by": "human (direction, interpretation refusals, merge)",
+   "merge_authority": "human",
+   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+  }
+ },
+ "C1": {
+  "sensei_code_sha": "29322a2 (plan rev 2 sha256 4e416500)",
+  "fixture": "github.com/globulario/sensei-code (self)",
+  "review_findings": [
+   "PR #93 reviews: three receipt-integrity holes found after acceptance (empty-grant resume, HEAD-not-base facts, first-anchor-only), fixed in e7d763f before merge",
+   "four review cycles produced three constitutional findings the plan lacked: deny ordinary coverage to absent files; read-failed is UNKNOWN not MISSING and the grant is a durable receipt; refutation is terminal"
+  ],
+  "review_provenance": {
+   "provider": "ChatGPT 5.6 (independent review on the PR, via Codex)",
+   "mediated_by": "human (direction, interpretation refusals, merge)",
+   "merge_authority": "human",
+   "recorded_by": "Claude, from the mediator's statement of 2026-08-28; the reviews had been labelled human_review by inference"
+  }
+ }
 }
