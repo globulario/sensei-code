@@ -693,14 +693,17 @@ func TestTheClosureBudgetIsSpentAgainstThePremiseReceipt(t *testing.T) {
 	if strings.Contains(src, "spendClosure(taskID, routing.Condition)") || strings.Contains(src, "spendClosure(taskID, routing.GapKey())") {
 		t.Fatal("a call site still spends the budget against the condition or a location bucket")
 	}
-	if n := strings.Count(src, "spendClosure(taskID, receipt.ID)"); n != 2 {
-		t.Fatalf("%d of 2 call sites spend against the receipt", n)
+	// Three sites: the proceed branch, the escalate branch, and the round a
+	// human's authorisation of a consequence opens when a planned file the
+	// graph never examined remains (#115) -- each spends against a receipt.
+	if n := strings.Count(src, "spendClosure(taskID, receipt.ID)"); n != 3 {
+		t.Fatalf("%d of 3 call sites spend against the receipt", n)
 	}
 	if n := strings.Count(src, "e.applyPremiseResolutions(taskID, d.PremiseResolutions)"); n != 2 {
 		t.Fatalf("%d of 2 branches apply the round's answers", n)
 	}
-	if n := strings.Count(src, "premiseReceiptNote(receipt.ID)"); n != 2 {
-		t.Fatalf("%d of 2 closure prompts ask the round to answer the receipt", n)
+	if n := strings.Count(src, "premiseReceiptNote(receipt.ID)"); n != 3 {
+		t.Fatalf("%d of 3 closure prompts ask the round to answer the receipt", n)
 	}
 	body := funcBody(t, "internal/workflow/engine.go", "routePlan")
 	if !strings.Contains(body, "e.governedBase(") || !strings.Contains(body, "routing.Gap.World") {

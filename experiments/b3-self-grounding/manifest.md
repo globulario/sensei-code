@@ -501,3 +501,22 @@ Discovery instances, not proof-v7 evidence. Nothing here justifies Family 4
 Not adjudicated here: whether a neighbour's anchor satisfies "derived
 coverage must be relevant" for the file actually changed (N3), and whether
 the stopping rule should read recipes or preflight anchors.
+
+### N3 reading corrected (slice 3, 2026-08-28) — the grant was examined silence, not the neighbour
+
+Re-measured per file on the same graph (`42e6e12c…`): `suppliedplan.go`
+alone answers `EMPTY, coverage sufficient=true, indexed_file_count=1/1 — no
+governing rule applies`. Under this repository's coverage contract
+(`Coverage.Proven`, pinned by `TestAnEmptyStatusIsNotACoverageVerdict`) an
+examined file with no governing rule IS proven coverage: the graph looked and
+found no law. So N3's grant rested on examined silence over `suppliedplan.go`
+itself; the "neighbour's anchor" reading above was this recorder's inference
+and is withdrawn. N3's planned set read `file_count=3, indexed_file_count=2`;
+the unexamined file was the granted test, which is not asked to be covered.
+
+What the re-measurement DID expose is the shape M25 §1 names, one step over:
+a scoped preflight over `[engine.go, <a file the graph never examined>]`
+answers `sufficient=true, direct_anchor_count=3, file_count=2,
+indexed_file_count=1` — proven at the region by one file, so an ungrounded
+file planned beside an anchored one inherits the region's coverage. Repaired
+in slice 3 (`docs/work/unexamined-planned-file-is-not-covered.md`).

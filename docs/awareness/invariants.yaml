@@ -467,3 +467,18 @@ invariants:
     evidence:
       - 'sensei-code #101 review 5047003424: repeated resume minted authority; fixed e61cee1'
     contract: "Routing computes and records authority; resume recomputes only to revalidate what the original routing decision recorded: it refuses when recorded authority cannot be re-established exactly, and it discards -- without failing -- any authority the recomputation would grant that routing never recorded, leaving the run ungranted."
+  - id: sensei_code.workflow.unexamined_planned_file_is_not_covered_by_its_neighbour
+    title: A planned file the graph never examined is not covered by its neighbour
+    severity: critical
+    status: active
+    description: 'UNEXAMINED_IS_UNCOVERED. A scoped preflight is one coverage verdict for the whole planned region, proven the moment one planned file carries anchors (live: [engine.go, a nonexistent file] answers sufficient=true, direct_anchor_count=3, file_count=2, indexed_file_count=1). Read at the region, a planned file the graph never examined inherits its neighbour''s coverage, and a plan can carry any ungrounded file into an anchored region and launder the region''s authority onto it (M25 §1). The per-file fact is engine-owned (Action.Unexamined, established by Engine.unexaminedFiles per file, never read off the scoped answer, never supplied by a provider); the router treats unexamined architectural files as a coverage gap (coverage-unexamined) closed only by a recognised derivation over every architectural file. Files under an operational grant are not asked to be examined.'
+    protects:
+      files:
+        - internal/workflow/authority.go
+        - internal/workflow/engine.go
+        - internal/workflow/consequence.go
+    required_tests:
+      - internal/workflow/unexamined_test.go:TestAnUnexaminedPlannedFileIsNotCoveredByItsNeighbour
+      - internal/workflow/unexamined_test.go:TestAnUnexaminedPlannedFileIsCoveredOnlyByADerivationOverIt
+      - internal/workflow/unexamined_test.go:TestAnUnexaminedFileUnderAnOperationalGrantOpensNoGap
+    contract: 'Coverage is a per-file property: the scoped preflight''s region verdict vouches for a planned file only if the graph examined that file; a file it never examined is uncovered whatever its neighbours carry'

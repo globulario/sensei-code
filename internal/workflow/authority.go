@@ -289,7 +289,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		// unrecognised blind spot, a consequence-shaped one, or NO blind spots
 		// at all tells us nothing about WHY, and an instrument that will not
 		// say why it is degraded is not one to reason from.
-		if len(spots.Coverage) == 0 || len(spots.Unrecognised) != 0 || len(spots.Consequence) != 0 {
+		if !spots.degradedIsCoverageShaped() {
 			return Routing{
 				Route: RouteCannotEstablish,
 				Condition: "preflight degraded and the reason is not a coverage gap: " +
@@ -395,6 +395,22 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	// whether the derivation RESOLVES this gap, not merely whether it is true
 	// over the same files -- subject overlap alone let a wide irrelevant truth
 	// manufacture coverage. See relevance.go.
+	// A planned file the graph never examined is uncovered whatever the region
+	// says. The scoped answer is one verdict for all the planned files, and it
+	// is proven the moment one of them carries anchors -- live, over
+	// [engine.go, a file that does not exist]: sufficient=true,
+	// direct_anchor_count=3, file_count=2, indexed_file_count=1. Read at the
+	// region, the second file inherited the first one's coverage, and a plan
+	// could carry any ungrounded file into an anchored region and launder the
+	// region's authority onto it (M25 §1: authority is not inherited from a
+	// neighbour). The per-file fact is engine-owned (Action.Unexamined); a
+	// file under an operational grant is not asked to be examined. The gap
+	// closes the way every coverage gap closes -- a recognised derivation
+	// over every architectural file -- and its identity is the unexamined
+	// files, so the closure budget is spent on them and not on the region.
+	if gap, open := unexaminedCoverageGap(action, spots); open {
+		return gap
+	}
 	if coverageAbsent && len(action.Files) != 0 {
 		// Files holding an operational grant are not asked to be covered:
 		// they are authorised to be edited, which is a different thing, and
@@ -597,6 +613,25 @@ func consequenceSignalSuffix(spots blindSpotReading) string {
 		return ""
 	}
 	return " (consequence signals in the planned region: " + strings.Join(spots.Consequence, ", ") + ")"
+}
+
+// unexaminedCoverageGap is the coverage gap the unexamined planned files open,
+// and whether it is open: closed only by a recognised derivation over every
+// architectural file. Asked by the router after the consequence checks, and
+// asked AGAIN by the engine once a human has authorised a consequence -- the
+// gate is answered first, and the answer is about the consequence, not about
+// coverage, so a file the graph never examined is not admitted by it.
+func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool) {
+	unexamined := action.unexaminedArchitecturalFiles()
+	if len(unexamined) == 0 {
+		return Routing{}, false
+	}
+	if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.architecturalFiles()); closed {
+		return Routing{}, false
+	}
+	return Routing{Route: RouteCloseGap,
+		Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(unexamined, ", "),
+		Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
 }
 
 // degradedReason renders why a degraded preflight could not be read as a

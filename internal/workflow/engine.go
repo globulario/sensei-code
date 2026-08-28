@@ -1666,11 +1666,24 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	d := supplied.decision
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
-	routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
+	routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 	if err != nil {
 		return architectureDecision{}, err
 	}
 	e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
+	// The human's answer is about the consequence, never about coverage: a
+	// supplied plan naming a file the graph never examined is refused after
+	// the answer exactly as it would be refused before a gate existed.
+	unexaminedAfterAnswer := func() error {
+		gap, open, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped)
+		if err != nil {
+			return err
+		}
+		if open {
+			return errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + gap.Condition)
+		}
+		return nil
+	}
 	switch {
 	case routing.Route == RouteCannotEstablish:
 		return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
@@ -1683,6 +1696,9 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
+			if err := unexaminedAfterAnswer(); err != nil {
+				return architectureDecision{}, err
+			}
 			return d, nil
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
@@ -1694,6 +1710,9 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 		// resolution and not the option string the prompt returned.
 		if authorized, _ := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); !authorized {
 			return architectureDecision{}, errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: " + routing.Condition)
+		}
+		if err := unexaminedAfterAnswer(); err != nil {
+			return architectureDecision{}, err
 		}
 		return d, nil
 	}
@@ -1767,7 +1786,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// through a region the graph cannot cover is the exact failure this
 			// routing exists to catch, and it is invisible at the time because
 			// the model sounds no different than usual.
-			routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
+			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -1822,6 +1841,56 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 					}
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 						"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
+					// The answer was about the consequence. Files the graph
+					// never examined are asked about now, and an open gap
+					// takes the same closure round any coverage gap takes.
+					gap, open, err := e.afterHumanAuthorization(sc, start, taskID, task, routing, action, scoped)
+					if err != nil {
+						return architectureDecision{}, err
+					}
+					if open {
+						receipt := e.premiseReceiptFor(taskID, gap, gap.ClaimGap)
+						if !e.spendClosure(taskID, receipt.ID) {
+							// The budget is spent and the gap the answer did not
+							// cover is still open. The same human-owned boundary
+							// every exhausted gap reaches: whether to proceed with
+							// it open is the human's, asked once and honoured.
+							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+								"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
+							e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds)
+							stillOpen := gap
+							stillOpen.Route = RouteHuman
+							stillOpen.Condition = "a bounded knowledge gap was not closed by investigation: " + gap.Condition
+							if authorized, asked := e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...); asked {
+								if !authorized {
+									return architectureDecision{}, fmt.Errorf(
+										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition)
+								}
+								e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
+								return d, nil
+							}
+							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
+							choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition)
+							if err != nil {
+								return architectureDecision{}, err
+							}
+							if err := newRound("a human authority answer"); err != nil {
+								return architectureDecision{}, err
+							}
+							prompt = humanResolutionPrompt(prompt, d, choice)
+							attempt = 0
+							continue
+						}
+						e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+							"authorised, and a bounded knowledge gap the answer did not cover remains; closing it before governance runs again: "+gap.Condition, map[string]any{"gap": receipt.ID, "gap_identity": gap.Gap}))
+						if err := newRound("a bounded knowledge gap"); err != nil {
+							return architectureDecision{}, err
+						}
+						prompt = gapClosurePrompt(prompt, d, gap.Condition+"\n\n"+premiseReceiptNote(receipt.ID))
+						attempt = 0
+						continue
+					}
 					return d, nil
 				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
@@ -1847,7 +1916,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, scoped, err := e.routePlan(ctx, sc, start, taskID, task, d)
+			routing, scoped, _, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -2072,18 +2141,18 @@ func shortDigest(d string) string {
 // This is the first preflight in the workflow that can name files: the start
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
-func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, error) {
+func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, Action, error) {
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
 	}
 	result, err := sc.CallTool("awareness_preflight", args)
 	if err != nil {
-		return Routing{}, sensei.PreflightDecision{}, fmt.Errorf("Sensei scoped preflight: %w", err)
+		return Routing{}, sensei.PreflightDecision{}, Action{}, fmt.Errorf("Sensei scoped preflight: %w", err)
 	}
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
-		return Routing{}, sensei.PreflightDecision{}, err
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
 	// The scoped decision is returned as well as the route. The router reduces
 	// it to one question -- who owns this plan -- and the Level-1 classifier
@@ -2128,6 +2197,37 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
+	// Which planned files the graph has NOT examined, established per file.
+	// The scoped answer cannot say: it is one verdict for the region, proven
+	// the moment one planned file carries anchors, so an ungrounded file
+	// planned beside an anchored one inherited the region's coverage (M25
+	// §1). Asked only when the region itself reports fewer examined files
+	// than planned; a per-file answer that cannot be obtained is unexamined,
+	// which is the direction this must fail in.
+	// A per-file answer that cannot be obtained is returned as the error it
+	// is, never represented as an unexamined file: that would be a gap a
+	// recognised derivation may close, and Sensei going away between the
+	// region call and the per-file call would then be a way to a grant
+	// (#115 review). The region call above fails the same way.
+	// Probed only where the router would otherwise GRANT. Every other route
+	// -- an explicit gate, a declared outward action, an uncertifiable
+	// graph, an open premise -- is already a refusal or a human-owned
+	// boundary that the probes can only make stricter, so probing there
+	// adds nothing but a way for a transient failure to abort the plan
+	// before it reaches that boundary (#115 review). Decided by the router
+	// itself on the same inputs, so the ordering cannot drift from it.
+	// A human-owned route is not probed here: the gate is asked first, and
+	// what it asks is about the consequence. Once the human has authorised
+	// it, the caller that consumes the recorded answer asks
+	// afterHumanAuthorization, which probes then. Nothing about the answer
+	// is read in this function.
+	if probeNeeded(routeAuthorityForAction(scoped, d.Claims, action), false) {
+		unexamined, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+		if err != nil {
+			return Routing{}, sensei.PreflightDecision{}, Action{}, err
+		}
+		action.Unexamined = unexamined
+	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
@@ -2161,6 +2261,9 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 			// Stated as its own kind, beside coverage and never summed with it.
 			summary += fmt.Sprintf("\n  operational authority (existing-test edit): %d file(s): %s", len(op), strings.Join(op, ", "))
 		}
+		if un := action.unexaminedArchitecturalFiles(); len(un) != 0 {
+			summary += fmt.Sprintf("\n  unexamined by the graph: %d file(s): %s", len(un), strings.Join(un, ", "))
+		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary,
 			map[string]any{
 				"derived_coverage_anchors": len(action.DerivedCoverage),
@@ -2169,6 +2272,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 				"closes_gap":               routing.ClosesGap(),
 				"anchors":                  files,
 				"operational_authority":    action.OperationalAuthority,
+				"unexamined":               action.unexaminedArchitecturalFiles(),
 			}))
 	}
 
@@ -2183,7 +2287,173 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing.Route, d).Render(), nil))
 
-	return routing, scoped, nil
+	return routing, scoped, action, nil
+}
+
+// unexaminedFiles asks about each architectural planned file on its own and
+// returns the ones the graph has no facts about: no direct anchor and not
+// indexed.
+//
+// A region answer with every planned file examined needs no second question.
+// Otherwise each file is asked separately, because the region's counts say how
+// many files were examined and never which -- and a file under an operational
+// grant, which is not asked to be covered, may be the unexamined one.
+//
+// An answer that cannot be obtained, or that the graph cannot vouch for, is an
+// error, not an unexamined file. The two are different worlds: one is a fact
+// about the graph's coverage, the other is an instrument that did not answer
+// (or answered from a graph that is not certifiable), and only the first is
+// evidence. A decoded answer is read only when its authority is certifiable
+// and its status is one whose coverage counters mean something -- OK, EMPTY
+// or DEGRADED, the same three the region router reads (#115 review).
+//
+// An observation asks nothing: the lane grants no authority, and its contract
+// is that an unusable graph must not prevent the investigation that could
+// diagnose it (TestObservationSurvivesAnUncertifiableGraph).
+func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
+	if stage == StageObserve || len(files) == 0 {
+		return nil, nil
+	}
+	// Whether a gated plan is probed is decided by the caller (probeNeeded):
+	// not before the human answers the gate, and always after. Deciding it
+	// here too made an authorised gated plan unprobeable (#115 review).
+	// There is no shortcut on the region's counts. A region that says every
+	// planned file is indexed can still hold a file that, asked alone,
+	// publishes sufficient=false -- a shape the router treats as meaningful
+	// -- and the aggregate cannot say which. Per-file sufficiency is the
+	// property; the only way to read it is to ask per file, every time a
+	// grant is on the table. What the region's counts CAN say is that the
+	// answer is not about this plan at all: more files examined than were
+	// asked about is malformed, and Proven() would read it as coverage, so
+	// it fails closed rather than being probed around.
+	c := scoped.Coverage
+	if c.IndexedFileCount > c.FileCount || (c.FileCount > 0 && c.FileCount != requested) {
+		return nil, fmt.Errorf("region preflight counts do not describe this plan: %d indexed of %d file(s), %d requested", c.IndexedFileCount, c.FileCount, requested)
+	}
+	var out []string
+	for _, f := range files {
+		one, err := ask(f)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", f, err)
+		}
+		if !one.Authority.Certifiable() {
+			return nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
+		}
+		// One graph generation for the region answer and every probe. The
+		// calls are sequential; a rebuild between them could answer the
+		// region from generation A and a probe from generation B, and no
+		// single graph would have examined what the two answers together
+		// claim. Identity absent on either side is not identity.
+		if !sameGraphGeneration(scoped.Authority, one.Authority) {
+			return nil, fmt.Errorf("%s: preflight answered from a different graph generation (%s/%s) than the region (%s/%s)", f,
+				one.Authority.GraphBuildCommit, one.Authority.SourceRepoCommit, scoped.Authority.GraphBuildCommit, scoped.Authority.SourceRepoCommit)
+		}
+		switch one.Status {
+		case sensei.PreflightOK, sensei.PreflightEmpty:
+		case sensei.PreflightDegraded:
+			// The region router's own reading: DEGRADED is an uninformed
+			// graph only when every blind spot is a coverage marker.
+			// Otherwise the instrument did not say why, and its coverage
+			// counters are not read.
+			if !readBlindSpots(one.BlindSpots).degradedIsCoverageShaped() {
+				return nil, fmt.Errorf("%s: preflight degraded and the reason is not a coverage gap: %s", f, degradedReason(one.BlindSpots))
+			}
+		default:
+			return nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
+		}
+		// A probe describes exactly the one file it asked about, or it is
+		// not this file's answer: a mis-scoped or older payload with no
+		// file_count, or more than one, could be Proven() on counts that
+		// belong to some other region (#115 review, sixth pass).
+		if c := one.Coverage; c.FileCount != 1 || c.IndexedFileCount > 1 {
+			return nil, fmt.Errorf("%s: preflight answered about %d file(s) (%d indexed), not this one", f, c.FileCount, c.IndexedFileCount)
+		}
+		// The file is examined only when its OWN answer proves coverage:
+		// Sensei's published sufficiency, narrowed to an analysis basis,
+		// exactly as the region is read. Counts never override a published
+		// sufficient=false (TestSufficiencyIsTakenAsPublishedAndNarrowedNotRecomputed).
+		if !one.Coverage.Proven() {
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+// probeNeeded reports whether per-file coverage probes can change the route.
+// Only two routes can: a grant the region answer alone would give, and a
+// human-owned route whose condition the human has already authorised -- the
+// next step for both is a worker. A route that refuses, or a human question
+// not yet answered, is returned as it is: the gate is asked first, and a
+// probe failure must not abort a plan before it reaches its boundary.
+func probeNeeded(pre Routing, authorized bool) bool {
+	return pre.Granted() || (pre.RequiresHuman() && authorized)
+}
+
+// afterAuthorization is the router's answer once a human has authorised the
+// consequence it asked about. The answer was about the consequence -- a gate,
+// an outward action -- and not about coverage, and the router asks the gate
+// before coverage, so a human-owned route says nothing about files the graph
+// never examined. Those are asked here, with the same relation the router
+// uses, before the plan can reach a worker (#115 review).
+func afterAuthorization(routing Routing, authorized bool, action Action, spots blindSpotReading) Routing {
+	if !authorized || !routing.RequiresHuman() {
+		return routing
+	}
+	if gap, open := unexaminedCoverageGap(action, spots); open {
+		return gap
+	}
+	return routing
+}
+
+// sameGraphGeneration reports that two preflight answers name the same graph
+// build and source commit, both present. Absent identity fails closed.
+func sameGraphGeneration(a, b sensei.Authority) bool {
+	return strings.TrimSpace(a.GraphBuildCommit) != "" && strings.TrimSpace(a.SourceRepoCommit) != "" &&
+		a.GraphBuildCommit == b.GraphBuildCommit && a.SourceRepoCommit == b.SourceRepoCommit
+}
+
+// unexaminedPlannedFiles asks Sensei about each architectural planned file on
+// its own, in the region answer's graph generation.
+func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart, task string, action Action, scoped sensei.PreflightDecision) ([]string, error) {
+	unexamined, err := unexaminedFiles(action.Stage, len(action.Files), func(f string) (sensei.PreflightDecision, error) {
+		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
+		if domain := start.Domain(); domain != "" {
+			args["domain"] = domain
+		}
+		result, err := sc.CallTool("awareness_preflight", args)
+		if err != nil {
+			return sensei.PreflightDecision{}, err
+		}
+		return sensei.DecodePreflight(result)
+	}, action.architecturalFiles(), scoped)
+	if err != nil {
+		return nil, fmt.Errorf("Sensei per-file preflight: %w", err)
+	}
+	return unexamined, nil
+}
+
+// afterHumanAuthorization is asked by the caller that has just consumed a
+// recorded human authorization of a human-owned route. The answer was about
+// the consequence, and the router asks the gate before coverage, so the
+// planned files the graph never examined are asked about now, before the
+// plan reaches a worker. Returns the open coverage gap, if any.
+func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart, taskID, task string, routing Routing, action Action, scoped sensei.PreflightDecision) (Routing, bool, error) {
+	if !probeNeeded(routing, true) {
+		return routing, false, nil
+	}
+	unexamined, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+	if err != nil {
+		return Routing{}, false, err
+	}
+	action.Unexamined = unexamined
+	after := afterAuthorization(routing, true, action, readBlindSpots(scoped.BlindSpots))
+	// The same gap identity routePlan would have built: completed with the
+	// pinned world, or the closure budget would treat the question this
+	// answer left open as a new one and issue a fresh receipt for it.
+	if after.Gap.Identified() {
+		after.Gap.World = strings.TrimSpace(e.governedBase(taskID))
+	}
+	return after, after.ClosesGap(), nil
 }
 
 // derivedRecipesPath is where the durable questions live.
