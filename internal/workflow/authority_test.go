@@ -746,3 +746,47 @@ func TestAnUnansweredReceiptIsUnresolvedNotUnasked(t *testing.T) {
 		}
 	}
 }
+
+// B3 N1b, round 1: premise.go covered by a lock-discipline anchor, and the
+// existing authority_test.go beside it under a test-edit grant. The blind-spot
+// coverage branch still asked the derivation to cover the test file and routed
+// cold -- the same defect the coverageAbsent branch had already been cured of
+// (M2.2), one seam over. Operational authority is subtracted here too, and the
+// gap this branch opens carries a mechanical identity.
+func TestTheBlindSpotCoverageBranchHonoursOperationalAuthority(t *testing.T) {
+	// N1b's preflight: coverage proven for the region as a whole, and a
+	// coverage blind spot reported for the planned files -- the shape that
+	// reaches the blind-spot branch rather than the coverage-absent one.
+	scoped := scopedPreflight(t, `{
+		"status": "PREFLIGHT_STATUS_OK",
+		"coverage": {"sufficient": true, "direct_anchor_count": 1, "indexed_file_count": 1},
+		"blind_spots": ["coverage_insufficient: no direct anchors and no indexed files"],
+		"change_risk": {"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},
+		`+healthyAuthority+`
+	}`)
+	claims := []Claim{{Statement: "s", About: "internal/workflow/premise.go", Source: "repository"}}
+	action := plannedEdit("internal/workflow/premise.go", "internal/workflow/authority_test.go")
+	action.DerivedCoverage = []CoverageAnchor{{File: "internal/workflow/premise.go", Requirement: RequirementLockDiscipline, Describe: "Engine.premises under Engine.mu"}}
+	cold := routeAuthorityForAction(scoped, claims, action)
+	if !cold.ClosesGap() {
+		t.Fatalf("precondition: without the grant, the test file is an uncovered planned file: %+v", cold)
+	}
+	if !cold.Gap.Identified() || cold.Gap.Kind != "coverage-blind-spot" {
+		t.Fatalf("the blind-spot gap carries no mechanical identity: %+v", cold.Gap)
+	}
+	action.OperationalAuthority = []string{"internal/workflow/authority_test.go"}
+	warm := routeAuthorityForAction(scoped, claims, action)
+	if warm.ClosesGap() || warm.RequiresHuman() {
+		t.Fatalf("with the test file under an operational grant, the covered source still read as a coverage gap: %+v", warm)
+	}
+	if len(action.DerivedCoverage) != 1 {
+		t.Fatal("the granted test entered DerivedCoverage")
+	}
+	// A plan that is ONLY operational files has nothing architectural to
+	// cover, and is not thereby covered.
+	only := plannedEdit("internal/workflow/authority_test.go")
+	only.OperationalAuthority = []string{"internal/workflow/authority_test.go"}
+	if r := routeAuthorityForAction(scoped, claims, only); !r.ClosesGap() {
+		t.Fatalf("a plan of only granted files was read as covered: %+v", r)
+	}
+}
