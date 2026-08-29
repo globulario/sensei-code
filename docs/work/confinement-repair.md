@@ -17,3 +17,16 @@ are in `experiments/confinement-repair/manifest.md`.
 If the candidate is scope-exact, passes audit and review, and the governor
 stays pinned, it is the first candidate eligible to become X+1 (owner's
 admission). Not called Witness 2.
+
+## C1 RESULT — refused at routing, no candidate
+
+The governor refused the frozen plan: two of its four files
+(`testedit_test.go`, `suppliedplan_test.go`) are unexamined by the graph, so
+`route bounded-knowledge-gap` with `unexamined by the graph: 2 file(s)` and
+`workflow.failed: … supply a revised plan`. Governor stayed pinned; no
+worker ran; no candidate exists; the bootstrap rule is not yet in play.
+
+This is the first live firing of the rule #115 added — refusing to grant
+authority over files the graph never examined, inside a real run. The repair
+itself is not implemented. A revised plan is a new freeze; the options are
+listed in the manifest and the choice is the owner's.

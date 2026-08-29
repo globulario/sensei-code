@@ -48,3 +48,78 @@ is never built or invoked as a governor).
   bootstrap rule applies and the record says so.
 - Governor commit and binary sha256 at end equal those at start; candidate
   commit ≠ X.
+
+## C1 — 00:32:39Z–00:32:46Z, exit 1, refused at routing. No candidate, no worker.
+
+```text
+governor binary sha256  7c0bd86b…  at start and end   EQUAL
+governor commit         f01592b…   at start and end   EQUAL
+subject HEAD            f01592b…   at start and end; tree clean; no candidate worktree created
+plan                    sha256 42c8b878… quoted by the governor
+graph                   42e6e12c…, CURRENT
+```
+
+The governor refused the plan:
+
+```text
+derived coverage: 0 anchor(s) over 4 planned file(s); route bounded-knowledge-gap
+  unexamined by the graph: 2 file(s): internal/workflow/testedit_test.go, internal/workflow/suppliedplan_test.go
+workflow.failed: the supplied plan needs a revision the run cannot make: a bounded knowledge gap
+  must be closed first: graph coverage is absent for planned file(s) the graph has not examined:
+  internal/workflow/testedit_test.go, internal/workflow/suppliedplan_test.go.
+  A supplied plan is not revised by the architect; supply a revised plan
+```
+
+**This is #115's rule firing for the first time in a real run**, and it did
+exactly what it was built to do: the plan named two files the graph has
+never examined, and the run refused rather than granting authority over
+them on their neighbours' anchors. Verified against the live graph
+(`42e6e12c…`) at the same moment:
+
+```text
+internal/workflow/testedit.go          OK        1 anchor          (REPEATED_RESUME_CANNOT_MINT)
+internal/workflow/engine.go            OK        3 anchors
+internal/workflow/routine_test.go      EMPTY     indexed 1/1       examined, no rule -> covered
+internal/workflow/engine_test.go       DEGRADED  indexed 1/1       examined, no rule -> covered
+internal/workflow/testedit_test.go     DEGRADED  indexed 0/1       "no files examined"  -> UNEXAMINED
+internal/workflow/suppliedplan_test.go EMPTY     indexed 0/1       "no files examined"  -> UNEXAMINED
+```
+
+Which test files the graph has examined is graph state, not a rule: two of
+these four are examined, two are not. The frozen plan put its regressions in
+the two unexamined ones.
+
+M2.2 also refused a grant for both, for its own reason ("no planned file in
+its directory holds architectural coverage at the pinned world"), before the
+coverage question was asked.
+
+### Reading
+
+Three facts, and none of them is "the loop is broken":
+
+1. The confinement repair was **not implemented**; the plan was refused
+   before any worker ran. The bootstrap rule is not yet in play — there is
+   no candidate to check for scope-exactness.
+2. The refusal is the **first live firing of the rule #115 added**, on a
+   governed run, refusing a real plan. That is the observation W1 predicted
+   but did not produce (all four of its files were examined).
+3. The supplied-plan lane behaved as designed: it does not revise a frozen
+   plan, it refuses and asks for a revised one.
+
+### What a revised plan must satisfy — the owner's call, not taken here
+
+Options, stated without choosing:
+
+- **(a) Move the regressions into examined test files.** `routine_test.go`
+  and `engine_test.go` are both examined at this graph; the four regressions
+  M27 names could live there. Cheapest, and the plan's substance is
+  unchanged — but it lets the graph's current coverage decide where tests go.
+- **(b) Derive coverage for the two files first**, then re-freeze the same
+  plan. Honest, and slow: it needs a family applicable to a test file.
+- **(c) Publish an invariant naming those files** (as #108 did for
+  `testedit.go`), which is a human-committed act, then re-freeze.
+- **(d) Accept the refusal as the run's result** and leave the repair for a
+  world where those files are covered.
+
+Recorded, not decided. Whichever is chosen, the revised plan is a NEW freeze
+with its own hash; this one stays as it is.
