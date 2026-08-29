@@ -8,6 +8,42 @@ permissions:
   contents: read
 
 jobs:
+  reviewer:
+    name: Hosted reviewer availability
+    runs-on: ubuntu-latest
+    outputs:
+      codex: ${{ steps.providers.outputs.codex }}
+      gemini: ${{ steps.providers.outputs.gemini }}
+      any: ${{ steps.providers.outputs.any }}
+    steps:
+      - name: Probe configured providers
+        id: providers
+        shell: bash
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          set -euo pipefail
+          codex=false
+          gemini=false
+          if [ -n "$OPENAI_API_KEY" ]; then codex=true; fi
+          if [ -n "$GEMINI_API_KEY" ]; then gemini=true; fi
+          any=false
+          if [ "$codex" = true ] || [ "$gemini" = true ]; then any=true; fi
+          echo "codex=${codex}" >> "$GITHUB_OUTPUT"
+          echo "gemini=${gemini}" >> "$GITHUB_OUTPUT"
+          echo "any=${any}" >> "$GITHUB_OUTPUT"
+          {
+            echo "Codex configured: ${codex}"
+            echo "Gemini configured: ${gemini}"
+            echo
+            if [ "$any" != true ]; then
+              echo "No hosted API reviewer is configured. The adversarial-review job is SKIPPED, not passed; manual/app review remains separate."
+            else
+              echo "Provider availability is not a verdict. Silence, quota, timeout, or malformed output remains UNKNOWN."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   go:
     name: Go verification
     runs-on: ubuntu-latest
@@ -67,7 +103,8 @@ jobs:
 
   hosted-review:
     name: Hosted adversarial review
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    needs: reviewer
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && needs.reviewer.outputs.any == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -93,24 +130,6 @@ jobs:
             exit 1
           fi
           echo "Exact review head: $actual" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Probe reviewer availability
-        id: providers
-        shell: bash
-        run: |
-          set -euo pipefail
-          codex=false
-          gemini=false
-          if [ -n "$OPENAI_API_KEY" ]; then codex=true; fi
-          if [ -n "$GEMINI_API_KEY" ]; then gemini=true; fi
-          echo "codex=${codex}" >> "$GITHUB_OUTPUT"
-          echo "gemini=${gemini}" >> "$GITHUB_OUTPUT"
-          {
-            echo "Codex configured: ${codex}"
-            echo "Gemini configured: ${gemini}"
-            echo
-            echo "Provider availability is not a verdict. Silence, quota, timeout, or malformed output remains UNKNOWN."
-          } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/setup-go@v5
         with:
@@ -161,7 +180,7 @@ jobs:
 
       - name: Run Codex reviewer
         id: codex
-        if: ${{ steps.providers.outputs.codex == 'true' }}
+        if: ${{ needs.reviewer.outputs.codex == 'true' }}
         continue-on-error: true
         timeout-minutes: 10
         uses: openai/codex-action@v1
@@ -208,7 +227,7 @@ jobs:
 
       - name: Run Gemini fallback reviewer
         id: gemini
-        if: ${{ always() && steps.codex-receipt.outputs.delivered != 'true' && steps.providers.outputs.gemini == 'true' }}
+        if: ${{ always() && steps.codex-receipt.outputs.delivered != 'true' && needs.reviewer.outputs.gemini == 'true' }}
         continue-on-error: true
         timeout-minutes: 10
         uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489
@@ -291,7 +310,7 @@ jobs:
             exit 0
           fi
           echo '::error::No hosted reviewer delivered a valid exact-head verdict. Provider silence/quota/timeout is UNKNOWN, never CLEAN.'
-          if [ "${{ steps.providers.outputs.gemini }}" != true ]; then
+          if [ "${{ needs.reviewer.outputs.gemini }}" != true ]; then
             echo '::error::Configure repository secret GEMINI_API_KEY to enable Gemini fallback.'
           fi
           exit 1
