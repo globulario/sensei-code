@@ -303,8 +303,9 @@ the claimant vouching for itself. Two things follow.
 
 **First, the state is now captured** — `runs/C3.isolation.txt`, read from the
 preserved subject, which is unchanged since the run's closing stamp (same
-HEAD, same tree, clean working tree). It contains a probe that settles the
-question rather than restating it:
+HEAD, same tree, clean working tree). The probe settles the **present
+preserved-subject state**; it does not settle the historical state
+throughout the run:
 
 ```text
 subject cat-file -t f01592b…   fatal: could not get object info
@@ -317,9 +318,10 @@ remotes 0 · refs: main + the candidate task branch only · 1141 loose objects, 
 
 A repository sharing the controller's object database — by alternates or any
 other means — resolves `f01592b`, the commit this subject's tree was
-materialised from. **This one cannot resolve it, or any controller object.**
-That is not compatible with a shared store, and it would have been equally
-true during the run: objects do not leave a store once borrowed.
+materialised from. This one cannot resolve it, or any controller object.
+That is strong corroboration of the frozen design, and it is **retrospective**:
+it cannot strictly exclude a shared store or ref state that existed during
+the run and was removed afterwards.
 
 **Second, the epistemic status is stated exactly.** This is a *post-run*
 capture of a subject that has not changed since. It is strictly stronger
@@ -327,17 +329,57 @@ than the manifest's prose and strictly weaker than in-run measurement, and
 it is labelled as such in the artifact itself. The protocol defect belongs
 to C3's design and is owed to C4:
 
-> **The run stamp must capture the isolation state it claims** — alternates,
-> remotes, refs, and the controller-object probe — at start AND end, beside
-> the governor and subject identity it already records. A property a witness
-> asserts about itself is not evidence.
+> **The run stamp must capture the isolation state it claims** — alternates
+> path and content, remotes, all refs, an object probe for X, an object probe
+> for controller-only commits, subject HEAD, subject tree, working-tree state
+> — at start AND end, beside the governor and subject identity it already
+> records. A property a witness asserts about itself is not evidence.
+
+with the interpretation frozen before the run:
+
+```text
+a controller-only object resolves      -> isolation FALSIFIED
+an unexpected alternate or remote      -> isolation FALSIFIED
+an expected isolation artifact absent  -> witness VOID
+```
+
+so that no future adjudicator is asked to infer isolation from setup
+instructions.
 
 Disclosed in the artifact: a dangling tree `e12832b1…` exists in the
 subject's store, written by the controller after the run with a temporary
 `GIT_INDEX_FILE` to pre-register the reviewed candidate tree. It changed no
 ref, no index and no file.
 
-Whether that capture is sufficient, or whether the witness should instead be
-classified VOID for having asserted a property it did not measure, is the
-owner's adjudication. The record states both readings rather than choosing
-the flattering one.
+### Adjudication (owner, 2026-08-29)
+
+```text
+C3 instrument            COMPLETE under the frozen protocol -- every artifact the
+                         freeze required was present, so it does not meet this
+                         experiment's own definition of void
+C3 workflow evidence     VALID
+C3 candidate             REFUSED (quoted-path fail-open)
+C3 run-time isolation    NOT ESTABLISHED, retrospectively corroborated
+C4                       must promote isolation from an asserted setup property
+                         to measured start/end instrument evidence
+```
+
+**Not void.** The frozen definition was specific: *missing expected evidence
+makes the witness void*, and the isolation probe was never one of the
+required artifacts. Redefining void as "any later-discovered missing
+measurement" would move the protocol after the result — the mistake this
+whole sequence exists to avoid. The missing measurement is classified where
+it belongs: an **unestablished claim and a protocol defect**.
+
+So the sentence this record must NOT contain is *"C3 established isolated
+review."* What it says instead:
+
+> **C3 was run in a subject designed for isolation, and post-run evidence
+> strongly corroborates that state, but run-time isolation is not proven
+> because the protocol did not measure it at start and end.**
+
+What C3 does establish, unchanged: governor source identity stayed X;
+governor binary identity stayed pinned; subject HEAD and tree stayed
+unchanged; the produced candidate's scope was exact; the workflow completed;
+the instrument record was complete by the declared artifact list; and the
+candidate was independently reviewed, then refused at adjudication.

@@ -41,3 +41,19 @@ X+1 from C3. The witness itself stands: governor pinned, isolation held,
 scope exact, instrument complete. The repair belongs to a fresh freeze (C4)
 under the same governor, over authoritative Git path identity rather than a
 textual rendering of a diff. C3 is not repaired in place.
+
+
+## FINAL ADJUDICATION
+
+```text
+instrument            COMPLETE under the frozen protocol (not void)
+workflow evidence     VALID
+candidate             REFUSED -- quoted-path fail-open; no X+1
+run-time isolation    NOT ESTABLISHED, retrospectively corroborated
+```
+
+C3 was run in a subject designed for isolation, and post-run evidence
+strongly corroborates that state, but run-time isolation is not proven
+because the protocol did not measure it at start and end. C4 makes isolation
+a required start/end instrument artifact with its interpretation frozen in
+advance.

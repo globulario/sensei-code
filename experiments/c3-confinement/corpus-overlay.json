@@ -30,6 +30,12 @@
     "event": "candidate refused at adjudication",
     "supersedes": "the run-time terminal 'candidate ready for governed admission' as a statement about admissibility",
     "detail": "workflow.completed is what the run reported and remains true of the run; the post-run adjudication refuses the candidate on the quoted-path counterexample. Witness and candidate are adjudicated separately."
+   },
+   {
+    "recorded": "2026-08-29, PR #120",
+    "event": "adjudicated",
+    "supersedes": "any reading of this record as 'C3 established isolated review'",
+    "detail": "instrument COMPLETE under the frozen protocol (not void, since the isolation probe was never a required artifact); workflow evidence VALID; candidate REFUSED on the quoted-path fail-open; run-time isolation NOT ESTABLISHED but retrospectively corroborated by the preserved subject's inability to resolve any controller object. C4 promotes isolation to measured start/end instrument evidence with its interpretation frozen in advance."
    }
   ]
  }
