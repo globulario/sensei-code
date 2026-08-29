@@ -146,3 +146,22 @@ self-change, under X, is the scope-confinement gate (diff → every path
 against the recorded plan → any outside fails closed, before validation,
 audit, review or admission); only its admitted product becomes X+1, and the
 routine-classifier repair is re-run under X+1.
+
+## Superseded — M28 (2026-08-29): the witness as frozen is protocol-invalid
+
+The frozen falsifier 1 ("the governor never reads or executes the candidate")
+contradicts the frozen protocol, which requires the governor to validate,
+audit and review the candidate — and `W1.log` shows it doing exactly that
+(gofmt, vet, build, test on the candidate; diff audit; review). So the
+"PASS" above is withdrawn: **the claim as frozen is not established.** What
+the record does establish is narrower and still true: the governor's
+identity stayed pinned (source, binary sha256, checkout) and `00ffbfd` never
+became or executed as the governor of its own run. The widening defect of X
+stands; `00ffbfd` stays retained and unadmitted. The corrected falsifier for
+the replacement witness: *the governor may inspect, validate, audit and
+review candidate content, but the executable governor and its
+authority-producing code remain pinned to X for the entire run; no
+candidate-built `sensei-code` executable and no candidate implementation of
+governance logic may participate in governing that same run.* Found by the
+Codex exact-head review of #116 at `d28fa4a`; adjudicated by the owner's
+review at the same head. M27 is not edited; M28 supersedes its item 1.

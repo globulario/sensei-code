@@ -98,3 +98,13 @@ is preserved. Corpus 44 → 46.
 PASS on the self-hosting claim; the widening is a critical defect of X;
 `00ffbfd` retained, not admitted; next self-change under X = candidate-vs-plan
 confinement gate (see `experiments/self-hosting-witness-1/manifest.md`).
+
+## SUPERSEDED — M28
+
+The frozen falsifier ("never reads from the candidate worktree")
+contradicts the protocol it was frozen with (validate, audit, review the
+candidate). The witness as frozen is protocol-invalid; its claim is not
+established. Observed and standing: governor identity remained pinned and
+the candidate never became the governor. Widening defect of X: confirmed.
+`00ffbfd`: not admitted. Next run: the confinement repair under X, under the
+corrected falsifier in M28 — not called Witness 2.
