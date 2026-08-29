@@ -311,3 +311,10 @@ about file handling:
 > pass as a whole), uniqueness (a stream is not present twice), identity (a
 > name is a name, never a pattern), and visibility (a malformed part is
 > refused, never ignored).
+
+The fifth round (`f4e86e1`) closed visibility's zero-length edge:
+`X.log.part-`, the sequence missing entirely, disappeared exactly as a
+misnumbered part had. Found independently by the owner's review and by
+Codex, minutes apart, and fixed by recognising an empty suffix as a claimed
+part (`.part-.*`) so the strict sequence refuses it. Not a fifth face of the
+law — the same face, at zero length.

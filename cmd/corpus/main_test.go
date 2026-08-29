@@ -341,7 +341,10 @@ func TestSplitStreamPathsAreMatchedLiterally(t *testing.T) {
 // regeneration emitted NO record for that encounter -- evidence disappearing
 // quietly, which is the one direction this must never fail (#118 review).
 func TestAMisnumberedPartIsRefusedNotIgnored(t *testing.T) {
-	for _, name := range []string{"X.log.part-01", "X.log.part-abc", "X.jsonl.part-1"} {
+	// "X.log.part-" is the zero-length edge of the same property: the
+	// sequence missing entirely, found independently by the owner's review
+	// and by Codex on f4e86e1.
+	for _, name := range []string{"X.log.part-01", "X.log.part-abc", "X.jsonl.part-1", "X.log.part-", "X.jsonl.part-"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			runs := filepath.Join(dir, "runs")

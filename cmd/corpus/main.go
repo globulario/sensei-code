@@ -378,7 +378,10 @@ func extract(log string) (record, error) {
 // misnumbered part invisible: discovery ignored it and the encounter left
 // the corpus in silence (#118 review). streamParts enforces the strict
 // numbering; this only decides what counts as claiming to be a part.
-var partSuffix = regexp.MustCompile(`^(.+\.(?:log|jsonl))\.part-.+$`)
+// The suffix is `.*`, not `.+`: `X.log.part-` -- the sequence missing
+// entirely -- is the zero-length edge of the same property, and it
+// disappeared exactly as a misnumbered one did.
+var partSuffix = regexp.MustCompile(`^(.+\.(?:log|jsonl))\.part-.*$`)
 
 // partOf returns the logical stream name a part claims to belong to, or "".
 func partOf(name string) string {
