@@ -779,3 +779,47 @@ func TestASplitOnlyStreamOwnsItsArtifacts(t *testing.T) {
 		t.Fatalf("the split-only stream did not reconstruct with its artifacts: %+v %v", rec.Task, err)
 	}
 }
+
+// The receipts suffix is not a bypass either.
+//
+// `.receipts.jsonl` kept the one unconditional suffix skip that ownership
+// replaced everywhere else, so `X.log.part-001-of-001.receipts.jsonl` --
+// a name claiming to be a piece -- was dropped before it could claim, and
+// generation succeeded with zero encounters. A receipts file is exempt
+// because it is OWNED by a stream that exists, never because of how it is
+// spelled (#118, round 14).
+func TestAReceiptsSuffixDoesNotBypassPartClaims(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs, "X.log.part-001-of-001.receipts.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := discover(dir)
+	if err == nil && len(logs) == 1 {
+		_, err = extract(logs[0])
+	}
+	if err == nil {
+		t.Fatalf("a part-shaped receipts name was dropped and the corpus reported %d encounter(s)", len(logs))
+	}
+
+	// A real receipts file, owned by a stream that exists, stays exempt --
+	// and is still read as the stream's receipts rather than as evidence.
+	dir2 := t.TempDir()
+	runs2 := filepath.Join(dir2, "runs")
+	if err := os.MkdirAll(runs2, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs2, "Y.log"), []byte("task task-1  session s\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs2, "Y.receipts.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs2, err := discover(dir2)
+	if err != nil || len(logs2) != 1 || filepath.Base(logs2[0]) != "Y.log" {
+		t.Fatalf("discover = %v, %v; want only Y.log", logs2, err)
+	}
+}

@@ -484,3 +484,22 @@ property/fuzz suite                               partition, order independence,
                                                   uniqueness, split completeness, round-trip, mutation, transport
                                                   transparency, enumeration failure
 ```
+
+
+### Round 14 — the last unconditional bypass, and the boundary held
+
+`.receipts.jsonl` kept the one suffix skip that ownership had replaced
+everywhere else, so `X.log.part-001-of-001.receipts.jsonl` — a name claiming
+to be a piece — was dropped before it could claim, and generation succeeded
+with **zero encounters** (P1, silent omission).
+
+Fixed here, and the reason it is not a fourteenth patch: the change **removes
+an exception** rather than adding a predicate. The ownership rule already
+decides which artifacts are exempt; receipts were the one place it was not
+consulted. That is the *single authority* law again — a rule applied by only
+some consumers is half a rule — and the failure direction was silent
+omission, which is the one this record cannot tolerate on the eve of being
+merged.
+
+The boundary stands where round 13 put it: any further edge that needs a
+NEW rule, predicate or filter goes to the refactor, not here.

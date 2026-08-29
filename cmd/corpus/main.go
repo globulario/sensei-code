@@ -382,6 +382,14 @@ func extract(log string) (record, error) {
 // spelling, was the defect. There is now one predicate, so a name is a
 // stream in both places or in neither.
 func isStreamName(name string) bool {
+	// A receipts file is a stream's artifact, never a stream. It is exempt
+	// from part claims because it is OWNED by a stream that exists (see
+	// artifactOf), never because of how it is spelled: the unconditional
+	// suffix skip that used to sit in discover dropped
+	// `X.log.part-001-of-001.receipts.jsonl` -- a name claiming to be a
+	// piece -- before it could claim, and generation succeeded with zero
+	// encounters (#118, round 14). The same bypass ownership removed for
+	// every other artifact.
 	if strings.HasSuffix(name, ".receipts.jsonl") {
 		return false
 	}
@@ -443,9 +451,6 @@ func streamIdentities(names []string) []string {
 		}
 	}
 	for _, name := range names {
-		if strings.HasSuffix(name, ".receipts.jsonl") {
-			continue
-		}
 		if isStreamName(name) {
 			add(name)
 			continue
@@ -690,8 +695,6 @@ func discover(root string) ([]string, error) {
 		for _, name := range names {
 			var logical string
 			switch {
-			case strings.HasSuffix(name, ".receipts.jsonl"):
-				continue
 			case isStreamName(name):
 				// Logical, so a stream present both whole and split is one
 				// entry and openLog refuses it once rather than producing
