@@ -481,3 +481,32 @@ prose, in a generated field, in a provenance string, in a run stamp, and in
 the very list written to separate supported observations from unsupported
 claims. That last one is the useful data point — **the correction mechanism
 reproduced the defect it was correcting.**
+
+### The correction had not reached the append-only trail
+
+`9c39ec9c`, 2026-08-29 19:33:45Z. The manifest, the overlay note and the
+findings all said UNRECORDED; the overlay's `history` event —
+*"superseded: witness VOID"* — still listed the pre-freeze validation among
+observations "surviving on their own artifacts", and `encounters.jsonl`
+copies history verbatim. So the structured correction trail, the part a
+consumer reconstructs the record from, still certified evidence the prose
+had just withdrawn.
+
+Corrected the way the corpus law requires: **an appended event superseding
+that clause**, naming it exactly, rather than editing the original entry.
+Editing it would have been faster and would have destroyed the sequence.
+
+That makes six adjudicator-authored defects in this record, and the same
+lesson at a third altitude:
+
+```text
+#118   a repair only some CONSUMERS use is half a repair
+#121   a correction only some RENDERINGS carry is half a correction
+here   a correction that reaches the prose but not the append-only trail
+       is half a correction with better manners
+```
+
+The record has four renderings — manifest prose, brief, overlay fields, and
+the append-only history that generates the corpus — and a claim must be
+withdrawn from all four. Nothing but a mechanical check will reliably do
+that, which is C5's item 0 arriving from a second direction.
