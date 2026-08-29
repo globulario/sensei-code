@@ -1,0 +1,25 @@
+{
+  "_comment": [
+    "Durable QUESTIONS, not answers. Each entry says which typed proposition is",
+    "worth checking in this part of the architecture; Sensei recomputes whether it",
+    "holds against the world being assessed, every time.",
+    "",
+    "This file is inert. A recipe on its own provides ZERO coverage — it must be",
+    "revalidated by `sensei derive` in the assessed world before it anchors",
+    "anything. That is why it is safe to commit and safe to let an agent write:",
+    "the worst a forged entry achieves is spending one derivation.",
+    "",
+    "What persists here is the judgment-bearing half an investigation produced —",
+    "knowing WHICH relationship is worth checking. The answer is cheap to recompute."
+  ],
+  "recipes": [
+    {
+      "kind": "field_access_under_lock",
+      "dir": "internal/event",
+      "type": "Bus",
+      "field": "subs",
+      "lock": "mu",
+      "why": "internal/event/bus.go answered PREFLIGHT_STATUS_EMPTY with 'no anchored rules apply'. A closure round read the code and found the discipline worth checking: Publish sends under RLock while the Subscribe cancel closes under Lock. Whether that is WHY the lock exists is a purpose claim no derivation establishes."
+    }
+  ]
+}

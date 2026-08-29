@@ -1,0 +1,15 @@
+START 2026-08-28T23:46:42Z
+governor commit (source) f01592b0f0828605ed254047fc064f41dacc78f2
+governor binary sha256 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+subject HEAD f01592b0f0828605ed254047fc064f41dacc78f2
+subject clean: 0 changed path(s)
+config sha256 94ed3b1723e3f9bd
+plan sha256 3cc668d80a8b603ca81828aecb4697d71472b7c16898332bd1af741bd17349f0
+EXIT 0 2026-08-28T23:50:31Z
+governor binary sha256 at end 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+governor commit at end f01592b0f0828605ed254047fc064f41dacc78f2
+subject HEAD at end f01592b0f0828605ed254047fc064f41dacc78f2
+subject tree at end:
+candidate worktrees:
+  /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/.subject-shw1-worktrees/task-1787960802377933262         00ffbfd [sensei-code/task-1787960802377933262]
+W1 untrimmed sha256 7dbd4e971269f5bece6559bceceb7f1abb0345a26093f7f7d79822c03a5783a8, 657015 bytes; W1.receipts.jsonl preserved EMPTY (0 bytes): no closure round opened, no derive receipt written; candidate diff sha256 prefix 9c2498c0eaaa = reviewed digest 9c2498c0eaaa; candidate commit 00ffbfd on branch sensei-code/task-1787960802377933262
