@@ -155,3 +155,93 @@ Predictions: all four files examined, so no `unexamined` line and no
 `routine_test.go` beside their covered subjects (operational, printed beside
 coverage, never summed) — and if it does, the candidate must still touch only
 the four named paths, because a grant is not a plan entry.
+
+## C2 — 00:38:02Z–01:04:03Z, exit 1, candidate `be3cdbe` retained, NOT admitted
+
+### The four facts
+
+```text
+governor commit (source)  f01592b0f0828605ed254047fc064f41dacc78f2  ->  f01592b0f0828605ed254047fc064f41dacc78f2   EQUAL
+governor binary sha256    7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea (start and end)          EQUAL
+subject HEAD              f01592b…  ->  f01592b…, tree clean at end; candidate only in the governor-created worktree
+candidate                 be3cdbe (3 commits from X); reviewed digests a5eb383fb17a (cycles 1, 3, 4), a5dc4636a38b (cycle 2)
+changed paths (4)         internal/workflow/{engine.go, testedit.go, engine_test.go, routine_test.go}  == the frozen four   SCOPE-EXACT
+```
+
+- **M28 pinned-governor property: HELD.** `be3cdbe` never governed its own run.
+- **Bootstrap scope condition: HELD.** No authority widening occurred.
+- **Confinement repair: NOT ESTABLISHED, NOT ADMITTED.** `EXIT 1`; there is
+  no X+1. `be3cdbe` is a retained specimen.
+
+### Cycles
+
+```text
+cycle 1  worker Claude   14,694 B  validation pass, audit pass (4 files, 0 findings), not routine   Codex REVISE
+cycle 2  worker Claude   21,439 B  pass / pass / not routine                                        Codex REVISE
+cycle 3  worker Claude   14,694 B  (back to cycle 1's bytes)                                        Codex REVISE
+         handoff: "Claude did not converge"
+cycle 1' worker Codex    14,694 B  pass / pass / not routine                                        reviewer substituted to Claude -> ESCALATE
+workflow.failed: no bounded implementor produced an acceptable candidate
+```
+
+### Primary finding — the planned confinement point is temporally insufficient
+
+Codex, three times, on the same point: `e.validate` runs mutating formatters
+**and then re-reads the diff**, precisely because "everything gathered before
+a rewrite is evidence about different bytes" (X's own comment). A scope check
+placed only *before* `e.validate` therefore binds the worker's diff, not the
+candidate that audit, Level-1, the reviewer and admission actually see.
+
+The architectural lesson, larger than "check twice":
+
+> **Authority must bind the exact candidate state that reaches judgement.**
+> If anything may mutate the candidate between authorisation and review, the
+> final digest and path set must be re-bound after the last mutation and
+> before audit, review or admission.
+
+### The authority boundary refused the improvisation — preserved exactly
+
+In cycle 2 the worker added a *second*, post-validation confinement check to
+answer the finding. The reviewer refused it **because the frozen plan did not
+authorise it**: "the candidate also adds an unplanned second [check]". The
+experiment failed to produce the repair, and the system refused to cheat its
+way to success — the boundary being repaired did its job on the repair
+attempt. Recorded, not worked around.
+
+### Separate design finding — two representations of one predicate
+
+The substituted reviewer's ESCALATE names it: `notPlanned` (`routine.go`,
+Level-1 condition 8) and the proposed `confineToPlannedFiles`
+(`testedit.go`) express the same relation and can drift or disagree
+(canonicalisation, rename handling, deleted paths). Recorded here; **not**
+silently cleaned up inside C2, which had no authority for it.
+
+### Reviewer isolation — OBSERVED FAILURE
+
+The reviewer's own output carried a `git log` view of the controller's
+commits, twice:
+
+```text
+00:51:21  cd7d1b2 experiment(confinement-repair): C2 FROZEN -- plan sha256 45d8b6c7…
+00:51:21  c28a121 experiment(confinement-repair): C1 -- the governor refused the frozen plan…
+00:54:25  cd7d1b2 …   (same two, again)
+00:54:25  c28a121 …
+```
+
+The subject is a **worktree of the same repository**: its working tree held
+no control document, but it shares the object database and refs, so
+`git log --all` reaches the freeze, the plan hash, M29's reasoning, the
+bootstrap rule and the predictions. **C2 supports no claim of a blind or
+untold review encounter.** Worktree confinement is not controller isolation.
+
+For W1 and earlier worktree runs the defensible statement is narrower:
+**controller/subject isolation was not proven and the same shared-object/ref
+channel existed.** `W1.log` was searched for worker/reviewer references to
+control documents and shows none, so no observed leakage is claimed there.
+
+A corrected isolation protocol (not applied to any completed run): materialise
+only X into a fresh repository with no shared object database, remove all
+remotes, expose no controller ref, run worker and reviewer where the
+controller checkout is unreachable, and carry no credentials permitting a
+fetch back — a bare export of X cloned into a sandbox, not a shallow clone
+that keeps an `origin`.

@@ -1,0 +1,15 @@
+START 2026-08-29T00:38:02Z
+governor commit (source) f01592b0f0828605ed254047fc064f41dacc78f2
+governor binary sha256 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+subject HEAD f01592b0f0828605ed254047fc064f41dacc78f2
+subject clean: 0 changed path(s)
+config sha256 94ed3b1723e3f9bd
+plan sha256 45d8b6c7f6ed7f89d8be4bf4a07c094916f2042dcd06cdd807d6b586ec3471df
+EXIT 1 2026-08-29T01:04:03Z
+governor binary sha256 at end 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+governor commit at end f01592b0f0828605ed254047fc064f41dacc78f2
+subject HEAD at end f01592b0f0828605ed254047fc064f41dacc78f2
+subject tree at end:
+candidate worktrees:
+  /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/.subject-c2-worktrees/task-1787963882236621025           be3cdbe [sensei-code/task-1787963882236621025]
+C2 untrimmed sha256 130e2fdfc73eab2c6c9261742526a175c22e55e95fab7cbe9950e2a46ec827b6, 6359622 bytes; C2.receipts.jsonl preserved EMPTY (0 bytes): no closure round opened; candidate diff sha256 prefix a5eb383fb17a, candidate be3cdbe

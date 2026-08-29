@@ -20,5 +20,30 @@
    "M29 (GPT-5.6 Sol, 2026-08-29): C1 accepted as a valid refusal and the first live confirmation of #115's per-file authority boundary; immutable; the graph must not be modified to make the refused plan admissible; the plan is revised to already-examined test homes (C2)"
   ],
   "note": "confinement repair, first attempt: governor sensei-code @ f01592b (binary sha256 7c0bd86b..., equal at start and end) REFUSED the supplied plan (sha256 42c8b878...) at routing -- two of its four planned files, internal/workflow/testedit_test.go and suppliedplan_test.go, are unexamined by graph 42e6e12c (indexed 0/1), so 'derived coverage: 0 anchor(s) over 4 planned file(s); route bounded-knowledge-gap' with 'unexamined by the graph: 2 file(s)' and the supplied-plan refusal. No worker ran, no candidate exists, no candidate worktree was created; the governor stayed pinned. First live firing of the rule PR #115 added."
+ },
+ "C2": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "f01592b0f0828605ed254047fc064f41dacc78f2",
+  "fixture": "github.com/globulario/sensei-code (self; subject = governor commit X, fresh detached worktree seeded only with .sensei-code/config.json)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- M27/M28/M29 and the C2 adjudication (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "Codex -- in-run reviewer (3 REVISE), then Claude as substituted in-run reviewer (ESCALATE); PR review of the evidence pending. NOT BLIND: the in-run reviewer was observed reading controller commits (00:51:21Z, 00:54:25Z)",
+   "implementation_and_reconstruction": "Claude -- freeze, run and records; also the in-run worker",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "not merged at record time (candidate retained, unadmitted; #118 open)",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "in-run Codex REVISE x3 (blocking, same point): a confinement check placed only before e.validate does not bind the candidate that reaches judgement -- validation runs mutating formatters and re-reads the diff",
+   "in-run refusal of the worker's improvisation: the second, post-validation check added in cycle 2 was refused because the frozen plan did not authorise it -- the authority boundary refused the repair attempt that exceeded its plan",
+   "in-run substituted reviewer (Claude) ESCALATE, 4 findings incl. notPlanned (routine.go) and confineToPlannedFiles (testedit.go) being two representations of one predicate that can disagree",
+   "isolation: OBSERVED FAILURE -- the reviewer read controller commits (cd7d1b2 C2 freeze with plan sha, c28a121 C1 record) at 00:51:21Z and 00:54:25Z through the shared worktree object store; C2 supports no blind-review claim"
+  ],
+  "note": "confinement repair, second attempt: governor sensei-code @ f01592b (binary sha256 7c0bd86b..., EQUAL at start and end) produced candidate be3cdbe from supplied plan sha256 45d8b6c7...; candidate SCOPE-EXACT (exactly the frozen four files); routed and reviewed, 4 cycles + 1 handoff, workflow.failed exit 1: no bounded implementor produced an acceptable candidate. M28 pinned-governor property HELD; bootstrap scope condition HELD; the confinement repair is NOT ESTABLISHED and be3cdbe is retained, NEVER X+1."
  }
 }

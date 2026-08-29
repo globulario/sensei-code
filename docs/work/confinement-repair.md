@@ -30,3 +30,21 @@ This is the first live firing of the rule #115 added — refusing to grant
 authority over files the graph never examined, inside a real run. The repair
 itself is not implemented. A revised plan is a new freeze; the options are
 listed in the manifest and the choice is the owner's.
+
+## C2 RESULT — scope-exact candidate, no convergence, no X+1
+
+Governor stayed pinned (commit and binary sha256 equal at both ends);
+candidate `be3cdbe` touched exactly the frozen four files; `EXIT 1 —
+no bounded implementor produced an acceptable candidate`. The repair is not
+established and `be3cdbe` is retained, never X+1.
+
+Why: a confinement check placed only before `e.validate` does not bind the
+candidate that reaches judgement, because validation's formatters may rewrite
+it and the diff is deliberately re-read afterwards. The lesson is
+**authority must bind the exact candidate state that reaches judgement**. The
+worker's attempt to add an unplanned second check was refused by the
+authority boundary itself — preserved as evidence, not worked around. A
+separate design finding (two representations of the same predicate,
+`notPlanned` vs `confineToPlannedFiles`) is recorded, not fixed here. And the
+reviewer was observed reading controller commits through the shared worktree
+object store: C2 supports no blind-review claim.
