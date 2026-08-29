@@ -148,3 +148,111 @@ provider void is an instrument finding.
 - Governor and producer identity equal at start and end; isolation records
   present at both ends with no falsifier fired; the candidate is committed
   with first parent exactly X.
+
+## C4 — 16:12:25Z–16:29:00Z, exit 0. Witness FAILS under its own frozen protocol.
+
+### The claims, each against the rule as frozen
+
+```text
+governor pinned (source + binary, start = end)                       PASS
+producer pinned (path + sha256, start = end)                         PASS
+subject is LITERALLY X (HEAD f01592b…, tree fe43d481…, 0 parents)     PASS
+controller objects unreachable (start and end)                       PASS
+alternates absent, remotes 0 (start and end)                         PASS
+frozen isolation predicate                                           FAIL
+instrument complete (all seven required artifacts)                   PASS
+candidate scope exact (the frozen seven paths)                       PASS
+candidate repair independently accepted (Codex ACCEPT b4f471f096d1)  PASS
+candidate committed                                                  FAIL
+literal candidate parent == X                                        NOT ESTABLISHED
+candidate admissible                                                 NO
+C4 as a self-governance witness                                      FAIL, not VOID
+```
+
+### Isolation — FAIL, applied literally
+
+```text
+                          start                      end
+refs                      main, c4-boundary          main, c4-boundary, sensei-code/task-1788019945987928256
+X resolves                commit                     commit                    EXPECTED
+ba5e8eed / 3ac57143 /
+e1dd5456 resolve          no                         no                        falsifier not fired
+alternates                ABSENT                     ABSENT                    falsifier not fired
+remotes                   0                          0
+.git/shallow              PRESENT                    PRESENT                   EXPECTED
+```
+
+The freeze said *an unexpected remote or ref falsifies isolation*, and
+predeclared only `refs/tags/c4-boundary`. At end the subject carried a
+`sensei-code/task-…` branch the governor created. **The predicate fires, so
+the frozen isolation claim fails.** It is not called harmless here, and the
+clause is not reinterpreted after the result — the tension was named in
+writing before the run, and the rule is applied as written.
+
+What the same capture shows is that the *controller-reachability* half
+passed perfectly at both ends. So C4's finding is that the frozen predicate
+was **too coarse**: it conflated a subject-owned ref created by the governed
+workflow with a ref exposing controller state. That is a protocol-design
+finding for the next witness, not a retroactive repair of this one.
+
+### Candidate lineage — FAIL
+
+```text
+candidate worktree   .c4-subject-worktrees/task-1788019945987928256
+candidate HEAD       f01592b…  (= X)      commits beyond X: 0
+first parent         none — no commit exists
+uncommitted          7 paths
+```
+
+The requirement was an actual commit whose first parent is X, precisely so
+tree equality could not stand in for lineage. There is no commit, so the
+proof is impossible rather than failed-by-comparison. **No commit was minted
+afterwards.**
+
+This exposes a distinction worth keeping:
+
+> **candidate custody ≠ candidate lineage.** C4 had custody of the state —
+> reviewed, audited, accepted — and no durable Git object whose parent
+> relationship could be certified.
+
+And it is a fact about the governor, not only about this experiment: X can
+reach `workflow.completed: candidate ready for governed admission` while the
+accepted candidate remains uncommitted. If a witness requires a committed
+candidate, the workflow needs a governed step that produces the commit
+*before* terminal completion, or terminal completion must refuse.
+
+### What C4 did establish
+
+**Literal ancestry-capable isolation is demonstrated.** The subject was
+`f01592b…` itself, with prior history cut by the shallow graft and no
+controller object reachable at either end. C3 could prove neither. That
+mechanism is now measured rather than described, and it is reusable.
+
+The repair was also independently accepted: validation passed, the audit
+found nothing over 7 files, Level-1 refused the fast path, and Codex
+accepted `b4f471f096d1` — *"establishes a NUL-parsed Git ChangeSet,
+reconciles renderer output before both…"*. Reviewer acceptance is not
+admission, and here two frozen witness falsifiers block it.
+
+### Recorded disposition
+
+> **Literal ancestry-capable isolation mechanism demonstrated; repair
+> accepted; overall witness FAILED because the frozen ref-isolation
+> predicate fired and the required candidate commit was absent. Candidate
+> retained and unadmitted.**
+
+### Owed to the next witness — and `capture.go` does not jump the queue
+
+1. **Isolation must classify refs by authority, not appearance.** Frozen in
+   advance: start refs are `main` and the boundary tag; end refs may
+   additionally contain exactly the candidate ref this run created, which
+   must be subject-owned, resolvable only inside the isolated object store,
+   descended from X, and expose no controller-only object. Everything else
+   still falsifies.
+2. **Candidate commitment must be a workflow obligation**, not an
+   experimental expectation — a governed step before terminal completion, or
+   a refusal at it.
+
+The `internal/gitx/capture.go` `--numstat` seam remains owed as C5 and does
+**not** leapfrog these two: the self-governance chain closes its own witness
+defects first.

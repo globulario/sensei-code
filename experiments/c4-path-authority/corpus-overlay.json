@@ -1,0 +1,26 @@
+{
+ "C4": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "f01592b0f0828605ed254047fc064f41dacc78f2",
+  "fixture": "github.com/globulario/sensei-code (self; subject is LITERALLY X: shallow boundary clone containing commit f01592b itself, prior history cut, origin removed, seeded only with .sensei-code/config.json. Isolation MEASURED at start and end: controller objects unreachable, alternates absent, remotes 0 -- but the frozen ref predicate FIRED at end on the candidate branch the governor created)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the frozen isolation interpretation, the ancestry falsifier, and this adjudication (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "Codex -- in-run reviewer, ACCEPT on b4f471f096d1, session inheriting nothing, in a subject whose isolation was measured at both ends",
+   "implementation_and_reconstruction": "Claude -- freeze, run, records; also the in-run worker",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "not merged at record time; the candidate is retained and unadmitted",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "frozen isolation predicate FAILED: an unexpected ref (sensei-code/task-1788019945987928256, created by the governor) existed at end, and the freeze predeclared only refs/tags/c4-boundary; applied literally, not reinterpreted. The controller-reachability half passed at both ends, so the predicate was too coarse -- it conflated a subject-owned workflow ref with one exposing controller state",
+   "required candidate commit ABSENT: the worker left 7 modified paths and no commit, so literal parent-X lineage is NOT ESTABLISHED and no commit was minted afterwards. candidate custody != candidate lineage",
+   "governor observation: X can reach workflow.completed 'candidate ready for governed admission' while the accepted candidate remains uncommitted; a witness requiring a committed candidate needs a governed step before terminal completion, or a refusal at it"
+  ],
+  "note": "C4, path identity as authority under governor X: governor and producer pinned (both sha256 equal at start and end), subject LITERALLY X (HEAD f01592b, tree fe43d481, 0 parents via shallow graft), controller objects unreachable and alternates absent at both ends, instrument COMPLETE (7 required artifacts incl. both isolation captures), candidate scope EXACT over the frozen seven, Codex ACCEPT on b4f471f096d1. Overall witness FAIL, not void: the frozen ref-isolation predicate fired and the required candidate commit was absent. Candidate retained, NOT admitted; no X+1."
+ }
+}

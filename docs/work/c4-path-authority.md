@@ -29,3 +29,21 @@ Plan `97e520945f0b3fb84104e042ff1423fd1cfaf7b4b37d3c2a1d497e58aa6a4694`; identit
 falsifiers and predictions in
 `experiments/c4-path-authority/manifest.md`. `internal/gitx/capture.go`
 remains an explicit non-claim owed to C5.
+
+## C4 RESULT — witness FAILED under its own frozen protocol, candidate unadmitted
+
+Governor, producer and subject identity all held, and the subject was
+**literally X** with no controller object reachable at either end: the
+ancestry-capable isolation mechanism is demonstrated, which C3 could not do.
+The repair was independently accepted over exactly the frozen seven paths.
+
+Two frozen requirements failed, applied as written: the isolation predicate
+fired on the candidate ref the governor created (the freeze predeclared only
+the boundary tag), and the required candidate commit was absent, so literal
+parent-X lineage is **not established**. No commit was minted afterwards and
+the branch is not called harmless. The candidate is retained and unadmitted;
+there is no X+1.
+
+Owed next: refs classified by authority rather than appearance, and
+candidate commitment as a workflow obligation before terminal completion.
+`capture.go` (C5) does not jump ahead of those.

@@ -1,0 +1,18 @@
+C4 isolation state — END (after the run)
+captured 2026-08-29T16:29:00Z
+
+HEAD                          f01592b0f0828605ed254047fc064f41dacc78f2
+tree                          fe43d481424072f325a7f315f1a5cfa5ab70609f
+parents of HEAD               0
+working tree (non .sensei)    0 path(s)
+remotes                       0
+refs                          refs/heads/main refs/heads/sensei-code/task-1788019945987928256 refs/tags/c4-boundary 
+.git/shallow                  PRESENT   [EXPECTED PRESENT]
+.git/objects/info/alternates  ABSENT   [FALSIFIER IF PRESENT]
+object store                  count: 0 size: 0 in-pack: 1133 packs: 1 size-pack: 2770 prune-packable: 0 garbage: 0 size-garbage: 0 
+
+object probes:
+  f01592b0f082   commit                                     [EXPECTED: commit]
+  ba5e8eed63e1   fatal: git cat-file: could not get object info [FALSIFIER IF RESOLVES]
+  3ac571435974   fatal: git cat-file: could not get object info [FALSIFIER IF RESOLVES]
+  e1dd5456856d   fatal: git cat-file: could not get object info [FALSIFIER IF RESOLVES]
