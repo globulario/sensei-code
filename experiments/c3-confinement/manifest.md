@@ -208,3 +208,81 @@ reviewer refused, three times, a check bound only to the worker's bytes, and
 refused the worker's *unplanned* attempt to add the second one. C3's frozen
 plan authorises both call sites, so the same repair arrives inside its
 authority.
+
+## Adjudication after the run — the candidate is REFUSED
+
+The witness and the candidate are adjudicated separately, and they part
+company here.
+
+**C3 the witness: PASS as evidence.** Governor identity held (commit and
+binary sha256 equal at both ends), isolation held (subject materialised from
+X alone, 0 remotes, no shared object database, no controller ref reachable),
+the produced candidate's scope was exact, the instrument was complete, and
+the governed workflow ran to `workflow.completed`. Nothing below changes any
+of that.
+
+**C3 the candidate: REFUSED, permanently unadmitted.** The exact-head Codex
+review of this record (`a54b51a3d`, 2026-08-29 14:13:49Z) constructed a
+counterexample against the candidate's repair:
+
+> a candidate that changes an out-of-plan path Git QUOTES — any non-ASCII
+> filename under default configuration — produces `diff --git "a/…" "b/…"`
+> headers that `internal/report/report.go` does not parse, so
+> `report.FromDiff` yields no `FileChange`, `confineToPlan` sees no outside
+> path, and returns nil.
+
+Reproduced against the preserved candidate, with a throwaway probe test
+removed afterwards (the worktree is unchanged: 4 modified files, 0 commits):
+
+```text
+confineToPlan(diff with "a/internal/workflow/caf\303\251.go", planned=[engine.go]) -> nil
+FAIL: a Git-quoted path outside the plan was not refused: confinement failed OPEN
+```
+
+Failing **open** is the one direction this repair exists to prevent, so the
+candidate does not become X+1 and is not admitted. The admission proof
+pre-registered before adjudication — `tree(apply(X, C3.diff))` was to equal
+`e12832b1a237f1c5b659a7ac3fc1fe99a3c7d28b` — is discarded with it, unused;
+pre-registering it is what makes discarding it costless rather than
+tempting.
+
+**Not repaired in place.** Editing the candidate after review would make the
+editor the author of an unreviewed change wearing a governed run's
+authority — the improvisation C2's boundary already refused, one level up.
+The repair belongs to a fresh freeze under the same governor.
+
+### What the failure chain actually says
+
+```text
+git working tree
+  -> textual patch serialisation
+  -> report.FromDiff            loses a quoted path
+  -> FileChange set incomplete
+  -> confineToPlan trusts it
+  -> unauthorised path invisible
+  -> FAIL OPEN
+```
+
+C2 established *when* authority must bind: after the last mutation. C3
+implemented that timing correctly — both call sites, worker diff and
+validate's re-read diff — and its defect is elsewhere: **the identity set
+being bound was incomplete.** So the progression is precise rather than
+circular:
+
+```text
+C2   bind after the final mutation
+C3   correct binding time, lossy path identity
+C4   bind at the correct time over AUTHORITATIVE path identity
+```
+
+The law C4 must satisfy:
+
+> **Confinement operates over Git path identity, not over a lossy textual
+> rendering of a diff.** The question "which paths changed?" has one
+> authoritative producer that cannot silently lose a legal Git pathname.
+
+Falsifying specimens C4 must carry: a non-ASCII path Git quotes; a pathname
+containing whitespace or other characters Git escapes; a rename where either
+side is quoted; a deletion of a quoted out-of-plan path; and an ordinary
+ASCII path as the preservation control. C3's two-check placement is not
+reopened — the new work is making the changed-path set authoritative.

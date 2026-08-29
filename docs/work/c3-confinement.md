@@ -28,3 +28,16 @@ than X itself, so **literal X→X+1 ancestry is not established**; and the
 candidate was never committed, so its identity is carried by its bytes
 alone. Admission — which would create a commit parented by X carrying the
 reviewed tree — is the owner's, and has not been taken.
+
+
+## ADJUDICATED — witness passes, candidate refused
+
+The exact-head review of the C3 record constructed a quoted-path
+counterexample against the candidate's repair, reproduced against the
+preserved candidate: `confineToPlan` fails OPEN when a changed path is one
+Git quotes, because `report.FromDiff` does not parse quoted headers. The
+candidate is therefore **refused and permanently unadmitted**; there is no
+X+1 from C3. The witness itself stands: governor pinned, isolation held,
+scope exact, instrument complete. The repair belongs to a fresh freeze (C4)
+under the same governor, over authoritative Git path identity rather than a
+textual rendering of a diff. C3 is not repaired in place.
