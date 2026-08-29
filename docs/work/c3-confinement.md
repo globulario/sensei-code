@@ -1,4 +1,4 @@
-# C3 — the confinement repair, governed by X, in an isolated subject (brief)
+# C3 — the confinement repair, governed by X, in a subject built for isolation (brief)
 
 The third attempt at M27 item 7, and the first under the corrected isolation
 protocol. C1 was refused at routing (two planned files unexamined); C2
@@ -25,7 +25,7 @@ candidate eligible to become X+1, by the owner's admission.
 Governor pinned (commit and binary sha256 equal at both ends), subject
 untouched, instrument complete, scope exactly the frozen four, Codex ACCEPT
 on the reviewed diff `80c2abdb…`. Two identity caveats stand in the record:
-the isolated subject is a byte-equivalent re-materialisation of X rather
+the subject is a byte-equivalent re-materialisation of X rather
 than X itself, so **literal X→X+1 ancestry is not established**; and the
 candidate was never committed, so its identity is carried by its bytes
 alone. Admission — which would create a commit parented by X carrying the

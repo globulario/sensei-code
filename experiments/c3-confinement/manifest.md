@@ -1,4 +1,4 @@
-# C3 — the confinement repair under governor X, isolated (FROZEN before any run)
+# C3 — the confinement repair under governor X, in a subject built for isolation (FROZEN before any run)
 
 Decisions: M27 (the repair), M28 (the corrected falsifier), M29 (measure the
 exact planned set before freezing), and the owner's sequencing of
@@ -126,7 +126,7 @@ question; timeout, crash or provider void is an instrument finding.
 authority source (governor)   X = f01592b0f0828605ed254047fc064f41dacc78f2
 governor binary sha256        7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea  (start = end)
 governor commit               f01592b…  (start = end; the governor checkout is not written by the run)
-isolated subject              S(X) = 63d4bd5f2f2aefc7bb715b59fc1a338c2609e844
+subject (built for isolation) S(X) = 63d4bd5f2f2aefc7bb715b59fc1a338c2609e844
 tree(S(X))                    fe43d481424072f325a7f315f1a5cfa5ab70609f  == tree(X)
 subject at end                HEAD unchanged, working tree clean, 0 remotes
 candidate                     an UNCOMMITTED worktree state at base S(X); NO candidate commit object exists
@@ -158,10 +158,11 @@ admission                     NOT YET
 
 So what C3 establishes is exactly this and no more:
 
-> **Governor X governed a fresh, isolated, byte-equivalent materialisation of
-> X through a scope-exact repair — post-validation confinement included —
-> with validation, audit and independent review, while X's executable
-> identity remained pinned.**
+> **Governor X governed a fresh, byte-equivalent materialisation of X —
+> built to be isolated, though the run never measured that — through a
+> scope-exact repair, post-validation confinement included, with validation,
+> audit and independent review, while X's executable identity remained
+> pinned.**
 
 Not established: literal `X → X+1` lineage. That is formed only by an
 admission step that creates a commit **parented by X** carrying the reviewed
@@ -214,8 +215,8 @@ authority.
 The witness and the candidate are adjudicated separately, and they part
 company here.
 
-**C3 the witness: PASS as evidence**, with isolation evidenced rather than
-asserted — see the correction below. Governor identity held (commit and
+**C3 the witness: PASS as evidence**, on what it measured; isolation is not
+among those things — see the correction below. Governor identity held (commit and
 binary sha256 equal at both ends), the produced candidate's scope was exact,
 the instrument was complete, and the governed workflow ran to
 `workflow.completed`. Nothing below changes any of that.
@@ -509,3 +510,22 @@ The general form, worth carrying into C4 and beyond:
 > ANY rendering of the record** — prose, summary, generated field or
 > provenance string. One corrected paragraph does not repair a claim that
 > exists in four places.
+
+### Fourth instance — and the sweep itself was the defect
+
+`5aea31bb`, 2026-08-29 15:55:10Z: the result section's own summary sentence
+still said C3 governed a *"fresh, isolated"* materialisation, three
+corrections after the claim was first challenged.
+
+The previous commit called itself a sweep. It grepped for the PHRASES it had
+already seen — "no shared object database", "isolation held", "no controller
+ref" — and therefore could not find "isolated" standing alone. That is the
+same incompleteness as a suffix catalogue, which #118 spent rounds
+unlearning, reappearing in the method used to repair a claim rather than in
+code. A sweep defined by known instances finds only known instances.
+
+Audited this time by the word, not the phrase: every occurrence of `isolat`
+in the manifest, the brief and the overlay, each judged individually. The
+ones that remain unqualified are the ones that are correct unqualified —
+C2's *observed* isolation failure, the *design* frozen before the run, the
+C4 requirements, and the sentence naming what this record must not say.
