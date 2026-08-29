@@ -33,14 +33,20 @@ remains an explicit non-claim owed to C5.
 ## C4 RESULT — witness FAILED under its own frozen protocol, candidate unadmitted
 
 Governor, producer and subject identity all held, and the subject was
-**literally X** with no controller object reachable at either end: the
-ancestry-capable isolation mechanism is demonstrated, which C3 could not do.
+**literally X** with no controller object reachable at either end. The
+ancestry-capable mechanism was demonstrated by the **pre-freeze
+validation**, not by this run: C4's own subject carried `refs/heads/main`
+from the start, a step the frozen procedure does not contain and that I
+added at materialisation, so the isolation predicate was already violated
+before the governor ran.
 The repair was independently accepted over exactly the frozen seven paths.
 
 Two frozen requirements failed, applied as written: the isolation predicate
-fired on the candidate ref the governor created (the freeze predeclared only
-the boundary tag), and the required candidate commit was absent, so literal
-parent-X lineage is **not established**. No commit was minted afterwards and
+was violated **at startup by the controller's own deviation** — an extra
+`refs/heads/main` created outside the frozen procedure, before the governor
+ran, and not (as first recorded) by the candidate ref at end — and the
+required candidate commit was absent, so literal parent-X lineage is **not
+established**. No commit was minted afterwards and
 the branch is not called harmless. The candidate is retained and unadmitted;
 there is no X+1.
 

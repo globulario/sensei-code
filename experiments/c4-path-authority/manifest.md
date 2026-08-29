@@ -295,3 +295,56 @@ Owed to C5, alongside the two witness defects:
 > in a way that can map two distinct paths onto one. The falsifiers are
 > leading space, trailing space, and a path differing from a planned one only
 > by surrounding whitespace.
+
+### Correction — the isolation predicate was already true at STARTUP, and the deviation is the controller's
+
+`151da20f`, 2026-08-29 17:01:18Z. My adjudication said the predicate "fires
+at end on the candidate ref the governor created". That is **wrong about
+when and about whom**:
+
+```text
+frozen verify step   refs = refs/tags/c4-boundary only
+C4.isolation.start   refs = refs/heads/main refs/tags/c4-boundary
+```
+
+`refs/heads/main` existed **before the governor ran**. It was created by me,
+at materialisation, with a step the freeze does not contain —
+`git checkout -B main HEAD` — added so the subject would have a branch.
+The frozen procedure is tag → clone → delete tag → remove origin → verify;
+that extra checkout is not in it.
+
+So the corrected finding is:
+
+- The isolation predicate was violated at **startup**, by the **controller's
+  deviation from its own frozen materialisation procedure**, not first by
+  the governor's candidate ref at end.
+- The earlier attribution ("fires at end on the candidate ref") stands
+  corrected. It made a controller error look like a governor artefact, and
+  it let me claim the freeze had been applied literally while I had
+  literally departed from it before the run began.
+
+**Consequence for the mechanism claim.** The manifest said C4 demonstrated
+"literal ancestry-capable isolation". Narrowed to what the evidence supports:
+
+> The **pre-freeze validation** produced a conforming subject — HEAD == X,
+> tree `fe43d481…`, X with 0 parents, 0 remotes, alternates absent, refs =
+> the boundary tag only, no controller object resolvable. That is where the
+> mechanism was demonstrated.
+>
+> **C4's own run did not use a conforming subject.** Its subject carried an
+> extra ref from the start, so C4 did not demonstrate the mechanism; it
+> demonstrated a subject that was literally X with an unfrozen ref added.
+
+The controller-reachability results (no controller object resolvable,
+alternates absent, remotes 0, at both ends) are unaffected and remain PASS —
+they were measured on the subject as it actually existed.
+
+This is the third instance in this record of the same shape, now committed
+by the adjudicator rather than the loop: **a claim asserted about a property
+the record itself contradicts.** C5 owes a fourth item —
+
+> **The run must verify the frozen materialisation procedure produced what
+> the freeze says it produces, before the governor is invoked, and refuse if
+> it did not.** A setup step outside the frozen procedure is a deviation
+> whether or not it looks harmless, and the start capture is where it is
+> caught.
