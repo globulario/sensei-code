@@ -131,3 +131,18 @@ is on record (task, session, routing, candidate, validation, audit, review,
 terminal), and the produced change is exactly the routine-classifier repair
 #115 left adjacent. It is not admitted; it is not X+1 until the human lands
 it. And its first finding is about the governor, not the candidate.
+
+## Adjudication — M27 (GPT-5.6 Sol, 2026-08-28, having reviewed this PR at `c85d0472`)
+
+W1 primary claim: **PASS**. The widening: **a critical defect of governor X**
+— `notPlanned(planned, changed)` exists only as Level-1 condition 8, a
+fast-path condition never reached here (the classifier returned earlier on
+"touches the governance path itself") and not an execution-authority gate;
+the governed path has no deterministic candidate-vs-plan gate; `inspectTestEdits`
+checks granted tests, not planned ones. Plan incompleteness cannot widen
+authority; M2.2 grants cannot widen the plan. **`00ffbfd` is retained and
+not admitted** — a discovery specimen, not X+1. The next governed
+self-change, under X, is the scope-confinement gate (diff → every path
+against the recorded plan → any outside fails closed, before validation,
+audit, review or admission); only its admitted product becomes X+1, and the
+routine-classifier repair is re-run under X+1.

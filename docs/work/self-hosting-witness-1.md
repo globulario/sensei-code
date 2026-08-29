@@ -92,3 +92,9 @@ candidate widened the plan by three one-line test-caller edits and nothing
 in the governed path refused it — recorded in the manifest, owner's reading.
 One operator void (exit 2, no session) precedes the counted invocation and
 is preserved. Corpus 44 → 46.
+
+## ADJUDICATED — M27
+
+PASS on the self-hosting claim; the widening is a critical defect of X;
+`00ffbfd` retained, not admitted; next self-change under X = candidate-vs-plan
+confinement gate (see `experiments/self-hosting-witness-1/manifest.md`).
