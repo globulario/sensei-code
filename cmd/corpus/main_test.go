@@ -292,3 +292,44 @@ func TestAWholeStreamBesideItsPartsIsRefused(t *testing.T) {
 		t.Fatal("a stream present both whole and split was read without objection")
 	}
 }
+
+// A stream is found by its literal name, never by pattern.
+//
+// filepath.Glob reads its argument as a pattern, so a logical stream whose
+// name contains metacharacters can match a SIBLING's parts: `A[1].log`
+// matches `A1.log.part-001`. The corpus would then emit the sibling's
+// evidence twice and omit the stream that actually exists (#118 review).
+func TestSplitStreamPathsAreMatchedLiterally(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, summary string) {
+		line := fmt.Sprintf(`{"kind":"task.created","task_id":%q,"summary":%q}`+"\n", summary, summary)
+		if err := os.WriteFile(filepath.Join(runs, name), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("A1.log.part-001", "sibling")
+	write("A[1].log.part-001", "itself")
+
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("two streams produced %d entries: %v", len(logs), logs)
+	}
+	got := map[string]string{}
+	for _, l := range logs {
+		rec, err := extract(l)
+		if err != nil {
+			t.Fatalf("%s: %v", l, err)
+		}
+		got[filepath.Base(l)] = rec.Task["id"].(string)
+	}
+	if got["A[1].log"] != "itself" || got["A1.log"] != "sibling" {
+		t.Fatalf("a stream was reconstructed from another stream's parts: %v", got)
+	}
+}

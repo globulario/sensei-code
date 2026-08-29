@@ -291,4 +291,9 @@ both reproduced as failing tests first): a gap in the numbering fails closed
 parses while omitting every event between them), and a stream present both
 whole and split is refused rather than silently preferring one
 representation. Pinned by `TestAGapInTheSplitStreamFailsClosed` and
-`TestAWholeStreamBesideItsPartsIsRefused`.
+`TestAWholeStreamBesideItsPartsIsRefused`. A third round (`0066935`) removed
+the glob: a stream's own name was read as a PATTERN, so `A[1].log` matched
+the sibling `A1.log.part-001` — the corpus would have emitted that sibling's
+evidence twice and omitted the stream that exists. Parts are now found by
+enumerating the directory and comparing names literally
+(`TestSplitStreamPathsAreMatchedLiterally`).

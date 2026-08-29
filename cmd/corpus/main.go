@@ -393,9 +393,25 @@ func partOf(name string) string {
 // ambiguity about what the evidence is, not a preference to resolve
 // silently: it is refused too (#118 review).
 func streamParts(path string) ([]string, error) {
-	parts, err := filepath.Glob(path + ".part-*")
-	if err != nil || len(parts) == 0 {
+	// The directory is enumerated and names are compared literally. Globbing
+	// would read the stream's own name as a PATTERN, so `A[1].log` would
+	// match the sibling `A1.log.part-001`: the corpus would emit that
+	// sibling's evidence twice and omit the stream that exists (#118
+	// review). A name is a name.
+	dir := filepath.Dir(path)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
 		return nil, err
+	}
+	prefix := filepath.Base(path) + ".part-"
+	var parts []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
+			parts = append(parts, filepath.Join(dir, e.Name()))
+		}
+	}
+	if len(parts) == 0 {
+		return nil, nil
 	}
 	sort.Strings(parts)
 	for i, p := range parts {
