@@ -8,32 +8,6 @@ permissions:
   contents: read
 
 jobs:
-  # Whether a hosted reviewer can run at all.
-  #
-  # This exists so the review job can be SKIPPED rather than pass without
-  # reviewing. secrets are not readable in a job-level `if`, so the question is
-  # answered once here and consumed as an output. A check named "Codex review"
-  # reporting success is a claim that a review happened, and an unrun check
-  # recorded as a pass is the overstated receipt this repository refuses.
-  reviewer:
-    name: Hosted reviewer availability
-    runs-on: ubuntu-latest
-    outputs:
-      configured: ${{ steps.probe.outputs.configured }}
-    steps:
-      - id: probe
-        shell: bash
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          if [ -n "${OPENAI_API_KEY}" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-            echo 'Hosted Codex reviewer is configured; the review job will run.' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo 'OPENAI_API_KEY is not configured, so the Codex review job is SKIPPED — not passed. No adversarial review has run on this pull request. Go and Sensei gates still apply.' >> "$GITHUB_STEP_SUMMARY"
-          fi
-
   go:
     name: Go verification
     runs-on: ubuntu-latest
@@ -91,25 +65,58 @@ jobs:
           echo '::error::Sensei enforcing gate did not prove this diff.'
           exit 1
 
-  codex-review:
-    name: Codex review with Sensei context
-    needs: reviewer
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository && needs.reviewer.outputs.configured == 'true' }}
+  hosted-review:
+    name: Hosted adversarial review
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: write
     env:
-      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GH_TOKEN: ${{ github.token }}
+      PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Bind review to exact PR head
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$PR_HEAD_SHA" ]; then
+            echo "::error::Review checkout drifted: expected $PR_HEAD_SHA, got $actual"
+            exit 1
+          fi
+          echo "Exact review head: $actual" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Probe reviewer availability
+        id: providers
+        shell: bash
+        run: |
+          set -euo pipefail
+          codex=false
+          gemini=false
+          if [ -n "$OPENAI_API_KEY" ]; then codex=true; fi
+          if [ -n "$GEMINI_API_KEY" ]; then gemini=true; fi
+          echo "codex=${codex}" >> "$GITHUB_OUTPUT"
+          echo "gemini=${gemini}" >> "$GITHUB_OUTPUT"
+          {
+            echo "Codex configured: ${codex}"
+            echo "Gemini configured: ${gemini}"
+            echo
+            echo "Provider availability is not a verdict. Silence, quota, timeout, or malformed output remains UNKNOWN."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.25.x'
           cache: true
+
       - name: Resolve module metadata for the context helper
         run: go mod tidy
 
@@ -119,7 +126,7 @@ jobs:
           mode: advisory
           sarif: 'false'
 
-      - name: Build assisted Sensei context packet
+      - name: Build one exact-head evidence packet for either reviewer
         shell: bash
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
@@ -127,48 +134,164 @@ jobs:
           BASE_REF: ${{ github.base_ref }}
         run: |
           set -euo pipefail
+          mkdir -p .sensei-code-review
           FILES="$(git diff --name-only "origin/${BASE_REF}...HEAD" | paste -sd, -)"
           go run ./cmd/sensei-code context \
             --task "Review PR #${PR_NUMBER}: ${PR_TITLE}" \
-            --task-id "github-pr-${PR_NUMBER}" \
+            --task-id "github-pr-${PR_NUMBER}-${PR_HEAD_SHA}" \
             --files "$FILES" \
-            --out "$RUNNER_TEMP/sensei-context.json"
-
-      - name: Prepare bounded review prompt
-        shell: bash
-        env:
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          BASE_REF: ${{ github.base_ref }}
-        run: |
-          set -euo pipefail
+            --out .sensei-code-review/context.json
+          git diff --no-ext-diff "origin/${BASE_REF}...HEAD" > .sensei-code-review/diff.patch
+          printf '%s\n' "$PR_HEAD_SHA" > .sensei-code-review/head.sha
           {
             echo "You are the independent reviewer for Sensei Code PR #${PR_NUMBER}: ${PR_TITLE}."
+            echo "Exact reviewed head: ${PR_HEAD_SHA}"
             echo
-            echo "The Sensei context packet below is governed evidence. Treat it as context, not as permission to invent claims that are absent from it."
+            echo "The Sensei context packet below is governed evidence. Treat it as context, not as permission to invent claims absent from it."
             echo "This is assisted-mode review. Reviewer acceptance is NOT Sensei admission."
             echo
             echo "## Sensei context packet"
-            cat "$RUNNER_TEMP/sensei-context.json"
+            cat .sensei-code-review/context.json
             echo
             echo "## Pull request diff"
-            git diff --no-ext-diff "origin/${BASE_REF}...HEAD"
+            cat .sensei-code-review/diff.patch
             echo
-            echo "Review whether the diff satisfies the stated task and the Sensei evidence. Identify correctness, architectural, test-evidence, authority, or provenance defects. Do not modify files. Return concise Markdown with a verdict of APPROVE or REQUEST_CHANGES and concrete findings."
-          } > "$RUNNER_TEMP/codex-review-prompt.md"
+            echo "Review whether the diff satisfies the stated task and Sensei evidence. Identify correctness, architectural, test-evidence, authority, security, or provenance defects. Do not modify files. Return concise Markdown with an explicit verdict of APPROVE or REQUEST_CHANGES and concrete findings. Absence of findings is not proof of correctness."
+          } > .sensei-code-review/codex-prompt.md
 
       - name: Run Codex reviewer
+        id: codex
+        if: ${{ steps.providers.outputs.codex == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 10
         uses: openai/codex-action@v1
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          prompt-file: ${{ runner.temp }}/codex-review-prompt.md
+          prompt-file: .sensei-code-review/codex-prompt.md
           output-file: ${{ runner.temp }}/codex-review.md
           sandbox: read-only
           safety-strategy: read-only
 
+      - name: Validate Codex receipt
+        id: codex-receipt
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          delivered=false
+          if [ "${{ steps.codex.outcome }}" = "success" ] \
+             && [ -s "$RUNNER_TEMP/codex-review.md" ] \
+             && grep -Eq '(^|[^A-Z_])(APPROVE|REQUEST_CHANGES)([^A-Z_]|$)' "$RUNNER_TEMP/codex-review.md"; then
+            delivered=true
+          fi
+          echo "delivered=${delivered}" >> "$GITHUB_OUTPUT"
+          if [ "$delivered" != true ]; then
+            echo "::warning::Codex did not deliver a valid exact-head receipt inside 10 minutes. This is UNKNOWN, not CLEAN."
+          fi
+
       - name: Publish Codex review
+        if: ${{ steps.codex-receipt.outputs.delivered == 'true' }}
         shell: bash
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/codex-review.md"
+        run: |
+          set -euo pipefail
+          {
+            echo "### Hosted adversarial review — Codex"
+            echo
+            echo "- exact head: \`${PR_HEAD_SHA}\`"
+            echo "- provider: OpenAI Codex Action"
+            echo
+            cat "$RUNNER_TEMP/codex-review.md"
+          } > "$RUNNER_TEMP/codex-review-published.md"
+          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/codex-review-published.md"
 
+      - name: Run Gemini fallback reviewer
+        id: gemini
+        if: ${{ always() && steps.codex-receipt.outputs.delivered != 'true' && steps.providers.outputs.gemini == 'true' }}
+        continue-on-error: true
+        timeout-minutes: 10
+        uses: google-github-actions/run-gemini-cli@f77273f4c914e4bf38440cf36a0369cb64a37489
+        with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          prompt: |-
+            You are the independent fallback reviewer for a Sensei Code pull request.
+            This is assisted-mode review. Reviewer acceptance is NOT Sensei admission.
+
+            Using the read-only file tool, read all three workflow-produced evidence files:
+            - .sensei-code-review/head.sha
+            - .sensei-code-review/context.json
+            - .sensei-code-review/diff.patch
+
+            Review the exact diff against the governed Sensei context. Identify concrete correctness,
+            architectural, test-evidence, authority, security, or provenance defects. Do not modify files.
+            Return concise Markdown with an explicit verdict of APPROVE or REQUEST_CHANGES and concrete
+            findings. Absence of findings is not proof of correctness.
+          settings: |-
+            {
+              "model": {
+                "maxSessionTurns": 12
+              },
+              "tools": {
+                "core": ["read_file"]
+              }
+            }
+
+      - name: Validate Gemini receipt
+        id: gemini-receipt
+        if: ${{ always() }}
+        shell: bash
+        env:
+          GEMINI_REVIEW: ${{ steps.gemini.outputs.summary }}
+        run: |
+          set -euo pipefail
+          delivered=false
+          printf '%s\n' "$GEMINI_REVIEW" > "$RUNNER_TEMP/gemini-review.md"
+          if [ "${{ steps.gemini.outcome }}" = "success" ] \
+             && [ -s "$RUNNER_TEMP/gemini-review.md" ] \
+             && grep -Eq '(^|[^A-Z_])(APPROVE|REQUEST_CHANGES)([^A-Z_]|$)' "$RUNNER_TEMP/gemini-review.md"; then
+            delivered=true
+          fi
+          echo "delivered=${delivered}" >> "$GITHUB_OUTPUT"
+          if [ "$delivered" != true ] && [ "${{ steps.codex-receipt.outputs.delivered }}" != true ]; then
+            echo "::warning::Gemini also failed to deliver a valid exact-head receipt. Provider outcome remains UNKNOWN."
+          fi
+
+      - name: Publish Gemini fallback review
+        if: ${{ steps.gemini-receipt.outputs.delivered == 'true' }}
+        shell: bash
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Hosted adversarial review — Gemini fallback"
+            echo
+            echo "- exact head: \`${PR_HEAD_SHA}\`"
+            echo "- provider: Google Gemini CLI Action"
+            echo "- fallback reason: Codex did not deliver a valid receipt inside its bounded attempt"
+            echo
+            cat "$RUNNER_TEMP/gemini-review.md"
+          } > "$RUNNER_TEMP/gemini-review-published.md"
+          gh pr comment "$PR_NUMBER" --body-file "$RUNNER_TEMP/gemini-review-published.md"
+
+      - name: Require one actual reviewer verdict
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          codex="${{ steps.codex-receipt.outputs.delivered }}"
+          gemini="${{ steps.gemini-receipt.outputs.delivered }}"
+          {
+            echo "Exact PR head: ${PR_HEAD_SHA}"
+            echo "Codex delivered: ${codex:-false}"
+            echo "Gemini delivered: ${gemini:-false}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$codex" = true ] || [ "$gemini" = true ]; then
+            exit 0
+          fi
+          echo '::error::No hosted reviewer delivered a valid exact-head verdict. Provider silence/quota/timeout is UNKNOWN, never CLEAN.'
+          if [ "${{ steps.providers.outputs.gemini }}" != true ]; then
+            echo '::error::Configure repository secret GEMINI_API_KEY to enable Gemini fallback.'
+          fi
+          exit 1
