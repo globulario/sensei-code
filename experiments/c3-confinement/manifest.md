@@ -214,12 +214,11 @@ authority.
 The witness and the candidate are adjudicated separately, and they part
 company here.
 
-**C3 the witness: PASS as evidence.** Governor identity held (commit and
-binary sha256 equal at both ends), isolation held (subject materialised from
-X alone, 0 remotes, no shared object database, no controller ref reachable),
-the produced candidate's scope was exact, the instrument was complete, and
-the governed workflow ran to `workflow.completed`. Nothing below changes any
-of that.
+**C3 the witness: PASS as evidence**, with isolation evidenced rather than
+asserted — see the correction below. Governor identity held (commit and
+binary sha256 equal at both ends), the produced candidate's scope was exact,
+the instrument was complete, and the governed workflow ran to
+`workflow.completed`. Nothing below changes any of that.
 
 **C3 the candidate: REFUSED, permanently unadmitted.** The exact-head Codex
 review of this record (`a54b51a3d`, 2026-08-29 14:13:49Z) constructed a
@@ -286,3 +285,59 @@ containing whitespace or other characters Git escapes; a rename where either
 side is quoted; a deletion of a quoted out-of-plan path; and an ordinary
 ASCII path as the preservation control. C3's two-check placement is not
 reopened — the new work is making the changed-path set authoritative.
+
+
+## Correction — isolation was ASSERTED by this manifest, not captured by the run
+
+The exact-head review of this record (`9c9b53f0`, 2026-08-29 14:28:46Z) is
+right about a real gap:
+
+> the committed artifacts do not independently establish the claimed absence
+> of a shared object database. `C3.run` records remotes and worktrees but no
+> object-store state, and the only such statement in `C3.log` is text in the
+> subject commit message. A subject using an alternate object store could
+> satisfy every captured check while recreating C2's leakage condition.
+
+The freeze asserted it; the run did not measure it; prose in a manifest is
+the claimant vouching for itself. Two things follow.
+
+**First, the state is now captured** — `runs/C3.isolation.txt`, read from the
+preserved subject, which is unchanged since the run's closing stamp (same
+HEAD, same tree, clean working tree). It contains a probe that settles the
+question rather than restating it:
+
+```text
+subject cat-file -t f01592b…   fatal: could not get object info
+                  e1dd5456…    fatal: could not get object info      (#118 merge)
+                  3ac57143…    fatal: could not get object info      (#119 merge)
+                  a54b51a3…    fatal: could not get object info      (this PR)
+.git/objects/info/alternates   ABSENT
+remotes 0 · refs: main + the candidate task branch only · 1141 loose objects, 0 packs
+```
+
+A repository sharing the controller's object database — by alternates or any
+other means — resolves `f01592b`, the commit this subject's tree was
+materialised from. **This one cannot resolve it, or any controller object.**
+That is not compatible with a shared store, and it would have been equally
+true during the run: objects do not leave a store once borrowed.
+
+**Second, the epistemic status is stated exactly.** This is a *post-run*
+capture of a subject that has not changed since. It is strictly stronger
+than the manifest's prose and strictly weaker than in-run measurement, and
+it is labelled as such in the artifact itself. The protocol defect belongs
+to C3's design and is owed to C4:
+
+> **The run stamp must capture the isolation state it claims** — alternates,
+> remotes, refs, and the controller-object probe — at start AND end, beside
+> the governor and subject identity it already records. A property a witness
+> asserts about itself is not evidence.
+
+Disclosed in the artifact: a dangling tree `e12832b1…` exists in the
+subject's store, written by the controller after the run with a temporary
+`GIT_INDEX_FILE` to pre-register the reviewed candidate tree. It changed no
+ref, no index and no file.
+
+Whether that capture is sufficient, or whether the witness should instead be
+classified VOID for having asserted a property it did not measure, is the
+owner's adjudication. The record states both readings rather than choosing
+the flattering one.
