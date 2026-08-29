@@ -47,3 +47,13 @@ there is no X+1.
 Owed next: refs classified by authority rather than appearance, and
 candidate commitment as a workflow obligation before terminal completion.
 `capture.go` (C5) does not jump ahead of those.
+
+
+A third refusal ground, found by the review of the record: `confineToPlan`
+collapses whitespace-distinct paths via `TrimSpace`, so a legal Git pathname
+differing only by a leading space passes confinement. **C4's own frozen plan
+specified that canonicalisation**, so the worker followed instructions and
+the fail-open is the freeze's. C3 lost quoted paths at the renderer; C4
+acquired Git-owned paths and normalised them away at the comparison —
+authoritative acquisition is not authoritative use. C5 owes: a Git path is
+compared as Git reports it.

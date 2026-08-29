@@ -256,3 +256,42 @@ admission, and here two frozen witness falsifiers block it.
 The `internal/gitx/capture.go` `--numstat` seam remains owed as C5 and does
 **not** leapfrog these two: the self-governance chain closes its own witness
 defects first.
+
+### A third failure, and the frozen plan is its author
+
+`75955b1d`, 2026-08-29 16:55:32Z, P1 against the candidate's code:
+
+> a legal Git pathname with leading or trailing whitespace — ` internal/workflow/engine.go` — is collapsed by `TrimSpace` onto the plan's unspaced path, so an out-of-plan change is accepted. Reproduced against a real repository: `CandidateChanges` and `reconcileRenderedDiff` agreed on the distinct leading-space path, and `confineToPlan` still returned success.
+
+Reproduced here against the preserved candidate, probe removed afterwards
+(worktree unchanged at 7 modified paths):
+
+```text
+confineToPlan([" internal/workflow/engine.go"], planned=["internal/workflow/engine.go"]) -> nil
+FAIL: a whitespace-distinct out-of-plan path was accepted: confinement failed OPEN
+```
+
+**The defect was specified by the frozen plan.** C4's plan required the check
+to canonicalise "with `path.Clean(strings.TrimSpace(f))` exactly as
+`architecturalFiles` does". The worker followed it faithfully. `TrimSpace`
+appears at four sites in X's `testedit.go`, so the plan propagated a
+pre-existing repository pattern into the one place where path identity is
+the authority — and thereby reproduced, in a different alphabet, exactly the
+class C4 existed to close: a legal Git pathname the confinement cannot see.
+
+C3 lost quoted paths at the *renderer*. C4 gained Git-owned paths and then
+**normalised them away at the comparison**. Authoritative acquisition is not
+authoritative use.
+
+It does not change C4's disposition — the candidate was already refused and
+unadmitted on two other grounds — but it adds a third, and it relocates the
+blame: this one is the freeze's, not the loop's.
+
+Owed to C5, alongside the two witness defects:
+
+> **A Git path is compared as Git reports it.** No trimming, no case
+> folding, no separator rewriting; `path.Clean` only where a plan's own
+> spelling must be canonicalised, and never applied to the Git-reported side
+> in a way that can map two distinct paths onto one. The falsifiers are
+> leading space, trailing space, and a path differing from a planned one only
+> by surrounding whitespace.
