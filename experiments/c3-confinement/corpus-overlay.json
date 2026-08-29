@@ -17,7 +17,6 @@
    "ultimate_authority": "project owner (human)"
   },
   "review_findings": [
-   "in-run Codex ACCEPT on 80c2abdbc75c: both fail-closed checks present (worker diff and validate's re-read diff), report.FromDiff including OldPath, grants kept out of scope confinement",
    "identity caveat 1: the subject is S(X)=63d4bd5f, a byte-equivalent re-materialisation of X (tree fe43d481 == tree(X)), so the candidate is NOT literally a Git descendant of f01592b; literal X->X+1 lineage is formed only by an admission commit parented by X carrying the reviewed tree",
    "identity caveat 2: the candidate was never committed -- four modified files in the worktree, zero commits beyond base -- so its identity is carried by its diff bytes alone",
    "PR #120 Codex exact-head review of a54b51a (2026-08-29 14:13:49Z): P1 -- the candidate's confineToPlan fails OPEN on a Git-quoted path, because report.FromDiff does not parse quoted headers and yields no FileChange; reproduced against the preserved candidate. CANDIDATE REFUSED, permanently unadmitted; no X+1 from C3. The witness stands.",
@@ -25,6 +24,12 @@
   ],
   "note": "C3, the confinement repair under governor X with corrected isolation: governor sensei-code @ f01592b (binary sha256 7c0bd86b..., EQUAL at start and end) governed a supplied plan (sha256 50df0097...) in a subject materialised from X alone; routed architectural-authority-granted with all four planned files examined; one worker cycle, 15,957-byte diff over EXACTLY the frozen four paths; validation, audit (4 files, 0 findings), Level-1 not routine, Codex ACCEPT; workflow.completed, retained, NOT admitted. Instrument complete (run, untrimmed log, empty-but-present receipts with its reason, graph metadata, candidate diff), so the record is evidence rather than void.",
   "history": [
+   {
+    "recorded": "2026-08-29, PR #120",
+    "event": "in-run review completed clean",
+    "supersedes": "",
+    "detail": "in-run Codex ACCEPT on 80c2abdbc75c: both fail-closed checks present (worker diff and validate's re-read diff), report.FromDiff including OldPath, grants kept out of scope confinement"
+   },
    {
     "recorded": "2026-08-29, PR #120",
     "event": "candidate refused at adjudication",

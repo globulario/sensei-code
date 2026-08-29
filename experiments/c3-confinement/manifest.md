@@ -383,3 +383,27 @@ governor binary identity stayed pinned; subject HEAD and tree stayed
 unchanged; the produced candidate's scope was exact; the workflow completed;
 the instrument record was complete by the declared artifact list; and the
 candidate was independently reviewed, then refused at adjudication.
+
+### Two record defects found by the review of the adjudication itself
+
+`4be94c72`, 2026-08-29 15:11:45Z — both about how this record reads, not
+about the run:
+
+- **The correction had left the flattering sentence standing.** The brief's
+  result section still said *"the witness itself stands: governor pinned,
+  isolation held, scope exact"* while the adjudication appended below it said
+  run-time isolation was not established. A correction that adds the honest
+  paragraph and leaves the positive verdict in place turns unavailable
+  evidence into a PASS for anyone who reads the summary and stops. Fixed:
+  the brief now names what the witness measured and says run-time isolation
+  is not among them.
+- **A clean review was filed as a finding.** `review_findings` is defined by
+  `SCHEMA.md` as the findings of the independent review — defects — so the
+  in-run ACCEPT sitting there made an acceptance indistinguishable from the
+  two real failures beside it. Moved to `history` as
+  `in-run review completed clean`; the findings array now holds four
+  defects and nothing else.
+
+The second is a corpus-vocabulary error of the same family the #118 rounds
+kept producing: a field whose meaning is fixed by the schema, used for
+something adjacent.

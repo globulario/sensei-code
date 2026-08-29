@@ -37,8 +37,10 @@ counterexample against the candidate's repair, reproduced against the
 preserved candidate: `confineToPlan` fails OPEN when a changed path is one
 Git quotes, because `report.FromDiff` does not parse quoted headers. The
 candidate is therefore **refused and permanently unadmitted**; there is no
-X+1 from C3. The witness itself stands: governor pinned, isolation held,
-scope exact, instrument complete. The repair belongs to a fresh freeze (C4)
+X+1 from C3. The witness itself stands on what it measured: governor pinned,
+scope exact, instrument complete. Run-time isolation is **not** among those:
+it was designed for, retrospectively corroborated, and never measured — see
+the final adjudication below. The repair belongs to a fresh freeze (C4)
 under the same governor, over authoritative Git path identity rather than a
 textual rendering of a diff. C3 is not repaired in place.
 
