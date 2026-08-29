@@ -1,0 +1,24 @@
+{
+ "C1": {
+  "sensei_sha": "f79f96f9faf542b73d5053bcf5e48603a68e2c74",
+  "sensei_code_sha": "f01592b0f0828605ed254047fc064f41dacc78f2",
+  "fixture": "github.com/globulario/sensei-code (self; subject = governor commit X, fresh detached clean worktree seeded only with .sensei-code/config.json)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- M27 (the repair), M28 (corrected falsifier), M29 (C1 accepted, C2 frozen on examined test homes); in conversation, relayed by the owner",
+   "independent_automated_reviewer": "Codex -- PR review of the evidence pending",
+   "implementation_and_reconstruction": "Claude -- freeze, run and records",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "not merged at record time (#118 open)",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "M29 (GPT-5.6 Sol, 2026-08-29): C1 accepted as a valid refusal and the first live confirmation of #115's per-file authority boundary; immutable; the graph must not be modified to make the refused plan admissible; the plan is revised to already-examined test homes (C2)"
+  ],
+  "note": "confinement repair, first attempt: governor sensei-code @ f01592b (binary sha256 7c0bd86b..., equal at start and end) REFUSED the supplied plan (sha256 42c8b878...) at routing -- two of its four planned files, internal/workflow/testedit_test.go and suppliedplan_test.go, are unexamined by graph 42e6e12c (indexed 0/1), so 'derived coverage: 0 anchor(s) over 4 planned file(s); route bounded-knowledge-gap' with 'unexamined by the graph: 2 file(s)' and the supplied-plan refusal. No worker ran, no candidate exists, no candidate worktree was created; the governor stayed pinned. First live firing of the rule PR #115 added."
+ }
+}
