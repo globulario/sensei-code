@@ -352,3 +352,12 @@ Two lessons, deliberately not merged:
 
 The resolution rule is stated semantically rather than as "take the last
 marker", so it survives a change of implementation.
+
+The eighth round (`5fb283d`) found the rule stated but not yet *used*
+everywhere: `streamParts` still collected parts by bare prefix, so
+`A.log.part-x.log.part-001` was handed to `A.log` as well, and reading that
+stream -- present whole, and correctly so -- reported an ambiguous
+whole-plus-parts representation and aborted the corpus. A repaired
+calculation that only one caller consults is half a repair. `partOf` is now
+the single identity calculation and everything that attributes a part uses
+it (`TestPartsAreAttributedByIdentityNotByPrefix`).

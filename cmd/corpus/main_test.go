@@ -451,3 +451,47 @@ func TestPartRecognitionChoosesTheLongestStreamIdentity(t *testing.T) {
 		t.Fatalf("the nested stream did not reconstruct: %+v %v", rec.Task, err)
 	}
 }
+
+// One identity calculation, used everywhere a part is attributed.
+//
+// `A.log` and `A.log.part-x.log` are two legitimate streams, and
+// `A.log.part-x.log.part-001` is a part of the SECOND. Collecting parts by
+// bare prefix attributed it to the first as well, so reading `A.log` --
+// present whole, and correctly so -- reported an ambiguous whole-plus-parts
+// representation and aborted the whole corpus. partOf is the identity
+// calculation; streamParts must use it rather than a prefix test (#118
+// review, round 8).
+func TestPartsAreAttributedByIdentityNotByPrefix(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, id string) {
+		line := fmt.Sprintf(`{"kind":"task.created","task_id":%q,"summary":%q}`+"\n", id, id)
+		if err := os.WriteFile(filepath.Join(runs, name), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("A.log", "whole")                      // a stream, present whole
+	write("A.log.part-x.log.part-001", "nested") // a part of A.log.part-x.log
+
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("two streams produced %d entries: %v", len(logs), logs)
+	}
+	got := map[string]string{}
+	for _, l := range logs {
+		rec, err := extract(l)
+		if err != nil {
+			t.Fatalf("%s: %v", filepath.Base(l), err)
+		}
+		got[filepath.Base(l)] = rec.Task["id"].(string)
+	}
+	if got["A.log"] != "whole" || got["A.log.part-x.log"] != "nested" {
+		t.Fatalf("parts were attributed by prefix rather than identity: %v", got)
+	}
+}

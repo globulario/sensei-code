@@ -435,10 +435,16 @@ func streamParts(path string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	prefix := filepath.Base(path) + partMarker
+	// Attributed by IDENTITY, not by prefix. `A.log.part-x.log.part-001` is
+	// a part of `A.log.part-x.log`, and starts with `A.log` + the marker: a
+	// prefix test handed it to `A.log` as well, so reading that stream --
+	// present whole, and correctly so -- reported an ambiguous
+	// whole-plus-parts representation and aborted the corpus. partOf is the
+	// one identity calculation; everything that attributes a part uses it.
+	logical := filepath.Base(path)
 	var parts []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
+		if !e.IsDir() && partOf(e.Name()) == logical {
 			parts = append(parts, filepath.Join(dir, e.Name()))
 		}
 	}
