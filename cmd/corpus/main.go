@@ -396,13 +396,28 @@ const partMarker = ".part-"
 // marker: the claim is what brings the file into the evidence machinery,
 // where streamParts proves the strict sequence or refuses it. Recognition is
 // permissive on purpose; acceptance is strict.
+//
+// The rule for WHICH stream, stated semantically rather than as this scan:
+//
+//	a part belongs to the LONGEST prefix that is itself a valid
+//	evidence-stream name.
+//
+// More than one prefix can qualify. `A.log.part-x.log` is a legitimate
+// stream -- it ends in .log -- and split it is `A.log.part-x.log.part-001`,
+// whose first qualifying prefix is the *other* legitimate stream `A.log`.
+// Taking the first match claimed the wrong identity: the parts then failed
+// their sequence check and the real stream got no encounter at all. That is
+// not the vanishing of rounds 4-6; the evidence arrives and is refused for
+// being something it is not. Constructed independently, before the repair,
+// by the owner reading this scan and by Codex reading the diff.
 func partOf(name string) string {
+	logical := ""
 	for i := 0; i+len(partMarker) <= len(name); i++ {
 		if name[i:i+len(partMarker)] == partMarker && isStreamName(name[:i]) {
-			return name[:i]
+			logical = name[:i]
 		}
 	}
-	return ""
+	return logical
 }
 
 // streamParts returns the ordered parts of a stream, refusing anything that

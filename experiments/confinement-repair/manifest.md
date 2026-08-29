@@ -331,3 +331,24 @@ regexp — so the asymmetry cannot recur by a new spelling. The empty-stem
 stream now reconstructs rather than being refused (it is well-formed);
 `TestAStreamWithAnEmptyStemIsStillAStream` pins both halves, and a
 non-stream name (`notes.txt.part-001`) still claims nothing.
+
+The seventh round (`284577a`) is a different property, and worth keeping
+apart from the first: **identity resolution**. `A.log.part-x.log` is itself a
+legitimate stream, so its split form `A.log.part-x.log.part-001` has TWO
+qualifying prefixes, and the left-to-right scan claimed the shorter one
+(`A.log`). The parts then failed their sequence check and the real stream got
+no encounter — evidence arriving and being refused for being something it is
+not, rather than vanishing. Constructed independently, before the repair, by
+the owner reading the scan and by Codex reading the diff.
+
+Two lessons, deliberately not merged:
+
+> **Recognition** — discovery and part recognition must share one definition
+> of what counts as an evidence stream. *(Rounds 4–6; evidence vanished.)*
+>
+> **Resolution** — a part belongs to the **longest prefix that is itself a
+> valid evidence-stream name**. *(Round 7; evidence refused under the wrong
+> identity.)*
+
+The resolution rule is stated semantically rather than as "take the last
+marker", so it survives a change of implementation.

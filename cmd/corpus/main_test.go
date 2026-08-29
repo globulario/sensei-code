@@ -406,3 +406,48 @@ func TestAStreamWithAnEmptyStemIsStillAStream(t *testing.T) {
 		t.Fatalf("the empty-stem stream did not reconstruct: %+v %v", rec.Task, err)
 	}
 }
+
+// A part belongs to the LONGEST prefix that is itself a valid stream name.
+//
+// `A.log.part-x.log` is a legitimate stream: it ends in .log, so whole-stream
+// discovery accepts it. Split, it is `A.log.part-x.log.part-001` — and a
+// left-to-right marker scan stops at the first qualifying prefix, `A.log`,
+// which is ALSO a legitimate stream. The parts then fail their sequence
+// check (expected `A.log.part-001`) and the real stream gets no encounter:
+// fail-closed, but under the wrong identity. Distinct from rounds 4-6, where
+// evidence vanished silently; here it enters the machinery and is refused
+// for being something it is not. Constructed independently by the owner's
+// review and by Codex on 284577a, before the repair.
+func TestPartRecognitionChoosesTheLongestStreamIdentity(t *testing.T) {
+	for name, want := range map[string]string{
+		"A.log.part-x.log.part-001":     "A.log.part-x.log",
+		"X.log.part-run.log.part-001":   "X.log.part-run.log",
+		"A.log.part-001":                "A.log",
+		"a/b/deep.jsonl.part-002":       "a/b/deep.jsonl",
+		"notes.txt.part-001":            "",
+		"X.log.part-run.jsonl.part-003": "X.log.part-run.jsonl",
+	} {
+		if got := partOf(name); got != want {
+			t.Errorf("partOf(%q) = %q; want %q", name, got, want)
+		}
+	}
+
+	// End to end: the nested stream reconstructs as itself.
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"kind":"task.created","task_id":"task-1","summary":"nested"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log.part-001"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := discover(dir)
+	if err != nil || len(logs) != 1 || filepath.Base(logs[0]) != "A.log.part-x.log" {
+		t.Fatalf("discover = %v, %v; want the one logical stream A.log.part-x.log", logs, err)
+	}
+	rec, err := extract(logs[0])
+	if err != nil || rec.Task["id"] != "task-1" {
+		t.Fatalf("the nested stream did not reconstruct: %+v %v", rec.Task, err)
+	}
+}
