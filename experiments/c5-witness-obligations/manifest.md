@@ -42,19 +42,24 @@ controller: git tag -f c5-boundary X
 subject:    git clone --depth 1 --no-tags --single-branch --branch c5-boundary file://<controller> <subject>
 controller: git tag -d c5-boundary
 subject:    git remote remove origin
+subject:    git checkout -B main X          <-- AMENDED PRE-RUN, see "Pre-run amendment"
 capture:    c5-capture.sh -> runs/C5.subject.start.txt      <-- PRESERVED, not merely checked
 gate:       every ref classified against the table below; any FALSIFIER row aborts before the governor runs
 ```
 
 C4 added `git checkout -B main` outside its frozen procedure and so began
-in violation of its own predicate. Here the clone's own `refs/heads/main`
-is **predeclared**, and the start capture is the artifact that proves what
-the subject was.
+in violation of its own predicate. ~~Here the clone's own `refs/heads/main`
+is **predeclared**~~ — **FALSE, corrected pre-run**: measurement shows
+`clone --branch <tag>` leaves a DETACHED HEAD and creates no
+`refs/heads/main` at all (`prerun-validation.txt`). The step is now inside
+the procedure, executed by `c5-run.sh` before the start capture, so the
+capture measures its result instead of a human typing it afterwards. The
+start capture remains the artifact that proves what the subject was.
 
 ## Ref classification (obligation 1) — by what a ref names, not by its shape
 
 ```text
-refs/heads/main          naming exactly X          PERMITTED   (created by the clone)
+refs/heads/main          naming exactly X          PERMITTED   (created by the procedure's checkout -B, not by the clone)
 refs/tags/c5-boundary    naming exactly X          PERMITTED   (the boundary)
 refs/heads/sensei-code/* at END only, created by the governor, descending from X   PERMITTED
 refs/heads/sensei-code/* at START                                                  FALSIFIER
@@ -85,6 +90,11 @@ runs/C5.receipts.jsonl          REQUIRED  present even when empty, with the reas
 runs/C5.graph.metadata.pre.json REQUIRED
 runs/C5.candidate.diff          REQUIRED IFF a candidate exists
 runs/C5.closure.txt             REQUIRED  the gate's own output, both phases
+runs/C5.materialise.txt         REQUIRED  the materialisation transcript (added pre-run)
+runs/C5.extract.txt             REQUIRED  the mechanical extraction from the log (added pre-run)
+                                          IFF a candidate is committed, C5.run additionally carries
+                                          candidate ref, candidate head, candidate parent,
+                                          candidate ancestry X->candidate  (all MEASURED)
 ```
 
 `c5-closure.sh` checks each artifact and each named field and **exits
@@ -180,3 +190,67 @@ provider void is an instrument finding.
 `internal/gitx/capture.go` and its textual `--numstat` pathname
 interpretation remain **C6**, out of scope here, and unexamined by the graph.
 No conclusion from C5 extends to `CandidateCapture`.
+
+
+## Pre-run amendment (appended to the `ddbf956` freeze; nothing removed)
+
+`ddbf956` froze prose stronger than its own harness. Reviewed before any run,
+six defects, all in the instrument:
+
+```text
+1  c5-capture.sh printed FALSIFIER and exited 0        the abort was left to whoever read the output
+2  candidate-ref ownership was asserted, not measured  no check that the ref is the one the run reported
+3  ancestry was printed, never enforced                "descends from X: no" did not fail anything
+4  C5.closure.txt was REQUIRED and unchecked           the gate did not gate its own receipt
+5  C5.candidate.diff was REQUIRED-IFF and unchecked    the conditional artifact had no condition in code
+6  fields were checked by LABEL, not by VALUE          `subject tree ` with no value passed
+plus: no committed runner bound capture -> gate -> governor; that binding
+      was going to be an after-freeze shell sequence, which is exactly how
+      C4 acquired the out-of-procedure `checkout -B main` that voided it.
+```
+
+Repairs, all pre-run, none of them a change to what C5 must prove:
+
+- **`c5-run.sh` is the runner** and is itself hashed into `C5.run`. It refuses
+  to overwrite an existing record (ONE invocation), verifies the pinned
+  governor, producer and plan digests before materialising anything, and
+  aborts *before invoking the governor* if the start capture or start gate
+  fails. An abort before the governor is an instrument refusal; an abort
+  after it is VOID.
+- **The capture is the gate.** Every falsifier row increments a counter and
+  the script exits non-zero. It classifies a candidate ref by its **exact
+  first parent**, not by `merge-base --is-ancestor`: a ref whose first parent
+  is X is the candidate; a ref naming X *itself* is permitted but annotated
+  `no candidate commit exists`; anything else is a FALSIFIER.
+- **The expected candidate ref comes from the governor's own log** —
+  `refs/heads/sensei-code/<task_id>` read from `task.created` — and the
+  capture refuses any candidate-shaped ref that is not it. The run reports;
+  the capture measures; they must agree.
+- **The closure gate reads the captures** and refuses any `FALSIFIER` row, and
+  requires the `ISOLATION GATE: PASS` line to be present.
+- **A field counts only with a non-empty value**, and a third phase
+  (`closed`) checks `C5.closure.txt` for both receipts, closing the loop the
+  frozen table opened.
+
+### One measurement the amendment forced into the open
+
+The binary answering awareness on `:10122` during this validation was
+`awareness-graph` sha256 `1070ee8dedeec323a47ebdaa360c390fd9e7d0e68826f7e7679216960f8b74eb`
+— **not** the frozen producer `sensei-f3` `13d4bfad…`, which is a file on
+disk that no run has been shown to execute. C3's and C4's `producer binary
+sha256` therefore recorded a **file**, not the **process that answered**:
+the same asserted-not-measured class this chain has spent nine rounds on.
+The frozen field is still recorded literally; `producer serving at start` /
+`at end` record the measured serving process beside it. C5 does not
+retroactively repair C3 or C4 — it stops repeating them.
+
+### Pre-run validation, recorded
+
+`prerun-validation.txt` is the transcript: seven capture cases (clean start;
+candidate-shaped ref at start; wrong candidate ref; ref naming X itself; a
+true child of X; a grandchild of X; a remote) and eight gate cases (complete
+set; empty value; missing field; falsifier in the capture; conditional diff
+missing then present; the `closed` phase without and with both receipts).
+Every case produced the intended exit status. **This is instrument
+validation, not a witness**: it proves the harness refuses, not that the
+loop works.

@@ -1,0 +1,67 @@
+== T1 clean subject start capture -> expect rc=0
+falsifiers fired: 0
+ISOLATION GATE: PASS (start)
+   rc=0
+== T2 candidate-shaped ref present at START -> expect rc=1
+falsifiers fired: 1
+ISOLATION GATE: FAILED (start) -- 1 falsifier(s)
+   rc=1
+== T3 wrong candidate ref at END (expected task-111) -> expect rc=1
+falsifiers fired: 1
+ISOLATION GATE: FAILED (end) -- 1 falsifier(s)
+   rc=1
+== T4 right ref but candidate==X does not descend -> expect rc=1
+falsifiers fired: 0
+ISOLATION GATE: PASS (end)
+   rc=0
+== T5 governor-reported ref descending from X at END -> expect rc=0
+falsifiers fired: 0
+ISOLATION GATE: PASS (end)
+   rc=0
+== T6 remote present -> expect rc=1
+falsifiers fired: 1
+ISOLATION GATE: FAILED (end) -- 1 falsifier(s)
+   rc=1
+== T4b ref naming X itself -> rc=0, annotated 'no candidate commit exists'
+falsifiers fired: 1
+ISOLATION GATE: FAILED (end) -- 1 falsifier(s)
+   rc=1
+  refs/heads/sensei-code/task-777 -> 1bba68bee89bcbf785baa374b7342416ecf0ee68  FALSIFIER (not the candidate ref the governor reported: expected refs/heads/sensei-code/task-999)
+  refs/heads/sensei-code/task-999 -> f01592b0f0828605ed254047fc064f41dacc78f2  PERMITTED (the governor's candidate ref; names X ITSELF -- no candidate commit exists)
+== T7 candidate two commits beyond X (first parent != X) -> expect rc=1
+falsifiers fired: 1
+ISOLATION GATE: FAILED (end) -- 1 falsifier(s)
+   rc=1
+== G1 complete start set -> expect rc=0
+instrument closure OK (start)
+   rc=0
+== G2 field label present, VALUE EMPTY -> expect rc=1 (this is the defect the amendment closes)
+EMPTY FIELD in C5.run: subject tree 
+INSTRUMENT CLOSURE FAILED (start) -> WITNESS VOID
+   rc=1
+== G3 field missing entirely -> expect rc=1
+MISSING FIELD in C5.run: plan sha256 
+INSTRUMENT CLOSURE FAILED (start) -> WITNESS VOID
+   rc=1
+== G4 start capture carries a FALSIFIER row -> expect rc=1
+FALSIFIER RECORDED in C5.subject.start.txt:
+    16:  refs/heads/sensei-code/task-777 -> 13dfd83dac93c7066a4c7cf244905a636adb87c4  FALSIFIER (candidate ref's first parent is not exactly X)
+NO ISOLATION-GATE PASS LINE in C5.subject.start.txt
+INSTRUMENT CLOSURE FAILED (start) -> WITNESS VOID
+   rc=1
+== G5 end phase, candidate committed yes but no C5.candidate.diff -> expect rc=1
+MISSING ARTIFACT: C5.candidate.diff
+INSTRUMENT CLOSURE FAILED (end) -> WITNESS VOID
+   rc=1
+== G6 same, with the diff present -> expect rc=0
+instrument closure OK (end)
+   rc=0
+== G7 closed phase with no C5.closure.txt receipt -> expect rc=1
+MISSING ARTIFACT: C5.closure.txt
+MISSING RECEIPT in C5.closure.txt: start-phase closure
+MISSING RECEIPT in C5.closure.txt: end-phase closure
+INSTRUMENT CLOSURE FAILED (closed) -> WITNESS VOID
+   rc=1
+== G8 closed phase after both receipts recorded -> expect rc=0
+instrument closure OK (closed)
+   rc=0
