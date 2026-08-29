@@ -17,7 +17,8 @@
    "ultimate_authority": "project owner (human)"
   },
   "review_findings": [
-   "M29 (GPT-5.6 Sol, 2026-08-29): C1 accepted as a valid refusal and the first live confirmation of #115's per-file authority boundary; immutable; the graph must not be modified to make the refused plan admissible; the plan is revised to already-examined test homes (C2)"
+   "M29 (GPT-5.6 Sol, 2026-08-29): C1 accepted as a valid refusal and the first live confirmation of #115's per-file authority boundary; immutable; the graph must not be modified to make the refused plan admissible; the plan is revised to already-examined test homes (C2)",
+   "PR #118 Codex round 15 on 4a336b6: P2 -- instrument.world published as 'unrecorded' though C1.run recorded 'subject HEAD f01592b...'; C1 is refused at routing so it writes no 'from base' line and the stamp was its only world record; fixed by reading that stamp, the run's own report still winning where it exists"
   ],
   "note": "confinement repair, first attempt: governor sensei-code @ f01592b (binary sha256 7c0bd86b..., equal at start and end) REFUSED the supplied plan (sha256 42c8b878...) at routing -- two of its four planned files, internal/workflow/testedit_test.go and suppliedplan_test.go, are unexamined by graph 42e6e12c (indexed 0/1), so 'derived coverage: 0 anchor(s) over 4 planned file(s); route bounded-knowledge-gap' with 'unexamined by the graph: 2 file(s)' and the supplied-plan refusal. No worker ran, no candidate exists, no candidate worktree was created; the governor stayed pinned. First live firing of the rule PR #115 added."
  },

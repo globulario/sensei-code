@@ -503,3 +503,25 @@ merged.
 
 The boundary stands where round 13 put it: any further edge that needs a
 NEW rule, predicate or filter goes to the refactor, not here.
+
+### Round 15 — the record was losing C1's world
+
+`instrument.world` for `confinement-repair/C1` published as `unrecorded`
+while the pinned SHA sat in `C1.run`. C1 is refused **at routing**, before
+any candidate exists, so it writes no `candidate … from base <sha>` line —
+its harness stamp is the only record of the world it ran against, and the
+parser recognised only a SHA appended to `START`. The encounter that exists
+to show a refusal was the one whose world went missing.
+
+Fixed by reading the stamp the harness actually wrote (`subject HEAD
+<sha>`), with the run's OWN report still winning where it exists: a world
+the loop reported outranks the harness's stamp of it. Not a new
+classification rule — this is the record failing to carry a fact it
+contains, the same class as 13b.
+
+```text
+confinement-repair/C1                 world f01592b0f0828605ed254047fc064f41dacc78f2   (was: unrecorded)
+confinement-repair/C2                 world f01592b0f082                               (from the run's own report)
+self-hosting-witness-1/W1             world f01592b0f082                               (unchanged)
+self-hosting-witness-1/W1.void1       world f01592b0f0828605ed254047fc064f41dacc78f2   (was: unrecorded)
+```

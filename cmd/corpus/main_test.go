@@ -823,3 +823,51 @@ func TestAReceiptsSuffixDoesNotBypassPartClaims(t *testing.T) {
 		t.Fatalf("discover = %v, %v; want only Y.log", logs2, err)
 	}
 }
+
+// The world a run pinned is read from the stamp the run actually wrote.
+//
+// A run refused before any candidate exists emits no `from base <sha>`
+// line, so its `.run` stamp is the only record of the world it was pinned
+// to. The parser recognised only a SHA appended to START, so C1 -- refused
+// at routing, which is the whole point of that encounter -- was published
+// with `world: unrecorded` while the SHA sat in the file (#118, round 15).
+func TestTheSubjectWorldIsReadFromTheRunStamp(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs, "R.log"), []byte("task task-1  session s\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stamp := "START 2026-08-29T00:32:39Z\n" +
+		"governor commit (source) f01592b0f0828605ed254047fc064f41dacc78f2\n" +
+		"subject HEAD abcdef1234567890abcdef1234567890abcdef12\n" +
+		"EXIT 1 2026-08-29T00:32:46Z\n"
+	if err := os.WriteFile(filepath.Join(runs, "R.run"), []byte(stamp), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := extract(filepath.Join(runs, "R.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Instrument["world"] != "abcdef1234567890abcdef1234567890abcdef12" {
+		t.Fatalf("world = %v; the stamp recorded it and the record must carry it", rec.Instrument["world"])
+	}
+	if rec.Terminal["start"] != "2026-08-29T00:32:39Z" || rec.Terminal["exit"] != "1" {
+		t.Fatalf("the stamp's other fields stopped being read: %+v", rec.Terminal)
+	}
+	// The log's own `from base` line still wins where it exists: it is the
+	// world the run itself reported, not the harness's stamp of it.
+	if err := os.WriteFile(filepath.Join(runs, "R.log"),
+		[]byte("task task-1  session s\n"+`{"kind":"status","summary":"candidate task-1 on b from base 1111111111111111111111111111111111111111 (clean)"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err = extract(filepath.Join(runs, "R.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Instrument["world"] != "1111111111111111111111111111111111111111" {
+		t.Fatalf("world = %v; the run's own report must win over the harness stamp", rec.Instrument["world"])
+	}
+}

@@ -77,7 +77,7 @@ type record struct {
 var (
 	coverageLine  = regexp.MustCompile(`^derived coverage: (\d+) anchor\(s\) over (\d+) planned file\(s\); route ([a-z-]+)`)
 	baseLine      = regexp.MustCompile(`from base ([0-9a-f]+)`)
-	runStamp      = regexp.MustCompile(`(?m)^START (\S+)(?: base (\S+))?|^EXIT (\d+) (\S+)`)
+	runStamp      = regexp.MustCompile(`(?m)^START (\S+)(?: base (\S+))?|^EXIT (\d+) (\S+)|^subject HEAD ([0-9a-f]{7,40})\b`)
 	bindingLine   = regexp.MustCompile(`^graph binding for every agent in this task: domain (\S+), build (\S+), via (.+)$`)
 	candidateLine = regexp.MustCompile(`^candidate diff (\d+) bytes · cycle (\d+)`)
 	anchorLine    = regexp.MustCompile(`^(\S+) \[(.+)\]$`)
@@ -285,6 +285,15 @@ func extract(log string) (record, error) {
 			}
 			if m[3] != "" {
 				rec.Terminal["exit"], rec.Terminal["end"] = m[3], m[4]
+			}
+			// The world the harness pinned. A run refused before any
+			// candidate exists writes no `from base` line, so this stamp is
+			// the only record of its world: C1 -- refused at routing, which
+			// is that encounter's whole point -- was published as
+			// `world: unrecorded` while the SHA sat in its .run file
+			// (#118, round 15). The run's own report still wins below.
+			if m[5] != "" && rec.Instrument["world"] == "unrecorded" {
+				rec.Instrument["world"] = m[5]
 			}
 		}
 	}
