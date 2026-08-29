@@ -75,7 +75,12 @@ type record struct {
 }
 
 var (
-	coverageLine  = regexp.MustCompile(`^derived coverage: (\d+) anchor\(s\) over (\d+) planned file\(s\); route ([a-z-]+)`)
+	coverageLine = regexp.MustCompile(`^derived coverage: (\d+) anchor\(s\) over (\d+) planned file\(s\); route ([a-z-]+)`)
+	// The authority lane states the decision directly when no derivation was
+	// consulted. Recording routes only from the coverage line published
+	// `route: null` for exactly the encounters that were GRANTED -- W1 and
+	// C2 both -- while their manifests said they were routed (#118, 16).
+	routedLine    = regexp.MustCompile(`(?m)^routed: ([a-z-]+)\s*$`)
 	baseLine      = regexp.MustCompile(`from base ([0-9a-f]+)`)
 	runStamp      = regexp.MustCompile(`(?m)^START (\S+)(?: base (\S+))?|^EXIT (\d+) (\S+)|^subject HEAD ([0-9a-f]{7,40})\b`)
 	bindingLine   = regexp.MustCompile(`^graph binding for every agent in this task: domain (\S+), build (\S+), via (.+)$`)
@@ -218,6 +223,11 @@ func extract(log string) (record, error) {
 		case "status":
 			if m := bindingLine.FindStringSubmatch(e.Summary); m != nil {
 				rec.Graph["domain"], rec.Graph["build"], rec.Graph["address"] = m[1], m[2], m[3]
+			}
+			// The decision as the authority lane states it, for a plan
+			// granted without a derivation to consult.
+			if m := routedLine.FindStringSubmatch(e.Summary); m != nil {
+				rec.Route = append(rec.Route, m[1])
 			}
 			if m := coverageLine.FindStringSubmatch(e.Summary); m != nil {
 				rec.Coverage = append(rec.Coverage, map[string]any{"anchors": m[1], "planned_files": m[2], "route": m[3], "anchor_lines": p["anchors"], "operational_authority": p["operational_authority"]})

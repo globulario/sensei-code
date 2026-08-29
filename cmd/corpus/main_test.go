@@ -871,3 +871,49 @@ func TestTheSubjectWorldIsReadFromTheRunStamp(t *testing.T) {
 		t.Fatalf("world = %v; the run's own report must win over the harness stamp", rec.Instrument["world"])
 	}
 }
+
+// The routing decision is recorded however the run stated it.
+//
+// `route` was populated only from the `derived coverage: … ; route <r>`
+// line, which the loop emits only when a derivation was available. A plan
+// granted directly on graph anchors states its decision in the authority
+// lane instead (`routed: architectural-authority-granted`), so the corpus
+// published `route: null` for exactly the encounters that were GRANTED --
+// W1 and C2 both -- while their manifests said they were routed (#118,
+// round 16).
+func TestTheRoutingDecisionIsRecordedFromEitherStatement(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	authority := "Authority for this plan, by lane.\\n\\nconsequence decision:\\n  BOUNDED\\n\\nrouted: architectural-authority-granted\\n"
+	body := "task task-1  session s\n" +
+		`{"kind":"status","source":"system","summary":"` + authority + `"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "G.log"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err := extract(filepath.Join(runs, "G.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.Route) != 1 || rec.Route[0] != "architectural-authority-granted" {
+		t.Fatalf("route = %v; the run stated it in the authority lane", rec.Route)
+	}
+
+	// A derived-coverage statement still records its route, and a run that
+	// states both records each once, in order.
+	both := "task task-1  session s\n" +
+		`{"kind":"status","source":"system","summary":"derived coverage: 1 anchor(s) over 1 planned file(s); route architectural-authority-granted"}` + "\n" +
+		`{"kind":"status","source":"system","summary":"` + authority + `"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "H.log"), []byte(both), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec, err = extract(filepath.Join(runs, "H.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rec.Route) != 2 {
+		t.Fatalf("route = %v; each statement is one routing decision", rec.Route)
+	}
+}

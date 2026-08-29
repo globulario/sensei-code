@@ -525,3 +525,38 @@ confinement-repair/C2                 world f01592b0f082                        
 self-hosting-witness-1/W1             world f01592b0f082                               (unchanged)
 self-hosting-witness-1/W1.void1       world f01592b0f0828605ed254047fc064f41dacc78f2   (was: unrecorded)
 ```
+
+### Round 16 — the corpus was dropping the routing decision for granted runs
+
+`route` was populated only from the `derived coverage: … ; route <r>` line,
+which the loop emits only when a derivation was available to consult. A plan
+granted directly on graph anchors states its decision in the authority lane
+instead (`routed: architectural-authority-granted`) — so the corpus
+published `route: null` for exactly the encounters that were **granted**:
+C2 here and W1 in the witness, both of which their manifests describe as
+routed. C1, refused with a derivation consulted, was the only one whose
+route survived.
+
+Recorded from either statement now. Two more facts recovered from evidence
+that already contained them:
+
+```text
+confinement-repair/C2       route architectural-authority-granted   (was: null)
+self-hosting-witness-1/W1   route architectural-authority-granted   (was: null)
+confinement-repair/C1       route bounded-knowledge-gap x2          (unchanged)
+```
+
+Two provenance laws from rounds 15 and 16, both about the record rather than
+the packaging model:
+
+> **Use the strongest first-party evidence available.** A harness stamp
+> supplies missing context; it does not override what the governed run
+> itself reported.
+>
+> **A fact is recorded however the run stated it.** Reading only one of the
+> forms a decision can take loses exactly the cases the other form covers —
+> here, every granted run.
+
+And the distinction the stop-boundary rests on, in one line:
+
+> **The experiment was not missing evidence; the corpus was losing it.**
