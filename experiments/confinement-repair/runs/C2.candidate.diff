@@ -1,0 +1,296 @@
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index 2ba26ec..983406b 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -1248,6 +1248,16 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 				"the plan was read-only and the candidate changed %d file(s): %s",
+ 				len(changedPaths(diff)), strings.Join(changedPaths(diff), ", "))
+ 		}
++		// A candidate is confined to the files its plan names. This is the same
++		// refusal shape as the read-only one above and sits in the same place,
++		// before anything downstream has read the candidate: validation, the
++		// audit, the Level-1 classification, the reviewer and admission all see
++		// only a candidate that stayed inside its plan, or they see none. The
++		// check reads the plan's files and the diff and nothing else -- no
++		// grant of any kind can enlarge the set it compares against.
++		if err := confineToPlannedFiles(diff, tc.Files); err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
+ 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), map[string]int{"cycle": cycle, "review_attempt": e.reviewAttempt(taskID) + 1}))
+ 
+ 		// The missing edge: worker → change → validation → typed evidence →
+diff --git a/internal/workflow/engine_test.go b/internal/workflow/engine_test.go
+index 021e824..286c11d 100644
+--- a/internal/workflow/engine_test.go
++++ b/internal/workflow/engine_test.go
+@@ -1321,3 +1321,149 @@ func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
+ 		}
+ 	}
+ }
++
++// unifiedModify, unifiedDelete and unifiedRename build the diff shapes the
++// confinement check reads, in the exact spelling Git writes.
++func unifiedModify(path string) string {
++	return "diff --git a/" + path + " b/" + path + "\nindex 1111111..2222222 100644\n--- a/" + path + "\n+++ b/" + path + "\n@@ -1 +1 @@\n-before\n+after\n"
++}
++
++func unifiedDelete(path string) string {
++	return "diff --git a/" + path + " b/" + path + "\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/" + path + "\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone\n"
++}
++
++func unifiedRename(from, to string) string {
++	return "diff --git a/" + from + " b/" + to + "\nsimilarity index 100%\nrename from " + from + "\nrename to " + to + "\n"
++}
++
++// A candidate is confined to the files its plan names.
++//
++// The plan's file list bounded what the worker was ASKED to change, and after
++// the worker ran nothing read it again: a candidate that also edited a file
++// outside the plan reached validation, the audit, the classification, the
++// reviewer and admission as though the plan had named it. The reviewer might
++// notice; noticing is not a boundary.
++func TestCandidateWiderThanPlanIsRefusedBeforeReview(t *testing.T) {
++	planned := []string{"internal/workflow/engine.go", "./internal/workflow/testedit.go"}
++
++	// One path outside the plan refuses the candidate, and the refusal names
++	// both that path and what the plan actually authorised.
++	err := confineToPlannedFiles(unifiedModify("internal/workflow/engine.go")+unifiedModify("internal/broker/guard.go"), planned)
++	if err == nil {
++		t.Fatal("a candidate that changed a file the plan never named was accepted")
++	}
++	if !strings.Contains(err.Error(), "internal/broker/guard.go") {
++		t.Fatalf("the refusal does not name the path outside the plan: %v", err)
++	}
++	if !strings.Contains(err.Error(), "internal/workflow/engine.go") {
++		t.Fatalf("the refusal does not state which files the plan named: %v", err)
++	}
++
++	// A candidate inside its plan passes, including the plan's own "./"
++	// spelling of a file the diff spells bare.
++	if err := confineToPlannedFiles(unifiedModify("internal/workflow/engine.go")+unifiedModify("internal/workflow/testedit.go"), planned); err != nil {
++		t.Fatalf("a candidate that stayed inside its plan was refused: %v", err)
++	}
++
++	// A deletion is a change. Removing a file the plan never named is exactly
++	// the widening this refuses, and a check reading only added or modified
++	// paths would let it through.
++	if err := confineToPlannedFiles(unifiedDelete("docs/awareness/high_risk_files.yaml"), planned); err == nil ||
++		!strings.Contains(err.Error(), "docs/awareness/high_risk_files.yaml") {
++		t.Fatalf("a deletion outside the plan was not refused: %v", err)
++	}
++
++	// A rename is two paths and both must be named: moving a planned file to an
++	// unplanned one changes a file the plan did not name.
++	if err := confineToPlannedFiles(unifiedRename("internal/workflow/testedit.go", "internal/workflow/scope.go"), planned); err == nil ||
++		!strings.Contains(err.Error(), "internal/workflow/scope.go") {
++		t.Fatalf("a rename out of the plan was not refused: %v", err)
++	}
++
++	// And it refuses where a refusal still means something: in runCandidate,
++	// after the read-only refusal and before the candidate is announced,
++	// validated, audited, classified or reviewed.
++	src := rawSource(t, "internal/workflow/engine.go")
++	readOnly := strings.Index(src, "the plan was read-only and the candidate changed")
++	confine := strings.Index(src, "confineToPlannedFiles(diff")
++	announced := strings.Index(src, "event.CandidateChanged")
++	validated := strings.Index(src, "e.validate(ctx")
++	audited := strings.Index(src, `sc.CallTool("awareness_audit_diff"`)
++	classified := strings.Index(src, "e.classifyForDarkRun(")
++	if readOnly < 0 || confine < 0 || announced < 0 || validated < 0 || audited < 0 || classified < 0 {
++		t.Fatal("the candidate loop no longer holds the refusal and the steps it must precede")
++	}
++	if confine < readOnly {
++		t.Fatal("the confinement check runs before the read-only refusal")
++	}
++	for _, downstream := range []struct {
++		at   int
++		what string
++	}{{announced, "the candidate.changed event"}, {validated, "validation"}, {audited, "the audit"}, {classified, "the Level-1 classification"}} {
++		if confine > downstream.at {
++			t.Fatalf("a candidate wider than its plan reaches %s before it is refused", downstream.what)
++		}
++	}
++}
++
++// An operational test-edit grant is authority to edit a file the plan already
++// names. It is not, and can never become, authority to touch one the plan does
++// not -- so the check that enforces the plan's bound is given no grant to read.
++func TestOperationalTestGrantDoesNotExpandPlanScope(t *testing.T) {
++	// The grant machinery does produce a grant for exactly this test file.
++	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
++	if len(grants) != 1 || grants[0].Path != teF {
++		t.Fatalf("the fixture no longer produces the grant this test is about: %+v", grants)
++	}
++
++	// A plan that names only the subject does not authorise touching the test
++	// beside it, grantable or not: a grant is computed from the plan's files
++	// and cannot reach outside them.
++	err := confineToPlannedFiles(unifiedModify(teS)+unifiedModify(teF), []string{teS})
++	if err == nil || !strings.Contains(err.Error(), teF) {
++		t.Fatalf("a grantable test file the plan never named was let through: %v", err)
++	}
++
++	// The check has two inputs, the diff and the plan's files, and there is no
++	// third one a grant could arrive through.
++	src := rawSource(t, "internal/workflow/testedit.go")
++	if !strings.Contains(src, "func confineToPlannedFiles(diff string, planned []string) error {") {
++		t.Fatal("the confinement check no longer takes exactly the diff and the plan's files")
++	}
++	if !strings.Contains(rawSource(t, "internal/workflow/engine.go"), "confineToPlannedFiles(diff, tc.Files)") {
++		t.Fatal("the confinement check is called with something other than the diff and the plan's files")
++	}
++	body := funcBody(t, "internal/workflow/testedit.go", "confineToPlannedFiles")
++	for _, grant := range []string{"testEditGrant", "testEditGrants", "operationalFiles", "grants", "Prospective", "prospectiveGrants"} {
++		if strings.Contains(body, grant) {
++			t.Fatalf("the confinement check reads %s, so a grant can enlarge the set it compares against", grant)
++		}
++	}
++}
++
++// A supplied plan is a bound authored outside the run, byte for byte. The
++// candidate is judged against it and never edits it: refusing a wider
++// candidate must leave the supplied plan's identity and file list exactly as
++// they were handed in.
++func TestASuppliedPlanIsNotWidenedByTheCandidate(t *testing.T) {
++	tc := testContext()
++	tc.PlanSource = PlanSupplied
++	tc.PlanDigest = "3a5f1c0e2b7d4a9f8c6b5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a09"
++	tc.Files = []string{"cmd/sensei-code/main.go", "internal/workflow/gate.go"}
++	digest := tc.PlanDigest
++	files := strings.Join(tc.Files, "\x00")
++
++	err := confineToPlannedFiles(unifiedModify("cmd/sensei-code/main.go")+unifiedModify("internal/authority/router.go"), tc.Files)
++	if err == nil || !strings.Contains(err.Error(), "internal/authority/router.go") {
++		t.Fatalf("a candidate wider than the supplied plan was accepted: %v", err)
++	}
++	if tc.PlanDigest != digest {
++		t.Fatalf("the supplied plan's digest changed: %q -> %q", digest, tc.PlanDigest)
++	}
++	if got := strings.Join(tc.Files, "\x00"); got != files {
++		t.Fatalf("the supplied plan's files changed: %q -> %q", files, got)
++	}
++	if tc.PlanSource != PlanSupplied {
++		t.Fatalf("the plan stopped being supplied: %q", tc.PlanSource)
++	}
++}
+diff --git a/internal/workflow/routine_test.go b/internal/workflow/routine_test.go
+index 740cc1c..78a3253 100644
+--- a/internal/workflow/routine_test.go
++++ b/internal/workflow/routine_test.go
+@@ -605,3 +605,41 @@ func TestArchitectProseCannotChangeTheClassification(t *testing.T) {
+ 		t.Fatal("calling a change trivial made an uncovered region routine")
+ 	}
+ }
++
++// The Level-1 classifier stops at the first categorical exclusion, so a
++// candidate that touches the governance path is reported as "touches the
++// governance path" and its widening is never mentioned. That is correct for a
++// classifier — it says why the change is not routine, not everything wrong with
++// it — but it means the classification cannot be where widening is caught. The
++// confinement check refuses the same candidate on its own, reading the plan's
++// files and the diff and no classification at all.
++func TestGovernancePathClassificationCannotMaskScopeWidening(t *testing.T) {
++	planned := []string{"internal/workflow/routine.go"}
++	diff := unifiedModify("internal/workflow/routine.go") + unifiedModify("internal/tui/model.go")
++
++	d := classifyRoutine(qualifyingPreflight(), nil, cleanEditCheck(), planned, shapeOf(diff))
++	if d.Routine {
++		t.Fatal("a candidate touching the governance path was classified routine")
++	}
++	if !strings.Contains(d.Blocking, "governance path") {
++		t.Fatalf("the classification blocked for another reason: %q", d.Blocking)
++	}
++	if strings.Contains(d.Blocking, "internal/tui/model.go") {
++		t.Fatalf("this test assumes the classification stops before the widening; it now reports it: %q", d.Blocking)
++	}
++
++	// Refused anyway, by name.
++	err := confineToPlannedFiles(diff, planned)
++	if err == nil || !strings.Contains(err.Error(), "internal/tui/model.go") {
++		t.Fatalf("a candidate wider than its plan survived because its widening was masked: %v", err)
++	}
++
++	// And the refusal owes nothing to the classification: no verdict, no
++	// exclusion list, no fast-path condition can change what it compares.
++	body := funcBody(t, "internal/workflow/testedit.go", "confineToPlannedFiles")
++	for _, classification := range []string{"classifyRoutine", "RoutineDecision", "categoricallyExcluded", "governancePath", "notPlanned", "shapeOf"} {
++		if strings.Contains(body, classification) {
++			t.Fatalf("the confinement check consults %s, so a classification can decide what it refuses", classification)
++		}
++	}
++}
+diff --git a/internal/workflow/testedit.go b/internal/workflow/testedit.go
+index c88d106..9618539 100644
+--- a/internal/workflow/testedit.go
++++ b/internal/workflow/testedit.go
+@@ -235,6 +235,70 @@ func diffFileStates(diff string) (touched, created, deleted, renamed map[string]
+ 	return touched, created, deleted, renamed
+ }
+ 
++// confineToPlannedFiles refuses a candidate that changed any path the plan did
++// not name.
++//
++// The plan's named files are the whole of what a candidate may touch: every
++// path the diff carries -- added, modified, deleted, or renamed, and both
++// sides of a rename -- must be one of them. A path outside the set refuses the
++// candidate, so nothing downstream (validation, audit, Level-1 classification,
++// review, admission) is ever handed a wider change than the one that was
++// planned.
++//
++// It takes the diff and the named files and NOTHING ELSE. In particular it
++// takes no test-edit grants: a grant is operational authority to edit a file
++// the plan already names (see testEditGrants), never authority to touch one it
++// does not, and a check that could read grants would be a check a grant could
++// widen. The named set is canonicalised exactly as architecturalFiles does, so
++// a plan that spells a file "./pkg/x.go" and a diff that spells it "pkg/x.go"
++// are the same file here.
++func confineToPlannedFiles(diff string, planned []string) error {
++	named := map[string]bool{}
++	var namedList []string
++	for _, f := range planned {
++		if strings.TrimSpace(f) == "" {
++			continue
++		}
++		c := path.Clean(strings.TrimSpace(f))
++		if named[c] {
++			continue
++		}
++		named[c] = true
++		namedList = append(namedList, c)
++	}
++	var outside []string
++	seen := map[string]bool{}
++	for _, f := range report.FromDiff(diff).Files {
++		for _, p := range []string{f.Path, f.OldPath} {
++			if strings.TrimSpace(p) == "" {
++				continue
++			}
++			c := path.Clean(strings.TrimSpace(p))
++			if named[c] || seen[c] {
++				continue
++			}
++			seen[c] = true
++			outside = append(outside, c)
++		}
++	}
++	if len(outside) == 0 {
++		return nil
++	}
++	sort.Strings(outside)
++	return fmt.Errorf("the candidate changed %d path(s) the plan did not name: %s; the plan names: %s",
++		len(outside), strings.Join(outside, ", "), plannedOrNone(namedList))
++}
++
++// plannedOrNone keeps a plan that named no file from reading as a rendering
++// bug. A plan that names nothing authorizes nothing, and saying so is the
++// answer.
++func plannedOrNone(named []string) string {
++	if len(named) == 0 {
++		return "(no file)"
++	}
++	return strings.Join(named, ", ")
++}
++
+ // matchTestEditGrants proves a recorded grant set is one grant per planned
+ // test path it names, all inside the plan, none duplicated, at the pinned
+ // world, with facts present. Not every planned test must hold a grant -- an

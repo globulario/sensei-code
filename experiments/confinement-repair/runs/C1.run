@@ -1,0 +1,14 @@
+START 2026-08-29T00:32:39Z
+governor commit (source) f01592b0f0828605ed254047fc064f41dacc78f2
+governor binary sha256 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+subject HEAD f01592b0f0828605ed254047fc064f41dacc78f2
+subject clean: 0 changed path(s)
+config sha256 94ed3b1723e3f9bd
+plan sha256 42c8b8784b3c7bac87924f42d15c1775994a700ae82e7ce1db3e9e0e59f04dad
+EXIT 1 2026-08-29T00:32:46Z
+governor binary sha256 at end 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+governor commit at end f01592b0f0828605ed254047fc064f41dacc78f2
+subject HEAD at end f01592b0f0828605ed254047fc064f41dacc78f2
+subject tree at end:
+candidate worktrees:
+C1 untrimmed sha256 be983a030b38f0f646a711daf0b98f77d4af82e4caebe65537daecfc4bca4d51, 10531 bytes; C1.receipts.jsonl preserved EMPTY (0 bytes): the run refused at routing, no closure round, no derivation; no candidate produced, no worker invoked
