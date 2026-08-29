@@ -558,14 +558,22 @@ func TestAWholeStreamIsNotAPartOfAnother(t *testing.T) {
 // fails its sequence check and aborts the corpus. A nested stream could
 // therefore never carry the sidecars every other stream has (#118, round 10).
 func TestASidecarIsNotAPartOfAnotherStream(t *testing.T) {
-	for _, suffix := range []string{".run", ".receipts.jsonl", ".recipes-after.json"} {
-		if got := partOf("A.log.part-x.log" + suffix); got != "" {
-			t.Errorf("partOf(%q) = %q; a sidecar claimed a stream", "A.log.part-x.log"+suffix, got)
+	// Ownership decides, not a suffix list (round 11 replaced round 10's
+	// list): a metadata file belongs to a stream that exists beside it,
+	// and `extract` builds those names from the stream WITHOUT its
+	// extension -- `A.log.part-x.run`, not `A.log.part-x.log.run`.
+	streams := []string{"A.log.part-x.log", "A.log"}
+	for _, suffix := range []string{".run", ".receipts.jsonl", ".recipes-after.json", ".graph.metadata.pre.json"} {
+		if name := "A.log.part-x" + suffix; !artifactOf(name, streams) {
+			t.Errorf("%q is not recognised as an artifact of A.log.part-x.log", name)
 		}
 	}
 	// The stream itself and its real pieces are unaffected.
 	if partOf("A.log.part-x.log.part-001") != "A.log.part-x.log" {
 		t.Fatal("the nested stream's own piece stopped resolving")
+	}
+	if artifactOf("A.log.part-x.log.part-001", streams) {
+		t.Fatal("a real piece was exempted as an artifact")
 	}
 
 	dir := t.TempDir()
@@ -577,7 +585,7 @@ func TestASidecarIsNotAPartOfAnotherStream(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log"), []byte(line), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log.run"), []byte("START\nEXIT 0\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.run"), []byte("START\nEXIT 0\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	logs, err := discover(dir)
@@ -619,5 +627,73 @@ func TestAWholeStreamIsRefusedWhenUniquenessCannotBeCertified(t *testing.T) {
 	}
 	if _, err := openLog(path); err == nil {
 		t.Fatal("a whole stream was accepted while its uniqueness could not be certified")
+	}
+}
+
+// A packaging error must not hide behind a metadata suffix.
+//
+// `X.log.part-001.run` claims to be a piece of `X.log` AND ends in a
+// metadata suffix. Exempting it as a sidecar on the suffix alone made it
+// invisible again -- zero encounters, or a coexisting `X.log` accepted as
+// uniquely represented -- which is the silent omission rounds 4-6 closed.
+// Ownership decides: a metadata file belongs to a stream that exists, and
+// nothing between a stream and its sequence may carry a marker (#118, 11a).
+func TestAPartShapedNameEndingInAMetadataSuffixIsNotExempt(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"X.log", "X.log.part-001.run"} {
+		if err := os.WriteFile(filepath.Join(runs, name), []byte("task task-1  session s\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	logs, err := discover(dir)
+	if err != nil {
+		return // refused at discovery is fail-closed
+	}
+	var failed bool
+	for _, l := range logs {
+		if _, err := extract(l); err != nil {
+			failed = true
+		}
+	}
+	if !failed {
+		t.Fatalf("a part-shaped packaging error was ignored and X.log was accepted as unique: %v", logs)
+	}
+}
+
+// A stream's run artifacts are its own, whatever they are called.
+//
+// The reader excluded three suffixes it happens to read. The runs this
+// repository actually commits also hold `.graph.metadata.pre.json` and
+// `.candidate.diff`, and any future artifact would be one more name nobody
+// listed -- each of them claimed by a shorter stream when the owning stream's
+// name contains a marker. Ownership is the rule, not a list (#118, 11b).
+func TestARunArtifactBelongsToItsOwnStream(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"kind":"task.created","task_id":"nested","summary":"nested"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, artifact := range []string{"A.log.part-x.graph.metadata.pre.json", "A.log.part-x.candidate.diff", "A.log.part-x.run"} {
+		if err := os.WriteFile(filepath.Join(runs, artifact), []byte("x\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(logs) != 1 || filepath.Base(logs[0]) != "A.log.part-x.log" {
+		t.Fatalf("discover = %v; want only the nested stream", logs)
+	}
+	if _, err := extract(logs[0]); err != nil {
+		t.Fatalf("a nested stream could not carry its run artifacts: %v", err)
 	}
 }

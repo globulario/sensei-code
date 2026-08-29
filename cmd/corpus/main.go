@@ -390,14 +390,38 @@ func isStreamName(name string) bool {
 // partMarker separates a stream from the sequence of one of its pieces.
 const partMarker = ".part-"
 
-// sidecarSuffixes are the metadata files a stream may carry; extract reads
-// each as <stream> + suffix. They are neither streams nor pieces of one.
-var sidecarSuffixes = []string{".run", ".receipts.jsonl", ".recipes-after.json"}
+// streamBase is the name a stream's artifacts are built from: the stream
+// without its extension, which is exactly what extract uses to find `.run`,
+// `.receipts.jsonl` and `.recipes-after.json`.
+func streamBase(stream string) string {
+	return strings.TrimSuffix(strings.TrimSuffix(stream, ".log"), ".jsonl")
+}
 
-// isSidecarName reports that a name is a stream's metadata file.
-func isSidecarName(name string) bool {
-	for _, suffix := range sidecarSuffixes {
-		if strings.HasSuffix(name, suffix) {
+// artifactOf reports that a name is a run artifact of one of these streams.
+//
+// OWNERSHIP, not a list of suffixes. A list is always incomplete: the reader
+// knew the three files extract reads, while the runs this repository commits
+// also hold `.graph.metadata.pre.json` and `.candidate.diff`, and the next
+// artifact would be one more name nobody enumerated -- each claimed by a
+// shorter stream whenever the owning stream's name contains a marker. An
+// artifact is instead recognised by belonging to a stream that EXISTS:
+// <streamBase> + rest, where rest carries no part marker.
+//
+// That last clause is what keeps a packaging error visible.
+// `X.log.part-001.run` starts with `X`'s base, but its rest holds a marker,
+// so it is not an artifact of `X.log`: it is a name claiming to be a piece,
+// and the sequence check refuses it rather than the reader walking past
+// (#118, rounds 11a and 11b).
+func artifactOf(name string, streams []string) bool {
+	for _, stream := range streams {
+		if name == stream {
+			continue
+		}
+		base := streamBase(stream)
+		if !strings.HasPrefix(name, base+".") {
+			continue
+		}
+		if rest := name[len(base):]; !strings.Contains(rest, partMarker) {
 			return true
 		}
 	}
@@ -432,7 +456,7 @@ func partOf(name string) string {
 	// stream then reported a false whole-plus-parts ambiguity and aborted
 	// the corpus, though the two files are independent evidence. Being a
 	// stream settles it (#118 review, round 9).
-	if isStreamName(name) || isSidecarName(name) {
+	if isStreamName(name) {
 		return ""
 	}
 	logical := ""
@@ -466,11 +490,18 @@ func streamParts(path string) ([]string, error) {
 	// whole-plus-parts representation and aborted the corpus. partOf is the
 	// one identity calculation; everything that attributes a part uses it.
 	logical := filepath.Base(path)
+	var streams []string
+	for _, e := range entries {
+		if !e.IsDir() && !strings.HasSuffix(e.Name(), ".receipts.jsonl") && isStreamName(e.Name()) {
+			streams = append(streams, e.Name())
+		}
+	}
 	var parts []string
 	for _, e := range entries {
-		if !e.IsDir() && partOf(e.Name()) == logical {
-			parts = append(parts, filepath.Join(dir, e.Name()))
+		if e.IsDir() || partOf(e.Name()) != logical || artifactOf(e.Name(), streams) {
+			continue
 		}
+		parts = append(parts, filepath.Join(dir, e.Name()))
 	}
 	if len(parts) == 0 {
 		return nil, nil
@@ -542,8 +573,10 @@ func (p partReader) Close() error {
 }
 
 func discover(root string) ([]string, error) {
-	var logs []string
-	seen := map[string]bool{}
+	// Collected per directory first: whether a name is a run artifact can
+	// only be answered against the streams that exist beside it.
+	byDir := map[string][]string{}
+	var order []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -552,9 +585,9 @@ func discover(root string) ([]string, error) {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
-		parts := strings.Split(filepath.ToSlash(rel), "/")
+		segments := strings.Split(filepath.ToSlash(rel), "/")
 		underRuns := false
-		for _, seg := range parts[:len(parts)-1] {
+		for _, seg := range segments[:len(segments)-1] {
 			if seg == "runs" {
 				underRuns = true
 			}
@@ -562,33 +595,55 @@ func discover(root string) ([]string, error) {
 		if !underRuns {
 			return nil
 		}
-		name := d.Name()
-		switch {
-		case strings.HasSuffix(name, ".receipts.jsonl"):
-			return nil
-		case isStreamName(name):
-			// Logical, so a stream present both whole and split is one entry
-			// and openLog refuses it once rather than producing two records.
-			if !seen[path] {
-				seen[path] = true
-				logs = append(logs, path)
-			}
-		case partOf(name) != "":
-			// A stream too large to transit a tool call is committed as
-			// ordered parts. It is ONE encounter: the parts are the same
-			// bytes in the same order, and the logical name is the stream
-			// they reconstruct, so a split changes the packaging and never
-			// the record.
-			logical := filepath.Join(filepath.Dir(path), partOf(name))
-			if !seen[logical] {
-				seen[logical] = true
-				logs = append(logs, logical)
-			}
+		dir := filepath.Dir(path)
+		if _, ok := byDir[dir]; !ok {
+			order = append(order, dir)
 		}
+		byDir[dir] = append(byDir[dir], d.Name())
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("discover: %w", err)
+		return nil, err
+	}
+
+	var logs []string
+	seen := map[string]bool{}
+	for _, dir := range order {
+		names := byDir[dir]
+		var streams []string
+		for _, name := range names {
+			if !strings.HasSuffix(name, ".receipts.jsonl") && isStreamName(name) {
+				streams = append(streams, name)
+			}
+		}
+		for _, name := range names {
+			var logical string
+			switch {
+			case strings.HasSuffix(name, ".receipts.jsonl"):
+				continue
+			case isStreamName(name):
+				// Logical, so a stream present both whole and split is one
+				// entry and openLog refuses it once rather than producing
+				// two records.
+				logical = name
+			case artifactOf(name, streams):
+				continue
+			case partOf(name) != "":
+				// A stream too large to transit a tool call is committed as
+				// ordered parts. It is ONE encounter: the parts are the same
+				// bytes in the same order, and the logical name is the
+				// stream they reconstruct, so a split changes the packaging
+				// and never the record.
+				logical = partOf(name)
+			default:
+				continue
+			}
+			full := filepath.Join(dir, logical)
+			if !seen[full] {
+				seen[full] = true
+				logs = append(logs, full)
+			}
+		}
 	}
 	sort.Strings(logs)
 	return logs, nil

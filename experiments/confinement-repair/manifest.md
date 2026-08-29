@@ -392,3 +392,29 @@ overlapping:
 > consumer that attributes a piece consults the same identity calculation.
 > **Certified uniqueness** — a representation is accepted only when the
 > directory could be enumerated to prove no other representation exists.
+> **Ownership** — a run artifact belongs to a stream that exists beside it,
+> recognised by that stream's base rather than by a list of suffixes.
+
+The eleventh round (`cf50c1e`) produced that last rule by falsifying the
+tenth's mechanism twice over. Round 10 had exempted sidecars *by suffix*,
+and a suffix test is both too broad and too narrow: `X.log.part-001.run`
+ends in `.run`, so a packaging error became invisible again — the silent
+omission rounds 4–6 had closed (11a) — while the runs this repository
+actually commits also carry `.graph.metadata.pre.json` and
+`.candidate.diff`, which no list had, so a nested stream could not own its
+own artifacts (11b). Ownership answers both: an artifact is
+`<stream-without-extension> + rest` for a stream that EXISTS beside it,
+where `rest` carries no marker — so a name claiming to be a piece is never
+exempted, and any artifact of a real stream is, listed or not.
+
+Classification is therefore per directory now, because whether a name is an
+artifact can only be answered against the streams beside it. Round 10's
+suffix rule and its test were replaced rather than extended; the test's
+fixture had also used `A.log.part-x.log.run`, a name `extract` never builds
+(it trims the extension first), which the ownership rule exposed.
+
+The epistemic core of round 10b is worth stating on its own, because it is
+the same shape as this repository's own laws:
+
+> **Failure to observe an alternative representation is not evidence that no
+> alternative representation exists.**
