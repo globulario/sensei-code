@@ -63,3 +63,17 @@ the fail-open is the freeze's. C3 lost quoted paths at the renderer; C4
 acquired Git-owned paths and normalised them away at the comparison —
 authoritative acquisition is not authoritative use. C5 owes: a Git path is
 compared as Git reports it.
+
+
+## SUPERSEDED — C4 is VOID
+
+The exact-head review found that `C4.run` omits required end-state fields the
+freeze specified for it — producer binary path and subject tree — so the
+instrument is incomplete against its own contract. The frozen rule makes
+missing expected evidence **VOID, not failed**, and instrument closure is a
+gate that precedes falsifier evaluation. The earlier `FAIL, not VOID`
+disposition is superseded and left in place above.
+
+The defects and measurements remain valid observations; none of them is a
+C4 *conclusion*. C5 owes, before anything else: **an instrument must prove
+its own completeness before its contents prove anything else.**

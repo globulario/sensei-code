@@ -348,3 +348,101 @@ the record itself contradicts.** C5 owes a fourth item —
 > it did not.** A setup step outside the frozen procedure is a deviation
 > whether or not it looks harmless, and the start capture is where it is
 > caught.
+
+## SUPERSEDING ADJUDICATION — C4 is VOID
+
+Found by the exact-head review of `2c8d7590`, 2026-08-29 19:00:01Z, and
+adjudicated by the owner. **The prior disposition — "FAIL, not VOID" — is
+superseded, not edited away.** It stands above, in the order it was written,
+with this correction appended.
+
+### The gate that was skipped
+
+```text
+required instrument complete?
+        │
+        ├─ NO  -> VOID,  stop witness adjudication
+        │
+        └─ YES -> evaluate falsifiers -> PASS / FAIL
+```
+
+The earlier adjudication began at the second layer. Instrument closure comes
+first, and C4 does not pass it.
+
+### What is missing
+
+The freeze required of `runs/C4.run`, field by field:
+
+```text
+governor commit + binary sha256   at start AND end
+producer binary PATH + sha256     at start AND end
+subject HEAD and TREE             at start and end
+plan sha256; exit
+```
+
+What `C4.run` records at end: governor commit, governor binary sha256,
+producer binary **sha256**, subject **HEAD**, exit. Absent:
+
+```text
+producer binary path at end   -- recorded at start only; nowhere else in the record
+subject tree at end           -- recorded at start only in C4.run
+```
+
+The subject tree at end *does* appear in `C4.isolation.end.txt`
+(`tree fe43d481…`), and that does **not** repair the requirement: the freeze
+specified **where** the evidence had to be captured, and moving evidence
+between instruments after the run would weaken the freeze retroactively. The
+bytes existing somewhere is not the same as the instrument containing what it
+was required to contain.
+
+### Disposition
+
+> **C4 VOID.** Post-run audit found that required end-state evidence
+> specified by the frozen protocol was absent from `C4.run`: producer binary
+> path and subject tree. The freeze states that missing expected evidence
+> makes the witness VOID rather than failed. The prior `FAIL, not VOID`
+> adjudication is therefore superseded. Independently reproducible defects
+> and factual observations remain valid observations but are **not
+> conclusions of the C4 witness**.
+
+A void witness does not erase observations. It means the experiment was
+incapable, under its own frozen evidence contract, of supporting the
+adjudication it promised.
+
+### What survives as observation, and what may no longer be concluded
+
+Valid observations, each resting on its own artifact or an independent
+reproduction:
+
+```text
+the whitespace/path fail-open in the candidate's code   reproduced independently
+the startup ref deviation (refs/heads/main)             recorded in C4.isolation.start.txt
+the candidate was left uncommitted                      observable in the preserved worktree
+literal X + shallow isolation can coexist               demonstrated by the pre-freeze validation
+controller-object probes, alternates, remotes           captured at both ends
+```
+
+No longer available as C4 conclusions: **PASS**, **FAIL**, "isolation
+established", "isolation failed", "lineage failed", or any overall witness
+verdict. The witness cannot conclude; only its observations stand.
+
+### The fifth thing C5 owes, and it comes first
+
+> **An instrument must prove its own completeness before its contents are
+> allowed to prove anything else.**
+
+Mechanically: the run verifies every frozen required field is present in the
+artifact the freeze named, at both endpoints, **before** any semantic
+adjudication is permitted — and the verification is itself recorded. C4
+failed this having been written by the same hand that wrote the requirement:
+I specified the fields and then wrote a run script that did not emit them.
+
+C5's owed list, in order:
+
+```text
+0  instrument closure verified mechanically, before any falsifier is read
+1  refs classified by authority, not appearance
+2  candidate commitment as a workflow obligation before terminal completion
+3  a Git path compared as Git reports it -- no trimming, folding, rewriting
+4  the frozen materialisation verified before the governor is invoked
+```
