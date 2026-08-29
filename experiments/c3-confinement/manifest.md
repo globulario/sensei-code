@@ -117,3 +117,94 @@ question; timeout, crash or provider void is an instrument finding.
   only the four named paths.
 - Governor commit and binary sha256 at end equal those at start; the
   candidate commit differs from X.
+
+## C3 — 13:49:21Z–13:58:16Z, exit 0, candidate retained, NOT admitted
+
+### Identity, before anything else
+
+```text
+authority source (governor)   X = f01592b0f0828605ed254047fc064f41dacc78f2
+governor binary sha256        7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea  (start = end)
+governor commit               f01592b…  (start = end; the governor checkout is not written by the run)
+isolated subject              S(X) = 63d4bd5f2f2aefc7bb715b59fc1a338c2609e844
+tree(S(X))                    fe43d481424072f325a7f315f1a5cfa5ab70609f  == tree(X)
+subject at end                HEAD unchanged, working tree clean, 0 remotes
+candidate                     an UNCOMMITTED worktree state at base S(X); NO candidate commit object exists
+reviewed candidate            diff sha256 80c2abdbc75c… (15,957 bytes) == the digest the reviewer read
+scope                         exactly the frozen four paths
+instrument                    complete
+workflow                      completed: candidate ready for governed admission
+admission                     NOT YET
+```
+
+**Two identity caveats, stated rather than smoothed over.**
+
+1. **Ancestry.** The subject was materialised by `git archive X → git init →
+   one commit`, which the freeze declared *before* the run. So the candidate
+   descends from `S(X)`, a byte-equivalent re-materialisation of X, and is
+   **not literally a Git descendant of `f01592b…`**. Strong isolation via
+   archive/re-init destroys ancestry; the two can coexist by materialising a
+   shallow boundary that contains commit `f01592b` itself with no reachable
+   prior history, no remotes and no controller refs — the improvement owed to
+   the next witness.
+2. **The candidate was never committed.** The worker left four modified
+   files in the worktree; `git rev-list S(X)..HEAD` is empty. The reviewed
+   object is the working-tree diff, and there is no commit object to
+   fast-forward or rebase. (This repository already records the hazard:
+   *uncommitted work binds Sensei evidence to a revision that does not
+   contain it*. Here the audit and review were bound to the diff, and the
+   diff is preserved, so the evidence stands — but nothing carries the
+   candidate's identity except its bytes.)
+
+So what C3 establishes is exactly this and no more:
+
+> **Governor X governed a fresh, isolated, byte-equivalent materialisation of
+> X through a scope-exact repair — post-validation confinement included —
+> with validation, audit and independent review, while X's executable
+> identity remained pinned.**
+
+Not established: literal `X → X+1` lineage. That is formed only by an
+admission step that creates a commit **parented by X** carrying the reviewed
+tree, and proves equivalence by tree/diff — never by pretending the
+candidate's commit object survived, because there is no such object.
+
+### What happened
+
+- Mode `governed · submitted unattended with an externally supplied plan`;
+  the plan quoted by sha256 `50df0097…`; the architect provider was not
+  consulted (prediction held).
+- Routing: `routed: architectural-authority-granted`, **no** `unexamined by
+  the graph` line and no `derived coverage` line — all four planned files
+  examined, so #115's rule was consulted and had nothing to name.
+- Worker (Claude, 13:49:29–13:56:23, in the candidate worktree only): one
+  cycle, 15,957-byte diff. Validation passed (gofmt, vet, build, tests).
+  Audit: pass, 4 files, 0 findings. Level-1: **not routine** (a critical
+  invariant governs the region).
+- Review: Codex, inheriting nothing, **ACCEPT** on `80c2abdbc75c`:
+  *"implements both required fail-closed checks on the worker diff and on
+  validate's re-read diff, uses report.FromDiff including OldPath, and keeps
+  grants out of scope confinement."*
+- Terminal: `workflow.completed: candidate ready for governed admission`;
+  `retained: accepted by review and unpublished; landing it is the human's
+  decision`. No pull request offered (push is not granted in the subject).
+- `decision.recorded: no governing invariant to link the decision to` —
+  the audit-semantics discrepancy M23 already names, observed a third time,
+  not folded in.
+
+### The repair the candidate contains
+
+`confineToPlan(diff, planned)` in `internal/workflow/testedit.go`, called
+**twice** in `runCandidate` (`engine.go:1257` over the worker's diff, and
+`engine.go:1281` over the diff `e.validate` re-read), taking no grant input.
+Tests: `TestCandidateWiderThanPlanIsRefusedBeforeReview`,
+`TestAFormatterCannotWidenTheCandidateAfterValidation`,
+`TestOperationalTestGrantDoesNotExpandPlanScope`,
+`TestASuppliedPlanIsNotWidenedByTheCandidate` (`engine_test.go`) and
+`TestGovernancePathClassificationCannotMaskScopeWidening`
+(`routine_test.go`). They pass in the subject.
+
+That is C2's terminal finding implemented rather than rediscovered: C2's
+reviewer refused, three times, a check bound only to the worker's bytes, and
+refused the worker's *unplanned* attempt to add the second one. C3's frozen
+plan authorises both call sites, so the same repair arrives inside its
+authority.

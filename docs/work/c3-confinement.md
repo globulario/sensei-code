@@ -17,3 +17,14 @@ measurement, the falsifier, the bootstrap rule and the predictions — is in
 `experiments/c3-confinement/manifest.md`. If the candidate is scope-exact,
 passes audit and review, and the governor stays pinned, it is the first
 candidate eligible to become X+1, by the owner's admission.
+
+## C3 RESULT — scope-exact, accepted by review, retained, NOT admitted
+
+Governor pinned (commit and binary sha256 equal at both ends), subject
+untouched, instrument complete, scope exactly the frozen four, Codex ACCEPT
+on the reviewed diff `80c2abdb…`. Two identity caveats stand in the record:
+the isolated subject is a byte-equivalent re-materialisation of X rather
+than X itself, so **literal X→X+1 ancestry is not established**; and the
+candidate was never committed, so its identity is carried by its bytes
+alone. Admission — which would create a commit parented by X carrying the
+reviewed tree — is the owner's, and has not been taken.
