@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
@@ -390,261 +389,36 @@ func extract(log string) (record, error) {
 //   - excluded: *.receipts.jsonl (receipts, read beside their stream), and
 //     anything outside a `runs` directory.
 //
-// isStreamName is the ONE answer to "is this the name of an evidence
-// stream", used by discovery and by part recognition alike.
+// openLog opens a stream's bytes, whole or reconstructed from its ordered
+// pieces.
 //
-// The two used to answer it differently -- discovery by suffix, parts by a
-// regexp requiring a non-empty stem and a non-empty sequence -- and every
-// disagreement between them was a way for evidence to disappear: a
-// misnumbered part, an empty sequence, an empty stem. Each was found and
-// fixed separately (#118 rounds 4, 5, 6) because the asymmetry, not any one
-// spelling, was the defect. There is now one predicate, so a name is a
-// stream in both places or in neither.
-func isStreamName(name string) bool {
-	// A receipts file is a stream's artifact, never a stream. It is exempt
-	// from part claims because it is OWNED by a stream that exists (see
-	// artifactOf), never because of how it is spelled: the unconditional
-	// suffix skip that used to sit in discover dropped
-	// `X.log.part-001-of-001.receipts.jsonl` -- a name claiming to be a
-	// piece -- before it could claim, and generation succeeded with zero
-	// encounters (#118, round 14). The same bypass ownership removed for
-	// every other artifact.
-	if strings.HasSuffix(name, ".receipts.jsonl") {
-		return false
-	}
-	return strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".jsonl")
-}
-
-// partMarker separates a stream from the sequence of one of its pieces.
-const partMarker = ".part-"
-
-// partSequence is the tail of a piece: its number and the TOTAL number of
-// pieces, which every piece declares.
-//
-// Contiguity from 001 proves there is no hole; it can never prove the tail
-// is present. Dropping the last piece of a two-piece stream left `part-001`
-// alone -- contiguous, and parsing cleanly because the split is on a line
-// boundary -- so the corpus emitted a partial encounter with missing reviews
-// and no terminal event, in silence. With the total on every piece a
-// missing tail is a counting failure (#118, round 12a).
-var partSequence = regexp.MustCompile(`^(\d{3,})-of-(\d{3,})$`)
-
-// wellFormedPart reports that a name is a piece of stream, with its
-// sequence and total.
-func wellFormedPart(name string) (logical string, index, total int, ok bool) {
-	logical = partOf(name)
-	if logical == "" {
-		return "", 0, 0, false
-	}
-	m := partSequence.FindStringSubmatch(name[len(logical)+len(partMarker):])
-	if m == nil {
-		return logical, 0, 0, false
-	}
-	index, _ = strconv.Atoi(m[1])
-	total, _ = strconv.Atoi(m[2])
-	return logical, index, total, index >= 1 && total >= 1 && index <= total
-}
-
-// streamBase is the name a stream's artifacts are built from: the stream
-// without its extension, which is exactly what extract uses to find `.run`,
-// `.receipts.jsonl` and `.recipes-after.json`.
-func streamBase(stream string) string {
-	return strings.TrimSuffix(strings.TrimSuffix(stream, ".log"), ".jsonl")
-}
-
-// streamIdentities are the logical streams these names represent: the whole
-// files, and the streams that exist only as pieces.
-//
-// Ownership is over IDENTITIES, not filenames. Built from whole files alone,
-// a split-only stream owned nothing -- its `.run` sidecar was claimed by a
-// shorter stream, which then aborted expecting a piece of itself. Only
-// well-formed pieces contribute, so a malformed name cannot invent an
-// identity for itself (#118, round 12b).
-func streamIdentities(names []string) []string {
-	seen := map[string]bool{}
-	var out []string
-	add := func(name string) {
-		if name != "" && !seen[name] {
-			seen[name] = true
-			out = append(out, name)
-		}
-	}
-	for _, name := range names {
-		if isStreamName(name) {
-			add(name)
-			continue
-		}
-		if logical, _, _, ok := wellFormedPart(name); ok {
-			add(logical)
-		}
-	}
-	return out
-}
-
-// artifactOf reports that a name is a run artifact of one of these streams.
-//
-// OWNERSHIP, not a list of suffixes. A list is always incomplete: the reader
-// knew the three files extract reads, while the runs this repository commits
-// also hold `.graph.metadata.pre.json` and `.candidate.diff`, and the next
-// artifact would be one more name nobody enumerated -- each claimed by a
-// shorter stream whenever the owning stream's name contains a marker. An
-// artifact is instead recognised by belonging to a stream that EXISTS:
-// <streamBase> + rest, where rest carries no part marker.
-//
-// That last clause is what keeps a packaging error visible.
-// `X.log.part-001.run` starts with `X`'s base, but its rest holds a marker,
-// so it is not an artifact of `X.log`: it is a name claiming to be a piece,
-// and the sequence check refuses it rather than the reader walking past
-// (#118, rounds 11a and 11b).
-func artifactOf(name string, streams []string) bool {
-	for _, stream := range streams {
-		if name == stream {
-			continue
-		}
-		base := streamBase(stream)
-		if !strings.HasPrefix(name, base+".") {
-			continue
-		}
-		if rest := name[len(base):]; !strings.Contains(rest, partMarker) {
-			return true
-		}
-	}
-	return false
-}
-
-// partOf returns the logical stream a name claims to be a piece of, or "".
-//
-// Anything shaped like a piece of a stream CLAIMS one, whatever follows the
-// marker: the claim is what brings the file into the evidence machinery,
-// where streamParts proves the strict sequence or refuses it. Recognition is
-// permissive on purpose; acceptance is strict.
-//
-// The rule for WHICH stream, stated semantically rather than as this scan:
-//
-//	a part belongs to the LONGEST prefix that is itself a valid
-//	evidence-stream name.
-//
-// More than one prefix can qualify. `A.log.part-x.log` is a legitimate
-// stream -- it ends in .log -- and split it is `A.log.part-x.log.part-001`,
-// whose first qualifying prefix is the *other* legitimate stream `A.log`.
-// Taking the first match claimed the wrong identity: the parts then failed
-// their sequence check and the real stream got no encounter at all. That is
-// not the vanishing of rounds 4-6; the evidence arrives and is refused for
-// being something it is not. Constructed independently, before the repair,
-// by the owner reading this scan and by Codex reading the diff.
-func partOf(name string) string {
-	// A name is either a stream or a piece of one, never both. Both
-	// `A.log` and `A.log.part-x.log` are streams -- the second ends in .log
-	// -- and the second also contains the marker after the first, so
-	// identity resolution alone called it a piece of `A.log`: reading that
-	// stream then reported a false whole-plus-parts ambiguity and aborted
-	// the corpus, though the two files are independent evidence. Being a
-	// stream settles it (#118 review, round 9).
-	if isStreamName(name) {
-		return ""
-	}
-	logical := ""
-	for i := 0; i+len(partMarker) <= len(name); i++ {
-		if name[i:i+len(partMarker)] == partMarker && isStreamName(name[:i]) {
-			logical = name[:i]
-		}
-	}
-	return logical
-}
-
-// streamParts returns the ordered parts of a stream, refusing anything that
-// is not the whole of it.
-//
-// The refusals are the point. The directory is enumerated and names compared
-// literally -- globbing would read a stream's own name as a PATTERN, so
-// `A[1].log` matched the sibling `A1.log.part-001`. The sequence must start
-// at 001 and be contiguous, because part-001 beside part-003 would
-// concatenate into something that PARSES while silently omitting every event
-// between them, and a regenerated corpus would carry that as authoritative.
-func streamParts(path string) ([]string, error) {
-	dir := filepath.Dir(path)
+// It parses no names. The directory is classified once by
+// BuildEvidenceIndex and this reads the representation that classification
+// produced -- so discovery, part collection and opening cannot disagree
+// about what a name is, which is what sixteen review rounds kept finding.
+// Enumeration failure is a refusal, not a licence: it is exactly the
+// evidence that no competing representation exists.
+func openLog(path string) (io.ReadCloser, error) {
+	dir, name := filepath.Split(path)
+	dir = filepath.Clean(dir)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	// Attributed by IDENTITY, not by prefix. `A.log.part-x.log.part-001` is
-	// a part of `A.log.part-x.log`, and starts with `A.log` + the marker: a
-	// prefix test handed it to `A.log` as well, so reading that stream --
-	// present whole, and correctly so -- reported an ambiguous
-	// whole-plus-parts representation and aborted the corpus. partOf is the
-	// one identity calculation; everything that attributes a part uses it.
-	logical := filepath.Base(path)
-	var names []string
+	names := make([]string, 0, len(entries))
 	for _, e := range entries {
 		if !e.IsDir() {
 			names = append(names, e.Name())
 		}
 	}
-	streams := streamIdentities(names)
-	var parts []string
-	for _, e := range entries {
-		if e.IsDir() || partOf(e.Name()) != logical || artifactOf(e.Name(), streams) {
-			continue
-		}
-		parts = append(parts, filepath.Join(dir, e.Name()))
-	}
-	if len(parts) == 0 {
-		return nil, nil
-	}
-	sort.Strings(parts)
-	declared := 0
-	for i, p := range parts {
-		_, index, total, ok := wellFormedPart(filepath.Base(p))
-		if !ok {
-			return parts, fmt.Errorf("%s: %s is not a well-formed piece (expected <stream>%s<nnn>-of-<mmm>)",
-				path, filepath.Base(p), partMarker)
-		}
-		if index != i+1 {
-			return parts, fmt.Errorf("%s: the pieces are not contiguous: expected piece %d, found %s",
-				path, i+1, filepath.Base(p))
-		}
-		if declared == 0 {
-			declared = total
-		} else if total != declared {
-			return parts, fmt.Errorf("%s: the pieces disagree about how many there are: %d and %d",
-				path, declared, total)
-		}
-	}
-	if len(parts) != declared {
-		return parts, fmt.Errorf("%s: the pieces declare %d but only %d are present; the stream is truncated",
-			path, declared, len(parts))
-	}
-	return parts, nil
-}
-
-// openLog opens a stream, reconstructing it from its ordered parts when the
-// stream itself is not present.
-func openLog(path string) (io.ReadCloser, error) {
-	parts, perr := streamParts(path)
-	whole, err := os.Open(path)
-	switch {
-	case err == nil && perr != nil:
-		// Enumeration is what proves this stream has no split or malformed
-		// twin. Accepting the whole file while that proof failed would let
-		// the corpus certify uniqueness it never established.
-		whole.Close()
-		return nil, perr
-	case err == nil && len(parts) != 0:
-		whole.Close()
-		return nil, fmt.Errorf("%s: the stream is present both whole and as %d part(s); one encounter has one representation", path, len(parts))
-	case err == nil:
-		return whole, nil
-	case !os.IsNotExist(err):
+	files, err := BuildEvidenceIndex(dir, names).Files(name)
+	if err != nil {
 		return nil, err
-	case perr != nil:
-		return nil, perr
-	case len(parts) == 0:
-		return nil, fmt.Errorf("%s: neither the stream nor any part of it is present", path)
 	}
-	readers := make([]io.Reader, 0, len(parts))
-	closers := make([]io.Closer, 0, len(parts))
-	for _, p := range parts {
-		fh, err := os.Open(p)
+	readers := make([]io.Reader, 0, len(files))
+	closers := make([]io.Closer, 0, len(files))
+	for _, f := range files {
+		fh, err := os.Open(f)
 		if err != nil {
 			for _, c := range closers {
 				c.Close()
@@ -671,10 +445,9 @@ func (p partReader) Close() error {
 	}
 	return err
 }
-
 func discover(root string) ([]string, error) {
-	// Collected per directory first: whether a name is a run artifact can
-	// only be answered against the streams that exist beside it.
+	// Collected per directory first: a name's role can only be decided
+	// against the names beside it.
 	byDir := map[string][]string{}
 	var order []string
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
@@ -705,37 +478,11 @@ func discover(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var logs []string
-	seen := map[string]bool{}
 	for _, dir := range order {
-		names := byDir[dir]
-		streams := streamIdentities(names)
-		for _, name := range names {
-			var logical string
-			switch {
-			case isStreamName(name):
-				// Logical, so a stream present both whole and split is one
-				// entry and openLog refuses it once rather than producing
-				// two records.
-				logical = name
-			case artifactOf(name, streams):
-				continue
-			case partOf(name) != "":
-				// A stream too large to transit a tool call is committed as
-				// ordered parts. It is ONE encounter: the parts are the same
-				// bytes in the same order, and the logical name is the
-				// stream they reconstruct, so a split changes the packaging
-				// and never the record.
-				logical = partOf(name)
-			default:
-				continue
-			}
-			full := filepath.Join(dir, logical)
-			if !seen[full] {
-				seen[full] = true
-				logs = append(logs, full)
-			}
+		ix := BuildEvidenceIndex(dir, byDir[dir])
+		for _, stream := range ix.StreamNames() {
+			logs = append(logs, filepath.Join(dir, stream))
 		}
 	}
 	sort.Strings(logs)

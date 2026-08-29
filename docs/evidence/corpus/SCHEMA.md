@@ -36,6 +36,36 @@ what Phase C will rank.
   `independent_automated_reviewer` Codex, `account_principal` and
   `project_owner` davecourtois, `ledger_recorder` Claude. An account that
   executes a merge does not author the reasoning behind it.)
+- **One representation model.** What a physical file IS — a stream, a piece
+  of one, a run artifact, or nothing this corpus reads — is decided once, by
+  `BuildEvidenceIndex` (`cmd/corpus/evidence.go`). Discovery, piece
+  collection and opening consume that index; none of them parses names.
+  Two laws:
+
+  > **Partition.** Every physical name in a directory has exactly one role
+  > and at most one owner. Ambiguity is an error, never precedence.
+  >
+  > **Certification.** A stream's bytes become evidence only when the
+  > observed physical representation exactly satisfies a complete declared
+  > representation. *Failure to observe an alternative representation is not
+  > evidence that no alternative exists.*
+
+  Their consequences, each with falsifiers in `cmd/corpus/`: recognition
+  (one definition of a stream), resolution (a piece belongs to the longest
+  prefix that is itself a valid stream), exclusivity (stream, piece or
+  artifact — never two), ownership (an artifact belongs to a stream that
+  exists, recognised structurally rather than by a suffix list),
+  completeness (pieces declare their total and all are present), uniqueness
+  (whole or split, never both), single authority (every consumer reads this
+  one classification).
+
+  A stream too large to transit a tool call is committed as
+  `<stream>.part-<nnn>-of-<mmm>`, same bytes, same order. **Known limit:** a
+  declaration carried in filenames cannot notice a stream whose every piece
+  was deleted — nothing survives to carry the claim. Closing that needs a
+  declaration living outside the files it describes; pinned by
+  `TestDeletingEveryPieceIsUndetectableFromNamesAlone`.
+
 - **Appended, never rewritten.** `review_findings`, `review_provenance` and
   `merge_provenance` are the observation as first committed. A correction or
   a later event (a review that came back clean, a merge) is appended to
