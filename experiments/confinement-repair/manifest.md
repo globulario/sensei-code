@@ -266,10 +266,13 @@ would change the instrument to accommodate the evidence it verifies. The
 bytes are unchanged; only their transport representation is:
 
 ```text
-C2.log            6,359,622 bytes  sha256 130e2fdfc73eab2c6c9261742526a175c22e55e95fab7cbe9950e2a46ec827b6   (as recorded in C2.run)
-  part-001        3,499,909 bytes  sha256 b879c26067d00637130a21368fd66d92c16914f74eb7023f7d8499f1565bcaba
-  part-002        2,859,713 bytes  sha256 09f56e7c53ab97e12fca86a5b4b9231c0fa617d32ad2d0efcbe18acadcf98998
+C2.log                    6,359,622 bytes  sha256 130e2fdfc73eab2c6c9261742526a175c22e55e95fab7cbe9950e2a46ec827b6   (as recorded in C2.run)
+  part-001-of-002         3,499,909 bytes  sha256 b879c26067d00637130a21368fd66d92c16914f74eb7023f7d8499f1565bcaba
+  part-002-of-002         2,859,713 bytes  sha256 09f56e7c53ab97e12fca86a5b4b9231c0fa617d32ad2d0efcbe18acadcf98998
 ```
+
+Every piece declares the total (`-of-002`) since round 12a: the bytes and
+their order are unchanged, only the names say how many there are.
 
 Split at complete log-line boundaries; `cat C2.log.part-001 C2.log.part-002`
 reconstructs the 6,359,622 bytes and the sha256 above exactly, verified at
@@ -418,3 +421,24 @@ the same shape as this repository's own laws:
 
 > **Failure to observe an alternative representation is not evidence that no
 > alternative representation exists.**
+
+The twelfth round (`f4462a4`) added the rule that makes a stream's
+completeness checkable at all, and corrected the ownership rule's domain:
+
+- **12a, completeness of the tail.** Contiguity from 001 proves there is no
+  hole; it can never prove the last piece is present. Removing
+  `C2.log.part-002` left `part-001` alone — contiguous, and parsing cleanly
+  because the split is on a line boundary — so the corpus emitted a partial
+  encounter with missing reviews and no terminal event, silently. Every
+  piece now declares the total (`<stream>.part-<nnn>-of-<mmm>`), so a
+  missing tail is a counting failure. The committed C2 pieces were renamed
+  accordingly; their bytes and order are untouched.
+- **12b, ownership is over identities.** The ownership set was built from
+  whole-stream *filenames*, so a stream existing only as pieces owned
+  nothing and its `.run` sidecar was claimed by a shorter stream. It is
+  now built from logical identities — whole files and well-formed pieces
+  alike — and only *well-formed* pieces contribute, so a malformed name
+  cannot invent an identity for itself.
+
+> **Completeness** — a representation states how many pieces it has, and is
+> accepted only when they are all present.

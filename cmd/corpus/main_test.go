@@ -207,7 +207,7 @@ func TestASplitStreamIsOneEncounterReconstructedFromItsParts(t *testing.T) {
 	// read independently would each hold half an event.
 	split := len(whole) - 20
 	for i, chunk := range []string{whole[:split], whole[split:]} {
-		if err := os.WriteFile(filepath.Join(runs, fmt.Sprintf("X.log.part-%03d", i+1)), []byte(chunk), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(runs, fmt.Sprintf("X.log.part-%03d-of-002", i+1)), []byte(chunk), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -311,8 +311,8 @@ func TestSplitStreamPathsAreMatchedLiterally(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("A1.log.part-001", "sibling")
-	write("A[1].log.part-001", "itself")
+	write("A1.log.part-001-of-001", "sibling")
+	write("A[1].log.part-001-of-001", "itself")
 
 	logs, err := discover(dir)
 	if err != nil {
@@ -380,11 +380,11 @@ func TestAStreamWithAnEmptyStemIsStillAStream(t *testing.T) {
 	if !isStreamName(".log") || !isStreamName(".jsonl") {
 		t.Fatal("whole-stream discovery accepts these names, so part recognition must too")
 	}
-	if partOf(".log.part-001") != ".log" || partOf(".jsonl.part-001") != ".jsonl" {
-		t.Fatalf("an empty-stem part claimed no stream: %q %q", partOf(".log.part-001"), partOf(".jsonl.part-001"))
+	if partOf(".log.part-001-of-001") != ".log" || partOf(".jsonl.part-001") != ".jsonl" {
+		t.Fatalf("an empty-stem part claimed no stream: %q %q", partOf(".log.part-001-of-001"), partOf(".jsonl.part-001"))
 	}
 	// Not a stream at all, split or whole.
-	if partOf("notes.txt.part-001") != "" || isStreamName("notes.txt") {
+	if partOf("notes.txt.part-001-of-001") != "" || isStreamName("notes.txt") {
 		t.Fatal("a non-stream name claimed to be evidence")
 	}
 	// And a well-formed empty-stem split reconstructs rather than vanishing.
@@ -394,7 +394,7 @@ func TestAStreamWithAnEmptyStemIsStillAStream(t *testing.T) {
 		t.Fatal(err)
 	}
 	line := `{"kind":"task.created","task_id":"task-1","summary":"evidence"}` + "\n"
-	if err := os.WriteFile(filepath.Join(runs, ".log.part-001"), []byte(line), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runs, ".log.part-001-of-001"), []byte(line), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	logs, err := discover(dir)
@@ -420,12 +420,12 @@ func TestAStreamWithAnEmptyStemIsStillAStream(t *testing.T) {
 // review and by Codex on 284577a, before the repair.
 func TestPartRecognitionChoosesTheLongestStreamIdentity(t *testing.T) {
 	for name, want := range map[string]string{
-		"A.log.part-x.log.part-001":     "A.log.part-x.log",
-		"X.log.part-run.log.part-001":   "X.log.part-run.log",
-		"A.log.part-001":                "A.log",
-		"a/b/deep.jsonl.part-002":       "a/b/deep.jsonl",
-		"notes.txt.part-001":            "",
-		"X.log.part-run.jsonl.part-003": "X.log.part-run.jsonl",
+		"A.log.part-x.log.part-001-of-001":     "A.log.part-x.log",
+		"X.log.part-run.log.part-001-of-001":   "X.log.part-run.log",
+		"A.log.part-001-of-001":                "A.log",
+		"a/b/deep.jsonl.part-002-of-002":       "a/b/deep.jsonl",
+		"notes.txt.part-001-of-001":            "",
+		"X.log.part-run.jsonl.part-003-of-003": "X.log.part-run.jsonl",
 	} {
 		if got := partOf(name); got != want {
 			t.Errorf("partOf(%q) = %q; want %q", name, got, want)
@@ -439,7 +439,7 @@ func TestPartRecognitionChoosesTheLongestStreamIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	line := `{"kind":"task.created","task_id":"task-1","summary":"nested"}` + "\n"
-	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log.part-001"), []byte(line), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log.part-001-of-001"), []byte(line), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	logs, err := discover(dir)
@@ -473,8 +473,8 @@ func TestPartsAreAttributedByIdentityNotByPrefix(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write("A.log", "whole")                      // a stream, present whole
-	write("A.log.part-x.log.part-001", "nested") // a part of A.log.part-x.log
+	write("A.log", "whole")                             // a stream, present whole
+	write("A.log.part-x.log.part-001-of-001", "nested") // a part of A.log.part-x.log
 
 	logs, err := discover(dir)
 	if err != nil {
@@ -510,7 +510,7 @@ func TestAWholeStreamIsNotAPartOfAnother(t *testing.T) {
 			partOf("A.log.part-x.log"), partOf("A.jsonl.part-x.jsonl"))
 	}
 	// Its own pieces still resolve to it.
-	if got := partOf("A.log.part-x.log.part-001"); got != "A.log.part-x.log" {
+	if got := partOf("A.log.part-x.log.part-001-of-001"); got != "A.log.part-x.log" {
 		t.Fatalf("partOf(nested part) = %q; want A.log.part-x.log", got)
 	}
 
@@ -569,10 +569,10 @@ func TestASidecarIsNotAPartOfAnotherStream(t *testing.T) {
 		}
 	}
 	// The stream itself and its real pieces are unaffected.
-	if partOf("A.log.part-x.log.part-001") != "A.log.part-x.log" {
+	if partOf("A.log.part-x.log.part-001-of-001") != "A.log.part-x.log" {
 		t.Fatal("the nested stream's own piece stopped resolving")
 	}
-	if artifactOf("A.log.part-x.log.part-001", streams) {
+	if artifactOf("A.log.part-x.log.part-001-of-001", streams) {
 		t.Fatal("a real piece was exempted as an artifact")
 	}
 
@@ -695,5 +695,87 @@ func TestARunArtifactBelongsToItsOwnStream(t *testing.T) {
 	}
 	if _, err := extract(logs[0]); err != nil {
 		t.Fatalf("a nested stream could not carry its run artifacts: %v", err)
+	}
+}
+
+// A truncated stream fails closed: the parts must declare their total.
+//
+// Contiguity from 001 proves no HOLE, never that the tail is present.
+// Dropping the last part leaves `part-001` alone, which is contiguous and
+// parses -- the split is on a line boundary -- so the corpus emitted a
+// partial encounter: missing reviews, no terminal kind, and no complaint.
+// Every part therefore declares the total (`.part-001-of-002`), so a
+// missing tail is a counting failure rather than a silence (#118, 12a).
+func TestATruncatedStreamFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	head := "task task-1  session s\n" + `{"kind":"task.created","task_id":"task-1","summary":"begun"}` + "\n"
+	tail := `{"kind":"workflow.completed","task_id":"task-1","summary":"ended"}` + "\n"
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(runs, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("X.log.part-001-of-002", head)
+	write("X.log.part-002-of-002", tail)
+
+	// Whole: it reconstructs and carries the terminal event.
+	logs, err := discover(dir)
+	if err != nil || len(logs) != 1 {
+		t.Fatalf("discover = %v, %v", logs, err)
+	}
+	rec, err := extract(logs[0])
+	if err != nil || rec.Terminal["kind"] != "workflow.completed" {
+		t.Fatalf("the intact stream did not reconstruct: %+v %v", rec.Terminal, err)
+	}
+
+	// Truncated: the tail is gone and the reader must say so.
+	if err := os.Remove(filepath.Join(runs, "X.log.part-002-of-002")); err != nil {
+		t.Fatal(err)
+	}
+	logs, err = discover(dir)
+	if err == nil && len(logs) == 1 {
+		_, err = extract(logs[0])
+	}
+	if err == nil {
+		t.Fatal("a truncated stream was read as complete evidence")
+	}
+	if !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("the refusal must name the counting failure: %v", err)
+	}
+}
+
+// A stream that exists ONLY as parts still owns its artifacts.
+//
+// The ownership set was built from whole-stream filenames alone, so a
+// split-only stream owned nothing: its `.run` sidecar was claimed by the
+// shorter `A.log`, which then aborted expecting a part of itself. Ownership
+// is over logical identities, however they are represented (#118, 12b).
+func TestASplitOnlyStreamOwnsItsArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"kind":"task.created","task_id":"nested","summary":"nested"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log.part-001-of-001"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.run"), []byte("START\nEXIT 0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(logs) != 1 || filepath.Base(logs[0]) != "A.log.part-x.log" {
+		t.Fatalf("discover = %v; want only the split-only nested stream", logs)
+	}
+	rec, err := extract(logs[0])
+	if err != nil || rec.Task["id"] != "nested" {
+		t.Fatalf("the split-only stream did not reconstruct with its artifacts: %+v %v", rec.Task, err)
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -390,11 +391,70 @@ func isStreamName(name string) bool {
 // partMarker separates a stream from the sequence of one of its pieces.
 const partMarker = ".part-"
 
+// partSequence is the tail of a piece: its number and the TOTAL number of
+// pieces, which every piece declares.
+//
+// Contiguity from 001 proves there is no hole; it can never prove the tail
+// is present. Dropping the last piece of a two-piece stream left `part-001`
+// alone -- contiguous, and parsing cleanly because the split is on a line
+// boundary -- so the corpus emitted a partial encounter with missing reviews
+// and no terminal event, in silence. With the total on every piece a
+// missing tail is a counting failure (#118, round 12a).
+var partSequence = regexp.MustCompile(`^(\d{3,})-of-(\d{3,})$`)
+
+// wellFormedPart reports that a name is a piece of stream, with its
+// sequence and total.
+func wellFormedPart(name string) (logical string, index, total int, ok bool) {
+	logical = partOf(name)
+	if logical == "" {
+		return "", 0, 0, false
+	}
+	m := partSequence.FindStringSubmatch(name[len(logical)+len(partMarker):])
+	if m == nil {
+		return logical, 0, 0, false
+	}
+	index, _ = strconv.Atoi(m[1])
+	total, _ = strconv.Atoi(m[2])
+	return logical, index, total, index >= 1 && total >= 1 && index <= total
+}
+
 // streamBase is the name a stream's artifacts are built from: the stream
 // without its extension, which is exactly what extract uses to find `.run`,
 // `.receipts.jsonl` and `.recipes-after.json`.
 func streamBase(stream string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(stream, ".log"), ".jsonl")
+}
+
+// streamIdentities are the logical streams these names represent: the whole
+// files, and the streams that exist only as pieces.
+//
+// Ownership is over IDENTITIES, not filenames. Built from whole files alone,
+// a split-only stream owned nothing -- its `.run` sidecar was claimed by a
+// shorter stream, which then aborted expecting a piece of itself. Only
+// well-formed pieces contribute, so a malformed name cannot invent an
+// identity for itself (#118, round 12b).
+func streamIdentities(names []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(name string) {
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	for _, name := range names {
+		if strings.HasSuffix(name, ".receipts.jsonl") {
+			continue
+		}
+		if isStreamName(name) {
+			add(name)
+			continue
+		}
+		if logical, _, _, ok := wellFormedPart(name); ok {
+			add(logical)
+		}
+	}
+	return out
 }
 
 // artifactOf reports that a name is a run artifact of one of these streams.
@@ -490,12 +550,13 @@ func streamParts(path string) ([]string, error) {
 	// whole-plus-parts representation and aborted the corpus. partOf is the
 	// one identity calculation; everything that attributes a part uses it.
 	logical := filepath.Base(path)
-	var streams []string
+	var names []string
 	for _, e := range entries {
-		if !e.IsDir() && !strings.HasSuffix(e.Name(), ".receipts.jsonl") && isStreamName(e.Name()) {
-			streams = append(streams, e.Name())
+		if !e.IsDir() {
+			names = append(names, e.Name())
 		}
 	}
+	streams := streamIdentities(names)
 	var parts []string
 	for _, e := range entries {
 		if e.IsDir() || partOf(e.Name()) != logical || artifactOf(e.Name(), streams) {
@@ -507,12 +568,27 @@ func streamParts(path string) ([]string, error) {
 		return nil, nil
 	}
 	sort.Strings(parts)
+	declared := 0
 	for i, p := range parts {
-		want := fmt.Sprintf("%s%s%03d", filepath.Base(path), partMarker, i+1)
-		if filepath.Base(p) != want {
-			return parts, fmt.Errorf("%s: the parts are not a whole stream: expected %s, found %s (%d part(s) present)",
-				path, want, filepath.Base(p), len(parts))
+		_, index, total, ok := wellFormedPart(filepath.Base(p))
+		if !ok {
+			return parts, fmt.Errorf("%s: %s is not a well-formed piece (expected <stream>%s<nnn>-of-<mmm>)",
+				path, filepath.Base(p), partMarker)
 		}
+		if index != i+1 {
+			return parts, fmt.Errorf("%s: the pieces are not contiguous: expected piece %d, found %s",
+				path, i+1, filepath.Base(p))
+		}
+		if declared == 0 {
+			declared = total
+		} else if total != declared {
+			return parts, fmt.Errorf("%s: the pieces disagree about how many there are: %d and %d",
+				path, declared, total)
+		}
+	}
+	if len(parts) != declared {
+		return parts, fmt.Errorf("%s: the pieces declare %d but only %d are present; the stream is truncated",
+			path, declared, len(parts))
 	}
 	return parts, nil
 }
@@ -610,12 +686,7 @@ func discover(root string) ([]string, error) {
 	seen := map[string]bool{}
 	for _, dir := range order {
 		names := byDir[dir]
-		var streams []string
-		for _, name := range names {
-			if !strings.HasSuffix(name, ".receipts.jsonl") && isStreamName(name) {
-				streams = append(streams, name)
-			}
-		}
+		streams := streamIdentities(names)
 		for _, name := range names {
 			var logical string
 			switch {
