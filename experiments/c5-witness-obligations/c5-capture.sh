@@ -18,7 +18,7 @@ fal() { FALSIFIED=$((FALSIFIED+1)); }
   HEAD_SHA=$(git -C "$S" rev-parse HEAD)
   echo "HEAD                          $HEAD_SHA"
   echo "tree                          $(git -C "$S" rev-parse HEAD^{tree})"
-  if [ "$HEAD_SHA" = "$X" ]; then echo "HEAD is X                     YES"; else echo "HEAD is X                     NO   [FALSIFIER]"; fi
+  if [ "$HEAD_SHA" = "$X" ]; then echo "HEAD is X                     YES"; else echo "HEAD is X                     NO   [FALSIFIER]"; fal; fi
   echo "parents of X                  $(git -C "$S" log --format='%P' -1 "$X" 2>/dev/null | wc -w)"
   echo "working tree (non .sensei)    $(git -C "$S" status --short | grep -v '^?? .sensei-code/' | wc -l) path(s)"
 

@@ -47,11 +47,36 @@ One pre-run correction commit answers all of it: `c5-run.sh` is now the
 frozen runner and the only entry point; both gates exit non-zero on every
 frozen falsifier; the expected candidate ref is read from the governor's own
 log and then measured against the subject's refs by **exact first parent**;
-and a third `closed` phase gates the gate's own receipt. Fourteen validation
+and a third `closed` phase gates the gate's own receipt. ~~Fourteen validation
 cases, seven for the capture and eight for the closure gate, are recorded in
-`experiments/c5-witness-obligations/prerun-validation.txt`.
+`experiments/c5-witness-obligations/prerun-validation.txt`.~~ **WITHDRAWN**:
+two of those cases did not produce their stated exit status, and seven plus
+eight is fifteen. A hand-written validation transcript is prose.
 
 Measuring rather than asserting immediately cost something: the process
 actually answering awareness is `awareness-graph`, not the `sensei-f3` file
 that C3 and C4 recorded as the producer. Both are now recorded, and C5 does
 not claim to repair the two runs that came before it.
+
+
+## Second pre-run amendment
+
+Reviewing the first amendment found four more defects, every one of them
+found by the apparatus rather than by a run: the validation transcript
+reported two failed expectations as passes and miscounted itself; the capture
+still had one fail-open path (`HEAD != X` printed `FALSIFIER` and incremented
+nothing); the newly measured serving producer was informational, so a run
+could still record `unknown`; and the runner recorded its own digest rather
+than refusing a drifted harness.
+
+The validation is now `c5-validate.sh`, a gate that materialises a fresh
+subject per case, asserts every expected exit status, prints its own count
+and exits non-zero on any disagreement: **25 cases, 25 passed**. The capture
+exits non-zero on every falsifier it prints. The measured serving process is
+required, may not read `unknown`, and must be the same executable at both
+ends. `c5-run.sh` pins the SHA256 of the capture, closure and extractor
+scripts and refuses to run a harness that differs from its committed state —
+recording drift is weaker than refusing it. And `c5-extract.py` keeps the
+whole reviewer trail, so a run where one provider fails and another delivers
+records both; the frozen `sensei-f3` is relabelled a reference file identity,
+not the producer, because nothing has shown it executing.

@@ -22,6 +22,14 @@ req_field() {
     else bad "MISSING FIELD in $1: $2"; fi
   fi
 }
+# The evidence producer is the process that ANSWERED, not a file on disk.
+# "unknown" is an instrumentation defect, not a measurement.
+req_measured() {
+  req_field "$1" "$2"
+  if grep -qE "^$(printf '%s' "$2" | sed 's/[][\.*^$(){}?+|/]/\\&/g').*unknown" "$R/$1" 2>/dev/null; then
+    bad "UNMEASURED FIELD in $1: $2 (records 'unknown'; the producer must be measured, not guessed)"
+  fi
+}
 no_falsifier() {
   [ -s "$R/$1" ] || return 0
   if grep -q "FALSIFIER" "$R/$1"; then
@@ -36,7 +44,9 @@ req_file C5.graph.metadata.pre.json
 no_falsifier C5.subject.start.txt
 for f in "governor commit (source) " "governor binary path " "governor binary sha256 " \
          "producer binary path " "producer binary sha256 " \
-         "subject HEAD " "subject tree " "plan sha256 "; do req_field C5.run "$f"; done
+         "subject HEAD " "subject tree " "plan sha256 " \
+         "harness pinned "; do req_field C5.run "$f"; done
+req_measured C5.run "producer serving at start "
 
 if [ "$PHASE" = "end" ] || [ "$PHASE" = "closed" ]; then
   req_file C5.subject.end.txt
@@ -47,7 +57,12 @@ if [ "$PHASE" = "end" ] || [ "$PHASE" = "closed" ]; then
            "producer binary path at end " "producer binary sha256 at end " \
            "subject HEAD at end " "subject tree at end " \
            "reviewer provider " "reviewer verdict " "reviewer reviewed digest " \
-           "candidate committed " "EXIT "; do req_field C5.run "$f"; done
+           "candidate committed " "EXIT " \
+           "reviewer attempts " "reviewer providers attempted "; do req_field C5.run "$f"; done
+  req_measured C5.run "producer serving at end "
+  req_field C5.run "producer serving stable "
+  grep -qE "^producer serving stable[[:space:]]+yes" "$R/C5.run" \
+    || bad "PRODUCER SERVING IDENTITY CHANGED (or unmeasured) ACROSS THE RUN"
   # Conditional artifact: a candidate exists -> its diff and its measured identity are required.
   if grep -qE "^candidate committed[[:space:]]+yes" "$R/C5.run" 2>/dev/null; then
     req_file C5.candidate.diff
