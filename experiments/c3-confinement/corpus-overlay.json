@@ -41,6 +41,12 @@
     "event": "adjudicated",
     "supersedes": "any reading of this record as 'C3 established isolated review'",
     "detail": "instrument COMPLETE under the frozen protocol (not void, since the isolation probe was never a required artifact); workflow evidence VALID; candidate REFUSED on the quoted-path fail-open; run-time isolation NOT ESTABLISHED but retrospectively corroborated by the preserved subject's inability to resolve any controller object. C4 promotes isolation to measured start/end instrument evidence with its interpretation frozen in advance."
+   },
+   {
+    "recorded": "2026-08-29, PR #120",
+    "event": "predictions scored",
+    "supersedes": "",
+    "detail": "1 MET (all four examined, granted route); 2 MET (not routine); 3 NOT MET (no M2.2 grant -- coverage at the PINNED world comes from the subject's derived recipes, which cover nothing in internal/workflow; the prediction was written from the controller's live-graph view); 4a MET (governor commit and binary equal at both ends); 4b NOT MET (no candidate commit exists at all). No passing finding depends on 3 or 4b; 4b names a C4 protocol defect: a run that produces a candidate must leave it committed, or record that none exists."
    }
   ]
  }

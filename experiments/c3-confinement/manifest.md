@@ -407,3 +407,50 @@ about the run:
 The second is a corpus-vocabulary error of the same family the #118 rounds
 kept producing: a field whose meaning is fixed by the schema, used for
 something adjacent.
+
+### The frozen predictions, scored
+
+The predictions are left exactly as frozen; this is their outcome, which the
+adjudication above had not recorded (found by the review of `304a03f`).
+
+```text
+1  all four planned files examined; no `unexamined by the graph` line;
+   route architectural-authority-granted                                    MET
+2  Level-1: not routine (a critical invariant governs the region)           MET
+3  M2.2 may grant engine_test.go and routine_test.go beside their
+   covered subjects; a grant is not a plan entry                            NOT MET
+4a governor commit and binary sha256 at end equal those at start            MET
+4b the candidate commit differs from X                                      NOT MET
+```
+
+**3 — no grant was issued.** The run logged
+`no test-edit authority: internal/workflow/engine_test.go: no planned file in
+its directory holds architectural coverage at the pinned world`, and the same
+for `routine_test.go`. The prediction was written from the LIVE graph, where
+`engine.go` carries three anchors — but M2.2 reads architectural coverage at
+the *pinned world* from derived recipes, and the subject at X carries none
+over `internal/workflow`. Predicting from the controller's view of the graph
+rather than the subject's is the error; the prediction should have been
+"no grant, because the subject's own recipes cover nothing here". Nothing
+downstream depended on it: no grant means no operational authority to
+subtract, and the candidate touched only the four planned files anyway.
+
+**4b — there is no candidate commit at all.** The worker left four modified
+files in the worktree and made no commit, so the prediction has no subject
+rather than a differing one. Effect on the witness classification: **none of
+the passing findings depends on it.** The candidate was reviewed as a diff,
+the audit was bound to that diff, and the scope check reads paths, not
+commits. What it does affect is lineage: with no commit object there is
+nothing to fast-forward or rebase, which is why the admission form is a
+commit parented by X carrying the reviewed tree — already recorded as
+identity caveat 2. It also names a protocol defect for C4, beside the
+isolation one:
+
+> **A run that produces a candidate must leave it committed**, or the
+> candidate's identity is carried only by bytes the harness happens to
+> collect afterwards. `C4.run` should record the candidate commit, or record
+> that none exists as an instrument finding.
+
+That echoes a scar this repository already carries — *uncommitted work binds
+Sensei evidence to a revision that does not contain it* — reappearing at the
+witness boundary rather than inside a run.
