@@ -454,3 +454,35 @@ isolation one:
 That echoes a scar this repository already carries — *uncommitted work binds
 Sensei evidence to a revision that does not contain it* — reappearing at the
 witness boundary rather than inside a run.
+
+### The producer's revision was never captured by this run
+
+`3b954ca`, 2026-08-29 15:44:39Z: the corpus overlay asserted
+`sensei_sha: f79f96f9…`, and **no C3 artifact establishes it**. The freeze
+does not name the producer; `C3.run` does not record it; the log carries
+`graph_build_commit fac399f8`, `source_repo_commit f56f5a30` and
+`server_version 0.0.1-dev` — graph identity and a version string, none of
+which is the Sensei executable's revision. The SHA came from
+`experiments/b3-self-grounding/manifest.md`, where that binary was built:
+another experiment's file, which the overlay source rule does not admit.
+
+Set to `unrecorded`. What is measurable is recorded here instead, with its
+status on its face:
+
+```text
+producer binary   sensei-f3, sha256 13d4bfada3a458b8ea92b550cc307338b4f542c81446d6b365daf35c01a64ac9
+                  measured post-run by the controller; the binary self-reports only "0.0.1-dev"
+source revision   NOT captured by this run. The b3-self-grounding freeze records this binary as
+                  built from sensei f79f96f9, which is a cross-experiment citation, not C3 evidence.
+```
+
+The same shape as the isolation defect one field over: **the run asserted an
+instrument property it never measured.** C4's required stamp therefore grows
+by one line —
+
+> the run records the producer binary's path and sha256 at start and end,
+> beside the governor's,
+
+— and if a future producer can report its own source revision, that belongs
+in the stamp too. Until a run captures it, the corpus says `unrecorded`
+rather than borrowing a neighbour's freeze.
