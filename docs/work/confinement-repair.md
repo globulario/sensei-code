@@ -43,8 +43,17 @@ candidate that reaches judgement, because validation's formatters may rewrite
 it and the diff is deliberately re-read afterwards. The lesson is
 **authority must bind the exact candidate state that reaches judgement**. The
 worker's attempt to add an unplanned second check was refused by the
-authority boundary itself — preserved as evidence, not worked around. A
+frozen-plan/review boundary — which proves the run did not improvise itself
+into success, and does not prove X already had the confinement gate being
+repaired. Preserved as evidence, not worked around. A
 separate design finding (two representations of the same predicate,
 `notPlanned` vs `confineToPlannedFiles`) is recorded, not fixed here. And the
 reviewer was observed reading controller commits through the shared worktree
 object store: C2 supports no blind-review claim.
+
+
+`C2.log` is committed as ordered parts (`C2.log.part-001`, `-002`) because
+the exact-head Sensei gate failed closed on a stream larger than the gRPC
+message ceiling. Same bytes, same order; concatenation reproduces the
+recorded sha256 `130e2fdf…` (6,359,622 B); the corpus generator reads parts
+as one stream. The verifier was not modified and nothing was exempted.
