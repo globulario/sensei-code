@@ -1,0 +1,26 @@
+START 2026-08-29T16:12:25Z
+governor commit (source) f01592b0f0828605ed254047fc064f41dacc78f2
+governor binary        /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/sensei-code-shw1
+governor binary sha256 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+producer binary        /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/14e477ec-1052-4b6a-b741-ba143440786d/scratchpad/sensei-f3
+producer binary sha256 13d4bfada3a458b8ea92b550cc307338b4f542c81446d6b365daf35c01a64ac9
+subject HEAD f01592b0f0828605ed254047fc064f41dacc78f2
+subject tree fe43d481424072f325a7f315f1a5cfa5ab70609f
+subject HEAD is X: YES
+config sha256 94ed3b1723e3f9bdc3788c19ebebeaf90296a0f081a90c8077525a5aff3fbc2d
+plan sha256 97e520945f0b3fb84104e042ff1423fd1cfaf7b4b37d3c2a1d497e58aa6a4694
+EXIT 0 2026-08-29T16:29:00Z
+governor binary sha256 at end 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+governor commit at end f01592b0f0828605ed254047fc064f41dacc78f2 (pinned; the governor checkout is not written by this run)
+producer binary sha256 at end 13d4bfada3a458b8ea92b550cc307338b4f542c81446d6b365daf35c01a64ac9
+subject HEAD at end f01592b0f0828605ed254047fc064f41dacc78f2
+candidate worktrees:
+  /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/c4-subject                                      f01592b [main]
+  /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/.c4-subject-worktrees/task-1788019945987928256  f01592b [sensei-code/task-1788019945987928256]
+candidate worktree     /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/.c4-subject-worktrees/task-1788019945987928256
+candidate HEAD         f01592b0f0828605ed254047fc064f41dacc78f2
+candidate first parent 
+candidate commits beyond X: 0
+candidate uncommitted: 7 path(s)
+(C4.receipts.jsonl empty: the run wrote no derive receipts -- no closure round opened)
+C4 untrimmed sha256 9fdf2fc2cf65ceb618bc866384cc13a02d89a7f634f1dfbec6b74ba6fc132095, 2123643 bytes; C4.receipts.jsonl preserved EMPTY (0 bytes): no closure round opened; candidate diff sha256 b4f471f096d13f2b45fe544fc3ad2939e16990f39c092b07b70c4c1588523ccd over an UNCOMMITTED worktree state at X -- no candidate commit exists, and none was created afterwards

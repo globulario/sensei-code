@@ -1,0 +1,989 @@
+diff --git a/internal/gitx/git.go b/internal/gitx/git.go
+index 5306fe0..28c8676 100644
+--- a/internal/gitx/git.go
++++ b/internal/gitx/git.go
+@@ -8,6 +8,7 @@ import (
+ 	"os/exec"
+ 	"path/filepath"
+ 	"regexp"
++	"sort"
+ 	"strings"
+ )
+ 
+@@ -87,6 +88,138 @@ func (r Repo) CandidateDiff(ctx context.Context, base string) (string, error) {
+ 	return cap.Diff, nil
+ }
+ 
++// Status is what Git says happened to one path. The values are spelled exactly
++// as internal/report spells them, because the two accounts of the same
++// candidate are compared and a difference in vocabulary would read as a
++// disagreement about the change itself.
++type Status string
++
++const (
++	Added    Status = "added"
++	Modified Status = "modified"
++	Deleted  Status = "deleted"
++	Renamed  Status = "renamed"
++)
++
++// FileChange is one path the candidate changed, as Git names it.
++type FileChange struct {
++	Path string `json:"path"`
++	// OldPath is the path a renamed file had before the change.
++	OldPath string `json:"old_path,omitempty"`
++	Status  Status `json:"status"`
++}
++
++// ChangeSet is Git's own account of which paths a candidate changed.
++//
++// A unified diff header is a RENDERING. Git quotes any path it will not print
++// raw -- `diff --git "a/caf\303\251.md" "b/caf\303\251.md"` -- and a reader
++// that expects a bare `a/` prefix does not see that file at all. Anything that
++// decides authority from such a reading (what the candidate touched, whether it
++// stayed inside the plan) decides it from a set the quoted path silently left,
++// and a file invisible to confinement is confined by nothing.
++//
++// This is the machine-safe account instead: name-status with NUL terminators,
++// where no pathname is munged, split on a character a filename may contain, or
++// lost, whatever bytes it holds.
++type ChangeSet struct {
++	Files []FileChange `json:"files"`
++}
++
++// Paths returns every path the change set names, BOTH sides of a rename
++// included: a file moved out of a directory is a change to the path it left as
++// well as to the path it arrived at, and a caller confining a candidate must
++// see the departure.
++func (c ChangeSet) Paths() []string {
++	out := make([]string, 0, len(c.Files))
++	for _, f := range c.Files {
++		out = append(out, f.Path)
++		if f.OldPath != "" {
++			out = append(out, f.OldPath)
++		}
++	}
++	return out
++}
++
++// CandidateChanges is the authoritative changed-path set for a candidate,
++// against the base it was cut from.
++//
++// `-z` is the whole point: with it Git does not munge pathnames, so what comes
++// back are the bytes on disk rather than a quoted rendering of them, and the
++// record boundaries are NUL rather than a character a filename may contain.
++//
++// Call it AFTER CandidateCapture, so the set describes the candidate the
++// reviewer will actually see rather than one still holding excluded artifacts.
++func (r Repo) CandidateChanges(ctx context.Context, base string) (ChangeSet, error) {
++	args := []string{noOptionalLocks, "diff", "--no-ext-diff", "--name-status", "-z"}
++	if b := strings.TrimSpace(base); b != "" {
++		args = append(args, b)
++	}
++	out, err := r.raw(ctx, append(args, "--")...)
++	if err != nil {
++		return ChangeSet{}, err
++	}
++	return parseNameStatus(out)
++}
++
++// parseNameStatus reads `--name-status -z` output on NUL boundaries.
++//
++// Each record is a status field followed by one path, or by two paths for a
++// rename. A status letter this does not recognise is an ERROR rather than a
++// guess: the caller refuses a candidate whose changed files it cannot account
++// for, which is the only safe reading of a set that is about to authorise
++// something. Copy detection (C) is off in the diffs this program takes, and an
++// unmerged (U) or broken (B) pairing is not a candidate anyone may judge.
++func parseNameStatus(out string) (ChangeSet, error) {
++	fields := strings.Split(out, "\x00")
++	var cs ChangeSet
++	for i := 0; i < len(fields); {
++		code := fields[i]
++		if code == "" {
++			// The final NUL terminator leaves one empty field behind.
++			i++
++			continue
++		}
++		want := 1
++		if code[0] == 'R' {
++			want = 2
++		}
++		if i+want >= len(fields) {
++			return ChangeSet{}, fmt.Errorf("git diff --name-status -z ended mid-record at status %q", code)
++		}
++		paths := fields[i+1 : i+1+want]
++		for _, p := range paths {
++			if p == "" {
++				return ChangeSet{}, fmt.Errorf("git diff --name-status -z reported status %q with an empty path", code)
++			}
++		}
++		var ch FileChange
++		switch code[0] {
++		case 'A':
++			ch = FileChange{Path: paths[0], Status: Added}
++		case 'D':
++			ch = FileChange{Path: paths[0], Status: Deleted}
++		case 'M', 'T':
++			ch = FileChange{Path: paths[0], Status: Modified}
++		case 'R':
++			ch = FileChange{Path: paths[1], OldPath: paths[0], Status: Renamed}
++		default:
++			return ChangeSet{}, fmt.Errorf("git diff --name-status -z reported status %q, which this reader cannot account for", code)
++		}
++		cs.Files = append(cs.Files, ch)
++		i += 1 + want
++	}
++	// A deterministic order after parsing, so the set reads the same way to
++	// every consumer and a comparison between two of them is about the change
++	// rather than about Git's output order.
++	sort.Slice(cs.Files, func(i, j int) bool {
++		if cs.Files[i].Path != cs.Files[j].Path {
++			return cs.Files[i].Path < cs.Files[j].Path
++		}
++		return cs.Files[i].OldPath < cs.Files[j].OldPath
++	})
++	return cs, nil
++}
++
+ // RevList returns commit ids in a range, newest first, bounded by limit.
+ //
+ // Used only by the counterfactual scanner, which replays history through the
+diff --git a/internal/gitx/git_test.go b/internal/gitx/git_test.go
+index cec356e..d8a8f91 100644
+--- a/internal/gitx/git_test.go
++++ b/internal/gitx/git_test.go
+@@ -227,3 +227,94 @@ func write(t *testing.T, dir, name, body string) {
+ 		t.Fatal(err)
+ 	}
+ }
++
++// TestChangeSetHoldsEveryPathGitCanQuote pins the reason ChangeSet exists.
++//
++// A diff header is a rendering: Git quotes any path it will not print raw, so
++// `diff --git "a/caf\303\251.md" "b/caf\303\251.md"` is an ordinary header for
++// an ordinary file. A reader that expects a bare `a/` prefix does not see that
++// file, and anything deciding what the candidate touched from such a reading
++// decides it from a set the quoted path silently left.
++//
++// `--name-status -z` is the account that cannot lose one: no quoting, and NUL
++// record boundaries rather than a character a filename may contain.
++func TestChangeSetHoldsEveryPathGitCanQuote(t *testing.T) {
++	ctx := context.Background()
++	dir := t.TempDir()
++	repo := Repo{Root: dir}
++	mustGit(t, dir, "init", "-q", "-b", "main")
++	mustGit(t, dir, "config", "user.email", "t@t")
++	mustGit(t, dir, "config", "user.name", "t")
++
++	write(t, dir, "docs/café.md", "a\n")         // non-ASCII, to be modified
++	write(t, dir, "gone/évier.md", "b\n")        // non-ASCII, to be deleted
++	write(t, dir, "naïve.go", "package p\n")     // quoted old path of a rename
++	write(t, dir, "plain_old.go", "package p\n") // renamed INTO a quoted path
++	write(t, dir, "ctrl\x01.txt", "e\n")         // an ordinary ASCII control
++	mustGit(t, dir, "add", "-A")
++	mustGit(t, dir, "commit", "-q", "-m", "base")
++	base, err := repo.Head(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++
++	write(t, dir, "docs/café.md", "a2\n")
++	write(t, dir, "weird/ta\tb.go", "package p\n") // a path containing a tab
++	write(t, dir, "ctrl\x01.txt", "e2\n")
++	mustGit(t, dir, "mv", "naïve.go", "plain_new.go")
++	mustGit(t, dir, "mv", "plain_old.go", "renommé.go")
++	mustGit(t, dir, "rm", "-q", "gone/évier.md")
++	mustGit(t, dir, "add", "-A")
++
++	// If Git ever stopped quoting these headers this test would prove nothing,
++	// so the premise is checked rather than assumed.
++	diff, err := repo.Diff(ctx, base)
++	if err != nil {
++		t.Fatal(err)
++	}
++	for _, quoted := range []string{`"a/docs/caf\303\251.md"`, `"a/weird/ta\tb.go"`, `"a/ctrl\001.txt"`} {
++		if !strings.Contains(diff, quoted) {
++			t.Fatalf("git no longer quotes %s in the diff header, so this test proves nothing:\n%s", quoted, diff)
++		}
++	}
++
++	changes, err := repo.CandidateChanges(ctx, base)
++	if err != nil {
++		t.Fatal(err)
++	}
++	want := []FileChange{
++		{Path: "ctrl\x01.txt", Status: Modified},
++		{Path: "docs/café.md", Status: Modified},
++		{Path: "gone/évier.md", Status: Deleted},
++		{Path: "plain_new.go", OldPath: "naïve.go", Status: Renamed},
++		{Path: "renommé.go", OldPath: "plain_old.go", Status: Renamed},
++		{Path: "weird/ta\tb.go", Status: Added},
++	}
++	if len(changes.Files) != len(want) {
++		t.Fatalf("ChangeSet holds %d file(s), want %d: %+q", len(changes.Files), len(want), changes.Files)
++	}
++	// The order is the parser's, not Git's: a set two consumers compare must
++	// read the same way to both of them.
++	for i, w := range want {
++		if changes.Files[i] != w {
++			t.Errorf("ChangeSet.Files[%d] = %+q, want %+q", i, changes.Files[i], w)
++		}
++	}
++	// Both sides of a rename are paths the candidate changed. A confinement
++	// that saw only the arrival would miss a file moved OUT of its scope.
++	paths := changes.Paths()
++	for _, p := range []string{"naïve.go", "plain_new.go", "plain_old.go", "renommé.go"} {
++		if !contains(paths, p) {
++			t.Errorf("Paths() omits %q: %+q", p, paths)
++		}
++	}
++}
++
++func contains(list []string, want string) bool {
++	for _, s := range list {
++		if s == want {
++			return true
++		}
++	}
++	return false
++}
+diff --git a/internal/report/report.go b/internal/report/report.go
+index 70096af..de6c7a5 100644
+--- a/internal/report/report.go
++++ b/internal/report/report.go
+@@ -12,6 +12,7 @@ import (
+ 	"fmt"
+ 	"path"
+ 	"sort"
++	"strconv"
+ 	"strings"
+ )
+ 
+@@ -86,14 +87,16 @@ func FromDiff(diff string) Change {
+ 		case strings.HasPrefix(line, "deleted file mode"):
+ 			status = Deleted
+ 		case strings.HasPrefix(line, "rename from "):
+-			old = strings.TrimPrefix(line, "rename from ")
++			old = headerValue(strings.TrimPrefix(line, "rename from "))
+ 			status = Renamed
+ 		case strings.HasPrefix(line, "rename to "):
+ 			// The rename lines carry both paths whole, however many spaces
+ 			// they hold; they outrank the header's guess.
+-			current = strings.TrimPrefix(line, "rename to ")
+-		case strings.HasPrefix(line, "+++ b/") && current == "":
+-			current = strings.TrimSuffix(strings.TrimPrefix(line, "+++ b/"), "\t")
++			current = headerValue(strings.TrimPrefix(line, "rename to "))
++		case strings.HasPrefix(line, "+++ ") && current == "":
++			if p, ok := headerName(strings.TrimSuffix(strings.TrimPrefix(line, "+++ "), "\t"), "b/"); ok {
++				current = p
++			}
+ 		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+ 			if kind := awarenessKind(current); kind != "" && isEntryStart(line) {
+ 				change.Awareness[kind]++
+@@ -113,8 +116,27 @@ func FromDiff(diff string) Change {
+ // unrenamed file both halves are the same path, and the one split that makes
+ // them equal is the answer. A header whose halves differ (a rename) yields
+ // "" here and is completed by the `rename to` line that follows it.
++//
++// Git DOES quote anything else it will not print raw -- a non-ASCII byte, a
++// tab, a control character, a quote -- and it quotes each side independently,
++// so `diff --git "a/na\303\257ve.go" b/plain.go` is an ordinary header. The
++// shape rule cannot read one of those, and the file it names was reported by
++// this package as not having changed at all. A report that silently drops a
++// file is wrong whatever else is true, so a quoted side is unquoted here.
++//
++// This remains a RENDERER. Nothing may take its account of which paths a
++// candidate touched as authority; gitx.ChangeSet is that, and this is
++// reconciled against it.
+ func diffPath(line string) string {
+ 	rest := strings.TrimPrefix(line, "diff --git ")
++	if left, right, ok := splitQuotedHeader(rest); ok {
++		l, lok := headerName(left, "a/")
++		r, rok := headerName(right, "b/")
++		if lok && rok && l == r {
++			return r
++		}
++		return ""
++	}
+ 	if !strings.HasPrefix(rest, "a/") {
+ 		return ""
+ 	}
+@@ -130,6 +152,69 @@ func diffPath(line string) string {
+ 	return ""
+ }
+ 
++// splitQuotedHeader splits the two halves of a `diff --git` header when at
++// least one of them is C-quoted, which is what makes the split unambiguous: an
++// unquoted half can hold spaces but never a quote, because a path containing
++// one is quoted. A header with neither half quoted is not this function's case
++// and is left to the shape rule.
++func splitQuotedHeader(rest string) (left, right string, ok bool) {
++	if strings.HasPrefix(rest, `"`) {
++		token, tail, found := quotedPrefix(rest)
++		if !found || !strings.HasPrefix(tail, " ") {
++			return "", "", false
++		}
++		return token, tail[1:], true
++	}
++	if i := strings.Index(rest, ` "`); i >= 0 {
++		return rest[:i], rest[i+1:], true
++	}
++	return "", "", false
++}
++
++// quotedPrefix returns the C-quoted token at the head of s, and what follows
++// it. The closing quote is the first unescaped one.
++func quotedPrefix(s string) (token, rest string, ok bool) {
++	for i := 1; i < len(s); i++ {
++		switch s[i] {
++		case '\\':
++			i++
++		case '"':
++			return s[:i+1], s[i+1:], true
++		}
++	}
++	return "", "", false
++}
++
++// headerName reads one side of a diff header -- `a/P`, or `"a/P"` with Git's
++// C-style escapes -- and strips the side's prefix.
++func headerName(side, prefix string) (string, bool) {
++	s := headerValue(side)
++	if !strings.HasPrefix(s, prefix) {
++		return "", false
++	}
++	return strings.TrimPrefix(s, prefix), true
++}
++
++// headerValue unquotes a path Git C-quoted, and returns anything else
++// unchanged.
++//
++// A token that will not unquote is returned verbatim rather than dropped. The
++// file stays visible in the report, and where it matters the mismatch against
++// the authoritative gitx.ChangeSet refuses the candidate -- which is the
++// direction to fail in. Silently losing the path is the direction that is not.
++func headerValue(s string) string {
++	if !strings.HasPrefix(s, `"`) {
++		return s
++	}
++	// Git's quoting is C-style: \a \b \f \n \r \t \v, \" and \\, and a
++	// three-digit octal escape for every other byte, which Go reads the same
++	// way.
++	if v, err := strconv.Unquote(s); err == nil {
++		return v
++	}
++	return s
++}
++
+ func awarenessKind(file string) string {
+ 	if !strings.Contains(file, "docs/awareness/") {
+ 		return ""
+diff --git a/internal/report/report_test.go b/internal/report/report_test.go
+index 463aed1..f2fbcff 100644
+--- a/internal/report/report_test.go
++++ b/internal/report/report_test.go
+@@ -126,3 +126,89 @@ func TestDiffPathsWithWhitespaceAndRenamesAreReadWhole(t *testing.T) {
+ 		t.Fatalf("plain: %+v", files[2])
+ 	}
+ }
++
++// quotedDiff is `git diff` output verbatim for a change holding a non-ASCII
++// path, a tab, a rename out of a quoted path, a rename into one, a deletion of
++// a quoted path, and an ASCII control character.
++//
++// Git quotes each side of the header independently, which is why
++// `"a/na\303\257ve.go" b/plain_new.go` is an ordinary line rather than a
++// malformed one.
++const quotedDiff = `diff --git "a/ctrl\001.txt" "b/ctrl\001.txt"
++index d905d9d..3811af3 100644
++--- "a/ctrl\001.txt"
+++++ "b/ctrl\001.txt"
++@@ -1 +1 @@
++-e
+++e2
++diff --git "a/docs/caf\303\251.md" "b/docs/caf\303\251.md"
++index 7898192..c1827f0 100644
++--- "a/docs/caf\303\251.md"
+++++ "b/docs/caf\303\251.md"
++@@ -1 +1 @@
++-a
+++a2
++diff --git "a/gone/\303\251vier.md" "b/gone/\303\251vier.md"
++deleted file mode 100644
++index 6178079..0000000
++--- "a/gone/\303\251vier.md"
+++++ /dev/null
++@@ -1 +0,0 @@
++-b
++diff --git "a/na\303\257ve.go" b/plain_new.go
++similarity index 100%
++rename from "na\303\257ve.go"
++rename to plain_new.go
++diff --git a/plain_old.go "b/renomm\303\251.go"
++similarity index 100%
++rename from plain_old.go
++rename to "renomm\303\251.go"
++diff --git "a/weird/ta\tb.go" "b/weird/ta\tb.go"
++new file mode 100644
++index 0000000..6a69f92
++--- /dev/null
+++++ "b/weird/ta\tb.go"
++@@ -0,0 +1 @@
+++f
++`
++
++// A report that silently drops a file is wrong whatever else is true: the
++// architect is told a file was not touched when it was. The `a/` shape rule
++// could not read a quoted header at all, so every path Git quotes -- any
++// non-ASCII byte, a tab, a control character -- was invisible here.
++//
++// This remains a renderer. It is reconciled against the authoritative
++// gitx.ChangeSet before anything decides authority from a changed-path set.
++func TestFromDiffReportsQuotedAndEscapedPaths(t *testing.T) {
++	want := []FileChange{
++		{Path: "ctrl\x01.txt", Status: Modified},
++		{Path: "docs/café.md", Status: Modified},
++		{Path: "gone/évier.md", Status: Deleted},
++		{Path: "plain_new.go", OldPath: "naïve.go", Status: Renamed},
++		{Path: "renommé.go", OldPath: "plain_old.go", Status: Renamed},
++		{Path: "weird/ta\tb.go", Status: Added},
++	}
++	files := FromDiff(quotedDiff).Files
++	if len(files) != len(want) {
++		t.Fatalf("FromDiff reported %d file(s), want %d: %+q", len(files), len(want), files)
++	}
++	for i, w := range want {
++		if files[i] != w {
++			t.Errorf("Files[%d] = %+q, want %+q", i, files[i], w)
++		}
++	}
++}
++
++// An ASCII control character is quoted with a three-digit octal escape rather
++// than a named one, which is the escape a reader is most likely to get wrong.
++func TestFromDiffReadsAnAsciiControlPath(t *testing.T) {
++	diff := "diff --git \"a/ctrl\\001.txt\" \"b/ctrl\\001.txt\"\n" +
++		"new file mode 100644\n--- /dev/null\n+++ \"b/ctrl\\001.txt\"\n@@ -0,0 +1 @@\n+e\n"
++	files := FromDiff(diff).Files
++	if len(files) != 1 {
++		t.Fatalf("FromDiff reported %d file(s), want 1: %+q", len(files), files)
++	}
++	if files[0].Path != "ctrl\x01.txt" || files[0].Status != Added {
++		t.Fatalf("Files[0] = %+q, want the added path ctrl\\x01.txt", files[0])
++	}
++}
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index 2ba26ec..a664db3 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -7,6 +7,7 @@ import (
+ 	"fmt"
+ 	"os"
+ 	"path/filepath"
++	"sort"
+ 	"strings"
+ 	"sync"
+ 	"time"
+@@ -1012,6 +1013,65 @@ func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskCont
+ 		"decision not recorded: "+err.Error(), nil))
+ }
+ 
++// authoritativeChanges is Git's own account of what the candidate changed,
++// having first proved that the diff everything downstream reads agrees with it.
++//
++// report.FromDiff renders a patch for an architect to read. It is not the
++// source of pathname authority and cannot be: a diff header is a rendering in
++// which Git quotes any path it will not print raw, so a file can be present in
++// the candidate and absent from that reading. Where the two accounts disagree
++// -- a path in one and not the other, a different status, a rename whose old
++// side differs -- the candidate is refused rather than judged on whichever
++// account the next consumer happens to consult.
++//
++// The refusal is deliberately not a repair. A disagreement means this program
++// cannot say what the candidate changed, and every decision below it (scope,
++// inspection, audit, classification, review, admission) is made from exactly
++// that set.
++func authoritativeChanges(ctx context.Context, candidate gitx.Repo, base, diff string) (gitx.ChangeSet, error) {
++	changes, err := candidate.CandidateChanges(ctx, base)
++	if err != nil {
++		return gitx.ChangeSet{}, err
++	}
++	if err := reconcileRenderedDiff(changes, diff); err != nil {
++		return gitx.ChangeSet{}, err
++	}
++	return changes, nil
++}
++
++// reconcileRenderedDiff compares the rendered diff against Git's own change
++// set and names every way they differ.
++func reconcileRenderedDiff(changes gitx.ChangeSet, diff string) error {
++	rendered := map[string]report.FileChange{}
++	for _, f := range report.FromDiff(diff).Files {
++		rendered[f.Path] = f
++	}
++	authoritative := map[string]bool{}
++	var disagreements []string
++	for _, f := range changes.Files {
++		authoritative[f.Path] = true
++		r, ok := rendered[f.Path]
++		switch {
++		case !ok:
++			disagreements = append(disagreements, fmt.Sprintf("git reports %q as %s and the rendered diff does not show it at all", f.Path, f.Status))
++		case string(r.Status) != string(f.Status):
++			disagreements = append(disagreements, fmt.Sprintf("git reports %q as %s and the rendered diff reads it as %s", f.Path, f.Status, r.Status))
++		case r.OldPath != f.OldPath:
++			disagreements = append(disagreements, fmt.Sprintf("git reports %q as renamed from %q and the rendered diff reads it as renamed from %q", f.Path, f.OldPath, r.OldPath))
++		}
++	}
++	for p, f := range rendered {
++		if !authoritative[p] {
++			disagreements = append(disagreements, fmt.Sprintf("the rendered diff shows %q as %s and git does not report it as changed", p, f.Status))
++		}
++	}
++	if len(disagreements) == 0 {
++		return nil
++	}
++	sort.Strings(disagreements)
++	return fmt.Errorf("the candidate's changed files cannot be established: %s", strings.Join(disagreements, "; "))
++}
++
+ // changedPaths lists the files a candidate actually touched, so a decision
+ // references work that exists rather than work that was intended.
+ func changedPaths(diff string) []string {
+@@ -1248,6 +1308,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 				"the plan was read-only and the candidate changed %d file(s): %s",
+ 				len(changedPaths(diff)), strings.Join(changedPaths(diff), ", "))
+ 		}
++		// The changed-path set every authority decision below is taken from is
++		// Git's own, and the rendered diff must agree with it. This is the
++		// first point at which a candidate that changes something is held to
++		// the plan's scope, and it is before validation, the prospective
++		// inspection, the test-edit inspection, the audit, the Level-1
++		// classification, the review, or admission sees the candidate at all.
++		changes, err := authoritativeChanges(ctx, candidate, tc.Identity.BaseSHA, diff)
++		if err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
++		if err := confineToPlan(changes.Paths(), tc.Files); err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
+ 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), map[string]int{"cycle": cycle, "review_attempt": e.reviewAttempt(taskID) + 1}))
+ 
+ 		// The missing edge: worker → change → validation → typed evidence →
+@@ -1263,6 +1336,17 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 		if err != nil {
+ 			return false, plan, lastReview, lastAudit, err
+ 		}
++		// Again, over the re-read diff: a formatter runs inside validation and
++		// may rewrite the candidate, so the set established above is evidence
++		// about bytes that no longer exist. A formatter that widened the
++		// candidate past the plan is caught here rather than reviewed.
++		changes, err = authoritativeChanges(ctx, candidate, tc.Identity.BaseSHA, diff)
++		if err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
++		if err := confineToPlan(changes.Paths(), tc.Files); err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
+ 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+ 
+ 		// Post-creation inspection of every declared prospective surface
+diff --git a/internal/workflow/engine_test.go b/internal/workflow/engine_test.go
+index 021e824..3299496 100644
+--- a/internal/workflow/engine_test.go
++++ b/internal/workflow/engine_test.go
+@@ -9,6 +9,8 @@ import (
+ 	"go/parser"
+ 	"go/token"
+ 	"os"
++	"os/exec"
++	"path/filepath"
+ 	"strings"
+ 	"testing"
+ 	"time"
+@@ -18,6 +20,7 @@ import (
+ 	"github.com/globulario/sensei-code/internal/authority"
+ 	"github.com/globulario/sensei-code/internal/decision"
+ 	"github.com/globulario/sensei-code/internal/event"
++	"github.com/globulario/sensei-code/internal/gitx"
+ 	"github.com/globulario/sensei-code/internal/taskstate"
+ )
+ 
+@@ -1321,3 +1324,319 @@ func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
+ 		}
+ 	}
+ }
++
++// The candidate's changed-path set is where confinement, inspection, the
++// audit, the classification, the review and admission all get their idea of
++// what the candidate touched. A path Git quotes was invisible in that set, so
++// a file outside the plan could be changed and no one downstream would know.
++// These tests pin the four shapes that were invisible and the two places the
++// authoritative set is now bound.
++
++func planned(files ...string) []string { return files }
++
++// A modification of a quoted path outside the plan is refused, by name.
++func TestAQuotedOutOfPlanModificationIsRefused(t *testing.T) {
++	changes := gitx.ChangeSet{Files: []gitx.FileChange{
++		{Path: "internal/workflow/engine.go", Status: gitx.Modified},
++		{Path: "docs/café.md", Status: gitx.Modified},
++	}}
++	err := confineToPlan(changes.Paths(), planned("internal/workflow/engine.go"))
++	if err == nil {
++		t.Fatal("a quoted path outside the plan was accepted; confinement cannot see what the plan does not name")
++	}
++	if !strings.Contains(err.Error(), "docs/café.md") {
++		t.Fatalf("the refusal does not name the path it refused: %v", err)
++	}
++}
++
++// A deletion is a change to the path that is gone. Reading only what the
++// candidate still holds would let a quoted file be deleted out of scope.
++func TestAQuotedOutOfPlanDeletionIsRefused(t *testing.T) {
++	changes := gitx.ChangeSet{Files: []gitx.FileChange{
++		{Path: "internal/workflow/engine.go", Status: gitx.Modified},
++		{Path: "gone/évier.md", Status: gitx.Deleted},
++	}}
++	err := confineToPlan(changes.Paths(), planned("internal/workflow/engine.go"))
++	if err == nil {
++		t.Fatal("a quoted deletion outside the plan was accepted")
++	}
++	if !strings.Contains(err.Error(), "gone/évier.md") {
++		t.Fatalf("the refusal does not name the deleted path: %v", err)
++	}
++}
++
++// A rename is two facts about scope. The plan names where the file landed and
++// not where it came from, so the candidate moved a file the plan does not name.
++func TestARenameOutOfThePlanIsRefused(t *testing.T) {
++	changes := gitx.ChangeSet{Files: []gitx.FileChange{
++		{Path: "internal/workflow/moved.go", OldPath: "naïve.go", Status: gitx.Renamed},
++	}}
++	err := confineToPlan(changes.Paths(), planned("internal/workflow/moved.go"))
++	if err == nil {
++		t.Fatal("a rename whose old path is outside the plan was accepted; the file left a path nobody authorised it to touch")
++	}
++	if !strings.Contains(err.Error(), "naïve.go") {
++		t.Fatalf("the refusal does not name the path the file left: %v", err)
++	}
++	if strings.Contains(err.Error(), "internal/workflow/moved.go") {
++		t.Fatalf("the refusal names the planned arrival path as if it were out of scope: %v", err)
++	}
++}
++
++// Confinement is not a source of scope of its own: a test-edit grant is
++// authority to edit a file the plan ALREADY names, and reading grants here
++// would make the scope look as though it came from somewhere other than the
++// plan.
++func TestConfinementTakesItsScopeFromThePlanAlone(t *testing.T) {
++	body := rawFuncSource(t, "internal/workflow/testedit.go", "confineToPlan")
++	for _, forbidden := range []string{"testEditGrant", "grants", "prospectiveGrants"} {
++		if strings.Contains(body, forbidden) {
++			t.Fatalf("confineToPlan reads %s; scope is the plan's to state", forbidden)
++		}
++	}
++}
++
++// The ordinary candidate is unaffected: every path it changed is one the plan
++// names, canonicalised the way the plan's own files are.
++func TestAnInPlanCandidateStillPasses(t *testing.T) {
++	changes := gitx.ChangeSet{Files: []gitx.FileChange{
++		{Path: "internal/workflow/engine.go", Status: gitx.Modified},
++		{Path: "internal/workflow/engine_test.go", Status: gitx.Added},
++		{Path: "internal/workflow/testedit.go", OldPath: "internal/workflow/old.go", Status: gitx.Renamed},
++	}}
++	plan := planned("./internal/workflow/engine.go", "internal/workflow/engine_test.go",
++		" internal/workflow/testedit.go ", "internal/workflow/old.go")
++	if err := confineToPlan(changes.Paths(), plan); err != nil {
++		t.Fatalf("an in-plan candidate was refused: %v", err)
++	}
++	diff := "diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go\n" +
++		"index 1..2 100644\n--- a/internal/workflow/engine.go\n+++ b/internal/workflow/engine.go\n@@ -1 +1 @@\n-x\n+y\n" +
++		"diff --git a/internal/workflow/engine_test.go b/internal/workflow/engine_test.go\n" +
++		"new file mode 100644\n--- /dev/null\n+++ b/internal/workflow/engine_test.go\n@@ -0,0 +1 @@\n+package workflow\n" +
++		"diff --git a/internal/workflow/old.go b/internal/workflow/testedit.go\n" +
++		"similarity index 100%\nrename from internal/workflow/old.go\nrename to internal/workflow/testedit.go\n"
++	if err := reconcileRenderedDiff(changes, diff); err != nil {
++		t.Fatalf("the two accounts of an ordinary candidate disagree: %v", err)
++	}
++}
++
++// Where the rendered diff and Git disagree, this program cannot say what the
++// candidate changed -- and every decision below is made from exactly that set.
++// It refuses rather than picking whichever account the next consumer reads.
++func TestADisagreementWithGitRefusesTheCandidate(t *testing.T) {
++	authoritative := gitx.ChangeSet{Files: []gitx.FileChange{
++		{Path: "internal/x.go", Status: gitx.Modified},
++		{Path: "docs/café.md", Status: gitx.Modified},
++	}}
++	// What a renderer that cannot read a quoted header produces: the ASCII
++	// file only, with the quoted one silently absent.
++	dropped := "diff --git a/internal/x.go b/internal/x.go\nindex 1..2 100644\n--- a/internal/x.go\n+++ b/internal/x.go\n@@ -1 +1 @@\n-x\n+y\n"
++	err := reconcileRenderedDiff(authoritative, dropped)
++	if err == nil {
++		t.Fatal("a rendered diff missing a file git reports was accepted as an account of the candidate")
++	}
++	if !strings.Contains(err.Error(), "docs/café.md") || !strings.Contains(err.Error(), "does not show it") {
++		t.Fatalf("the refusal does not name the disagreement: %v", err)
++	}
++
++	for _, tc := range []struct {
++		name     string
++		changes  gitx.ChangeSet
++		diff     string
++		disagree string
++	}{
++		{
++			name:    "a status the two accounts read differently",
++			changes: gitx.ChangeSet{Files: []gitx.FileChange{{Path: "internal/x.go", Status: gitx.Deleted}}},
++			diff: "diff --git a/internal/x.go b/internal/x.go\nnew file mode 100644\n--- /dev/null\n" +
++				"+++ b/internal/x.go\n@@ -0,0 +1 @@\n+x\n",
++			disagree: "reads it as added",
++		},
++		{
++			name:    "a rename whose old side differs",
++			changes: gitx.ChangeSet{Files: []gitx.FileChange{{Path: "internal/x.go", OldPath: "internal/was.go", Status: gitx.Renamed}}},
++			diff: "diff --git a/internal/other.go b/internal/x.go\nsimilarity index 100%\n" +
++				"rename from internal/other.go\nrename to internal/x.go\n",
++			disagree: "renamed from",
++		},
++		{
++			name:     "a file the rendered diff shows and git does not report",
++			changes:  gitx.ChangeSet{},
++			diff:     "diff --git a/internal/x.go b/internal/x.go\nindex 1..2 100644\n@@ -1 +1 @@\n-x\n+y\n",
++			disagree: "git does not report it as changed",
++		},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			err := reconcileRenderedDiff(tc.changes, tc.diff)
++			if err == nil {
++				t.Fatal("the candidate was accepted with its changed files unestablished")
++			}
++			if !strings.Contains(err.Error(), tc.disagree) {
++				t.Fatalf("the refusal does not name the disagreement %q: %v", tc.disagree, err)
++			}
++		})
++	}
++}
++
++// Both binding points, in order, and both before anything that reads the
++// candidate.
++//
++// The second is not a duplicate of the first: a formatter runs inside
++// e.validate and may rewrite the candidate, so the set established before it
++// is evidence about bytes that no longer exist. A formatter that widened the
++// candidate past the plan is caught by the second binding point.
++func TestConfinementRefusesAtBothBindingPoints(t *testing.T) {
++	body := rawFuncSource(t, "internal/workflow/engine.go", "runCandidate")
++	lane := strings.Index(body, "the plan was read-only and the candidate changed")
++	if lane < 0 {
++		t.Fatal("the read-only refusal is gone, so the first binding point cannot be located")
++	}
++	// Everything from the read-only refusal on is the lane a candidate that
++	// changed something travels.
++	body = body[lane:]
++
++	if got := strings.Count(body, "confineToPlan(changes.Paths(), tc.Files)"); got != 2 {
++		t.Fatalf("confinement binds %d time(s) over the authoritative change set, want 2", got)
++	}
++	if strings.Contains(body, "confineToPlan(changedPaths(") {
++		t.Fatal("confinement re-parses the diff instead of using the authoritative change set")
++	}
++
++	first := strings.Index(body, "confineToPlan")
++	validate := strings.Index(body, "e.validate(")
++	second := strings.LastIndex(body, "confineToPlan")
++	if validate < 0 {
++		t.Fatal("validation no longer runs in the candidate lane")
++	}
++	if !(first < validate && validate < second) {
++		t.Fatalf("confinement does not bind both before validation and after it (first=%d validate=%d second=%d)", first, validate, second)
++	}
++	// Each binding takes Git's own account first, so a disagreement refuses
++	// before the scope question is even asked.
++	if got := strings.Count(body, "authoritativeChanges(ctx, candidate, tc.Identity.BaseSHA, diff)"); got != 2 {
++		t.Fatalf("the authoritative change set is obtained %d time(s), want 2", got)
++	}
++	if strings.Index(body, "authoritativeChanges") > first {
++		t.Fatal("confinement runs before the change set it confines is established")
++	}
++
++	// The reason the second binding is not a duplicate: a formatter is a
++	// validation check (validation.Format), and one that reformatted a file
++	// the plan does not name has widened the candidate since the first
++	// binding read it.
++	widened := gitx.ChangeSet{Files: []gitx.FileChange{
++		{Path: "internal/workflow/engine.go", Status: gitx.Modified},
++		{Path: "internal/other/formatted.go", Status: gitx.Modified},
++	}}
++	if err := confineToPlan(widened.Paths(), planned("internal/workflow/engine.go")); err == nil {
++		t.Fatal("a candidate a formatter widened past the plan was accepted")
++	}
++
++	// Nothing downstream sees a candidate whose changed files are unestablished
++	// or outside the plan.
++	for _, consumer := range []string{
++		"inspectProspectiveSurfaces(",
++		"inspectTestEdits(",
++		`sc.CallTool("awareness_audit_diff"`,
++		"sensei.DecodeDiffAudit(",
++		"e.classifyForDarkRun(",
++		"e.resolveReview(",
++	} {
++		at := strings.Index(body, consumer)
++		if at < 0 {
++			t.Fatalf("%s no longer runs in the candidate lane; this test no longer proves what it claims", consumer)
++		}
++		if at < second {
++			t.Fatalf("%s reads the candidate before confinement has finished with it", consumer)
++		}
++	}
++}
++
++// rawFuncSource returns one function's source text, verbatim, so an assertion
++// can be about what the code says and not only about which identifiers it
++// mentions. The doc comment is excluded: prose describing a rule is not the
++// rule.
++func rawFuncSource(t *testing.T, rel, name string) string {
++	t.Helper()
++	fset := token.NewFileSet()
++	parsed, err := parser.ParseFile(fset, "../../"+rel, nil, 0)
++	if err != nil {
++		t.Fatalf("parse %s: %v", rel, err)
++	}
++	src := rawSource(t, rel)
++	var out string
++	ast.Inspect(parsed, func(n ast.Node) bool {
++		fn, ok := n.(*ast.FuncDecl)
++		if !ok || fn.Name.Name != name || fn.Body == nil {
++			return true
++		}
++		out = src[fset.Position(fn.Pos()).Offset:fset.Position(fn.End()).Offset]
++		return false
++	})
++	if out == "" {
++		t.Fatalf("function %s not found in %s", name, rel)
++	}
++	return out
++}
++
++// The reconciliation is only worth anything if the two accounts agree on an
++// ordinary candidate: a refusal that fires on every run is a broken gate, not
++// a safe one. This runs both Git invocations over a real change holding the
++// paths that used to be invisible, and requires them to agree.
++func TestTheTwoAccountsOfARealCandidateAgree(t *testing.T) {
++	ctx := context.Background()
++	root := t.TempDir()
++	run := func(args ...string) {
++		t.Helper()
++		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
++		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
++		if out, err := cmd.CombinedOutput(); err != nil {
++			t.Fatalf("git %v: %v\n%s", args, err, out)
++		}
++	}
++	write := func(name, body string) {
++		t.Helper()
++		p := filepath.Join(root, name)
++		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
++			t.Fatal(err)
++		}
++		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
++			t.Fatal(err)
++		}
++	}
++	run("init", "-q", "-b", "main")
++	write("docs/café.md", "a\n")
++	write("naïve.go", "package p\n")
++	write("plain.go", "package p\n\nfunc Gone() {}\n")
++	run("add", "-A")
++	run("commit", "-q", "-m", "base")
++
++	repo := gitx.Repo{Root: root}
++	base, err := repo.Head(ctx)
++	if err != nil {
++		t.Fatal(err)
++	}
++
++	write("docs/café.md", "a2\n")
++	write("weird/ta\tb.go", "package p\n\nfunc Added() {}\n")
++	run("mv", "naïve.go", "renommé.go")
++	run("rm", "-q", "plain.go")
++
++	capture, err := repo.CandidateCapture(ctx, base, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	changes, err := repo.CandidateChanges(ctx, base)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(changes.Files) != 4 {
++		t.Fatalf("git reports %d changed file(s), want 4: %+q", len(changes.Files), changes.Files)
++	}
++	if err := reconcileRenderedDiff(changes, capture.Diff); err != nil {
++		t.Fatalf("the rendered diff and git disagree about an ordinary candidate, so every run would be refused: %v\n%s", err, capture.Diff)
++	}
++	if err := confineToPlan(changes.Paths(), planned("docs/café.md", "weird/ta\tb.go", "naïve.go", "renommé.go", "plain.go")); err != nil {
++		t.Fatalf("an in-plan candidate holding quoted paths was refused: %v", err)
++	}
++}
+diff --git a/internal/workflow/testedit.go b/internal/workflow/testedit.go
+index c88d106..19e94fb 100644
+--- a/internal/workflow/testedit.go
++++ b/internal/workflow/testedit.go
+@@ -135,6 +135,52 @@ func testEditGrants(ctx context.Context, world string, planned []string, covered
+ 	return grants, reasons
+ }
+ 
++// confineToPlan refuses a candidate that changed a file the plan does not name.
++//
++// changed are the paths from the authoritative Git change set, both sides of a
++// rename included. A rename is two facts about scope: the file arrived at one
++// path and LEFT another, and a confinement that reads only the arrival lets a
++// candidate move a file out of the plan's scope unnoticed.
++//
++// It takes no grant of any kind. A test-edit grant is operational authority to
++// edit a file the plan ALREADY names -- matchTestEditGrants refuses any grant
++// naming a file the plan does not -- so reading grants here could only ever
++// re-authorise a path the plan already holds, while making the scope look as
++// though it came from somewhere other than the plan. Scope is the architect's
++// to state and this function's only job is to hold the candidate to it.
++//
++// A plan that names no file confines nothing. The empty set is not a refusal
++// of everything: the architect may bound a task without listing paths (see
++// renderScope), and turning silence into a universal refusal would decide the
++// plan's scope here rather than read it.
++func confineToPlan(changed, planned []string) error {
++	if len(planned) == 0 {
++		return nil
++	}
++	// Canonicalised exactly as architecturalFiles does, so "./internal/x.go",
++	// "internal//x.go" and "internal/x.go" are one path in both the plan and
++	// the candidate rather than three.
++	allowed := map[string]bool{}
++	for _, f := range planned {
++		allowed[path.Clean(strings.TrimSpace(f))] = true
++	}
++	var outside []string
++	seen := map[string]bool{}
++	for _, c := range changed {
++		p := path.Clean(strings.TrimSpace(c))
++		if p == "" || p == "." || allowed[p] || seen[p] {
++			continue
++		}
++		seen[p] = true
++		outside = append(outside, p)
++	}
++	if len(outside) == 0 {
++		return nil
++	}
++	sort.Strings(outside)
++	return fmt.Errorf("the candidate changed %d file(s) the plan does not name: %s", len(outside), strings.Join(outside, ", "))
++}
++
+ // testFacts reads a test file's package, imports, and build constraints.
+ func testFacts(src []byte) (testEditFacts, error) {
+ 	pf, err := parseGoFacts(src)

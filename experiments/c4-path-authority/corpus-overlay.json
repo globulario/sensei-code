@@ -1,0 +1,45 @@
+{
+ "C4": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "f01592b0f0828605ed254047fc064f41dacc78f2",
+  "fixture": "github.com/globulario/sensei-code (self; subject is LITERALLY X: shallow boundary clone containing commit f01592b itself, prior history cut, origin removed, seeded only with .sensei-code/config.json. Isolation MEASURED at start and end: controller objects unreachable, alternates absent, remotes 0 -- but the frozen ref predicate was already violated AT STARTUP by refs/heads/main, which the controller created outside the frozen materialisation procedure)",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the frozen isolation interpretation, the ancestry falsifier, and this adjudication (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "Codex -- in-run reviewer, ACCEPT on b4f471f096d1, session inheriting nothing, in a subject whose isolation was measured at both ends",
+   "implementation_and_reconstruction": "Claude -- freeze, run, records; also the in-run worker",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "merge_provenance": {
+   "merge_executed_by": "not merged at record time; the candidate is retained and unadmitted",
+   "authorized_account": "davecourtois",
+   "ultimate_authority": "project owner (human)"
+  },
+  "review_findings": [
+   "frozen isolation predicate FAILED AT STARTUP: C4.isolation.start recorded refs/heads/main beside refs/tags/c4-boundary, while the frozen verify step permits the boundary tag only. The extra ref was created by the CONTROLLER at materialisation (git checkout -B main), a step the frozen procedure does not contain -- so the predicate was true before the governor ran, and the candidate ref at end was not its first cause. The controller-reachability half (no controller object resolvable, alternates absent, remotes 0) passed at both ends.",
+   "required candidate commit ABSENT: the worker left 7 modified paths and no commit, so literal parent-X lineage is NOT ESTABLISHED and no commit was minted afterwards. candidate custody != candidate lineage",
+   "governor observation: X can reach workflow.completed 'candidate ready for governed admission' while the accepted candidate remains uncommitted; a witness requiring a committed candidate needs a governed step before terminal completion, or a refusal at it",
+   "PR #121 Codex exact-head review of 75955b1d (2026-08-29 16:55:32Z): P1 -- confineToPlan collapses a whitespace-distinct path onto the planned one via TrimSpace, so ' internal/workflow/engine.go' passes against a plan naming 'internal/workflow/engine.go'; confinement fails OPEN, defeating C4's own goal. Reproduced against the preserved candidate. THE FROZEN PLAN SPECIFIED THIS: it required path.Clean(strings.TrimSpace(f)) 'exactly as architecturalFiles does', propagating a pre-existing repository pattern into the one place path identity is authority. Third ground for refusal; the blame is the freeze's, not the loop's. C5 owes: a Git path is compared as Git reports it.",
+   "PR #121 Codex exact-head review of 151da20f (2026-08-29 17:01:18Z): P2 -- the adjudication attributed the isolation failure to the governor's candidate ref at end, while the start capture already violated the predicate. Corrected: the deviation is the controller's, at materialisation, before the run. The 'mechanism demonstrated' claim is narrowed to the pre-freeze validation; C4's own run did not use a conforming subject.",
+   "PR #121 Codex exact-head review of 2c8d7590 (2026-08-29 19:00:01Z): P2 -- C4.run omits required end-state fields the freeze specified for it (producer binary path, subject tree), so the instrument is incomplete against its own contract. Adjudicated: C4 is VOID; the prior 'FAIL, not VOID' disposition is superseded. The tree in C4.isolation.end.txt does not repair it -- the freeze specified WHERE evidence had to be captured.",
+   "PR #121 Codex exact-head review of 42bb8062 (2026-08-29 19:29:23Z): P2 -- the surviving-observations list claimed each item rests on its own artifact and then included the pre-freeze materialisation validation, for which no capture exists (prefreeze/ holds graph metadata and preflights only; the earliest recorded subject state is C4.isolation.start.txt, after refs/heads/main already existed). Marked UNRECORDED, not captured retroactively. Fifth adjudicator-authored defect here and the third of the species 'asserted without the capture that would support it' -- this instance inside the list written to separate supported from unsupported.",
+   "PR #121 Codex exact-head review of 9c39ec9c (2026-08-29 19:33:45Z): P2 -- the note and findings had been corrected but the append-only history event still listed the pre-freeze validation among artifact-backed observations, and encounters.jsonl copies history verbatim, so the structured correction trail still certified evidence the manifest says was never captured. Superseded by an appended history event rather than by editing the original."
+  ],
+  "note": "C4, path identity as authority under governor X: VOID. The instrument record is incomplete against its own frozen contract -- C4.run omits the producer binary path and subject tree at end, which the freeze required in that artifact at both endpoints -- and the freeze makes missing expected evidence VOID rather than failed. No overall witness verdict is available: not PASS, not FAIL, not 'isolation established' or 'lineage failed'. Surviving observations, each on its own artifact: the candidate's whitespace path fail-open (independently reproduced), the startup ref deviation created by the controller outside the frozen materialisation, the candidate left uncommitted, controller objects unreachable and alternates absent at both ends; the claim that literal X and shallow isolation can coexist is UNRECORDED -- the pre-freeze validation was run but never captured, and prefreeze/ holds only graph metadata and file preflights. Candidate retained, NOT admitted; no X+1.",
+  "history": [
+   {
+    "recorded": "2026-08-29, PR #121",
+    "event": "superseded: witness VOID",
+    "supersedes": "the disposition 'C4 as a self-governance witness: FAIL, not VOID' and every overall verdict derived from it (isolation FAIL, lineage FAIL, mechanism demonstrated)",
+    "detail": "instrument closure is a gate preceding falsifier evaluation, and C4.run lacks required end fields. Observations survive on their own artifacts -- whitespace fail-open (independently reproduced), startup ref deviation, uncommitted candidate, controller-object probes, and the pre-freeze validation of the materialisation mechanism -- but none is a C4 conclusion. C5 owes first: an instrument must prove its own completeness before its contents prove anything else."
+   },
+   {
+    "recorded": "2026-08-29, PR #121",
+    "event": "correction: the pre-freeze validation is UNRECORDED",
+    "supersedes": "the clause 'and the pre-freeze validation of the materialisation mechanism' in the history event 'superseded: witness VOID', which listed it among observations surviving on their own artifacts",
+    "detail": "No pre-freeze subject or isolation capture exists: prefreeze/ holds graph metadata and seven file preflights only, and the earliest recorded subject state is C4.isolation.start.txt at 16:12:25Z, after refs/heads/main already existed. The validation was run and never captured, so the claim that literal X and shallow isolation can coexist is UNRECORDED for this experiment and is not an observation of it. Not captured retroactively -- re-running the materialisation now would capture a different one. Every other observation named in the superseded event stands."
+   }
+  ]
+ }
+}
