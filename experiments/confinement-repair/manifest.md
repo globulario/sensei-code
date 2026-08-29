@@ -284,3 +284,11 @@ Note on the figures: the review quoted 6,359,705 bytes and sha256
 `f62eca9e…`; the measured stream, recorded in `C2.run` at run time and
 unchanged since, is **6,359,622 bytes, sha256 `130e2fdf…`**. The measured
 values are used here.
+
+Hardened after the #118 exact-head Codex review of `8ecc5b3` (two findings,
+both reproduced as failing tests first): a gap in the numbering fails closed
+(`part-001` beside `part-003` would have concatenated into something that
+parses while omitting every event between them), and a stream present both
+whole and split is refused rather than silently preferring one
+representation. Pinned by `TestAGapInTheSplitStreamFailsClosed` and
+`TestAWholeStreamBesideItsPartsIsRefused`.

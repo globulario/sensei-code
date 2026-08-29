@@ -381,20 +381,51 @@ func partOf(name string) string {
 	return ""
 }
 
-// openLog opens a stream, reconstructing it from its ordered parts when the
-// stream itself is not present. Parts are read in lexical order, which is
-// their numeric order by construction.
-func openLog(path string) (io.ReadCloser, error) {
-	if fh, err := os.Open(path); err == nil {
-		return fh, nil
-	} else if !os.IsNotExist(err) {
-		return nil, err
-	}
+// streamParts returns the ordered parts of a stream, refusing anything that
+// is not the whole of it.
+//
+// The refusals are the point. Glob returns whatever happens to be present,
+// so part-001 beside part-003 would concatenate into something that PARSES
+// while silently omitting every event between them -- candidate, validation,
+// review -- and a regenerated corpus would carry that as authoritative
+// evidence. Missing evidence must fail closed, so the sequence must start at
+// 001 and be contiguous. And a stream present BOTH whole and split is an
+// ambiguity about what the evidence is, not a preference to resolve
+// silently: it is refused too (#118 review).
+func streamParts(path string) ([]string, error) {
 	parts, err := filepath.Glob(path + ".part-*")
 	if err != nil || len(parts) == 0 {
-		return nil, fmt.Errorf("%s: neither the stream nor any part of it is present", path)
+		return nil, err
 	}
 	sort.Strings(parts)
+	for i, p := range parts {
+		want := fmt.Sprintf("%s.part-%03d", filepath.Base(path), i+1)
+		if filepath.Base(p) != want {
+			return parts, fmt.Errorf("%s: the parts are not a whole stream: expected %s, found %s (%d part(s) present)",
+				path, want, filepath.Base(p), len(parts))
+		}
+	}
+	return parts, nil
+}
+
+// openLog opens a stream, reconstructing it from its ordered parts when the
+// stream itself is not present.
+func openLog(path string) (io.ReadCloser, error) {
+	parts, perr := streamParts(path)
+	whole, err := os.Open(path)
+	switch {
+	case err == nil && len(parts) != 0:
+		whole.Close()
+		return nil, fmt.Errorf("%s: the stream is present both whole and as %d part(s); one encounter has one representation", path, len(parts))
+	case err == nil:
+		return whole, nil
+	case !os.IsNotExist(err):
+		return nil, err
+	case perr != nil:
+		return nil, perr
+	case len(parts) == 0:
+		return nil, fmt.Errorf("%s: neither the stream nor any part of it is present", path)
+	}
 	readers := make([]io.Reader, 0, len(parts))
 	closers := make([]io.Closer, 0, len(parts))
 	for _, p := range parts {
@@ -451,6 +482,13 @@ func discover(root string) ([]string, error) {
 		switch {
 		case strings.HasSuffix(name, ".receipts.jsonl"):
 			return nil
+		case strings.HasSuffix(name, ".log"), strings.HasSuffix(name, ".jsonl"):
+			// Logical, so a stream present both whole and split is one entry
+			// and openLog refuses it once rather than producing two records.
+			if !seen[path] {
+				seen[path] = true
+				logs = append(logs, path)
+			}
 		case partOf(name) != "":
 			// A stream too large to transit a tool call is committed as
 			// ordered parts. It is ONE encounter: the parts are the same
@@ -462,8 +500,6 @@ func discover(root string) ([]string, error) {
 				seen[logical] = true
 				logs = append(logs, logical)
 			}
-		case strings.HasSuffix(name, ".log"), strings.HasSuffix(name, ".jsonl"):
-			logs = append(logs, path)
 		}
 		return nil
 	})

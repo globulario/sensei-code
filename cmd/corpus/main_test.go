@@ -229,3 +229,66 @@ func TestASplitStreamIsOneEncounterReconstructedFromItsParts(t *testing.T) {
 		t.Fatalf("the reconstructed stream was not read as one: %+v", rec.Task)
 	}
 }
+
+// Missing evidence fails closed: a gap in the parts is not a stream.
+//
+// Glob returns whatever is present, so part-001 + part-003 would concatenate
+// into something that parses while silently omitting every event in between
+// -- candidate, validation, review -- and a regenerated corpus would treat
+// that incomplete evidence as authoritative (#118 review, P1).
+func TestAGapInTheSplitStreamFailsClosed(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []int{1, 3} {
+		line := fmt.Sprintf(`{"kind":"status","summary":"part %d"}`+"\n", n)
+		if err := os.WriteFile(filepath.Join(runs, fmt.Sprintf("X.log.part-%03d", n)), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	logs, err := discover(dir)
+	if err == nil && len(logs) == 1 {
+		if _, err = extract(logs[0]); err == nil {
+			t.Fatal("a stream missing its middle part was read as complete evidence")
+		}
+	}
+	if err == nil {
+		t.Fatal("the gap was not reported")
+	}
+	if !strings.Contains(err.Error(), "part") {
+		t.Fatalf("the refusal must name the parts: %v", err)
+	}
+}
+
+// A whole stream and parts of it cannot both stand: one encounter, one
+// record. Two representations of the same stream is an ambiguity about what
+// the evidence IS, not something to silently prefer one side of (#118, P2).
+func TestAWholeStreamBesideItsPartsIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"kind":"status","summary":"whole"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "X.log"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs, "X.log.part-001"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := discover(dir)
+	if err != nil {
+		if !strings.Contains(err.Error(), "X.log") {
+			t.Fatalf("the refusal must name the stream: %v", err)
+		}
+		return
+	}
+	if len(logs) != 1 {
+		t.Fatalf("one stream produced %d entries: %v", len(logs), logs)
+	}
+	if _, err := extract(logs[0]); err == nil {
+		t.Fatal("a stream present both whole and split was read without objection")
+	}
+}
