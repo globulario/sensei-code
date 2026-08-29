@@ -547,3 +547,77 @@ func TestAWholeStreamIsNotAPartOfAnother(t *testing.T) {
 		t.Fatalf("two independent streams were not read as two: %v", got)
 	}
 }
+
+// A stream's sidecar is neither a stream nor a piece of one.
+//
+// `A.log.part-x.log` is an accepted stream, so it may carry the metadata
+// files extract already reads: `.run`, `.receipts.jsonl`,
+// `.recipes-after.json`. Each of those names contains the marker after
+// `A.log`, so part attribution claimed them for that shorter stream --
+// inventing an `A.log` encounter whose "part" is a `.run` file, which then
+// fails its sequence check and aborts the corpus. A nested stream could
+// therefore never carry the sidecars every other stream has (#118, round 10).
+func TestASidecarIsNotAPartOfAnotherStream(t *testing.T) {
+	for _, suffix := range []string{".run", ".receipts.jsonl", ".recipes-after.json"} {
+		if got := partOf("A.log.part-x.log" + suffix); got != "" {
+			t.Errorf("partOf(%q) = %q; a sidecar claimed a stream", "A.log.part-x.log"+suffix, got)
+		}
+	}
+	// The stream itself and its real pieces are unaffected.
+	if partOf("A.log.part-x.log.part-001") != "A.log.part-x.log" {
+		t.Fatal("the nested stream's own piece stopped resolving")
+	}
+
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"kind":"task.created","task_id":"nested","summary":"nested"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(runs, "A.log.part-x.log.run"), []byte("START\nEXIT 0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(logs) != 1 || filepath.Base(logs[0]) != "A.log.part-x.log" {
+		t.Fatalf("discover = %v; want only the nested stream", logs)
+	}
+	if _, err := extract(logs[0]); err != nil {
+		t.Fatalf("a nested stream could not carry its sidecar: %v", err)
+	}
+}
+
+// Uniqueness must be certified, not assumed: if the directory cannot be
+// enumerated, nothing proves the whole stream has no split or malformed
+// twin, so the whole file is not accepted on its own (#118, round 10).
+func TestAWholeStreamIsRefusedWhenUniquenessCannotBeCertified(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(runs, "X.log")
+	if err := os.WriteFile(path, []byte("task task-1  session s\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(runs, 0o100); err != nil { // executable, not readable
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(runs, 0o755) })
+	if _, err := os.ReadDir(runs); err == nil {
+		t.Skip("this environment can list an unreadable directory; the specimen needs enumeration to fail")
+	}
+	if fh, err := os.Open(path); err != nil {
+		t.Skipf("the whole file is not openable either, so the specimen is not the one under test: %v", err)
+	} else {
+		fh.Close()
+	}
+	if _, err := openLog(path); err == nil {
+		t.Fatal("a whole stream was accepted while its uniqueness could not be certified")
+	}
+}

@@ -390,6 +390,20 @@ func isStreamName(name string) bool {
 // partMarker separates a stream from the sequence of one of its pieces.
 const partMarker = ".part-"
 
+// sidecarSuffixes are the metadata files a stream may carry; extract reads
+// each as <stream> + suffix. They are neither streams nor pieces of one.
+var sidecarSuffixes = []string{".run", ".receipts.jsonl", ".recipes-after.json"}
+
+// isSidecarName reports that a name is a stream's metadata file.
+func isSidecarName(name string) bool {
+	for _, suffix := range sidecarSuffixes {
+		if strings.HasSuffix(name, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 // partOf returns the logical stream a name claims to be a piece of, or "".
 //
 // Anything shaped like a piece of a stream CLAIMS one, whatever follows the
@@ -418,7 +432,7 @@ func partOf(name string) string {
 	// stream then reported a false whole-plus-parts ambiguity and aborted
 	// the corpus, though the two files are independent evidence. Being a
 	// stream settles it (#118 review, round 9).
-	if isStreamName(name) {
+	if isStreamName(name) || isSidecarName(name) {
 		return ""
 	}
 	logical := ""
@@ -478,6 +492,12 @@ func openLog(path string) (io.ReadCloser, error) {
 	parts, perr := streamParts(path)
 	whole, err := os.Open(path)
 	switch {
+	case err == nil && perr != nil:
+		// Enumeration is what proves this stream has no split or malformed
+		// twin. Accepting the whole file while that proof failed would let
+		// the corpus certify uniqueness it never established.
+		whole.Close()
+		return nil, perr
 	case err == nil && len(parts) != 0:
 		whole.Close()
 		return nil, fmt.Errorf("%s: the stream is present both whole and as %d part(s); one encounter has one representation", path, len(parts))

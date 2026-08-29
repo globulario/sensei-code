@@ -371,3 +371,24 @@ whole-plus-parts ambiguity and aborted the corpus, though the two files are
 independent evidence (Codex reproduced it with `go run ./cmd/corpus`). Being
 a stream settles it, and the nested stream's own pieces still resolve to it
 (`TestAWholeStreamIsNotAPartOfAnother`).
+
+The tenth round (`5544eca`) added the last two: a stream's **sidecars** are
+neither streams nor pieces (`A.log.part-x.log.run` was claimed by `A.log`,
+inventing an encounter whose "part" was a `.run` file — so a nested stream
+could never carry the metadata every other stream has), and **uniqueness
+must be certified rather than assumed** (when the directory cannot be
+enumerated, nothing proves a whole stream has no split or malformed twin, so
+the whole file is no longer accepted on that silence). Pinned by
+`TestASidecarIsNotAPartOfAnotherStream` and
+`TestAWholeStreamIsRefusedWhenUniquenessCannotBeCertified`.
+
+The identity contract is therefore five rules, composing rather than
+overlapping:
+
+> **Recognition** — one definition decides whether a name is an evidence
+> stream. **Resolution** — a piece belongs to the longest prefix that is
+> itself a valid stream. **Exclusivity** — a complete name is a stream, a
+> piece, or a sidecar; never two of them. **Single authority** — every
+> consumer that attributes a piece consults the same identity calculation.
+> **Certified uniqueness** — a representation is accepted only when the
+> directory could be enumerated to prove no other representation exists.
