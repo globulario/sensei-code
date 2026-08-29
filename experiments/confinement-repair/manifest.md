@@ -123,3 +123,35 @@ Options, stated without choosing:
 
 Recorded, not decided. Whichever is chosen, the revised plan is a NEW freeze
 with its own hash; this one stays as it is.
+
+## C2 — FROZEN (2026-08-29, M29; C1 unchanged)
+
+Option (a): the four M27 regressions move to test files the graph has
+already examined and that already own these concerns —
+`engine_test.go` (workflow-level "context/guidance cannot enlarge the plan")
+and `routine_test.go` (Level-1 widening and governance-path cases). The
+production helper stays beside `inspectTestEdits` in `testedit.go`. Names
+unchanged. Measured before freezing: `prefreeze-c2/`.
+
+```text
+governor source     f01592b0f0828605ed254047fc064f41dacc78f2   (unchanged; ba519f7 is an evidence record, not a governor)
+governor binary     sensei-code-shw1, sha256 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea   (the W1/C1 binary)
+subject / base      f01592b0f0828605ed254047fc064f41dacc78f2, a FRESH detached clean worktree, seeded only with .sensei-code/config.json (94ed3b1723e3f9bd…)
+plan                experiments/confinement-repair/plan-c2.json, sha256 45d8b6c7f6ed7f89d8be4bf4a07c094916f2042dcd06cdd807d6b586ec3471df   (C1's plan.json, 42c8b878…, stays as it is)
+planned files       internal/workflow/{engine.go, testedit.go, engine_test.go, routine_test.go} -- all four EXAMINED at 42e6e12c
+graph               42e6e12c…, CURRENT; recorded again per run
+worker / reviewer   as C1: Claude in the candidate worktree; Codex; provider failure is an instrument outcome
+env / stopping rule as C1: SENSEI_CODE_BENCHMARK=1, --json --timeout 30m, ONE invocation, no opportunistic replanning
+```
+
+Bootstrap rule (unchanged): candidate-path equality with THIS frozen plan is
+an admission precondition, checked by hand from the preserved diff; any
+widening means retained and not admitted, and a further revision is a new
+freeze. Falsifier: M28's, unchanged.
+
+Predictions: all four files examined, so no `unexamined` line and no
+`bounded-knowledge-gap` on that account; route
+`architectural-authority-granted`; M2.2 may grant `engine_test.go` and
+`routine_test.go` beside their covered subjects (operational, printed beside
+coverage, never summed) — and if it does, the candidate must still touch only
+the four named paths, because a grant is not a plan entry.
