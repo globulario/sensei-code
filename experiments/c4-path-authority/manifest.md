@@ -418,8 +418,8 @@ reproduction:
 the whitespace/path fail-open in the candidate's code   reproduced independently
 the startup ref deviation (refs/heads/main)             recorded in C4.isolation.start.txt
 the candidate was left uncommitted                      observable in the preserved worktree
-literal X + shallow isolation can coexist               demonstrated by the pre-freeze validation
 controller-object probes, alternates, remotes           captured at both ends
+literal X + shallow isolation can coexist               UNRECORDED -- see below
 ```
 
 No longer available as C4 conclusions: **PASS**, **FAIL**, "isolation
@@ -446,3 +446,38 @@ C5's owed list, in order:
 3  a Git path compared as Git reports it -- no trimming, folding, rewriting
 4  the frozen materialisation verified before the governor is invoked
 ```
+
+
+### The pre-freeze validation is UNRECORDED, and was listed as an observation anyway
+
+`42bb8062`, 2026-08-29 19:29:23Z. The surviving-observations list said each
+item "rests on its own artifact or an independent reproduction", and then
+included *"literal X + shallow isolation can coexist — demonstrated by the
+pre-freeze validation"*. **There is no such artifact.**
+`prefreeze/` holds graph metadata and seven file preflights, nothing else;
+the earliest recorded subject state in this experiment is
+`C4.isolation.start.txt`, captured at 16:12:25Z — after `refs/heads/main`
+already existed.
+
+The validation was run. Its output exists only in the working conversation,
+which is adjudicator prose, and the sentence immediately above the list
+forbids exactly that. So:
+
+```text
+literal X + shallow isolation can coexist    UNRECORDED
+                                             not an observation of this experiment
+```
+
+It is not captured retroactively either: re-running the materialisation now
+would capture a *different* materialisation, not the one that preceded the
+freeze. Marking it unrecorded costs nothing real — C5 requires the
+materialisation to be verified and captured before the governor is invoked
+(owed item 4), so the property will be evidenced there or not at all.
+
+This is the **fifth** defect in this record authored by the adjudicator
+rather than the loop, and the third of the same species: *a property asserted
+without the capture that would support it.* The species now has instances in
+prose, in a generated field, in a provenance string, in a run stamp, and in
+the very list written to separate supported observations from unsupported
+claims. That last one is the useful data point — **the correction mechanism
+reproduced the defect it was correcting.**
