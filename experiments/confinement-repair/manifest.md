@@ -361,3 +361,13 @@ whole-plus-parts representation and aborted the corpus. A repaired
 calculation that only one caller consults is half a repair. `partOf` is now
 the single identity calculation and everything that attributes a part uses
 it (`TestPartsAreAttributedByIdentityNotByPrefix`).
+
+The ninth round (`138ee23`) completed the identity model with the rule the
+first eight had left implicit: **a name is either a stream or a piece of one,
+never both.** `A.log.part-x.log` ends in `.log`, so it IS a stream — and it
+also contains the marker after `A.log`, which is also a stream, so resolution
+alone called it a piece of the first. Reading `A.log` then reported a false
+whole-plus-parts ambiguity and aborted the corpus, though the two files are
+independent evidence (Codex reproduced it with `go run ./cmd/corpus`). Being
+a stream settles it, and the nested stream's own pieces still resolve to it
+(`TestAWholeStreamIsNotAPartOfAnother`).

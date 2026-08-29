@@ -495,3 +495,55 @@ func TestPartsAreAttributedByIdentityNotByPrefix(t *testing.T) {
 		t.Fatalf("parts were attributed by prefix rather than identity: %v", got)
 	}
 }
+
+// A name is either a stream or a piece of one, never both.
+//
+// `A.log.part-x.log` ends in .log, so it IS a stream -- and it also contains
+// the marker after `A.log`, which is also a stream, so identity resolution
+// alone called it a part of `A.log`. Reading `A.log` then reported a false
+// whole-plus-parts ambiguity and aborted the corpus, though both files are
+// independent evidence. Being a stream settles it: a whole stream is not a
+// piece of anything (#118 review, round 9).
+func TestAWholeStreamIsNotAPartOfAnother(t *testing.T) {
+	if partOf("A.log.part-x.log") != "" || partOf("A.jsonl.part-x.jsonl") != "" {
+		t.Fatalf("a whole stream claimed to be a part: %q %q",
+			partOf("A.log.part-x.log"), partOf("A.jsonl.part-x.jsonl"))
+	}
+	// Its own pieces still resolve to it.
+	if got := partOf("A.log.part-x.log.part-001"); got != "A.log.part-x.log" {
+		t.Fatalf("partOf(nested part) = %q; want A.log.part-x.log", got)
+	}
+
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, id string) {
+		line := fmt.Sprintf(`{"kind":"task.created","task_id":%q,"summary":%q}`+"\n", id, id)
+		if err := os.WriteFile(filepath.Join(runs, name), []byte(line), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("A.log", "first")
+	write("A.log.part-x.log", "second")
+
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	if len(logs) != 2 {
+		t.Fatalf("two whole streams produced %d entries: %v", len(logs), logs)
+	}
+	got := map[string]string{}
+	for _, l := range logs {
+		rec, err := extract(l)
+		if err != nil {
+			t.Fatalf("%s: %v", filepath.Base(l), err)
+		}
+		got[filepath.Base(l)] = rec.Task["id"].(string)
+	}
+	if got["A.log"] != "first" || got["A.log.part-x.log"] != "second" {
+		t.Fatalf("two independent streams were not read as two: %v", got)
+	}
+}

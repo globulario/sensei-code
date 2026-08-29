@@ -411,6 +411,16 @@ const partMarker = ".part-"
 // being something it is not. Constructed independently, before the repair,
 // by the owner reading this scan and by Codex reading the diff.
 func partOf(name string) string {
+	// A name is either a stream or a piece of one, never both. Both
+	// `A.log` and `A.log.part-x.log` are streams -- the second ends in .log
+	// -- and the second also contains the marker after the first, so
+	// identity resolution alone called it a piece of `A.log`: reading that
+	// stream then reported a false whole-plus-parts ambiguity and aborted
+	// the corpus, though the two files are independent evidence. Being a
+	// stream settles it (#118 review, round 9).
+	if isStreamName(name) {
+		return ""
+	}
 	logical := ""
 	for i := 0; i+len(partMarker) <= len(name); i++ {
 		if name[i:i+len(partMarker)] == partMarker && isStreamName(name[:i]) {
