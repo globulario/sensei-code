@@ -8,8 +8,10 @@ reaches judgement. C3's plan authorises both call sites, so the lesson C2
 established is what C3 implements rather than what C3 rediscovers.
 
 Governor `f01592b` (unchanged by #118 or #119 landing), base = X, subject
-materialised from X alone into a fresh repository with no remotes, no shared
-object database and no reachable controller ref. Expected artifacts are
+materialised from X alone into a fresh repository **designed** to have no
+remotes, no shared object database and no reachable controller ref — a
+design the run did not measure and post-run capture corroborates, never a
+run-time established fact (see the final adjudication). Expected artifacts are
 closed, and a missing one makes the witness void rather than failed.
 
 Everything else — identities, the plan hash, the pre-freeze per-file

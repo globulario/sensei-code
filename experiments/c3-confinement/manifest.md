@@ -486,3 +486,26 @@ by one line —
 — and if a future producer can report its own source revision, that belongs
 in the stamp too. Until a run captures it, the corpus says `unrecorded`
 rather than borrowing a neighbour's freeze.
+
+### The same claim, a third time — swept rather than patched
+
+`d243a813`, 2026-08-29 15:50:07Z: the overlay's `instrument.fixture` still
+presented the absence of a shared object database and reachable controller
+refs as established fact, and that string is regenerated into
+`encounters.jsonl`, so the corpus asserted what this record's own
+adjudication denies.
+
+That is the **third** place the claim survived a correction — manifest prose,
+then the brief's summary, now a generated field. Fixing instances one at a
+time is the pattern #118 spent sixteen rounds unlearning, so this time the
+record was swept: every committed statement about C3's isolation now says
+*designed for*, with run-time measurement absent and post-run corroboration
+named. The freeze's own description of the intended materialisation is left
+as written — it is a statement of design, and it was frozen before the run.
+
+The general form, worth carrying into C4 and beyond:
+
+> **A property the protocol failed to measure must not appear as a fact in
+> ANY rendering of the record** — prose, summary, generated field or
+> provenance string. One corrected paragraph does not repair a claim that
+> exists in four places.
