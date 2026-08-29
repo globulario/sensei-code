@@ -223,6 +223,11 @@ candidate, the workflow needs a governed step that produces the commit
 
 ### What C4 did establish
 
+> **WITHDRAWN — this section is superseded twice over.** The mechanism claim
+> below is UNRECORDED (no pre-freeze capture exists) and the witness is VOID
+> (see the superseding adjudication). The text is preserved unedited as the
+> record of what was written at the time; it is not a live claim.
+
 **Literal ancestry-capable isolation is demonstrated.** The subject was
 `f01592b…` itself, with prior history cut by the shallow graft and no
 controller object reachable at either end. C3 could prove neither. That
@@ -235,6 +240,10 @@ reconciles renderer output before both…"*. Reviewer acceptance is not
 admission, and here two frozen witness falsifiers block it.
 
 ### Recorded disposition
+
+> **WITHDRAWN — superseded by the VOID adjudication below, and its mechanism
+> clause is UNRECORDED.** Preserved unedited as the disposition written at
+> the time.
 
 > **Literal ancestry-capable isolation mechanism demonstrated; repair
 > accepted; overall witness FAILED because the frozen ref-isolation
@@ -532,3 +541,29 @@ its strongest form:
 > the one you were shown.** The reviewer names an instance; the instance is
 > not the claim. Anything less leaves the record asserting, somewhere, what
 > it has formally withdrawn everywhere else.
+
+### The enumeration ran, printed the survivors, and was not a gate
+
+Disclosed against myself: the previous commit's message says the withdrawal
+was completed "by listing every mention across all four renderings". The
+listing ran. It printed two more survivors — `manifest.md:226` and `:239`,
+in the earlier FAIL adjudication and its disposition — and the commit
+proceeded anyway, because the shell gate was wired to the test suite and not
+to the grep. The line "(empty above = none survive)" printed under a
+non-empty list.
+
+Both are now marked WITHDRAWN in place, not deleted: they are the record of
+what was written at the time, and the sequence is the point. What is removed
+is their status as live claims.
+
+So the law from the previous round needs its second half, and this is the
+seventh adjudicator-authored defect in this record:
+
+> **An enumeration that is not a gate is prose.** Listing the occurrences
+> and then not blocking on the list is the same failure as never listing
+> them — with more evidence that it was preventable.
+
+C5's item 0 is now argued from three directions: a required-field check the
+run must perform, a claim-withdrawal check the record must perform, and a
+gate that refuses rather than reports. The common shape is that **every one
+of these was something I verified by reading.**
