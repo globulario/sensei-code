@@ -199,14 +199,17 @@ The architectural lesson, larger than "check twice":
 > final digest and path set must be re-bound after the last mutation and
 > before audit, review or admission.
 
-### The authority boundary refused the improvisation — preserved exactly
+### The frozen-plan/review boundary refused the improvisation — preserved exactly
 
 In cycle 2 the worker added a *second*, post-validation confinement check to
-answer the finding. The reviewer refused it **because the frozen plan did not
-authorise it**: "the candidate also adds an unplanned second [check]". The
-experiment failed to produce the repair, and the system refused to cheat its
-way to success — the boundary being repaired did its job on the repair
-attempt. Recorded, not worked around.
+answer the finding. The reviewer rejected it **because the supplied plan did
+not authorise it**: "the candidate also adds an unplanned second [check]".
+
+Stated precisely: **this proves the run did not improvise itself into
+success; it does not prove that X already possessed the candidate-vs-plan
+confinement gate being repaired.** The refusal came from the frozen plan and
+the review boundary, not from the gate C2 was building — X has no such gate,
+which is why C2 exists. Recorded, not worked around.
 
 ### Separate design finding — two representations of one predicate
 
@@ -245,3 +248,39 @@ remotes, expose no controller ref, run worker and reviewer where the
 controller checkout is unreachable, and carry no credentials permitting a
 fetch back — a bare export of X cloned into a sandbox, not a shallow clone
 that keeps an `origin`.
+
+
+## Evidence packaging — `C2.log` is committed as ordered parts
+
+The exact-head Sensei architectural gate failed closed on `ec4004b9`
+(Actions run 33225550271): the raw stream is larger than the gRPC message
+ceiling, so the verifier could not scope every changed file.
+
+```text
+[scope] rpc error: code = ResourceExhausted
+grpc: received message larger than max (… vs. 4194304)
+```
+
+The verifier is **not** modified and no file is exempted from it — that
+would change the instrument to accommodate the evidence it verifies. The
+bytes are unchanged; only their transport representation is:
+
+```text
+C2.log            6,359,622 bytes  sha256 130e2fdfc73eab2c6c9261742526a175c22e55e95fab7cbe9950e2a46ec827b6   (as recorded in C2.run)
+  part-001        3,499,909 bytes  sha256 b879c26067d00637130a21368fd66d92c16914f74eb7023f7d8499f1565bcaba
+  part-002        2,859,713 bytes  sha256 09f56e7c53ab97e12fca86a5b4b9231c0fa617d32ad2d0efcbe18acadcf98998
+```
+
+Split at complete log-line boundaries; `cat C2.log.part-001 C2.log.part-002`
+reconstructs the 6,359,622 bytes and the sha256 above exactly, verified at
+the split. `cmd/corpus` now reads `X.log.part-NNN` as the one stream it
+reconstructs, so a split changes the packaging and never the record —
+pinned by `TestASplitStreamIsOneEncounterReconstructedFromItsParts`, whose
+fixture is split MID-LINE so only a faithful reconstruction parses. Without
+that, splitting a log would have silently deleted the C2 encounter from the
+corpus.
+
+Note on the figures: the review quoted 6,359,705 bytes and sha256
+`f62eca9e…`; the measured stream, recorded in `C2.run` at run time and
+unchanged since, is **6,359,622 bytes, sha256 `130e2fdf…`**. The measured
+values are used here.

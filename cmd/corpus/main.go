@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -155,7 +156,7 @@ func extract(log string) (record, error) {
 		Instrument: map[string]any{"sensei_sha": "unrecorded", "sensei_code_sha": "unrecorded", "fixture": "unrecorded", "world": "unrecorded"},
 		Graph:      map[string]any{"domain": "unrecorded", "build": "unrecorded", "address": "unrecorded", "audit_graph_commit": "unrecorded", "input_graph_digest": "unrecorded", "authority": "unrecorded"},
 		Task:       map[string]any{}, AuthorityToWorker: map[string]any{}, Terminal: map[string]any{}, ReviewFindings: "unrecorded", ReviewProvenance: "unrecorded", MergeProvenance: "unrecorded", History: "unrecorded"}
-	fh, err := os.Open(log)
+	fh, err := openLog(log)
 	if err != nil {
 		return rec, err
 	}
@@ -368,8 +369,66 @@ func extract(log string) (record, error) {
 //     suffix .log (trimmed stream) or .jsonl (untrimmed stream);
 //   - excluded: *.receipts.jsonl (receipts, read beside their stream), and
 //     anything outside a `runs` directory.
+//
+// partSuffix matches the ordered pieces of a split stream: X.log.part-001.
+var partSuffix = regexp.MustCompile(`^(.+\.(?:log|jsonl))\.part-\d{3,}$`)
+
+// partOf returns the logical stream name a part belongs to, or "".
+func partOf(name string) string {
+	if m := partSuffix.FindStringSubmatch(name); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
+// openLog opens a stream, reconstructing it from its ordered parts when the
+// stream itself is not present. Parts are read in lexical order, which is
+// their numeric order by construction.
+func openLog(path string) (io.ReadCloser, error) {
+	if fh, err := os.Open(path); err == nil {
+		return fh, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	parts, err := filepath.Glob(path + ".part-*")
+	if err != nil || len(parts) == 0 {
+		return nil, fmt.Errorf("%s: neither the stream nor any part of it is present", path)
+	}
+	sort.Strings(parts)
+	readers := make([]io.Reader, 0, len(parts))
+	closers := make([]io.Closer, 0, len(parts))
+	for _, p := range parts {
+		fh, err := os.Open(p)
+		if err != nil {
+			for _, c := range closers {
+				c.Close()
+			}
+			return nil, err
+		}
+		readers = append(readers, fh)
+		closers = append(closers, fh)
+	}
+	return partReader{Reader: io.MultiReader(readers...), closers: closers}, nil
+}
+
+type partReader struct {
+	io.Reader
+	closers []io.Closer
+}
+
+func (p partReader) Close() error {
+	var err error
+	for _, c := range p.closers {
+		if e := c.Close(); e != nil && err == nil {
+			err = e
+		}
+	}
+	return err
+}
+
 func discover(root string) ([]string, error) {
 	var logs []string
+	seen := map[string]bool{}
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -392,6 +451,17 @@ func discover(root string) ([]string, error) {
 		switch {
 		case strings.HasSuffix(name, ".receipts.jsonl"):
 			return nil
+		case partOf(name) != "":
+			// A stream too large to transit a tool call is committed as
+			// ordered parts. It is ONE encounter: the parts are the same
+			// bytes in the same order, and the logical name is the stream
+			// they reconstruct, so a split changes the packaging and never
+			// the record.
+			logical := filepath.Join(filepath.Dir(path), partOf(name))
+			if !seen[logical] {
+				seen[logical] = true
+				logs = append(logs, logical)
+			}
 		case strings.HasSuffix(name, ".log"), strings.HasSuffix(name, ".jsonl"):
 			logs = append(logs, path)
 		}

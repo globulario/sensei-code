@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,5 +187,45 @@ func TestHistoryIsOverlayOnlyAndAppended(t *testing.T) {
 	}
 	if h, ok := rec.History.([]any); !ok || len(h) != 1 || h[0].(map[string]any)["event"] != "merged" {
 		t.Fatalf("history: %v", rec.History)
+	}
+}
+
+// A stream committed as ordered parts is one encounter, reconstructed.
+//
+// A run log can exceed a tool call's message ceiling, so it is committed as
+// C2.log.part-001, .part-002 … The parts are the same bytes in the same
+// order: the corpus must read them as the one stream they reconstruct, or
+// splitting a file would silently delete an encounter from the record.
+func TestASplitStreamIsOneEncounterReconstructedFromItsParts(t *testing.T) {
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	whole := "task task-1  session s\n" + `{"kind":"task.created","task_id":"task-1","summary":"do the thing"}` + "\n"
+	// Split MID-LINE, so only a faithful reconstruction parses: two parts
+	// read independently would each hold half an event.
+	split := len(whole) - 20
+	for i, chunk := range []string{whole[:split], whole[split:]} {
+		if err := os.WriteFile(filepath.Join(runs, fmt.Sprintf("X.log.part-%03d", i+1)), []byte(chunk), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	logs, err := discover(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(logs) != 1 || filepath.Base(logs[0]) != "X.log" {
+		t.Fatalf("discover = %v; want the one logical stream X.log", logs)
+	}
+	rec, err := extract(logs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec.Encounter != filepath.Base(dir)+"/X" {
+		t.Fatalf("encounter = %q", rec.Encounter)
+	}
+	if rec.Task["id"] != "task-1" || rec.Task["text"] != "do the thing" {
+		t.Fatalf("the reconstructed stream was not read as one: %+v", rec.Task)
 	}
 }
