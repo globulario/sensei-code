@@ -333,3 +333,35 @@ func TestSplitStreamPathsAreMatchedLiterally(t *testing.T) {
 		t.Fatalf("a stream was reconstructed from another stream's parts: %v", got)
 	}
 }
+
+// A malformed part name is refused, never ignored.
+//
+// `X.log.part-01` (a packaging typo) matched neither the strict part
+// pattern nor the plain-stream suffixes, so discovery walked past it and
+// regeneration emitted NO record for that encounter -- evidence disappearing
+// quietly, which is the one direction this must never fail (#118 review).
+func TestAMisnumberedPartIsRefusedNotIgnored(t *testing.T) {
+	for _, name := range []string{"X.log.part-01", "X.log.part-abc", "X.jsonl.part-1"} {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			runs := filepath.Join(dir, "runs")
+			if err := os.MkdirAll(runs, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			line := `{"kind":"task.created","task_id":"task-1","summary":"evidence"}` + "\n"
+			if err := os.WriteFile(filepath.Join(runs, name), []byte(line), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			logs, err := discover(dir)
+			if err != nil {
+				return // refused at discovery is also fail-closed
+			}
+			if len(logs) == 0 {
+				t.Fatal("a stream-like part was ignored, so the encounter vanished from the corpus")
+			}
+			if _, err := extract(logs[0]); err == nil {
+				t.Fatalf("a malformed part name was read as evidence: %v", logs)
+			}
+		})
+	}
+}

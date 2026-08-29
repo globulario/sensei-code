@@ -296,4 +296,18 @@ the glob: a stream's own name was read as a PATTERN, so `A[1].log` matched
 the sibling `A1.log.part-001` — the corpus would have emitted that sibling's
 evidence twice and omitted the stream that exists. Parts are now found by
 enumerating the directory and comparing names literally
-(`TestSplitStreamPathsAreMatchedLiterally`).
+(`TestSplitStreamPathsAreMatchedLiterally`). A fourth (`7a9e71c`) closed the
+last silent path: a misnumbered name (`X.log.part-01`) matched neither the
+strict part pattern nor a plain stream, so discovery walked past it and the
+encounter left the corpus without a word. Anything SHAPED like a part now
+claims its stream, and the strict numbering refuses it
+(`TestAMisnumberedPartIsRefusedNotIgnored`).
+
+Together the four findings are one law, and it is about evidence rather than
+about file handling:
+
+> **One logical evidence stream has one identity, one complete
+> representation, and exactly its own bytes** — completeness (no gap may
+> pass as a whole), uniqueness (a stream is not present twice), identity (a
+> name is a name, never a pattern), and visibility (a malformed part is
+> refused, never ignored).

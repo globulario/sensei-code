@@ -370,10 +370,17 @@ func extract(log string) (record, error) {
 //   - excluded: *.receipts.jsonl (receipts, read beside their stream), and
 //     anything outside a `runs` directory.
 //
-// partSuffix matches the ordered pieces of a split stream: X.log.part-001.
-var partSuffix = regexp.MustCompile(`^(.+\.(?:log|jsonl))\.part-\d{3,}$`)
+// partSuffix matches anything SHAPED like a piece of a split stream:
+// X.log.part-<anything>. It is deliberately loose, because a name this
+// shape is evidence either way -- a well-formed part reconstructs its
+// stream, and a malformed one (X.log.part-01, a packaging typo) must be
+// REFUSED rather than walked past. Recognising only the strict form made a
+// misnumbered part invisible: discovery ignored it and the encounter left
+// the corpus in silence (#118 review). streamParts enforces the strict
+// numbering; this only decides what counts as claiming to be a part.
+var partSuffix = regexp.MustCompile(`^(.+\.(?:log|jsonl))\.part-.+$`)
 
-// partOf returns the logical stream name a part belongs to, or "".
+// partOf returns the logical stream name a part claims to belong to, or "".
 func partOf(name string) string {
 	if m := partSuffix.FindStringSubmatch(name); m != nil {
 		return m[1]
