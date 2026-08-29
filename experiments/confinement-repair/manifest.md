@@ -274,9 +274,10 @@ C2.log                    6,359,622 bytes  sha256 130e2fdfc73eab2c6c9261742526a1
 Every piece declares the total (`-of-002`) since round 12a: the bytes and
 their order are unchanged, only the names say how many there are.
 
-Split at complete log-line boundaries; `cat C2.log.part-001 C2.log.part-002`
-reconstructs the 6,359,622 bytes and the sha256 above exactly, verified at
-the split. `cmd/corpus` now reads `X.log.part-NNN` as the one stream it
+Split at complete log-line boundaries;
+`cat C2.log.part-001-of-002 C2.log.part-002-of-002` reconstructs the
+6,359,622 bytes and the sha256 above exactly, verified at the split and
+again after the round-12 rename. `cmd/corpus` now reads `X.log.part-NNN` as the one stream it
 reconstructs, so a split changes the packaging and never the record —
 pinned by `TestASplitStreamIsOneEncounterReconstructedFromItsParts`, whose
 fixture is split MID-LINE so only a faithful reconstruction parses. Without
@@ -442,3 +443,44 @@ completeness checkable at all, and corrected the ownership rule's domain:
 
 > **Completeness** — a representation states how many pieces it has, and is
 > accepted only when they are all present.
+
+
+## Round 13 — and the point at which patching stops
+
+Two findings on `e420b773`:
+
+- **13b, the record could not be reproduced.** The reconstruction command in
+  this manifest, and the overlay's history entry, still named
+  `C2.log.part-001` / `-002` after round 12 renamed the committed files.
+  Following the documented command failed, so a reader could not reproduce
+  the stated size and hash. Fixed here: **this is the evidence record being
+  wrong about itself, which is exactly what this document is for.**
+- **13a, lexical ordering breaks at 1,000 pieces.** `part-1000-of-1000`
+  sorts between 100 and 101, so a complete stream is rejected at piece 101.
+  **Not fixed here, by decision.** It fails CLOSED — a valid stream is
+  refused, never a broken one accepted — and it is not another filename
+  predicate: ordering belongs to the representation algebra that the
+  follow-up refactor owns. Patching it here would be the fourteenth round of
+  inferring a schema from strings.
+
+The decision recorded: after round 12 the mediator's rule fired — *if
+another classification/ownership/representation edge appears, stop adding
+rules to this PR and refactor around an explicit evidence index instead.*
+Round 13a is that edge. This PR's reader stands as the specimen that
+motivated the refactor; its job was to carry the C1/C2 record through a
+verifier ceiling, and it does that correctly for the evidence committed
+here (two pieces, ordered, complete, reconstructing to the recorded hash).
+
+Owed to the follow-up, in one place so nothing is lost:
+
+```text
+BuildEvidenceIndex(entries) -> EvidenceIndex      one classifier; discover/streamParts/openLog stop reading names
+numeric ordering of pieces                        13a
+digest verification of the reconstruction         the producer already records sha256 and byte count in <run>.run;
+                                                  -of-NNN declares arity, never content
+producer-authored manifest                        identity, representation, ordering, ownership and digests declared
+                                                  once by the packager; filenames carry no authority
+property/fuzz suite                               partition, order independence, non-interference, representation
+                                                  uniqueness, split completeness, round-trip, mutation, transport
+                                                  transparency, enumeration failure
+```

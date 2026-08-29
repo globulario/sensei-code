@@ -43,7 +43,8 @@
    "in-run refusal of the worker's improvisation: the second, post-validation check added in cycle 2 was refused because the frozen plan did not authorise it -- the authority boundary refused the repair attempt that exceeded its plan",
    "in-run substituted reviewer (Claude) ESCALATE, 4 findings incl. notPlanned (routine.go) and confineToPlannedFiles (testedit.go) being two representations of one predicate that can disagree",
    "isolation: OBSERVED FAILURE -- the reviewer read controller commits (cd7d1b2 C2 freeze with plan sha, c28a121 C1 record) at 00:51:21Z and 00:54:25Z through the shared worktree object store; C2 supports no blind-review claim",
-   "PR #118 exact-head review of ec4004b9 (GPT-5.6 Sol, 2026-08-29): C1/C2 adjudication ACCEPTED in substance; two corrections required -- (1) wording: the refusal of the worker's improvisation proves the run did not improvise itself into success, NOT that X already had the confinement gate; (2) the Sensei architectural gate failed closed on the raw C2 log exceeding the gRPC message ceiling, so the stream is committed as ordered parts with the verifier unmodified"
+   "PR #118 exact-head review of ec4004b9 (GPT-5.6 Sol, 2026-08-29): C1/C2 adjudication ACCEPTED in substance; two corrections required -- (1) wording: the refusal of the worker's improvisation proves the run did not improvise itself into success, NOT that X already had the confinement gate; (2) the Sensei architectural gate failed closed on the raw C2 log exceeding the gRPC message ceiling, so the stream is committed as ordered parts with the verifier unmodified",
+   "PR #118 Codex round 13 on e420b773: P2 the manifest's reconstruction command still named the pre-rename pieces, so the record could not be reproduced (fixed); P2 lexical ordering rejects a complete stream at 1,000 pieces -- NOT fixed here, it fails closed and belongs to the representation algebra the follow-up refactor owns"
   ],
   "note": "confinement repair, second attempt: governor sensei-code @ f01592b (binary sha256 7c0bd86b..., EQUAL at start and end) produced candidate be3cdbe from supplied plan sha256 45d8b6c7...; candidate SCOPE-EXACT (exactly the frozen four files); routed and reviewed, 4 cycles + 1 handoff, workflow.failed exit 1: no bounded implementor produced an acceptable candidate. M28 pinned-governor property HELD; bootstrap scope condition HELD; the confinement repair is NOT ESTABLISHED and be3cdbe is retained, NEVER X+1.",
   "history": [
@@ -51,7 +52,7 @@
     "recorded": "2026-08-29, PR #118",
     "event": "evidence repackaged",
     "supersedes": "runs/C2.log as a single file",
-    "detail": "committed as C2.log.part-001 (3,499,909 B) and C2.log.part-002 (2,859,713 B); concatenation reproduces 6,359,622 B, sha256 130e2fdfc73eab2c6c9261742526a175c22e55e95fab7cbe9950e2a46ec827b6; bytes and order unchanged"
+    "detail": "committed as C2.log.part-001-of-002 (3,499,909 B) and C2.log.part-002-of-002 (2,859,713 B), renamed from C2.log.part-001/-002 in round 12a so every piece declares the total; concatenation in that order reproduces 6,359,622 B, sha256 130e2fdfc73eab2c6c9261742526a175c22e55e95fab7cbe9950e2a46ec827b6; bytes and order unchanged throughout"
    }
   ]
  }
