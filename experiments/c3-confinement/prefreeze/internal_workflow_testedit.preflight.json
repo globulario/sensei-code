@@ -1,0 +1,65 @@
+{
+  "status":  "PREFLIGHT_STATUS_OK",
+  "risk_class":  "ARCHITECTURE_SENSITIVE",
+  "confidence":  "CONFIDENCE_MEDIUM",
+  "direct_invariants":  [
+    {
+      "iri":  "https://globular.io/awareness#invariant/sensei_code.workflow.repeated_resume_cannot_mint_authority",
+      "id":  "sensei_code.workflow.repeated_resume_cannot_mint_authority",
+      "class":  "invariant",
+      "label":  "Resume revalidates recorded authority and never mints new authority",
+      "severity":  "critical",
+      "status":  "active",
+      "related_ids":  [
+        "test:internal/workflow/testedit_test.go:TestARepeatedResumeCannotMintTestEditAuthority",
+        "test:internal/workflow/testedit_test.go:TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused",
+        "source_file:internal/session/store.go",
+        "source_file:internal/workflow/prospective.go",
+        "source_file:internal/workflow/testedit.go",
+        "source_file:internal/workflow/engine.go"
+      ],
+      "facts":  [
+        {
+          "predicate":  "status",
+          "value":  "active"
+        }
+      ]
+    }
+  ],
+  "required_actions":  [
+    "Change risk: blast=local, approval=none",
+    "Verify invariant still holds: Resume revalidates recorded authority and never mints new authority",
+    "Re-read CLAUDE.md hard rules; call awareness.briefing(file=...) per the rule R2 contract"
+  ],
+  "blind_spots":  [
+    "anchor with severity=critical",
+    "file path under high-risk directory"
+  ],
+  "coverage":  {
+    "direct_anchor_count":  1,
+    "file_count":  1,
+    "indexed_file_count":  1,
+    "sufficient":  true,
+    "note":  "1 direct anchor(s) matched"
+  },
+  "generated_in_ms":  "651",
+  "authority":  {
+    "authoritative":  true,
+    "graph_freshness_state":  "GRAPH_FRESHNESS_STATE_CURRENT",
+    "graph_freshness_detail":  "live store matches expected validated graph artifact",
+    "build_provenance_state":  "BUILD_PROVENANCE_STATE_STAMPED",
+    "seed_state":  "SEED_STATE_CURRENT",
+    "graph_build_commit":  "fac399f8225f",
+    "graph_build_time_unix":  "1787418755",
+    "source_repo_commit":  "f56f5a305798",
+    "embedded_seed_digest_sha256":  "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+    "live_store_graph_digest_sha256":  "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+    "live_store_graph_triple_count":  "164506",
+    "embedded_transaction_detail":  "runtime transaction stamp missing: .sensei/graph-authority.transaction.tsv",
+    "verdict":  "AUTHORITY_VERDICT_AUTHORITATIVE"
+  },
+  "change_risk":  {
+    "blast_radius":  "BLAST_RADIUS_LOCAL",
+    "approval_gate":  "APPROVAL_GATE_NONE"
+  }
+}
