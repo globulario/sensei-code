@@ -1,0 +1,20 @@
+START 2026-08-29T13:49:21Z
+governor commit (source) f01592b0f0828605ed254047fc064f41dacc78f2
+governor binary sha256 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+subject HEAD 63d4bd5f2f2aefc7bb715b59fc1a338c2609e844
+subject tree fe43d481424072f325a7f315f1a5cfa5ab70609f
+subject clean: 0 changed path(s)
+subject remotes: 0
+config sha256 94ed3b1723e3f9bdc3788c19ebebeaf90296a0f081a90c8077525a5aff3fbc2d
+plan sha256 50df0097b52a5611ec3b4a22a3fa64b74e50362982fa2477c7ec6bcd025a6934
+EXIT 0 2026-08-29T13:58:16Z
+governor binary sha256 at end 7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea
+governor commit at end f01592b0f0828605ed254047fc064f41dacc78f2 (pinned; the governor checkout is not written by this run)
+subject HEAD at end 63d4bd5f2f2aefc7bb715b59fc1a338c2609e844
+subject remotes at end: 0
+subject tree at end:
+candidate worktrees:
+  /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/c3-subject                                      63d4bd5 [main]
+  /tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/.c3-subject-worktrees/task-1788011361705193562  63d4bd5 [sensei-code/task-1788011361705193562]
+(empty: the run wrote no derive receipts -- no closure round opened)
+C3 untrimmed sha256 d7524b8d87bcff7caf0bdb4d85181350851992319fd79be7b4497c194f39797d, 2443452 bytes; C3.receipts.jsonl preserved EMPTY (0 bytes): no closure round opened; candidate diff sha256 80c2abdbc75c62b5d07f69bd7874306738816a51de7786234c941b9399e5562a = the reviewed digest 80c2abdbc75c; the candidate is an UNCOMMITTED worktree state at base 63d4bd5f -- no candidate commit object exists

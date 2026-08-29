@@ -1,0 +1,73 @@
+{
+  "status":  "PREFLIGHT_STATUS_DEGRADED",
+  "risk_class":  "UNKNOWN_IMPACT",
+  "confidence":  "CONFIDENCE_LOW",
+  "required_actions":  [
+    "Read the source file directly before editing — Preflight has no anchored facts",
+    "After your edit, file any newly-discovered invariants/failure_modes as candidates in docs/awareness/candidates/ so future Preflight calls become richer",
+    "Change risk: blast=local, approval=none",
+    "Coverage is thin — read the surrounding code, then re-run preflight with --file to narrow"
+  ],
+  "blind_spots":  [
+    "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply — graph has no facts about this file; treat as unknown, read source directly",
+    "this is NOT proof of safety — the graph has no facts about this file"
+  ],
+  "coverage":  {
+    "file_count":  1,
+    "indexed_file_count":  1,
+    "sufficient":  true,
+    "note":  "1/1 file(s) examined in the graph — no governing rule applies"
+  },
+  "generated_in_ms":  "694",
+  "direct_architecture":  [
+    {
+      "iri":  "https://globular.io/awareness#decision/decision.sensei_code.prospective_authority_for_a_new_surface_existing_governed_fa",
+      "id":  "decision.sensei_code.prospective_authority_for_a_new_surface_existing_governed_fa",
+      "class":  "decision",
+      "label":  "Prospective authority for a new surface: existing governed facts authorize a bounded CREATE operation, decided by a closed predicate, inspected after creation, never an anchor for a file that does not exist (sensei#312)",
+      "status":  "accepted",
+      "description":  "decision_authority: architectural; certified_by: github.com/globulario/sensei-code @ fac399f8225f; decided_by: supplied plan sha256 4e4165005627fb7847d0b165b50b81cad5774ef10c8d8c32663b3fe291b6b2f7 (not architect-produced); human_authorization: none established: submitted unattended with an externally supplied plan; no human presence was established",
+      "related_ids":  [
+        "invariant:sensei_code.workflow.execution_is_authorized_once_at_run",
+        "invariant:sensei_code.workflow.context_never_widens_worker_scope",
+        "source_file:internal/session/store.go",
+        "source_file:internal/workflow/prospective_test.go",
+        "source_file:internal/workflow/prospective.go",
+        "source_file:internal/workflow/suppliedplan.go",
+        "source_file:internal/workflow/engine_test.go",
+        "source_file:internal/workflow/engine.go",
+        "source_file:internal/workflow/derivedcoverage_live_test.go",
+        "source_file:internal/event/event.go"
+      ],
+      "facts":  [
+        {
+          "predicate":  "status",
+          "value":  "accepted"
+        },
+        {
+          "predicate":  "architectural plane",
+          "value":  "intended"
+        }
+      ]
+    }
+  ],
+  "authority":  {
+    "authoritative":  true,
+    "graph_freshness_state":  "GRAPH_FRESHNESS_STATE_CURRENT",
+    "graph_freshness_detail":  "live store matches expected validated graph artifact",
+    "build_provenance_state":  "BUILD_PROVENANCE_STATE_STAMPED",
+    "seed_state":  "SEED_STATE_CURRENT",
+    "graph_build_commit":  "fac399f8225f",
+    "graph_build_time_unix":  "1787418755",
+    "source_repo_commit":  "f56f5a305798",
+    "embedded_seed_digest_sha256":  "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+    "live_store_graph_digest_sha256":  "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+    "live_store_graph_triple_count":  "164506",
+    "embedded_transaction_detail":  "runtime transaction stamp missing: .sensei/graph-authority.transaction.tsv",
+    "verdict":  "AUTHORITY_VERDICT_AUTHORITATIVE"
+  },
+  "change_risk":  {
+    "blast_radius":  "BLAST_RADIUS_LOCAL",
+    "approval_gate":  "APPROVAL_GATE_NONE"
+  }
+}

@@ -1,0 +1,24 @@
+C3 isolation state — captured from the preserved subject repository AFTER the run
+captured 2026-08-29T14:30:30Z by the controller, read-only except as disclosed below
+
+subject HEAD                  63d4bd5f2f2aefc7bb715b59fc1a338c2609e844   (unchanged since the run's closing stamp)
+subject tree                  fe43d481424072f325a7f315f1a5cfa5ab70609f
+working tree                  0 changed path(s) outside .sensei-code/
+remotes                       0
+refs                          refs/heads/main refs/heads/sensei-code/task-1788011361705193562 
+.git/objects/info/alternates  ABSENT
+object store                  count: 1141 size: 6872 in-pack: 0 packs: 0 size-pack: 0 prune-packable: 0 garbage: 0 size-garbage: 0 
+
+DISPOSITIVE PROBE — can the subject resolve any controller object?
+  f01592b0f082  fatal: git cat-file: could not get object info
+  e1dd5456856d  fatal: git cat-file: could not get object info
+  3ac571435974  fatal: git cat-file: could not get object info
+  a54b51a3dcd5  fatal: git cat-file: could not get object info
+
+A repository sharing the controller's object database -- by alternates or otherwise --
+would resolve f01592b, which is the commit this subject's tree was materialised from.
+It cannot. The subject's store holds only objects created inside it.
+
+DISCLOSURE: the dangling tree e12832b1a237f1c5b659a7ac3fc1fe99a3c7d28b in this store was
+written by the controller AFTER the run, with a temporary GIT_INDEX_FILE, to pre-register
+the reviewed candidate tree before adjudication. It changed no ref, no index and no file.
