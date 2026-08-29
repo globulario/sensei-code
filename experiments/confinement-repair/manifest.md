@@ -314,7 +314,20 @@ about file handling:
 
 The fifth round (`f4e86e1`) closed visibility's zero-length edge:
 `X.log.part-`, the sequence missing entirely, disappeared exactly as a
-misnumbered part had. Found independently by the owner's review and by
-Codex, minutes apart, and fixed by recognising an empty suffix as a claimed
-part (`.part-.*`) so the strict sequence refuses it. Not a fifth face of the
-law — the same face, at zero length.
+misnumbered part had. Two separate review paths — the owner reading the
+regexp and Codex reading the diff — **independently constructed the same
+falsifying specimen before the repair was applied**; that is the evidence,
+not "two reviewers agreed". Not a fifth face of the law: the same face, at
+zero length.
+
+The sixth round (`305869d`) found the mirror edge — `.log.part-001`, an
+empty STEM, where a file named exactly `.log` is a stream to discovery but
+not to part recognition — and with it the shape of the whole family. Rounds
+4, 5 and 6 were three spellings of one defect: **discovery and part
+recognition answered "is this an evidence stream?" differently, and every
+disagreement was a way for evidence to vanish.** The repair is one shared
+predicate, `isStreamName`, used by both, plus a marker scan instead of a
+regexp — so the asymmetry cannot recur by a new spelling. The empty-stem
+stream now reconstructs rather than being refused (it is well-formed);
+`TestAStreamWithAnEmptyStemIsStillAStream` pins both halves, and a
+non-stream name (`notes.txt.part-001`) still claims nothing.

@@ -344,7 +344,7 @@ func TestAMisnumberedPartIsRefusedNotIgnored(t *testing.T) {
 	// "X.log.part-" is the zero-length edge of the same property: the
 	// sequence missing entirely, found independently by the owner's review
 	// and by Codex on f4e86e1.
-	for _, name := range []string{"X.log.part-01", "X.log.part-abc", "X.jsonl.part-1", "X.log.part-", "X.jsonl.part-"} {
+	for _, name := range []string{"X.log.part-01", "X.log.part-abc", "X.jsonl.part-1", "X.log.part-", "X.jsonl.part-", ".jsonl.part-002"} {
 		t.Run(name, func(t *testing.T) {
 			dir := t.TempDir()
 			runs := filepath.Join(dir, "runs")
@@ -366,5 +366,43 @@ func TestAMisnumberedPartIsRefusedNotIgnored(t *testing.T) {
 				t.Fatalf("a malformed part name was read as evidence: %v", logs)
 			}
 		})
+	}
+}
+
+// A stream with an empty stem is a stream, split or whole.
+//
+// A file named exactly `.log` is accepted by whole-stream discovery, so
+// `.log.part-001` must reconstruct it -- otherwise splitting an otherwise
+// discoverable stream erases its evidence. Recognition and discovery now
+// share one predicate (isStreamName), so the two cannot disagree again
+// (#118 review, round 6).
+func TestAStreamWithAnEmptyStemIsStillAStream(t *testing.T) {
+	if !isStreamName(".log") || !isStreamName(".jsonl") {
+		t.Fatal("whole-stream discovery accepts these names, so part recognition must too")
+	}
+	if partOf(".log.part-001") != ".log" || partOf(".jsonl.part-001") != ".jsonl" {
+		t.Fatalf("an empty-stem part claimed no stream: %q %q", partOf(".log.part-001"), partOf(".jsonl.part-001"))
+	}
+	// Not a stream at all, split or whole.
+	if partOf("notes.txt.part-001") != "" || isStreamName("notes.txt") {
+		t.Fatal("a non-stream name claimed to be evidence")
+	}
+	// And a well-formed empty-stem split reconstructs rather than vanishing.
+	dir := t.TempDir()
+	runs := filepath.Join(dir, "runs")
+	if err := os.MkdirAll(runs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	line := `{"kind":"task.created","task_id":"task-1","summary":"evidence"}` + "\n"
+	if err := os.WriteFile(filepath.Join(runs, ".log.part-001"), []byte(line), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logs, err := discover(dir)
+	if err != nil || len(logs) != 1 || filepath.Base(logs[0]) != ".log" {
+		t.Fatalf("discover = %v, %v; want the one logical stream .log", logs, err)
+	}
+	rec, err := extract(logs[0])
+	if err != nil || rec.Task["id"] != "task-1" {
+		t.Fatalf("the empty-stem stream did not reconstruct: %+v %v", rec.Task, err)
 	}
 }

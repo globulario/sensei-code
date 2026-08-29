@@ -370,23 +370,37 @@ func extract(log string) (record, error) {
 //   - excluded: *.receipts.jsonl (receipts, read beside their stream), and
 //     anything outside a `runs` directory.
 //
-// partSuffix matches anything SHAPED like a piece of a split stream:
-// X.log.part-<anything>. It is deliberately loose, because a name this
-// shape is evidence either way -- a well-formed part reconstructs its
-// stream, and a malformed one (X.log.part-01, a packaging typo) must be
-// REFUSED rather than walked past. Recognising only the strict form made a
-// misnumbered part invisible: discovery ignored it and the encounter left
-// the corpus in silence (#118 review). streamParts enforces the strict
-// numbering; this only decides what counts as claiming to be a part.
-// The suffix is `.*`, not `.+`: `X.log.part-` -- the sequence missing
-// entirely -- is the zero-length edge of the same property, and it
-// disappeared exactly as a misnumbered one did.
-var partSuffix = regexp.MustCompile(`^(.+\.(?:log|jsonl))\.part-.*$`)
+// isStreamName is the ONE answer to "is this the name of an evidence
+// stream", used by discovery and by part recognition alike.
+//
+// The two used to answer it differently -- discovery by suffix, parts by a
+// regexp requiring a non-empty stem and a non-empty sequence -- and every
+// disagreement between them was a way for evidence to disappear: a
+// misnumbered part, an empty sequence, an empty stem. Each was found and
+// fixed separately (#118 rounds 4, 5, 6) because the asymmetry, not any one
+// spelling, was the defect. There is now one predicate, so a name is a
+// stream in both places or in neither.
+func isStreamName(name string) bool {
+	if strings.HasSuffix(name, ".receipts.jsonl") {
+		return false
+	}
+	return strings.HasSuffix(name, ".log") || strings.HasSuffix(name, ".jsonl")
+}
 
-// partOf returns the logical stream name a part claims to belong to, or "".
+// partMarker separates a stream from the sequence of one of its pieces.
+const partMarker = ".part-"
+
+// partOf returns the logical stream a name claims to be a piece of, or "".
+//
+// Anything shaped like a piece of a stream CLAIMS one, whatever follows the
+// marker: the claim is what brings the file into the evidence machinery,
+// where streamParts proves the strict sequence or refuses it. Recognition is
+// permissive on purpose; acceptance is strict.
 func partOf(name string) string {
-	if m := partSuffix.FindStringSubmatch(name); m != nil {
-		return m[1]
+	for i := 0; i+len(partMarker) <= len(name); i++ {
+		if name[i:i+len(partMarker)] == partMarker && isStreamName(name[:i]) {
+			return name[:i]
+		}
 	}
 	return ""
 }
@@ -394,26 +408,19 @@ func partOf(name string) string {
 // streamParts returns the ordered parts of a stream, refusing anything that
 // is not the whole of it.
 //
-// The refusals are the point. Glob returns whatever happens to be present,
-// so part-001 beside part-003 would concatenate into something that PARSES
-// while silently omitting every event between them -- candidate, validation,
-// review -- and a regenerated corpus would carry that as authoritative
-// evidence. Missing evidence must fail closed, so the sequence must start at
-// 001 and be contiguous. And a stream present BOTH whole and split is an
-// ambiguity about what the evidence is, not a preference to resolve
-// silently: it is refused too (#118 review).
+// The refusals are the point. The directory is enumerated and names compared
+// literally -- globbing would read a stream's own name as a PATTERN, so
+// `A[1].log` matched the sibling `A1.log.part-001`. The sequence must start
+// at 001 and be contiguous, because part-001 beside part-003 would
+// concatenate into something that PARSES while silently omitting every event
+// between them, and a regenerated corpus would carry that as authoritative.
 func streamParts(path string) ([]string, error) {
-	// The directory is enumerated and names are compared literally. Globbing
-	// would read the stream's own name as a PATTERN, so `A[1].log` would
-	// match the sibling `A1.log.part-001`: the corpus would emit that
-	// sibling's evidence twice and omit the stream that exists (#118
-	// review). A name is a name.
 	dir := filepath.Dir(path)
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	prefix := filepath.Base(path) + ".part-"
+	prefix := filepath.Base(path) + partMarker
 	var parts []string
 	for _, e := range entries {
 		if !e.IsDir() && strings.HasPrefix(e.Name(), prefix) {
@@ -425,7 +432,7 @@ func streamParts(path string) ([]string, error) {
 	}
 	sort.Strings(parts)
 	for i, p := range parts {
-		want := fmt.Sprintf("%s.part-%03d", filepath.Base(path), i+1)
+		want := fmt.Sprintf("%s%s%03d", filepath.Base(path), partMarker, i+1)
 		if filepath.Base(p) != want {
 			return parts, fmt.Errorf("%s: the parts are not a whole stream: expected %s, found %s (%d part(s) present)",
 				path, want, filepath.Base(p), len(parts))
@@ -508,7 +515,7 @@ func discover(root string) ([]string, error) {
 		switch {
 		case strings.HasSuffix(name, ".receipts.jsonl"):
 			return nil
-		case strings.HasSuffix(name, ".log"), strings.HasSuffix(name, ".jsonl"):
+		case isStreamName(name):
 			// Logical, so a stream present both whole and split is one entry
 			// and openLog refuses it once rather than producing two records.
 			if !seen[path] {
