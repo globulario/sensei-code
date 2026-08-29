@@ -326,14 +326,14 @@ So the corrected finding is:
 **Consequence for the mechanism claim.** The manifest said C4 demonstrated
 "literal ancestry-capable isolation". Narrowed to what the evidence supports:
 
-> The **pre-freeze validation** produced a conforming subject — HEAD == X,
-> tree `fe43d481…`, X with 0 parents, 0 remotes, alternates absent, refs =
-> the boundary tag only, no controller object resolvable. That is where the
-> mechanism was demonstrated.
->
 > **C4's own run did not use a conforming subject.** Its subject carried an
 > extra ref from the start, so C4 did not demonstrate the mechanism; it
-> demonstrated a subject that was literally X with an unfrozen ref added.
+> exercised a subject that was literally X with an unfrozen ref added.
+>
+> *(This passage originally continued "the pre-freeze validation produced a
+> conforming subject … that is where the mechanism was demonstrated". That
+> claim is **UNRECORDED** — no such capture exists — and is withdrawn here;
+> the withdrawal is recorded in full below.)*
 
 The controller-reachability results (no controller object resolvable,
 alternates absent, remotes 0, at both ends) are unaffected and remain PASS —
@@ -510,3 +510,25 @@ The record has four renderings — manifest prose, brief, overlay fields, and
 the append-only history that generates the corpus — and a claim must be
 withdrawn from all four. Nothing but a mechanical check will reliably do
 that, which is C5's item 0 arriving from a second direction.
+
+### Fourth rendering, and the enumeration that should have come first
+
+`ca194714`, 2026-08-29 19:38:20Z: the brief still said the mechanism "was
+demonstrated by the pre-freeze validation", and — found by enumerating
+rather than by being told — so did a blockquote in this manifest, inside the
+very correction that had narrowed the claim.
+
+So the withdrawal had reached the manifest's new section, the overlay note,
+the findings and the append-only history, and had missed **two** places: the
+brief, and an earlier paragraph of the manifest itself. Fixed by listing
+every mention of the validation across all four renderings and judging each,
+which is what the previous three rounds should have done instead of
+correcting the instance in front of me.
+
+The lesson has now cost six rounds in one record, so it is worth stating in
+its strongest form:
+
+> **A claim is withdrawn by enumerating its occurrences, not by rewriting
+> the one you were shown.** The reviewer names an instance; the instance is
+> not the claim. Anything less leaves the record asserting, somewhere, what
+> it has formally withdrawn everywhere else.

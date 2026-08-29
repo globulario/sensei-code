@@ -34,11 +34,12 @@ remains an explicit non-claim owed to C5.
 
 Governor, producer and subject identity all held, and the subject was
 **literally X** with no controller object reachable at either end. The
-ancestry-capable mechanism was demonstrated by the **pre-freeze
-validation**, not by this run: C4's own subject carried `refs/heads/main`
-from the start, a step the frozen procedure does not contain and that I
-added at materialisation, so the isolation predicate was already violated
-before the governor ran.
+ancestry-capable mechanism is **UNRECORDED**: the pre-freeze validation that
+exercised it was never captured, and C4's own subject carried
+`refs/heads/main` from the start — a step the frozen procedure does not
+contain and that I added at materialisation — so the isolation predicate was
+already violated before the governor ran and this run demonstrates nothing
+about the mechanism either.
 The repair was independently accepted over exactly the frozen seven paths.
 
 Two frozen requirements failed, applied as written: the isolation predicate
