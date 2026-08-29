@@ -117,6 +117,45 @@ func wellFormedPart(name string) (logical string, index, total int, ok bool) {
 	return logical, index, total, index >= 1 && total >= 1 && index <= total
 }
 
+// artifactOwners are the streams a name is a run artifact of.
+//
+// Plural on purpose. `A.log` and `A.jsonl` are two streams with the same
+// base `A`, so `A.run` belongs to both -- and extract builds sidecar names
+// from the base, so both encounters would silently receive the same run
+// stamp and recipes. Law 1 admits at most ONE owner and says ambiguity is
+// an error, never precedence: returning the first match quietly chose
+// precedence (#119 review).
+func artifactOwners(name string, streams []string) []string {
+	// Resolution applies here exactly as it applies to pieces: the LONGEST
+	// matching base wins. `N1.void1-provider-quota.run` matches the base of
+	// both `N1.log` and `N1.void1-provider-quota.log`, and it belongs to the
+	// second -- treating that as ambiguity would refuse two real encounters
+	// in this repository's own corpus. What remains genuinely ambiguous is a
+	// tie: `A.log` and `A.jsonl` share the base `A` exactly, so `A.run`
+	// belongs to both and to neither.
+	longest := -1
+	var owners []string
+	for _, stream := range streams {
+		if name == stream {
+			continue
+		}
+		base := streamBase(stream)
+		if !strings.HasPrefix(name, base+".") {
+			continue
+		}
+		if rest := name[len(base):]; strings.Contains(rest, partMarker) {
+			continue
+		}
+		switch {
+		case len(base) > longest:
+			longest, owners = len(base), []string{stream}
+		case len(base) == longest:
+			owners = append(owners, stream)
+		}
+	}
+	return owners
+}
+
 // artifactOf reports that a name is a run artifact of one of these streams.
 //
 // Ownership, not a suffix catalogue: a list is always incomplete, and the
@@ -126,19 +165,7 @@ func wellFormedPart(name string) (logical string, index, total int, ok bool) {
 // marker -- so a name claiming to be a piece is never exempted by looking
 // like metadata.
 func artifactOf(name string, streams []string) bool {
-	for _, stream := range streams {
-		if name == stream {
-			continue
-		}
-		base := streamBase(stream)
-		if !strings.HasPrefix(name, base+".") {
-			continue
-		}
-		if rest := name[len(base):]; !strings.Contains(rest, partMarker) {
-			return true
-		}
-	}
-	return false
+	return len(artifactOwners(name, streams)) != 0
 }
 
 // Part is one ordered piece of a split representation.
@@ -232,6 +259,18 @@ func BuildEvidenceIndex(dir string, names []string) *EvidenceIndex {
 			rep.Whole = name
 		case artifactOf(name, identities):
 			ix.Roles[name] = RoleArtifact
+			// At most one owner. Two streams sharing a base share every
+			// artifact built from it, and neither may be read on the
+			// strength of evidence that belongs to both.
+			if owners := artifactOwners(name, identities); len(owners) > 1 {
+				for _, owner := range owners {
+					r := ix.representation(owner)
+					if r.Problem == nil {
+						r.Problem = fmt.Errorf("%s: %s is an artifact of %d streams (%s); one artifact has at most one owner",
+							filepath.Join(dir, owner), name, len(owners), strings.Join(owners, ", "))
+					}
+				}
+			}
 		case partOf(name) != "":
 			ix.Roles[name] = RolePart
 			logical, index, total, ok := wellFormedPart(name)

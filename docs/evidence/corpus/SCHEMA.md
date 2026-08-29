@@ -57,7 +57,10 @@ what Phase C will rank.
   exists, recognised structurally rather than by a suffix list),
   completeness (pieces declare their total and all are present), uniqueness
   (whole or split, never both), single authority (every consumer reads this
-  one classification).
+  one classification). Resolution governs artifacts as well as pieces — the
+  longest matching base owns — and a genuine tie (`A.log` and `A.jsonl`
+  share the base `A`, so `A.run` belongs to both) refuses both streams
+  rather than choosing one.
 
   A stream too large to transit a tool call is committed as
   `<stream>.part-<nnn>-of-<mmm>`, same bytes, same order. **Known limit:** a

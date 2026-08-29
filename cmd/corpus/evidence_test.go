@@ -22,18 +22,23 @@ import (
 // some artifacts, some irrelevant files, and some deliberate damage.
 func namespace(rnd *rand.Rand) (names []string, intended map[string]bool) {
 	intended = map[string]bool{}
+	// Distinct BASES: two streams sharing a base (A.log and A.jsonl) share
+	// every artifact built from it, which is a genuine ambiguity the index
+	// refuses -- covered by TestAnArtifactSharedByTwoStreamsIsAmbiguous
+	// rather than manufactured accidentally here.
 	stems := []string{"A", "B", "run-1", "A.log.part-x", "", "deep.name"}
 	exts := []string{".log", ".jsonl"}
+	usedBase := map[string]bool{}
 	used := map[string]bool{}
 	for i := 0; i < 1+rnd.Intn(4); i++ {
 		stream := stems[rnd.Intn(len(stems))] + exts[rnd.Intn(len(exts))]
 		// One representation per stream: a namespace that names the same
 		// stream twice is a contradiction the index is right to refuse, and
 		// the generator must not manufacture it accidentally.
-		if used[stream] {
+		if used[stream] || usedBase[streamBase(stream)] {
 			continue
 		}
-		used[stream] = true
+		used[stream], usedBase[streamBase(stream)] = true, true
 		switch rnd.Intn(3) {
 		case 0: // whole
 			names = append(names, stream)
@@ -261,5 +266,63 @@ func TestDeletingEveryPieceIsUndetectableFromNamesAlone(t *testing.T) {
 	}
 	if !strings.Contains(rep.Problem.Error(), "truncated") {
 		t.Fatalf("the refusal must say what is missing: %v", rep.Problem)
+	}
+}
+
+// An artifact has at most ONE owner, or nobody may read it.
+//
+// `A.log` and `A.jsonl` are two streams whose base is the same `A`, so
+// `A.run` and `A.recipes-after.json` belong to both -- and `extract` builds
+// sidecar names from the base, so BOTH encounters would silently receive
+// the same run stamp and recipes. Law 1 says at most one owner and that
+// ambiguity is an error, never precedence; the first-match rule quietly
+// chose precedence (#119 review).
+func TestAnArtifactSharedByTwoStreamsIsAmbiguous(t *testing.T) {
+	ix := BuildEvidenceIndex("d", []string{"A.log", "A.jsonl", "A.run", "A.recipes-after.json", "B.log", "B.run"})
+
+	for _, stream := range []string{"A.log", "A.jsonl"} {
+		rep, ok := ix.Streams[stream]
+		if !ok {
+			t.Fatalf("%s is a stream and must be classified", stream)
+		}
+		if rep.Problem == nil {
+			t.Fatalf("%s shares its artifacts with a sibling and was accepted anyway", stream)
+		}
+		if _, err := ix.Files(stream); err == nil {
+			t.Fatalf("%s was readable despite ambiguous ownership", stream)
+		}
+	}
+	// A stream whose artifacts are unambiguously its own is untouched.
+	if rep := ix.Streams["B.log"]; rep == nil || rep.Problem != nil {
+		t.Fatalf("an unrelated stream was disturbed: %+v", rep)
+	}
+	if files, err := ix.Files("B.log"); err != nil || len(files) != 1 {
+		t.Fatalf("B.log: %v %v", files, err)
+	}
+}
+
+// Resolution governs artifacts too: the longest matching base owns.
+//
+// `N1.void1-provider-quota.run` matches the base of `N1.log` AND of
+// `N1.void1-provider-quota.log`. Treating every match as an owner made
+// those two real encounters ambiguous and refused them both -- this
+// repository's own corpus, broken by a rule that ignored resolution.
+func TestAnArtifactBelongsToTheLongestMatchingBase(t *testing.T) {
+	names := []string{
+		"N1.log", "N1.run", "N1.receipts.jsonl",
+		"N1.void1-provider-quota.log", "N1.void1-provider-quota.run",
+	}
+	ix := BuildEvidenceIndex("d", names)
+	for _, stream := range []string{"N1.log", "N1.void1-provider-quota.log"} {
+		rep, ok := ix.Streams[stream]
+		if !ok || rep.Problem != nil {
+			t.Fatalf("%s was refused: %+v", stream, rep)
+		}
+	}
+	if owners := artifactOwners("N1.void1-provider-quota.run", []string{"N1.log", "N1.void1-provider-quota.log"}); len(owners) != 1 || owners[0] != "N1.void1-provider-quota.log" {
+		t.Fatalf("owners = %v; the longest matching base owns", owners)
+	}
+	if owners := artifactOwners("N1.run", []string{"N1.log", "N1.void1-provider-quota.log"}); len(owners) != 1 || owners[0] != "N1.log" {
+		t.Fatalf("owners = %v; N1.run belongs to N1.log", owners)
 	}
 }
