@@ -1,0 +1,18 @@
+contract_unknown:
+  - id: contract_unknown.sensei_code.candidate_law_evidence_is_bound_and_recorded_before_control
+    kind: contract_unknown
+    title: 'Candidate law: evidence is bound and recorded before control flow that can terminate on it'
+    description: 'CANDIDATE, awaiting governed review. Repeated execution produced evidence consistent with this rule. It is NOT asserted as true and has not been promoted; the named tests encode the CURRENT falsifiers and do not establish that the rule holds generally. Determine whether it deserves promotion, refinement, narrowing or rejection. FALSIFIER, mechanical rather than editorial: for a fact F required by terminal R, a path exists from acquire(F) to a terminating edge dependent on R with no dominating record(F) from the authority establishing F.'
+    proposed_contract: A fact required by any possible terminal boundary is acquired from the authority that establishes its semantics, and bound and recorded, before any control-flow edge that depends on it can terminate the governed encounter. Evidence acquisition and evidence recording must not sit on opposite sides of a control-flow boundary.
+    source_files:
+      - internal/workflow/receipt.go
+      - internal/workflow/engine.go
+      - internal/workflow/gate.go
+    evidence:
+      - 'run R1: a run that exited at a human-authority boundary emitted no record at all; the terminal was classified non-terminal because the run is resumable, which is true inside the process model and false outside it'
+      - 'run R2: graph_digest UNKNOWN because the accessor read the preflight authority block while the digest sat in the workspace contract the same gate had decoded'
+      - 'run R4: plan_state UNKNOWN about a plan the router had just escalated on -- notePlan ran after routing, and routing is where a deferral terminates'
+      - 'run R5: the repair for R4 was placed after resolveArchitecture RETURNS, which a deferred run never reaches; predicted from the call graph before the run confirmed it'
+      - the reviewed tree was written at capture into a field named 'reviewed', so the mint used a pre-review measurement while reporting it as the reviewed one
+      - 'falsifier tests: internal/workflow/gate_test.go:TestTheGraphDigestComesFromWhereSenseiReportsIt, internal/workflow/mint_test.go:TestACapturedButUnreviewedTreeCannotBeMinted, internal/workflow/mint_test.go:TestTheMintUsesTheVerdictsTreeNotTheCaptures, internal/workflow/receipt_test.go:TestOnlyEmitRunTerminalEndsARun'
+    domain: github.com/globulario/sensei-code
