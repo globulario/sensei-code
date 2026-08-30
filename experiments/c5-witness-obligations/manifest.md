@@ -399,3 +399,77 @@ requires closure to **pass** (so FAIL survives as FAIL); `G21` supplies a
 truncated one and requires VOID; `R2` asserts structurally that the runner
 interprets the held status only after both gates and that FAIL has its own
 exit code. **35 cases, 35 passed.**
+
+## OUTCOME: VOID (2026-08-30)
+
+```text
+falsifiers fired: 0
+ISOLATION GATE: PASS (start)
+instrument closure OK (start)
+AttributeError: 'str' object has no attribute 'get'   c5-extract.py:33
+C5 ABORT: extraction failed; the reviewer identity is unrecorded
+RUNNER EXIT: 1
+```
+
+The governor executed. The witness never reached an end capture, never
+recorded a reviewer identity, and never closed its instrument. Applying the
+frozen rule literally — **missing expected evidence makes the witness VOID,
+not failed** — C5 is VOID.
+
+**Nothing about the governed loop may be read from this run.** Obligation 2
+(candidate commitment), obligation 3 (exact Git pathname identity),
+obligation 6 (reviewer identity) and the terminal state are **UNADJUDICATED,
+not failed**. The extractor was **not** repaired and re-run over the preserved
+log to complete the record, and the log's semantic content was not read.
+Diagnosis was bounded to the payload shape that broke the parser.
+
+### The defect, and where it came from
+
+`c5-extract.py` guarded the outer payload with `isinstance(p, dict)` and then
+assumed the nested `provenance` was a dict. One event in 4425 —
+`kind=mode.selected` — carries `payload.provenance` as a **string**.
+
+The four pre-run review rounds hardened every gate in the harness. The run
+died in the one component whose test fixtures its author invented:
+`c5-extract.py` was validated against two synthetic logs written from Claude's
+model of the event stream, and never once against `C4.log`, which was already
+in this repository. **C4.log contains the identical crashing shape.** A single
+execution against the real log would have caught it before the freeze.
+
+A parser validated only against specimens its author invented is a claim
+standing where a measurement was available — the class this whole chain has
+been repairing, one level below where anyone was looking.
+
+### Shape census (parser corpus, never semantic evidence)
+
+Over `C4.log` + `C5.log`: **9123 events, 21 distinct kinds, 0 unparseable
+lines, and exactly one polymorphic field name in the entire corpus** —
+`payload.provenance` (`str` ×2, `dict` ×2). The crash class is one field wide.
+Using preserved logs to ask *what shapes exist in this protocol* tests an
+instrument against historical bytes; it does not adjudicate what those bytes
+say about the runs that produced them.
+
+### Two design faults this exposes in the witness itself
+
+1. **An unrelated physical measurement was made to depend on a fragile
+   semantic one.** The end isolation capture needed the candidate ref from the
+   extractor, so an extractor defect destroyed the end-state measurement too.
+   The end capture must be **unconditional and raw** — HEAD, tree, every ref
+   and target, first parents, remotes, alternates, worktrees — with binding to
+   the run-reported identity performed **afterwards**.
+2. **Recovering the expected ref from the subject is rejected as circular.**
+   A capture that chooses its expectation from the subject then proves the ref
+   it just chose, collapsing the run-reported versus subject-contained
+   distinction the witness exists to maintain.
+
+### What follows
+
+Not a larger C5b around the same event-log reconstruction. The 673-line
+external witness failed at a 62-line parser, which is evidence *from the
+instrument* — independent of anything the run contained — that identities the
+governor already knows should be emitted through a product-owned, versioned,
+**total-parse** receipt schema instead of being reconstructed afterwards from
+a general-purpose event stream. The next witness is smaller by design.
+
+`C6` remains reserved for `capture.go` / `--numstat -z` and is not consumed
+by this.

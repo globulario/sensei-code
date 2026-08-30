@@ -117,3 +117,32 @@ terminal classification line, a ref section — and say nothing about what it
 found. The runner holds the capture's status until both gates pass and then
 classifies, with three exit codes: complete-and-held, VOID, and valid witness
 with isolation FAIL. **35 cases, 35 passed.**
+
+## Outcome: VOID
+
+The governor executed; the witness never reached an end capture, never
+recorded a reviewer identity, and never closed its instrument. `c5-extract.py`
+crashed on `payload.provenance` being a string rather than an object — one
+event in 4425 — and the runner correctly refused to complete with the reviewer
+identity unrecorded rather than inventing one. By the frozen rule, missing
+expected evidence makes the witness VOID, not failed. Obligations 2, 3 and 6
+are unadjudicated, not failed, and the log's semantic content was not read.
+
+The lesson is sharper than the bug. Four review rounds hardened every gate,
+and the run died in the one component whose fixtures its author invented: the
+extractor was tested against two synthetic logs and never against `C4.log`,
+which sits in this repository and contains the identical crashing shape. A
+parser validated only against specimens its author invented is a claim
+standing where a measurement was available.
+
+Two faults belong to the witness's design, not just its code: the end
+isolation capture was made to depend on the extractor, so a semantic defect
+destroyed an unrelated physical measurement; and recovering the expected
+candidate ref from the subject would be circular, since the capture would then
+prove the ref it had just chosen. The next witness takes the end capture
+unconditionally and binds run-reported identity afterwards.
+
+The 673-line external witness failed at a 62-line parser. That is evidence
+from the instrument rather than from the run, and it points the same way the
+pre-run analysis did: the governed run should emit a product-owned, versioned,
+total-parse receipt instead of being reconstructed from an event stream.

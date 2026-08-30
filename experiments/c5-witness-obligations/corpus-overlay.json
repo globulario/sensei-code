@@ -1,0 +1,33 @@
+{
+ "C5": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "f01592b0f0828605ed254047fc064f41dacc78f2",
+  "fixture": "github.com/globulario/sensei-code (self; subject is LITERALLY X: shallow boundary clone containing commit f01592b itself, prior history cut, origin removed, seeded only with .sensei-code/config.json). Materialisation and start isolation MEASURED and PRESERVED before the governor ran: 0 falsifiers, ISOLATION GATE PASS, instrument closure OK (start). The governor executed. The end state was NEVER MEASURED: the runner refused to continue when reviewer extraction crashed, so no end capture, no end closure, and no end record exist.",
+  "outcome": "VOID -- instrument defect. c5-extract.py crashed on payload.provenance being a string rather than an object (kind=mode.selected, 1 event in 4425). The runner correctly refused to complete with the reviewer identity unrecorded, and correctly did not fabricate one.",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the four pre-run amendment reviews, the classification-order law, and this adjudication (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "NONE -- the witness never recorded a reviewer identity; whatever occurred inside the run is not adjudicable from a void record",
+   "implementation_and_reconstruction": "Claude -- freeze, four pre-run corrections, harness, run, records; the extractor defect is Claude's",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  },
+  "note": "NOTHING about the governed loop may be read from this run. Candidate commitment (obligation 2), exact Git pathname identity (obligation 3), reviewer identity (obligation 6) and the terminal state are all UNADJUDICATED, not failed. C5.log is preserved as a PARSER CORPUS -- historical bytes for testing an instrument -- and never as semantic evidence about this run.",
+  "findings": [
+   "The four pre-run review rounds hardened every gate and the run died in the one component whose fixtures its author invented. c5-extract.py was validated against two synthetic logs written from Claude's model of the event stream; it was never run against C4.log, which was already in the repository.",
+   "C4.log contains the identical crashing shape (kind=mode.selected, payload.provenance as a string). One execution of the extractor against the real log already in the repo would have caught this before the freeze.",
+   "Shape census over both preserved logs: 9123 events, 21 distinct kinds, 0 unparseable lines, and exactly ONE polymorphic field name in the entire corpus -- payload.provenance (str x2, dict x2). The crash class is one field wide.",
+   "The runner made an unrelated physical measurement depend on a fragile semantic one: the end isolation capture needed the candidate ref from the extractor, so an extractor defect destroyed the end-state measurement too. The end capture must be unconditional and raw, with binding to run-reported identity performed afterwards.",
+   "Deriving the expected candidate ref from the subject when extraction fails is REJECTED as circular: the capture would prove the ref it had just chosen, collapsing the run-reported vs subject-contained distinction the witness exists to maintain.",
+   "The 673-line external witness failed not at an elaborate gate but at a 62-line parser. This is independent evidence -- from the instrument, not from the run's contents -- that identities the governor already knows should be emitted through a product-owned, versioned, total-parse receipt schema rather than reconstructed from a general-purpose event stream."
+  ],
+  "history": [
+   {
+    "recorded": "2026-08-30",
+    "event": "witness VOID",
+    "detail": "Runner exit 1 at the extraction step. Start gates passed and are preserved; no end capture, no end closure, no reviewer identity, no candidate measurement. Applying the frozen rule literally: missing expected evidence makes the witness VOID, not failed. No retroactive rescue -- the extractor was NOT fixed and re-run over the preserved log to complete the record, and the log's semantic content was not read. Diagnosis was limited to the payload shape that broke the parser.",
+    "supersedes": "nothing; this is C5's first and only disposition"
+   }
+  ]
+ }
+}
