@@ -118,3 +118,102 @@ reported as partial: "admitted but not succeeded" is a real and useful outcome.
 
 Nothing here acts. This is the design, brought back for inspection before any
 admission or integration action touches `6016791c`.
+
+---
+
+# The four decisions, resolved by the owner and FROZEN
+
+## 1. Admitted ref namespace
+
+```text
+refs/sensei-code/admitted/a1/6016791c6ec722301c038b96f0268cdbf2190bc8
+```
+
+One-shot and immutable. Not `accepted`, not `candidate`, not a movable ordinal:
+**the full object ID makes the ref itself incapable of quietly meaning a
+different C later.** `refs/evidence/j1r/preserved-candidate` remains custody
+only.
+
+## 2. Integration goes through an ordinary PR with its own gates
+
+The candidate-producing worker gets **no special merge authority** because C was
+admitted. No squash, rebase or cherry-pick substitution of C.
+
+> **M is the authoritative main tip READ BACK AFTER the PR is merged, not the PR
+> head before merge.**
+
+That closes a sneaky identity split where one integration commit is reviewed and
+another is minted at merge time. If main moves during the PR, the gates must
+cover the final integration state before M is accepted.
+
+**Structural consequence, recorded now:** `C^1` is `2d5b31c`, which lives on the
+working branch and not on main. C therefore **cannot be integrated in
+isolation** — merging it necessarily integrates the branch up to its parent. M
+will contain more than C. That does not weaken criterion 7 (byte-identity and
+reachability still hold), but it must not be described later as "C was merged".
+
+## 3. Criterion 8 is NOT scoped out
+
+Redefining A1 as "1–7 plus 9" because 8 is operationally inconvenient would
+weaken the experiment at exactly the point it becomes interesting. The status
+model is:
+
+```text
+1-7  pass
+8    blocked
+9    not yet canonical
+-----------------------------
+ADMITTED / INTEGRATED
+SUCCESSION BLOCKED
+```
+
+**Criterion 9 occurs AFTER criterion 8, not before.** The intended sequence is
+admission → regenerated self-knowledge → next iteration. A governor built from M
+may be run earlier as a **pre-succession probe**; that is a diagnostic and is
+explicitly **not** criterion 9. Only the governed run that follows the deployment
+owner's safe publication of authoritative knowledge for M is canonical.
+
+The topology refusal is doing its job. **Do not `--force`.**
+
+## 4. P1 differential behaviour: a predeclared witness, never an admission proof
+
+> **P1 differential behaviour is a predeclared positive witness of causal
+> succession under criterion 9, not an admission proof. Exact M and binary
+> identity remain the primary origin proof.**
+
+Two different things are being evidenced:
+
+```text
+object identity   proves WHICH governor ran
+P1 behaviour      proves the semantic change carried by C is ALIVE
+```
+
+Predicted outcomes, frozen before the probe and not reinterpreted afterwards:
+
+```text
+under B      the validation-bundle / recaptured-diff disagreement falls through
+             toward a movement refusal at the mint -> WRONG causal attribution
+
+under M      certifiedAgainstCapture catches the disagreement and fails closed at
+             capture certification -> CORRECT causal attribution
+```
+
+If M produces the repaired behaviour, that is positive causal evidence the
+successor embodies C's changed governance behaviour rather than merely pointing
+at a new SHA. If it produces B's behaviour, that is a serious contradiction. If
+circumstances make the comparison ambiguous, it is **UNKNOWN**.
+
+**P1 must never certify C's admission retrospectively.** C repaired the governor
+that judged it; using the repaired behaviour to justify its own admission would
+close the forbidden self-certification loop. Its evidentiary role begins only
+after independent admission and integration.
+
+## Authorisation
+
+Admission of C is the owner's decision, given explicitly and relayed into this
+session. It is **not** derived from the J1-R acceptance receipt, which grants no
+admission authority (criterion 2).
+
+Approved scope: proceed through admission and integration. **Stop at the
+criterion-8 deployment boundary.** Do not force it, and do not declare
+succession until 8 and then canonical 9 both pass.
