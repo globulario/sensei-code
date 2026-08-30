@@ -84,7 +84,13 @@ func (r Repo) CanonicalTree(ctx context.Context, base string, paths []string) (s
 	_ = os.Remove(indexPath)
 	defer os.Remove(indexPath)
 
-	env := append(os.Environ(), "GIT_INDEX_FILE="+indexPath)
+	// GIT_LITERAL_PATHSPECS because these paths came FROM Git as measured
+	// pathnames and are going back TO Git as arguments. Without it, a file
+	// genuinely named ":(glob)*" -- preserved perfectly by the NUL-safe
+	// capture -- is reinterpreted by `add` as pathspec magic and stages files
+	// the reviewer never named. Exact bytes are not enough if the receiver is
+	// allowed to read them as a pattern.
+	env := append(os.Environ(), "GIT_INDEX_FILE="+indexPath, "GIT_LITERAL_PATHSPECS=1")
 	if _, err := r.envOutput(ctx, env, "read-tree", base); err != nil {
 		return "", fmt.Errorf("read the base tree: %w", err)
 	}

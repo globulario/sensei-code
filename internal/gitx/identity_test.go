@@ -344,3 +344,107 @@ func TestTheArtifactBoundaryExcludesAnAwkwardlyNamedArtifactByItsExactName(t *te
 		}
 	}
 }
+
+// TestAPathspecMagicFilenameIsALiteralPath is the last hop of the pathname
+// repair: exact bytes are not enough if the receiver may read them as a
+// pattern.
+//
+// A file genuinely named ":(glob)*" survives capture intact, and `git add`
+// would then read it as pathspec magic and stage everything -- including a
+// scratch file the reviewer never named. GIT_LITERAL_PATHSPECS closes it.
+func TestAPathspecMagicFilenameIsALiteralPath(t *testing.T) {
+	ctx := context.Background()
+	r, base := repoWithBase(t)
+	magic := ":(glob)*"
+	if err := os.WriteFile(filepath.Join(r.Root, magic), []byte("reviewed\n"), 0o644); err != nil {
+		t.Skipf("this filesystem will not hold %q: %v", magic, err)
+	}
+	os.WriteFile(filepath.Join(r.Root, "secret.txt"), []byte("never reviewed\n"), 0o644)
+
+	tree, err := r.CanonicalTree(ctx, base, []string{magic})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command("git", "-C", r.Root, "ls-tree", "-r", "-z", "--name-only", tree).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var listed []string
+	for _, p := range strings.Split(string(out), "\x00") {
+		if p != "" {
+			listed = append(listed, p)
+		}
+	}
+	var sawMagic bool
+	for _, p := range listed {
+		if p == "secret.txt" {
+			t.Fatal("a pathspec-magic filename globbed an unreviewed file into the canonical tree")
+		}
+		if p == magic {
+			sawMagic = true
+		}
+	}
+	if !sawMagic {
+		t.Fatalf("the literal path %q is missing from the tree: %q", magic, listed)
+	}
+}
+
+// The artifact boundary hands measured pathnames back to `git reset`, so a
+// magic-looking artifact must not reset paths it never classified.
+func TestAMagicNamedArtifactCannotResetUnrelatedPaths(t *testing.T) {
+	r, base := repoWithBase(t)
+	// The pattern must be one that WOULD capture the unrelated file, or the
+	// test passes with or without the guard and proves nothing. ":(glob)*.bin"
+	// was that mistake: it globs only .bin files, so kept.txt survived either
+	// way. ":(glob)*" matches everything.
+	magic := ":(glob)*"
+	elf := append([]byte{0x7f, 'E', 'L', 'F', 2, 1, 1, 0}, bytes.Repeat([]byte{0x00, 0xff, 0x13}, 1024)...)
+	if err := os.WriteFile(filepath.Join(r.Root, magic), elf, 0o644); err != nil {
+		t.Skipf("this filesystem will not hold %q: %v", magic, err)
+	}
+	os.WriteFile(filepath.Join(r.Root, "kept.txt"), []byte("real candidate work\n"), 0o644)
+
+	cap, err := r.CandidateCapture(context.Background(), base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keptPresent, magicPresent bool
+	for _, p := range cap.Paths {
+		switch p {
+		case "kept.txt":
+			keptPresent = true
+		case magic:
+			magicPresent = true
+		}
+	}
+	if !keptPresent {
+		t.Fatalf("resetting the magic-named artifact removed unrelated work: %q", cap.Paths)
+	}
+	if magicPresent {
+		t.Fatalf("the excluded artifact stayed in the reviewed set: %q", cap.Paths)
+	}
+	if len(cap.Excluded) != 1 || cap.Excluded[0].Path != magic {
+		t.Fatalf("excluded = %+v, want exactly %q", cap.Excluded, magic)
+	}
+}
+
+// The parsers are identity infrastructure: a record they cannot model is a
+// pathname they cannot vouch for.
+func TestTheNameStatusParserFailsClosed(t *testing.T) {
+	if _, err := parseNameStatusZ("A\x00one\x00M\x00"); err == nil {
+		t.Fatal("an odd field count parsed as if it were pairs")
+	}
+	if _, err := parseNameStatusZ("A\x00\x00"); err == nil {
+		t.Fatal("an empty pathname parsed as a path")
+	}
+	got, err := parseNameStatusZ("A\x00one\x00M\x00two\x00")
+	if err != nil {
+		t.Fatalf("a well-formed stream was rejected: %v", err)
+	}
+	if len(got) != 2 || got[0] != "one" || got[1] != "two" {
+		t.Fatalf("paths = %q", got)
+	}
+	if got, err := parseNameStatusZ(""); err != nil || len(got) != 0 {
+		t.Fatalf("an empty diff = %q, %v", got, err)
+	}
+}

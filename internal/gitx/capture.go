@@ -68,6 +68,17 @@ type Capture struct {
 	Paths []string
 }
 
+// literalPathOutput runs git with pathspec magic DISABLED.
+//
+// Every path this package hands back to git came from git as a measured
+// pathname. A file genuinely named ":(glob)*" survives the NUL-safe capture
+// intact and is then read by `reset` as a pattern, unstaging paths the boundary
+// never classified. Exact bytes are not enough if the receiver may read them as
+// a pattern.
+func (r Repo) literalPathOutput(ctx context.Context, args ...string) (string, error) {
+	return r.envOutput(ctx, append(os.Environ(), "GIT_LITERAL_PATHSPECS=1"), args...)
+}
+
 // parseNameStatusZ reads `--name-status -z` output: a status field and a path
 // field, each terminated by NUL. With rename detection off there is never a
 // second path field, so the shape is a strict alternation.
@@ -75,18 +86,30 @@ type Capture struct {
 // Nothing here trims, splits on whitespace, or unquotes. A pathname containing
 // a tab, a newline, a quote or a non-UTF-8 byte survives it unchanged, which is
 // the whole reason this function exists.
-func parseNameStatusZ(out string) []string {
+//
+// It FAILS CLOSED. This is identity infrastructure now: a record it cannot
+// model is a pathname it cannot vouch for, and silently skipping one would omit
+// a path from the set that decides what enters the canonical tree.
+func parseNameStatusZ(out string) ([]string, error) {
 	fields := strings.Split(out, "\x00")
+	// A NUL-terminated stream ends with one empty field. Anything else empty is
+	// a record this parser does not understand.
+	if n := len(fields); n > 0 && fields[n-1] == "" {
+		fields = fields[:n-1]
+	}
+	if len(fields)%2 != 0 {
+		return nil, fmt.Errorf("malformed --name-status -z output: %d field(s), which is not status/path pairs", len(fields))
+	}
 	var paths []string
 	for i := 0; i+1 < len(fields); i += 2 {
 		status, path := fields[i], fields[i+1]
 		if status == "" || path == "" {
-			continue
+			return nil, fmt.Errorf("malformed --name-status -z record at field %d: status %q path %q", i, status, path)
 		}
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
-	return paths
+	return paths, nil
 }
 
 // oversizedBytes is the size above which a NEW non-binary file is treated as
@@ -122,14 +145,21 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		return Capture{}, err
 	}
 	var cap Capture
-	for _, record := range strings.Split(numstat, "\x00") {
+	numstatRecords := strings.Split(numstat, "\x00")
+	if n := len(numstatRecords); n > 0 && numstatRecords[n-1] == "" {
+		numstatRecords = numstatRecords[:n-1]
+	}
+	for _, record := range numstatRecords {
 		// Each record is "added\tdeleted\tpath". Only the first two tabs are
 		// separators; everything after them is the pathname's own bytes, which
 		// may themselves contain a tab. TrimSpace is deliberately absent: a
 		// pathname may begin or end with whitespace.
 		parts := strings.SplitN(record, "\t", 3)
 		if len(parts) != 3 {
-			continue
+			// Fail closed: this loop decides which paths are artifacts and
+			// resets them out of the candidate. A record it cannot read is a
+			// classification it cannot make.
+			return Capture{}, fmt.Errorf("malformed --numstat -z record: %q", record)
 		}
 		added, deleted, path := parts[0], parts[1], parts[2]
 		isNew := !r.existsAt(ctx, base, path)
@@ -139,7 +169,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 			a := Artifact{Path: path, Size: size, Class: "binary"}
 			if isNew && !want[path] {
 				a.Excluded, a.Reason = true, "a new binary the plan did not name as an intended output"
-				if _, err := r.output(ctx, "reset", "-q", "--", path); err != nil {
+				if _, err := r.literalPathOutput(ctx, "reset", "-q", "--", path); err != nil {
 					return Capture{}, fmt.Errorf("exclude %s from the candidate: %w", path, err)
 				}
 				cap.Excluded = append(cap.Excluded, a)
@@ -151,7 +181,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 			if isNew && !want[path] && size > oversizedBytes {
 				a := Artifact{Path: path, Size: size, Class: "oversized", Excluded: true,
 					Reason: "a new file over " + strconv.Itoa(oversizedBytes>>20) + " MiB the plan did not name as an intended output"}
-				if _, err := r.output(ctx, "reset", "-q", "--", path); err != nil {
+				if _, err := r.literalPathOutput(ctx, "reset", "-q", "--", path); err != nil {
 					return Capture{}, fmt.Errorf("exclude %s from the candidate: %w", path, err)
 				}
 				cap.Excluded = append(cap.Excluded, a)
@@ -181,7 +211,10 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	if err != nil {
 		return Capture{}, err
 	}
-	cap.Paths = parseNameStatusZ(names)
+	cap.Paths, err = parseNameStatusZ(names)
+	if err != nil {
+		return Capture{}, err
+	}
 	return cap, nil
 }
 
