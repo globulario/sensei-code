@@ -93,14 +93,19 @@ mapped to `FAILED`, and a known outcome is no longer left as `UNKNOWN`.
 
 ### F3 — RESOLVED: a `PlanState` axis
 
-`plan_digest` is unconditionally required, but an architect's conversational
-reply and the assisted lane produce no plan at all. Unlike F1 this is not a
-missing measurement: **the artifact does not exist**. Making `plan_digest`
-conditional on a plan axis would be the same conditional-evidence law already
-applied to candidates and reviews, but that is a schema decision and is not
-taken here.
+An architect's conversational reply and the assisted lane produce no plan at
+all. Unlike F1 this was never a missing measurement: **the artifact does not
+exist**, and `plan_digest` was unconditionally required anyway.
 
-### F4 — three identities the governor could not state, two now measured
+`PlanState` resolves it, and it is the third independent instance of one law:
+`PRESENT` requires the digest, `NONE` requires the absence to be recorded and is
+cross-checked against it, `UNKNOWN` is never complete. The axis is **asserted,
+never implied** -- a supplied plan is recorded before anything can fail, a lane
+that never plans claims `NONE`, and a run that cannot yet say says `UNKNOWN`.
+Requiring a digest for an artifact that does not exist is not rigour; it is the
+wrong predicate.
+
+### F4 — three identities the governor could not state, all three now measured
 
 The schema required `governor_commit`, `governor_binary_sha256` and
 `serving_producer`, and the engine could state none of them. Two were
@@ -174,4 +179,8 @@ base differs from it.
 
 - No admission. The receipt reports evidence and grants nothing.
 - No isolation. It stays external.
-- No schema relaxation. Three terminals are INCOMPLETE and say why.
+- No schema relaxation. Where a receipt is INCOMPLETE it says exactly why: the
+  **main success path** cannot name its candidate's commit, tree or first parent
+  because the loop never commits it (F1, the driver for Exact Candidate
+  Admission), and the **resume lane** measures little of the world it re-enters.
+  Both are recorded gaps, not relaxed requirements.

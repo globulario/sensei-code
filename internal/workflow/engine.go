@@ -568,11 +568,10 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		// that goes silent when stopped leaves no account of why it ended.
 		if ctx.Err() != nil {
 			const note = "stopped by the human; the candidate is left as it stands"
-			// FINDING: the schema has no STOPPED outcome. A human withdrawing is
-			// not a failure -- recording it as one would teach the behavioural
-			// record that this task shape breaks -- so the receipt says UNKNOWN
-			// and is INCOMPLETE, which is the truthful record of a vocabulary
-			// that does not yet cover this terminal. It is not weakened to fit.
+			// A human withdrawing is a real terminal outcome, not a failure:
+			// recording it as one would teach the behavioural record that this
+			// task shape breaks. STOPPED says what happened, and a receipt
+			// carrying it is complete.
 			e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceSystem,
 				runreceipt.OutcomeStopped, e.candidateStateFor(taskID), note, nil)
 			e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
