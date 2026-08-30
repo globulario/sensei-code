@@ -71,7 +71,7 @@ than refusing a drifted harness.
 
 The validation is now `c5-validate.sh`, a gate that materialises a fresh
 subject per case, asserts every expected exit status, prints its own count
-and exits non-zero on any disagreement: **25 cases, 25 passed**. The capture
+and exits non-zero on any disagreement. The capture
 exits non-zero on every falsifier it prints. The measured serving process is
 required, may not read `unknown`, and must be the same executable at both
 ends. `c5-run.sh` pins the SHA256 of the capture, closure and extractor
@@ -80,3 +80,20 @@ recording drift is weaker than refusing it. And `c5-extract.py` keeps the
 whole reviewer trail, so a run where one provider fails and another delivers
 records both; the frozen `sensei-f3` is relabelled a reference file identity,
 not the producer, because nothing has shown it executing.
+
+
+## Third pre-run amendment
+
+Two wires were missing between the manifest and its gate: `C5.materialise.txt`
+and `C5.extract.txt` were declared REQUIRED and checked nowhere, and the
+frozen rule "the candidate diff is REQUIRED iff a candidate exists" had been
+implemented as "iff the candidate was committed". Those are not the same
+thing — an uncommitted candidate state is exactly what C4 ended with, and the
+gate would have tolerated its diff being absent.
+
+Both are wired now, taking the stronger reading: a candidate state is a
+commit, a candidate-shaped ref, or a live worktree, measured from all three,
+and whichever exists must have its exact diff preserved — with a recorded
+reason if that diff is empty, and a cross-check that refuses a run reporting
+no candidate state while candidate refs sit in the subject. **32 cases, 32
+passed.**

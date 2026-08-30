@@ -41,6 +41,7 @@ no_falsifier() {
 req_file C5.run
 req_file C5.subject.start.txt
 req_file C5.graph.metadata.pre.json
+req_file C5.materialise.txt
 no_falsifier C5.subject.start.txt
 for f in "governor commit (source) " "governor binary path " "governor binary sha256 " \
          "producer binary path " "producer binary sha256 " \
@@ -51,6 +52,7 @@ req_measured C5.run "producer serving at start "
 if [ "$PHASE" = "end" ] || [ "$PHASE" = "closed" ]; then
   req_file C5.subject.end.txt
   req_file C5.log
+  req_file C5.extract.txt
   no_falsifier C5.subject.end.txt
   [ -f "$R/C5.receipts.jsonl" ] || bad "MISSING ARTIFACT: C5.receipts.jsonl (must exist even when empty)"
   for f in "governor commit at end " "governor binary path at end " "governor binary sha256 at end " \
@@ -63,9 +65,28 @@ if [ "$PHASE" = "end" ] || [ "$PHASE" = "closed" ]; then
   req_field C5.run "producer serving stable "
   grep -qE "^producer serving stable[[:space:]]+yes" "$R/C5.run" \
     || bad "PRODUCER SERVING IDENTITY CHANGED (or unmeasured) ACROSS THE RUN"
-  # Conditional artifact: a candidate exists -> its diff and its measured identity are required.
+  # Conditional artifact. The frozen table says REQUIRED IFF A CANDIDATE
+  # EXISTS -- which is not the same as "was committed". An uncommitted
+  # worktree state is still a candidate state, and its exact diff is the
+  # evidence C4 had to reconstruct after the fact.
+  req_field C5.run "candidate state exists "
+  STATE=$(sed -n 's/^candidate state exists[[:space:]]*//p' "$R/C5.run" | head -1)
+  NREFS=$(sed -n 's/^candidate-shaped refs in subject[[:space:]]*//p' "$R/C5.run" | head -1)
+  if [ "${NREFS:-0}" -gt 0 ] 2>/dev/null && [ "$STATE" != "yes" ]; then
+    bad "CANDIDATE STATE MISREPORTED: $NREFS candidate-shaped ref(s) in the subject but 'candidate state exists' says $STATE"
+  fi
+  if grep -qE "^candidate committed[[:space:]]+yes" "$R/C5.run" 2>/dev/null && [ "$STATE" != "yes" ]; then
+    bad "CANDIDATE STATE MISREPORTED: committed yes but 'candidate state exists' says $STATE"
+  fi
+  if [ "$STATE" = "yes" ]; then
+    # It must EXIST. A zero-byte diff is evidence only when the record says why.
+    if [ ! -f "$R/C5.candidate.diff" ]; then
+      bad "MISSING ARTIFACT: C5.candidate.diff (a candidate state existed)"
+    elif [ ! -s "$R/C5.candidate.diff" ]; then
+      req_field C5.run "candidate diff empty because "
+    fi
+  fi
   if grep -qE "^candidate committed[[:space:]]+yes" "$R/C5.run" 2>/dev/null; then
-    req_file C5.candidate.diff
     req_field C5.run "candidate ref "
     req_field C5.run "candidate parent "
     req_field C5.run "candidate ancestry X->candidate "

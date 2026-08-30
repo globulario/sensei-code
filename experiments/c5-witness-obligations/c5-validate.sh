@@ -79,8 +79,10 @@ mk_start() { rm -rf "$R"; mkdir -p "$R"
     echo "producer binary path /p"; echo "producer binary sha256 def"
     echo "producer serving at start $SERV_OK"
     echo "subject HEAD $X"; echo "subject tree fe43d48"; echo "plan sha256 990090fd"; } > "$R/C5.run"
-  cp "$W/c1.txt" "$R/C5.subject.start.txt"; echo '{}' > "$R/C5.graph.metadata.pre.json"; }
+  cp "$W/c1.txt" "$R/C5.subject.start.txt"; echo '{}' > "$R/C5.graph.metadata.pre.json"
+  echo "cloning into ..." > "$R/C5.materialise.txt"; }
 mk_end() { mk_start; cp "$W/c1.txt" "$R/C5.subject.end.txt"; echo log > "$R/C5.log"; : > "$R/C5.receipts.jsonl"
+  echo "task id task-1" > "$R/C5.extract.txt"
   { echo "governor commit at end $X"; echo "governor binary path at end /g"; echo "governor binary sha256 at end abc"
     echo "producer binary path at end /p"; echo "producer binary sha256 at end def"
     echo "producer serving at end $SERV_OK"; echo "producer serving stable yes"
@@ -89,7 +91,13 @@ mk_end() { mk_start; cp "$W/c1.txt" "$R/C5.subject.end.txt"; echo log > "$R/C5.l
     echo "reviewer provider gemini"; echo "reviewer verdict accept"; echo "reviewer reviewed digest b4f471f0"
     echo "candidate ref refs/heads/sensei-code/task-1"; echo "candidate head abc123"
     echo "candidate parent $X"; echo "candidate ancestry X->candidate yes"
-    echo "candidate committed yes"; echo "EXIT 0"; } >> "$R/C5.run"; }
+    echo "candidate-shaped refs in subject 1"
+    echo "candidate committed yes"; echo "candidate state exists yes"; echo "EXIT 0"; } >> "$R/C5.run"; }
+# a candidate that exists but was never committed -- C4's actual end state
+mk_end_uncommitted() { mk_end
+  sed -i "s|^candidate committed yes|candidate committed no|" "$R/C5.run"
+  sed -i "s|^candidate ancestry X->candidate yes|candidate ancestry X->candidate no|" "$R/C5.run"
+  rm -f "$R/C5.candidate.diff"; }
 
 mk_start; check G1 0 "complete start set" bash "$CLO" "$R" start
 mk_start; sed -i "s|^subject tree fe43d48|subject tree |" "$R/C5.run"
@@ -110,6 +118,21 @@ mk_end;   echo diff > "$R/C5.candidate.diff"
 mk_end;   echo diff > "$R/C5.candidate.diff"
           grep -v '^reviewer providers attempted' "$R/C5.run" > "$R/t" && mv "$R/t" "$R/C5.run"
           check G10 1 "no record of which providers were attempted" bash "$CLO" "$R" end
+mk_start; rm -f "$R/C5.materialise.txt"
+          check G13 1 "the materialisation transcript is missing (frozen REQUIRED, previously unchecked)" bash "$CLO" "$R" start
+mk_end;   echo diff > "$R/C5.candidate.diff"; rm -f "$R/C5.extract.txt"
+          check G14 1 "the extraction record is missing (frozen REQUIRED, previously unchecked)" bash "$CLO" "$R" end
+mk_end_uncommitted
+          check G15 1 "an UNCOMMITTED candidate state exists and its diff is absent" bash "$CLO" "$R" end
+mk_end_uncommitted; echo diff > "$R/C5.candidate.diff"
+          check G16 0 "an uncommitted candidate state with its diff preserved" bash "$CLO" "$R" end
+mk_end_uncommitted; : > "$R/C5.candidate.diff"
+          check G17 1 "the candidate diff is EMPTY with no recorded reason" bash "$CLO" "$R" end
+mk_end_uncommitted; : > "$R/C5.candidate.diff"
+          echo "candidate diff empty because the candidate state carried no change against X" >> "$R/C5.run"
+          check G18 0 "an empty candidate diff with the reason recorded" bash "$CLO" "$R" end
+mk_end;   echo diff > "$R/C5.candidate.diff"; sed -i "s|^candidate state exists yes|candidate state exists no|" "$R/C5.run"
+          check G19 1 "candidate-shaped refs exist but the run reports no candidate state" bash "$CLO" "$R" end
 mk_end;   echo diff > "$R/C5.candidate.diff"; check G11 1 "closed phase with no C5.closure.txt receipt" bash "$CLO" "$R" closed
 mk_end;   echo diff > "$R/C5.candidate.diff"
           printf 'instrument closure OK (start)\ninstrument closure OK (end)\n' > "$R/C5.closure.txt"

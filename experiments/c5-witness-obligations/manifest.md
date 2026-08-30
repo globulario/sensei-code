@@ -88,7 +88,10 @@ runs/C5.subject.end.txt         REQUIRED
 runs/C5.log                     REQUIRED  untrimmed
 runs/C5.receipts.jsonl          REQUIRED  present even when empty, with the reason
 runs/C5.graph.metadata.pre.json REQUIRED
-runs/C5.candidate.diff          REQUIRED IFF a candidate exists
+runs/C5.candidate.diff          REQUIRED IFF a candidate EXISTS -- a commit, a candidate-shaped
+                                          ref, or a live worktree; "exists" is not "was committed".
+                                          It must be PRESENT; a zero-byte diff is evidence only when
+                                          C5.run records `candidate diff empty because ...`
 runs/C5.closure.txt             REQUIRED  the gate's own output, both phases
 runs/C5.materialise.txt         REQUIRED  the materialisation transcript (added pre-run)
 runs/C5.extract.txt             REQUIRED  the mechanical extraction from the log (added pre-run)
@@ -99,6 +102,7 @@ runs/C5.extract.txt             REQUIRED  the mechanical extraction from the log
                                           IFF a candidate is committed, C5.run additionally carries
                                           candidate ref, candidate head, candidate parent,
                                           candidate ancestry X->candidate  (all MEASURED)
+                                          and, at END always: candidate state exists
 ```
 
 `c5-closure.sh` checks each artifact and each named field and **exits
@@ -314,5 +318,38 @@ Repairs:
   answered. Case `E1` proves it; `E2` proves a missing verdict reads
   `UNREVIEWED`.
 
-`prerun-validation.txt`: **25 cases, 25 passed**, counted by the script —
-ten capture, twelve closure, two extractor, one runner-pinning.
+`prerun-validation.txt`: **32 cases, 32 passed**, counted by the script —
+ten capture, nineteen closure, two extractor, one runner-pinning.
+
+
+## Third pre-run amendment (all of `ddbf956`, `9a70ae7`, `22ff7b6` preserved)
+
+Two wires were missing between this manifest and its gate. Both mechanical,
+both found by reading the freeze against the code rather than by a run:
+
+```text
+1  C5.materialise.txt and C5.extract.txt were declared REQUIRED and the      the manifest's claim that the gate
+   gate checked neither                                                     checks each required artifact was false
+2  the manifest said REQUIRED IFF A CANDIDATE EXISTS; the gate required      an uncommitted candidate state --
+   the diff only when `candidate committed yes`                             C4's actual end state -- passed with
+                                                                            its diff absent
+```
+
+- `C5.materialise.txt` is required at the **start** gate, `C5.extract.txt` at
+  **end** and **closed**.
+- The candidate-diff rule now means what the table says. The runner measures
+  `candidate state exists` from three independent signals — a candidate
+  commit, a candidate-shaped ref, or a live worktree — and preserves the diff
+  for whichever holds. The gate requires the artifact whenever that field is
+  `yes`, requires a recorded reason when the diff is zero bytes, and
+  **cross-checks the field against the measured ref count**: refs present
+  with `candidate state exists no` is a misreport, not a pass. The stronger
+  reading was taken deliberately: C4 had to reconstruct an uncommitted
+  candidate's diff after the fact, and a witness should never rebuild its own
+  evidence.
+
+Seven new cases prove it: `G13` (materialisation transcript deleted), `G14`
+(extraction record deleted), `G15`/`G16` (uncommitted candidate state without
+and with its diff), `G17`/`G18` (empty diff without and with a recorded
+reason), `G19` (candidate refs present while the run reports no candidate
+state).

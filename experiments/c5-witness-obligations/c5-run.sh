@@ -30,7 +30,7 @@ CLOSURE="$RUNS/C5.closure.txt"
 # Harness pins. Recording a hash proves what ran; REFUSING a hash keeps an
 # edited harness from running at all. A frozen witness needs the second.
 PIN_CAPTURE=ecfd73e899c9261fddb5c05b1ef27795fb8e908d445376873029d30522dbee18
-PIN_CLOSURE=f18df436e18202b269ea38799449d41083a3ab057fd112f9c3201578139cd0dc
+PIN_CLOSURE=7481974a89b540a589b7b0d170fe1008a24ada5640d0a0bd53c1a2a20f5ff9cf
 PIN_EXTRACT=dfad93f2bf7a5ba57f9a2dadcbfb075148b2fe9b847f1f6b1446fe600391d6a3
 
 die() { echo "C5 ABORT: $*" >&2; exit 1; }
@@ -169,14 +169,28 @@ fi
   echo "log sha256 $(sha256sum "$RUNS/C5.log" | cut -d' ' -f1) $(stat -c%s "$RUNS/C5.log") bytes"
 } >> "$RUN"
 
-if [ "$COMMITTED" = yes ]; then
-  git -C "$SUBJ" diff --no-ext-diff "$X" "$CAND_HEAD" > "$RUNS/C5.candidate.diff"
-else
-  WT=$(git -C "$SUBJ" worktree list --porcelain | sed -n 's/^worktree //p' | grep -v "^$SUBJ$" | head -1)
-  if [ -n "$WT" ] && [ -d "$WT" ]; then
+# A candidate STATE is a commit, a candidate-shaped ref, or a live worktree.
+# Whichever of those exists, its exact diff is preserved: C4 had to
+# reconstruct an uncommitted candidate's diff after the fact, and that is the
+# evidence a witness should never have to rebuild.
+WT=$(git -C "$SUBJ" worktree list --porcelain | sed -n 's/^worktree //p' | grep -v "^$SUBJ$" | head -1)
+STATE=no
+[ "$COMMITTED" = yes ] && STATE=yes
+[ "${CAND_REFS:-0}" -gt 0 ] && STATE=yes
+[ -n "$WT" ] && [ -d "$WT" ] && STATE=yes
+echo "candidate state exists $STATE" >> "$RUN"
+if [ "$STATE" = yes ]; then
+  if [ "$COMMITTED" = yes ]; then
+    git -C "$SUBJ" diff --no-ext-diff "$X" "$CAND_HEAD" > "$RUNS/C5.candidate.diff"
+  elif [ -n "$WT" ] && [ -d "$WT" ]; then
     git -C "$WT" diff --no-ext-diff "$X" > "$RUNS/C5.candidate.diff"
     echo "candidate worktree $WT (UNCOMMITTED: the diff is over a working state, not a commit)" >> "$RUN"
+  else
+    git -C "$SUBJ" diff --no-ext-diff "$X" "${CAND_HEAD:-$X}" > "$RUNS/C5.candidate.diff"
+    echo "candidate worktree NONE (a candidate-shaped ref exists with no live worktree)" >> "$RUN"
   fi
+  [ -s "$RUNS/C5.candidate.diff" ] \
+    || echo "candidate diff empty because the candidate state carried no change against X" >> "$RUN"
 fi
 [ -f "$RUNS/C5.receipts.jsonl" ] || : > "$RUNS/C5.receipts.jsonl"
 [ -s "$RUNS/C5.receipts.jsonl" ] || echo "(C5.receipts.jsonl preserved EMPTY: the run emitted no derive receipts)" >> "$RUN"
