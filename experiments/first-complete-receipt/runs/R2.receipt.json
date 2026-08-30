@@ -1,0 +1,125 @@
+{
+ "completeness": "INCOMPLETE",
+ "missing": [
+  "graph_digest: the certified start did not carry a live graph digest; the build commit is a different fact and does not stand in for it"
+ ],
+ "receipt": {
+  "schema": "sensei-code.governed-run-receipt/v3",
+  "governor_commit": {
+   "text": "4a507b288e6e0bd2219735b21729a8a4d1adcbd9",
+   "state": "KNOWN",
+   "source": "runtime/debug build info vcs.revision"
+  },
+  "governor_binary_sha256": {
+   "text": "f9ccd2b8e21bc173f8d7028bff48ffa55c9aeeb6d26a809f666a1154cd67a938",
+   "state": "KNOWN",
+   "source": "sha256 of the executable this process is running (/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/sensei-code-v3)"
+  },
+  "base_commit": {
+   "text": "4a507b288e6e0bd2219735b21729a8a4d1adcbd9",
+   "state": "KNOWN",
+   "source": "git rev-parse HEAD, at the certified start"
+  },
+  "plan_digest": {
+   "text": "1806ef7f2d6a2c7b3c90adc02923ad61afcd6099291bf9b0f95fdfc8fe91bc86",
+   "state": "KNOWN",
+   "source": "sha256 of the architect's plan text"
+  },
+  "graph_digest": {
+   "state": "UNKNOWN",
+   "detail": "the certified start did not carry a live graph digest; the build commit is a different fact and does not stand in for it"
+  },
+  "candidate_commit": {
+   "text": "a504593f02ebb7f445fc366fc0148bfc3e9d2fa2",
+   "state": "KNOWN",
+   "source": "git rev-parse on the candidate ref"
+  },
+  "candidate_tree": {
+   "text": "9d39a05eb51ff055afdf84604b35a6b85128accf",
+   "state": "KNOWN",
+   "source": "git rev-parse <candidate>^{tree}"
+  },
+  "candidate_first_parent": {
+   "text": "4a507b288e6e0bd2219735b21729a8a4d1adcbd9",
+   "state": "KNOWN",
+   "source": "git rev-parse <candidate>^1"
+  },
+  "candidate_digest": {
+   "text": "c18be9a6154ae1a9ac45bc5cfba816004254d473cb66ee3dc9c27530d47a502e",
+   "state": "KNOWN",
+   "source": "sha256 of the candidate diff, as the review binding names it"
+  },
+  "candidate_commit_diff_digest": {
+   "text": "c18be9a6154ae1a9ac45bc5cfba816004254d473cb66ee3dc9c27530d47a502e",
+   "state": "KNOWN",
+   "source": "sha256 of the canonical rendering of the minted object"
+  },
+  "candidate_digest_relation": "MATCH",
+  "serving_producer": {
+   "text": "b5b6113661ee8afeac19bfd7b239272005249fadd1c9137ceaf7d77c13384988",
+   "state": "KNOWN",
+   "source": "sha256 of pid 2433579, the process that answered this run's awareness initialize (/proc/2433579/exe)"
+  },
+  "reviewer_provider": {
+   "text": "codex",
+   "state": "KNOWN",
+   "source": "the provider recorded in the verdict's provenance"
+  },
+  "reviewer_executable": {
+   "state": "UNKNOWN",
+   "detail": "not measured: the engine does not measure the reviewer executable"
+  },
+  "review_verdict": {
+   "text": "accept",
+   "state": "KNOWN",
+   "source": "the reviewer's own decision"
+  },
+  "reviewed_digest": {
+   "text": "c18be9a6154ae1a9ac45bc5cfba816004254d473cb66ee3dc9c27530d47a502e",
+   "state": "KNOWN",
+   "source": "the candidate digest the verdict names"
+  },
+  "reviewed_tree": {
+   "text": "9d39a05eb51ff055afdf84604b35a6b85128accf",
+   "state": "KNOWN",
+   "source": "the candidate tree the verdict's envelope names"
+  },
+  "plan_state": "PRESENT",
+  "candidate_state": "PRESENT",
+  "attempts": [
+   {
+    "provider": {
+     "text": "codex",
+     "state": "KNOWN",
+     "source": "the provider recorded in the verdict's provenance"
+    },
+    "delivery": {
+     "text": "DELIVERED",
+     "state": "KNOWN",
+     "source": "the verdict this attempt returned"
+    },
+    "verdict": {
+     "text": "accept",
+     "state": "KNOWN",
+     "source": "the reviewer's own decision"
+    },
+    "reviewed_digest": {
+     "text": "c18be9a6154ae1a9ac45bc5cfba816004254d473cb66ee3dc9c27530d47a502e",
+     "state": "KNOWN",
+     "source": "the candidate digest the verdict names"
+    },
+    "reviewed_tree": {
+     "text": "9d39a05eb51ff055afdf84604b35a6b85128accf",
+     "state": "KNOWN",
+     "source": "the candidate tree the verdict's envelope names"
+    }
+   }
+  ],
+  "terminal": {
+   "text": "workflow.completed",
+   "state": "KNOWN",
+   "source": "the terminal event this run emitted"
+  },
+  "outcome": "ACCEPTED"
+ }
+}

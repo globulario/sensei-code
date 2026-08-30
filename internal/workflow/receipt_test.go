@@ -182,7 +182,7 @@ func TestTheEngineNeverInfersAReviewItDidNotMeasure(t *testing.T) {
 	if len(r.Attempts) != 1 || r.Attempts[0].DeliveredVerdict() {
 		t.Fatalf("attempts = %+v: an assigned reviewer that never returned has not delivered", r.Attempts)
 	}
-	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f0")
+	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f0", "")
 	if got := e.reviewedOutcome("task-1"); got != runreceipt.OutcomeAccepted {
 		t.Fatalf("outcome = %s after a measured acceptance", got)
 	}
@@ -202,10 +202,10 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 	e.beginReceipt("task-1")
 	e.noteWorld("task-1", "f01592b0f0828605ed254047fc064f41dacc78f2", "fac399f8225f")
 	e.notePlan("task-1", "", "a plan the architect wrote")
-	e.noteCandidateCreated("task-1")
+	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
 	e.noteCandidateDigest("task-1", "b4f471f096d13f2b")
 	e.noteReviewerAssigned("task-1", "codex")
-	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f096d13f2b")
+	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f096d13f2b", "")
 
 	r := e.emitReceipt("task-1", event.WorkflowFailed, e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
 	if r.CandidateState != runreceipt.CandidatePresent || r.Outcome != runreceipt.OutcomeAccepted {
@@ -221,25 +221,12 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 			t.Errorf("missing should name %s: %v", want, missing)
 		}
 	}
-	// And once the loop commits its candidate, the same run completes.
-	//
-	// The governor's own identity is stubbed here to isolate the candidate
-	// axis. It is not a gap: `go version -m` on a built sensei-code shows
-	// vcs.revision embedded by the toolchain, so a binary built from a clean
-	// checkout states its commit. A `go test` binary carries no stamp, which is
-	// a fact about test binaries rather than about the engine.
-	restore := governorIdentityFn
-	governorIdentityFn = func() (runreceipt.Value, runreceipt.Value) {
-		return runreceipt.MeasuredValue("3e5ade1391b4b754f0472bdcde6877e6db699d19", "runtime/debug build info vcs.revision"),
-			runreceipt.MeasuredValue(strings.Repeat("a", 64), "sha256 of the executable this process is running")
-	}
-	defer func() { governorIdentityFn = restore }()
-	e.noteServingProducer("task-1", os.Getpid(), true)
-	e.noteCandidateCommit("task-1", "cccc", "tttt", "f01592b0f0828605ed254047fc064f41dacc78f2")
-	r = e.emitReceipt("task-1", event.WorkflowFailed, e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
-	if state, missing := r.Completeness(); state != runreceipt.Complete {
-		t.Fatalf("with a committed candidate the record should be complete: %v", missing)
-	}
+	// The completion half of this claim is no longer staged here: a complete
+	// accepted record now also needs the reviewed tree and the canonical
+	// rendering relation, and faking those would prove nothing.
+	// TestAnAcceptedRunProducesACompleteReceipt exercises the real sequence
+	// against a real repository, including the mint.
+
 }
 
 // An architect's plan had no identity at all before this slice asked for one.
@@ -356,7 +343,7 @@ func TestCandidateAndPlanStatesAreRecordedNotInferred(t *testing.T) {
 	if got := e.candidateStateFor("task-1"); got != runreceipt.CandidateNone {
 		t.Fatalf("a fresh run = %s, want NONE as a positive claim", got)
 	}
-	e.noteCandidateCreated("task-1")
+	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
 	if got := e.candidateStateFor("task-1"); got != runreceipt.CandidatePresent {
 		t.Fatalf("after a worktree is created = %s", got)
 	}

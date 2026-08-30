@@ -34,7 +34,11 @@ import (
 // because the diff always exists.
 func candidateRevision(diff string) string {
 	sum := sha256.Sum256([]byte(diff))
-	return hex.EncodeToString(sum[:])[:16]
+	// The WHOLE digest. It used to be truncated to sixteen hex characters --
+	// 64 bits -- which was a fine short revision label and is not a thing to
+	// carry as one leg of an exact {B, D, T} identity. shortDigest() exists for
+	// display; evidence keeps its full width.
+	return hex.EncodeToString(sum[:])
 }
 
 // reportRevision is the identity of one inspection's findings.
@@ -58,6 +62,7 @@ func reviewPacket(tc taskContext, binding roles.Binding, start certifiedStart, p
 		Provenance: roles.Provenance{
 			TaskID: binding.TaskID, Role: roles.Reviewer,
 			BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+			CandidateTree:    binding.CandidateTree,
 			GraphBuildCommit: start.GraphBuildCommit(),
 			SessionMode:      roles.Fresh,
 			At:               time.Now().UTC(),
@@ -88,6 +93,7 @@ func inspectionPacket(tc taskContext, binding roles.Binding, start certifiedStar
 		Provenance: roles.Provenance{
 			TaskID: binding.TaskID, Role: roles.Reviewer,
 			BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+			CandidateTree:    binding.CandidateTree,
 			GraphBuildCommit: start.GraphBuildCommit(),
 			SessionMode:      roles.Fresh,
 			At:               time.Now().UTC(),
@@ -148,7 +154,11 @@ func (e *Engine) recordReconciliation(taskID string, binding roles.Binding, r ro
 		TaskID: taskID, Role: roles.Architect,
 		Provider: e.Config.Architect.Name, SessionID: e.SessionID,
 		BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
-		At: time.Now().UTC(),
+		// Reconciliation is the exceptional path -- two reviews disagreed and
+		// the architect may let the accepting one stand -- so it is the LAST
+		// artifact that should speak a smaller identity than the ordinary path.
+		CandidateTree: binding.CandidateTree,
+		At:            time.Now().UTC(),
 	}
 	if err := r.Validate(); err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,

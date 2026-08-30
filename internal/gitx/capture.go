@@ -49,6 +49,166 @@ type Capture struct {
 	// Binaries are binary members the candidate legitimately holds -- tracked
 	// binaries it modified, or new ones the plan named -- as metadata.
 	Binaries []Artifact
+	// Tree is the canonical tree: the base tree plus exactly Paths. It is the
+	// candidate's CONTENT IDENTITY and the immutable centre of the capture --
+	// Diff is rendered FROM it, not from a second look at the worktree.
+	//
+	// Two sequential reads of a mutable worktree leave a seam: the content can
+	// move between the read that produced the review text and the read that
+	// produced the tree. Deriving Diff from Tree means there is one measurement
+	// and one representation of it, with no instant in between.
+	//
+	// (An earlier version of this comment argued that a kept binary renders as
+	// "Binary files differ" and so different bytes could share a Diff. That is
+	// wrong and was measured to be wrong: git also emits an `index <old>..<new>`
+	// line, whose abbreviated blob hashes distinguish them. The seam above is
+	// the reason; the binary corner is not.)
+	//
+	// A candidate that changed nothing has Tree equal to the base's own tree,
+	// which is how "produced no work" is MEASURED rather than inferred.
+	Tree string
+	// BaseTree is the base commit's own tree, carried so a caller can MEASURE
+	// "this candidate produced no work" as Tree == BaseTree rather than infer
+	// it from an empty path list.
+	BaseTree string
+	// Paths is the exact set of repository-relative paths this candidate
+	// changed, as Git reports them, taken AFTER artifact exclusions.
+	//
+	// It exists because every consumer used to re-derive it from text: this
+	// file split `--numstat` on tabs after TrimSpace, and report.FromDiff
+	// parsed `diff --git a/P b/P` headers and failed open on a quoted path.
+	// A pathname Git quotes was therefore invisible to whichever consumer
+	// looked -- and the canonical candidate identity commit stages exactly
+	// these paths, so an identity built on a lossy set would be exact about
+	// the wrong tree.
+	//
+	// Produced with `--name-status -z`, parsed on NUL boundaries: no trimming,
+	// no tab splitting, no unquoting. Rename detection is deliberately OFF, so
+	// a rename arrives as a deletion at the old path and an addition at the
+	// new one -- which is what a tree builder needs, rather than a
+	// presentation-level encoding it would have to undo.
+	Paths []string
+}
+
+// RenderCandidateDiff is the ONE rendering of a candidate.
+//
+// Capture uses it to produce what the reviewer reads, and any later comparison
+// -- diff(B,C) against diff(B,T) -- must call this rather than reassemble an
+// equivalent command line. Two command lines that are equivalent today are two
+// things that can drift apart tomorrow, and the whole point of the comparison
+// is that a difference means something.
+//
+// Text only: `--binary` would inline every kept binary as a patch, which is
+// exactly the payload nobody can judge and every transport refuses.
+func (r Repo) RenderCandidateDiff(ctx context.Context, base, treeish string) (string, error) {
+	return r.raw(ctx, "diff", "--no-ext-diff", base, treeish, "--")
+}
+
+// validateBoundaryAgainstTree re-asks the artifact question of the frozen tree.
+//
+// Every load-bearing claim must ultimately refer to T: if T is the content
+// authority, then artifact admissibility has to hold of T and not merely of
+// whatever the worktree held when the classification loop ran.
+func (r Repo) validateBoundaryAgainstTree(ctx context.Context, base, tree string, want map[string]bool) error {
+	out, err := r.raw(ctx, "diff", "--no-ext-diff", "--no-renames", "--numstat", "-z", base, tree, "--")
+	if err != nil {
+		return err
+	}
+	records := strings.Split(out, "\x00")
+	if n := len(records); n > 0 && records[n-1] == "" {
+		records = records[:n-1]
+	}
+	for _, record := range records {
+		parts := strings.SplitN(record, "\t", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("malformed --numstat -z record while validating the frozen tree: %q", record)
+		}
+		added, deleted, path := parts[0], parts[1], parts[2]
+		if want[path] || r.existsAt(ctx, base, path) {
+			continue
+		}
+		if added == "-" && deleted == "-" {
+			return fmt.Errorf("the frozen candidate tree holds %q as a new binary the plan did not name; "+
+				"the artifact boundary allowed it against different bytes", path)
+		}
+		size, err := r.sizeInTree(ctx, tree, path)
+		if err != nil {
+			return err
+		}
+		if size > oversizedBytes {
+			return fmt.Errorf("the frozen candidate tree holds %q at %d bytes, over the %d MiB limit, and the plan did not name it; "+
+				"the artifact boundary allowed it against different bytes", path, size, oversizedBytes>>20)
+		}
+	}
+	return nil
+}
+
+// sizeInTree is a blob's size AS THE FROZEN TREE HOLDS IT, not as the worktree
+// happens to hold it now.
+func (r Repo) sizeInTree(ctx context.Context, tree, path string) (int64, error) {
+	out, err := r.envOutput(ctx, append(os.Environ(), "GIT_LITERAL_PATHSPECS=1"),
+		"ls-tree", "-l", "-z", tree, "--", path)
+	if err != nil {
+		return 0, err
+	}
+	record := strings.TrimSuffix(out, "\x00")
+	head, _, ok := strings.Cut(record, "\t")
+	if !ok {
+		return 0, fmt.Errorf("cannot read the size of %q in tree %s", path, tree)
+	}
+	fields := strings.Fields(head)
+	if len(fields) != 4 {
+		return 0, fmt.Errorf("cannot read the size of %q in tree %s: %q", path, tree, head)
+	}
+	size, err := strconv.ParseInt(fields[3], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("cannot read the size of %q in tree %s: %w", path, tree, err)
+	}
+	return size, nil
+}
+
+// literalPathOutput runs git with pathspec magic DISABLED.
+//
+// Every path this package hands back to git came from git as a measured
+// pathname. A file genuinely named ":(glob)*" survives the NUL-safe capture
+// intact and is then read by `reset` as a pattern, unstaging paths the boundary
+// never classified. Exact bytes are not enough if the receiver may read them as
+// a pattern.
+func (r Repo) literalPathOutput(ctx context.Context, args ...string) (string, error) {
+	return r.envOutput(ctx, append(os.Environ(), "GIT_LITERAL_PATHSPECS=1"), args...)
+}
+
+// parseNameStatusZ reads `--name-status -z` output: a status field and a path
+// field, each terminated by NUL. With rename detection off there is never a
+// second path field, so the shape is a strict alternation.
+//
+// Nothing here trims, splits on whitespace, or unquotes. A pathname containing
+// a tab, a newline, a quote or a non-UTF-8 byte survives it unchanged, which is
+// the whole reason this function exists.
+//
+// It FAILS CLOSED. This is identity infrastructure now: a record it cannot
+// model is a pathname it cannot vouch for, and silently skipping one would omit
+// a path from the set that decides what enters the canonical tree.
+func parseNameStatusZ(out string) ([]string, error) {
+	fields := strings.Split(out, "\x00")
+	// A NUL-terminated stream ends with one empty field. Anything else empty is
+	// a record this parser does not understand.
+	if n := len(fields); n > 0 && fields[n-1] == "" {
+		fields = fields[:n-1]
+	}
+	if len(fields)%2 != 0 {
+		return nil, fmt.Errorf("malformed --name-status -z output: %d field(s), which is not status/path pairs", len(fields))
+	}
+	var paths []string
+	for i := 0; i+1 < len(fields); i += 2 {
+		status, path := fields[i], fields[i+1]
+		if status == "" || path == "" {
+			return nil, fmt.Errorf("malformed --name-status -z record at field %d: status %q path %q", i, status, path)
+		}
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths, nil
 }
 
 // oversizedBytes is the size above which a NEW non-binary file is treated as
@@ -66,11 +226,25 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
 		return Capture{}, err
 	}
+	// The intended set is compared against pathnames Git reported EXACTLY, so it
+	// must not normalise them either. A plan naming " asset.bin" or "asset.bin "
+	// -- with real leading or trailing whitespace, which is data in a pathname
+	// -- would otherwise fail to match its own measured path and be excluded as
+	// an unplanned artifact. TrimSpace here undid, on one side, the exactness
+	// the other side had just gained.
+	//
+	// The "./" prefix is still dropped: Git never reports a path that way, so it
+	// can only be a human writing "./x" for "x".
 	want := map[string]bool{}
 	for _, p := range intended {
-		want[filepath.ToSlash(strings.TrimPrefix(strings.TrimSpace(p), "./"))] = true
+		want[filepath.ToSlash(strings.TrimPrefix(p, "./"))] = true
 	}
-	numstatArgs := []string{"diff", "--no-ext-diff", "--numstat"}
+	// -z and --no-renames for the same reason Paths uses them: this loop
+	// decides which paths are ARTIFACTS and resets them out of the candidate,
+	// so a pathname it misreads is a file excluded or kept by the wrong name.
+	// The exact path set downstream cannot repair a boundary decision already
+	// made against a mangled name.
+	numstatArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--numstat", "-z"}
 	if b := strings.TrimSpace(base); b != "" {
 		numstatArgs = append(numstatArgs, b)
 	}
@@ -79,10 +253,21 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		return Capture{}, err
 	}
 	var cap Capture
-	for _, line := range strings.Split(numstat, "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "\t", 3)
+	numstatRecords := strings.Split(numstat, "\x00")
+	if n := len(numstatRecords); n > 0 && numstatRecords[n-1] == "" {
+		numstatRecords = numstatRecords[:n-1]
+	}
+	for _, record := range numstatRecords {
+		// Each record is "added\tdeleted\tpath". Only the first two tabs are
+		// separators; everything after them is the pathname's own bytes, which
+		// may themselves contain a tab. TrimSpace is deliberately absent: a
+		// pathname may begin or end with whitespace.
+		parts := strings.SplitN(record, "\t", 3)
 		if len(parts) != 3 {
-			continue
+			// Fail closed: this loop decides which paths are artifacts and
+			// resets them out of the candidate. A record it cannot read is a
+			// classification it cannot make.
+			return Capture{}, fmt.Errorf("malformed --numstat -z record: %q", record)
 		}
 		added, deleted, path := parts[0], parts[1], parts[2]
 		isNew := !r.existsAt(ctx, base, path)
@@ -92,7 +277,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 			a := Artifact{Path: path, Size: size, Class: "binary"}
 			if isNew && !want[path] {
 				a.Excluded, a.Reason = true, "a new binary the plan did not name as an intended output"
-				if _, err := r.output(ctx, "reset", "-q", "--", path); err != nil {
+				if _, err := r.literalPathOutput(ctx, "reset", "-q", "--", path); err != nil {
 					return Capture{}, fmt.Errorf("exclude %s from the candidate: %w", path, err)
 				}
 				cap.Excluded = append(cap.Excluded, a)
@@ -104,7 +289,7 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 			if isNew && !want[path] && size > oversizedBytes {
 				a := Artifact{Path: path, Size: size, Class: "oversized", Excluded: true,
 					Reason: "a new file over " + strconv.Itoa(oversizedBytes>>20) + " MiB the plan did not name as an intended output"}
-				if _, err := r.output(ctx, "reset", "-q", "--", path); err != nil {
+				if _, err := r.literalPathOutput(ctx, "reset", "-q", "--", path); err != nil {
 					return Capture{}, fmt.Errorf("exclude %s from the candidate: %w", path, err)
 				}
 				cap.Excluded = append(cap.Excluded, a)
@@ -112,13 +297,63 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		}
 	}
 	sort.Slice(cap.Excluded, func(i, j int) bool { return cap.Excluded[i].Path < cap.Excluded[j].Path })
-	// Text only. `--binary` would inline every kept binary as a patch, which is
-	// exactly the payload nobody can judge and every transport refuses.
-	diffArgs := []string{"diff", "--no-ext-diff"}
+	// The exact path set, taken after exclusions so it names what the reviewer
+	// will actually judge. Same base, same boundary, one authority.
+	nameArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--name-status", "-z"}
 	if b := strings.TrimSpace(base); b != "" {
-		diffArgs = append(diffArgs, b)
+		nameArgs = append(nameArgs, b)
 	}
-	diff, err := r.raw(ctx, append(diffArgs, "--")...)
+	names, err := r.raw(ctx, append(nameArgs, "--")...)
+	if err != nil {
+		return Capture{}, err
+	}
+	cap.Paths, err = parseNameStatusZ(names)
+	if err != nil {
+		return Capture{}, err
+	}
+
+	// A capture with no base has no content identity: a tree is "the base tree
+	// plus these paths", and there is no base tree to start from. The governed
+	// loop always has one (the candidate's recorded base); this shape exists
+	// for callers that only want to see what a worktree holds, and it keeps the
+	// older worktree rendering.
+	if strings.TrimSpace(base) == "" {
+		diff, err := r.raw(ctx, "diff", "--no-ext-diff", "--")
+		if err != nil {
+			return Capture{}, err
+		}
+		cap.Diff = diff
+		return cap, nil
+	}
+
+	// The content identity, built ONCE, before anything renders it.
+	if cap.BaseTree, err = r.CommitTreeOf(ctx, base); err != nil {
+		return Capture{}, err
+	}
+	if len(cap.Paths) == 0 {
+		// No work. The candidate's tree IS the base's tree, which is a
+		// measurement of "produced nothing" rather than an inference from an
+		// empty diff.
+		cap.Tree = cap.BaseTree
+		return cap, nil
+	}
+	if cap.Tree, err = r.CanonicalTree(ctx, base, cap.Paths); err != nil {
+		return Capture{}, err
+	}
+
+	// The boundary decision was made against a MUTABLE worktree, before T
+	// existed. Now that the content is frozen, the same decision is re-asked of
+	// it: a path could have changed between classification and the tree build,
+	// leaving a capture whose exclusion metadata describes bytes the reviewer
+	// will never see. Failing is the only honest answer -- silently rebuilding
+	// or reinterpreting T would make the boundary describe whichever read won.
+	if err := r.validateBoundaryAgainstTree(ctx, base, cap.Tree, want); err != nil {
+		return Capture{}, err
+	}
+
+	// The review representation, rendered FROM the tree, through the ONE
+	// renderer any later comparison must also use.
+	diff, err := r.RenderCandidateDiff(ctx, base, cap.Tree)
 	if err != nil {
 		return Capture{}, err
 	}

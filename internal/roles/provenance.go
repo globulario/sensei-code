@@ -34,6 +34,20 @@ type Provenance struct {
 	// an exact candidate revision.
 	BaseSHA         string `json:"base_sha,omitempty"`
 	CandidateDigest string `json:"candidate_digest,omitempty"`
+	// CandidateTree is the exact content the artifact is about.
+	//
+	// It is carried by the ENVELOPE, like BaseSHA and CandidateDigest: the
+	// workflow stamps all three from one binding, because a producer must not
+	// author its own identity. No model transcribes it.
+	//
+	// It is checked by Mismatch on the same terms as the others. Where the
+	// engine stamps both sides that check is uniform rather than probative --
+	// what it protects is an artifact that arrives from anywhere else.
+	//
+	// CandidateDigest cannot stand in for it even now that it is a full
+	// SHA-256: it identifies a RENDERING, and two renderings are only as equal
+	// as the renderer that produced them. The tree is the content itself.
+	CandidateTree string `json:"candidate_tree,omitempty"`
 	// GraphBuildCommit pins the rule generation. A verdict reached under one
 	// graph and applied under another is being applied by rules it never read.
 	GraphBuildCommit string `json:"graph_build_commit,omitempty"`
@@ -51,11 +65,13 @@ type Binding struct {
 	TaskID          string `json:"task_id"`
 	BaseSHA         string `json:"base_sha,omitempty"`
 	CandidateDigest string `json:"candidate_digest,omitempty"`
+	// CandidateTree is the content identity this artifact must be about.
+	CandidateTree string `json:"candidate_tree,omitempty"`
 }
 
 // Binding extracts the subject this artifact claims to be about.
 func (p Provenance) Binding() Binding {
-	return Binding{TaskID: p.TaskID, BaseSHA: p.BaseSHA, CandidateDigest: p.CandidateDigest}
+	return Binding{TaskID: p.TaskID, BaseSHA: p.BaseSHA, CandidateDigest: p.CandidateDigest, CandidateTree: p.CandidateTree}
 }
 
 // Verify refuses an artifact whose subject is not the one asked about.
@@ -83,6 +99,7 @@ func (b Binding) Mismatch(p Provenance) string {
 		{"task", b.TaskID, p.TaskID},
 		{"base commit", b.BaseSHA, p.BaseSHA},
 		{"candidate revision", b.CandidateDigest, p.CandidateDigest},
+		{"candidate content", b.CandidateTree, p.CandidateTree},
 	} {
 		want := strings.TrimSpace(check.want)
 		if want == "" {

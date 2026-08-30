@@ -38,12 +38,20 @@ type Request struct {
 	// never appeared in the audit or the reviewer's packet -- was still
 	// untracked in the worktree, and --all committed and pushed it (#89). What
 	// is published is exactly what was judged, or nothing.
+	//
+	// Publication stages nothing: the accepted object already holds exactly
+	// these paths. They are carried as the record of what the review covered,
+	// and a publication naming none of them is refused.
 	Paths []string
+	// CandidateCommit is the accepted candidate's canonical identity. It is
+	// minted before publication is ever offered; this package pushes it and
+	// never creates one.
+	CandidateCommit string
 }
 
-// ErrNoReviewedPaths reports a publication with nothing judged to publish.
-// It is a refusal: sweeping the worktree instead would publish what no
-// reviewer saw.
+// ErrNoReviewedPaths reports a publication with nothing judged to publish. It
+// is a refusal: a publication that names nothing judged must not be allowed to
+// mean "publish whatever is there".
 var ErrNoReviewedPaths = errors.New("publication names no reviewed candidate paths, so nothing is staged; the worktree is not swept")
 
 // ErrPushNotGranted reports that publication was attempted without the
@@ -51,9 +59,15 @@ var ErrNoReviewedPaths = errors.New("publication names no reviewed candidate pat
 // repository may not be pushed to.
 var ErrPushNotGranted = errors.New("push is not granted in .sensei-code/config.json, so no pull request was opened")
 
-// ErrCommitNotGranted reports that the candidate cannot be committed, which a
-// pull request requires.
-var ErrCommitNotGranted = errors.New("local_commit is not granted in .sensei-code/config.json, so the candidate cannot be committed")
+// ErrNoCandidateCommit reports a publication asked to push a branch that does
+// not name the accepted candidate's identity.
+//
+// Publication does not commit. The accepted candidate is given exactly one
+// commit -- its canonical identity -- before anything reports or publishes it,
+// and this package pushes THAT OBJECT by refspec. It does not consult a local
+// branch, because verifying one identity and publishing another is how work
+// nobody reviewed reaches a remote.
+var ErrNoCandidateCommit = errors.New("no accepted candidate identity was supplied, so there is nothing to publish")
 
 // Body renders the pull request description. The change report is quoted
 // verbatim and the governance position is stated plainly, because a reader of
@@ -69,23 +83,18 @@ func (r Request) Body() string {
 	return b.String()
 }
 
-// CommitArgs is the argv that commits exactly the reviewed candidate paths.
+// PushArgs is the argv that publishes ONE EXACT OBJECT to the candidate branch.
 //
-// `add --all` is deliberately absent: it stages whatever is in the worktree,
-// and the worktree can hold what the candidate does not (an excluded
-// artifact, a worker's scratch file). Staging is by explicit path, so what
-// reaches the commit is what reached the review.
-func CommitArgs(message string, paths []string) [][]string {
-	add := append([]string{"add", "--"}, paths...)
-	return [][]string{
-		add,
-		{"commit", "--message", message},
-	}
-}
-
-// PushArgs is the argv that publishes the candidate branch.
-func PushArgs(branch string) []string {
-	return []string{"push", "--set-upstream", "origin", branch}
+// It pushes the commit itself, not a local ref that names it. Verifying that a
+// branch points at C and then pushing "that branch" proves one identity and
+// publishes another: the two are different values, and anything may move the
+// ref in between. A refspec from the object removes the inference -- what
+// reaches the remote is literally the accepted candidate.
+//
+// Upstream tracking is deliberately not set here. `--set-upstream` needs a
+// local branch as the source, which is exactly the indirection this avoids.
+func PushArgs(commit, branch string) []string {
+	return []string{"push", "origin", commit + ":refs/heads/" + branch}
 }
 
 // PullRequestArgs is the argv handed to gh. It never contains a merge verb.
@@ -105,10 +114,14 @@ func (r Request) PullRequestArgs() []string {
 // error occurred" would record the candidate as unpublished while the remote
 // disagrees. Effects that happened are reported whether or not the whole
 // sequence did.
+//
+// There is no Committed stage. Publication does not commit -- the accepted
+// candidate was given its one identity before publication was ever offered --
+// and a field reporting "committed locally" for an act this package no longer
+// performs would be false provenance in the record that exists to prevent it.
 type Result struct {
-	Committed bool
-	Pushed    bool
-	URL       string
+	Pushed bool
+	URL    string
 }
 
 // Opened reports a complete publication.
@@ -122,8 +135,6 @@ func (r Result) Effects() string {
 		return "pull request opened at " + r.URL
 	case r.Pushed:
 		return "the candidate branch was pushed to origin but no pull request was opened"
-	case r.Committed:
-		return "the candidate was committed locally but nothing was pushed"
 	default:
 		return ""
 	}
@@ -134,40 +145,47 @@ func (r Result) Effects() string {
 // person where their pull request is.
 var ErrNoPullRequestURL = errors.New("gh reported success but printed no pull request URL")
 
-// Open commits the candidate, publishes its branch, and opens a pull request.
+// Open publishes the accepted candidate's exact object and opens a pull request.
+//
+// It does not commit. The candidate was given its canonical identity when it
+// was accepted; this pushes THAT object or fails.
 // The caller is responsible for having obtained the human's decision; this only
 // enforces the configured capabilities.
 //
 // The Result is returned on every path, including the error paths, so a partial
 // publication is recoverable by the caller rather than lost with the error.
-func Open(ctx context.Context, r Request, pushGranted, commitGranted bool) (Result, error) {
+func Open(ctx context.Context, r Request, pushGranted bool) (Result, error) {
 	var done Result
 	if !pushGranted {
 		return done, ErrPushNotGranted
-	}
-	if !commitGranted {
-		return done, ErrCommitNotGranted
 	}
 	if strings.TrimSpace(r.Branch) == "" || strings.TrimSpace(r.Workspace) == "" {
 		return done, errors.New("publication needs a candidate branch and workspace")
 	}
 	paths := make([]string, 0, len(r.Paths))
 	for _, p := range r.Paths {
-		if p = strings.TrimSpace(p); p != "" {
+		// p != "", not TrimSpace(p) != "": these are exact measured pathnames,
+		// and a name made only of spaces is odd but valid. Trimming here would
+		// reintroduce, in miniature, the whitespace-is-data defect the capture
+		// layer spent three closures removing.
+		if p != "" {
 			paths = append(paths, p)
 		}
 	}
 	if len(paths) == 0 {
+		// Kept from when this package committed: a publication that names
+		// nothing judged is refused rather than allowed to mean "publish
+		// whatever is there".
 		return done, ErrNoReviewedPaths
 	}
-	for _, args := range CommitArgs(r.Title, paths) {
-		if out, err := run(ctx, r.Workspace, "git", args); err != nil {
-			return done, fmt.Errorf("git %s: %s", args[0], out)
-		}
+	if strings.TrimSpace(r.CandidateCommit) == "" {
+		return done, ErrNoCandidateCommit
 	}
-	done.Committed = true
-	if out, err := run(ctx, r.Workspace, "git", PushArgs(r.Branch)); err != nil {
-		return done, fmt.Errorf("push the candidate branch: %s", out)
+	// Push the EXACT accepted object. Nothing is inferred from a local ref: the
+	// refspec names the commit the receipt recorded, so what reaches the remote
+	// is the accepted candidate or the push fails.
+	if out, err := run(ctx, r.Workspace, "git", PushArgs(r.CandidateCommit, r.Branch)); err != nil {
+		return done, fmt.Errorf("push the accepted candidate: %s", out)
 	}
 	done.Pushed = true
 	out, err := run(ctx, r.Workspace, "gh", r.PullRequestArgs())
@@ -211,4 +229,12 @@ func run(ctx context.Context, dir, name string, args []string) (string, error) {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
+}
+
+func short12(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 12 {
+		return s[:12]
+	}
+	return s
 }

@@ -11,11 +11,13 @@ import (
 )
 
 func TestPublicationRefusedWithoutTheCapability(t *testing.T) {
-	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w"}, false, true); err != ErrPushNotGranted {
+	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w"}, false); err != ErrPushNotGranted {
 		t.Fatalf("err = %v, want ErrPushNotGranted", err)
 	}
-	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w"}, true, false); err != ErrCommitNotGranted {
-		t.Fatalf("err = %v, want ErrCommitNotGranted", err)
+	// The local_commit capability is no longer checked here: this package does
+	// not commit. It is enforced where the act now happens, at the mint.
+	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w", Paths: []string{"a.go"}}, true); !errors.Is(err, ErrNoCandidateCommit) {
+		t.Fatalf("err = %v, want ErrNoCandidateCommit", err)
 	}
 }
 
@@ -92,10 +94,14 @@ func TestCommitAndPushReachARealRemote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, args := range CommitArgs("add a thing", []string{"new.txt"}) {
-		git(work, args...)
-	}
-	git(work, PushArgs("sensei-code/task-1/claude")...)
+	// The candidate's identity is minted BEFORE publication now, so the fixture
+	// commits exactly the reviewed path the way the mint does -- scoped, never
+	// sweeping. The scoping guarantee itself is tested in internal/gitx, where
+	// the canonical tree is built.
+	git(work, "add", "--", "new.txt")
+	git(work, "commit", "--message", "add a thing")
+	head := strings.TrimSpace(git(work, "rev-parse", "HEAD"))
+	git(work, PushArgs(head, "sensei-code/task-1/claude")...)
 
 	branches := git(root, "--git-dir", remote, "branch", "--list")
 	if !strings.Contains(branches, "sensei-code/task-1/claude") {
@@ -113,11 +119,11 @@ func TestCommitAndPushReachARealRemote(t *testing.T) {
 // Publication with nothing judged publishes nothing. Sweeping the worktree
 // instead is exactly how an excluded artifact reached a remote.
 func TestPublicationRefusesToSweepTheWorktree(t *testing.T) {
-	_, err := Open(context.Background(), Request{Workspace: t.TempDir(), Branch: "b", Title: "t"}, true, true)
+	_, err := Open(context.Background(), Request{Workspace: t.TempDir(), Branch: "b", Title: "t"}, true)
 	if !errors.Is(err, ErrNoReviewedPaths) {
 		t.Fatalf("a publication with no reviewed paths was not refused: %v", err)
 	}
-	for _, args := range CommitArgs("m", []string{"a.go", "b.go"}) {
+	for _, args := range [][]string{{"add", "--", "a.go", "b.go"}, {"commit", "--message", "m"}} {
 		for _, a := range args {
 			if a == "--all" || a == "-A" || a == "." {
 				t.Fatalf("commit args sweep the worktree: %v", args)
@@ -156,10 +162,12 @@ func TestAPartialPublicationReportsWhatReachedTheRemote(t *testing.T) {
 		r    Result
 		want string
 	}{
+		// There is no "committed" stage any more: publication does not commit,
+		// and reporting an act this package no longer performs would be false
+		// provenance. Before a push, nothing has left the worktree.
 		{"nothing happened", Result{}, ""},
-		{"committed only", Result{Committed: true}, "committed locally"},
-		{"pushed but no PR", Result{Committed: true, Pushed: true}, "pushed to origin"},
-		{"opened", Result{Committed: true, Pushed: true, URL: "https://x/pull/1"}, "https://x/pull/1"},
+		{"pushed but no PR", Result{Pushed: true}, "pushed to origin"},
+		{"opened", Result{Pushed: true, URL: "https://x/pull/1"}, "https://x/pull/1"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := tc.r.Effects()
@@ -179,5 +187,119 @@ func TestAPartialPublicationReportsWhatReachedTheRemote(t *testing.T) {
 	}
 	if !(Result{URL: "https://x/pull/1"}).Opened() {
 		t.Error("a URL does not report as opened")
+	}
+}
+
+// TestPublicationNeverCommits is the ownership boundary as a gate.
+//
+// The accepted candidate is given exactly ONE commit -- its canonical identity,
+// minted before anything reports or publishes it. Two commit paths would
+// eventually disagree about what was committed.
+func TestPublicationNeverCommits(t *testing.T) {
+	src, err := os.ReadFile("publish.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`"commit"`, "commit-tree", "hash-object"} {
+		if strings.Contains(string(src), forbidden) {
+			t.Errorf("publish.go invokes %s: publication pushes the accepted object and never creates one", forbidden)
+		}
+	}
+}
+
+// Publication names the object it publishes, so an identity that does not exist
+// cannot be published under a plausible-looking ref.
+//
+// This replaces an earlier test that expected a refusal when the local branch
+// pointed somewhere else. That refusal is gone because the INFERENCE is gone:
+// publication no longer consults a ref to decide what to push, so there is no
+// ref/object disagreement left to detect. The property it protected is now held
+// by TestPublicationPushesTheObjectNotTheRefThatNamedIt.
+func TestPublicationCannotPublishAnObjectThatDoesNotExist(t *testing.T) {
+	root := t.TempDir()
+	work := filepath.Join(root, "w")
+	remote := filepath.Join(root, "remote.git")
+	git := func(dir string, args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	os.MkdirAll(work, 0o755)
+	git(root, "init", "--bare", "-q", remote)
+	git(work, "init", "-q")
+	git(work, "config", "user.email", "t@t")
+	git(work, "config", "user.name", "t")
+	git(work, "remote", "add", "origin", remote)
+	os.WriteFile(filepath.Join(work, "a.go"), []byte("package a\n"), 0o644)
+	git(work, "add", "-A")
+	git(work, "commit", "-q", "-m", "one")
+
+	_, err := Open(context.Background(), Request{
+		Workspace: work, Branch: "b", Title: "t",
+		Paths:           []string{"a.go"},
+		CandidateCommit: strings.Repeat("0", 40),
+	}, true)
+	if err == nil {
+		t.Fatal("a nonexistent identity was published")
+	}
+	if out := git(root, "--git-dir", remote, "branch", "--list"); strings.Contains(out, "b") {
+		t.Fatalf("a branch reached the remote for an object that does not exist: %s", out)
+	}
+}
+
+// TestPublicationPushesTheObjectNotTheRefThatNamedIt is the adversarial case.
+//
+// Verifying that a branch points at C and then pushing "that branch" proves one
+// identity and publishes another. They are different values, and anything may
+// move the ref in between. The refspec removes the inference.
+func TestPublicationPushesTheObjectNotTheRefThatNamedIt(t *testing.T) {
+	root := t.TempDir()
+	work := filepath.Join(root, "w")
+	remote := filepath.Join(root, "remote.git")
+	git := func(dir string, args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	os.MkdirAll(work, 0o755)
+	git(root, "init", "--bare", "-q", remote)
+	git(work, "init", "-q")
+	git(work, "config", "user.email", "t@t")
+	git(work, "config", "user.name", "t")
+	git(work, "remote", "add", "origin", remote)
+
+	os.WriteFile(filepath.Join(work, "reviewed.txt"), []byte("the accepted candidate\n"), 0o644)
+	git(work, "add", "-A")
+	git(work, "commit", "-q", "-m", "accepted")
+	accepted := strings.TrimSpace(git(work, "rev-parse", "HEAD"))
+
+	// A local branch of the same name pointing at DIFFERENT work.
+	git(work, "checkout", "-q", "-b", "sensei-code/task-1/claude")
+	os.WriteFile(filepath.Join(work, "unreviewed.txt"), []byte("nobody judged this\n"), 0o644)
+	git(work, "add", "-A")
+	git(work, "commit", "-q", "-m", "not the candidate")
+	other := strings.TrimSpace(git(work, "rev-parse", "HEAD"))
+	if accepted == other {
+		t.Fatal("the fixture did not produce two distinct objects")
+	}
+
+	if _, err := Open(context.Background(), Request{
+		Workspace: work, Branch: "sensei-code/task-1/claude", Title: "t",
+		Paths: []string{"reviewed.txt"}, CandidateCommit: accepted,
+	}, true); err != nil && !strings.Contains(err.Error(), "pull request") {
+		t.Fatalf("publication failed before reaching the remote: %v", err)
+	}
+
+	landed := strings.TrimSpace(git(root, "--git-dir", remote, "rev-parse", "refs/heads/sensei-code/task-1/claude"))
+	if landed != accepted {
+		t.Fatalf("the remote holds %s, want the accepted candidate %s", landed[:12], accepted[:12])
+	}
+	listed := git(root, "--git-dir", remote, "ls-tree", "--name-only", "-r", "refs/heads/sensei-code/task-1/claude")
+	if strings.Contains(listed, "unreviewed.txt") {
+		t.Fatal("work nobody reviewed reached the remote because the push followed a ref instead of the object")
 	}
 }

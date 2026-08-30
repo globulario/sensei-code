@@ -1,0 +1,52 @@
+{
+ "R1": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "4a507b288e6e0bd2219735b21729a8a4d1adcbd9",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone of the branch head, origin removed, seeded with .sensei-code/config.json)",
+  "outcome": "NO RECEIPT -- the run reached a human-owned authority boundary and exited (exit 3, workflow.awaiting_authority). internal/gitx/capture.go has zero anchors, so the router took the bounded-knowledge-gap path, the closure round did not close it, and it escalated with the question open.",
+  "note": "The finding is that a deferred-authority exit emits no receipt. WorkflowAwaitingAuthority was classified non-terminal because the run is resumable -- true inside the process model, false outside it, since the process exited. The schema has no vocabulary for that axis, as it had none for STOPPED. Left open rather than decided unilaterally.",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the receipt architecture, the {B,D,T} envelope, and the instruction to run the ordinary loop (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "NONE -- the run never reached review",
+   "implementation_and_reconstruction": "Claude -- the slice, the runs and these records",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ },
+ "R2": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "4a507b288e6e0bd2219735b21729a8a4d1adcbd9",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone of the branch head, origin removed)",
+  "outcome": "INCOMPLETE / ACCEPTED. Codex accepted; the candidate was minted with first parent exactly the base, candidate_tree == reviewed_tree, relation MATCH. The receipt was INCOMPLETE for one true reason: the certified start carried no live graph digest.",
+  "note": "certifiedStart.GraphDigest() read the preflight authority block, where the field is empty, while the digest sat in the workspace contract the same gate had already decoded. The receipt refused to name a fact it had not been given and refused to substitute the build commit, which is a different fact. THIS DEFECT SURVIVED ~20 ROUNDS OF HUMAN REVIEW AND WAS FOUND BY ONE TWO-MINUTE EXECUTION -- the first time a mechanism in this system caught an authoring error before a person did.",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol",
+   "independent_automated_reviewer": "Codex -- in-run reviewer, ACCEPT on candidate c18be9a6154a",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ },
+ "R3": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "f0858b69aa91122527010d6a637b86fc3ff3f235",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone of the branch head, origin removed)",
+  "outcome": "COMPLETE / ACCEPTED. The first complete governed-run receipt this project has produced. candidate d0a7e9bf, first parent EXACTLY the governed base f0858b69, candidate_tree == reviewed_tree 3e810fbd, candidate_commit_diff_digest == candidate_digest == reviewed_digest, relation MATCH, serving producer read from /proc/<pid>/exe after it answered.",
+  "note": "NOTHING IS ADMITTED. The candidate is retained and unpublished; there is no X+1 and self-hosting has not happened. A comment-only change proves the wiring, not the judgement. d0a7e9bf is reconstructible by anyone holding (f0858b69, 3e810fbd), with no signature and no trust in the machine that produced it.",
+  "findings": [
+   "F1 is closed by execution: the main success path can now state what it produced.",
+   "Two runs found two structural defects that ~20 rounds of diff review missed, and both lived in the SEAMS BETWEEN COMPONENTS -- the ordering of capture, mint, disposition and receipt, and which of two decoded results a fact comes from. Unit tests exercise components; review reads changes; only execution traverses ordering.",
+   "A deferred-authority exit still emits no receipt (R1). Open."
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol",
+   "independent_automated_reviewer": "Codex -- in-run reviewer, ACCEPT",
+   "implementation_and_reconstruction": "Claude",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ }
+}

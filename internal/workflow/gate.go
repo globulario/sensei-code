@@ -65,7 +65,21 @@ func (c certifiedStart) GraphBuildCommit() string { return c.preflight.Authority
 // It is a different fact from GraphBuildCommit and must never stand in for it:
 // one names the generation that produced the rules, the other the bytes that
 // answered this run.
-func (c certifiedStart) GraphDigest() string { return c.preflight.Authority.LiveStoreGraphDigest }
+//
+// It is read from the WORKSPACE contract, which is where Sensei reports it. An
+// earlier version read the preflight authority block, where the field is empty
+// -- so the first real governed run emitted a receipt saying the start "did not
+// carry a live graph digest" while the digest was sitting in the other result
+// the gate had already decoded. The receipt was right that it had not been
+// given one; it was this accessor that looked in the wrong place.
+func (c certifiedStart) GraphDigest() string {
+	if a := c.workspace.GraphAuthority; a != nil && strings.TrimSpace(a.LiveStoreGraphDigest) != "" {
+		return a.LiveStoreGraphDigest
+	}
+	// Not a fallback to a different fact: the preflight block carries the same
+	// field name, and if only it is populated that is still the served graph.
+	return c.preflight.Authority.LiveStoreGraphDigest
+}
 
 // SourceRepoCommit is the repository commit that graph was built against.
 func (c certifiedStart) SourceRepoCommit() string { return c.preflight.Authority.SourceRepoCommit }

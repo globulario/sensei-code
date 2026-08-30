@@ -836,7 +836,10 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		// Exactly the paths the accepted candidate changed, as snapshotted at
 		// its last audit. Nothing else in the worktree is published.
 		Paths: tc.EvidenceSnapshot.ChangedPaths,
-	}, e.Config.Permissions.Push, e.Config.Permissions.LocalCommit)
+		// The object minted when the candidate was accepted. Publication pushes
+		// it and never creates one.
+		CandidateCommit: e.candidateCommitFor(taskID),
+	}, e.Config.Permissions.Push)
 	if err != nil {
 		// What already reached the remote is stated. A failed publication that
 		// pushed a branch has changed the world, and reporting only the error
@@ -846,7 +849,9 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 			detail += "\n" + effects
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, detail, map[string]any{
-			"committed": done.Committed, "pushed": done.Pushed,
+			// No "committed" here: publication does not commit. The candidate's
+			// identity was minted at acceptance and is reported by the receipt.
+			"pushed": done.Pushed, "candidate": e.candidateCommitFor(taskID),
 		}))
 		return publication{State: failed, Err: err, Result: done}
 	}
@@ -1435,8 +1440,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// Snapshot the position so a handover states what the candidate holds
 		// rather than describing it in prose the next worker has to re-derive.
 		tc.EvidenceSnapshot = taskstate.Evidence{
-			DiffBytes:     len(diff),
-			ChangedPaths:  changedPaths(diff),
+			DiffBytes: len(diff),
+			// The capture's exact path set, not a re-parse of the diff text:
+			// the authoritative set is already in hand here.
+			ChangedPaths:  capture.Paths,
 			AuditVerdict:  string(verdict.Decision),
 			AuditDetail:   verdict.Diagnostic(),
 			RequiredTests: tc.EvidenceSnapshot.RequiredTests,
@@ -1446,8 +1453,20 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// here on is about. It is computed from the diff rather than taken from
 		// the audit, so a review is still bound to what it read on a run where
 		// Sensei could not audit at all.
-		binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: candidateRevision(diff)}
+		// {B, D, T}: the base, the representation the reviewer consumed, and the
+		// content identity that representation was rendered from. D is a
+		// deterministic function of (B, T) computed in the same capture, so the
+		// three are one claim rather than three measurements that have to be
+		// argued into agreement.
+		binding := roles.Binding{
+			TaskID:          taskID,
+			BaseSHA:         tc.Identity.BaseSHA,
+			CandidateDigest: candidateRevision(diff),
+			CandidateTree:   capture.Tree,
+		}
 		e.noteCandidateDigest(taskID, binding.CandidateDigest)
+		e.noteCapturedTree(taskID, capture.Tree)
+		e.noteCandidateWork(taskID, capture.Tree, capture.BaseTree)
 		policy := e.policyFor(taskID)
 
 		// The implementer is excluded by construction, not by instruction. An
@@ -2113,6 +2132,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 				TaskID: taskID, Role: roles.Reviewer, Provider: cfg.Name,
 				SessionID: e.SessionID, SessionMode: result.Session,
 				BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+				CandidateTree:    binding.CandidateTree,
 				GraphBuildCommit: packet.Provenance.GraphBuildCommit,
 				At:               time.Now().UTC(),
 			},
@@ -2150,7 +2170,8 @@ func reviewIsInadmissible(v roles.ReviewVerdict, b roles.Binding, implementer st
 // line. A review compressed to a sentence loses the only part a worker can act
 // on, and the compression is invisible afterwards.
 func (e *Engine) reportReview(taskID string, v roles.ReviewVerdict) {
-	e.noteReviewDelivered(taskID, v.Provenance.Provider, string(v.Decision), v.Provenance.CandidateDigest)
+	e.noteReviewDelivered(taskID, v.Provenance.Provider, string(v.Decision),
+		v.Provenance.CandidateDigest, v.Provenance.CandidateTree)
 	for _, f := range v.Findings {
 		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewFinding, f.Line(), f))
 	}
@@ -3705,7 +3726,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 
 	workspace, createErr := e.Repo.CreateWorktreeAt(ctx, taskID, identity.BaseSHA)
 	if createErr == nil {
-		e.noteCandidateCreated(taskID)
+		// The container exists; whether it will hold WORK is unmeasured until
+		// the capture freezes a tree.
+		e.noteCandidateWorkUnmeasured(taskID)
 	}
 	if createErr != nil {
 		fail(fmt.Errorf("create the candidate worktree: %w", createErr))
@@ -3773,6 +3796,17 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		plan = finalPlan
 		if accepted {
+			// The accepted candidate is given its name here: after the verdict,
+			// before anything reports or publishes it, and before the receipt
+			// that must be able to state what the run produced.
+			//
+			// A read-only plan produced no candidate and has nothing to mint.
+			if tc.Mode != ModeInspect {
+				if err := e.mintCandidateIdentity(ctx, taskID, tc, workspace, e.Repo.WorktreeBranch(taskID)); err != nil {
+					fail(fmt.Errorf("the accepted candidate could not be given a commit identity: %w", err))
+					return
+				}
+			}
 			state.Phase = taskstate.Accepted
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(nil)

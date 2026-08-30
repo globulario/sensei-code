@@ -46,6 +46,7 @@ type openReview struct {
 	Summary          string          `json:"summary"`
 	Findings         []roles.Finding `json:"findings,omitempty"`
 	CandidateDigest  string          `json:"candidate_digest"`
+	CandidateTree    string          `json:"candidate_tree,omitempty"`
 	EvidenceIdentity string          `json:"evidence_identity"`
 }
 
@@ -69,6 +70,9 @@ func evidenceIdentity(b validation.Bundle, audit sensei.DiffAuditDecision) strin
 }
 
 // openReviewFrom records what a non-accepting verdict left unanswered.
+// openReviewFrom records a verdict left open, in the same identity language as
+// everything else: the contradiction record names the content, not only the
+// representation of it.
 func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenceID string) openReview {
 	return openReview{
 		Reviewer:         v.Provenance.Provider,
@@ -77,12 +81,18 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 		Summary:          v.Summary,
 		Findings:         v.Findings,
 		CandidateDigest:  candidateDigest,
+		CandidateTree:    v.Provenance.CandidateTree,
 		EvidenceIdentity: evidenceID,
 	}
 }
 
 // contradicts reports whether an accepting verdict on this candidate and
 // evidence contradicts the open review rather than answering it.
+//
+// "The same candidate" is decided by the CONTENT as well as the representation:
+// the digest names a rendering, and the tree names the bytes. Requiring both to
+// match makes this predicate mean what its own "exact candidate" language
+// claims.
 //
 // The candidate or the evidence changing at all is taken as the mechanical
 // resolution: the finding was raised against bytes and outcomes that no longer
@@ -93,7 +103,8 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 func (o openReview) contradicts(accepting roles.ReviewVerdict, candidateDigest, evidenceID string) bool {
 	return accepting.Accepts() &&
 		o.CandidateDigest != "" && o.CandidateDigest == candidateDigest &&
-		o.EvidenceIdentity != "" && o.EvidenceIdentity == evidenceID
+		o.EvidenceIdentity != "" && o.EvidenceIdentity == evidenceID &&
+		o.CandidateTree == accepting.Provenance.CandidateTree
 }
 
 // describe is the contradiction stated once, for the event and the receipt.
