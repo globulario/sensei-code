@@ -236,8 +236,10 @@ byte-identical and an ancestor of the branch head. Criteria 5-7 remain
 UNANSWERED because M does not exist: M is main read back AFTER merge, and
 the PR has not merged.
 
-M IS BLOCKED, AND NOT BY C. Both gate failures at bafb17a are pre-existing
-on this branch and reproduce at C's own parent:
+M IS BLOCKED, AND NOT BY C. Both failures at bafb17a are pre-existing on this
+branch. Neither is caused by C, by admission, or by the merge, but they enter
+at DIFFERENT points, and an earlier draft of this record overstated that by
+saying both reproduce at C's parent. Only (a) does:
 
   (a) TestATimeoutWaitsForItsOwnAccount fails ~50% of runs. The test hands
       streamUntilSettled a CANCELLED ctx and a BUFFERED WorkflowTimedOut, so
@@ -264,6 +266,13 @@ on this branch and reproduce at C's own parent:
       not unique: experiments/b3-self-grounding/runs/N3.log is 4.5 MB and
       already on main; it will do the same the next time it is in a diff.
 
+      This one does NOT reproduce at C's parent, and the control run proves
+      why: at 2d5b31c the enforcing gate passes even against an unpatched
+      server, because the log did not exist yet. It is introduced by a03a050,
+      the commit that recorded the J1-R result. a03a050 is NOT an ancestor of
+      C -- C forks from 2d5b31c -- so the defect is still not C's, but it is
+      reached through the branch rather than through C's history.
+
       Evidence is what makes these experiments readable. Shrinking or deleting
       a run log to obtain a green gate would trade the record for the gate,
       which is the trade this experiment exists to refuse. The owner decides.
@@ -274,3 +283,43 @@ attempted. Succession is NOT declared.
 The branch has been red since 2d5b31c -- every head from 2d5b31c onward
 failed, and 157a742 was the last green. Admission and integration did not
 turn it red and cannot turn it green.
+
+## The two repairs, made outside C under the owner's decisions
+
+Neither repair touches C, amends it, or moves the admitted ref.
+
+(a) THE ENGINE OWNS TERMINAL TRUTH -- sensei-code 974f239.
+    A deadline requests a terminal and never establishes one. Engine.TimeOut
+    claims atomically and loses silently against an already-settled task; the
+    CLI derives its exit from the engine's terminal instead of deciding one.
+    Four falsifiers at 200 draws each. Applies cleanly at 2d5b31c and passes
+    there, which preserves the statement that the defect predates C.
+
+(b) LARGE EVIDENCE IS VERIFIED, NOT EXEMPTED -- sensei 0e244455, on branch
+    fix/large-evidence-transport in globulario/sensei.
+    The evidence artifacts are untouched: no shrink, no truncation, no
+    deletion, no pathname exemption. The transport ceiling is raised to 16 MiB
+    as the temporary repair the owner authorised, stated once and carried by
+    every dial and serve site, with the fixed ceiling recorded in-code as debt
+    and a test that fails if it is ever raised far enough to be mistaken for
+    the durable chunked-transport solution.
+
+    Proved end to end with the same gate and the same diff against two
+    servers: unpatched, ResourceExhausted and CANNOT VERIFY; patched, 45 files
+    evaluated, PASS, exit 0.
+
+WHAT THIS DOES NOT YET DO. The repair lives in globulario/sensei. The gate in
+this repository runs globulario/sensei-action@main, which builds sensei at a
+PINNED ref. Until that fix is released and the pin advances, #127's gate will
+keep failing closed on exactly the file it failed on before -- correctly, since
+the deployed verifier still lacks the capability. Releasing sensei and moving
+the pin is a cross-repository decision, and it is the owner's.
+
+So M remains blocked, criteria 5-7 remain unanswered, criterion 8 remains
+downstream, and succession remains undeclared.
+
+WHAT A1 FOUND. The experiment was designed to test whether a system can admit
+and succeed a change to itself. On the way it exposed two hidden assumptions in
+the governor: that whoever notices an ending may declare it, and that evidence
+is small. Neither was written down anywhere. Both were found by trying to
+integrate a change through the machinery rather than by reasoning about it.
