@@ -1,0 +1,47 @@
+[
+ {
+  "kind": "review.finding",
+  "summary": "[f1] blocking: exactChange claims it can safely fall back to report.FromDiff when FromCapture detects a mismatch. (internal/workflow/engine.go: exactChange and runCandidate) \u2014 The architectural plan explicitly requires structural mismatches to fail closed. This code instead accepts the reviewed candidate, emits a status event, then records a report and decision using the known-lossy parser\u2014the exact authority bypass this change is meant to eliminate. Sensei\u2019s current high-confidence preflight identifies the critical candidate-evidence and authority invariants, and its architect guidance specifically calls out \u201cfallback-as-truth\u201d as a failure mode to challenge. \u2192 Propagate the FromCapture error out of the final-candidate path (or recapture after validation so the final diff and exact Paths are from one capture), and do not call emitChangeReport or recordDecision unless the exact Change was constructed successfully.",
+  "payload": {
+   "id": "f1",
+   "severity": "blocking",
+   "claim": "exactChange claims it can safely fall back to report.FromDiff when FromCapture detects a mismatch.",
+   "reference": "internal/workflow/engine.go: exactChange and runCandidate",
+   "reason": "The architectural plan explicitly requires structural mismatches to fail closed. This code instead accepts the reviewed candidate, emits a status event, then records a report and decision using the known-lossy parser\u2014the exact authority bypass this change is meant to eliminate. Sensei\u2019s current high-confidence preflight identifies the critical candidate-evidence and authority invariants, and its architect guidance specifically calls out \u201cfallback-as-truth\u201d as a failure mode to challenge.",
+   "correction": "Propagate the FromCapture error out of the final-candidate path (or recapture after validation so the final diff and exact Paths are from one capture), and do not call emitChangeReport or recordDecision unless the exact Change was constructed successfully.",
+   "proof_gap": "No test demonstrates that a diff/Capture.Paths mismatch prevents acceptance, reporting, and decision recording; the existing mismatch test covers only report.FromCapture, while the workflow deliberately defeats that failure."
+  }
+ },
+ {
+  "kind": "review.completed",
+  "summary": "REVISE: The candidate violates the plan\u2019s fail-closed requirement: a structural disagreement between the final diff and Capture.Paths is converted into a lossy report and decision after acceptance.  (reviewer \u00b7 via codex \u00b7 session fresh \u00b7 candidate 73449817d223)",
+  "payload": {
+   "provenance": {
+    "task_id": "task-1788067371276752033",
+    "role": "reviewer",
+    "provider": "codex",
+    "session_id": "session-20260830T052251.276503861Z",
+    "session_mode": "fresh",
+    "base_sha": "292686f4c2aa875798da7413b375f9f6c152064d",
+    "candidate_digest": "73449817d223977f3a81bc92fdae2f8924fbe8d46f637a913e9f6f0ee77919e5",
+    "candidate_tree": "963c76d0ba857556fe36f05e6150f20b1fa3c0c8",
+    "graph_build_commit": "fac399f8225f",
+    "at": "2026-08-30T05:43:33.566809027Z"
+   },
+   "decision": "revise",
+   "summary": "The candidate violates the plan\u2019s fail-closed requirement: a structural disagreement between the final diff and Capture.Paths is converted into a lossy report and decision after acceptance.",
+   "instructions": "Remove exactChange\u2019s FromDiff fallback. Build the exact Change from the final, validated capture; if diff/path reconciliation fails, stop before emitting the report or recording the decision. Add a workflow regression covering a post-validation mismatch and proving no report/decision is produced from parsed paths.",
+   "findings": [
+    {
+     "id": "f1",
+     "severity": "blocking",
+     "claim": "exactChange claims it can safely fall back to report.FromDiff when FromCapture detects a mismatch.",
+     "reference": "internal/workflow/engine.go: exactChange and runCandidate",
+     "reason": "The architectural plan explicitly requires structural mismatches to fail closed. This code instead accepts the reviewed candidate, emits a status event, then records a report and decision using the known-lossy parser\u2014the exact authority bypass this change is meant to eliminate. Sensei\u2019s current high-confidence preflight identifies the critical candidate-evidence and authority invariants, and its architect guidance specifically calls out \u201cfallback-as-truth\u201d as a failure mode to challenge.",
+     "correction": "Propagate the FromCapture error out of the final-candidate path (or recapture after validation so the final diff and exact Paths are from one capture), and do not call emitChangeReport or recordDecision unless the exact Change was constructed successfully.",
+     "proof_gap": "No test demonstrates that a diff/Capture.Paths mismatch prevents acceptance, reporting, and decision recording; the existing mismatch test covers only report.FromCapture, while the workflow deliberately defeats that failure."
+    }
+   ]
+  }
+ }
+]

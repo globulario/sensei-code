@@ -1,0 +1,929 @@
+diff --git a/internal/report/report.go b/internal/report/report.go
+index 70096af..115724b 100644
+--- a/internal/report/report.go
++++ b/internal/report/report.go
+@@ -65,43 +65,291 @@ var awarenessKinds = map[string]string{
+ 
+ // FromDiff derives the change shape from a unified diff. It reads the diff
+ // itself rather than asking the worker what it did.
++//
++// The pathnames are the ones the diff text spells, which is Git's presentation
++// form: a pathname holding a tab, a newline, a quote or a non-UTF-8 byte
++// arrives quoted and escaped, and is misread or missed here. A caller holding
++// the capture's measured path set must use FromCapture instead.
+ func FromDiff(diff string) Change {
+ 	change := Change{Awareness: map[string]int{}}
+-	var current, old string
+-	status := Modified
++	for _, e := range scanDiff(diff) {
++		path := e.parsedPath()
++		if path == "" {
++			continue
++		}
++		change.Files = append(change.Files, FileChange{Path: path, Status: e.status, OldPath: e.renameFrom})
++		if kind := awarenessKind(path); kind != "" && e.awareness != 0 {
++			change.Awareness[kind] += e.awareness
++		}
++	}
++	return change
++}
++
++// FromCapture derives the change shape from a candidate diff and the exact path
++// set the capture measured.
++//
++// The diff supplies the presentation -- which files were added, deleted or
++// renamed, and what governance their added lines hold -- and gitx.Capture.Paths
++// supplies the pathnames, because the diff spells them in Git's quoted form and
++// the capture took them from `--name-status -z` on NUL boundaries. That is the
++// whole difference: a pathname holding a tab, a newline, a quote or a non-UTF-8
++// byte is data here rather than something to be parsed back out of text.
++//
++// It FAILS CLOSED. A diff entry naming a path the capture did not measure, or a
++// measured path no diff entry claims, is two readings of one candidate
++// disagreeing; a report that quietly picked either would be exact about the
++// wrong change.
++//
++// Rename detection is on in the diff and off in the path set, so a rename is
++// ONE Renamed FileChange that consumes BOTH of its exact paths.
++func FromCapture(diff string, paths []string) (Change, error) {
++	change := Change{Awareness: map[string]int{}}
++	unclaimed := make(map[string]int, len(paths))
++	for _, p := range paths {
++		unclaimed[p]++
++	}
++	claim := func(p string) error {
++		if unclaimed[p] == 0 {
++			return fmt.Errorf("the diff names %q, which the capture did not measure", p)
++		}
++		unclaimed[p]--
++		return nil
++	}
++	for _, e := range scanDiff(diff) {
++		path, err := e.exactPath()
++		if err != nil {
++			return Change{}, err
++		}
++		if err := claim(path); err != nil {
++			return Change{}, err
++		}
++		file := FileChange{Path: path, Status: e.status}
++		if e.status == Renamed {
++			old, err := unquotePath(e.renameFrom)
++			if err != nil {
++				return Change{}, fmt.Errorf("rename source: %w", err)
++			}
++			if err := claim(old); err != nil {
++				return Change{}, err
++			}
++			file.OldPath = old
++		}
++		change.Files = append(change.Files, file)
++		if kind := awarenessKind(path); kind != "" && e.awareness != 0 {
++			change.Awareness[kind] += e.awareness
++		}
++	}
++	if left := remaining(unclaimed); len(left) != 0 {
++		return Change{}, fmt.Errorf("the capture measured %d path(s) no diff entry claims: %q", len(left), left)
++	}
++	return change, nil
++}
++
++// remaining is the paths still unclaimed, in order, so a mismatch names them.
++func remaining(unclaimed map[string]int) []string {
++	var left []string
++	for p, n := range unclaimed {
++		if n > 0 {
++			left = append(left, p)
++		}
++	}
++	sort.Strings(left)
++	return left
++}
++
++// diffEntry is one logical change as the diff presents it, with its pathnames
++// left in the text's own form. Resolving them is the caller's business:
++// FromDiff takes the presentation form, FromCapture takes the measured bytes.
++type diffEntry struct {
++	header     string
++	renameFrom string
++	renameTo   string
++	// plus is the rest of the `+++ ` line, which is a pathname only for a
++	// fragment carrying no `diff --git` header at all.
++	plus   string
++	status Status
++	// awareness is how many governance entries the added lines start, counted
++	// before anything knows which file they belong to.
++	awareness int
++}
++
++// scanDiff walks a unified diff once and records what each entry says about
++// itself.
++func scanDiff(diff string) []diffEntry {
++	var entries []diffEntry
++	current := diffEntry{status: Modified}
++	started := false
+ 	flush := func() {
+-		if current == "" {
+-			return
++		if started {
++			entries = append(entries, current)
+ 		}
+-		change.Files = append(change.Files, FileChange{Path: current, Status: status, OldPath: old})
++		current, started = diffEntry{status: Modified}, false
+ 	}
+ 	for _, line := range strings.Split(diff, "\n") {
+ 		switch {
+ 		case strings.HasPrefix(line, "diff --git "):
+ 			flush()
+-			current, old = diffPath(line), ""
+-			status = Modified
++			current.header, started = line, true
+ 		case strings.HasPrefix(line, "new file mode"):
+-			status = Added
++			current.status = Added
+ 		case strings.HasPrefix(line, "deleted file mode"):
+-			status = Deleted
++			current.status = Deleted
+ 		case strings.HasPrefix(line, "rename from "):
+-			old = strings.TrimPrefix(line, "rename from ")
+-			status = Renamed
++			current.renameFrom = strings.TrimPrefix(line, "rename from ")
++			current.status = Renamed
+ 		case strings.HasPrefix(line, "rename to "):
+ 			// The rename lines carry both paths whole, however many spaces
+ 			// they hold; they outrank the header's guess.
+-			current = strings.TrimPrefix(line, "rename to ")
+-		case strings.HasPrefix(line, "+++ b/") && current == "":
+-			current = strings.TrimSuffix(strings.TrimPrefix(line, "+++ b/"), "\t")
+-		case strings.HasPrefix(line, "+") && !strings.HasPrefix(line, "+++"):
+-			if kind := awarenessKind(current); kind != "" && isEntryStart(line) {
+-				change.Awareness[kind]++
++			current.renameTo = strings.TrimPrefix(line, "rename to ")
++		case strings.HasPrefix(line, "+++ "):
++			if current.plus == "" {
++				current.plus = strings.TrimPrefix(line, "+++ ")
++			}
++			started = true
++		case strings.HasPrefix(line, "+"):
++			if isEntryStart(line) {
++				current.awareness++
+ 			}
+ 		}
+ 	}
+ 	flush()
+-	return change
++	return entries
++}
++
++// parsedPath is the pathname the diff text spells for this entry.
++func (e diffEntry) parsedPath() string {
++	if e.renameTo != "" {
++		return e.renameTo
++	}
++	if p := diffPath(e.header); p != "" {
++		return p
++	}
++	if rest, ok := strings.CutPrefix(e.plus, "b/"); ok {
++		return strings.TrimSuffix(rest, "\t")
++	}
++	return ""
++}
++
++// exactPath is the pathname bytes this entry names on the b side, with Git's
++// quoting undone so the result can be compared with a measured path.
++//
++// Every entry Git emits carries a `diff --git` header, and a rename carries the
++// whole destination on its own line, so these two sources are exhaustive for a
++// real diff. Anything else is reported rather than guessed at.
++func (e diffEntry) exactPath() (string, error) {
++	if e.renameTo != "" {
++		return unquotePath(e.renameTo)
++	}
++	return headerBSide(e.header)
++}
++
++// headerBSide reads the b-side pathname out of a `diff --git a/P b/P` header.
++//
++// Git quotes each side independently, and an UNQUOTED pathname can never hold a
++// quote character -- Git would have quoted it -- so the first ` "` in a header
++// whose a side is bare can only open the b side. When neither side is quoted
++// the two paths are told apart by shape, as diffPath explains.
++func headerBSide(line string) (string, error) {
++	rest, ok := strings.CutPrefix(line, "diff --git ")
++	if !ok {
++		return "", fmt.Errorf("a diff entry carries no `diff --git` header: %q", line)
++	}
++	var token string
++	switch {
++	case strings.HasPrefix(rest, `"`):
++		_, after, ok := splitQuoted(rest)
++		if !ok {
++			return "", fmt.Errorf("unterminated quoted pathname in %q", line)
++		}
++		token = strings.TrimPrefix(after, " ")
++	case strings.Contains(rest, ` "`):
++		token = rest[strings.Index(rest, ` "`)+1:]
++	default:
++		if p := diffPath(line); p != "" {
++			return p, nil
++		}
++		return "", fmt.Errorf("no pathname could be read from %q", line)
++	}
++	name, err := unquotePath(token)
++	if err != nil {
++		return "", err
++	}
++	b, ok := strings.CutPrefix(name, "b/")
++	if !ok {
++		return "", fmt.Errorf("the b side of %q is not a b/ path", line)
++	}
++	return b, nil
++}
++
++// unquotePath undoes Git's C-style quoting, and leaves an unquoted name alone.
++//
++// Git quotes a pathname holding a control character, a quote or a backslash,
++// and -- with core.quotePath at its default -- every byte above ASCII, as
++// three-digit octal. This decodes to BYTES rather than through a Go string
++// literal: the pathname this exists for may not be valid UTF-8, and
++// strconv.Unquote would replace such a byte with U+FFFD.
++func unquotePath(s string) (string, error) {
++	if !strings.HasPrefix(s, `"`) {
++		return s, nil
++	}
++	name, rest, ok := splitQuoted(s)
++	if !ok || rest != "" {
++		return "", fmt.Errorf("cannot read the quoted pathname %s", s)
++	}
++	return name, nil
++}
++
++// cEscapes are the single-character escapes Git emits; anything else it escapes
++// in octal.
++var cEscapes = map[byte]byte{'a': 0x07, 'b': 0x08, 't': 0x09, 'n': 0x0a, 'v': 0x0b, 'f': 0x0c, 'r': 0x0d, '"': '"', '\\': '\\'}
++
++// splitQuoted decodes the C-quoted token at the start of s, returning the bytes
++// it names and whatever follows its closing quote.
++func splitQuoted(s string) (string, string, bool) {
++	if !strings.HasPrefix(s, `"`) {
++		return "", "", false
++	}
++	var out []byte
++	for i := 1; i < len(s); {
++		c := s[i]
++		if c == '"' {
++			return string(out), s[i+1:], true
++		}
++		if c != '\\' {
++			out = append(out, c)
++			i++
++			continue
++		}
++		if i+1 >= len(s) {
++			return "", "", false
++		}
++		if e := s[i+1]; e >= '0' && e <= '7' {
++			// Git writes exactly three octal digits.
++			if i+4 > len(s) {
++				return "", "", false
++			}
++			value := 0
++			for _, d := range []byte(s[i+1 : i+4]) {
++				if d < '0' || d > '7' {
++					return "", "", false
++				}
++				value = value<<3 | int(d-'0')
++			}
++			if value > 0xff {
++				return "", "", false
++			}
++			out = append(out, byte(value))
++			i += 4
++			continue
++		}
++		b, ok := cEscapes[s[i+1]]
++		if !ok {
++			return "", "", false
++		}
++		out = append(out, b)
++		i += 2
++	}
++	return "", "", false
+ }
+ 
+ // diffPath takes the b-side path from a `diff --git a/P b/P` header.
+diff --git a/internal/report/report_test.go b/internal/report/report_test.go
+index 463aed1..44fcbee 100644
+--- a/internal/report/report_test.go
++++ b/internal/report/report_test.go
+@@ -1,6 +1,7 @@
+ package report
+ 
+ import (
++	"fmt"
+ 	"strings"
+ 	"testing"
+ )
+@@ -126,3 +127,223 @@ func TestDiffPathsWithWhitespaceAndRenamesAreReadWhole(t *testing.T) {
+ 		t.Fatalf("plain: %+v", files[2])
+ 	}
+ }
++
++// The quoted diffs below are the shapes Git actually emits for these names,
++// taken from `git diff` rather than invented: each side of the header is quoted
++// independently, and the escaped form is what the parser has to read past.
++var quotedCases = []struct {
++	name  string
++	diff  string
++	exact string
++}{
++	{
++		name: "a tab",
++		diff: `diff --git "a/tab\there.txt" "b/tab\there.txt"
++index 1111111..2222222 100644
++--- "a/tab\there.txt"
+++++ "b/tab\there.txt"
++@@ -1 +1,2 @@
+++y
++`,
++		exact: "tab\there.txt",
++	},
++	{
++		name: "a newline",
++		diff: `diff --git "a/new\nline.txt" "b/new\nline.txt"
++index 1111111..2222222 100644
++--- "a/new\nline.txt"
+++++ "b/new\nline.txt"
++@@ -1 +1,2 @@
+++y
++`,
++		exact: "new\nline.txt",
++	},
++	{
++		name: "a quote",
++		diff: `diff --git "a/quo\"te.txt" "b/quo\"te.txt"
++index 1111111..2222222 100644
++--- "a/quo\"te.txt"
+++++ "b/quo\"te.txt"
++@@ -1 +1,2 @@
+++y
++`,
++		exact: "quo\"te.txt",
++	},
++	{
++		name: "a byte that is not UTF-8",
++		diff: `diff --git "a/utf\303\251\200bad.txt" "b/utf\303\251\200bad.txt"
++index 1111111..2222222 100644
++--- "a/utf\303\251\200bad.txt"
+++++ "b/utf\303\251\200bad.txt"
++@@ -1 +1,2 @@
+++y
++`,
++		exact: "utf\303\251\200bad.txt",
++	},
++}
++
++// The payoff: a pathname Git quotes arrives as the bytes the capture measured,
++// not as the escaped text the diff spells it with.
++func TestFromCaptureTakesThePathnameFromTheCaptureAndNotFromTheDiffText(t *testing.T) {
++	for _, tc := range quotedCases {
++		t.Run(tc.name, func(t *testing.T) {
++			c, err := FromCapture(tc.diff, []string{tc.exact})
++			if err != nil {
++				t.Fatal(err)
++			}
++			if len(c.Files) != 1 || c.Files[0].Path != tc.exact || c.Files[0].Status != Modified {
++				t.Fatalf("FromCapture files = %#v, want one modified %q", c.Files, tc.exact)
++			}
++		})
++	}
++}
++
++// Why the constructor exists at all: the parser reads the presentation form and
++// loses exactly these names. This is the behaviour FromDiff keeps, stated so a
++// caller can see what it is choosing when it stays with the parser.
++func TestFromDiffLosesAPathnameGitQuotes(t *testing.T) {
++	for _, tc := range quotedCases {
++		t.Run(tc.name, func(t *testing.T) {
++			if files := FromDiff(tc.diff).Files; len(files) != 0 {
++				t.Fatalf("FromDiff read %#v from a quoted pathname; if it now reads it exactly, FromCapture's reason has changed", files)
++			}
++		})
++	}
++}
++
++// An ordinary path, and a path holding a space, are unquoted in the diff and
++// must come through the exact constructor unchanged.
++func TestFromCaptureKeepsOrdinaryPathnames(t *testing.T) {
++	diff := `diff --git a/cmd/main.go b/cmd/main.go
++index 1111111..2222222 100644
++--- a/cmd/main.go
+++++ b/cmd/main.go
++@@ -1 +1,2 @@
+++added
++diff --git a/with space.txt b/with space.txt
++index 3333333..4444444 100644
++--- a/with space.txt	
+++++ b/with space.txt	
++@@ -1 +1,2 @@
+++added
++diff --git a/b/confusing a/name.txt b/b/confusing a/name.txt
++index 5555555..6666666 100644
++--- a/b/confusing a/name.txt	
+++++ b/b/confusing a/name.txt	
++@@ -1 +1,2 @@
+++added
++`
++	// The last of these is the header nobody can split by searching: the path
++	// itself begins with "b/" and holds " a/", and only the shape of the two
++	// halves says where one ends.
++	want := []string{"b/confusing a/name.txt", "cmd/main.go", "with space.txt"}
++	c, err := FromCapture(diff, want)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(c.Files) != 3 || c.Files[0].Path != "cmd/main.go" || c.Files[1].Path != "with space.txt" || c.Files[2].Path != want[0] {
++		t.Fatalf("FromCapture files = %#v", c.Files)
++	}
++}
++
++// A deletion keeps its status and its exact pathname, so a caller can still
++// tell "this file is gone" from "this file exists afterwards".
++func TestFromCaptureKeepsADeletionAtAQuotedPath(t *testing.T) {
++	diff := `diff --git "a/gone\there.txt" "b/gone\there.txt"
++deleted file mode 100644
++index 1111111..0000000
++--- "a/gone\there.txt"
+++++ /dev/null
++@@ -1 +0,0 @@
++-x
++`
++	c, err := FromCapture(diff, []string{"gone\there.txt"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(c.Files) != 1 || c.Files[0].Path != "gone\there.txt" || c.Files[0].Status != Deleted {
++		t.Fatalf("FromCapture files = %#v, want one deleted %q", c.Files, "gone\there.txt")
++	}
++}
++
++// Rename detection is ON in the diff and OFF in the measured set, so a rename
++// arrives as one entry against two paths. It stays ONE renamed file that
++// consumes both, rather than becoming a deletion and an addition.
++func TestFromCaptureKeepsARenameAsOneFileConsumingBothPaths(t *testing.T) {
++	diff := `diff --git a/oldname.txt "b/zz\tren.txt"
++similarity index 100%
++rename from oldname.txt
++rename to "zz\tren.txt"
++`
++	c, err := FromCapture(diff, []string{"oldname.txt", "zz\tren.txt"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(c.Files) != 1 {
++		t.Fatalf("FromCapture files = %#v, want one renamed file", c.Files)
++	}
++	got := c.Files[0]
++	if got.Status != Renamed || got.Path != "zz\tren.txt" || got.OldPath != "oldname.txt" {
++		t.Fatalf("renamed file = %#v", got)
++	}
++}
++
++// Two readings of one candidate that disagree are not reconciled here. A
++// measured path no diff entry claims, and a diff entry naming a path nothing
++// measured, are both refused.
++func TestFromCaptureFailsClosedWhenTheDiffAndThePathSetDisagree(t *testing.T) {
++	diff := `diff --git a/cmd/main.go b/cmd/main.go
++index 1111111..2222222 100644
++--- a/cmd/main.go
+++++ b/cmd/main.go
++@@ -1 +1,2 @@
+++added
++`
++	if _, err := FromCapture(diff, []string{"cmd/main.go", "unmeasured/extra.go"}); err == nil {
++		t.Fatal("a measured path no diff entry claims was accepted")
++	}
++	if _, err := FromCapture(diff, []string{"internal/other.go"}); err == nil {
++		t.Fatal("a diff entry naming a path the capture never measured was accepted")
++	}
++}
++
++// The exact constructor changes the pathnames and nothing else: same files,
++// same statuses, same governance counts as the parser reports for a diff whose
++// paths are all ordinary.
++func TestFromCaptureAgreesWithFromDiffOnOrdinaryPaths(t *testing.T) {
++	parsed := FromDiff(sampleDiff)
++	paths := make([]string, 0, len(parsed.Files))
++	for _, f := range parsed.Files {
++		paths = append(paths, f.Path)
++	}
++	exact, err := FromCapture(sampleDiff, paths)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if fmt.Sprint(exact.Files) != fmt.Sprint(parsed.Files) {
++		t.Fatalf("files: exact %v, parsed %v", exact.Files, parsed.Files)
++	}
++	if fmt.Sprint(exact.Awareness) != fmt.Sprint(parsed.Awareness) {
++		t.Fatalf("awareness: exact %v, parsed %v", exact.Awareness, parsed.Awareness)
++	}
++}
++
++// Governance counted against a quoted pathname still lands under the right
++// kind: the added lines are attributed once the exact path is known.
++func TestFromCaptureCountsGovernanceUnderTheExactPath(t *testing.T) {
++	diff := `diff --git "a/docs/awareness/inva\triants.yaml" "b/docs/awareness/inva\triants.yaml"
++index 1111111..2222222 100644
++--- "a/docs/awareness/inva\triants.yaml"
+++++ "b/docs/awareness/inva\triants.yaml"
++@@ -1 +1,3 @@
+++  - id: sensei_code.one
+++  - id: sensei_code.two
++`
++	c, err := FromCapture(diff, []string{"docs/awareness/inva\triants.yaml"})
++	if err != nil {
++		t.Fatal(err)
++	}
++	if got := c.Awareness["awareness entries"]; got != 2 {
++		t.Fatalf("awareness = %v, want 2 entries counted against the exact path", c.Awareness)
++	}
++}
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index b501b4c..14cdbe6 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -910,21 +910,17 @@ func (e *Engine) reportUndeliveredNotes(taskID string) {
+ }
+ 
+ // emitChangeReport tells the architect what the candidate actually changed.
+-// Every figure is counted from the diff or quoted from Sensei; nothing is the
+-// worker's account of its own work.
+-func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, diff, audit string) string {
+-	change := report.FromDiff(diff)
++// Every figure is counted from the diff, or measured by the capture, or quoted
++// from Sensei; nothing is the worker's account of its own work. The shape is
++// handed in already built, so the report and the recorded decision describe one
++// reading of the candidate rather than two.
++func (e *Engine) emitChangeReport(ctx context.Context, sc *sensei.Client, taskID string, tc *taskContext, change report.Change, audit string) string {
+ 	change.Audit = audit
+ 
+ 	// Ask Sensei what governs the files the candidate actually touched, rather
+ 	// than reusing the preflight taken before anyone knew which files those
+ 	// would be.
+-	paths := make([]string, 0, len(change.Files))
+-	for _, f := range change.Files {
+-		if f.Status != report.Deleted {
+-			paths = append(paths, f.Path)
+-		}
+-	}
++	paths := changedPathsOf(change)
+ 	if len(paths) != 0 {
+ 		args := map[string]any{"task": tc.Task, "files": paths, "mode": "compact"}
+ 		if tc.Domain != "" {
+@@ -1067,18 +1063,50 @@ func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskCont
+ 		"decision not recorded: "+err.Error(), nil))
+ }
+ 
+-// changedPaths lists the files a candidate actually touched, so a decision
+-// references work that exists rather than work that was intended.
+-func changedPaths(diff string) []string {
++// changedPathsOf lists the files a change left in place, so a decision
++// references work that exists rather than work that was intended. A deleted
++// file is not one of them.
++func changedPathsOf(change report.Change) []string {
+ 	var out []string
+-	for _, change := range report.FromDiff(diff).Files {
+-		if change.Status != report.Deleted {
+-			out = append(out, change.Path)
++	for _, f := range change.Files {
++		if f.Status != report.Deleted {
++			out = append(out, f.Path)
+ 		}
+ 	}
+ 	return out
+ }
+ 
++// changedPaths reads the same list out of diff text, for callers holding a diff
++// and no capture. It is lossy for a pathname Git quotes -- the diff spells such
++// a name in escaped form -- so a caller with the capture in hand must go through
++// exactChange instead.
++func changedPaths(diff string) []string { return changedPathsOf(report.FromDiff(diff)) }
++
++// exactChange is the candidate's shape with the pathnames the capture MEASURED
++// rather than pathnames parsed back out of diff text.
++//
++// It FAILS CLOSED, and there is no parser fallback behind it. Falling back to
++// report.FromDiff here would be the exact bypass this constructor exists to
++// close: the diff text is the reading that loses a pathname Git had to quote,
++// so a report built from it after the exact reading refused would be a report
++// that looks exact and is not. A caller that cannot build this shape has no
++// business emitting a report or recording a decision about the candidate.
++//
++// Both arguments come from the SAME capture -- validate returns the final diff
++// and the final path set together -- so a disagreement here is not a formatter
++// racing the measurement. It is the two readings of one candidate genuinely
++// contradicting each other, which nothing downstream may resolve by preferring
++// the lossy one.
++func exactChange(diff string, paths []string) (report.Change, error) {
++	change, err := report.FromCapture(diff, paths)
++	if err != nil {
++		return report.Change{}, fmt.Errorf(
++			"the candidate's diff and the path set measured from the same capture disagree, "+
++				"so no report or decision may be built from either: %w", err)
++	}
++	return change, nil
++}
++
+ // proposedPlan is the PlanProposed payload: the decision plus who authored it.
+ //
+ // The source lives on the record and not on architectureDecision itself, so a
+@@ -1314,7 +1342,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 		// everything gathered before a rewrite is evidence about different
+ 		// bytes. The diff is therefore re-read afterwards and the certifying
+ 		// checks are bound to the digest of what will actually be reviewed.
+-		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff)
++		evidence, diff, exactPaths, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff, capture.Paths)
+ 		if err != nil {
+ 			return false, plan, lastReview, lastAudit, err
+ 		}
+@@ -1574,12 +1602,25 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 				feedback = reviseInstruction(judged)
+ 				continue
+ 			}
+-			tc.Report = e.emitChangeReport(ctx, sc, taskID, tc, diff, lastAudit)
++			// One shape for both, taken from the exact path set the final
++			// capture measured: the report and the decision must name the
++			// same files, and neither may lose a pathname Git had to quote.
++			//
++			// A candidate whose diff and measured paths disagree stops here,
++			// before either is produced. It is structural: the candidate was
++			// reviewed and accepted, so there is nothing to hand the next
++			// executor and no revision a worker could be asked for -- what
++			// failed is the reading of the candidate, not the work in it.
++			change, err := exactChange(diff, exactPaths)
++			if err != nil {
++				return false, plan, lastReview, lastAudit, structuralFailure(err.Error())
++			}
++			tc.Report = e.emitChangeReport(ctx, sc, taskID, tc, change, lastAudit)
+ 			// The decision is recorded now rather than at approval. At approval
+ 			// the architect can only name files it intends to create, and a
+ 			// decision that references a file the task never produced is a
+ 			// reference to nothing.
+-			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
++			e.recordDecision(ctx, taskID, tc, start, changedPathsOf(change))
+ 			return true, plan, lastReview, lastAudit, nil
+ 		case roles.Revise:
+ 			e.setOpenReview(taskID, openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID))
+@@ -4466,7 +4507,13 @@ func oneLine(s string) string {
+ // candidate, so the diff is re-read after formatting and the certifying checks
+ // are bound to that. Returning the new diff rather than mutating in place makes
+ // it impossible for a caller to keep using the pre-format bytes by accident.
+-func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
++//
++// The exact path set travels with it for the same reason. A formatter can add
++// or remove a file, so a path set measured before formatting describes a
++// candidate that no longer exists; returning both from the ONE capture that
++// produced the final diff means the pathnames and the text a caller reports on
++// are two halves of a single reading rather than two readings that may disagree.
++func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string, paths []string) (validation.Bundle, string, []string, error) {
+ 	permits := func(kind validation.CheckKind) (bool, string) {
+ 		var capability broker.Capability
+ 		switch kind {
+@@ -4518,11 +4565,14 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
+ 	// certifying bundle: it describes the candidate before the rewrite.
+ 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
+ 		runner.Run(ctx, taskID, validation.Digest(diff), formats)
+-		reread, err := repo.CandidateDiff(ctx, base)
++		// The whole capture, not just its text: CandidateDiff is this call with
++		// its measured path set thrown away, and that set is what the change
++		// report's pathnames are taken from.
++		reread, err := repo.CandidateCapture(ctx, base, nil)
+ 		if err != nil {
+-			return validation.Bundle{}, diff, err
++			return validation.Bundle{}, diff, paths, err
+ 		}
+-		diff = reread
++		diff, paths = reread.Diff, reread.Paths
+ 	}
+ 
+ 	var checks []validation.Check
+@@ -4532,7 +4582,7 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
+ 	checks = append(checks, checksOf(validation.Vet, e.Config.Validation.Vet)...)
+ 	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
+ 	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
+-	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
++	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, paths, nil
+ }
+ 
+ func checksOf(kind validation.CheckKind, commands []config.Command) []validation.Check {
+diff --git a/internal/workflow/exactpaths_test.go b/internal/workflow/exactpaths_test.go
+new file mode 100644
+index 0000000..f34faa5
+--- /dev/null
++++ b/internal/workflow/exactpaths_test.go
+@@ -0,0 +1,205 @@
++package workflow
++
++import (
++	"context"
++	"go/ast"
++	"go/parser"
++	"go/token"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/globulario/sensei-code/internal/report"
++)
++
++// The payoff: a candidate's pathnames reach the change report and the recorded
++// decision as the capture MEASURED them.
++//
++// Built with real Git, because what is at stake is exactly what Git emits for a
++// name it has to quote -- and the reader this replaces parsed that text back
++// and lost the name entirely.
++func TestExactPathsFromTheCaptureReachTheReportAndTheDecision(t *testing.T) {
++	repo, _ := mintRepo(t)
++	git := func(args ...string) {
++		t.Helper()
++		if out, err := exec.Command("git", append([]string{"-C", repo.Root}, args...)...).CombinedOutput(); err != nil {
++			t.Fatalf("git %v: %v\n%s", args, err, out)
++		}
++	}
++	awkward := "quo\"ted\tpath.go"
++	renamed := "re\tnamed.go"
++	if err := os.WriteFile(filepath.Join(repo.Root, awkward), []byte("package main\n"), 0o644); err != nil {
++		t.Skipf("this filesystem will not hold %q: %v", awkward, err)
++	}
++	os.Remove(filepath.Join(repo.Root, awkward))
++
++	// The base holds the two ordinary files the candidate goes on to delete and
++	// rename, so the candidate carries all three shapes at once. The deleted
++	// file shares nothing with the added one but its package line, so Git's
++	// rename detection cannot pair them into a rename the candidate never made.
++	os.WriteFile(filepath.Join(repo.Root, "gone.go"), []byte("package main\n\nconst removed = \"zzzzzzzzzzzzzzzzzzzzzzzzzzzz\"\n"), 0o644)
++	os.WriteFile(filepath.Join(repo.Root, "old.go"), []byte("package main\n\nfunc old() {}\n"), 0o644)
++	git("add", "-A")
++	git("commit", "-q", "-m", "base for the exact-path candidate")
++	out, err := exec.Command("git", "-C", repo.Root, "rev-parse", "HEAD").Output()
++	if err != nil {
++		t.Fatal(err)
++	}
++	base := strings.TrimSpace(string(out))
++
++	if err := os.WriteFile(filepath.Join(repo.Root, awkward), []byte("package main\n\nfunc added() {\n\tfor i := 0; i < 9; i++ {\n\t\tprintln(i)\n\t}\n}\n"), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	os.Remove(filepath.Join(repo.Root, "gone.go"))
++	git("mv", "old.go", renamed)
++
++	capture, err := repo.CandidateCapture(context.Background(), base, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	// Git's own diff of Git's own path set: if these two readings of one
++	// candidate disagree, the constructor is wrong about the text Git emits.
++	if _, err := report.FromCapture(capture.Diff, capture.Paths); err != nil {
++		t.Fatalf("the capture and the diff rendered from it disagree: %v", err)
++	}
++
++	change, err := exactChange(capture.Diff, capture.Paths)
++	if err != nil {
++		t.Fatal(err)
++	}
++	paths := changedPathsOf(change)
++	held := map[string]bool{}
++	for _, p := range paths {
++		held[p] = true
++	}
++	if !held[awkward] {
++		t.Fatalf("the pathname Git quotes did not reach changedPaths: %q", paths)
++	}
++	if !held[renamed] {
++		t.Fatalf("the rename destination did not reach changedPaths: %q", paths)
++	}
++	if held["gone.go"] {
++		t.Fatalf("a deleted path is still listed as work that exists: %q", paths)
++	}
++	var rename report.FileChange
++	for _, f := range change.Files {
++		if f.Status == report.Renamed {
++			rename = f
++		}
++	}
++	if rename.Path != renamed || rename.OldPath != "old.go" {
++		t.Fatalf("the rename lost its exact paths: %#v (files %#v)", rename, change.Files)
++	}
++	if len(change.Files) != 3 {
++		t.Fatalf("files = %#v, want the addition, the deletion and the rename", change.Files)
++	}
++}
++
++// The report and the decision are built ONCE, from the capture's path set, and
++// the accepted candidate is described by that one reading rather than by two
++// re-parses of the diff text that could disagree.
++func TestTheChangeReportAndTheDecisionShareTheCapturesPathSet(t *testing.T) {
++	loop := funcBody(t, "internal/workflow/engine.go", "runCandidate")
++	if !strings.Contains(loop, "exactChange") || !strings.Contains(loop, "capture.Paths") {
++		t.Fatal("the accepted candidate's change is not built from the capture's exact path set")
++	}
++	if strings.Contains(funcBody(t, "internal/workflow/engine.go", "emitChangeReport"), "FromDiff") {
++		t.Fatal("the change report re-parses the diff text instead of using the change it was given")
++	}
++}
++
++// The diff a formatter rewrote and the path set the capture measured must be
++// two halves of ONE reading, so validate carries the path set through with the
++// diff it re-reads instead of leaving the caller to pair a fresh diff with a
++// stale measurement.
++func TestValidationReturnsTheExactPathsBesideTheDiffItReread(t *testing.T) {
++	body := funcBody(t, "internal/workflow/engine.go", "validate")
++	if !strings.Contains(body, "repo.CandidateCapture") {
++		t.Fatal("validate re-reads the diff without the path set the same capture measured")
++	}
++	if strings.Contains(body, "repo.CandidateDiff") {
++		t.Fatal("validate still throws away the measured path set of its re-read")
++	}
++	loop := funcBody(t, "internal/workflow/engine.go", "runCandidate")
++	if !strings.Contains(loop, "exactPaths") {
++		t.Fatal("the accepted candidate is not reported on the path set validation returned")
++	}
++}
++
++// A disagreement between the two readings of one candidate FAILS CLOSED.
++//
++// The parser this change exists to replace is still there, still exported, and
++// still lossy for a pathname Git quotes. Falling back to it when the exact
++// reading refuses would produce precisely the report this change was asked to
++// make impossible -- one that looks measured and was parsed.
++func TestAMismatchProducesNoChangeAtAllRatherThanAParsedOne(t *testing.T) {
++	// What a formatter that created a file after the measurement would leave:
++	// the diff names two files, the measured set holds one.
++	diff := "diff --git a/kept.go b/kept.go\n--- a/kept.go\n+++ b/kept.go\n@@ -1 +1 @@\n-package a\n+package b\n" +
++		"diff --git a/added_by_the_formatter.go b/added_by_the_formatter.go\nnew file mode 100644\n--- /dev/null\n+++ b/added_by_the_formatter.go\n@@ -0,0 +1 @@\n+package a\n"
++	change, err := exactChange(diff, []string{"kept.go"})
++	if err == nil {
++		t.Fatalf("the mismatch was accepted: %#v", change)
++	}
++	if len(change.Files) != 0 {
++		t.Fatalf("a refused reading still returned files, which a caller may report: %#v", change.Files)
++	}
++	// The other direction: a path measured that no diff entry claims.
++	if _, err := exactChange(diff, []string{"kept.go", "added_by_the_formatter.go", "unclaimed.go"}); err == nil {
++		t.Fatal("a measured path no diff entry claims was accepted")
++	}
++	if !strings.Contains(err.Error(), "no report or decision may be built") {
++		t.Fatalf("the refusal does not say what it stops: %v", err)
++	}
++}
++
++// ...and the accepted-candidate path STOPS on that refusal: no change report is
++// emitted and no decision is recorded from pathnames parsed out of diff text.
++func TestAPostValidationMismatchStopsBeforeTheReportAndTheDecision(t *testing.T) {
++	body := funcSource(t, "internal/workflow/engine.go", "runCandidate")
++	i := strings.Index(body, "exactChange(")
++	if i < 0 {
++		t.Fatal("the accepted candidate no longer builds an exact change")
++	}
++	gate := body[i:]
++	j := strings.Index(gate, "emitChangeReport")
++	if j < 0 {
++		t.Fatal("the accepted candidate no longer emits a change report")
++	}
++	gate = gate[:j]
++	if !strings.Contains(gate, "if err != nil") || !strings.Contains(gate, "return false") {
++		t.Fatalf("nothing stops the run between the exact reading and the report it must not produce:\n%s", gate)
++	}
++	if k := strings.Index(body, "recordDecision"); k < i {
++		t.Fatal("the decision is recorded before the exact reading it must depend on")
++	}
++	if strings.Contains(funcSource(t, "internal/workflow/engine.go", "exactChange"), "FromDiff") {
++		t.Fatal("exactChange fell back to the lossy parser again")
++	}
++}
++
++// funcSource is the declaration's own text, for an assertion about the ORDER of
++// statements rather than about which identifiers a function mentions.
++func funcSource(t *testing.T, rel, name string) string {
++	t.Helper()
++	src, err := os.ReadFile("../../" + rel)
++	if err != nil {
++		t.Fatal(err)
++	}
++	fset := token.NewFileSet()
++	f, err := parser.ParseFile(fset, "../../"+rel, src, 0)
++	if err != nil {
++		t.Fatalf("parse %s: %v", rel, err)
++	}
++	for _, d := range f.Decls {
++		fn, ok := d.(*ast.FuncDecl)
++		if !ok || fn.Name.Name != name || fn.Body == nil {
++			continue
++		}
++		return string(src[fset.Position(fn.Body.Pos()).Offset:fset.Position(fn.Body.End()).Offset])
++	}
++	t.Fatalf("function %s not found in %s", name, rel)
++	return ""
++}
