@@ -48,5 +48,72 @@
    "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
    "ledger_recorder": "Claude"
   }
+ },
+ "R4": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "b23bd90b6824983d00a2e9fbbb422c734b0ea9ea",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone, origin removed)",
+  "outcome": "INCOMPLETE / DEFERRED. R1's gap closed: a process-exiting deferral now emits a receipt naming the exact question. INCOMPLETE for a NEW true reason -- plan_state UNKNOWN.",
+  "note": "notePlan ran after the task context was assembled, which is AFTER authority routing, so a run deferring DURING routing reported no plan about a plan the router had just escalated on.",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the deferral semantics, the version-vocabulary rule, and the two candidate laws (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "NONE -- these runs never reached review; they deferred at an authority boundary",
+   "implementation_and_reconstruction": "Claude -- the slice, the runs and these records; four of the five defects are Claude's",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ },
+ "R5": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "eacd5faf",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone, origin removed)",
+  "outcome": "INCOMPLETE / DEFERRED, plan_state UNKNOWN -- PREDICTED BEFORE THE RUN.",
+  "note": "routePlan is called INSIDE resolveArchitectureIn; a deferral returns an error from it, so a notePlan added in execute after resolveArchitecture RETURNS is never reached. Found by reading the call graph and stated before the run confirmed it: the only outcome in this sequence predicted rather than learned. The law is about control-flow boundaries, not source order, and the fix for the third instance was placed on the wrong side of one.",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the deferral semantics, the version-vocabulary rule, and the two candidate laws (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "NONE -- these runs never reached review; they deferred at an authority boundary",
+   "implementation_and_reconstruction": "Claude -- the slice, the runs and these records; four of the five defects are Claude's",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ },
+ "R6": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "9c3373cfa76a275176890e158b5349933632260e",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone, origin removed)",
+  "outcome": "COMPLETE / DEFERRED with every required fact -- and schema labelled v3 while carrying a v4 outcome.",
+  "note": "PROVES THE BEHAVIOUR; NOT A VALID v4 SPECIMEN. The v4 bump was written, the replacement silently did not match, and the commit message claimed v4. A mislabelled artifact cannot be the canonical proof of the schema it misnames. Repaired beyond the label: vocabularies pins which outcomes each version DEFINES and SpeaksItsVersion checks a record against its own label, so v3 + DEFERRED is invalid and an unknown version is reported rather than assumed permissive.",
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the deferral semantics, the version-vocabulary rule, and the two candidate laws (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "NONE -- these runs never reached review; they deferred at an authority boundary",
+   "implementation_and_reconstruction": "Claude -- the slice, the runs and these records; four of the five defects are Claude's",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ },
+ "R7": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "e563539971b47b1d043ccd07e2449b79bd6cc619",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone, origin removed)",
+  "outcome": "COMPLETE / DEFERRED, schema v4, missing none. The coherent specimen. R1 closed by execution.",
+  "note": "NOTHING IS ADMITTED. The deferred question names the exact change and the exact reason it cannot proceed, so a reader can act on it without touching the event stream.",
+  "findings": [
+   "Seven runs, five defects, two law families. None found by review; none escaped into a merge.",
+   "R5 is the first outcome in this chain predicted from reading before being observed in a run.",
+   "POSTCONDITION VERIFICATION: a claimed resulting state must be established by reading the resulting state after the operation intended to produce it. Specimen: the schema v4 bump that never landed.",
+   "EVIDENCE BEFORE DEPENDENT CONTROL FLOW: a load-bearing fact must be acquired from the authority that establishes its semantics, and bound and recorded, before any control-flow edge depending on it can terminate the encounter. Specimens: GraphDigest, ReviewedTree, PlanDigest, and the misplaced fix for PlanDigest.",
+   "Both are proposed to Sensei as CANDIDATES, not asserted as authority, and are not special-cased for having come from this work."
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the deferral semantics, the version-vocabulary rule, and the two candidate laws (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "NONE -- these runs never reached review; they deferred at an authority boundary",
+   "implementation_and_reconstruction": "Claude -- the slice, the runs and these records; four of the five defects are Claude's",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
  }
 }
