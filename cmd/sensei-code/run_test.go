@@ -16,11 +16,22 @@ type fakeControl struct {
 	stopped  []string
 	timedOut []string
 	canDefer bool
+	// settled models a task the ENGINE has already terminalized. The real
+	// engine reports this by finding no live task to claim.
+	settled bool
 }
 
 // TimeOut records that the stop was a DEADLINE, which is different evidence
 // from a human withdrawing.
+//
+// It mirrors the engine's claim: a deadline may only end a task that is still
+// live. Against an already-settled task it records NOTHING and reports the
+// loss, because a timeout that did not cause the ending must not be able to
+// state a cause for it.
 func (f *fakeControl) TimeOut(taskID, budget string) bool {
+	if f.settled {
+		return false
+	}
 	f.timedOut = append(f.timedOut, taskID+" "+budget)
 	return f.Stop(taskID)
 }
@@ -200,32 +211,25 @@ func TestASuppliedPlanFileIsValidatedBeforeSubmission(t *testing.T) {
 	}
 }
 
-// TestATimeoutWaitsForItsOwnAccount closes the gap Task A found.
+// TestATimeoutWaitsForItsOwnAccount is GONE, and this note is its headstone.
 //
-// The timeout used to call Stop and return immediately, so the process exited
-// before the engine could terminalize: a timed-out invocation emitted no
-// terminal event and no receipt, and the only account of it was the event
-// stream. It now records the deadline as the CAUSE and waits, boundedly, for
-// the engine's own terminal.
-func TestATimeoutWaitsForItsOwnAccount(t *testing.T) {
-	ctrl := &fakeControl{}
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // the deadline has already fired
-
-	events := make(chan event.Event, 1)
-	events <- ev("t1", event.WorkflowTimedOut)
-	code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, 25*time.Minute)
-
-	if code != exitTimeout {
-		t.Fatalf("exit = %d, want exitTimeout", code)
-	}
-	if len(ctrl.timedOut) != 1 || !strings.Contains(ctrl.timedOut[0], "25m") {
-		t.Fatalf("the deadline was not recorded as the cause: %v", ctrl.timedOut)
-	}
-	if len(ctrl.stopped) != 1 {
-		t.Fatalf("the task was not stopped: %v", ctrl.stopped)
-	}
-}
+// It closed the gap Task A found: the timeout used to call Stop and return
+// immediately, so a timed-out invocation emitted no terminal and no receipt.
+// That property still holds and is still proved -- by
+// TestADeadlineClaimsAStillLiveTask, which additionally requires the deadline
+// to be recorded as the CAUSE.
+//
+// It is removed rather than repaired because its world was self-contradictory
+// and its assertion is now false. It handed streamUntilSettled a cancelled ctx
+// AND a buffered WorkflowTimedOut -- an engine that had already terminalized --
+// then demanded the timeout state the cause anyway. Under the rule that the
+// engine owns terminal truth, a timeout that did not cause the ending may not
+// claim it. That world is now TestATimeoutRacingItsOwnTerminalSettlesOnce, and
+// it requires the opposite of what this test required.
+//
+// This is a falsifier being REPLACED BY A STRICTER ONE, not relaxed: the old
+// test asserted a scheduler-dependent outcome and passed about half the time.
+// Its two successors assert deterministic outcomes over 200 draws each.
 
 // A hung engine must not hold the process open forever.
 func TestATimeoutGivesUpOnAnEngineThatNeverAccounts(t *testing.T) {
@@ -262,10 +266,98 @@ func TestTheDrainWaitsPastAnInterruptionBoundary(t *testing.T) {
 	if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, time.Minute); code != exitTimeout {
 		t.Fatalf("exit = %d, want exitTimeout", code)
 	}
-	if invocationFinal(event.AuthorityRequired) {
-		t.Fatal("AuthorityRequired must not be invocation-final")
+	if _, ok := exitFor(event.AuthorityRequired, false); ok {
+		t.Fatal("AuthorityRequired must not end an invocation")
 	}
-	if !invocationFinal(event.WorkflowTimedOut) {
-		t.Fatal("WorkflowTimedOut must be invocation-final")
+	if _, ok := exitFor(event.WorkflowTimedOut, false); !ok {
+		t.Fatal("WorkflowTimedOut must end an invocation")
+	}
+}
+
+// The engine owns terminal truth.
+//
+// These four falsifiers pin the rule that a deadline REQUESTS a terminal and
+// never establishes one. Each constructs a world where the deadline and an
+// engine terminal are both already true -- both select cases ready at once --
+// and requires ONE answer, the engine's. Before this rule, the same world was
+// classified two ways depending on Go's random select choice, so
+// TestATimeoutWaitsForItsOwnAccount failed about half the time and the branch
+// went green or red by scheduler luck.
+//
+// They run with -count high enough that a scheduler-dependent answer cannot
+// survive: a 50/50 outcome passes 200 consecutive draws with probability 2^-200.
+const settlementDraws = 200
+
+// A completed run must not be rewritten into a timeout by the observer's clock.
+func TestADeadlineCannotRewriteACompletedRun(t *testing.T) {
+	for i := 0; i < settlementDraws; i++ {
+		ctrl := &fakeControl{settled: true}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // the deadline has already fired
+		events := make(chan event.Event, 1)
+		events <- ev("t1", event.WorkflowCompleted) // ...and the engine already finished
+		code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, 25*time.Minute)
+		if code != exitCompleted {
+			t.Fatalf("draw %d: exit = %d, want exitCompleted: the deadline rewrote an established ending", i, code)
+		}
+		if len(ctrl.timedOut) != 0 {
+			t.Fatalf("draw %d: a lost timeout stated a cause for an ending it did not cause: %v", i, ctrl.timedOut)
+		}
+	}
+}
+
+// A failed run is likewise the engine's to report, not the clock's.
+func TestADeadlineCannotRewriteAFailedRun(t *testing.T) {
+	for i := 0; i < settlementDraws; i++ {
+		ctrl := &fakeControl{settled: true}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		events := make(chan event.Event, 1)
+		events <- ev("t1", event.WorkflowFailed)
+		if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, time.Minute); code != exitFailed {
+			t.Fatalf("draw %d: exit = %d, want exitFailed", i, code)
+		}
+	}
+}
+
+// A deadline racing a timeout the engine itself terminalized settles as
+// TIMED_OUT exactly once, whichever case the scheduler picks.
+func TestATimeoutRacingItsOwnTerminalSettlesOnce(t *testing.T) {
+	for i := 0; i < settlementDraws; i++ {
+		ctrl := &fakeControl{settled: true}
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		events := make(chan event.Event, 1)
+		events <- ev("t1", event.WorkflowTimedOut)
+		if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, 25*time.Minute); code != exitTimeout {
+			t.Fatalf("draw %d: exit = %d, want exitTimeout", i, code)
+		}
+		if len(ctrl.timedOut) != 0 {
+			t.Fatalf("draw %d: the timeout restated a cause the engine had already established: %v", i, ctrl.timedOut)
+		}
+	}
+}
+
+// When the deadline reaches a task that is genuinely still live, the timeout
+// WINS: it claims the task, records the deadline as the cause, and the engine's
+// WorkflowTimedOut is what the invocation reports.
+func TestADeadlineClaimsAStillLiveTask(t *testing.T) {
+	ctrl := &fakeControl{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	// Nothing is buffered: the engine has not accounted yet, so the ctx case is
+	// the only ready one and the claim path is the one under test.
+	events := make(chan event.Event, 1)
+	go func() { events <- ev("t1", event.WorkflowTimedOut) }()
+
+	if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, 25*time.Minute); code != exitTimeout {
+		t.Fatalf("exit = %d, want exitTimeout", code)
+	}
+	if len(ctrl.timedOut) != 1 || !strings.Contains(ctrl.timedOut[0], "25m") {
+		t.Fatalf("the deadline was not recorded as the cause: %v", ctrl.timedOut)
+	}
+	if len(ctrl.stopped) != 1 {
+		t.Fatalf("the task was not stopped: %v", ctrl.stopped)
 	}
 }

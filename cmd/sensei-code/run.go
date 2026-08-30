@@ -179,17 +179,17 @@ var terminalGrace = 15 * time.Second
 // The grace is bounded because a hung engine must not hold the process open,
 // and it is not zero because an invocation that ends without its own account
 // forces every later reader back into the event stream.
-func drainUntilTerminal(events <-chan event.Event, taskID string, enc *json.Encoder, asJSON, quiet bool, code int) int {
+func drainUntilTerminal(events <-chan event.Event, taskID string, enc *json.Encoder, asJSON, quiet, deferred bool, unaccounted int) int {
 	grace := time.NewTimer(terminalGrace)
 	defer grace.Stop()
 	for {
 		select {
 		case <-grace.C:
 			fmt.Fprintln(os.Stderr, "sensei-code run: the engine did not account for this invocation within the grace window")
-			return code
+			return unaccounted
 		case ev, ok := <-events:
 			if !ok {
-				return code
+				return unaccounted
 			}
 			if ev.TaskID != "" && ev.TaskID != taskID {
 				continue
@@ -199,7 +199,7 @@ func drainUntilTerminal(events <-chan event.Event, taskID string, enc *json.Enco
 			} else if !quiet || terminal(ev.Kind) {
 				fmt.Println(renderEvent(ev))
 			}
-			if invocationFinal(ev.Kind) {
+			if code, ok := exitFor(ev.Kind, deferred); ok {
 				return code
 			}
 		}
@@ -213,22 +213,39 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 	for {
 		select {
 		case <-ctx.Done():
-			// A timeout stops computation; it does not decide anything. The
-			// candidate is left as it stands so the work can be resumed.
+			// A deadline REQUESTS a terminal. It does not decide one, and it
+			// does not exit here.
 			//
-			// It does NOT exit here. Returning the moment the deadline fired
-			// ended the process before the engine could terminalize, so a
-			// timed-out invocation produced no terminal event and no receipt,
-			// and the only account of it was the event stream -- the
-			// reconstruction the receipt exists to abolish. The invocation
-			// waits, briefly and boundedly, for its own account.
+			// Returning the moment the deadline fired ended the process before
+			// the engine could terminalize, so a timed-out invocation produced
+			// no terminal event and no receipt, and the only account of it was
+			// the event stream -- the reconstruction the receipt exists to
+			// abolish. The invocation waits, briefly and boundedly, for its own
+			// account.
+			//
+			// It also must not ANSWER. The engine owns terminal truth: whether
+			// the invocation was still running, and what ending actually
+			// occurred. This branch once returned exitTimeout on its own
+			// authority, which made the observer's clock able to rewrite an
+			// established COMPLETED into TIMED_OUT -- and, because a buffered
+			// terminal made both select cases ready at once, made WHICH answer
+			// you got depend on Go's random choice. The same world was
+			// classified two ways by the scheduler.
+			//
+			// So: ask the engine to claim the task, then consume the one
+			// terminal the engine emits and report THAT. If the timeout lost
+			// the claim, the task had already settled and its real ending is
+			// already on its way down the channel.
 			spent := budget.String()
 			if budget <= 0 {
 				spent = "no deadline was configured; the context ended for another reason"
 			}
-			engine.TimeOut(taskID, spent)
-			fmt.Fprintln(os.Stderr, "sensei-code run: timed out; the task was stopped and its candidate left in place")
-			return drainUntilTerminal(events, taskID, enc, asJSON, quiet, exitTimeout)
+			if engine.TimeOut(taskID, spent) {
+				fmt.Fprintln(os.Stderr, "sensei-code run: timed out; the task was stopped and its candidate left in place")
+			} else {
+				fmt.Fprintln(os.Stderr, "sensei-code run: the deadline expired after the task had already settled; reporting the ending the engine established")
+			}
+			return drainUntilTerminal(events, taskID, enc, asJSON, quiet, deferred, exitTimeout)
 		case ev, ok := <-events:
 			if !ok {
 				return exitFailed
@@ -253,26 +270,8 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 				continue
 			}
 
-			switch ev.Kind {
-			case event.WorkflowCompleted:
-				return exitCompleted
-			case event.WorkflowObserved:
-				return exitObserved
-			case event.WorkflowFailed:
-				return exitFailed
-			case event.WorkflowTimedOut:
-				// The engine terminalized a deadline itself. Adding a terminal
-				// kind without teaching every consumer that reads terminals is
-				// how the drain ended up waiting a full grace window for an
-				// event it had already been handed.
-				return exitTimeout
-			case event.WorkflowStopped:
-				if deferred {
-					return exitAwaitingAuthority
-				}
-				return exitStopped
-			case event.WorkflowAwaitingAuthority:
-				return exitAwaitingAuthority
+			if code, ok := exitFor(ev.Kind, deferred); ok {
+				return code
 			}
 		}
 	}
@@ -286,13 +285,25 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 // drain that treated it as final could return on a buffered AuthorityRequired
 // and exit before WorkflowTimedOut and its receipt ever arrived -- reopening
 // the accounting hole this drain exists to close.
-func invocationFinal(k event.Kind) bool {
+func exitFor(k event.Kind, deferred bool) (int, bool) {
 	switch k {
-	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
-		event.WorkflowTimedOut, event.WorkflowObserved, event.WorkflowAwaitingAuthority:
-		return true
+	case event.WorkflowCompleted:
+		return exitCompleted, true
+	case event.WorkflowObserved:
+		return exitObserved, true
+	case event.WorkflowFailed:
+		return exitFailed, true
+	case event.WorkflowTimedOut:
+		return exitTimeout, true
+	case event.WorkflowStopped:
+		if deferred {
+			return exitAwaitingAuthority, true
+		}
+		return exitStopped, true
+	case event.WorkflowAwaitingAuthority:
+		return exitAwaitingAuthority, true
 	}
-	return false
+	return 0, false
 }
 
 // terminal is the RENDER-worthy set: what a quiet run still prints, including
