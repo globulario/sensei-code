@@ -359,6 +359,24 @@ func (e *Engine) noteCandidateWorkUnmeasured(taskID string) {
 	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateState = runreceipt.CandidateUnknown })
 }
 
+// noteCandidateUnattempted records that work exists and no canonical candidate
+// identity will be created, because the run is refusing before the mint.
+//
+// A1's P1 witness found this hole: a capture-certification refusal returned
+// after the worker had edited and validation had run, leaving candidate_state
+// at the UNKNOWN the editing window had set. The receipt was INCOMPLETE while
+// the execution knew exactly what had happened, which is the second candidate
+// law -- evidence before dependent control flow -- failing in the seam that
+// exists to enforce the first.
+//
+// It is a MEASUREMENT, not a default: callers reach it only on a path that has
+// already decided to refuse.
+func (e *Engine) noteCandidateUnattempted(taskID string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.candidateState = runreceipt.CandidateUnattempted
+	})
+}
+
 // noteCandidateRendering records the canonical rendering of the MINTED object
 // and how it compares with the rendering the review was given.
 func (e *Engine) noteCandidateRendering(taskID, digest string, reviewed string) {
