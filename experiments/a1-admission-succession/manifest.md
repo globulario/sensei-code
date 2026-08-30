@@ -580,3 +580,71 @@ Two pre-existing conditions, neither caused by this change and neither hidden:
     identically on clean main and on this branch.
 
 CRITERION 9 IS NOT ATTEMPTED. Succession is NOT declared.
+
+## Criterion 8, re-established under LANDED governance
+
+The prior PASS was produced by a publisher that existed only as a local binary.
+The owner refused that as the certifying authority for the first
+self-succession experiment -- correctly, and for the same reason this whole
+experiment exists: an authority nobody else can inspect is testimony wearing a
+digest.
+
+So it was landed first, then re-run.
+
+  LANDED           globulario/sensei PR #314, merged as e2f7cb7b.
+                   All gates green on the merged head 035994b2: build-and-test,
+                   activation, real-oxigraph, build-and-smoke, review on ubuntu
+                   and windows, darwin-arm64 and windows-amd64 compiles, and
+                   the Sensei gate itself.
+
+  A GATE CAUGHT WHAT LOCAL TESTING STRUCTURALLY COULD NOT. The first push
+  failed:
+
+      STALE: docs/awareness/generated/awareness_graph_go_import_graph.yaml
+
+  Adding golang/publication changed the Go import graph, and the corpus had no
+  component describing it. My local differential ran `go test` and could never
+  have found this, because it is not a test -- it is a corpus-freshness gate.
+  The claim "no additional failure introduced" was true of the test suite and
+  FALSE of the branch. Repaired by regenerating the graph; the diff is exactly
+  the new module declaring itself and its one dependency.
+
+  RE-RUN, from a clean detached worktree at exactly M, with the publisher built
+  FROM LANDED MAIN e2f7cb7b:
+
+      source revision f6b4755ff4d12591e9e802b2094b16a938260cc2 (CLEAN_EXACT)
+      closure PROVEN 40/40
+      store 164839 -> 164839  (idempotent: the landed publisher reproduced the
+                               local one exactly, no drift, and the receipt IRI
+                               is unchanged at 2223c940)
+
+  RESTARTED, step 5, the existing configured process: same binary, same 14
+  arguments captured from /proc before stopping it, no endpoint change and no
+  freshness bypass. It came up at 15:52:40Z and reported:
+
+      Live graph digest  367a4c6d...
+      Live graph triples 164839
+      Seed state         current
+      Freshness state    current
+      Freshness detail   live store matches expected validated graph artifact
+
+THE CHAIN, every link measured after the restart
+
+    :10122  --[digest 367a4c6d, 164839 triples]-->  G
+    G       --[containment]-------------------->    R
+    R       --[recomputed identity 2223c940]--->    revision f6b4755
+    receipts retained: 2, history preserved
+
+  SOURCE IDENTITY     PASS      M -> R          cryptographic
+  PUBLISHED IDENTITY  PASS      G -> R          cryptographic
+  SERVING IDENTITY    PASS      :10122 -> G     read back after restart
+
+CRITERION 8: PASS.
+
+Criterion 9 remains untouched. Succession is NOT declared.
+
+Still true, and still the next piece of work: the typed query API has no class
+for a publication receipt, so the serving process cannot be ASKED for its
+revision provenance. `sensei query --mode by_id` on the receipt IRI answers
+`unsupported class "https"`. Criterion 9 must therefore read the store to state
+which world it inherited, rather than asking the endpoint it inherited it from.
