@@ -96,6 +96,7 @@ func TestACompleteRecordOfAnUnreviewedRunIsNotVoid(t *testing.T) {
 	rec := completeReceipt()
 	rec.ReviewVerdict = UnknownValue("no provider produced a bounded verdict")
 	rec.ReviewedDigest = UnknownValue("no provider produced a bounded verdict")
+	rec.ReviewedTree = UnknownValue("no provider produced a bounded verdict")
 	rec.Attempts = nil
 	rec.Outcome = OutcomeUnreviewed
 	state, missing := rec.Completeness()
@@ -108,6 +109,7 @@ func TestACompleteRecordOfAFailedRunIsAlsoComplete(t *testing.T) {
 	rec := completeReceipt()
 	rec.ReviewVerdict = UnknownValue("the run ended before a verdict")
 	rec.ReviewedDigest = UnknownValue("the run ended before a verdict")
+	rec.ReviewedTree = UnknownValue("the run ended before a verdict")
 	rec.Attempts = nil
 	rec.Outcome = OutcomeFailed
 	if state, missing := rec.Completeness(); state != Complete {
@@ -168,21 +170,25 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 
 func completeReceipt() Receipt {
 	return Receipt{
-		Schema:               SchemaVersion,
-		PlanState:            PlanPresent,
-		CandidateState:       CandidatePresent,
-		CandidateCommit:      MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
-		CandidateTree:        MeasuredValue("tttttttttttttttttttttttttttttttttttttttt", "git rev-parse refs/heads/sensei-code/task-1^{tree}"),
-		CandidateFirstParent: MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "git rev-parse refs/heads/sensei-code/task-1^1"),
-		CandidateDigest:      MeasuredValue("b4f471f096d13f2b", "sha256(candidate diff)"),
-		ReviewerProvider:     MeasuredValue("codex", "event:review.completed.payload.provenance.provider"),
-		ReviewVerdict:        MeasuredValue("accept", "event:review.completed.payload.decision"),
-		ReviewedDigest:       MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
+		Schema:                    SchemaVersion,
+		PlanState:                 PlanPresent,
+		CandidateState:            CandidatePresent,
+		CandidateCommit:           MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
+		CandidateTree:             MeasuredValue("tttttttttttttttttttttttttttttttttttttttt", "git rev-parse refs/heads/sensei-code/task-1^{tree}"),
+		CandidateFirstParent:      MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "git rev-parse refs/heads/sensei-code/task-1^1"),
+		CandidateDigest:           MeasuredValue("b4f471f096d13f2b", "sha256(candidate diff)"),
+		ReviewerProvider:          MeasuredValue("codex", "event:review.completed.payload.provenance.provider"),
+		ReviewVerdict:             MeasuredValue("accept", "event:review.completed.payload.decision"),
+		ReviewedDigest:            MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
+		ReviewedTree:              MeasuredValue("tttttttttttttttttttttttttttttttttttttttt", "the candidate tree the verdict's envelope names"),
+		CandidateCommitDiffDigest: MeasuredValue("b4f471f096d13f2b", "sha256 of the canonical rendering of the minted object"),
+		CandidateDigestRelation:   RelationMatch,
 		Attempts: []Attempt{{
 			Provider: MeasuredValue("codex", "event:agent.role.assigned.payload.provider"),
 			Delivery: DeliveryValue(Delivered, "event:review.completed"),
 			Verdict:  MeasuredValue("accept", "event:review.completed.payload.decision"),
 			Digest:   MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
+			Tree:     MeasuredValue("tttttttttttttttttttttttttttttttttttttttt", "the candidate tree the verdict's envelope names"),
 		}},
 		GovernorCommit:       MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "governor self-report"),
 		GovernorBinarySHA256: MeasuredValue("7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea", "sha256:/path/to/governor"),
@@ -264,6 +270,7 @@ func TestARunWithNoCandidateIsCompleteWhenItSaysSo(t *testing.T) {
 	rec.CandidateTree = UnknownValue("the run produced no candidate")
 	rec.CandidateFirstParent = UnknownValue("the run produced no candidate")
 	rec.CandidateDigest = UnknownValue("the run produced no candidate")
+	rec.CandidateCommitDiffDigest = UnknownValue("the run produced no candidate")
 	if state, missing := rec.Completeness(); state != Complete {
 		t.Fatalf("state = %s (%v)", state, missing)
 	}
@@ -504,6 +511,7 @@ func TestAStoppedRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	rec.Outcome = OutcomeStopped
 	rec.ReviewVerdict = UnknownValue("the human ended the run before a verdict")
 	rec.ReviewedDigest = UnknownValue("the human ended the run before a verdict")
+	rec.ReviewedTree = UnknownValue("the human ended the run before a verdict")
 	rec.Attempts = nil
 	if state, missing := rec.Completeness(); state != Complete {
 		t.Fatalf("COMPLETE / STOPPED must be representable: %v", missing)

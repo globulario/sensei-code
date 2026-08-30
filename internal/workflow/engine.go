@@ -1466,6 +1466,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		e.noteCandidateDigest(taskID, binding.CandidateDigest)
 		e.noteCapturedTree(taskID, capture.Tree)
+		e.noteCandidateWork(taskID, capture.Tree, capture.BaseTree)
 		policy := e.policyFor(taskID)
 
 		// The implementer is excluded by construction, not by instruction. An
@@ -3725,7 +3726,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 
 	workspace, createErr := e.Repo.CreateWorktreeAt(ctx, taskID, identity.BaseSHA)
 	if createErr == nil {
-		e.noteCandidateCreated(taskID)
+		// The container exists; whether it will hold WORK is unmeasured until
+		// the capture freezes a tree.
+		e.noteCandidateWorkUnmeasured(taskID)
 	}
 	if createErr != nil {
 		fail(fmt.Errorf("create the candidate worktree: %w", createErr))

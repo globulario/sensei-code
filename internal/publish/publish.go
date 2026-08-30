@@ -37,9 +37,11 @@ type Request struct {
 	// CandidateCapture had excluded from the candidate -- and that therefore
 	// never appeared in the audit or the reviewer's packet -- was still
 	// untracked in the worktree, and --all committed and pushed it (#89). What
-	// is published is exactly what was judged, or nothing. They are carried as
-	// the record of what the review covered; publication stages nothing, since
-	// the accepted object already holds exactly those paths.
+	// is published is exactly what was judged, or nothing.
+	//
+	// Publication stages nothing: the accepted object already holds exactly
+	// these paths. They are carried as the record of what the review covered,
+	// and a publication naming none of them is refused.
 	Paths []string
 	// CandidateCommit is the accepted candidate's canonical identity. It is
 	// minted before publication is ever offered; this package pushes it and
@@ -47,9 +49,9 @@ type Request struct {
 	CandidateCommit string
 }
 
-// ErrNoReviewedPaths reports a publication with nothing judged to publish.
-// It is a refusal: a publication that names nothing judged must not be allowed
-// to mean "publish whatever is there".
+// ErrNoReviewedPaths reports a publication with nothing judged to publish. It
+// is a refusal: a publication that names nothing judged must not be allowed to
+// mean "publish whatever is there".
 var ErrNoReviewedPaths = errors.New("publication names no reviewed candidate paths, so nothing is staged; the worktree is not swept")
 
 // ErrPushNotGranted reports that publication was attempted without the
@@ -60,12 +62,12 @@ var ErrPushNotGranted = errors.New("push is not granted in .sensei-code/config.j
 // ErrNoCandidateCommit reports a publication asked to push a branch that does
 // not name the accepted candidate's identity.
 //
-// Publication no longer commits. The accepted candidate is given exactly one
+// Publication does not commit. The accepted candidate is given exactly one
 // commit -- its canonical identity -- before anything reports or publishes it,
-// and this package pushes THAT object or refuses. Two commit paths would
-// eventually disagree about what was committed, which is the whole defect class
-// this work exists to remove.
-var ErrNoCandidateCommit = errors.New("the candidate branch does not name the accepted candidate's commit identity, so there is nothing to publish")
+// and this package pushes THAT OBJECT by refspec. It does not consult a local
+// branch, because verifying one identity and publishing another is how work
+// nobody reviewed reaches a remote.
+var ErrNoCandidateCommit = errors.New("no accepted candidate identity was supplied, so there is nothing to publish")
 
 // Body renders the pull request description. The change report is quoted
 // verbatim and the governance position is stated plainly, because a reader of
@@ -162,7 +164,11 @@ func Open(ctx context.Context, r Request, pushGranted bool) (Result, error) {
 	}
 	paths := make([]string, 0, len(r.Paths))
 	for _, p := range r.Paths {
-		if strings.TrimSpace(p) != "" {
+		// p != "", not TrimSpace(p) != "": these are exact measured pathnames,
+		// and a name made only of spaces is odd but valid. Trimming here would
+		// reintroduce, in miniature, the whitespace-is-data defect the capture
+		// layer spent three closures removing.
+		if p != "" {
 			paths = append(paths, p)
 		}
 	}

@@ -46,12 +46,15 @@ func TestAnAcceptedRunProducesACompleteReceipt(t *testing.T) {
 	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteWorld("task-1", base, "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64")
 	e.notePlan("task-1", "", "a plan the architect wrote")
-	e.noteCandidateCreated("task-1")
+	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
 	e.noteCapturedTree("task-1", cap.Tree)
-	e.noteCandidateDigest("task-1", "b4f471f096d13f2bb4f471f096d13f2bb4f471f096d13f2bb4f471f096d13f2b")
+	// The REAL rendering digest, so the canonical relation is measured rather
+	// than staged: a fabricated digest would make this DIFFER, which is exactly
+	// what the relation is for.
+	reviewed := candidateRevision(cap.Diff)
+	e.noteCandidateDigest("task-1", reviewed)
 	e.noteReviewerAssigned("task-1", "codex")
-	e.noteReviewDelivered("task-1", "codex", "accept",
-		"b4f471f096d13f2bb4f471f096d13f2bb4f471f096d13f2bb4f471f096d13f2b", cap.Tree)
+	e.noteReviewDelivered("task-1", "codex", "accept", reviewed, cap.Tree)
 
 	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
 	if err := e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, ""); err != nil {
@@ -73,5 +76,13 @@ func TestAnAcceptedRunProducesACompleteReceipt(t *testing.T) {
 	}
 	if r.CandidateFirstParent.Text != base {
 		t.Fatalf("first parent = %s, want the governed base", r.CandidateFirstParent.Text)
+	}
+	// The canonical rendering of the minted object equals the one the review
+	// was given -- measured, through the same renderer.
+	if r.CandidateDigestRelation != runreceipt.RelationMatch {
+		t.Fatalf("digest relation = %s, want MATCH", r.CandidateDigestRelation)
+	}
+	if r.ReviewedTree.Text != r.CandidateTree.Text {
+		t.Fatalf("reviewed tree %s != candidate tree %s", r.ReviewedTree.Text, r.CandidateTree.Text)
 	}
 }

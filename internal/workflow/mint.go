@@ -97,6 +97,15 @@ func (e *Engine) mintCandidateIdentity(ctx context.Context, taskID string, tc *t
 			return fmt.Errorf("point the candidate branch at its identity: %w", err)
 		}
 	}
+	// The canonical rendering of what was minted, through the SAME renderer the
+	// capture used, compared with the rendering the review was given. Once
+	// C^{tree} == T and C^1 == B this must MATCH; a difference means two
+	// identities this record calls equal are not.
+	rendered, err := repo.RenderCandidateDiff(ctx, base, commit)
+	if err != nil {
+		return fmt.Errorf("render the minted candidate: %w", err)
+	}
+	e.noteCandidateRendering(taskID, candidateRevision(rendered), e.reviewedDigestFor(taskID))
 	e.noteCandidateCommit(taskID, commit, tree, parent)
 	return nil
 }

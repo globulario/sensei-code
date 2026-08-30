@@ -67,6 +67,10 @@ type Capture struct {
 	// A candidate that changed nothing has Tree equal to the base's own tree,
 	// which is how "produced no work" is MEASURED rather than inferred.
 	Tree string
+	// BaseTree is the base commit's own tree, carried so a caller can MEASURE
+	// "this candidate produced no work" as Tree == BaseTree rather than infer
+	// it from an empty path list.
+	BaseTree string
 	// Paths is the exact set of repository-relative paths this candidate
 	// changed, as Git reports them, taken AFTER artifact exclusions.
 	//
@@ -323,13 +327,14 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	}
 
 	// The content identity, built ONCE, before anything renders it.
+	if cap.BaseTree, err = r.CommitTreeOf(ctx, base); err != nil {
+		return Capture{}, err
+	}
 	if len(cap.Paths) == 0 {
-		// No work. The candidate's tree is the base's tree, which is a
+		// No work. The candidate's tree IS the base's tree, which is a
 		// measurement of "produced nothing" rather than an inference from an
 		// empty diff.
-		if cap.Tree, err = r.CommitTreeOf(ctx, base); err != nil {
-			return Capture{}, err
-		}
+		cap.Tree = cap.BaseTree
 		return cap, nil
 	}
 	if cap.Tree, err = r.CanonicalTree(ctx, base, cap.Paths); err != nil {

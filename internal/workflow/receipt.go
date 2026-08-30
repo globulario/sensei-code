@@ -43,8 +43,12 @@ type receiptFacts struct {
 	// exists only once a bounded verdict comes back bound to one. Writing the
 	// capture into a field named "reviewed" made the mint use a remembered
 	// PRE-review measurement while claiming it used the reviewed one.
-	capturedTree                          runreceipt.Value
-	reviewedTree                          runreceipt.Value
+	capturedTree runreceipt.Value
+	reviewedTree runreceipt.Value
+	// candRendering is the canonical rendering of the MINTED object, and
+	// digestRelation is how it compares with the rendering the review saw.
+	candRendering                         runreceipt.Value
+	digestRelation                        runreceipt.DigestRelation
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
 	attempts                              []runreceipt.Attempt
@@ -84,20 +88,24 @@ func freshFacts() *receiptFacts {
 		return runreceipt.UnknownValue("not measured: " + what)
 	}
 	return &receiptFacts{
-		base:         notYet("the run did not reach the start gate"),
-		graph:        notYet("the run did not reach the start gate"),
-		plan:         notYet("no plan was established for this run"),
-		candCommit:   notYet("no candidate was created"),
-		candTree:     notYet("no candidate was created"),
-		candParent:   notYet("no candidate was created"),
-		candDiff:     notYet("no candidate was created"),
-		capturedTree: notYet("no candidate was captured"),
-		reviewedTree: notYet("no bounded review was delivered"),
-		provider:     notYet("no reviewer was assigned"),
-		executable:   notYet("the engine does not measure the reviewer executable"),
-		verdict:      notYet("no bounded verdict was returned"),
-		digest:       notYet("no bounded verdict was returned"),
-		serving:      notYet("the awareness process had not been launched"),
+		base:          notYet("the run did not reach the start gate"),
+		graph:         notYet("the run did not reach the start gate"),
+		plan:          notYet("no plan was established for this run"),
+		candCommit:    notYet("no candidate was created"),
+		candTree:      notYet("no candidate was created"),
+		candParent:    notYet("no candidate was created"),
+		candDiff:      notYet("no candidate was created"),
+		capturedTree:  notYet("no candidate was captured"),
+		candRendering: notYet("no candidate identity was minted"),
+		// The relation is UNKNOWN until something measures it, and UNKNOWN is
+		// never sufficient for a complete record of a candidate that exists.
+		digestRelation: runreceipt.RelationUnknown,
+		reviewedTree:   notYet("no bounded review was delivered"),
+		provider:       notYet("no reviewer was assigned"),
+		executable:     notYet("the engine does not measure the reviewer executable"),
+		verdict:        notYet("no bounded verdict was returned"),
+		digest:         notYet("no bounded verdict was returned"),
+		serving:        notYet("the awareness process had not been launched"),
 		// Opening states. Nothing has been CREATED yet, so the candidate axis
 		// opens at NONE as a positive claim. The plan axis does NOT: a supplied
 		// plan may already exist before the first step succeeds, and a resumed
@@ -223,6 +231,7 @@ func (e *Engine) noteReviewerAssigned(taskID, provider string) {
 			Delivery: runreceipt.UnknownValue("this attempt had not returned when it was superseded"),
 			Verdict:  runreceipt.UnknownValue("this attempt produced no verdict"),
 			Digest:   runreceipt.UnknownValue("this attempt produced no verdict"),
+			Tree:     runreceipt.UnknownValue("this attempt produced no verdict"),
 		})
 	})
 }
@@ -240,17 +249,22 @@ func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest
 		if strings.TrimSpace(reviewedTree) != "" {
 			f.reviewedTree = runreceipt.MeasuredValue(reviewedTree, "the candidate tree the verdict's envelope names")
 		}
+		tv := runreceipt.UnknownValue("this verdict's envelope named no tree")
+		if strings.TrimSpace(reviewedTree) != "" {
+			tv = runreceipt.MeasuredValue(reviewedTree, "the candidate tree the verdict's envelope names")
+		}
 		if n := len(f.attempts); n > 0 {
 			f.attempts[n-1].Provider = p
 			f.attempts[n-1].Delivery = runreceipt.DeliveryValue(runreceipt.Delivered, "the verdict this attempt returned")
 			f.attempts[n-1].Verdict = v
 			f.attempts[n-1].Digest = d
+			f.attempts[n-1].Tree = tv
 			return
 		}
 		f.attempts = append(f.attempts, runreceipt.Attempt{
 			Provider: p,
 			Delivery: runreceipt.DeliveryValue(runreceipt.Delivered, "the verdict this attempt returned"),
-			Verdict:  v, Digest: d,
+			Verdict:  v, Digest: d, Tree: tv,
 		})
 	})
 }
@@ -274,24 +288,27 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 	governor, binary := governorIdentityFn()
 
 	r := runreceipt.Receipt{
-		Schema:               runreceipt.SchemaVersion,
-		GovernorCommit:       governor,
-		GovernorBinarySHA256: binary,
-		BaseCommit:           facts.base,
-		PlanDigest:           facts.plan,
-		GraphDigest:          facts.graph,
-		PlanState:            facts.planState,
-		CandidateState:       cand,
-		CandidateCommit:      facts.candCommit,
-		CandidateTree:        facts.candTree,
-		CandidateFirstParent: facts.candParent,
-		CandidateDigest:      facts.candDiff,
-		ServingProducer:      facts.serving,
-		ReviewerProvider:     facts.provider,
-		ReviewerExecutable:   facts.executable,
-		ReviewVerdict:        facts.verdict,
-		ReviewedDigest:       facts.digest,
-		Attempts:             facts.attempts,
+		Schema:                    runreceipt.SchemaVersion,
+		GovernorCommit:            governor,
+		GovernorBinarySHA256:      binary,
+		BaseCommit:                facts.base,
+		PlanDigest:                facts.plan,
+		GraphDigest:               facts.graph,
+		PlanState:                 facts.planState,
+		ReviewedTree:              facts.reviewedTree,
+		CandidateCommitDiffDigest: facts.candRendering,
+		CandidateDigestRelation:   facts.digestRelation,
+		CandidateState:            cand,
+		CandidateCommit:           facts.candCommit,
+		CandidateTree:             facts.candTree,
+		CandidateFirstParent:      facts.candParent,
+		CandidateDigest:           facts.candDiff,
+		ServingProducer:           facts.serving,
+		ReviewerProvider:          facts.provider,
+		ReviewerExecutable:        facts.executable,
+		ReviewVerdict:             facts.verdict,
+		ReviewedDigest:            facts.digest,
+		Attempts:                  facts.attempts,
 		// The terminal EVENT, not the outcome. Recording the outcome here made
 		// Outcome quietly into two fields, and a reader comparing them would
 		// have been comparing a fact with itself.
@@ -305,13 +322,43 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 	return r
 }
 
-// noteCandidateCreated records that a candidate worktree now exists.
+// noteCandidateWork records whether the candidate holds WORK, measured.
 //
-// It is a measurement, not a guess: the engine created the worktree, so it
-// knows. Terminal paths that cannot see the candidate from where they stand --
-// the generic failure closure, above all -- read this rather than assuming.
-func (e *Engine) noteCandidateCreated(taskID string) {
-	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateState = runreceipt.CandidatePresent })
+// A worktree is an execution container, not a candidate: firing PRESENT when
+// the directory was created made a run that produced nothing owe a commit, and
+// minting an empty one to satisfy that would be a fabricated specimen in Git
+// clothing. PRESENT and NONE are both read from the frozen tree.
+func (e *Engine) noteCandidateWork(taskID, tree, baseTree string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		if tree != "" && tree == baseTree {
+			f.candidateState = runreceipt.CandidateNone
+			return
+		}
+		f.candidateState = runreceipt.CandidatePresent
+	})
+}
+
+// noteCandidateWorkUnmeasured says the content is moving and unmeasured.
+//
+// A worker is editing, and a stale NONE here would deny work that exists.
+func (e *Engine) noteCandidateWorkUnmeasured(taskID string) {
+	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateState = runreceipt.CandidateUnknown })
+}
+
+// noteCandidateRendering records the canonical rendering of the MINTED object
+// and how it compares with the rendering the review was given.
+func (e *Engine) noteCandidateRendering(taskID, digest string, reviewed string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.candRendering = runreceipt.MeasuredValue(digest, "sha256 of the canonical rendering of the minted object")
+		switch {
+		case digest == "" || reviewed == "":
+			f.digestRelation = runreceipt.RelationUnknown
+		case digest == reviewed:
+			f.digestRelation = runreceipt.RelationMatch
+		default:
+			f.digestRelation = runreceipt.RelationDiffer
+		}
+	})
 }
 
 // candidateStateFor reports what the engine measured about the candidate's
@@ -474,4 +521,15 @@ func (e *Engine) candidateCommitFor(taskID string) string {
 		return ""
 	}
 	return f.candCommit.Text
+}
+
+// reviewedDigestFor returns the rendering digest the verdict named.
+func (e *Engine) reviewedDigestFor(taskID string) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	f, ok := e.receipts[taskID]
+	if !ok || f == nil || f.digest.State != runreceipt.Known {
+		return ""
+	}
+	return f.digest.Text
 }

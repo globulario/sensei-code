@@ -49,12 +49,13 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
-// v2 added the PlanState axis and the STOPPED outcome. Both change what a
-// COMPLETE receipt means, so a v1 reader would misread a v2 record and a v2
-// reader would find v1 records missing a required axis. Leaving the version at
-// v1 through that change would be the fabricated specimen this comment warns
-// about, written by the schema's own author.
-const SchemaVersion = "sensei-code.governed-run-receipt/v2"
+// v2 added the PlanState axis and the STOPPED outcome. v3 adds the reviewed
+// tree, the canonical diff-digest relation, and redefines CandidateState to
+// mean MEASURED WORK rather than "a worktree exists". Each changes what a
+// COMPLETE receipt means, so the version moves with them: a reader on the wrong
+// version misreads the record, which is the fabricated specimen this comment
+// warns about.
+const SchemaVersion = "sensei-code.governed-run-receipt/v3"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -219,6 +220,34 @@ func (p PlanState) Valid() bool {
 	return false
 }
 
+// DigestRelation says whether the review's representation and the minted
+// object's representation agree.
+//
+// Once C^{tree} == T and C^1 == B, rendering B->C and rendering B->T through
+// the SAME renderer are renderings of the same two objects. A difference is
+// therefore not "two mechanisms disagreed" -- it means one of the identities we
+// call equal is not. DIFFER is a contradiction, not an alternative outcome.
+type DigestRelation string
+
+const (
+	// RelationMatch: the canonical rendering of the minted object equals the
+	// digest the review was given.
+	RelationMatch DigestRelation = "MATCH"
+	// RelationDiffer: they disagree. The record is internally contradictory.
+	RelationDiffer DigestRelation = "DIFFER"
+	// RelationUnknown: not measured.
+	RelationUnknown DigestRelation = "UNKNOWN"
+)
+
+// Valid reads membership by enumeration.
+func (d DigestRelation) Valid() bool {
+	switch d {
+	case RelationMatch, RelationDiffer, RelationUnknown:
+		return true
+	}
+	return false
+}
+
 // Knownness is how a single fact stands in the record. Every read of untrusted
 // input lands on exactly one of these, so no input shape can crash extraction.
 type Knownness string
@@ -314,9 +343,13 @@ type Attempt struct {
 	Provider Value `json:"provider"`
 	// Delivery carries a DeliveryState, measured like any other fact. UNKNOWN
 	// never satisfies a bounded-review requirement.
-	Delivery   Value  `json:"delivery"`
-	Verdict    Value  `json:"verdict"`
-	Digest     Value  `json:"reviewed_digest"`
+	Delivery Value `json:"delivery"`
+	Verdict  Value `json:"verdict"`
+	Digest   Value `json:"reviewed_digest"`
+	// Tree is the content this attempt's verdict was bound to. Without it the
+	// receipt could name a reviewed tree while the delivered attempt proves only
+	// a digest -- the same law, one more axis.
+	Tree       Value  `json:"reviewed_tree"`
 	Diagnostic string `json:"diagnostic,omitempty"`
 }
 
@@ -342,12 +375,23 @@ type Receipt struct {
 	CandidateFirstParent Value `json:"candidate_first_parent"`
 	CandidateDigest      Value `json:"candidate_digest"`
 
+	// CandidateCommitDiffDigest is the canonical rendering of the MINTED object,
+	// digested. It exists to be compared with CandidateDigest.
+	CandidateCommitDiffDigest Value `json:"candidate_commit_diff_digest"`
+	// CandidateDigestRelation is that comparison. DIFFER is a contradiction.
+	CandidateDigestRelation DigestRelation `json:"candidate_digest_relation"`
+
 	// Observed identities. Nothing can reconstruct these afterwards.
 	ServingProducer    Value `json:"serving_producer"`
 	ReviewerProvider   Value `json:"reviewer_provider"`
 	ReviewerExecutable Value `json:"reviewer_executable"`
 	ReviewVerdict      Value `json:"review_verdict"`
 	ReviewedDigest     Value `json:"reviewed_digest"`
+	// ReviewedTree is the content the verdict's envelope named. A receipt that
+	// states a candidate tree and a reviewed digest, while proving nothing about
+	// whether the verdict was bound to THAT tree, sends a later adjudicator back
+	// into the event stream -- the work this record exists to remove.
+	ReviewedTree Value `json:"reviewed_tree"`
 
 	// PlanState is the condition that makes the plan's identity required, and
 	// it is cross-checked against PlanDigest the way CandidateState is.
@@ -412,6 +456,8 @@ func (r Receipt) Fields() []Field {
 		{"reviewer_executable", r.ReviewerExecutable, Observed, false},
 		{"review_verdict", r.ReviewVerdict, Observed, reviewed},
 		{"reviewed_digest", r.ReviewedDigest, Observed, reviewed},
+		{"reviewed_tree", r.ReviewedTree, Observed, reviewed},
+		{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest, Rederivable, candidate},
 		{"terminal", r.Terminal, Observed, true},
 	}
 }
@@ -462,6 +508,7 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		if a.Delivery.State == Known && !DeliveryState(a.Delivery.Text).Valid() {
 			missing = append(missing, fmt.Sprintf("%s.delivery %q is not a value this schema defines", p, a.Delivery.Text))
 		}
+		missing = append(missing, validateValue(p+".reviewed_tree", a.Tree)...)
 		if a.Verdict.State == Known && !ReviewDecision(a.Verdict.Text).Valid() {
 			missing = append(missing, fmt.Sprintf("%s.verdict %q is outside the closed review vocabulary", p, a.Verdict.Text))
 		}
@@ -523,11 +570,42 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		missing = append(missing, "outcome UNREVIEWED while a bounded verdict is recorded: the condition contradicts the evidence")
 	}
 
+	// The canonical rendering relation. Once C^{tree} == T and C^1 == B, a
+	// DIFFER is an internal contradiction rather than a tolerable outcome, and
+	// UNKNOWN means nobody looked.
+	if r.CandidateState == CandidatePresent {
+		switch {
+		case !r.CandidateDigestRelation.Valid():
+			missing = append(missing, fmt.Sprintf("candidate_digest_relation %q is not a value this schema defines", r.CandidateDigestRelation))
+		case r.CandidateDigestRelation == RelationUnknown:
+			missing = append(missing, "candidate_digest_relation UNKNOWN: the minted object's rendering was never compared with the reviewed one")
+		case r.CandidateDigestRelation == RelationDiffer:
+			missing = append(missing,
+				"candidate_digest_relation DIFFER: the minted object renders differently from what the review was given, so two identities this record calls equal are not")
+		}
+	}
+
+	// The reviewed tree and the candidate tree are the same content or the
+	// record is claiming an identity it did not establish.
+	if r.ReviewedTree.State == Known && r.CandidateTree.State == Known &&
+		r.ReviewedTree.Text != r.CandidateTree.Text {
+		missing = append(missing, fmt.Sprintf(
+			"candidate_tree %s is not the reviewed_tree %s: the object minted is not the content the verdict was bound to",
+			shortSHA(r.CandidateTree.Text), shortSHA(r.ReviewedTree.Text)))
+	}
+
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		return Incomplete, missing
 	}
 	return Complete, nil
+}
+
+func shortSHA(s string) string {
+	if len(s) > 12 {
+		return s[:12]
+	}
+	return s
 }
 
 // checkBoundedReview holds the review binding.
@@ -559,13 +637,14 @@ func (r Receipt) checkBoundedReview() []string {
 		}
 		if a.Provider.Text == r.ReviewerProvider.Text &&
 			a.Verdict.Text == r.ReviewVerdict.Text &&
-			a.Digest.Text == r.ReviewedDigest.Text {
+			a.Digest.Text == r.ReviewedDigest.Text &&
+			a.Tree.Text == r.ReviewedTree.Text {
 			bound = true
 		}
 	}
 	if !bound {
 		missing = append(missing, fmt.Sprintf(
-			"outcome %s claims a bounded verdict, but no DELIVERED attempt carries the same provider, decision and reviewed digest as the receipt",
+			"outcome %s claims a bounded verdict, but no DELIVERED attempt carries the same provider, decision, reviewed digest and reviewed tree as the receipt",
 			r.Outcome))
 	}
 	return missing

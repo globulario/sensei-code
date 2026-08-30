@@ -89,6 +89,11 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 // contradicts reports whether an accepting verdict on this candidate and
 // evidence contradicts the open review rather than answering it.
 //
+// "The same candidate" is decided by the CONTENT as well as the representation:
+// the digest names a rendering, and the tree names the bytes. Requiring both to
+// match makes this predicate mean what its own "exact candidate" language
+// claims.
+//
 // The candidate or the evidence changing at all is taken as the mechanical
 // resolution: the finding was raised against bytes and outcomes that no longer
 // exist, and the new verdict is about new facts. That is a deliberately coarse
@@ -98,7 +103,8 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 func (o openReview) contradicts(accepting roles.ReviewVerdict, candidateDigest, evidenceID string) bool {
 	return accepting.Accepts() &&
 		o.CandidateDigest != "" && o.CandidateDigest == candidateDigest &&
-		o.EvidenceIdentity != "" && o.EvidenceIdentity == evidenceID
+		o.EvidenceIdentity != "" && o.EvidenceIdentity == evidenceID &&
+		o.CandidateTree == accepting.Provenance.CandidateTree
 }
 
 // describe is the contradiction stated once, for the event and the receipt.

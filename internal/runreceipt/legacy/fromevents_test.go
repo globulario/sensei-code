@@ -95,6 +95,9 @@ func TestEveryPreservedLogIsTotallyReadable(t *testing.T) {
 				}
 			}
 		}
+		if !rec.CandidateDigestRelation.Valid() {
+			t.Fatalf("%s: digest relation %q", path, rec.CandidateDigestRelation)
+		}
 		if !rec.Outcome.Valid() || !rec.CandidateState.Valid() || !rec.PlanState.Valid() {
 			t.Fatalf("%s: outcome %q candidate_state %q plan_state %q",
 				path, rec.Outcome, rec.CandidateState, rec.PlanState)

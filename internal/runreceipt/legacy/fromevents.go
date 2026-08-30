@@ -99,6 +99,10 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 	// instance of the raw-zero pattern, inside the package that exists to
 	// remove it.
 	rec.PlanState = runreceipt.PlanUnknown
+	// v3 facts the historical stream never carried. Stated, not defaulted.
+	rec.ReviewedTree = runreceipt.UnknownValue("the event stream does not name the tree a verdict was bound to")
+	rec.CandidateCommitDiffDigest = runreceipt.UnknownValue("no candidate identity was minted, so nothing was rendered from one")
+	rec.CandidateDigestRelation = runreceipt.RelationUnknown
 
 	// Facts the historical stream never measured. Each says so, and why. A
 	// governor emitting its own receipt supplies these; an adapter cannot.
