@@ -323,3 +323,92 @@ and succeed a change to itself. On the way it exposed two hidden assumptions in
 the governor: that whoever notices an ending may declare it, and that evidence
 is small. Neither was written down anywhere. Both were found by trying to
 integrate a change through the machinery rather than by reasoning about it.
+
+## The dependency door, and what walked through it
+
+The cross-repository blocker was opened WITHOUT touching C, #127, or any
+evidence artifact.
+
+  sensei    v1.6.1, cut from the exact v1.6.0 commit 6b2c9c64 plus ONE commit
+            (30 lines, 3 files, 1 new package). It deliberately excludes the
+            549 commits main had accumulated, so consuming the verifier
+            capability did not also consume unrelated semantics.
+            The release-line call sites were MEASURED, not ported from main:
+            v1.6.0 carries server, client.Dial and client.DialConn, and the
+            gate dials through DialConn -- the site a first pass on main had
+            missed while every test still passed.
+
+  action    globulario/sensei-action#16, one line, sensei-ref v1.6.0 -> v1.6.1.
+            The owner merged 411c13e and read main back: the deployed default
+            is v1.6.1. Not inferred.
+
+THE EXPERIMENT, on an unmodified head:
+
+    head             aa5c5e33, byte-identical before and after
+    evidence         the same 5.6 MB J1R.complete-accepted.log
+    gate             the same enforcing gate, same 45-file diff
+    only variable    the deployed verifier
+
+    v1.6.0 verifier  CANNOT VERIFY (ResourceExhausted, 5647072 vs 4194304)
+    v1.6.1 verifier  PASS, 45 file(s) evaluated, 0 blocking, 0 advisory
+
+  CI confirms the ref it actually ran: "using prebuilt Sensei bundle (v1.6.1,
+  linux-amd64)". The pre-bump run at the SAME head had Go verification already
+  green and only the gate failing, so the verifier is isolated as the sole
+  cause of the change in outcome.
+
+## Criteria 5-7, established against M
+
+M := f6b4755ff4d12591e9e802b2094b16a938260cc2
+
+  read back from `git ls-remote origin refs/heads/main` AFTER GitHub completed
+  the merge -- not the PR head, not a local ref, not the value GitHub reported.
+  It happens to equal the reported merge commit; that was CHECKED, not assumed.
+
+  5  authoritative resulting state read back                        PASS
+  6  not applicable under Architecture B: M != C, because merging C
+     necessarily integrated the branch up to its parent              N/A
+  7  exact C byte-identical and reachable from M                    PASS
+
+     reachable   C is an ancestor of M, via bafb17a then f6b4755
+     identical   C reconstructs to 6016791c from (B,T) by independent
+                 recomputation of its commit bytes, after the merge
+     content     both of C's blobs are bit-identical in M:
+                   engine.go              a7ed967e678a99546f96288acf905dc592d23f9f
+                   postvalidation_test.go 456576c9ab7070cb0547bac52d55cea56ccdb8bf
+     ref         refs/sensei-code/admitted/a1/6016791c... still names exactly C
+
+  C's P1 repair is live in M at internal/workflow/engine.go:1356.
+
+## STOP
+
+Criterion 8 is NOT attempted. Succession is NOT declared. Criterion 9 remains
+forbidden until 8 establishes regenerated authoritative knowledge for exact M.
+
+## Two scars, retained so they cannot mutate the interpretation
+
+  Neither is a finding about the system under test.
+
+  1. During local verification the enforcing gate hung twice. Cause: several
+     awareness-graph servers sharing one Oxigraph backend. Laboratory
+     infrastructure contention, mine, not a transport regression. With a single
+     server the gate is reliable. Recorded so a future hang is not misread as
+     evidence about v1.6.1.
+
+  2. The released `sensei` binary rejects `--version` ("unknown command"), and
+     `awg` warns that it is deprecated in favour of `sensei`. Pre-existing,
+     cosmetic, untouched.
+
+## What A1 has actually shown so far
+
+A1 was designed to ask whether a system can admit and succeed a change to
+itself. Getting from "candidate accepted" to "next world exists" forced three
+dependencies to state their own authority, and each had been silently assumed:
+
+  who owns an ending          the engine, not whoever notices first
+  how large evidence may be   larger than one message, or the verifier must
+                              say so rather than fail on it silently
+  what a pin deploys          a read-back default, not an inferred one
+
+None was written down anywhere. All three were found by trying to move a change
+through the machinery rather than by reasoning about it.
