@@ -1,0 +1,23 @@
+{
+ "J1R": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "2d5b31c0082e22fa0b2de43dcf61367eca8d6992",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone at the pinned base, origin removed)",
+  "outcome": "COMPLETE / ACCEPTED, schema v6, missing none. The first complete governed REVISION cycle in this chain: codex REVISE on T1 (tree 371dbeb9), worker revision, fresh validation/audit/review on T2 (tree c1a208d7), codex ACCEPT, canonical candidate 6016791c minted for exactly T2 with first parent exactly the base.",
+  "note": "NOTHING IS ADMITTED. The candidate is retained and unpublished; there is no X+1. The identity was reconstructed independently with git hash-object alone, outside the program that minted it. P1 did NOT activate (measurement 2: minted candidate with MATCH), corroborated by formatter_mutation UNCHANGED, so the pre-registered bootstrap boundary remains UNTESTED.",
+  "findings": [
+   "Criteria 8-12 passed and had never been testable before: T1 and T2 are mechanically distinguishable, the T1 verdict did not authorise T2, T2 received its own evidentiary cycle, C wraps the accepted tree and not the earlier one, and both attempts are preserved rather than overwritten.",
+   "The first review refused the PROOF rather than the change: the new tests hand-assembled the sequence instead of invoking runCandidate, establishing an adjacent property rather than the required end-to-end behaviour.",
+   "First direct evidence that an autonomous worker can take an architectural criticism, revise implementation AND proof, and return an exact candidate an independent reviewer accepts.",
+   "The 50m budget, justified before execution as 2 x the measured 25m, was materially used: ~41m elapsed, with the second cycle needing what the denominator bought."
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the task, the twelve falsifiers, the bias audit, the budget denominator and this result framing (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "Codex -- two bounded reviews in sessions inheriting nothing: REVISE on ea9e02ab, ACCEPT on bf149d0c",
+   "implementation_and_reconstruction": "Claude -- the frozen experiment and these records; the candidate was produced by a separate bounded Claude worker",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ }
+}

@@ -1,0 +1,610 @@
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index fa4d7a2..a7ed967 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -1326,12 +1326,38 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 		// everything gathered before a rewrite is evidence about different
+ 		// bytes. The diff is therefore re-read afterwards and the certifying
+ 		// checks are bound to the digest of what will actually be reviewed.
+-		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff)
++		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff, tc.Files)
+ 		if err != nil {
+ 			return false, plan, lastReview, lastAudit, err
+ 		}
+ 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+ 
++		// The content identity is re-measured HERE, after validation, because
++		// validation can rewrite the candidate: a formatter changes the bytes,
++		// and the capture taken before it froze a tree nobody will ever review.
++		// Everything downstream -- audit, review, receipt, decision, mint --
++		// was reading that pre-validation tree while the reviewer read
++		// post-format text, so an accepted candidate that had not moved since
++		// its verdict was refused at the mint as though it had.
++		//
++		// Canonically: against the recorded base and the plan's declared paths,
++		// through the same capture the mint will later re-measure with.
++		reviewed, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
++		if err != nil {
++			return false, plan, lastReview, lastAudit, fmt.Errorf("re-measure the candidate after validation: %w", err)
++		}
++		// The re-measurement is not trusted on its own. The evidence bundle and
++		// the diff validation returned must both be about exactly this
++		// capture's canonical rendering; if they are not, the proof, the
++		// reviewed text and the content identity are three measurements of
++		// different bytes and there is no honest way to pick one. Fail closed
++		// here rather than let the disagreement surface as a movement refusal
++		// at the mint, which names the wrong cause.
++		if err := certifiedAgainstCapture(evidence, taskID, reviewed.Diff, diff); err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
++		capture, diff = reviewed, reviewed.Diff
++
+ 		// Post-creation inspection of every declared prospective surface
+ 		// (sensei#312). The authorization was for a shape; a candidate whose
+ 		// created file has another shape is refuted here, before any review
+@@ -4478,7 +4504,13 @@ func oneLine(s string) string {
+ // candidate, so the diff is re-read after formatting and the certifying checks
+ // are bound to that. Returning the new diff rather than mutating in place makes
+ // it impossible for a caller to keep using the pre-format bytes by accident.
+-func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
++//
++// intended are the plan's declared paths, and they are passed through to the
++// re-read for the same reason the first capture takes them: the boundary keeps
++// an artifact the plan named and refuses one it did not. Re-reading through a
++// different boundary would return a diff the caller's own capture of the same
++// worktree disagrees with, over a file both of them are right about.
++func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string, intended []string) (validation.Bundle, string, error) {
+ 	permits := func(kind validation.CheckKind) (bool, string) {
+ 		var capability broker.Capability
+ 		switch kind {
+@@ -4531,10 +4563,11 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
+ 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
+ 		before := validation.Digest(diff)
+ 		runner.Run(ctx, taskID, before, formats)
+-		reread, err := repo.CandidateDiff(ctx, base)
++		recapture, err := repo.CandidateCapture(ctx, base, intended)
+ 		if err != nil {
+ 			return validation.Bundle{}, diff, err
+ 		}
++		reread := recapture.Diff
+ 		// The formatter's own evidence is discarded above, but WHETHER IT
+ 		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
+ 		// about the candidate, and later identity reasoning depends on it.
+@@ -4555,6 +4588,40 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
+ 	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+ }
+ 
++// certifiedAgainstCapture refuses unless the validation evidence and the diff
++// validation returned are both about one exact content identity: the canonical
++// rendering of the capture the run is about to bind every downstream artifact
++// to.
++//
++// Every check in the bundle is examined, not just the bundle's own binding: a
++// bundle that reads as complete while one check speaks about other bytes proves
++// less than it appears to. A bundle with no checks at all is not turned into a
++// failure here -- a repository may configure no certifying checks, and that is
++// a configuration fact rather than stale evidence -- but its binding must still
++// name this candidate's post-validation content.
++func certifiedAgainstCapture(b validation.Bundle, taskID, rendered, returned string) error {
++	if returned != rendered {
++		return fmt.Errorf(
++			"validation returned a diff of %d bytes and the candidate's canonical rendering is %d bytes: "+
++				"the text the reviewer would read and the content identity it would be bound to are different bytes",
++			len(returned), len(rendered))
++	}
++	digest := validation.Digest(rendered)
++	if b.CandidateID != taskID || b.DiffDigest != digest {
++		return fmt.Errorf(
++			"the validation evidence is bound to candidate %q at %s, not to %q at its post-validation content %s",
++			b.CandidateID, shortDigest(b.DiffDigest), taskID, shortDigest(digest))
++	}
++	for _, c := range b.Checks {
++		if !c.Certifies(taskID, digest) {
++			return fmt.Errorf(
++				"the %s check %q certifies candidate %q at %s, not this candidate's post-validation content %s",
++				c.Kind, c.Command, c.CandidateID, shortDigest(c.DiffDigest), shortDigest(digest))
++		}
++	}
++	return nil
++}
++
+ func checksOf(kind validation.CheckKind, commands []config.Command) []validation.Check {
+ 	out := make([]validation.Check, 0, len(commands))
+ 	for _, c := range commands {
+diff --git a/internal/workflow/postvalidation_test.go b/internal/workflow/postvalidation_test.go
+new file mode 100644
+index 0000000..456576c
+--- /dev/null
++++ b/internal/workflow/postvalidation_test.go
+@@ -0,0 +1,491 @@
++package workflow
++
++// Validation can rewrite the candidate.
++//
++// A configured formatter is not an observer: it edits the worktree, and every
++// measurement taken before it describes bytes that no longer exist. The run
++// used to freeze its content identity BEFORE validation and re-read only the
++// diff afterwards, so the reviewer read post-format text while the tree bound
++// to the verdict was the pre-format one. The mint re-measured the worktree,
++// found the post-format tree, and refused an accepted candidate that had not
++// moved since its verdict -- naming candidate movement as the cause of a
++// disagreement the run had created itself.
++//
++// The first test here drives the real loop -- runCandidate, its audit call, its
++// review packet, its verdict binding -- with a formatter that actually rewrites
++// the candidate, because that is the only place the production binding exists.
++// A test that assembled validate → capture → noteReviewDelivered → mint by hand
++// would stay green with the loop's binding removed, which is exactly the defect
++// under repair. The rest hold the two ends: a candidate that moves after the
++// state bound to the verdict is still refused, and evidence about other bytes
++// is refused rather than reconciled.
++
++import (
++	"bufio"
++	"context"
++	"encoding/json"
++	"flag"
++	"fmt"
++	"io"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strconv"
++	"strings"
++	"testing"
++
++	"github.com/globulario/sensei-code/internal/broker"
++	"github.com/globulario/sensei-code/internal/config"
++	"github.com/globulario/sensei-code/internal/gitx"
++	"github.com/globulario/sensei-code/internal/sensei"
++	"github.com/globulario/sensei-code/internal/validation"
++)
++
++// unformatted is Go that compiles and that gofmt WILL rewrite, so the formatter
++// step is a real mutation rather than a no-op that would pass either way.
++const unformatted = "package main\n\nfunc main() {\nprintln( 1 )\n}\n"
++
++// The same statement before and after gofmt. Every question of the form "which
++// bytes did this role actually receive" is answered with these two, because
++// they survive into a diff and into a prompt where a tree digest does not.
++const (
++	unformattedMark = "println( 1 )"
++	formattedMark   = "println(1)"
++)
++
++// formattingEngine is the governed loop's validation configuration, reduced to
++// the one check that mutates and the one that certifies the result.
++func formattingEngine(t *testing.T, repo gitx.Repo) *Engine {
++	t.Helper()
++	requireGofmt(t)
++	e := &Engine{Repo: repo}
++	e.Config.Permissions.RunFormatters = true
++	e.Config.Permissions.LocalCommit = true
++	e.Config.Validation = formattingValidation()
++	return e
++}
++
++func formattingValidation() config.Validation {
++	return config.Validation{
++		Format:       []config.Command{{Command: "gofmt", Args: []string{"-w", "main.go"}}},
++		FormatVerify: []config.Command{{Command: "gofmt", Args: []string{"-l", "main.go"}, FailIfOutput: true}},
++	}
++}
++
++func requireGofmt(t *testing.T) {
++	t.Helper()
++	if _, err := exec.LookPath("gofmt"); err != nil {
++		t.Skip("gofmt is not on PATH, so no formatter can rewrite the candidate here")
++	}
++}
++
++// The payoff, in the loop that actually runs: a worker writes unformatted Go,
++// validation rewrites it, and every downstream identity -- the audited diff,
++// the review packet, the verdict's tree and digest, the recorded path set, the
++// minted commit -- is the state the formatter produced. Then the other end: a
++// worktree that moves after that verdict is refused rather than rebound.
++//
++// This fails if runCandidate stops re-capturing after validation, or stops
++// assigning that capture over the pre-validation one: the verdict would carry
++// the tree of bytes nobody reviewed, and the mint would refuse a candidate that
++// never moved.
++func TestTheGovernedLoopBindsTheCandidateTheFormatterProduced(t *testing.T) {
++	ctx := context.Background()
++	requireGofmt(t)
++
++	repo, base := mintRepo(t)
++	workspace, err := repo.CreateWorktreeAt(ctx, "task-1", base)
++	if err != nil {
++		t.Fatalf("create the candidate worktree: %v", err)
++	}
++
++	// What each stub was handed, written down so the test reads the bytes the
++	// role received rather than the bytes the engine says it sent.
++	record := t.TempDir()
++	reviewerSaw := filepath.Join(record, "review-prompt.txt")
++	auditSaw := filepath.Join(record, "audited-diff.txt")
++
++	implCommand, implArgs := stubProcess(t, "implementor", "")
++	reviewCommand, reviewArgs := stubProcess(t, "reviewer", reviewerSaw)
++	senseiCommand, senseiArgs := stubProcess(t, "sensei", auditSaw)
++
++	sc, err := sensei.Start(ctx, repo.Root, senseiCommand, senseiArgs)
++	if err != nil {
++		t.Fatalf("start the stub Sensei MCP: %v", err)
++	}
++	defer sc.Close()
++
++	worker := config.Agent{Name: "claude", Command: implCommand, Args: implArgs, Graph: "none"}
++	e := &Engine{Repo: repo, SessionID: "session-1"}
++	e.Config.Permissions = config.Permissions{
++		ReadRepository: true, WriteCandidates: true, CreateWorktrees: true,
++		RunFormatters: true, LocalCommit: true,
++	}
++	e.Config.Workflow.ReviewCycles = 1
++	e.Config.Validation = formattingValidation()
++	e.Config.Implementors = []config.Agent{worker}
++	e.Config.Reviewer = config.Agent{Name: "codex", Command: reviewCommand, Args: reviewArgs, Graph: "none"}
++	e.beginReceipt("task-1")
++
++	tc := &taskContext{
++		Task:     "print a number from main",
++		Mode:     ModeModify,
++		Files:    []string{"main.go"},
++		Identity: candidateIdentityWithBase(base),
++	}
++	accepted, _, _, _, err := e.runCandidate(ctx, sc, certifiedStart{}, "task-1", tc,
++		"Rewrite main.go so it prints a number.", worker, workspace, "")
++	if err != nil {
++		t.Fatalf("the governed candidate loop failed: %v", err)
++	}
++	if !accepted {
++		t.Fatal("the loop did not accept the candidate, so nothing was bound to a verdict")
++	}
++
++	// The state the formatter left behind, measured the way the mint measures.
++	candidate := gitx.Repo{Root: workspace}
++	reviewed, err := candidate.CandidateCapture(ctx, base, tc.Files)
++	if err != nil {
++		t.Fatal(err)
++	}
++	// Without a real rewrite the pre- and post-validation captures are the same
++	// object and this test cannot tell them apart.
++	if !strings.Contains(reviewed.Diff, formattedMark) || strings.Contains(reviewed.Diff, unformattedMark) {
++		t.Fatalf("validation did not rewrite the worker's bytes, so this test distinguishes nothing:\n%s", reviewed.Diff)
++	}
++
++	// What Sensei was asked to audit.
++	if audited := readRecord(t, auditSaw); audited != reviewed.Diff {
++		t.Errorf("the audit judged bytes that are not the post-validation candidate:\n%s", audited)
++	}
++
++	// What the reviewer read, and the revision the packet bound it to.
++	prompt := readRecord(t, reviewerSaw)
++	if strings.Contains(prompt, unformattedMark) {
++		t.Error("the reviewer was handed the pre-validation bytes")
++	}
++	if !strings.Contains(prompt, formattedMark) {
++		t.Error("the reviewer was not handed the post-validation candidate")
++	}
++	// The prompt names the revision the way it renders it -- shortened. The
++	// full-width leg of the identity is asserted below, against the verdict.
++	if revision := shortDigest(candidateRevision(reviewed.Diff)); !strings.Contains(prompt, revision) {
++		t.Errorf("the review packet does not name the post-validation revision %s", revision)
++	}
++
++	// The content identity the delivered verdict is bound to.
++	tree, ok := e.reviewedTreeFor("task-1")
++	if !ok {
++		t.Fatal("the loop recorded no reviewed tree, so no verdict bound a content identity")
++	}
++	if tree != reviewed.Tree {
++		t.Fatalf("the verdict is bound to tree %s and the reviewed state is %s",
++			shortDigest(tree), shortDigest(reviewed.Tree))
++	}
++	if digest := e.reviewedDigestFor("task-1"); digest != candidateRevision(reviewed.Diff) {
++		t.Errorf("the verdict names revision %s, not the post-validation candidate's %s",
++			shortDigest(digest), shortDigest(candidateRevision(reviewed.Diff)))
++	}
++	// The exact path set travels with it: the capture's, not a re-parse of an
++	// older diff.
++	if got, want := tc.EvidenceSnapshot.ChangedPaths, reviewed.Paths; !samePaths(got, want) {
++		t.Errorf("the recorded path set is %v, and the post-validation capture holds %v", got, want)
++	}
++
++	// That exact state mints, and the identity reconstructs from (base, tree).
++	if err := e.mintCandidateIdentity(ctx, "task-1", tc, workspace, repo.WorktreeBranch("task-1")); err != nil {
++		t.Fatalf("the accepted post-validation state could not be minted: %v", err)
++	}
++	if err := candidate.VerifyCanonicalCommit(ctx, base, reviewed.Tree, e.candidateCommitFor("task-1")); err != nil {
++		t.Fatalf("the minted identity does not reconstruct from the reviewed state: %v", err)
++	}
++
++	// And a candidate that moves AFTER the state bound to the verdict is still
++	// refused rather than silently rebound to wherever the worktree went.
++	if err := os.WriteFile(filepath.Join(workspace, "main.go"),
++		[]byte("package main\n\nfunc main() { println(2) }\n"), 0o644); err != nil {
++		t.Fatal(err)
++	}
++	err = e.mintCandidateIdentity(ctx, "task-1", tc, workspace, repo.WorktreeBranch("task-1"))
++	if err == nil {
++		t.Fatal("a candidate that moved after its verdict was minted anyway")
++	}
++	if !strings.Contains(err.Error(), "moved after it was reviewed") {
++		t.Errorf("the refusal must name the movement, got %v", err)
++	}
++}
++
++// The failure this replaces: binding the verdict to the PRE-validation capture
++// refuses the accepted candidate at the mint, blaming movement that never
++// happened. Pinned so a future re-ordering that reintroduces it is visible as
++// this behaviour rather than as a mysterious refusal in a real run.
++func TestThePreValidationCaptureIsNotTheReviewedState(t *testing.T) {
++	ctx := context.Background()
++	repo, base := mintRepo(t)
++	if err := os.WriteFile(filepath.Join(repo.Root, "main.go"), []byte(unformatted), 0o644); err != nil {
++		t.Fatal(err)
++	}
++
++	e := formattingEngine(t, repo)
++	e.beginReceipt("task-1")
++	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
++
++	before, err := repo.CandidateCapture(ctx, base, tc.Files)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, tc.Files); err != nil {
++		t.Fatal(err)
++	}
++
++	e.noteReviewDelivered("task-1", "codex", "accept", "d1", before.Tree)
++	err = e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, "")
++	if err == nil {
++		t.Fatal("the pre-validation tree minted, so the two captures are indistinguishable here")
++	}
++	if !strings.Contains(err.Error(), "moved after it was reviewed") {
++		t.Fatalf("unexpected refusal: %v", err)
++	}
++}
++
++// Fail closed on evidence about other bytes: the proof, the reviewed text and
++// the content identity must be one claim, and a run that cannot show they are
++// has no honest way to choose between them.
++func TestValidationEvidenceAboutOtherBytesIsRefused(t *testing.T) {
++	rendered := "diff --git a/x b/x\n"
++	digest := validation.Digest(rendered)
++	certifying := validation.Evidence{CandidateID: "task-1", DiffDigest: digest, Outcome: validation.Passed}
++
++	if err := certifiedAgainstCapture(validation.Bundle{
++		CandidateID: "task-1", DiffDigest: digest, Checks: []validation.Evidence{certifying},
++	}, "task-1", rendered, rendered); err != nil {
++		t.Fatalf("evidence bound to exactly this rendering was refused: %v", err)
++	}
++
++	cases := map[string]struct {
++		bundle   validation.Bundle
++		returned string
++	}{
++		"the returned diff is not the canonical rendering": {
++			bundle:   validation.Bundle{CandidateID: "task-1", DiffDigest: digest},
++			returned: rendered + "extra\n",
++		},
++		"the bundle is bound to other content": {
++			bundle:   validation.Bundle{CandidateID: "task-1", DiffDigest: validation.Digest("other")},
++			returned: rendered,
++		},
++		"the bundle is bound to another candidate": {
++			bundle:   validation.Bundle{CandidateID: "task-2", DiffDigest: digest},
++			returned: rendered,
++		},
++		"one check inside a well-bound bundle is stale": {
++			bundle: validation.Bundle{CandidateID: "task-1", DiffDigest: digest, Checks: []validation.Evidence{
++				certifying,
++				{CandidateID: "task-1", DiffDigest: validation.Digest("other"), Outcome: validation.Passed, Kind: validation.Vet, Command: "go"},
++			}},
++			returned: rendered,
++		},
++	}
++	for name, tc := range cases {
++		t.Run(name, func(t *testing.T) {
++			if err := certifiedAgainstCapture(tc.bundle, "task-1", rendered, tc.returned); err == nil {
++				t.Fatal("accepted validation evidence that does not speak about the reviewed bytes")
++			}
++		})
++	}
++}
++
++func samePaths(got, want []string) bool {
++	if len(got) != len(want) {
++		return false
++	}
++	for i := range got {
++		if got[i] != want[i] {
++			return false
++		}
++	}
++	return true
++}
++
++func readRecord(t *testing.T, path string) string {
++	t.Helper()
++	body, err := os.ReadFile(path)
++	if err != nil {
++		t.Fatalf("the stub recorded nothing at %s: %v", filepath.Base(path), err)
++	}
++	return string(body)
++}
++
++// stubMarker identifies a re-entry of this test binary as one of the
++// deterministic processes the governed loop needs.
++const stubMarker = "postvalidation-stub"
++
++// stubProcess is the argv that re-enters this test binary in one stub role.
++//
++// The loop needs three real processes -- a worker, an independent reviewer and
++// Sensei's MCP -- and cannot be driven without them. Re-entering the test
++// binary keeps them deterministic and in this file, where what each one returns
++// is visible beside the behaviour it is supposed to expose; building separate
++// stub commands would put the interesting half somewhere else.
++func stubProcess(t *testing.T, role, record string) (string, []string) {
++	t.Helper()
++	exe, err := os.Executable()
++	if err != nil {
++		t.Fatalf("locate this test binary to re-enter it as the %s stub: %v", role, err)
++	}
++	return exe, []string{"-test.run=^TestPostValidationStubProcess$", stubMarker, role, record}
++}
++
++// TestPostValidationStubProcess is those processes. It is a subprocess entry
++// point rather than a test: without the marker it skips, and with one it does
++// its job and exits before the testing framework can write anything of its own
++// onto a stream a caller is parsing.
++func TestPostValidationStubProcess(t *testing.T) {
++	args := flag.Args()
++	if len(args) < 3 || args[0] != stubMarker {
++		t.Skip("not a stub re-entry: this test is the subprocess entry point for the governed-loop regression")
++	}
++	role, record := args[1], args[2]
++	switch role {
++	case "implementor":
++		// The prompt is read and discarded: a stub that varied with it would be
++		// a very small language model, and then a failure would be ambiguous.
++		// It must be drained, though -- a worker that exits without reading its
++		// prompt fails the parent's write, not its own exit status.
++		_, _ = io.Copy(io.Discard, os.Stdin)
++		wd, err := os.Getwd()
++		if err != nil {
++			exitStub(err)
++		}
++		// Unformatted on purpose. This is the whole premise: the bytes the
++		// worker produces are not the bytes anyone will review.
++		if err := os.WriteFile(filepath.Join(wd, "main.go"), []byte(unformatted), 0o644); err != nil {
++			exitStub(err)
++		}
++		fmt.Println("wrote main.go and did not format it")
++	case "reviewer":
++		prompt, err := io.ReadAll(os.Stdin)
++		if err != nil {
++			exitStub(err)
++		}
++		// What the reviewer received, kept so the test can read the bytes
++		// rather than the engine's claim about them.
++		if err := os.WriteFile(record, prompt, 0o644); err != nil {
++			exitStub(err)
++		}
++		fmt.Println(`{"decision":"accept","summary":"the candidate prints a number and touches nothing else"}`)
++	case "sensei":
++		serveStubSensei(os.Stdin, os.Stdout, record)
++	default:
++		exitStub(fmt.Errorf("unknown stub role %q", role))
++	}
++	os.Exit(0)
++}
++
++func exitStub(err error) {
++	fmt.Fprintln(os.Stderr, "postvalidation stub:", err)
++	os.Exit(1)
++}
++
++// serveStubSensei answers the MCP calls the candidate loop makes, in the
++// Content-Length framing internal/sensei speaks.
++func serveStubSensei(in io.Reader, out io.Writer, record string) {
++	r := bufio.NewReader(in)
++	for {
++		body, err := readStubFrame(r)
++		if err != nil {
++			return
++		}
++		var req struct {
++			ID     *int64 `json:"id"`
++			Method string `json:"method"`
++			Params struct {
++				Name      string         `json:"name"`
++				Arguments map[string]any `json:"arguments"`
++			} `json:"params"`
++		}
++		if json.Unmarshal(body, &req) != nil || req.ID == nil {
++			// A notification expects no reply, and an unparseable frame is not
++			// one this stub can answer.
++			continue
++		}
++		var result any = map[string]any{}
++		switch req.Method {
++		case "initialize":
++			result = map[string]any{
++				"protocolVersion": "2025-06-18",
++				"capabilities":    map[string]any{},
++				"serverInfo":      map[string]any{"name": stubMarker, "version": "0"},
++			}
++		case "tools/call":
++			result = stubTool(req.Params.Name, req.Params.Arguments, record)
++		}
++		if err := writeStubFrame(out, map[string]any{"jsonrpc": "2.0", "id": *req.ID, "result": result}); err != nil {
++			return
++		}
++	}
++}
++
++// stubTool passes every candidate and records the diff the audit was given.
++// Passing is what makes the identity question the only one this test asks.
++func stubTool(name string, args map[string]any, record string) map[string]any {
++	if name != "awareness_audit_diff" {
++		return map[string]any{
++			"content":           []map[string]string{{"type": "text", "text": "the stub graph holds nothing about this"}},
++			"structuredContent": map[string]any{},
++		}
++	}
++	diff, _ := args["diff"].(string)
++	if record != "" {
++		if err := os.WriteFile(record, []byte(diff), 0o644); err != nil {
++			exitStub(err)
++		}
++	}
++	return map[string]any{
++		"content": []map[string]string{{"type": "text", "text": "audit: pass"}},
++		"structuredContent": map[string]any{
++			"schema":            "sensei.audit.diff.v1",
++			"decision":          "pass",
++			"availability":      "available",
++			"input_diff_digest": validation.Digest(diff),
++		},
++	}
++}
++
++func readStubFrame(r *bufio.Reader) ([]byte, error) {
++	length := -1
++	for {
++		line, err := r.ReadString('\n')
++		if err != nil {
++			return nil, err
++		}
++		line = strings.TrimRight(line, "\r\n")
++		if line == "" {
++			break
++		}
++		if parts := strings.SplitN(line, ":", 2); len(parts) == 2 &&
++			strings.EqualFold(strings.TrimSpace(parts[0]), "Content-Length") {
++			if length, err = strconv.Atoi(strings.TrimSpace(parts[1])); err != nil {
++				return nil, err
++			}
++		}
++	}
++	if length < 0 {
++		return nil, fmt.Errorf("frame without a Content-Length")
++	}
++	body := make([]byte, length)
++	_, err := io.ReadFull(r, body)
++	return body, err
++}
++
++func writeStubFrame(w io.Writer, v any) error {
++	body, err := json.Marshal(v)
++	if err != nil {
++		return err
++	}
++	if _, err := fmt.Fprintf(w, "Content-Length: %d\r\n\r\n", len(body)); err != nil {
++		return err
++	}
++	_, err = w.Write(body)
++	return err
++}

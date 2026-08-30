@@ -1,0 +1,312 @@
+diff --git a/internal/workflow/engine.go b/internal/workflow/engine.go
+index fa4d7a2..a7ed967 100644
+--- a/internal/workflow/engine.go
++++ b/internal/workflow/engine.go
+@@ -1326,12 +1326,38 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
+ 		// everything gathered before a rewrite is evidence about different
+ 		// bytes. The diff is therefore re-read afterwards and the certifying
+ 		// checks are bound to the digest of what will actually be reviewed.
+-		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff)
++		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff, tc.Files)
+ 		if err != nil {
+ 			return false, plan, lastReview, lastAudit, err
+ 		}
+ 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+ 
++		// The content identity is re-measured HERE, after validation, because
++		// validation can rewrite the candidate: a formatter changes the bytes,
++		// and the capture taken before it froze a tree nobody will ever review.
++		// Everything downstream -- audit, review, receipt, decision, mint --
++		// was reading that pre-validation tree while the reviewer read
++		// post-format text, so an accepted candidate that had not moved since
++		// its verdict was refused at the mint as though it had.
++		//
++		// Canonically: against the recorded base and the plan's declared paths,
++		// through the same capture the mint will later re-measure with.
++		reviewed, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
++		if err != nil {
++			return false, plan, lastReview, lastAudit, fmt.Errorf("re-measure the candidate after validation: %w", err)
++		}
++		// The re-measurement is not trusted on its own. The evidence bundle and
++		// the diff validation returned must both be about exactly this
++		// capture's canonical rendering; if they are not, the proof, the
++		// reviewed text and the content identity are three measurements of
++		// different bytes and there is no honest way to pick one. Fail closed
++		// here rather than let the disagreement surface as a movement refusal
++		// at the mint, which names the wrong cause.
++		if err := certifiedAgainstCapture(evidence, taskID, reviewed.Diff, diff); err != nil {
++			return false, plan, lastReview, lastAudit, err
++		}
++		capture, diff = reviewed, reviewed.Diff
++
+ 		// Post-creation inspection of every declared prospective surface
+ 		// (sensei#312). The authorization was for a shape; a candidate whose
+ 		// created file has another shape is refuted here, before any review
+@@ -4478,7 +4504,13 @@ func oneLine(s string) string {
+ // candidate, so the diff is re-read after formatting and the certifying checks
+ // are bound to that. Returning the new diff rather than mutating in place makes
+ // it impossible for a caller to keep using the pre-format bytes by accident.
+-func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
++//
++// intended are the plan's declared paths, and they are passed through to the
++// re-read for the same reason the first capture takes them: the boundary keeps
++// an artifact the plan named and refuses one it did not. Re-reading through a
++// different boundary would return a diff the caller's own capture of the same
++// worktree disagrees with, over a file both of them are right about.
++func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string, intended []string) (validation.Bundle, string, error) {
+ 	permits := func(kind validation.CheckKind) (bool, string) {
+ 		var capability broker.Capability
+ 		switch kind {
+@@ -4531,10 +4563,11 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
+ 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
+ 		before := validation.Digest(diff)
+ 		runner.Run(ctx, taskID, before, formats)
+-		reread, err := repo.CandidateDiff(ctx, base)
++		recapture, err := repo.CandidateCapture(ctx, base, intended)
+ 		if err != nil {
+ 			return validation.Bundle{}, diff, err
+ 		}
++		reread := recapture.Diff
+ 		// The formatter's own evidence is discarded above, but WHETHER IT
+ 		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
+ 		// about the candidate, and later identity reasoning depends on it.
+@@ -4555,6 +4588,40 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
+ 	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+ }
+ 
++// certifiedAgainstCapture refuses unless the validation evidence and the diff
++// validation returned are both about one exact content identity: the canonical
++// rendering of the capture the run is about to bind every downstream artifact
++// to.
++//
++// Every check in the bundle is examined, not just the bundle's own binding: a
++// bundle that reads as complete while one check speaks about other bytes proves
++// less than it appears to. A bundle with no checks at all is not turned into a
++// failure here -- a repository may configure no certifying checks, and that is
++// a configuration fact rather than stale evidence -- but its binding must still
++// name this candidate's post-validation content.
++func certifiedAgainstCapture(b validation.Bundle, taskID, rendered, returned string) error {
++	if returned != rendered {
++		return fmt.Errorf(
++			"validation returned a diff of %d bytes and the candidate's canonical rendering is %d bytes: "+
++				"the text the reviewer would read and the content identity it would be bound to are different bytes",
++			len(returned), len(rendered))
++	}
++	digest := validation.Digest(rendered)
++	if b.CandidateID != taskID || b.DiffDigest != digest {
++		return fmt.Errorf(
++			"the validation evidence is bound to candidate %q at %s, not to %q at its post-validation content %s",
++			b.CandidateID, shortDigest(b.DiffDigest), taskID, shortDigest(digest))
++	}
++	for _, c := range b.Checks {
++		if !c.Certifies(taskID, digest) {
++			return fmt.Errorf(
++				"the %s check %q certifies candidate %q at %s, not this candidate's post-validation content %s",
++				c.Kind, c.Command, c.CandidateID, shortDigest(c.DiffDigest), shortDigest(digest))
++		}
++	}
++	return nil
++}
++
+ func checksOf(kind validation.CheckKind, commands []config.Command) []validation.Check {
+ 	out := make([]validation.Check, 0, len(commands))
+ 	for _, c := range commands {
+diff --git a/internal/workflow/postvalidation_test.go b/internal/workflow/postvalidation_test.go
+new file mode 100644
+index 0000000..6eb48a4
+--- /dev/null
++++ b/internal/workflow/postvalidation_test.go
+@@ -0,0 +1,193 @@
++package workflow
++
++// Validation can rewrite the candidate.
++//
++// A configured formatter is not an observer: it edits the worktree, and every
++// measurement taken before it describes bytes that no longer exist. The run
++// used to freeze its content identity BEFORE validation and re-read only the
++// diff afterwards, so the reviewer read post-format text while the tree bound
++// to the verdict was the pre-format one. The mint re-measured the worktree,
++// found the post-format tree, and refused an accepted candidate that had not
++// moved since its verdict -- naming candidate movement as the cause of a
++// disagreement the run had created itself.
++//
++// These tests hold both ends: the exact post-validation state the reviewer
++// received mints canonically, and a candidate that moves after that state is
++// still refused.
++
++import (
++	"context"
++	"os"
++	"os/exec"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/globulario/sensei-code/internal/broker"
++	"github.com/globulario/sensei-code/internal/config"
++	"github.com/globulario/sensei-code/internal/gitx"
++	"github.com/globulario/sensei-code/internal/validation"
++)
++
++// unformatted is Go that compiles and that gofmt WILL rewrite, so the formatter
++// step is a real mutation rather than a no-op that would pass either way.
++const unformatted = "package main\n\nfunc main() {\nprintln( 1 )\n}\n"
++
++// formattingEngine is the governed loop's validation configuration, reduced to
++// the one check that mutates and the one that certifies the result.
++func formattingEngine(t *testing.T, repo gitx.Repo) *Engine {
++	t.Helper()
++	if _, err := exec.LookPath("gofmt"); err != nil {
++		t.Skip("gofmt is not on PATH, so no formatter can rewrite the candidate here")
++	}
++	e := &Engine{Repo: repo}
++	e.Config.Permissions.RunFormatters = true
++	e.Config.Permissions.LocalCommit = true
++	e.Config.Validation = config.Validation{
++		Format:       []config.Command{{Command: "gofmt", Args: []string{"-w", "main.go"}}},
++		FormatVerify: []config.Command{{Command: "gofmt", Args: []string{"-l", "main.go"}, FailIfOutput: true}},
++	}
++	return e
++}
++
++// The payoff: the state the reviewer actually received is the state that mints.
++func TestTheTreeAFormatterProducedIsTheTreeThatMints(t *testing.T) {
++	ctx := context.Background()
++	repo, base := mintRepo(t)
++	os.WriteFile(filepath.Join(repo.Root, "main.go"), []byte(unformatted), 0o644)
++
++	e := formattingEngine(t, repo)
++	e.beginReceipt("task-1")
++	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
++
++	// What the loop captures before validation runs.
++	before, err := repo.CandidateCapture(ctx, base, tc.Files)
++	if err != nil {
++		t.Fatal(err)
++	}
++	evidence, diff, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, tc.Files)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if !evidence.Passed() {
++		t.Fatalf("the certifying checks did not pass, so this test proves nothing about identity:\n%s", evidence.Render())
++	}
++
++	// The post-validation capture: what the reviewer will actually be given.
++	after, err := repo.CandidateCapture(ctx, base, tc.Files)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if after.Tree == before.Tree {
++		t.Fatal("the formatter rewrote nothing, so this test cannot distinguish the two captures")
++	}
++	if err := certifiedAgainstCapture(evidence, "task-1", after.Diff, diff); err != nil {
++		t.Fatalf("the validated candidate is not the capture the run would bind: %v", err)
++	}
++
++	// The verdict is bound to that exact state, and nothing moves afterwards.
++	e.noteCapturedTree("task-1", after.Tree)
++	e.noteReviewDelivered("task-1", "codex", "accept", candidateRevision(diff), after.Tree)
++	if err := e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, ""); err != nil {
++		t.Fatalf("the accepted post-validation state could not be minted: %v", err)
++	}
++
++	// And the identity is the canonical one for (base, reviewed tree).
++	commit, err := repo.ExpectedCanonicalSHA(ctx, base, after.Tree)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if err := repo.VerifyCanonicalCommit(ctx, base, after.Tree, commit); err != nil {
++		t.Fatalf("the minted identity does not reconstruct: %v", err)
++	}
++
++	// The other end: a candidate that moves AFTER the state bound to the
++	// verdict is still refused rather than silently rebound to wherever the
++	// worktree went.
++	os.WriteFile(filepath.Join(repo.Root, "main.go"), []byte("package main\n\nfunc main() { println(2) }\n"), 0o644)
++	err = e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, "")
++	if err == nil {
++		t.Fatal("a candidate that moved after its verdict was minted anyway")
++	}
++	if !strings.Contains(err.Error(), "moved after it was reviewed") {
++		t.Errorf("the refusal must name the movement, got %v", err)
++	}
++}
++
++// The failure this replaces: binding the verdict to the PRE-validation capture
++// refuses the accepted candidate at the mint, blaming movement that never
++// happened. Pinned so a future re-ordering that reintroduces it is visible as
++// this behaviour rather than as a mysterious refusal in a real run.
++func TestThePreValidationCaptureIsNotTheReviewedState(t *testing.T) {
++	ctx := context.Background()
++	repo, base := mintRepo(t)
++	os.WriteFile(filepath.Join(repo.Root, "main.go"), []byte(unformatted), 0o644)
++
++	e := formattingEngine(t, repo)
++	e.beginReceipt("task-1")
++	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
++
++	before, err := repo.CandidateCapture(ctx, base, tc.Files)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if _, _, err := e.validate(ctx, "task-1", base, broker.New(e.Config.Permissions), repo, before.Diff, tc.Files); err != nil {
++		t.Fatal(err)
++	}
++
++	e.noteReviewDelivered("task-1", "codex", "accept", "d1", before.Tree)
++	err = e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, "")
++	if err == nil {
++		t.Fatal("the pre-validation tree minted, so the two captures are indistinguishable here")
++	}
++	if !strings.Contains(err.Error(), "moved after it was reviewed") {
++		t.Fatalf("unexpected refusal: %v", err)
++	}
++}
++
++// Fail closed on evidence about other bytes: the proof, the reviewed text and
++// the content identity must be one claim, and a run that cannot show they are
++// has no honest way to choose between them.
++func TestValidationEvidenceAboutOtherBytesIsRefused(t *testing.T) {
++	rendered := "diff --git a/x b/x\n"
++	digest := validation.Digest(rendered)
++	certifying := validation.Evidence{CandidateID: "task-1", DiffDigest: digest, Outcome: validation.Passed}
++
++	if err := certifiedAgainstCapture(validation.Bundle{
++		CandidateID: "task-1", DiffDigest: digest, Checks: []validation.Evidence{certifying},
++	}, "task-1", rendered, rendered); err != nil {
++		t.Fatalf("evidence bound to exactly this rendering was refused: %v", err)
++	}
++
++	cases := map[string]struct {
++		bundle   validation.Bundle
++		returned string
++	}{
++		"the returned diff is not the canonical rendering": {
++			bundle:   validation.Bundle{CandidateID: "task-1", DiffDigest: digest},
++			returned: rendered + "extra\n",
++		},
++		"the bundle is bound to other content": {
++			bundle:   validation.Bundle{CandidateID: "task-1", DiffDigest: validation.Digest("other")},
++			returned: rendered,
++		},
++		"the bundle is bound to another candidate": {
++			bundle:   validation.Bundle{CandidateID: "task-2", DiffDigest: digest},
++			returned: rendered,
++		},
++		"one check inside a well-bound bundle is stale": {
++			bundle: validation.Bundle{CandidateID: "task-1", DiffDigest: digest, Checks: []validation.Evidence{
++				certifying,
++				{CandidateID: "task-1", DiffDigest: validation.Digest("other"), Outcome: validation.Passed, Kind: validation.Vet, Command: "go"},
++			}},
++			returned: rendered,
++		},
++	}
++	for name, tc := range cases {
++		t.Run(name, func(t *testing.T) {
++			if err := certifiedAgainstCapture(tc.bundle, "task-1", rendered, tc.returned); err == nil {
++				t.Fatal("accepted validation evidence that does not speak about the reviewed bytes")
++			}
++		})
++	}
++}
