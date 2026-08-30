@@ -37,10 +37,17 @@ import (
 type receiptFacts struct {
 	base, graph, plan                          runreceipt.Value
 	candCommit, candTree, candParent, candDiff runreceipt.Value
-	reviewedTree                               runreceipt.Value
-	provider, executable, verdict, digest      runreceipt.Value
-	serving                                    runreceipt.Value
-	attempts                                   []runreceipt.Attempt
+	// capturedTree and reviewedTree are DIFFERENT FACTS and were one field.
+	//
+	// The capture freezes a tree before anything judges it; a reviewed tree
+	// exists only once a bounded verdict comes back bound to one. Writing the
+	// capture into a field named "reviewed" made the mint use a remembered
+	// PRE-review measurement while claiming it used the reviewed one.
+	capturedTree                          runreceipt.Value
+	reviewedTree                          runreceipt.Value
+	provider, executable, verdict, digest runreceipt.Value
+	serving                               runreceipt.Value
+	attempts                              []runreceipt.Attempt
 	// candidateState and planState are STATES, not booleans.
 	//
 	// An earlier draft used `candidateExists bool`, which reintroduced exactly
@@ -84,7 +91,8 @@ func freshFacts() *receiptFacts {
 		candTree:     notYet("no candidate was created"),
 		candParent:   notYet("no candidate was created"),
 		candDiff:     notYet("no candidate was created"),
-		reviewedTree: notYet("no candidate was reviewed"),
+		capturedTree: notYet("no candidate was captured"),
+		reviewedTree: notYet("no bounded review was delivered"),
 		provider:     notYet("no reviewer was assigned"),
 		executable:   notYet("the engine does not measure the reviewer executable"),
 		verdict:      notYet("no bounded verdict was returned"),
@@ -178,13 +186,14 @@ func (e *Engine) noteCandidateDigest(taskID, digest string) {
 	})
 }
 
-// noteCandidateTree records the content identity the review was about.
+// noteCapturedTree records the content identity the capture froze.
 //
-// It is measured at capture, before anything renders or judges the candidate,
-// and it is what the receipt means by ReviewedTree.
-func (e *Engine) noteCandidateTree(taskID, tree string) {
+// This is NOT the reviewed tree. Nothing has judged it yet, and a field that
+// conflated the two let the mint use a pre-review measurement while reporting
+// it as the reviewed one.
+func (e *Engine) noteCapturedTree(taskID, tree string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.reviewedTree = runreceipt.MeasuredValue(tree, "the canonical tree the review binding named")
+		f.capturedTree = runreceipt.MeasuredValue(tree, "the canonical tree the capture froze")
 	})
 }
 
@@ -222,12 +231,17 @@ func (e *Engine) noteReviewerAssigned(taskID, provider string) {
 
 // noteReviewDelivered records a bounded verdict against the attempt that gave
 // it, so the receipt's top-level review and its trail cannot disagree.
-func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest string) {
+func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest, reviewedTree string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		p := runreceipt.MeasuredValue(provider, "the provider recorded in the verdict's provenance")
 		v := runreceipt.MeasuredValue(decision, "the reviewer's own decision")
 		d := runreceipt.MeasuredValue(candidateDigest, "the candidate digest the verdict names")
 		f.provider, f.verdict, f.digest = p, v, d
+		// The reviewed tree comes from the VERDICT's envelope, so it exists
+		// only once a bounded review has come back carrying one.
+		if strings.TrimSpace(reviewedTree) != "" {
+			f.reviewedTree = runreceipt.MeasuredValue(reviewedTree, "the candidate tree the verdict's envelope names")
+		}
 		if n := len(f.attempts); n > 0 {
 			f.attempts[n-1].Provider = p
 			f.attempts[n-1].Delivery = runreceipt.DeliveryValue(runreceipt.Delivered, "the verdict this attempt returned")
@@ -439,8 +453,9 @@ func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.So
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
 }
 
-// reviewedTreeFor returns the content identity the review binding named, and
-// whether the run measured one at all.
+// reviewedTreeFor returns the content identity a DELIVERED VERDICT was bound
+// to, and whether one was delivered at all. It is deliberately not the captured
+// tree: minting is for a candidate a reviewer judged.
 func (e *Engine) reviewedTreeFor(taskID string) (string, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -449,4 +464,16 @@ func (e *Engine) reviewedTreeFor(taskID string) (string, bool) {
 		return "", false
 	}
 	return f.reviewedTree.Text, true
+}
+
+// candidateCommitFor returns the identity minted for this candidate, or "" if
+// none was. Publication uses it to push the exact accepted object.
+func (e *Engine) candidateCommitFor(taskID string) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	f, ok := e.receipts[taskID]
+	if !ok || f == nil || f.candCommit.State != runreceipt.Known {
+		return ""
+	}
+	return f.candCommit.Text
 }

@@ -836,7 +836,10 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 		// Exactly the paths the accepted candidate changed, as snapshotted at
 		// its last audit. Nothing else in the worktree is published.
 		Paths: tc.EvidenceSnapshot.ChangedPaths,
-	}, e.Config.Permissions.Push, e.Config.Permissions.LocalCommit)
+		// The object minted when the candidate was accepted. Publication pushes
+		// it and never creates one.
+		CandidateCommit: e.candidateCommitFor(taskID),
+	}, e.Config.Permissions.Push)
 	if err != nil {
 		// What already reached the remote is stated. A failed publication that
 		// pushed a branch has changed the world, and reporting only the error
@@ -1460,7 +1463,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			CandidateTree:   capture.Tree,
 		}
 		e.noteCandidateDigest(taskID, binding.CandidateDigest)
-		e.noteCandidateTree(taskID, capture.Tree)
+		e.noteCapturedTree(taskID, capture.Tree)
 		policy := e.policyFor(taskID)
 
 		// The implementer is excluded by construction, not by instruction. An
@@ -2126,6 +2129,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 				TaskID: taskID, Role: roles.Reviewer, Provider: cfg.Name,
 				SessionID: e.SessionID, SessionMode: result.Session,
 				BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+				CandidateTree:    binding.CandidateTree,
 				GraphBuildCommit: packet.Provenance.GraphBuildCommit,
 				At:               time.Now().UTC(),
 			},
@@ -2163,7 +2167,8 @@ func reviewIsInadmissible(v roles.ReviewVerdict, b roles.Binding, implementer st
 // line. A review compressed to a sentence loses the only part a worker can act
 // on, and the compression is invisible afterwards.
 func (e *Engine) reportReview(taskID string, v roles.ReviewVerdict) {
-	e.noteReviewDelivered(taskID, v.Provenance.Provider, string(v.Decision), v.Provenance.CandidateDigest)
+	e.noteReviewDelivered(taskID, v.Provenance.Provider, string(v.Decision),
+		v.Provenance.CandidateDigest, v.Provenance.CandidateTree)
 	for _, f := range v.Findings {
 		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewFinding, f.Line(), f))
 	}

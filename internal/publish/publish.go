@@ -39,6 +39,10 @@ type Request struct {
 	// untracked in the worktree, and --all committed and pushed it (#89). What
 	// is published is exactly what was judged, or nothing.
 	Paths []string
+	// CandidateCommit is the accepted candidate's canonical identity. It is
+	// minted before publication is ever offered; this package pushes it and
+	// never creates one.
+	CandidateCommit string
 }
 
 // ErrNoReviewedPaths reports a publication with nothing judged to publish.
@@ -51,9 +55,15 @@ var ErrNoReviewedPaths = errors.New("publication names no reviewed candidate pat
 // repository may not be pushed to.
 var ErrPushNotGranted = errors.New("push is not granted in .sensei-code/config.json, so no pull request was opened")
 
-// ErrCommitNotGranted reports that the candidate cannot be committed, which a
-// pull request requires.
-var ErrCommitNotGranted = errors.New("local_commit is not granted in .sensei-code/config.json, so the candidate cannot be committed")
+// ErrNoCandidateCommit reports a publication asked to push a branch that does
+// not name the accepted candidate's identity.
+//
+// Publication no longer commits. The accepted candidate is given exactly one
+// commit -- its canonical identity -- before anything reports or publishes it,
+// and this package pushes THAT object or refuses. Two commit paths would
+// eventually disagree about what was committed, which is the whole defect class
+// this work exists to remove.
+var ErrNoCandidateCommit = errors.New("the candidate branch does not name the accepted candidate's commit identity, so there is nothing to publish")
 
 // Body renders the pull request description. The change report is quoted
 // verbatim and the governance position is stated plainly, because a reader of
@@ -67,20 +77,6 @@ func (r Request) Body() string {
 	b.WriteString("- Reviewer acceptance is not correctness certification.\n")
 	b.WriteString("- Sensei Code does not merge. Landing this change is a human decision.\n")
 	return b.String()
-}
-
-// CommitArgs is the argv that commits exactly the reviewed candidate paths.
-//
-// `add --all` is deliberately absent: it stages whatever is in the worktree,
-// and the worktree can hold what the candidate does not (an excluded
-// artifact, a worker's scratch file). Staging is by explicit path, so what
-// reaches the commit is what reached the review.
-func CommitArgs(message string, paths []string) [][]string {
-	add := append([]string{"add", "--"}, paths...)
-	return [][]string{
-		add,
-		{"commit", "--message", message},
-	}
 }
 
 // PushArgs is the argv that publishes the candidate branch.
@@ -140,30 +136,39 @@ var ErrNoPullRequestURL = errors.New("gh reported success but printed no pull re
 //
 // The Result is returned on every path, including the error paths, so a partial
 // publication is recoverable by the caller rather than lost with the error.
-func Open(ctx context.Context, r Request, pushGranted, commitGranted bool) (Result, error) {
+func Open(ctx context.Context, r Request, pushGranted bool) (Result, error) {
 	var done Result
 	if !pushGranted {
 		return done, ErrPushNotGranted
-	}
-	if !commitGranted {
-		return done, ErrCommitNotGranted
 	}
 	if strings.TrimSpace(r.Branch) == "" || strings.TrimSpace(r.Workspace) == "" {
 		return done, errors.New("publication needs a candidate branch and workspace")
 	}
 	paths := make([]string, 0, len(r.Paths))
 	for _, p := range r.Paths {
-		if p = strings.TrimSpace(p); p != "" {
+		if strings.TrimSpace(p) != "" {
 			paths = append(paths, p)
 		}
 	}
 	if len(paths) == 0 {
+		// Kept from when this package committed: a publication that names
+		// nothing judged is refused rather than allowed to mean "publish
+		// whatever is there".
 		return done, ErrNoReviewedPaths
 	}
-	for _, args := range CommitArgs(r.Title, paths) {
-		if out, err := run(ctx, r.Workspace, "git", args); err != nil {
-			return done, fmt.Errorf("git %s: %s", args[0], out)
-		}
+	if strings.TrimSpace(r.CandidateCommit) == "" {
+		return done, ErrNoCandidateCommit
+	}
+	// Push the EXACT accepted object, or refuse. The branch was pointed at the
+	// candidate's identity when it was minted; if it no longer names that
+	// commit, something moved it and this is not the accepted candidate.
+	head, err := run(ctx, r.Workspace, "git", []string{"rev-parse", "HEAD"})
+	if err != nil {
+		return done, fmt.Errorf("read the candidate branch head: %s", head)
+	}
+	if strings.TrimSpace(head) != strings.TrimSpace(r.CandidateCommit) {
+		return done, fmt.Errorf("%w: the branch is at %s and the accepted candidate is %s",
+			ErrNoCandidateCommit, short12(head), short12(r.CandidateCommit))
 	}
 	done.Committed = true
 	if out, err := run(ctx, r.Workspace, "git", PushArgs(r.Branch)); err != nil {
@@ -211,4 +216,12 @@ func run(ctx context.Context, dir, name string, args []string) (string, error) {
 	cmd.Dir = dir
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err
+}
+
+func short12(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > 12 {
+		return s[:12]
+	}
+	return s
 }

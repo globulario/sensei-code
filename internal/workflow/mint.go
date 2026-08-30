@@ -38,9 +38,12 @@ var errNoLocalCommit = errors.New(
 // from the worktree and required to equal the tree the review was bound to. A
 // candidate that moved after its verdict is not the candidate that was judged.
 func (e *Engine) mintCandidateIdentity(ctx context.Context, taskID string, tc *taskContext, workspace, branch string) error {
+	// The tree a DELIVERED VERDICT was bound to -- not the one the capture
+	// froze. Minting from the capture would give an identity to content no
+	// reviewer is on record as having judged.
 	bound, ok := e.reviewedTreeFor(taskID)
 	if !ok {
-		return errors.New("no reviewed content identity was measured for this candidate, so there is nothing to mint")
+		return errors.New("no bounded review delivered a content identity for this candidate, so there is nothing to mint")
 	}
 	base := strings.TrimSpace(tc.Identity.BaseSHA)
 	if base == "" {
@@ -55,7 +58,7 @@ func (e *Engine) mintCandidateIdentity(ctx context.Context, taskID string, tc *t
 	}
 	if recap.Tree != bound {
 		return fmt.Errorf(
-			"the candidate moved after it was reviewed: the verdict was bound to tree %s and the worktree now holds %s",
+			"the candidate moved after it was reviewed: the verdict's envelope named tree %s and the worktree now holds %s",
 			shortDigest(bound), shortDigest(recap.Tree))
 	}
 

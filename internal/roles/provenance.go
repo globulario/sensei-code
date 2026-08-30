@@ -34,18 +34,19 @@ type Provenance struct {
 	// an exact candidate revision.
 	BaseSHA         string `json:"base_sha,omitempty"`
 	CandidateDigest string `json:"candidate_digest,omitempty"`
-	// CandidateTree is the exact content the verdict was reached about.
+	// CandidateTree is the exact content the artifact is about.
 	//
-	// It is ENGINE-ASSERTED, not echoed by the producer, and Mismatch therefore
-	// does not check it. That is deliberate. CandidateDigest is a deterministic
-	// function of (BaseSHA, CandidateTree) -- the capture builds the tree and
-	// renders the digest from it in one measurement -- so the digest the
-	// producer echoes already binds its verdict to this tree. Demanding a
-	// second forty-character transcription would add a failure mode without
-	// adding assurance.
+	// It is carried by the ENVELOPE, like BaseSHA and CandidateDigest: the
+	// workflow stamps all three from one binding, because a producer must not
+	// author its own identity. No model transcribes it.
 	//
-	// It is recorded because a later reader must be able to say WHAT the
-	// verdict was about without re-deriving it from an event stream.
+	// It is checked by Mismatch on the same terms as the others. Where the
+	// engine stamps both sides that check is uniform rather than probative --
+	// what it protects is an artifact that arrives from anywhere else.
+	//
+	// CandidateDigest cannot stand in for it: candidateRevision truncates
+	// SHA-256 to sixteen hex characters, which is a fine short revision label
+	// and not a substitute for a full tree identity in an exactness claim.
 	CandidateTree string `json:"candidate_tree,omitempty"`
 	// GraphBuildCommit pins the rule generation. A verdict reached under one
 	// graph and applied under another is being applied by rules it never read.
@@ -64,9 +65,7 @@ type Binding struct {
 	TaskID          string `json:"task_id"`
 	BaseSHA         string `json:"base_sha,omitempty"`
 	CandidateDigest string `json:"candidate_digest,omitempty"`
-	// CandidateTree is the content identity this artifact must be about. See
-	// Provenance.CandidateTree: it is asserted by the engine and carried, not
-	// demanded back from the producer.
+	// CandidateTree is the content identity this artifact must be about.
 	CandidateTree string `json:"candidate_tree,omitempty"`
 }
 
@@ -100,6 +99,7 @@ func (b Binding) Mismatch(p Provenance) string {
 		{"task", b.TaskID, p.TaskID},
 		{"base commit", b.BaseSHA, p.BaseSHA},
 		{"candidate revision", b.CandidateDigest, p.CandidateDigest},
+		{"candidate content", b.CandidateTree, p.CandidateTree},
 	} {
 		want := strings.TrimSpace(check.want)
 		if want == "" {

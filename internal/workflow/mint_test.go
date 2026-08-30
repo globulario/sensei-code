@@ -51,7 +51,9 @@ func TestAnAcceptedCandidateAcquiresAnExactIdentity(t *testing.T) {
 	}
 	e := mintEngine(repo, true)
 	e.beginReceipt("task-1")
-	e.noteCandidateTree("task-1", cap.Tree)
+	e.noteCapturedTree("task-1", cap.Tree)
+	// A DELIVERED verdict is what makes a tree the reviewed one.
+	e.noteReviewDelivered("task-1", "codex", "accept", "d1", cap.Tree)
 	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
 
 	if err := e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, ""); err != nil {
@@ -85,7 +87,9 @@ func TestMintingRefusesWhereLocalCommitIsNotGranted(t *testing.T) {
 	}
 	e := mintEngine(repo, false)
 	e.beginReceipt("task-1")
-	e.noteCandidateTree("task-1", cap.Tree)
+	e.noteCapturedTree("task-1", cap.Tree)
+	// A DELIVERED verdict is what makes a tree the reviewed one.
+	e.noteReviewDelivered("task-1", "codex", "accept", "d1", cap.Tree)
 	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
 
 	err = e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, "")
@@ -109,7 +113,9 @@ func TestACandidateThatMovedAfterReviewIsRefused(t *testing.T) {
 	}
 	e := mintEngine(repo, true)
 	e.beginReceipt("task-1")
-	e.noteCandidateTree("task-1", cap.Tree)
+	e.noteCapturedTree("task-1", cap.Tree)
+	// A DELIVERED verdict is what makes a tree the reviewed one.
+	e.noteReviewDelivered("task-1", "codex", "accept", "d1", cap.Tree)
 	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
 
 	// Somebody edits the worktree between the verdict and the mint.
@@ -141,3 +147,49 @@ func candidateIdentityWithBase(base string) candidate.Identity {
 }
 
 var _ = config.Agent{}
+
+// A captured tree is not a reviewed one. Minting from the capture would give an
+// identity to content no reviewer is on record as having judged.
+func TestACapturedButUnreviewedTreeCannotBeMinted(t *testing.T) {
+	ctx := context.Background()
+	repo, base := mintRepo(t)
+	os.WriteFile(filepath.Join(repo.Root, "main.go"), []byte("package main\n\nfunc main() { println(1) }\n"), 0o644)
+	cap, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := mintEngine(repo, true)
+	e.beginReceipt("task-1")
+	e.noteCapturedTree("task-1", cap.Tree) // captured, never reviewed
+	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
+
+	if err := e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, ""); err == nil {
+		t.Fatal("a captured tree was minted without any delivered review")
+	}
+}
+
+// The tree the mint uses is the one the VERDICT's envelope named, not the one
+// the capture happened to freeze.
+func TestTheMintUsesTheVerdictsTreeNotTheCaptures(t *testing.T) {
+	ctx := context.Background()
+	repo, base := mintRepo(t)
+	os.WriteFile(filepath.Join(repo.Root, "main.go"), []byte("package main\n\nfunc main() { println(1) }\n"), 0o644)
+	cap, err := repo.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := mintEngine(repo, true)
+	e.beginReceipt("task-1")
+	e.noteCapturedTree("task-1", cap.Tree)
+	// A verdict bound to a DIFFERENT tree must not be satisfied by the capture.
+	e.noteReviewDelivered("task-1", "codex", "accept", "d1", strings.Repeat("9", 40))
+	tc := &taskContext{Identity: candidateIdentityWithBase(base)}
+
+	err = e.mintCandidateIdentity(ctx, "task-1", tc, repo.Root, "")
+	if err == nil {
+		t.Fatal("the mint fell back to the captured tree when the verdict named another")
+	}
+	if !strings.Contains(err.Error(), "moved after it was reviewed") {
+		t.Errorf("got %v", err)
+	}
+}

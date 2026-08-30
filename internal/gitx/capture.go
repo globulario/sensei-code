@@ -86,6 +86,20 @@ type Capture struct {
 	Paths []string
 }
 
+// RenderCandidateDiff is the ONE rendering of a candidate.
+//
+// Capture uses it to produce what the reviewer reads, and any later comparison
+// -- diff(B,C) against diff(B,T) -- must call this rather than reassemble an
+// equivalent command line. Two command lines that are equivalent today are two
+// things that can drift apart tomorrow, and the whole point of the comparison
+// is that a difference means something.
+//
+// Text only: `--binary` would inline every kept binary as a patch, which is
+// exactly the payload nobody can judge and every transport refuses.
+func (r Repo) RenderCandidateDiff(ctx context.Context, base, treeish string) (string, error) {
+	return r.raw(ctx, "diff", "--no-ext-diff", base, treeish, "--")
+}
+
 // validateBoundaryAgainstTree re-asks the artifact question of the frozen tree.
 //
 // Every load-bearing claim must ultimately refer to T: if T is the content
@@ -332,10 +346,9 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		return Capture{}, err
 	}
 
-	// The review representation, rendered FROM the tree. Text only: `--binary`
-	// would inline every kept binary as a patch, which is exactly the payload
-	// nobody can judge and every transport refuses.
-	diff, err := r.raw(ctx, "diff", "--no-ext-diff", base, cap.Tree, "--")
+	// The review representation, rendered FROM the tree, through the ONE
+	// renderer any later comparison must also use.
+	diff, err := r.RenderCandidateDiff(ctx, base, cap.Tree)
 	if err != nil {
 		return Capture{}, err
 	}

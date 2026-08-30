@@ -11,11 +11,13 @@ import (
 )
 
 func TestPublicationRefusedWithoutTheCapability(t *testing.T) {
-	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w"}, false, true); err != ErrPushNotGranted {
+	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w"}, false); err != ErrPushNotGranted {
 		t.Fatalf("err = %v, want ErrPushNotGranted", err)
 	}
-	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w"}, true, false); err != ErrCommitNotGranted {
-		t.Fatalf("err = %v, want ErrCommitNotGranted", err)
+	// The local_commit capability is no longer checked here: this package does
+	// not commit. It is enforced where the act now happens, at the mint.
+	if _, err := Open(context.Background(), Request{Branch: "b", Workspace: "/w", Paths: []string{"a.go"}}, true); !errors.Is(err, ErrNoCandidateCommit) {
+		t.Fatalf("err = %v, want ErrNoCandidateCommit", err)
 	}
 }
 
@@ -92,9 +94,12 @@ func TestCommitAndPushReachARealRemote(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, args := range CommitArgs("add a thing", []string{"new.txt"}) {
-		git(work, args...)
-	}
+	// The candidate's identity is minted BEFORE publication now, so the fixture
+	// commits exactly the reviewed path the way the mint does -- scoped, never
+	// sweeping. The scoping guarantee itself is tested in internal/gitx, where
+	// the canonical tree is built.
+	git(work, "add", "--", "new.txt")
+	git(work, "commit", "--message", "add a thing")
 	git(work, PushArgs("sensei-code/task-1/claude")...)
 
 	branches := git(root, "--git-dir", remote, "branch", "--list")
@@ -113,11 +118,11 @@ func TestCommitAndPushReachARealRemote(t *testing.T) {
 // Publication with nothing judged publishes nothing. Sweeping the worktree
 // instead is exactly how an excluded artifact reached a remote.
 func TestPublicationRefusesToSweepTheWorktree(t *testing.T) {
-	_, err := Open(context.Background(), Request{Workspace: t.TempDir(), Branch: "b", Title: "t"}, true, true)
+	_, err := Open(context.Background(), Request{Workspace: t.TempDir(), Branch: "b", Title: "t"}, true)
 	if !errors.Is(err, ErrNoReviewedPaths) {
 		t.Fatalf("a publication with no reviewed paths was not refused: %v", err)
 	}
-	for _, args := range CommitArgs("m", []string{"a.go", "b.go"}) {
+	for _, args := range [][]string{{"add", "--", "a.go", "b.go"}, {"commit", "--message", "m"}} {
 		for _, a := range args {
 			if a == "--all" || a == "-A" || a == "." {
 				t.Fatalf("commit args sweep the worktree: %v", args)
@@ -179,5 +184,51 @@ func TestAPartialPublicationReportsWhatReachedTheRemote(t *testing.T) {
 	}
 	if !(Result{URL: "https://x/pull/1"}).Opened() {
 		t.Error("a URL does not report as opened")
+	}
+}
+
+// TestPublicationNeverCommits is the ownership boundary as a gate.
+//
+// The accepted candidate is given exactly ONE commit -- its canonical identity,
+// minted before anything reports or publishes it. Two commit paths would
+// eventually disagree about what was committed.
+func TestPublicationNeverCommits(t *testing.T) {
+	src, err := os.ReadFile("publish.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{`"commit"`, "commit-tree", "hash-object"} {
+		if strings.Contains(string(src), forbidden) {
+			t.Errorf("publish.go invokes %s: publication pushes the accepted object and never creates one", forbidden)
+		}
+	}
+}
+
+// Publication pushes the EXACT accepted object, or refuses.
+func TestPublicationRefusesABranchThatIsNotTheAcceptedCandidate(t *testing.T) {
+	root := t.TempDir()
+	work := filepath.Join(root, "w")
+	git := func(dir string, args ...string) string {
+		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	os.MkdirAll(work, 0o755)
+	git(work, "init", "-q")
+	git(work, "config", "user.email", "t@t")
+	git(work, "config", "user.name", "t")
+	os.WriteFile(filepath.Join(work, "a.go"), []byte("package a\n"), 0o644)
+	git(work, "add", "-A")
+	git(work, "commit", "-q", "-m", "one")
+
+	_, err := Open(context.Background(), Request{
+		Workspace: work, Branch: "b", Title: "t",
+		Paths:           []string{"a.go"},
+		CandidateCommit: strings.Repeat("0", 40),
+	}, true)
+	if !errors.Is(err, ErrNoCandidateCommit) {
+		t.Fatalf("a branch that is not the accepted candidate was published: %v", err)
 	}
 }

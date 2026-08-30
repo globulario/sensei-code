@@ -182,7 +182,7 @@ func TestTheEngineNeverInfersAReviewItDidNotMeasure(t *testing.T) {
 	if len(r.Attempts) != 1 || r.Attempts[0].DeliveredVerdict() {
 		t.Fatalf("attempts = %+v: an assigned reviewer that never returned has not delivered", r.Attempts)
 	}
-	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f0")
+	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f0", "")
 	if got := e.reviewedOutcome("task-1"); got != runreceipt.OutcomeAccepted {
 		t.Fatalf("outcome = %s after a measured acceptance", got)
 	}
@@ -205,7 +205,7 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 	e.noteCandidateCreated("task-1")
 	e.noteCandidateDigest("task-1", "b4f471f096d13f2b")
 	e.noteReviewerAssigned("task-1", "codex")
-	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f096d13f2b")
+	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f096d13f2b", "")
 
 	r := e.emitReceipt("task-1", event.WorkflowFailed, e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
 	if r.CandidateState != runreceipt.CandidatePresent || r.Outcome != runreceipt.OutcomeAccepted {
