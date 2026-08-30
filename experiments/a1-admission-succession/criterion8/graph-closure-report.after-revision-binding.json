@@ -1,0 +1,16 @@
+{
+  "domain": "github.com/globulario/sensei-code",
+  "certified_source_root": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/M/docs/awareness",
+  "marker_digest_sha256": "367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9",
+  "source_identities": 40,
+  "expected_to_project": 40,
+  "identities_projected": 40,
+  "identities_missing": 0,
+  "identities_explicitly_excluded": 159,
+  "unexpected_foreign_provenance": 0,
+  "unresolved_attribution": 0,
+  "class_emits_no_provenance": 3,
+  "duplicate_canonical_subjects": 0,
+  "published_triples": 164839,
+  "closure_proven": true
+}

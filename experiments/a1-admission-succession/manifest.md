@@ -496,3 +496,87 @@ STATE LEFT BEHIND, and how to undo it. The live store's sensei-code slice was
 replaced (164506 -> 164587 triples) under the owner's explicit authorisation.
 The whole store was snapshotted beforehand and can be restored. The owner's
 :10122 process was NOT restarted and NOT reconfigured.
+
+## Criterion 8: PASS. All three identities close, and the testimony arrow is gone.
+
+The gap #128 found was a missing capability, not a broken digest. It was
+repaired in globulario/sensei as `feat/domain-publication-receipt` (da29a0e7),
+NOT by weakening criterion 8 and NOT by editing any evidence artifact.
+
+WHAT WAS BUILT. Revision provenance as a first-class PER-DOMAIN publication
+identity. Not on the whole-store marker: the store is multi-domain and one
+generation covers every domain in it, so a revision stamped there would be a
+lie about all but one.
+
+  GENERATION IS NOT A FIELD OF THE RECEIPT, for a structural reason. The
+  generation digest is computed over content that CONTAINS the receipt, so a
+  receipt naming its generation would have to be hashed before it existed. The
+  binding is inverted, and is stronger:
+
+      the receipt commits to the revision      (its own digest)
+      the generation commits to the receipt    (by containing it)
+
+  Neither half is self-referential; neither can change without breaking the
+  other. Closure is omitted for the same class of reason -- it is proven after
+  promotion, so a receipt could only ever say PENDING, a value that becomes
+  false the moment the proof lands and is never revised.
+
+  CLEAN_EXACT IS EARNED: resolvable HEAD, resolvable tree for the source root,
+  and no uncommitted change under that root INCLUDING UNTRACKED FILES. A
+  publication that compiled an untracked YAML did not come from the commit it
+  names, and that difference is invisible in the compiled output.
+
+THE THREE IDENTITIES, measured
+
+  1 SOURCE IDENTITY                                                  PASS
+      Read back from the authoritative store, then RECOMPUTED: the per-domain
+      pointer resolves to a receipt whose fields hash to the IRI it is stored
+      under.
+        revision  f6b4755ff4d12591e9e802b2094b16a938260cc2
+        state     CLEAN_EXACT
+        tree      ad916f771bbc07523c92ff299c27af53c852aacd
+        content   cff0d6113939b6f986b873dffad22847491669d903d1254386ef57c18cdf9c23
+        receipts retained: 2  (history preserved, not repainted)
+
+  2 PUBLISHED IDENTITY                                               PASS
+        generation 367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9
+        164839 triples, closure PROVEN 40/40
+        IDEMPOTENT: three consecutive publishes of identical state left the
+        count at 164839 -> 164839 -> 164839, so receipts do not grow without
+        bound while a CHANGED state still adds one and keeps the old.
+
+  3 SERVING IDENTITY                                                 PASS
+        the CONFIGURED endpoint -- localhost:10122, unchanged, same process,
+        same flags -- answers with live graph digest 367a4c6d..., 164839
+        triples, freshness "live store matches expected validated graph
+        artifact".
+
+  The chain now reads, with no testimony arrow anywhere in it:
+
+      serving --[digest 367a4c6d]--> generation --[containment]--> receipt
+              --[receipt digest]--> revision f6b4755
+
+A CORRECTION TO THIS RECORD. It previously said :10122 "pinned its expected
+marker at startup". That was wrong. The process re-validates: without being
+restarted it moved from stale to current on its own once the store held a
+generation it could verify. Its earlier stale answer was a correct refusal of a
+specific unverifiable state, not a permanent pin, and the authorised restart
+turned out to be unnecessary. It was never performed.
+
+WHAT DOES NOT YET EXIST, stated rather than glossed. The server's typed query
+API has a closed class vocabulary with no member for a publication receipt, so
+the serving process cannot be ASKED for its revision provenance -- `sensei
+query --mode by_id` on the receipt IRI returns `unsupported class "https"`.
+The binding is cryptographic and complete; the read path is the store, not the
+server's typed surface. A governed execution that wants to state which world it
+inherited must currently read the store directly. That is an ergonomic gap and
+it is the natural next piece of work.
+
+Two pre-existing conditions, neither caused by this change and neither hidden:
+  - the sensei domain reports UNPROVEN because no prior closure proof exists
+    for it to carry forward; receipts are untagged and SliceDigest counts only
+    tagged subjects, so they cannot have caused it;
+  - cmd/awg's TestThePromotionGateAdmitsOnlyIndependentlyVerifiedEvidence fails
+    identically on clean main and on this branch.
+
+CRITERION 9 IS NOT ATTEMPTED. Succession is NOT declared.
