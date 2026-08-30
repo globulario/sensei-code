@@ -176,6 +176,10 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 			provider := text(payload, "provider", "event:agent.role.assigned.payload.provider")
 			pending = &runreceipt.Attempt{
 				Provider: provider,
+				// The historical stream does not state whether a superseded
+				// attempt failed or was abandoned, and the adapter does not
+				// infer. Only a delivered verdict is measurable from it.
+				Delivery: runreceipt.UnknownValue("the event stream does not record whether this attempt delivered"),
 				Verdict:  runreceipt.UnknownValue("this attempt produced no verdict"),
 				Digest:   runreceipt.UnknownValue("this attempt produced no verdict"),
 			}
@@ -193,7 +197,7 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 			if pending == nil {
 				pending = &runreceipt.Attempt{Provider: runreceipt.UnknownValue("no role assignment preceded this verdict")}
 			}
-			pending.Delivered = true
+			pending.Delivery = runreceipt.DeliveryValue(runreceipt.Delivered, "event:review.completed")
 			pending.Verdict = verdict
 			pending.Digest = digest
 			if provider.State == runreceipt.Known {

@@ -178,10 +178,10 @@ func completeReceipt() Receipt {
 		ReviewVerdict:        MeasuredValue("accept", "event:review.completed.payload.decision"),
 		ReviewedDigest:       MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
 		Attempts: []Attempt{{
-			Provider:  MeasuredValue("codex", "event:agent.role.assigned.payload.provider"),
-			Delivered: true,
-			Verdict:   MeasuredValue("accept", "event:review.completed.payload.decision"),
-			Digest:    MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
+			Provider: MeasuredValue("codex", "event:agent.role.assigned.payload.provider"),
+			Delivery: DeliveryValue(Delivered, "event:review.completed"),
+			Verdict:  MeasuredValue("accept", "event:review.completed.payload.decision"),
+			Digest:   MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
 		}},
 		GovernorCommit:       MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "governor self-report"),
 		GovernorBinarySHA256: MeasuredValue("7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea", "sha256:/path/to/governor"),
@@ -344,5 +344,107 @@ func TestARequiredUnsupportedFieldIsReportedAsUnsupported(t *testing.T) {
 	}
 	if kind != MismatchRecordedUnsupported {
 		t.Fatalf("graph_digest kind = %q, want RECORDED_UNSUPPORTED: collapsing it into RECORDED_UNKNOWN brings back prose-parsing", kind)
+	}
+}
+
+// --- review binding: the last cluster ---
+
+// TestDeliveryIsMeasuredNotABoolean closes the one place a raw Go zero value
+// was still doing evidentiary work. `Delivered: false` could not distinguish a
+// measured non-delivery from a field nobody set.
+func TestDeliveryIsMeasuredNotABoolean(t *testing.T) {
+	if (Attempt{}).DeliveredVerdict() {
+		t.Fatal("an unset attempt must not read as having delivered")
+	}
+	rec := completeReceipt()
+	rec.Attempts[0].Delivery = Value{Text: string(Delivered), State: Known} // no source
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "attempts[0].delivery") {
+		t.Fatalf("a sourceless delivery claim = %s %v", state, missing)
+	}
+	rec = completeReceipt()
+	rec.Attempts[0].Delivery = DeliveryValue(DeliveryUnsaid, "the stream does not say")
+	if state, _ := rec.Completeness(); state != Incomplete {
+		t.Fatal("UNKNOWN delivery must never satisfy a bounded-review requirement")
+	}
+	rec = completeReceipt()
+	rec.Attempts[0].Delivery = MeasuredValue("SORT_OF", "somewhere")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "not a value this schema defines") {
+		t.Fatalf("delivery membership = %s %v", state, missing)
+	}
+}
+
+// TestTheDeliveredAttemptMustBeTheOneTheReceiptDescribes: it is not enough that
+// SOME attempt delivered. One measured fact must not support a different claim.
+func TestTheDeliveredAttemptMustBeTheOneTheReceiptDescribes(t *testing.T) {
+	for _, diverge := range []string{"provider", "verdict", "digest"} {
+		rec := completeReceipt()
+		switch diverge {
+		case "provider":
+			rec.Attempts[0].Provider = MeasuredValue("gemini", "event:agent.role.assigned.payload.provider")
+		case "verdict":
+			rec.Attempts[0].Verdict = MeasuredValue("revise", "event:review.completed.payload.decision")
+		case "digest":
+			rec.Attempts[0].Digest = MeasuredValue("BBBB", "event:review.completed.payload.provenance.candidate_digest")
+		}
+		state, missing := rec.Completeness()
+		if state != Incomplete {
+			t.Fatalf("attempt diverging in %s yielded %s: the delivering attempt must be the one described", diverge, state)
+		}
+		if !strings.Contains(strings.Join(missing, " "), "no DELIVERED attempt carries the same") {
+			t.Errorf("%s: missing = %v", diverge, missing)
+		}
+	}
+}
+
+func TestTheReviewVocabularyIsClosedAndBoundToTheOutcome(t *testing.T) {
+	rec := completeReceipt()
+	rec.ReviewVerdict = MeasuredValue("banana", "event:review.completed.payload.decision")
+	rec.Attempts[0].Verdict = MeasuredValue("banana", "event:review.completed.payload.decision")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "closed review vocabulary") {
+		t.Fatalf("an invented decision = %s %v", state, missing)
+	}
+	// ACCEPTED must mean the reviewer said accept.
+	rec = completeReceipt()
+	rec.ReviewVerdict = MeasuredValue("revise", "event:review.completed.payload.decision")
+	rec.Attempts[0].Verdict = MeasuredValue("revise", "event:review.completed.payload.decision")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "ACCEPTED while the review decision") {
+		t.Fatalf("ACCEPTED with a revise decision = %s %v", state, missing)
+	}
+	// REFUSED covers revise and escalate, and only those.
+	for _, d := range []ReviewDecision{DecisionRevise, DecisionEscalate} {
+		rec := completeReceipt()
+		rec.Outcome = OutcomeRefused
+		rec.ReviewVerdict = MeasuredValue(string(d), "event:review.completed.payload.decision")
+		rec.Attempts[0].Verdict = MeasuredValue(string(d), "event:review.completed.payload.decision")
+		if state, missing := rec.Completeness(); state != Complete {
+			t.Fatalf("REFUSED/%s = %s %v", d, state, missing)
+		}
+	}
+	rec = completeReceipt()
+	rec.Outcome = OutcomeRefused // verdict is still "accept"
+	if state, _ := rec.Completeness(); state != Incomplete {
+		t.Fatal("REFUSED with an accept decision must not be complete")
+	}
+}
+
+func TestClaimingNoCandidateRequiresTheAbsenceToBeReadable(t *testing.T) {
+	for _, st := range []Knownness{Malformed, Unsupported} {
+		rec := completeReceipt()
+		rec.CandidateState = CandidateNone
+		rec.CandidateCommit = Value{State: st, Detail: "unreadable"}
+		rec.CandidateTree = UnknownValue("no candidate")
+		rec.CandidateFirstParent = UnknownValue("no candidate")
+		rec.CandidateDigest = UnknownValue("no candidate")
+		state, missing := rec.Completeness()
+		if state != Incomplete {
+			t.Fatalf("NONE with a %s candidate field yielded %s: an instrument that cannot read the thing may not claim it does not exist", st, state)
+		}
+		if !strings.Contains(strings.Join(missing, " "), "not unreadable") {
+			t.Errorf("%s: missing = %v", st, missing)
+		}
 	}
 }

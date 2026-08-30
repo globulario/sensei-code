@@ -126,6 +126,60 @@ func (c CandidateState) Valid() bool {
 	return false
 }
 
+// ReviewDecision is the closed vocabulary a bounded review may return.
+//
+// It mirrors internal/roles.Decision deliberately rather than importing it: a
+// serialization schema that borrows a live internal type changes meaning
+// whenever that type does, silently. The two are held equal by
+// TestTheReceiptVocabularyMatchesTheReviewerContract, so drift is caught
+// mechanically instead of avoided by coupling.
+type ReviewDecision string
+
+const (
+	DecisionAccept   ReviewDecision = "accept"
+	DecisionRevise   ReviewDecision = "revise"
+	DecisionEscalate ReviewDecision = "escalate"
+)
+
+// Valid reads membership by enumeration. A verdict outside the vocabulary is
+// not a new kind of review; it is an invalid record of one.
+func (d ReviewDecision) Valid() bool {
+	switch d {
+	case DecisionAccept, DecisionRevise, DecisionEscalate:
+		return true
+	}
+	return false
+}
+
+// DeliveryState is whether one reviewer attempt actually produced a verdict.
+//
+// It was a raw bool, which escaped the law every other fact obeys: `true`
+// needed no source, and `false` could not distinguish "measured: this provider
+// did not deliver" from "nobody set this field". It is load-bearing -- a
+// bounded outcome is only believable if some attempt delivered -- so it is
+// measured like everything else.
+type DeliveryState string
+
+const (
+	Delivered      DeliveryState = "DELIVERED"
+	NotDelivered   DeliveryState = "NOT_DELIVERED"
+	DeliveryUnsaid DeliveryState = "UNKNOWN"
+)
+
+// Valid reads membership by enumeration.
+func (d DeliveryState) Valid() bool {
+	switch d {
+	case Delivered, NotDelivered, DeliveryUnsaid:
+		return true
+	}
+	return false
+}
+
+// DeliveryValue records a measured delivery state with its source.
+func DeliveryValue(state DeliveryState, source string) Value {
+	return MeasuredValue(string(state), source)
+}
+
 // Knownness is how a single fact stands in the record. Every read of untrusted
 // input lands on exactly one of these, so no input shape can crash extraction.
 type Knownness string
@@ -218,11 +272,20 @@ func MalformedValue(detail string) Value { return Value{State: Malformed, Detail
 // only the provider that answered would say a different provider reviewed than
 // the one that did.
 type Attempt struct {
-	Provider   Value  `json:"provider"`
-	Delivered  bool   `json:"delivered"`
+	Provider Value `json:"provider"`
+	// Delivery carries a DeliveryState, measured like any other fact. UNKNOWN
+	// never satisfies a bounded-review requirement.
+	Delivery   Value  `json:"delivery"`
 	Verdict    Value  `json:"verdict"`
 	Digest     Value  `json:"reviewed_digest"`
 	Diagnostic string `json:"diagnostic,omitempty"`
+}
+
+// DeliveredVerdict reports whether this attempt is MEASURED to have delivered.
+// Anything else -- not delivered, unsaid, unmeasured, or a state outside the
+// vocabulary -- is not a delivery.
+func (a Attempt) DeliveredVerdict() bool {
+	return a.Delivery.State == Known && DeliveryState(a.Delivery.Text) == Delivered
 }
 
 // Receipt is one governed run's account of itself.
@@ -349,8 +412,15 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	for i, a := range r.Attempts {
 		p := fmt.Sprintf("attempts[%d]", i)
 		missing = append(missing, validateValue(p+".provider", a.Provider)...)
+		missing = append(missing, validateValue(p+".delivery", a.Delivery)...)
 		missing = append(missing, validateValue(p+".verdict", a.Verdict)...)
 		missing = append(missing, validateValue(p+".reviewed_digest", a.Digest)...)
+		if a.Delivery.State == Known && !DeliveryState(a.Delivery.Text).Valid() {
+			missing = append(missing, fmt.Sprintf("%s.delivery %q is not a value this schema defines", p, a.Delivery.Text))
+		}
+		if a.Verdict.State == Known && !ReviewDecision(a.Verdict.Text).Valid() {
+			missing = append(missing, fmt.Sprintf("%s.verdict %q is outside the closed review vocabulary", p, a.Verdict.Text))
+		}
 	}
 
 	// The candidate axis, and its cross-check. A receipt that names a candidate
@@ -362,9 +432,24 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	case r.CandidateState == CandidateUnknown:
 		missing = append(missing, "candidate_state UNKNOWN: a record that cannot say whether a candidate exists is not complete")
 	case r.CandidateState == CandidateNone:
+		// NONE is a POSITIVE claim that no candidate exists, so every piece of
+		// candidate evidence must be an explicitly recorded absence. MALFORMED
+		// or UNSUPPORTED means the instrument could not read the thing it is
+		// claiming does not exist, and it may not make that claim.
 		for _, f := range r.Fields() {
-			if strings.HasPrefix(f.Name, "candidate_") && f.Value.State == Known {
-				missing = append(missing, fmt.Sprintf("%s is measured while candidate_state is NONE: the condition contradicts the evidence", f.Name))
+			if !strings.HasPrefix(f.Name, "candidate_") {
+				continue
+			}
+			switch f.Value.State {
+			case Unknown:
+				// The absence is recorded, which is what NONE asserts.
+			case Known:
+				missing = append(missing, fmt.Sprintf(
+					"%s is measured while candidate_state is NONE: the condition contradicts the evidence", f.Name))
+			default:
+				missing = append(missing, fmt.Sprintf(
+					"%s is %s while candidate_state is NONE: claiming no candidate requires the absence to be recorded, not unreadable",
+					f.Name, f.Value.State))
 			}
 		}
 	}
@@ -378,16 +463,7 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	case !r.Outcome.SufficientForComplete():
 		missing = append(missing, "outcome UNKNOWN: a record that cannot say what happened is not complete")
 	case r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused:
-		// A bounded verdict was claimed, so somebody must have delivered one.
-		delivered := false
-		for _, a := range r.Attempts {
-			if a.Delivered {
-				delivered = true
-			}
-		}
-		if !delivered {
-			missing = append(missing, fmt.Sprintf("outcome %s claims a bounded verdict but no reviewer attempt delivered one", r.Outcome))
-		}
+		missing = append(missing, r.checkBoundedReview()...)
 	case r.Outcome == OutcomeUnreviewed && r.ReviewVerdict.State == Known:
 		missing = append(missing, "outcome UNREVIEWED while a bounded verdict is recorded: the condition contradicts the evidence")
 	}
@@ -397,6 +473,47 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		return Incomplete, missing
 	}
 	return Complete, nil
+}
+
+// checkBoundedReview holds the review binding.
+//
+// An ACCEPTED or REFUSED receipt asserts that a named reviewer returned a
+// particular decision about a particular candidate revision. It is not enough
+// that SOME attempt delivered and that the top-level fields are populated: one
+// measured fact must not support a different claim. The delivering attempt has
+// to be THE one the receipt is talking about.
+func (r Receipt) checkBoundedReview() []string {
+	var missing []string
+	decision := ReviewDecision(r.ReviewVerdict.Text)
+	if r.ReviewVerdict.State == Known {
+		if !decision.Valid() {
+			missing = append(missing, fmt.Sprintf("review_verdict %q is outside the closed review vocabulary (accept, revise, escalate)", r.ReviewVerdict.Text))
+		} else {
+			switch {
+			case r.Outcome == OutcomeAccepted && decision != DecisionAccept:
+				missing = append(missing, fmt.Sprintf("outcome ACCEPTED while the review decision is %q", decision))
+			case r.Outcome == OutcomeRefused && decision == DecisionAccept:
+				missing = append(missing, "outcome REFUSED while the review decision is \"accept\"")
+			}
+		}
+	}
+	bound := false
+	for _, a := range r.Attempts {
+		if !a.DeliveredVerdict() {
+			continue
+		}
+		if a.Provider.Text == r.ReviewerProvider.Text &&
+			a.Verdict.Text == r.ReviewVerdict.Text &&
+			a.Digest.Text == r.ReviewedDigest.Text {
+			bound = true
+		}
+	}
+	if !bound {
+		missing = append(missing, fmt.Sprintf(
+			"outcome %s claims a bounded verdict, but no DELIVERED attempt carries the same provider, decision and reviewed digest as the receipt",
+			r.Outcome))
+	}
+	return missing
 }
 
 // validateValue holds the two rules every recorded fact obeys, wherever it

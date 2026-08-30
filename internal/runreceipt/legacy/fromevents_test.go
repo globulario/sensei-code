@@ -168,11 +168,16 @@ func TestTheReviewerTrailKeepsAFailedAttemptBesideTheDeliveringOne(t *testing.T)
 	if len(rec.Attempts) != 2 {
 		t.Fatalf("attempts = %d, want both the failed and the delivering provider", len(rec.Attempts))
 	}
-	if rec.Attempts[0].Provider.Text != "codex" || rec.Attempts[0].Delivered {
-		t.Errorf("first attempt = %+v, want codex undelivered", rec.Attempts[0])
+	if rec.Attempts[0].Provider.Text != "codex" || rec.Attempts[0].DeliveredVerdict() {
+		t.Errorf("first attempt = %+v, want codex not measured as delivering", rec.Attempts[0])
 	}
-	if rec.Attempts[1].Provider.Text != "gemini" || !rec.Attempts[1].Delivered {
-		t.Errorf("second attempt = %+v, want gemini delivered", rec.Attempts[1])
+	// The adapter must not INFER that the superseded attempt failed: the stream
+	// records a replacement, not a failure.
+	if rec.Attempts[0].Delivery.State != runreceipt.Unknown {
+		t.Errorf("first attempt delivery = %v, want UNKNOWN rather than an inferred failure", rec.Attempts[0].Delivery)
+	}
+	if rec.Attempts[1].Provider.Text != "gemini" || !rec.Attempts[1].DeliveredVerdict() {
+		t.Errorf("second attempt = %+v, want gemini measured as delivering", rec.Attempts[1])
 	}
 }
 
