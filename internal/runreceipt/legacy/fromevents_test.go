@@ -58,12 +58,24 @@ func TestTheBaselineCorpusIsPresentAndUnchanged(t *testing.T) {
 	}
 }
 
-func TestTheRealCorpusNeverCrashesTheReader(t *testing.T) {
+// TestEveryPreservedLogIsTotallyReadable is the totality contract over ALL
+// preserved logs, pinned and discovered alike.
+//
+// It asserts only what totality means: no crash, every field in a state this
+// schema defines, and a valid outcome. It deliberately asserts NOTHING about
+// content, because discovery reaches runs that are legitimately incomplete --
+// W1.void1-operator.log is a void run that never reached a binding revision,
+// and demanding a base commit from it would be asserting that reality should
+// have been tidier.
+func TestEveryPreservedLogIsTotallyReadable(t *testing.T) {
 	paths := discovered(t)
 	for path := range baseline {
 		paths = append(paths, path)
 	}
 	sort.Strings(paths)
+	if len(paths) < len(baseline) {
+		t.Fatalf("only %d preserved log(s) found; the baseline alone is %d", len(paths), len(baseline))
+	}
 	for _, path := range paths {
 		f, err := os.Open(path)
 		if err != nil {
@@ -72,21 +84,49 @@ func TestTheRealCorpusNeverCrashesTheReader(t *testing.T) {
 		rec := FromEvents(f)
 		f.Close()
 		for _, fl := range rec.Fields() {
-			switch fl.Value.State {
-			case runreceipt.Known, runreceipt.Unknown, runreceipt.Malformed, runreceipt.Unsupported:
-			default:
+			if !fl.Value.State.Valid() {
 				t.Fatalf("%s left %s in state %q", path, fl.Name, fl.Value.State)
 			}
 		}
-		if rec.BaseCommit.State != runreceipt.Known {
-			t.Errorf("%s: base commit %s (%s)", path, rec.BaseCommit.State, rec.BaseCommit.Detail)
+		for i, a := range rec.Attempts {
+			for name, v := range map[string]runreceipt.Value{"provider": a.Provider, "delivery": a.Delivery, "verdict": a.Verdict, "digest": a.Digest} {
+				if !v.State.Valid() {
+					t.Fatalf("%s attempts[%d].%s state %q", path, i, name, v.State)
+				}
+			}
+		}
+		if !rec.Outcome.Valid() || !rec.CandidateState.Valid() {
+			t.Fatalf("%s: outcome %q candidate_state %q", path, rec.Outcome, rec.CandidateState)
 		}
 		// Deliberately NOT logging rec.Outcome. C5 is a VOID witness and its
 		// semantic content is inadmissible as evidence about that run; a
 		// passing test's output is exactly where an inadmissible fact would
-		// acquire a citable home. The corpus proves the reader is total, not
-		// what those runs did.
-		t.Logf("%s -> base=%s attempts=%d diagnostics=%d", path, rec.BaseCommit.Text, len(rec.Attempts), len(rec.Diagnostics))
+		// acquire a citable home.
+		t.Logf("%s -> attempts=%d diagnostics=%d", path, len(rec.Attempts), len(rec.Diagnostics))
+	}
+}
+
+// TestThePinnedBaselineStillYieldsMeasurements is the content assertion, and it
+// applies only to the two full runs the baseline pins. If the reader ever stops
+// finding what these logs demonstrably contain, that is a regression in the
+// reader rather than a fact about a run that ended early.
+func TestThePinnedBaselineStillYieldsMeasurements(t *testing.T) {
+	for path := range baseline {
+		f, err := os.Open(path)
+		if err != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		rec := FromEvents(f)
+		f.Close()
+		if rec.BaseCommit.State != runreceipt.Known {
+			t.Errorf("%s: base commit %s (%s)", path, rec.BaseCommit.State, rec.BaseCommit.Detail)
+		}
+		if rec.GraphDigest.State != runreceipt.Known {
+			t.Errorf("%s: graph digest %s (%s)", path, rec.GraphDigest.State, rec.GraphDigest.Detail)
+		}
+		if rec.BaseCommit.State == runreceipt.Known && strings.TrimSpace(rec.BaseCommit.Source) == "" {
+			t.Errorf("%s: a measured base commit with no source", path)
+		}
 	}
 }
 
