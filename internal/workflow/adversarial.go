@@ -154,7 +154,11 @@ func (e *Engine) recordReconciliation(taskID string, binding roles.Binding, r ro
 		TaskID: taskID, Role: roles.Architect,
 		Provider: e.Config.Architect.Name, SessionID: e.SessionID,
 		BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
-		At: time.Now().UTC(),
+		// Reconciliation is the exceptional path -- two reviews disagreed and
+		// the architect may let the accepting one stand -- so it is the LAST
+		// artifact that should speak a smaller identity than the ordinary path.
+		CandidateTree: binding.CandidateTree,
+		At:            time.Now().UTC(),
 	}
 	if err := r.Validate(); err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,

@@ -44,9 +44,9 @@ type Provenance struct {
 	// engine stamps both sides that check is uniform rather than probative --
 	// what it protects is an artifact that arrives from anywhere else.
 	//
-	// CandidateDigest cannot stand in for it: candidateRevision truncates
-	// SHA-256 to sixteen hex characters, which is a fine short revision label
-	// and not a substitute for a full tree identity in an exactness claim.
+	// CandidateDigest cannot stand in for it even now that it is a full
+	// SHA-256: it identifies a RENDERING, and two renderings are only as equal
+	// as the renderer that produced them. The tree is the content itself.
 	CandidateTree string `json:"candidate_tree,omitempty"`
 	// GraphBuildCommit pins the rule generation. A verdict reached under one
 	// graph and applied under another is being applied by rules it never read.

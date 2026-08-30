@@ -37,7 +37,9 @@ type Request struct {
 	// CandidateCapture had excluded from the candidate -- and that therefore
 	// never appeared in the audit or the reviewer's packet -- was still
 	// untracked in the worktree, and --all committed and pushed it (#89). What
-	// is published is exactly what was judged, or nothing.
+	// is published is exactly what was judged, or nothing. They are carried as
+	// the record of what the review covered; publication stages nothing, since
+	// the accepted object already holds exactly those paths.
 	Paths []string
 	// CandidateCommit is the accepted candidate's canonical identity. It is
 	// minted before publication is ever offered; this package pushes it and
@@ -46,8 +48,8 @@ type Request struct {
 }
 
 // ErrNoReviewedPaths reports a publication with nothing judged to publish.
-// It is a refusal: sweeping the worktree instead would publish what no
-// reviewer saw.
+// It is a refusal: a publication that names nothing judged must not be allowed
+// to mean "publish whatever is there".
 var ErrNoReviewedPaths = errors.New("publication names no reviewed candidate paths, so nothing is staged; the worktree is not swept")
 
 // ErrPushNotGranted reports that publication was attempted without the
@@ -79,9 +81,18 @@ func (r Request) Body() string {
 	return b.String()
 }
 
-// PushArgs is the argv that publishes the candidate branch.
-func PushArgs(branch string) []string {
-	return []string{"push", "--set-upstream", "origin", branch}
+// PushArgs is the argv that publishes ONE EXACT OBJECT to the candidate branch.
+//
+// It pushes the commit itself, not a local ref that names it. Verifying that a
+// branch points at C and then pushing "that branch" proves one identity and
+// publishes another: the two are different values, and anything may move the
+// ref in between. A refspec from the object removes the inference -- what
+// reaches the remote is literally the accepted candidate.
+//
+// Upstream tracking is deliberately not set here. `--set-upstream` needs a
+// local branch as the source, which is exactly the indirection this avoids.
+func PushArgs(commit, branch string) []string {
+	return []string{"push", "origin", commit + ":refs/heads/" + branch}
 }
 
 // PullRequestArgs is the argv handed to gh. It never contains a merge verb.
@@ -101,10 +112,14 @@ func (r Request) PullRequestArgs() []string {
 // error occurred" would record the candidate as unpublished while the remote
 // disagrees. Effects that happened are reported whether or not the whole
 // sequence did.
+//
+// There is no Committed stage. Publication does not commit -- the accepted
+// candidate was given its one identity before publication was ever offered --
+// and a field reporting "committed locally" for an act this package no longer
+// performs would be false provenance in the record that exists to prevent it.
 type Result struct {
-	Committed bool
-	Pushed    bool
-	URL       string
+	Pushed bool
+	URL    string
 }
 
 // Opened reports a complete publication.
@@ -118,8 +133,6 @@ func (r Result) Effects() string {
 		return "pull request opened at " + r.URL
 	case r.Pushed:
 		return "the candidate branch was pushed to origin but no pull request was opened"
-	case r.Committed:
-		return "the candidate was committed locally but nothing was pushed"
 	default:
 		return ""
 	}
@@ -130,7 +143,10 @@ func (r Result) Effects() string {
 // person where their pull request is.
 var ErrNoPullRequestURL = errors.New("gh reported success but printed no pull request URL")
 
-// Open commits the candidate, publishes its branch, and opens a pull request.
+// Open publishes the accepted candidate's exact object and opens a pull request.
+//
+// It does not commit. The candidate was given its canonical identity when it
+// was accepted; this pushes THAT object or fails.
 // The caller is responsible for having obtained the human's decision; this only
 // enforces the configured capabilities.
 //
@@ -159,20 +175,11 @@ func Open(ctx context.Context, r Request, pushGranted bool) (Result, error) {
 	if strings.TrimSpace(r.CandidateCommit) == "" {
 		return done, ErrNoCandidateCommit
 	}
-	// Push the EXACT accepted object, or refuse. The branch was pointed at the
-	// candidate's identity when it was minted; if it no longer names that
-	// commit, something moved it and this is not the accepted candidate.
-	head, err := run(ctx, r.Workspace, "git", []string{"rev-parse", "HEAD"})
-	if err != nil {
-		return done, fmt.Errorf("read the candidate branch head: %s", head)
-	}
-	if strings.TrimSpace(head) != strings.TrimSpace(r.CandidateCommit) {
-		return done, fmt.Errorf("%w: the branch is at %s and the accepted candidate is %s",
-			ErrNoCandidateCommit, short12(head), short12(r.CandidateCommit))
-	}
-	done.Committed = true
-	if out, err := run(ctx, r.Workspace, "git", PushArgs(r.Branch)); err != nil {
-		return done, fmt.Errorf("push the candidate branch: %s", out)
+	// Push the EXACT accepted object. Nothing is inferred from a local ref: the
+	// refspec names the commit the receipt recorded, so what reaches the remote
+	// is the accepted candidate or the push fails.
+	if out, err := run(ctx, r.Workspace, "git", PushArgs(r.CandidateCommit, r.Branch)); err != nil {
+		return done, fmt.Errorf("push the accepted candidate: %s", out)
 	}
 	done.Pushed = true
 	out, err := run(ctx, r.Workspace, "gh", r.PullRequestArgs())

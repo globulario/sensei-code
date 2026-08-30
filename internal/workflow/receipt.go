@@ -182,7 +182,7 @@ func (e *Engine) notePlan(taskID, suppliedDigest, planText string) {
 // noteCandidateDigest records the identity of the candidate's content.
 func (e *Engine) noteCandidateDigest(taskID, digest string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		f.candDiff = runreceipt.MeasuredValue(digest, "sha256 of the candidate diff, truncated as the review binding does")
+		f.candDiff = runreceipt.MeasuredValue(digest, "sha256 of the candidate diff, as the review binding names it")
 	})
 }
 
@@ -197,14 +197,12 @@ func (e *Engine) noteCapturedTree(taskID, tree string) {
 	})
 }
 
-// noteCandidateCommit records a COMMITTED candidate's Git identity.
+// noteCandidateCommit records the accepted candidate's Git identity.
 //
-// It is called nowhere today, and that is the finding rather than an oversight:
-// the loop leaves its candidate uncommitted in a worktree, so there is no
-// commit, tree or first parent to measure. The receipt says UNKNOWN for all
-// three, which makes a PRESENT candidate INCOMPLETE -- exactly the obligation
-// C5 was frozen to test, now visible at the production boundary without an
-// experiment.
+// It was called nowhere when the receipt first shipped, and that absence WAS
+// F1: the loop left its candidate uncommitted, so a PRESENT candidate could
+// never state its commit, tree or first parent and the main success path could
+// not produce a complete account of itself. mintCandidateIdentity calls it now.
 func (e *Engine) noteCandidateCommit(taskID, commit, tree, firstParent string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		f.candCommit = runreceipt.MeasuredValue(commit, "git rev-parse on the candidate ref")

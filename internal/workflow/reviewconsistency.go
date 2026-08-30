@@ -46,6 +46,7 @@ type openReview struct {
 	Summary          string          `json:"summary"`
 	Findings         []roles.Finding `json:"findings,omitempty"`
 	CandidateDigest  string          `json:"candidate_digest"`
+	CandidateTree    string          `json:"candidate_tree,omitempty"`
 	EvidenceIdentity string          `json:"evidence_identity"`
 }
 
@@ -69,6 +70,9 @@ func evidenceIdentity(b validation.Bundle, audit sensei.DiffAuditDecision) strin
 }
 
 // openReviewFrom records what a non-accepting verdict left unanswered.
+// openReviewFrom records a verdict left open, in the same identity language as
+// everything else: the contradiction record names the content, not only the
+// representation of it.
 func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenceID string) openReview {
 	return openReview{
 		Reviewer:         v.Provenance.Provider,
@@ -77,6 +81,7 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 		Summary:          v.Summary,
 		Findings:         v.Findings,
 		CandidateDigest:  candidateDigest,
+		CandidateTree:    v.Provenance.CandidateTree,
 		EvidenceIdentity: evidenceID,
 	}
 }

@@ -849,7 +849,9 @@ func (e *Engine) offerPullRequest(ctx context.Context, taskID string, tc *taskCo
 			detail += "\n" + effects
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.Status, detail, map[string]any{
-			"committed": done.Committed, "pushed": done.Pushed,
+			// No "committed" here: publication does not commit. The candidate's
+			// identity was minted at acceptance and is reported by the receipt.
+			"pushed": done.Pushed, "candidate": e.candidateCommitFor(taskID),
 		}))
 		return publication{State: failed, Err: err, Result: done}
 	}
