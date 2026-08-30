@@ -448,3 +448,107 @@ func TestTheNameStatusParserFailsClosed(t *testing.T) {
 		t.Fatalf("an empty diff = %q, %v", got, err)
 	}
 }
+
+// TestTheDiffIsRenderedFromTheTreeNotASecondLookAtTheWorktree is the Step 2
+// ordering: one measurement, and a representation OF it.
+//
+// Two sequential reads of a mutable worktree leave a seam a later equality
+// check cannot always close -- the review text renders a kept binary as
+// "Binary files differ", so different binary content can produce an identical
+// diff while the tree moves underneath it.
+func TestTheDiffIsRenderedFromTheTreeNotASecondLookAtTheWorktree(t *testing.T) {
+	ctx := context.Background()
+	r, base := repoWithBase(t)
+	os.WriteFile(filepath.Join(r.Root, "main.go"), []byte("package main\n\nfunc main() { println(2) }\n"), 0o644)
+
+	cap, err := r.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap.Tree == "" {
+		t.Fatal("a capture with a base must carry a content identity")
+	}
+	// The diff must be exactly what the bound tree says, not what the worktree
+	// says now: mutating the worktree after the capture cannot change it.
+	os.WriteFile(filepath.Join(r.Root, "main.go"), []byte("package main\n\nfunc main() { println(999) }\n"), 0o644)
+	rendered, err := r.raw(ctx, "diff", "--no-ext-diff", base, cap.Tree, "--")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rendered != cap.Diff {
+		t.Fatal("the captured diff is not a rendering of the captured tree")
+	}
+	if strings.Contains(cap.Diff, "999") {
+		t.Fatal("the captured diff followed the worktree after the capture")
+	}
+}
+
+// A candidate that changed nothing has the base's own tree. "Produced no work"
+// is then a MEASUREMENT, not an inference from an empty diff.
+func TestACandidateThatChangedNothingHasTheBaseTree(t *testing.T) {
+	ctx := context.Background()
+	r, base := repoWithBase(t)
+	cap, err := r.CandidateCapture(ctx, base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseTree, err := r.CommitTreeOf(ctx, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cap.Tree != baseTree {
+		t.Fatalf("tree = %s, want the base tree %s", short12(cap.Tree), short12(baseTree))
+	}
+	if len(cap.Paths) != 0 || cap.Diff != "" {
+		t.Fatalf("paths = %q diff = %q", cap.Paths, cap.Diff)
+	}
+}
+
+// TestDifferentBinaryContentAlwaysMovesTheTree states the property T actually
+// guarantees, unconditionally.
+//
+// A note on the argument for it. The binary corner is weaker than it first
+// appears: `git diff` renders a changed binary as an `index <old>..<new>` line
+// followed by "Binary files ... differ", so the abbreviated blob hashes DO
+// distinguish two different binaries in the review text. Measured, not assumed.
+//
+// The ordering change does not rest on that corner. It rests on removing the
+// seam between two sequential reads of a mutable worktree: with the diff
+// rendered FROM the tree there is one measurement and one representation of it,
+// and no instant in between for the content to move. The binary case remains a
+// reason to prefer a full tree hash over abbreviated ones in a rendering, which
+// is a weaker claim than the one that motivated the change.
+func TestDifferentBinaryContentAlwaysMovesTheTree(t *testing.T) {
+	ctx := context.Background()
+	r, _ := repoWithBase(t)
+	run := func(args ...string) {
+		if out, err := exec.Command("git", append([]string{"-C", r.Root}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	blob := append([]byte{0x00, 0x01, 0x02}, bytes.Repeat([]byte{0xff}, 64)...)
+	os.WriteFile(filepath.Join(r.Root, "asset.bin"), blob, 0o644)
+	run("add", "-A")
+	run("commit", "-q", "-m", "with an asset")
+	newBase, err := r.Head(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	os.WriteFile(filepath.Join(r.Root, "asset.bin"), append([]byte{0x00, 0x01, 0x02}, bytes.Repeat([]byte{0xaa}, 64)...), 0o644)
+	first, err := r.CandidateCapture(ctx, newBase, []string{"asset.bin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(r.Root, "asset.bin"), append([]byte{0x00, 0x01, 0x02}, bytes.Repeat([]byte{0xbb}, 64)...), 0o644)
+	second, err := r.CandidateCapture(ctx, newBase, []string{"asset.bin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Tree == second.Tree {
+		t.Fatal("two different binary contents produced the same content identity")
+	}
+	if first.Tree == "" || second.Tree == "" {
+		t.Fatal("a capture with a base must carry a content identity")
+	}
+}

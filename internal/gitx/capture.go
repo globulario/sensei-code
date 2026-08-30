@@ -49,6 +49,19 @@ type Capture struct {
 	// Binaries are binary members the candidate legitimately holds -- tracked
 	// binaries it modified, or new ones the plan named -- as metadata.
 	Binaries []Artifact
+	// Tree is the canonical tree: the base tree plus exactly Paths. It is the
+	// candidate's CONTENT IDENTITY and the immutable centre of the capture --
+	// Diff is rendered FROM it, not from a second look at the worktree.
+	//
+	// Two sequential reads of a mutable worktree leave a seam that a later
+	// equality check cannot always close: Diff renders a kept binary as
+	// "Binary files differ" rather than bytes, so different binary content can
+	// produce an identical Diff while the tree moves underneath it. Deriving
+	// Diff from Tree means there is one measurement, and Diff describes it.
+	//
+	// A candidate that changed nothing has Tree equal to the base's own tree,
+	// which is how "produced no work" is MEASURED rather than inferred.
+	Tree string
 	// Paths is the exact set of repository-relative paths this candidate
 	// changed, as Git reports them, taken AFTER artifact exclusions.
 	//
@@ -189,18 +202,6 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		}
 	}
 	sort.Slice(cap.Excluded, func(i, j int) bool { return cap.Excluded[i].Path < cap.Excluded[j].Path })
-	// Text only. `--binary` would inline every kept binary as a patch, which is
-	// exactly the payload nobody can judge and every transport refuses.
-	diffArgs := []string{"diff", "--no-ext-diff"}
-	if b := strings.TrimSpace(base); b != "" {
-		diffArgs = append(diffArgs, b)
-	}
-	diff, err := r.raw(ctx, append(diffArgs, "--")...)
-	if err != nil {
-		return Capture{}, err
-	}
-	cap.Diff = diff
-
 	// The exact path set, taken after exclusions so it names what the reviewer
 	// will actually judge. Same base, same boundary, one authority.
 	nameArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--name-status", "-z"}
@@ -215,6 +216,43 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	if err != nil {
 		return Capture{}, err
 	}
+
+	// A capture with no base has no content identity: a tree is "the base tree
+	// plus these paths", and there is no base tree to start from. The governed
+	// loop always has one (the candidate's recorded base); this shape exists
+	// for callers that only want to see what a worktree holds, and it keeps the
+	// older worktree rendering.
+	if strings.TrimSpace(base) == "" {
+		diff, err := r.raw(ctx, "diff", "--no-ext-diff", "--")
+		if err != nil {
+			return Capture{}, err
+		}
+		cap.Diff = diff
+		return cap, nil
+	}
+
+	// The content identity, built ONCE, before anything renders it.
+	if len(cap.Paths) == 0 {
+		// No work. The candidate's tree is the base's tree, which is a
+		// measurement of "produced nothing" rather than an inference from an
+		// empty diff.
+		if cap.Tree, err = r.CommitTreeOf(ctx, base); err != nil {
+			return Capture{}, err
+		}
+		return cap, nil
+	}
+	if cap.Tree, err = r.CanonicalTree(ctx, base, cap.Paths); err != nil {
+		return Capture{}, err
+	}
+
+	// The review representation, rendered FROM the tree. Text only: `--binary`
+	// would inline every kept binary as a patch, which is exactly the payload
+	// nobody can judge and every transport refuses.
+	diff, err := r.raw(ctx, "diff", "--no-ext-diff", base, cap.Tree, "--")
+	if err != nil {
+		return Capture{}, err
+	}
+	cap.Diff = diff
 	return cap, nil
 }
 
