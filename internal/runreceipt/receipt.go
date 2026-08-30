@@ -59,7 +59,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v6"
+const SchemaVersion = "sensei-code.governed-run-receipt/v7"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -153,6 +153,44 @@ var vocabularies = map[string][]Outcome{
 		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown,
 	},
+	// v7 adds CandidateUnattempted to the CANDIDATE vocabulary; the outcome
+	// vocabulary is unchanged. It is listed anyway, because an unlisted version
+	// is unreadable rather than permissive.
+	"sensei-code.governed-run-receipt/v7": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown,
+	},
+}
+
+// candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
+// reason outcomes are pinned: UNATTEMPTED under a v6 label would be a receipt
+// speaking a language its own version does not define.
+//
+//	v6 + UNATTEMPTED   invalid
+//	v7 + UNATTEMPTED   valid
+var candidateVocabularies = map[string][]CandidateState{
+	"sensei-code.governed-run-receipt/v3": {CandidateNone, CandidatePresent, CandidateUnknown},
+	"sensei-code.governed-run-receipt/v4": {CandidateNone, CandidatePresent, CandidateUnknown},
+	"sensei-code.governed-run-receipt/v5": {CandidateNone, CandidatePresent, CandidateUnknown},
+	"sensei-code.governed-run-receipt/v6": {CandidateNone, CandidatePresent, CandidateUnknown},
+	"sensei-code.governed-run-receipt/v7": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+}
+
+// SpeaksItsCandidateVocabulary reports whether a candidate state belongs to the
+// vocabulary the stated schema version defines.
+func SpeaksItsCandidateVocabulary(schema string, c CandidateState) error {
+	allowed, known := candidateVocabularies[schema]
+	if !known {
+		return fmt.Errorf("schema %q is not a version this reader defines, so nothing it says can be checked against a vocabulary", schema)
+	}
+	for _, a := range allowed {
+		if a == c {
+			return nil
+		}
+	}
+	return fmt.Errorf("candidate_state %q is not in the vocabulary %s defines", c, schema)
 }
 
 // SpeaksItsVersion reports whether an outcome belongs to the vocabulary the
@@ -195,6 +233,24 @@ const (
 	// CandidatePresent: a candidate exists, so the evidence describing it --
 	// commit, tree, first parent, diff digest -- is required.
 	CandidatePresent CandidateState = "PRESENT"
+	// CandidateUnattempted: work existed in the container, and the run refused
+	// before any canonical candidate identity was created.
+	//
+	// A1's P1 witness produced exactly this world and had no word for it. A
+	// capture-certification refusal happens AFTER the worker has edited and
+	// validation has run, but BEFORE the mint, so:
+	//
+	//   NONE     is false -- work exists, and claiming otherwise denies it;
+	//   PRESENT  is false -- it obliges commit, tree, first parent and digest,
+	//            and asserting a candidate identity that was never minted is a
+	//            worse error than admitting ignorance;
+	//   UNKNOWN  was what the run actually emitted, and it is a lie of a third
+	//            kind: the execution knew precisely what had happened.
+	//
+	// So this is a POSITIVE claim, sufficient for COMPLETE, that names the
+	// outcome instead of the absence: no canonical candidate was created, and
+	// the reason is that the run refused before creating one.
+	CandidateUnattempted CandidateState = "UNATTEMPTED"
 	// CandidateUnknown: the record does not say. Never sufficient for COMPLETE.
 	CandidateUnknown CandidateState = "UNKNOWN"
 )
@@ -202,7 +258,7 @@ const (
 // Valid reads membership by enumeration, for the same reason Outcome does.
 func (c CandidateState) Valid() bool {
 	switch c {
-	case CandidateNone, CandidatePresent, CandidateUnknown:
+	case CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown:
 		return true
 	}
 	return false
@@ -554,6 +610,11 @@ type Field struct {
 func (r Receipt) Fields() []Field {
 	planned := r.PlanState == PlanPresent
 	candidate := r.CandidateState == CandidatePresent
+	// Work reached validation whenever a candidate exists OR the run refused
+	// after producing one. The formatter fact is knowable in both worlds, so
+	// UNATTEMPTED does not excuse leaving it unstated -- only the MINT evidence
+	// is excused, because it was never created.
+	worked := candidate || r.CandidateState == CandidateUnattempted
 	// ACCEPTED and REFUSED both assert that a reviewer returned a bounded
 	// verdict. Neither may be said without the evidence that says who, what
 	// and about which candidate revision.
@@ -579,7 +640,7 @@ func (r Receipt) Fields() []Field {
 		{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest, Rederivable, candidate},
 		{"deferred_question", r.DeferredQuestion, Observed, deferred},
 		{"execution_budget", r.ExecutionBudget, Observed, timedOut},
-		{"formatter_mutation", r.FormatterMutationState, Observed, candidate},
+		{"formatter_mutation", r.FormatterMutationState, Observed, worked},
 		{"terminal", r.Terminal, Observed, true},
 	}
 }
@@ -659,8 +720,27 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	switch {
 	case !r.CandidateState.Valid():
 		missing = append(missing, fmt.Sprintf("candidate_state %q is not a value this schema defines", r.CandidateState))
+	case SpeaksItsCandidateVocabulary(r.Schema, r.CandidateState) != nil:
+		missing = append(missing, SpeaksItsCandidateVocabulary(r.Schema, r.CandidateState).Error())
 	case r.CandidateState == CandidateUnknown:
 		missing = append(missing, "candidate_state UNKNOWN: a record that cannot say whether a candidate exists is not complete")
+	case r.CandidateState == CandidateUnattempted:
+		// The claim is that no canonical identity was ever created, so any
+		// mint evidence present would contradict it.
+		for _, f := range []struct {
+			name string
+			v    Value
+		}{
+			{"candidate_commit", r.CandidateCommit},
+			{"candidate_tree", r.CandidateTree},
+			{"candidate_first_parent", r.CandidateFirstParent},
+			{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest},
+		} {
+			if f.v.State == Known {
+				missing = append(missing, fmt.Sprintf(
+					"%s is stated while candidate_state is UNATTEMPTED: the record claims no canonical candidate was created and then names one", f.name))
+			}
+		}
 	case r.CandidateState == CandidateNone:
 		// NONE is a POSITIVE claim that no candidate exists, so every piece of
 		// candidate evidence must be an explicitly recorded absence. MALFORMED

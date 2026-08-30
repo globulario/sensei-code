@@ -1354,6 +1354,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// here rather than let the disagreement surface as a movement refusal
 		// at the mint, which names the wrong cause.
 		if err := certifiedAgainstCapture(evidence, taskID, reviewed.Diff, diff); err != nil {
+			// Record the candidate outcome BEFORE the edge that terminates on
+			// it. The run knows here that work exists and that no canonical
+			// identity will ever be minted; returning first left the receipt
+			// saying UNKNOWN about something it had just established.
+			e.noteCandidateUnattempted(taskID)
 			return false, plan, lastReview, lastAudit, err
 		}
 		capture, diff = reviewed, reviewed.Diff

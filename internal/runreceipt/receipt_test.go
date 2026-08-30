@@ -590,7 +590,7 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v6"
+	const version = "sensei-code.governed-run-receipt/v7"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
@@ -704,4 +704,124 @@ func TestTheFormatterMutationFactIsMeasuredAndClosed(t *testing.T) {
 		!strings.Contains(strings.Join(missing, " "), "formatter_mutation") {
 		t.Fatalf("state=%s missing=%v", state, missing)
 	}
+}
+
+// UNATTEMPTED is the state A1's P1 witness produced and the schema had no word
+// for: work exists, and the run refused before any canonical identity was
+// minted.
+//
+// The defect it repairs was not a missing field. The execution KNEW what had
+// happened and the record said UNKNOWN, which is the one answer that was false.
+func TestUnattemptedIsAPositiveClaimSufficientForComplete(t *testing.T) {
+	r := unattemptedReceipt()
+	r.CandidateCommit = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateTree = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateFirstParent = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateDigest = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateCommitDiffDigest = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateDigestRelation = RelationUnknown
+	r.ReviewedTree = UnknownValue("no verdict was returned")
+	r.FormatterMutationState = MeasuredValue(string(FormatterUnchanged), "measured across the format step")
+
+	state, missing := r.Completeness()
+	if state != Complete {
+		t.Fatalf("UNATTEMPTED did not yield a COMPLETE receipt: %v", missing)
+	}
+}
+
+// The mint evidence is EXCUSED, not permitted: a record claiming no canonical
+// candidate was created may not then name one.
+func TestUnattemptedMayNotNameACandidateItSaysWasNeverCreated(t *testing.T) {
+	r := unattemptedReceipt()
+	r.CandidateCommit = MeasuredValue("6016791c6ec722301c038b96f0268cdbf2190bc8", "a mint that never happened")
+
+	_, missing := r.Completeness()
+	var found bool
+	for _, m := range missing {
+		if strings.Contains(m, "UNATTEMPTED") && strings.Contains(m, "candidate_commit") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("a receipt claimed no candidate was created and then named one: %v", missing)
+	}
+}
+
+// The formatter fact is knowable whenever validation ran, so UNATTEMPTED does
+// not excuse leaving it unstated. Only the MINT evidence is excused.
+func TestUnattemptedStillOwesTheFormatterFact(t *testing.T) {
+	r := unattemptedReceipt()
+	r.FormatterMutationState = UnknownValue("nobody looked")
+
+	_, missing := r.Completeness()
+	var found bool
+	for _, m := range missing {
+		if strings.Contains(m, "formatter_mutation") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("UNATTEMPTED excused the formatter fact, which validation had already established: %v", missing)
+	}
+}
+
+// The candidate vocabulary is pinned per version, like the outcome vocabulary.
+// v4's bump once failed to land while the commit message claimed it had; this
+// is the guard that makes that unguessable.
+func TestTheSchemaVersionPinsItsCandidateVocabulary(t *testing.T) {
+	if err := SpeaksItsCandidateVocabulary("sensei-code.governed-run-receipt/v6", CandidateUnattempted); err == nil {
+		t.Fatal("v6 accepted UNATTEMPTED, a word it does not define")
+	}
+	if err := SpeaksItsCandidateVocabulary(SchemaVersion, CandidateUnattempted); err != nil {
+		t.Fatalf("the current schema does not speak its own candidate vocabulary: %v", err)
+	}
+	for _, c := range []CandidateState{CandidateNone, CandidatePresent, CandidateUnknown} {
+		if err := SpeaksItsCandidateVocabulary(SchemaVersion, c); err != nil {
+			t.Fatalf("%q must remain in the current vocabulary: %v", c, err)
+		}
+	}
+	if err := SpeaksItsCandidateVocabulary("sensei-code.governed-run-receipt/v99", CandidateNone); err == nil {
+		t.Fatal("an unknown schema was treated as permissive")
+	}
+}
+
+// A receipt stating UNATTEMPTED under a version that predates it is invalid,
+// which is the whole point of pinning.
+func TestUnattemptedUnderAnOlderLabelIsRefused(t *testing.T) {
+	r := unattemptedReceipt()
+	r.Schema = "sensei-code.governed-run-receipt/v6"
+	_, missing := r.Completeness()
+	var found bool
+	for _, m := range missing {
+		if strings.Contains(m, "not in the vocabulary") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("UNATTEMPTED passed under a v6 label: %v", missing)
+	}
+}
+
+// unattemptedReceipt is the world A1's P1 witness actually produced: the worker
+// edited, validation ran, capture certification refused, and no canonical
+// candidate identity was ever minted. The run FAILED and no verdict was
+// returned, so every reviewer-bound fact is an explicit absence.
+func unattemptedReceipt() Receipt {
+	r := completeReceipt()
+	r.Outcome = OutcomeFailed
+	r.CandidateState = CandidateUnattempted
+	r.Attempts = nil
+	r.ReviewerProvider = UnknownValue("no bounded verdict was returned")
+	r.ReviewerExecutable = UnknownValue("no bounded verdict was returned")
+	r.ReviewVerdict = UnknownValue("no bounded verdict was returned")
+	r.ReviewedDigest = UnknownValue("no bounded verdict was returned")
+	r.ReviewedTree = UnknownValue("no bounded verdict was returned")
+	r.CandidateCommit = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateTree = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateFirstParent = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateDigest = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateCommitDiffDigest = UnknownValue("not measured: no candidate identity was minted")
+	r.CandidateDigestRelation = RelationUnknown
+	r.FormatterMutationState = MeasuredValue(string(FormatterUnchanged), "measured across the format step")
+	return r
 }
