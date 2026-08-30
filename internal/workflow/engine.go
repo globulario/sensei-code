@@ -736,17 +736,6 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 			runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 		return
 	}
-	// The bound this run carries is recorded HERE, the moment the architect
-	// produced it -- before routing, and therefore before any authority
-	// boundary a routing decision can reach.
-	//
-	// It used to be recorded after the task context was assembled, which is
-	// after routing. A run that deferred to a human during routing therefore
-	// reported "plan_state UNKNOWN" about a plan that demonstrably existed:
-	// the escalation is literally "Authority for THIS PLAN, by lane". Third
-	// instance in one day of a fact recorded after the terminal that needs it.
-	e.notePlan(taskID, e.planDigest(taskID), decision.Plan)
-
 	// The plan is published as information, not as a gate.
 	//
 	// There used to be a rendezvous here: "Implement this plan? 1/2". It asked
@@ -1747,6 +1736,8 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	d := supplied.decision
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
+	// Before routing, for the same reason: routing can terminate this run.
+	e.notePlan(taskID, supplied.Digest, d.Plan)
 	routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 	if err != nil {
 		return architectureDecision{}, err
@@ -1862,6 +1853,17 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				lastErr = errors.New("architect returned PROCEED without a plan")
 				continue
 			}
+			// Record the bound BEFORE routing, because routing is control flow
+			// that can terminate this run: it escalates, the human defers, and
+			// resolveArchitectureIn returns an error. Anything recorded after
+			// this call does not exist for a deferred run.
+			//
+			// The first attempt at this fix recorded the plan in execute, after
+			// resolveArchitecture RETURNS -- which a deferral never reaches. The
+			// law is about control-flow boundaries, not about source order, and
+			// I put it on the wrong side of one while fixing exactly that bug.
+			e.notePlan(taskID, e.planDigest(taskID), d.Plan)
+
 			// The architect proposes; it does not decide whether the proposal
 			// carries architectural authority. A confident model proceeding
 			// through a region the graph cannot cover is the exact failure this
