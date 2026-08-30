@@ -30,6 +30,7 @@ import (
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/retrieval"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/runreceipt"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -289,10 +290,14 @@ func (r senseiReader) CallTool(name string, args map[string]any) (retrieval.Resu
 }
 
 func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
+	// The conversational lane opens a record too. It produces no candidate and
+	// receives no review, and the receipt says both rather than staying silent.
+	e.beginReceipt(taskID)
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	e.announceMode(taskID, assistedMode())
 
 	fail := func(err error) {
+		e.emitReceipt(taskID, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
 	}
 	if task == "" {
@@ -467,6 +472,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"architect conversation identity not recorded: "+err.Error(), nil))
 	}
+	e.emitReceipt(taskID, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
 }
 
