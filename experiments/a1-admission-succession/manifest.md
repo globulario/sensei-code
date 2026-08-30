@@ -412,3 +412,87 @@ dependencies to state their own authority, and each had been silently assumed:
 
 None was written down anywhere. All three were found by trying to move a change
 through the machinery rather than by reasoning about it.
+
+## Criterion 8: BLOCKED. Two of three identities established.
+
+Performed from a clean detached worktree at exactly M
+(f6b4755, `git status --porcelain` empty), publishing the sensei-code slice
+in place with `sensei build --repo github.com/globulario/sensei-code`.
+
+NO --force. NO topology override. The topology safeguard did not refuse: the
+per-domain path is non-destructive by construction, so the whole-graph
+override the earlier attempt would have needed was never reached.
+
+  2 PUBLISHED IDENTITY                                            PASS
+      marker written and read back
+        digest 4ead3c19756c59686d7551caa6b8b22fab134b41d5f4f0cafe2aa3b8d651fd64
+        triple_count 164587
+      store read back: 164587 triples (was 164506)
+      closure PROVEN: 178/178 projected, 0 missing, 0 foreign provenance,
+        0 unresolved attribution, 0 duplicate canonical subjects
+      DETERMINISTIC: republished from the same worktree, identical digest and
+        identical count (164587 -> 164587), so the generation is a function of
+        its input rather than of the run.
+
+  3 SERVING IDENTITY                          PASS, but not where it counts
+      On a server started AFTER publication, live graph digest == marker
+      digest, freshness "live store matches expected validated graph
+      artifact". The graph being answered IS the generation produced for M.
+
+      The configured endpoint is NOT that server. .sensei/config.yaml and
+      .mcp.json both bind to localhost:10122, a long-running process started
+      2026-08-22 that pinned its expected marker at startup. It now reports:
+
+        Live graph digest:   (unstamped)
+        Seed state:          stale
+        Freshness state:     stale
+        Freshness detail:    live store missing expected graph marker 42e6e12c...
+
+      That is the safeguard WORKING. It is refusing to claim it serves a
+      generation it cannot verify, and it must not be forced. Restarting it is
+      a deployment action on the owner's process, not a repair this experiment
+      may perform on its own authority.
+
+  1 SOURCE IDENTITY                                              NOT PROVEN
+      Regeneration WAS performed from exact M. That is operationally true and
+      it is not self-evidencing, which is the whole difference this project
+      exists to insist on.
+
+      Nothing in the published artifact records a repository revision:
+        - the marker node carries digest, triple count, version, label -- and
+          no revision
+        - grep for f6b4755 in the generated slice: 0 hits, and there is no
+          commit/revision provenance predicate of any kind
+        - the transaction file certifies the awareness-graph repo (afc39e9d,
+          the v1.6.1 commit) and per-file content digests of the ag_awareness,
+          ag_generated, svc_* trees -- 138 entries, NONE of them sensei-code's
+          docs/awareness
+        - the closure report names a certified_source_root, which is a
+          filesystem PATH, not a commit
+
+      So the chain is bound at one end and testified at the other:
+
+        serving --[digest 4ead3c19]--> published      cryptographic
+        published --[my say-so]-----> M               testimony
+
+      A graph that cannot state which revision produced it cannot later prove
+      that a governed run inherited M. This is the same law this project keeps
+      re-deriving: every representation preserves its predicate. The
+      publication preserves CONTENT identity and drops REVISION identity.
+
+VERDICT: criterion 8 is BLOCKED, on two independent grounds, neither of which
+may be forced:
+
+  a  the published authoritative knowledge does not bind itself to M, so
+     "the served graph describes f6b4755" is not provable from the artifact;
+  b  the endpoint a governed run would inherit does not serve that generation
+     and correctly says so.
+
+CRITERION 9 IS NOT ATTEMPTED. Succession is NOT declared. Under (a) a passing
+criterion 9 would not mean what it claims: a run could inherit generation
+4ead3c19 and no artifact would show that generation is M's.
+
+STATE LEFT BEHIND, and how to undo it. The live store's sensei-code slice was
+replaced (164506 -> 164587 triples) under the owner's explicit authorisation.
+The whole store was snapshotted beforehand and can be restored. The owner's
+:10122 process was NOT restarted and NOT reconfigured.

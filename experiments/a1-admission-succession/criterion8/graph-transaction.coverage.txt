@@ -1,0 +1,7 @@
+     90 ag_awareness
+      9 ag_generated
+      1 bench_contracts
+      1 learning_events
+     30 svc_awareness
+      1 svc_generated_filtered
+      6 svc_intent
