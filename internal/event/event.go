@@ -103,6 +103,13 @@ const (
 	// stage 1 it grants nothing and skips nothing — it is a measurement,
 	// emitted so the tier can be judged from real runs rather than intuition.
 	RoutineClassified Kind = "routine.classified"
+	// RunReceipt is the governed run's own account of itself: the identities
+	// it measured, the candidate it produced, who reviewed it, and how it
+	// ended, in one typed record whose completeness is checkable without
+	// reconstructing the run from the rest of this stream.
+	//
+	// It reports evidence and grants nothing. Admission is decided outside.
+	RunReceipt Kind = "run.receipt"
 	// ValidationRun records checks the broker executed against a candidate.
 	ValidationRun     Kind = "validation.run"
 	AuthorityRequired Kind = "authority.required"

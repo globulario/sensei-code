@@ -49,7 +49,12 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
-const SchemaVersion = "sensei-code.governed-run-receipt/v1"
+// v2 added the PlanState axis and the STOPPED outcome. Both change what a
+// COMPLETE receipt means, so a v1 reader would misread a v2 record and a v2
+// reader would find v1 records missing a required axis. Leaving the version at
+// v1 through that change would be the fabricated specimen this comment warns
+// about, written by the schema's own author.
+const SchemaVersion = "sensei-code.governed-run-receipt/v2"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -74,6 +79,12 @@ const (
 	// OutcomeUnreviewed: the run reached its end and no provider produced a
 	// bounded verdict. A measured absence, never "clean by exhaustion".
 	OutcomeUnreviewed Outcome = "UNREVIEWED"
+	// OutcomeStopped: a human ended the run. This is a real terminal outcome,
+	// not instrument incompleteness and not workflow failure -- recording it as
+	// FAILED would teach the behavioural record that this task shape breaks,
+	// and recording it as UNKNOWN would leave a known outcome unnamed.
+	// COMPLETE / STOPPED is a fully meaningful record.
+	OutcomeStopped Outcome = "STOPPED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -84,7 +95,7 @@ const (
 // all -- is not a new outcome, it is an invalid one.
 func (o Outcome) Valid() bool {
 	switch o {
-	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed, OutcomeUnknown:
+	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed, OutcomeStopped, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -178,6 +189,34 @@ func (d DeliveryState) Valid() bool {
 // DeliveryValue records a measured delivery state with its source.
 func DeliveryValue(state DeliveryState, source string) Value {
 	return MeasuredValue(string(state), source)
+}
+
+// PlanState is the condition under which a plan's identity is required.
+//
+// The third independent instance of one law: requiredness is conditional
+// evidence. A conversational answer genuinely has no plan, and demanding a
+// digest for an artifact that does not exist is not rigour, it is the wrong
+// predicate.
+type PlanState string
+
+const (
+	// PlanPresent: the run carried a bound, so that bound must have an identity
+	// a later reader can check a candidate against.
+	PlanPresent PlanState = "PRESENT"
+	// PlanNone: the run carried no plan at all. A positive claim, so the digest
+	// must be an explicitly recorded absence.
+	PlanNone PlanState = "NONE"
+	// PlanUnknown: the record does not say. Never sufficient for COMPLETE.
+	PlanUnknown PlanState = "UNKNOWN"
+)
+
+// Valid reads membership by enumeration.
+func (p PlanState) Valid() bool {
+	switch p {
+	case PlanPresent, PlanNone, PlanUnknown:
+		return true
+	}
+	return false
 }
 
 // Knownness is how a single fact stands in the record. Every read of untrusted
@@ -310,6 +349,10 @@ type Receipt struct {
 	ReviewVerdict      Value `json:"review_verdict"`
 	ReviewedDigest     Value `json:"reviewed_digest"`
 
+	// PlanState is the condition that makes the plan's identity required, and
+	// it is cross-checked against PlanDigest the way CandidateState is.
+	PlanState PlanState `json:"plan_state"`
+
 	// CandidateState is the condition that makes candidate evidence required.
 	// It is cross-checked against the candidate fields themselves: a receipt
 	// naming a candidate while claiming none is inconsistent, not complete.
@@ -348,6 +391,7 @@ type Field struct {
 // A fixed Required flag would let ACCEPTED coexist with no reviewer and
 // PRESENT coexist with no candidate tree -- both COMPLETE, both false.
 func (r Receipt) Fields() []Field {
+	planned := r.PlanState == PlanPresent
 	candidate := r.CandidateState == CandidatePresent
 	// ACCEPTED and REFUSED both assert that a reviewer returned a bounded
 	// verdict. Neither may be said without the evidence that says who, what
@@ -357,7 +401,7 @@ func (r Receipt) Fields() []Field {
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
 		{"base_commit", r.BaseCommit, Rederivable, true},
-		{"plan_digest", r.PlanDigest, Rederivable, true},
+		{"plan_digest", r.PlanDigest, Rederivable, planned},
 		{"graph_digest", r.GraphDigest, Rederivable, true},
 		{"candidate_commit", r.CandidateCommit, Rederivable, candidate},
 		{"candidate_tree", r.CandidateTree, Rederivable, candidate},
@@ -421,6 +465,17 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		if a.Verdict.State == Known && !ReviewDecision(a.Verdict.Text).Valid() {
 			missing = append(missing, fmt.Sprintf("%s.verdict %q is outside the closed review vocabulary", p, a.Verdict.Text))
 		}
+	}
+
+	// The plan axis, and its cross-check.
+	switch {
+	case !r.PlanState.Valid():
+		missing = append(missing, fmt.Sprintf("plan_state %q is not a value this schema defines", r.PlanState))
+	case r.PlanState == PlanUnknown:
+		missing = append(missing, "plan_state UNKNOWN: a record that cannot say whether a plan governed the run is not complete")
+	case r.PlanState == PlanNone && r.PlanDigest.State != Unknown:
+		missing = append(missing, fmt.Sprintf(
+			"plan_digest is %s while plan_state is NONE: claiming no plan requires the absence to be recorded", r.PlanDigest.State))
 	}
 
 	// The candidate axis, and its cross-check. A receipt that names a candidate

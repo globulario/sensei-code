@@ -60,6 +60,13 @@ func (c certifiedStart) GraphSourceCommit() string { return c.preflight.Authorit
 // GraphBuildCommit is the graph generation that certified this start.
 func (c certifiedStart) GraphBuildCommit() string { return c.preflight.Authority.GraphBuildCommit }
 
+// GraphDigest is the digest of the graph actually served to this start.
+//
+// It is a different fact from GraphBuildCommit and must never stand in for it:
+// one names the generation that produced the rules, the other the bytes that
+// answered this run.
+func (c certifiedStart) GraphDigest() string { return c.preflight.Authority.LiveStoreGraphDigest }
+
 // SourceRepoCommit is the repository commit that graph was built against.
 func (c certifiedStart) SourceRepoCommit() string { return c.preflight.Authority.SourceRepoCommit }
 

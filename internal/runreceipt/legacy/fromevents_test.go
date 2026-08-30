@@ -95,8 +95,9 @@ func TestEveryPreservedLogIsTotallyReadable(t *testing.T) {
 				}
 			}
 		}
-		if !rec.Outcome.Valid() || !rec.CandidateState.Valid() {
-			t.Fatalf("%s: outcome %q candidate_state %q", path, rec.Outcome, rec.CandidateState)
+		if !rec.Outcome.Valid() || !rec.CandidateState.Valid() || !rec.PlanState.Valid() {
+			t.Fatalf("%s: outcome %q candidate_state %q plan_state %q",
+				path, rec.Outcome, rec.CandidateState, rec.PlanState)
 		}
 		// Deliberately NOT logging rec.Outcome. C5 is a VOID witness and its
 		// semantic content is inadmissible as evidence about that run; a

@@ -30,6 +30,7 @@ import (
 	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/retrieval"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/runreceipt"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -289,11 +290,17 @@ func (r senseiReader) CallTool(name string, args map[string]any) (retrieval.Resu
 }
 
 func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
+	// The conversational lane opens a record too. It produces no candidate and
+	// receives no review, and the receipt says both rather than staying silent.
+	e.beginReceipt(taskID)
+	// The conversational lane never plans, and that is a fact about the lane.
+	e.notePlanAbsent(taskID)
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	e.announceMode(taskID, assistedMode())
 
 	fail := func(err error) {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, runreceipt.CandidateNone, err.Error(), nil)
 	}
 	if task == "" {
 		fail(errEmptyTask)
@@ -467,7 +474,8 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"architect conversation identity not recorded: "+err.Error(), nil))
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
+	e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+		runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 }
 
 // continuityPresence maps a resumption onto the typed availability vocabulary

@@ -26,6 +26,7 @@ import (
 	"github.com/globulario/sensei-code/internal/publish"
 	"github.com/globulario/sensei-code/internal/report"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/runreceipt"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/taskstate"
@@ -90,6 +91,9 @@ type Engine struct {
 	// preflight would describe a possibly-moved graph while appearing to
 	// describe the moment the plan was authorised.
 	routings map[string]routingRecord
+	// receipts holds what each task has MEASURED so far, recorded at the moment
+	// of measurement rather than reconstructed at the end. See receipt.go.
+	receipts map[string]*receiptFacts
 	// closures counts gap-closure rounds already spent on one condition within
 	// one task, so a gap that does not actually close cannot loop forever.
 	//
@@ -537,6 +541,17 @@ func (e *Engine) markObserving(taskID string) {
 // through run: it was created and announced once already, and announcing it a
 // second time as a fresh human request would overwrite its real provenance.
 func (e *Engine) execute(ctx context.Context, taskID, task string) {
+	// Open the run's own record before anything can fail. A run that ends at
+	// its first step still emits a receipt, and that receipt says it never
+	// reached the gate rather than saying nothing at all.
+	e.beginReceipt(taskID)
+	// A supplied plan governs the run from its first instruction, so its
+	// identity is recorded before anything can fail. Waiting until the plan is
+	// assembled would let an early failure report no plan for a run that was
+	// handed one.
+	if supplied := e.planDigest(taskID); supplied != "" {
+		e.notePlan(taskID, supplied, "")
+	}
 	fail := func(err error) {
 		// A deferred authority decision has already recorded itself, with the
 		// question attached. Reporting it again as a failure or a stop would
@@ -553,11 +568,17 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		// that goes silent when stopped leaves no account of why it ended.
 		if ctx.Err() != nil {
 			const note = "stopped by the human; the candidate is left as it stands"
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowStopped, note, nil))
+			// A human withdrawing is a real terminal outcome, not a failure:
+			// recording it as one would teach the behavioural record that this
+			// task shape breaks. STOPPED says what happened, and a receipt
+			// carrying it is complete.
+			e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceSystem,
+				runreceipt.OutcomeStopped, e.candidateStateFor(taskID), note, nil)
 			e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
 			return
 		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
 		e.reportOutcome(ctx, "failure", task, err.Error())
 	}
 	if task == "" {
@@ -570,6 +591,14 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	}
 
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
+	// Measured AFTER the client answered initialize: the process that served
+	// this run, not the image that was intended to serve it.
+	if err == nil {
+		pid, ok := sc.ServingPID()
+		e.noteServingProducer(taskID, pid, ok)
+	} else {
+		e.noteServingProducer(taskID, 0, false)
+	}
 	if err != nil {
 		fail(fmt.Errorf("start Sensei: %w", err))
 		return
@@ -605,13 +634,20 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// overridable by the architect's decision, because an architect handed a
 	// stale or uncertifiable graph produces a confident, specific plan built on
 	// invariants that no longer hold — which reads as excellent work.
-	start, err := certifyStartForLane(workspaceStatus, preflight, repositoryHead(ctx, e.Repo), e.observes(taskID))
+	// One reading of the repository head, carried through the start and checked
+	// against the base the candidate is actually cut from. Reading it twice let
+	// the receipt name one base while the candidate was rooted at another if
+	// the repository moved in between.
+	head := repositoryHead(ctx, e.Repo)
+	start, err := certifyStartForLane(workspaceStatus, preflight, head, e.observes(taskID))
 	if err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 		e.reportOutcome(ctx, "blocked", task, err.Error())
 		fail(err)
 		return
 	}
+
+	e.noteWorld(taskID, head, start.GraphDigest())
 
 	// The observation lane leaves here, before the change lifecycle begins.
 	//
@@ -656,6 +692,15 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		fail(err)
 		return
 	}
+	// The receipt names the base the start gate read. If the candidate is cut
+	// from a different commit, the repository moved between the two reads and
+	// every later claim about "the base" would name one of two things.
+	if head != "" && identity.BaseSHA != "" && identity.BaseSHA != head {
+		fail(fmt.Errorf(
+			"the repository moved between the certified start and the candidate: the start read %s and the candidate is cut from %s",
+			short(head), short(identity.BaseSHA)))
+		return
+	}
 	if bound, bindErr := identity.BindGraph(e.Repo.Root, start.GraphBuildCommit(), start.SourceRepoCommit()); bindErr == nil {
 		identity = bound
 	}
@@ -683,7 +728,11 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	}
 	if decision.Decision == "reply" {
 		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, decision.Message, decision))
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
+		// A conversational answer carries no plan and no review. Claimed, not
+		// implied: this branch returns before the plan is ever assembled.
+		e.notePlanAbsent(taskID)
+		e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+			runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 		return
 	}
 	// The plan is published as information, not as a gate.
@@ -720,6 +769,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
 	}
+	e.notePlan(taskID, e.planDigest(taskID), plan)
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
 		fail(errors.New("candidate worktree capability is not granted"))
@@ -1397,6 +1447,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// the audit, so a review is still bound to what it read on a run where
 		// Sensei could not audit at all.
 		binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: candidateRevision(diff)}
+		e.noteCandidateDigest(taskID, binding.CandidateDigest)
 		policy := e.policyFor(taskID)
 
 		// The implementer is excluded by construction, not by instruction. An
@@ -2002,6 +2053,7 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			lastErr = fmt.Errorf("no configured reviewer named %q", current.Provider)
 			continue
 		}
+		e.noteReviewerAssigned(taskID, cfg.Name)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
 			fmt.Sprintf("%s takes the reviewer role in a session that inherits nothing", config.DisplayName(cfg.Name)),
 			map[string]any{
@@ -2098,6 +2150,7 @@ func reviewIsInadmissible(v roles.ReviewVerdict, b roles.Binding, implementer st
 // line. A review compressed to a sentence loses the only part a worker can act
 // on, and the compression is invisible afterwards.
 func (e *Engine) reportReview(taskID string, v roles.ReviewVerdict) {
+	e.noteReviewDelivered(taskID, v.Provenance.Provider, string(v.Decision), v.Provenance.CandidateDigest)
 	for _, f := range v.Findings {
 		e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.ReviewFinding, f.Line(), f))
 	}
@@ -3651,6 +3704,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	}
 
 	workspace, createErr := e.Repo.CreateWorktreeAt(ctx, taskID, identity.BaseSHA)
+	if createErr == nil {
+		e.noteCandidateCreated(taskID)
+	}
 	if createErr != nil {
 		fail(fmt.Errorf("create the candidate worktree: %w", createErr))
 		return
@@ -3733,12 +3789,13 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				e.reportOutcome(ctx, "success", task, "read-only plan completed; findings are in the transcript")
 				e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 					"read-only plan: the candidate was never meant to hold work")
-				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted,
+				e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+					e.reviewedOutcome(taskID), runreceipt.CandidateNone,
 					"read-only plan completed with no change to the repository", map[string]any{
 						"implementor": worker.Name,
 						"plan":        plan,
 						"mode":        ModeInspect,
-					}))
+					})
 				return
 			}
 
@@ -3755,8 +3812,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 					Reason:      "accepted by review; the publication decision is still open",
 				})
 				if published.State == stopped {
-					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.WorkflowStopped,
-						"stopped while the publication decision was open; the candidate is left as it stands", nil))
+					e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceUser,
+						runreceipt.OutcomeStopped, e.candidateStateFor(taskID),
+						"stopped while the publication decision was open; the candidate is left as it stands", nil)
 				}
 				return
 			}
@@ -3785,18 +3843,21 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			e.resolveCandidate(taskID, identity, tc, disposition)
 			// Exactly one terminal event. A failed publication used to emit
 			// WorkflowFailed and then WorkflowCompleted for the same run.
-			kind := event.WorkflowCompleted
-			if published.State == failed {
-				kind = event.WorkflowFailed
-			}
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, kind, summary, map[string]any{
+			terminalPayload := map[string]any{
 				"workspace":   workspace,
 				"implementor": worker.Name,
 				"plan":        plan,
 				"review":      review,
 				"audit":       audit,
 				"publication": string(published.State),
-			}))
+			}
+			if published.State == failed {
+				e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+					runreceipt.OutcomeFailed, e.candidateStateFor(taskID), summary, terminalPayload)
+			} else {
+				e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+					e.reviewedOutcome(taskID), e.candidateStateFor(taskID), summary, terminalPayload)
+			}
 			return
 		}
 	}
@@ -3986,13 +4047,15 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) {
 	var deferred DeferredAuthority
 	if err := json.Unmarshal(task.AwaitingAuthority, &deferred); err != nil {
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed,
-			"the deferred authority question could not be read back, so it cannot be asked again: "+err.Error(), nil))
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the deferred authority question could not be read back, so it cannot be asked again: "+err.Error(), nil)
 		return
 	}
 	if len(deferred.Decision.Options) == 0 {
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed,
-			"the deferred authority question carried no options, so there is nothing to answer", nil))
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the deferred authority question carried no options, so there is nothing to answer", nil)
 		return
 	}
 
@@ -4000,8 +4063,9 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// consulted about the question.
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
 	if err != nil {
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed,
-			fmt.Errorf("start Sensei: %w", err).Error(), nil))
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			fmt.Errorf("start Sensei: %w", err).Error(), nil)
 		return
 	}
 	defer sc.Close()
@@ -4012,7 +4076,9 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		// Deferred again, or stopped at the boundary. Either way the question
 		// stands and the workflow does not move past it.
 		if !errors.Is(err, errAuthorityDeferred) {
-			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+				err.Error(), nil)
 		}
 		return
 	}
@@ -4034,7 +4100,9 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			return
 		}
 		fail := func(err error) {
-			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+				err.Error(), nil)
 			e.reportOutcome(ctx, "failure", task.Task, err.Error())
 		}
 		sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)

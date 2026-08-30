@@ -88,9 +88,20 @@ func TestEveryPublicationOutcomeIsDistinguished(t *testing.T) {
 // One run, one terminal event. A failed publication used to emit WorkflowFailed
 // and then WorkflowCompleted.
 func TestAFailedPublicationEmitsOneTerminalEvent(t *testing.T) {
+	// The claim is unchanged: one run, one terminal event, and a failed
+	// publication reports failure rather than reporting twice. The mechanism
+	// moved -- the terminal is now selected in an if/else that routes through
+	// emitRunTerminal, which emits the run receipt with it -- so this checks
+	// the routing rather than the variable the old shape used.
 	body := funcBody(t, "internal/workflow/engine.go", "implement")
-	if !strings.Contains(body, "kind") || !strings.Contains(body, "WorkflowFailed") {
-		t.Fatal("the terminal event is no longer selected from the outcome")
+	if !strings.Contains(body, "emitRunTerminal") {
+		t.Fatal("implement no longer ends the run through the single terminal funnel")
+	}
+	if !strings.Contains(body, "WorkflowFailed") || !strings.Contains(body, "WorkflowCompleted") {
+		t.Fatal("the terminal event is no longer selected from the publication outcome")
+	}
+	if strings.Contains(body, "e.emit(event.New(e.SessionID, taskID, event.SourceSystem, kind") {
+		t.Fatal("the terminal event is emitted outside the funnel, so a run could end without a receipt")
 	}
 	// offerPullRequest must not emit a terminal event of its own any more: that
 	// was the second one.
