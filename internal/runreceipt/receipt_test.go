@@ -6,6 +6,20 @@ import (
 	"testing"
 )
 
+// TestTheZeroValueIsNotAFact: an unset Value carries State "", which is not one
+// of the four. A receipt must STATE every fact, including an absence, rather
+// than let a struct's zero value stand in for one.
+func TestTheZeroValueIsNotAFact(t *testing.T) {
+	if (Value{}).State.Valid() {
+		t.Fatal("the zero Value must not read as a defined state")
+	}
+	rec := completeReceipt()
+	rec.ReviewerExecutable = Value{}
+	if state, _ := rec.Completeness(); state != Incomplete {
+		t.Fatalf("state = %s: an unset value is not an absence anyone recorded", state)
+	}
+}
+
 func TestKnowledgeRequiresAStatedSource(t *testing.T) {
 	if v := MeasuredValue("f01592b0", ""); v.State != Malformed {
 		t.Fatalf("an unsourced claim of knowledge = %v, want MALFORMED", v)
@@ -81,6 +95,8 @@ func TestAnUnknownOutcomeIsRepresentableButNeverComplete(t *testing.T) {
 func TestACompleteRecordOfAnUnreviewedRunIsNotVoid(t *testing.T) {
 	rec := completeReceipt()
 	rec.ReviewVerdict = UnknownValue("no provider produced a bounded verdict")
+	rec.ReviewedDigest = UnknownValue("no provider produced a bounded verdict")
+	rec.Attempts = nil
 	rec.Outcome = OutcomeUnreviewed
 	state, missing := rec.Completeness()
 	if state != Complete {
@@ -91,6 +107,8 @@ func TestACompleteRecordOfAnUnreviewedRunIsNotVoid(t *testing.T) {
 func TestACompleteRecordOfAFailedRunIsAlsoComplete(t *testing.T) {
 	rec := completeReceipt()
 	rec.ReviewVerdict = UnknownValue("the run ended before a verdict")
+	rec.ReviewedDigest = UnknownValue("the run ended before a verdict")
+	rec.Attempts = nil
 	rec.Outcome = OutcomeFailed
 	if state, missing := rec.Completeness(); state != Complete {
 		t.Fatalf("state = %s (%v)", state, missing)
@@ -151,12 +169,27 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 func completeReceipt() Receipt {
 	return Receipt{
 		Schema:               SchemaVersion,
+		CandidateState:       CandidatePresent,
+		CandidateCommit:      MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
+		CandidateTree:        MeasuredValue("tttttttttttttttttttttttttttttttttttttttt", "git rev-parse refs/heads/sensei-code/task-1^{tree}"),
+		CandidateFirstParent: MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "git rev-parse refs/heads/sensei-code/task-1^1"),
+		CandidateDigest:      MeasuredValue("b4f471f096d13f2b", "sha256(candidate diff)"),
+		ReviewerProvider:     MeasuredValue("codex", "event:review.completed.payload.provenance.provider"),
+		ReviewVerdict:        MeasuredValue("accept", "event:review.completed.payload.decision"),
+		ReviewedDigest:       MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
+		Attempts: []Attempt{{
+			Provider:  MeasuredValue("codex", "event:agent.role.assigned.payload.provider"),
+			Delivered: true,
+			Verdict:   MeasuredValue("accept", "event:review.completed.payload.decision"),
+			Digest:    MeasuredValue("b4f471f096d13f2b", "event:review.completed.payload.provenance.candidate_digest"),
+		}},
 		GovernorCommit:       MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "governor self-report"),
 		GovernorBinarySHA256: MeasuredValue("7c0bd86ba2030666f577c9d0ef4dae550eff77a9f6eec01828edf25509c5baea", "sha256:/path/to/governor"),
 		BaseCommit:           MeasuredValue("f01592b0f0828605ed254047fc064f41dacc78f2", "git rev-parse HEAD"),
 		PlanDigest:           MeasuredValue("990090fd50446fedcdf60f11e3256ed91a22fac1670cc4d9333e86f9e638d554", "sha256:plan.json"),
 		GraphDigest:          MeasuredValue("42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64", "awareness metadata"),
 		ServingProducer:      MeasuredValue("pid 2375957 | sha256 1070ee8d", "readlink /proc/2375957/exe"),
+		ReviewerExecutable:   UnknownValue("the governor did not measure the reviewer executable"),
 		Terminal:             MeasuredValue("workflow.completed", "event:workflow.completed"),
 		Outcome:              OutcomeAccepted,
 	}
@@ -169,4 +202,147 @@ func recordedValue(r Receipt, field string) string {
 		}
 	}
 	return ""
+}
+
+// --- conditional evidence: C5's third amendment, carried into the product ---
+
+func TestAPresentCandidateRequiresTheEvidenceThatDescribesIt(t *testing.T) {
+	for _, drop := range []string{"candidate_tree", "candidate_first_parent", "candidate_digest", "candidate_commit"} {
+		rec := completeReceipt()
+		switch drop {
+		case "candidate_tree":
+			rec.CandidateTree = UnknownValue("not measured")
+		case "candidate_first_parent":
+			rec.CandidateFirstParent = UnknownValue("not measured")
+		case "candidate_digest":
+			rec.CandidateDigest = UnknownValue("not measured")
+		case "candidate_commit":
+			rec.CandidateCommit = UnknownValue("not measured")
+		}
+		state, missing := rec.Completeness()
+		if state != Incomplete {
+			t.Fatalf("PRESENT candidate missing %s yielded %s: a receipt may not name a candidate whose describing evidence disappeared", drop, state)
+		}
+		if !strings.Contains(strings.Join(missing, " "), drop) {
+			t.Errorf("missing = %v, want %s named", missing, drop)
+		}
+	}
+}
+
+func TestACandidateNamedWhileClaimingNoneIsInconsistent(t *testing.T) {
+	rec := completeReceipt()
+	rec.CandidateState = CandidateNone
+	state, missing := rec.Completeness()
+	if state != Incomplete {
+		t.Fatalf("state = %s, want INCOMPLETE", state)
+	}
+	if !strings.Contains(strings.Join(missing, " "), "contradicts the evidence") {
+		t.Fatalf("missing = %v, want the contradiction named", missing)
+	}
+}
+
+func TestACandidateStateThatCannotSayIsNeverComplete(t *testing.T) {
+	if CandidateState("MAYBE").Valid() {
+		t.Fatal("membership must be read by enumeration")
+	}
+	for _, bad := range []CandidateState{CandidateUnknown, "MAYBE", ""} {
+		rec := completeReceipt()
+		rec.CandidateState = bad
+		if state, _ := rec.Completeness(); state != Incomplete {
+			t.Fatalf("candidate_state %q yielded %s", bad, state)
+		}
+	}
+}
+
+// A read-only run legitimately has no candidate, and that is a fact rather than
+// an absence of one.
+func TestARunWithNoCandidateIsCompleteWhenItSaysSo(t *testing.T) {
+	rec := completeReceipt()
+	rec.CandidateState = CandidateNone
+	rec.CandidateCommit = UnknownValue("the run produced no candidate")
+	rec.CandidateTree = UnknownValue("the run produced no candidate")
+	rec.CandidateFirstParent = UnknownValue("the run produced no candidate")
+	rec.CandidateDigest = UnknownValue("the run produced no candidate")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("state = %s (%v)", state, missing)
+	}
+}
+
+func TestABoundedVerdictRequiresTheEvidenceOfWhoGaveIt(t *testing.T) {
+	for _, outcome := range []Outcome{OutcomeAccepted, OutcomeRefused} {
+		for _, drop := range []string{"reviewer_provider", "review_verdict", "reviewed_digest", "no delivered attempt"} {
+			rec := completeReceipt()
+			rec.Outcome = outcome
+			switch drop {
+			case "reviewer_provider":
+				rec.ReviewerProvider = UnknownValue("not measured")
+			case "review_verdict":
+				rec.ReviewVerdict = UnknownValue("not measured")
+			case "reviewed_digest":
+				rec.ReviewedDigest = UnknownValue("not measured")
+			case "no delivered attempt":
+				rec.Attempts = nil
+			}
+			state, missing := rec.Completeness()
+			if state != Incomplete {
+				t.Fatalf("%s without %s yielded %s: the outcome asserts a bounded verdict that nothing evidences", outcome, drop, state)
+			}
+			_ = missing
+		}
+	}
+}
+
+func TestUnreviewedWhileABoundedVerdictIsRecordedIsInconsistent(t *testing.T) {
+	rec := completeReceipt()
+	rec.Outcome = OutcomeUnreviewed // but the verdict fields are still measured
+	state, missing := rec.Completeness()
+	if state != Incomplete {
+		t.Fatalf("state = %s, want INCOMPLETE", state)
+	}
+	if !strings.Contains(strings.Join(missing, " "), "contradicts the evidence") {
+		t.Fatalf("missing = %v, want the contradiction named", missing)
+	}
+}
+
+// --- every value, wherever it lives ---
+
+func TestASourcelessClaimInsideAReviewerAttemptIsAlsoInvalid(t *testing.T) {
+	rec := completeReceipt()
+	rec.Attempts[0].Provider = Value{Text: "codex", State: Known}
+	state, missing := rec.Completeness()
+	if state != Incomplete {
+		t.Fatalf("state = %s: attempts carry evidence too, and validation must reach them", state)
+	}
+	if !strings.Contains(strings.Join(missing, " "), "attempts[0].provider") {
+		t.Fatalf("missing = %v, want the attempt value named", missing)
+	}
+}
+
+func TestAKnownnessOutsideTheDefinedFourIsInvalid(t *testing.T) {
+	if Knownness("CERTAIN").Valid() {
+		t.Fatal("membership must be read by enumeration")
+	}
+	rec := completeReceipt()
+	rec.ReviewerExecutable = Value{Text: "/usr/bin/codex", State: Knownness("CERTAIN")}
+	state, missing := rec.Completeness()
+	if state != Incomplete {
+		t.Fatalf("state = %s: an invalid state on an OPTIONAL field must still be caught", state)
+	}
+	if !strings.Contains(strings.Join(missing, " "), "not a value this schema defines") {
+		t.Fatalf("missing = %v", missing)
+	}
+}
+
+func TestARequiredUnsupportedFieldIsReportedAsUnsupported(t *testing.T) {
+	rec := completeReceipt()
+	rec.GraphDigest = Value{State: Unsupported, Detail: "emitted under a newer schema"}
+	var kind MismatchKind
+	for _, m := range rec.Verify(func(string) (string, bool) { return "", true }) {
+		if m.Field == "graph_digest" {
+			kind = m.Kind
+		}
+	}
+	if kind != MismatchRecordedUnsupported {
+		t.Fatalf("graph_digest kind = %q, want RECORDED_UNSUPPORTED: collapsing it into RECORDED_UNKNOWN brings back prose-parsing", kind)
+	}
 }

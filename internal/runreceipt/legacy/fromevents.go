@@ -89,6 +89,10 @@ func nested(m map[string]any, objKey, key, source string) runreceipt.Value {
 // an outage, and the observation is the thing worth keeping.
 func FromEvents(r io.Reader) runreceipt.Receipt {
 	rec := runreceipt.Receipt{Schema: runreceipt.SchemaVersion, Outcome: runreceipt.OutcomeUnknown}
+	// The historical stream cannot distinguish "this run produced no candidate"
+	// from "the events do not say", so the adapter says UNKNOWN rather than
+	// choosing. A governor emitting its own receipt knows which it is.
+	rec.CandidateState = runreceipt.CandidateUnknown
 
 	// Facts the historical stream never measured. Each says so, and why. A
 	// governor emitting its own receipt supplies these; an adapter cannot.
@@ -180,6 +184,7 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 			}
 			if v := text(payload, "candidate", "event:agent.role.assigned.payload.candidate"); v.State == runreceipt.Known {
 				rec.CandidateDigest = v
+				rec.CandidateState = runreceipt.CandidatePresent
 			}
 		case "review.completed":
 			verdict := text(payload, "decision", "event:review.completed.payload.decision")
@@ -198,9 +203,12 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 			rec.ReviewVerdict = verdict
 			rec.ReviewedDigest = digest
 			flush()
+		case "candidate.changed":
+			rec.CandidateState = runreceipt.CandidatePresent
 		case "workflow.completed", "workflow.failed", "candidate.not_auditable":
 			rec.Terminal = runreceipt.MeasuredValue(kind, "event:"+kind)
 		case "candidate.resolved":
+			rec.CandidateState = runreceipt.CandidatePresent
 			if evidence, state, _ := object(payload, "evidence"); state == runreceipt.Known {
 				if v := text(evidence, "base_sha", "event:candidate.resolved.payload.evidence.base_sha"); v.State == runreceipt.Known {
 					rec.BaseCommit = v
@@ -234,7 +242,7 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 func modelled(kind string) bool {
 	switch kind {
 	case "output", "status", "task.created", "mode.selected", "context.consulted",
-		"candidate.changed", "candidate.audited", "validation.run", "routine.classified",
+		"candidate.audited", "validation.run", "routine.classified",
 		"review.started", "review.finding", "change.reported", "decision.recorded",
 		"agent.started", "agent.finished", "inspection.reported", "handoff.created",
 		"authority.required", "authority.resolved", "review.contradiction",

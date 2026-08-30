@@ -42,11 +42,26 @@ already existed in the previous run's preserved log, unexamined.
   `Verify` recomputes each re-derivable fact — reporting a field it *could not*
   recompute, because silence from a verifier is not agreement.
 - **`MismatchKind`** (`DISAGREEMENT` / `UNRECOMPUTABLE` / `RECORDED_UNKNOWN` /
-  `RECORDED_MALFORMED`) so consumers switch on epistemic state rather than
+  `RECORDED_MALFORMED` / `RECORDED_UNSUPPORTED`) so consumers switch on epistemic state rather than
   parse English prose.
+- **Conditional evidence.** Requiredness is not a static boolean on a field.
+  `CandidateState` (`NONE` / `PRESENT` / `UNKNOWN`) is the machine-readable
+  condition that makes candidate evidence required, and it is **cross-checked**
+  against the candidate fields: a receipt naming a candidate while claiming
+  none is inconsistent, not complete. Likewise `ACCEPTED`/`REFUSED` require the
+  reviewer evidence *and* at least one delivered attempt, while `UNREVIEWED`
+  alongside a recorded bounded verdict is a contradiction. This is C5's third
+  amendment carried into the product rather than left at the boundary.
+- **Every value is validated wherever it lives**, including inside reviewer
+  `Attempts`. `Knownness.Valid()` and `Outcome.Valid()` read membership by
+  enumeration, so `Knownness("CERTAIN")` is invalid rather than a fifth kind of
+  knowledge — and the **zero `Value` is invalid too**, so an unset field cannot
+  stand in for an absence somebody recorded.
 - **`internal/runreceipt/legacy.FromEvents`** builds a receipt from a run's
-  JSONL stream, in its own package. The governed loop imports the core and
-  never the adapter: a package boundary is a stronger statement than a comment,
+  JSONL stream, in its own package, and an **import guard test** walks the
+  repository and fails if anything outside the adapter imports it. The boundary
+  is enforced rather than described: a package boundary alone kept only the
+  core clean,
   and documentation did not stop a parser from being tested against invented
   specimens. The adapter also **never infers** — an earlier draft set
   `GovernorCommit` from the same field as `BaseCommit`, one measured fact
@@ -75,7 +90,19 @@ discovered experiments/*/runs  -> every other preserved log joins automatically
 adapter-built receipt          -> can never be COMPLETE: the historical stream
                                   cannot supply governor identity, binary
                                   digest or serving producer
-sourceless KNOWN               -> INCOMPLETE
+sourceless KNOWN, anywhere     -> INCOMPLETE, including inside an Attempt
+zero Value / Knownness("X")    -> INCOMPLETE, on optional fields too
+PRESENT candidate, no tree     -> INCOMPLETE
+candidate named + state NONE   -> INCOMPLETE, the condition contradicts the
+                                  evidence
+NONE + no candidate fields     -> COMPLETE (a read-only run is a fact)
+ACCEPTED without reviewer      -> INCOMPLETE
+ACCEPTED with no delivered     -> INCOMPLETE
+attempt
+UNREVIEWED + bounded verdict   -> INCOMPLETE
+required UNSUPPORTED field     -> RECORDED_UNSUPPORTED
+nothing outside the adapter    -> enforced by an import-guard test
+imports it
 outcome "VOID" / any unknown   -> INCOMPLETE, invalid membership
 outcome UNKNOWN                -> representable, never COMPLETE
 payload.provenance as a string -> MALFORMED, and the well-formed verdict beside
