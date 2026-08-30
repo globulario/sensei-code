@@ -171,6 +171,7 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 func completeReceipt() Receipt {
 	return Receipt{
 		Schema:                    SchemaVersion,
+		FormatterMutationState:    MeasuredValue(string(FormatterUnchanged), "no formatter is configured"),
 		ExecutionBudget:           UnknownValue("no execution budget expired"),
 		DeferredQuestion:          UnknownValue("no authority question was deferred"),
 		PlanState:                 PlanPresent,
@@ -589,7 +590,7 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v5"
+	const version = "sensei-code.governed-run-receipt/v6"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
@@ -672,5 +673,35 @@ func TestATimedOutRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	// v4 does not define TIMED_OUT.
 	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v4", OutcomeTimedOut); err == nil {
 		t.Fatal("v4 + TIMED_OUT must be invalid: TIMED_OUT was added in v5")
+	}
+}
+
+// The formatter fact is instrumentation, and it obeys the same laws as every
+// other fact: a closed vocabulary, a stated source, and no silent gap.
+func TestTheFormatterMutationFactIsMeasuredAndClosed(t *testing.T) {
+	for _, v := range []FormatterMutation{FormatterMutated, FormatterUnchanged, FormatterUnsaid} {
+		if !v.Valid() {
+			t.Errorf("%q is enumerated but not valid", v)
+		}
+	}
+	for _, bad := range []FormatterMutation{"YES", "NO", "CHANGED", ""} {
+		if bad.Valid() {
+			t.Errorf("%q must not be a valid formatter fact", bad)
+		}
+	}
+	// UNKNOWN is an acceptable VALUE; an unstated field is not.
+	rec := completeReceipt()
+	rec.FormatterMutationState = MeasuredValue(string(FormatterUnsaid), "validation had not run")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("UNKNOWN must be an acceptable value: %v", missing)
+	}
+	rec.FormatterMutationState = UnknownValue("not recorded")
+	if state, _ := rec.Completeness(); state != Incomplete {
+		t.Fatal("a candidate that exists must STATE the formatter fact, even as UNKNOWN")
+	}
+	rec.FormatterMutationState = MeasuredValue("PROBABLY", "a guess")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "formatter_mutation") {
+		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }

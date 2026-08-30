@@ -199,7 +199,7 @@ func drainUntilTerminal(events <-chan event.Event, taskID string, enc *json.Enco
 			} else if !quiet || terminal(ev.Kind) {
 				fmt.Println(renderEvent(ev))
 			}
-			if terminal(ev.Kind) {
+			if invocationFinal(ev.Kind) {
 				return code
 			}
 		}
@@ -260,6 +260,12 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 				return exitObserved
 			case event.WorkflowFailed:
 				return exitFailed
+			case event.WorkflowTimedOut:
+				// The engine terminalized a deadline itself. Adding a terminal
+				// kind without teaching every consumer that reads terminals is
+				// how the drain ended up waiting a full grace window for an
+				// event it had already been handed.
+				return exitTimeout
 			case event.WorkflowStopped:
 				if deferred {
 					return exitAwaitingAuthority
@@ -272,6 +278,25 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 	}
 }
 
+// invocationFinal is the set that ENDS an invocation.
+//
+// It is deliberately narrower than terminal(): AuthorityRequired is an
+// interruption boundary, not an ending. In the ordinary stream it triggers
+// DeferAuthority and the engine then emits the real terminal afterwards. A
+// drain that treated it as final could return on a buffered AuthorityRequired
+// and exit before WorkflowTimedOut and its receipt ever arrived -- reopening
+// the accounting hole this drain exists to close.
+func invocationFinal(k event.Kind) bool {
+	switch k {
+	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
+		event.WorkflowTimedOut, event.WorkflowObserved, event.WorkflowAwaitingAuthority:
+		return true
+	}
+	return false
+}
+
+// terminal is the RENDER-worthy set: what a quiet run still prints, including
+// the interruption boundary a human needs to see.
 func terminal(k event.Kind) bool {
 	switch k {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,

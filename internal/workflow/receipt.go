@@ -53,6 +53,7 @@ type receiptFacts struct {
 	// executionBudget the deadline a timed-out invocation exhausted.
 	deferredQuestion                      runreceipt.Value
 	executionBudget                       runreceipt.Value
+	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
 	attempts                              []runreceipt.Attempt
@@ -103,6 +104,10 @@ func freshFacts() *receiptFacts {
 		candRendering:    notYet("no candidate identity was minted"),
 		deferredQuestion: notYet("no authority question was deferred"),
 		executionBudget:  notYet("no execution budget expired"),
+		// Stated, not defaulted: a candidate that never reached validation has
+		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
+		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
+			"validation had not run when this record was opened"),
 		// The relation is UNKNOWN until something measures it, and UNKNOWN is
 		// never sufficient for a complete record of a candidate that exists.
 		digestRelation: runreceipt.RelationUnknown,
@@ -304,6 +309,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		ReviewedTree:              facts.reviewedTree,
 		DeferredQuestion:          facts.deferredQuestion,
 		ExecutionBudget:           facts.executionBudget,
+		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
 		CandidateState:            cand,
@@ -504,6 +510,29 @@ func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.So
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
 	e.emitReceipt(taskID, kind, outcome, cand)
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
+}
+
+// noteFormatterMutation records whether validation's formatter changed
+// candidate bytes. Instrumentation only: it repairs nothing and decides
+// nothing, it merely stops the occurrence from being unobservable.
+func (e *Engine) noteFormatterMutation(taskID string, mutated bool) {
+	state := runreceipt.FormatterUnchanged
+	if mutated {
+		state = runreceipt.FormatterMutated
+	}
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.formatterMutation = runreceipt.MeasuredValue(string(state),
+			"the candidate diff digest compared across the formatter step")
+	})
+}
+
+// noteNoFormatterConfigured records that nothing could have rewritten the
+// candidate, which is a measurement rather than an absence of one.
+func (e *Engine) noteNoFormatterConfigured(taskID string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.formatterMutation = runreceipt.MeasuredValue(string(runreceipt.FormatterUnchanged),
+			"no formatter is configured, so nothing rewrote the candidate")
+	})
 }
 
 // noteDeferredQuestion records the authority question a run stopped on.

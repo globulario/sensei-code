@@ -234,9 +234,38 @@ func TestATimeoutGivesUpOnAnEngineThatNeverAccounts(t *testing.T) {
 	ctrl := &fakeControl{}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	events := make(chan event.Event) // nothing will ever arrive
-	close(events)
+	// The channel stays OPEN. An earlier version closed it, and the drain
+	// returns immediately on closure, so the grace timer was never exercised
+	// and the test proved nothing about the property it names. The real
+	// headless subscription stays open until the run returns.
+	events := make(chan event.Event)
+	start := time.Now()
 	if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, time.Minute); code != exitTimeout {
 		t.Fatalf("exit = %d, want exitTimeout", code)
+	}
+	if time.Since(start) < 20*time.Millisecond {
+		t.Fatal("returned before the grace window elapsed, so the grace path was not exercised")
+	}
+}
+
+// An interruption boundary is not an ending: a buffered AuthorityRequired must
+// not let the drain exit before the real terminal and its receipt arrive.
+func TestTheDrainWaitsPastAnInterruptionBoundary(t *testing.T) {
+	defer func(d time.Duration) { terminalGrace = d }(terminalGrace)
+	terminalGrace = 2 * time.Second
+	ctrl := &fakeControl{canDefer: true}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	events := make(chan event.Event, 2)
+	events <- ev("t1", event.AuthorityRequired) // an interruption, not an ending
+	events <- ev("t1", event.WorkflowTimedOut)  // the real terminal
+	if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, time.Minute); code != exitTimeout {
+		t.Fatalf("exit = %d, want exitTimeout", code)
+	}
+	if invocationFinal(event.AuthorityRequired) {
+		t.Fatal("AuthorityRequired must not be invocation-final")
+	}
+	if !invocationFinal(event.WorkflowTimedOut) {
+		t.Fatal("WorkflowTimedOut must be invocation-final")
 	}
 }

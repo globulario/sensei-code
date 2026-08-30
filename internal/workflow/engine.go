@@ -4529,12 +4529,20 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// Formatting first, and its evidence is deliberately discarded from the
 	// certifying bundle: it describes the candidate before the rewrite.
 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
-		runner.Run(ctx, taskID, validation.Digest(diff), formats)
+		before := validation.Digest(diff)
+		runner.Run(ctx, taskID, before, formats)
 		reread, err := repo.CandidateDiff(ctx, base)
 		if err != nil {
 			return validation.Bundle{}, diff, err
 		}
+		// The formatter's own evidence is discarded above, but WHETHER IT
+		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
+		// about the candidate, and later identity reasoning depends on it.
+		// Measured here because this is the only point where both sides exist.
+		e.noteFormatterMutation(taskID, before != validation.Digest(reread))
 		diff = reread
+	} else {
+		e.noteNoFormatterConfigured(taskID)
 	}
 
 	var checks []validation.Check
