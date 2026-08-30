@@ -37,13 +37,25 @@ An author string is not proof — anyone can write one. The proof is that `C` is
 **reconstructible**: given `B` and the reviewed tree, an independent
 implementation must produce the same SHA.
 
+`CanonicalCommit(B, T)` is a **function with a test vector**, not a convention
+around a subprocess. Step 1 fixes the exact serialized commit bytes:
+
 ```text
+tree        T
 parent      B
-tree        the reviewed tree
 author      Sensei Code Candidate Identity <reserved non-person address>
-committer   the same
-dates       derived from B's commit time, +1 second, fixed +0000 offset
-message     derived only from (B, tree) -- no task id, no reviewer, no plan
+            <base committer timestamp + 1> +0000
+committer   the same identity, the same timestamp
+message     derived only from (B, T) -- no task id, no reviewer, no plan --
+            with an exact trailing newline
+```
+
+Everything is an input or a constant; nothing is read from the environment. The
+tests assert that none of these change `C`:
+
+```text
+user.name   user.email   TZ   arbitrary git config   the current clock
+task id     reviewer     plan digest
 ```
 
 The task id, reviewer, plan digest and verdict live in the **receipt**.
@@ -70,6 +82,45 @@ worker finishes
   ↓ noteCandidateCommit(C, tree, first parent)
   ↓ emitRunTerminal  ->  COMPLETE / ACCEPTED for the first time
   ↓ disposition, publication, admission -- each a separate decision
+```
+
+## Step 0 of step 1 — an exact reviewed path set
+
+The tree builder needs "exactly the reviewed paths". **That set does not exist
+today.** `Capture` carries `Diff`, `Excluded` and `Binaries` and no path list at
+all, so every consumer re-derives it from text:
+
+```text
+CandidateCapture   --numstat WITHOUT -z, TrimSpace, SplitN on tab
+report.FromDiff    parses `diff --git a/P b/P` headers, fails open on a
+                   quoted path
+changedPaths(diff) the same, again
+```
+
+That is the representation seam reserved for C6, and canonical identity cannot
+depend on the lossy form while promising to repair it later. **An assumption
+moves earlier when a new load-bearing mechanism starts depending on it**, so
+that piece of C6 moves into step 1.
+
+```text
+CandidateCapture
+  ↓ artifact exclusions established, as today
+  ↓ git diff --no-renames --name-status -z <base>
+  ↓ parse on NUL boundaries -- no trimming, no tab splitting
+Capture.Paths      the ONE authority for the reviewed path set
+```
+
+**No rename detection**, deliberately: a rename then arrives as exactly what
+the tree builder needs -- a deletion at the old path and an addition at the new
+one -- rather than a presentation-level encoding the builder would have to undo.
+
+That single set is the authority for all three consumers, with no independently
+reconstructed list anywhere:
+
+```text
+what the reviewer judged
+what the temporary index stages
+what the diff(B,C) path verification compares against
 ```
 
 ## Mechanics
@@ -117,6 +168,18 @@ they are produced by different mechanisms. It does **not** force them equal, and
 it does not quietly redefine `CandidateDigest` to mean whichever one matches.
 That would be the false equivalence this chain keeps repairing.
 
+**v3 reserves the typed space for that measurement now**, rather than landing v3
+and discovering step 5 needs v4:
+
+```text
+CandidateDigest             the reviewed CandidateCapture digest, D
+CandidateCommitDiffDigest   recomputed from diff(B,C)
+CandidateDigestRelation     MATCH | DIFFER | UNKNOWN, read by enumeration
+```
+
+`UNKNOWN` is the honest value before step 5 has measured anything, and it is
+never sufficient for COMPLETE once both digests are present.
+
 ## Schema: v3
 
 `CandidateState` changes meaning — `PRESENT` becomes *measured work*, not
@@ -128,6 +191,20 @@ NONE      candidate content was measured and there is no work
 PRESENT   candidate content was measured and differs from B
 UNKNOWN   the run cannot yet say
 ```
+
+The transitions are explicit, and the important one is the middle:
+
+```text
+before the candidate lifecycle    NONE, when structurally known absent
+worktree opened / worker running  UNKNOWN   <-- content is mutating and
+                                            unmeasured; a stale NONE here
+                                            would deny work that exists
+final capture empty               NONE      (Evidence.ProducedNoWork)
+final capture non-empty           PRESENT
+```
+
+A failure after the worker mutated the tree but before `CandidateCapture` must
+therefore read `UNKNOWN`, not `NONE`.
 
 `noteCandidateCreated` moves from worktree creation to capture. **No empty
 commit is ever minted** to satisfy `PRESENT`: a run that produced nothing is
@@ -150,20 +227,37 @@ precondition check on the identity step instead. A test asserts the publication
 package invokes no `git commit` at all — two paths that can disagree about what
 was committed is the defect class this chain exists to remove.
 
-## Custody, in three layers
+## Custody, in four layers
+
+Three was wrong: publication already creates a durable ref, and says plainly
+that it is not admission.
 
 ```text
-IDENTITY                    the exact object C
-CANDIDATE CUSTODY           the candidate branch points at C, and disappears
-                            with it if the disposition removes the branch
-ADMISSION CUSTODY           a policy-owned durable ref -- refs/sensei-code/
-                            admitted/<...> -- created by a separate decision
+IDENTITY               the exact object C
+LOCAL CANDIDATE        the local candidate branch -> C; disposable with the
+CUSTODY                candidate lifecycle
+PUBLICATION CUSTODY    origin's candidate branch -> C, via
+                       `push --set-upstream`. Durable, and explicitly NOT
+                       admission: publish.Body says so in the pull request
+                       itself -- "not a Sensei admission", "Sensei Code does
+                       not merge".
+ADMISSION CUSTODY      a policy-owned ref -> C, created by a separate decision
 ```
 
-Minting `C` does give it *candidate* custody, because a ref points at it. That
-custody belongs to the candidate lifecycle and dies with it, so it still implies
-no admission. **Admission custody is out of scope for this slice** and is named
-here only so the boundary is explicit.
+This is better evidence for the architecture than the three-layer version:
+
+> **Durability does not imply admission either.** Authority comes from the
+> class and creator of the surviving ref, not from reachability.
+
+And the claim about removal must be narrower than "deleting the branch makes C
+unreachable" -- reflog and GC timing can retain objects transiently. The claim
+we actually need is:
+
+> no policy-recognised candidate custody remains once its candidate refs are
+> removed.
+
+**Admission custody is out of scope for this slice** and is named only so the
+boundary is explicit.
 
 Before implementing admission custody, re-read
 `sensei_code.candidate.disposition_is_decided_and_evidence_outlives_removal`:
