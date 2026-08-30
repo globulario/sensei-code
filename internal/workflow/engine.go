@@ -1435,8 +1435,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// Snapshot the position so a handover states what the candidate holds
 		// rather than describing it in prose the next worker has to re-derive.
 		tc.EvidenceSnapshot = taskstate.Evidence{
-			DiffBytes:     len(diff),
-			ChangedPaths:  changedPaths(diff),
+			DiffBytes: len(diff),
+			// The capture's exact path set, not a re-parse of the diff text:
+			// the authoritative set is already in hand here.
+			ChangedPaths:  capture.Paths,
 			AuditVerdict:  string(verdict.Decision),
 			AuditDetail:   verdict.Diagnostic(),
 			RequiredTests: tc.EvidenceSnapshot.RequiredTests,
@@ -1446,8 +1448,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// here on is about. It is computed from the diff rather than taken from
 		// the audit, so a review is still bound to what it read on a run where
 		// Sensei could not audit at all.
-		binding := roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: candidateRevision(diff)}
+		// {B, D, T}: the base, the representation the reviewer consumed, and the
+		// content identity that representation was rendered from. D is a
+		// deterministic function of (B, T) computed in the same capture, so the
+		// three are one claim rather than three measurements that have to be
+		// argued into agreement.
+		binding := roles.Binding{
+			TaskID:          taskID,
+			BaseSHA:         tc.Identity.BaseSHA,
+			CandidateDigest: candidateRevision(diff),
+			CandidateTree:   capture.Tree,
+		}
 		e.noteCandidateDigest(taskID, binding.CandidateDigest)
+		e.noteCandidateTree(taskID, capture.Tree)
 		policy := e.policyFor(taskID)
 
 		// The implementer is excluded by construction, not by instruction. An
@@ -3773,6 +3786,17 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		plan = finalPlan
 		if accepted {
+			// The accepted candidate is given its name here: after the verdict,
+			// before anything reports or publishes it, and before the receipt
+			// that must be able to state what the run produced.
+			//
+			// A read-only plan produced no candidate and has nothing to mint.
+			if tc.Mode != ModeInspect {
+				if err := e.mintCandidateIdentity(ctx, taskID, tc, workspace, e.Repo.WorktreeBranch(taskID)); err != nil {
+					fail(fmt.Errorf("the accepted candidate could not be given a commit identity: %w", err))
+					return
+				}
+			}
 			state.Phase = taskstate.Accepted
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(nil)

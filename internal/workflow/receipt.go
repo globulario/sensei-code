@@ -37,6 +37,7 @@ import (
 type receiptFacts struct {
 	base, graph, plan                          runreceipt.Value
 	candCommit, candTree, candParent, candDiff runreceipt.Value
+	reviewedTree                               runreceipt.Value
 	provider, executable, verdict, digest      runreceipt.Value
 	serving                                    runreceipt.Value
 	attempts                                   []runreceipt.Attempt
@@ -76,18 +77,19 @@ func freshFacts() *receiptFacts {
 		return runreceipt.UnknownValue("not measured: " + what)
 	}
 	return &receiptFacts{
-		base:       notYet("the run did not reach the start gate"),
-		graph:      notYet("the run did not reach the start gate"),
-		plan:       notYet("no plan was established for this run"),
-		candCommit: notYet("no candidate was created"),
-		candTree:   notYet("no candidate was created"),
-		candParent: notYet("no candidate was created"),
-		candDiff:   notYet("no candidate was created"),
-		provider:   notYet("no reviewer was assigned"),
-		executable: notYet("the engine does not measure the reviewer executable"),
-		verdict:    notYet("no bounded verdict was returned"),
-		digest:     notYet("no bounded verdict was returned"),
-		serving:    notYet("the awareness process had not been launched"),
+		base:         notYet("the run did not reach the start gate"),
+		graph:        notYet("the run did not reach the start gate"),
+		plan:         notYet("no plan was established for this run"),
+		candCommit:   notYet("no candidate was created"),
+		candTree:     notYet("no candidate was created"),
+		candParent:   notYet("no candidate was created"),
+		candDiff:     notYet("no candidate was created"),
+		reviewedTree: notYet("no candidate was reviewed"),
+		provider:     notYet("no reviewer was assigned"),
+		executable:   notYet("the engine does not measure the reviewer executable"),
+		verdict:      notYet("no bounded verdict was returned"),
+		digest:       notYet("no bounded verdict was returned"),
+		serving:      notYet("the awareness process had not been launched"),
 		// Opening states. Nothing has been CREATED yet, so the candidate axis
 		// opens at NONE as a positive claim. The plan axis does NOT: a supplied
 		// plan may already exist before the first step succeeds, and a resumed
@@ -173,6 +175,16 @@ func (e *Engine) notePlan(taskID, suppliedDigest, planText string) {
 func (e *Engine) noteCandidateDigest(taskID, digest string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		f.candDiff = runreceipt.MeasuredValue(digest, "sha256 of the candidate diff, truncated as the review binding does")
+	})
+}
+
+// noteCandidateTree records the content identity the review was about.
+//
+// It is measured at capture, before anything renders or judges the candidate,
+// and it is what the receipt means by ReviewedTree.
+func (e *Engine) noteCandidateTree(taskID, tree string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.reviewedTree = runreceipt.MeasuredValue(tree, "the canonical tree the review binding named")
 	})
 }
 
@@ -425,4 +437,16 @@ func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.So
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
 	e.emitReceipt(taskID, kind, outcome, cand)
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
+}
+
+// reviewedTreeFor returns the content identity the review binding named, and
+// whether the run measured one at all.
+func (e *Engine) reviewedTreeFor(taskID string) (string, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	f, ok := e.receipts[taskID]
+	if !ok || f == nil || f.reviewedTree.State != runreceipt.Known {
+		return "", false
+	}
+	return f.reviewedTree.Text, true
 }
