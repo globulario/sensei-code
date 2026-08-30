@@ -1,0 +1,26 @@
+{
+ "A1": {
+  "sensei_sha": "unrecorded",
+  "sensei_code_sha": "292686f4c2aa875798da7413b375f9f6c152064d",
+  "fixture": "github.com/globulario/sensei-code (self; shallow clone of the branch head, origin removed)",
+  "outcome": "TIMED OUT at 25m inside the revision turn. Exit 5, candidate left in place, NO terminal event, NO RECEIPT. The judgement path passed; the accounting failed.",
+  "note": "Codex returned REVISE on candidate 73449817d223 with a blocking architectural finding: the worker removed a lossy authority path while preserving that same lossy parser as a fallback on the mismatch path, converting a structural disagreement into a lossy report after acceptance. It named fail-closed violation and fallback-as-truth. First genuine architectural judgement observed in this chain, on a task whose text prescribed no implementation.",
+  "findings": [
+   "Criterion 1 PASS: a real behavioural implementation was independently reviewed and a natural REVISE was returned.",
+   "Criteria 2-5 UNTESTED: the revision turn never completed, so T1->T2 identity remains unexercised.",
+   "Criteria 7 and 9 FAIL: a timeout is a process-ending path that emits no receipt, so determining what happened required reading the event stream.",
+   "NEW DEFECT, same family as R1's authority deferral: the CLI calls engine.Stop and returns immediately, so the process exits before the engine can terminalize. The invocation ends OUTSIDE the engine's own accounting.",
+   "P1 activation UNMEASURED, and the pre-registered procedure has a hole: measurements 1 and 2 need a mint and a receipt; measurement 3 cannot answer because gofmt -w runs first and the design deliberately discards its evidence.",
+   "Not a provider limit: Codex reviewed in 65 seconds and never failed, so the gemini fallback correctly did not fire. All 14 rate-limit events read status=allowed. The budget was spent by the architect (4m32s) and the first implementor turn (14m41s).",
+   "The headless lane can produce a resumable candidate it cannot resume: session.FindInterrupted and Engine.Resume are wired only into the TUI."
+  ],
+  "review_provenance": {
+   "reasoning_author": "GPT-5.6 Sol -- the task selection, the twelve falsifiers, the bias audit and this classification (in conversation, relayed by the owner)",
+   "independent_automated_reviewer": "Codex -- in-run reviewer, REVISE on candidate 73449817d223, session inheriting nothing",
+   "implementation_and_reconstruction": "Claude -- the frozen experiment, the run and these records; the reviewed candidate was produced by a separate bounded Claude worker",
+   "account_principal": "davecourtois",
+   "project_owner": "davecourtois (human) -- owner, operator, ultimate authority",
+   "ledger_recorder": "Claude"
+  }
+ }
+}
