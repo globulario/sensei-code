@@ -75,10 +75,16 @@ earlier version built `T` after acceptance, which meant `T` was a tree
 *constructed from* what was reviewed rather than one of the identities *of* what
 was reviewed — leaving a race between "review succeeded" and "build the tree".
 
-`D` cannot close that gap on its own: `CandidateCapture.Diff` deliberately
-renders a kept binary as `Binary files differ` rather than bytes, so two
-different binary blobs can share a textual review representation. **Tree
-equality, not textual-diff equality, carries exact content identity.**
+`D` cannot close that gap on its own, because it is a second read of a mutable
+worktree: content can move between the read that produced the review text and
+the read that produced the tree. **Tree equality, not textual-diff equality,
+carries exact content identity.**
+
+~~Two different binary blobs can share a textual review representation, because
+a kept binary renders as `Binary files differ`.~~ **RETRACTED, measured:** git
+also emits an `index <old>..<new>` line whose abbreviated blob hashes
+distinguish them. The two-read seam is the reason for the ordering; the binary
+corner is not.
 
 The reviewer binding therefore grows one field:
 
@@ -151,16 +157,21 @@ Built in a **temporary index** so the live worktree index is untouched
 interfere):
 
 ```text
-GIT_INDEX_FILE=<tmp>  git read-tree B
-GIT_INDEX_FILE=<tmp>  git add --all -- <reviewed paths>     # scoped: handles
-                                                            # adds, edits and
-                                                            # deletions, and
+GIT_INDEX_FILE=<tmp> GIT_LITERAL_PATHSPECS=1
+                      git read-tree B
+                      git add --all -- <reviewed paths>     # scoped: adds,
+                                                            # edits, deletions;
                                                             # sweeps nothing
-GIT_INDEX_FILE=<tmp>  git write-tree                        # -> T
-GIT_AUTHOR_* GIT_COMMITTER_* fixed
-                      git commit-tree T -p B -m <message>   # -> C
+                      git write-tree                        # -> T
+                      # then: re-ask the artifact boundary of T
+                      # then: diff B T  -> the review representation -> D
+                      git hash-object -t commit --stdin     # expected id, NO -w
+                      git hash-object -t commit -w --stdin  # mint C
                       git update-ref refs/heads/<branch> C
 ```
+
+The commit object is serialized by this package rather than built by
+`commit-tree`, which is what makes the byte-exact test vector possible.
 
 `add --all` is scoped to the reviewed path list, so an excluded artifact or a
 worker's scratch file cannot enter `C` — the property `publish.CommitArgs`
