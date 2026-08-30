@@ -145,3 +145,31 @@ failure_modes:
     evidence:
       - 'live preflight over [internal/workflow/engine.go, internal/workflow/zz_not_in_graph.go] on graph 42e6e12c: status OK, sufficient=true, direct_anchor_count=3, file_count=2, indexed_file_count=1'
       - 'same over [engine.go, internal/workflow/relevance.go] (real, unindexed): identical counts; relevance.go alone: sufficient=false indexed=0'
+  - id: failure.sensei_code.a_terminal_reported_a_fact_as_unknown_that_the_run_had_alrea
+    title: A terminal reported a fact as unknown that the run had already acquired
+    severity: high
+    description: The fact existed and the run held it, but the recording point sat after a control-flow edge that could end the encounter, so the terminal record said the run could not say. Three distinct instances in one day, each in a different subsystem, each invisible to diff review because ordering is not visible in a diff.
+    protects:
+      files:
+        - internal/workflow/receipt.go
+    related_invariants:
+      - invariant.sensei_code.evidence_is_bound_and_recorded_before_control_flow_that_can
+    required_tests:
+      - internal/workflow/gate_test.go:TestTheGraphDigestComesFromWhereSenseiReportsIt
+    evidence:
+      - 'graph_digest: read from the preflight authority block while the digest sat in the workspace contract the same gate had decoded'
+      - 'plan_state: notePlan ran after routing, and routing is where a deferral terminates the run'
+      - the repair for plan_state was itself placed after resolveArchitecture returns, which a deferred run never reaches
+  - id: failure.sensei_code.a_record_wore_a_schema_version_whose_vocabulary_it_did_not_s
+    title: A record wore a schema version whose vocabulary it did not speak
+    severity: high
+    description: A version bump was intended and claimed; the edit silently did not match the file; the emitted artifact then carried a value the stated version does not define. The version string had been decorative rather than evidentiary, so nothing rejected the artifact.
+    protects:
+      files:
+        - internal/runreceipt/receipt.go
+    related_invariants:
+      - invariant.sensei_code.a_claimed_resulting_state_is_established_by_reading_the_resu
+    required_tests:
+      - internal/runreceipt/receipt_test.go:TestAReceiptMustSpeakTheLanguageItsVersionDefines
+    evidence:
+      - 'run R6: COMPLETE / DEFERRED emitted under sensei-code.governed-run-receipt/v3, while DEFERRED was introduced in v4'

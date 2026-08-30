@@ -482,3 +482,39 @@ invariants:
       - internal/workflow/unexamined_test.go:TestAnUnexaminedPlannedFileIsCoveredOnlyByADerivationOverIt
       - internal/workflow/unexamined_test.go:TestAnUnexaminedFileUnderAnOperationalGrantOpensNoGap
     contract: 'Coverage is a per-file property: the scoped preflight''s region verdict vouches for a planned file only if the graph examined that file; a file it never examined is uncovered whatever its neighbours carry'
+  - id: invariant.sensei_code.a_claimed_resulting_state_is_established_by_reading_the_resu
+    title: A claimed resulting state is established by reading the resulting state, not by the operation intended to produce it
+    severity: high
+    status: active
+    description: 'Intent, a successful invocation, or an operation''s nominal effect is not evidence of its postcondition. A claim about resulting state must be preceded by a read of that state. Discovered by execution: a schema version bump was written, the edit silently did not match the file, the commit message claimed the new version, and a real governed run then emitted a v4 outcome under a v3 label -- the exact defect the version comment existed to prevent, produced by the author of that comment.'
+    protects:
+      files:
+        - internal/runreceipt/receipt.go
+    required_tests:
+      - internal/runreceipt/receipt_test.go:TestTheSchemaVersionPinsItsVocabulary
+      - internal/runreceipt/receipt_test.go:TestAReceiptMustSpeakTheLanguageItsVersionDefines
+    evidence:
+      - 'run R6: receipt schema sensei-code.governed-run-receipt/v3 carrying OutcomeDeferred, a value v4 introduced'
+      - five claims in one session asserted a resulting state that a read-back falsified
+    contract: A governed record's claim about resulting state is established by measuring that state, never by the operation intended to produce it
+  - id: invariant.sensei_code.evidence_is_bound_and_recorded_before_control_flow_that_can
+    title: Evidence is bound and recorded before control flow that can terminate on it
+    severity: high
+    status: active
+    description: 'A fact required by any possible terminal boundary must be acquired from the authority that establishes its semantics, and bound and recorded, before the code that can terminate using it runs. Evidence acquisition and evidence recording must not sit on opposite sides of a control-flow boundary. Four manifestations found by execution: the graph digest read from the wrong decoded result; a captured tree named ''reviewed'' before any review existed; the plan recorded after the routing that escalates on it; and the fix for that third case placed after the very call that terminates.'
+    protects:
+      files:
+        - internal/workflow/receipt.go
+        - internal/workflow/engine.go
+        - internal/workflow/gate.go
+    required_tests:
+      - internal/workflow/gate_test.go:TestTheGraphDigestComesFromWhereSenseiReportsIt
+      - internal/workflow/mint_test.go:TestACapturedButUnreviewedTreeCannotBeMinted
+      - internal/workflow/mint_test.go:TestTheMintUsesTheVerdictsTreeNotTheCaptures
+      - internal/workflow/receipt_test.go:TestOnlyEmitRunTerminalEndsARun
+    evidence:
+      - 'run R1: a run that exited at an authority boundary emitted no record at all'
+      - 'run R2: graph_digest UNKNOWN because the accessor read the preflight block while the digest sat in the workspace contract'
+      - 'run R4: plan_state UNKNOWN about a plan the router had just escalated on'
+      - 'run R5: the correction itself sat outside the function containing the terminating edge; predicted from the call graph before the run confirmed it'
+    contract: A load-bearing fact is recorded from its establishing authority before any control-flow edge that depends on it can terminate the encounter
