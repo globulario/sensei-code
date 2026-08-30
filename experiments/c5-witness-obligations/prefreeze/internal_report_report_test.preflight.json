@@ -1,0 +1,41 @@
+{
+  "status":  "PREFLIGHT_STATUS_DEGRADED",
+  "risk_class":  "UNKNOWN_IMPACT",
+  "confidence":  "CONFIDENCE_LOW",
+  "required_actions":  [
+    "Read the source file directly before editing — Preflight has no anchored facts",
+    "After your edit, file any newly-discovered invariants/failure_modes as candidates in docs/awareness/candidates/ so future Preflight calls become richer",
+    "Change risk: blast=local, approval=none",
+    "Coverage is thin — read the surrounding code, then re-run preflight with --file to narrow"
+  ],
+  "blind_spots":  [
+    "high_risk_path_no_direct_anchors: file is under a high-risk directory but no awareness anchors apply — graph has no facts about this file; treat as unknown, read source directly",
+    "this is NOT proof of safety — the graph has no facts about this file"
+  ],
+  "coverage":  {
+    "file_count":  1,
+    "indexed_file_count":  1,
+    "sufficient":  true,
+    "note":  "1/1 file(s) examined in the graph — no governing rule applies"
+  },
+  "generated_in_ms":  "549",
+  "authority":  {
+    "authoritative":  true,
+    "graph_freshness_state":  "GRAPH_FRESHNESS_STATE_CURRENT",
+    "graph_freshness_detail":  "live store matches expected validated graph artifact",
+    "build_provenance_state":  "BUILD_PROVENANCE_STATE_STAMPED",
+    "seed_state":  "SEED_STATE_CURRENT",
+    "graph_build_commit":  "fac399f8225f",
+    "graph_build_time_unix":  "1787418755",
+    "source_repo_commit":  "f56f5a305798",
+    "embedded_seed_digest_sha256":  "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+    "live_store_graph_digest_sha256":  "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+    "live_store_graph_triple_count":  "164506",
+    "embedded_transaction_detail":  "runtime transaction stamp missing: .sensei/graph-authority.transaction.tsv",
+    "verdict":  "AUTHORITY_VERDICT_AUTHORITATIVE"
+  },
+  "change_risk":  {
+    "blast_radius":  "BLAST_RADIUS_LOCAL",
+    "approval_gate":  "APPROVAL_GATE_NONE"
+  }
+}
