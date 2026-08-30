@@ -70,14 +70,35 @@ reconstruct C' from (B, reviewed tree)   ->   C' == recorded CandidateCommit
 
 ## The transition
 
+**The tree is measured at capture and travels in the review binding.** An
+earlier version built `T` after acceptance, which meant `T` was a tree
+*constructed from* what was reviewed rather than one of the identities *of* what
+was reviewed — leaving a race between "review succeeded" and "build the tree".
+
+`D` cannot close that gap on its own: `CandidateCapture.Diff` deliberately
+renders a kept binary as `Binary files differ` rather than bytes, so two
+different binary blobs can share a textual review representation. **Tree
+equality, not textual-diff equality, carries exact content identity.**
+
+The reviewer binding therefore grows one field:
+
+```text
+BaseSHA
+CandidateDigest    the representation the reviewer consumed
+CandidateTree      the exact content identity          <-- new
+```
+
 ```text
 worker finishes
   ↓ capture the final candidate against B      (CandidateCapture)
-  ↓ audit + review the exact digest D
+  ↓   -> exact Paths, review Diff D, canonical Tree T, built HERE from the
+  ↓      same measured state
+  ↓ binding = { B, D, T }
+  ↓ audit + review that binding
   ↓ ACCEPT
-  ↓ re-capture; the digest must still be D     (nothing moved after review)
-  ↓ build the canonical tree: B's tree, plus exactly the reviewed paths
-  ↓ mint C deterministically; point the candidate branch at it
+  ↓ re-capture: D2 must equal D AND T2 must equal T
+  ↓ mint C from the ALREADY-BOUND T -- no worktree read at this point
+  ↓ point the candidate branch at C
   ↓ verify: C^1 == B, C^{tree} == the built tree, C reconstructs
   ↓ noteCandidateCommit(C, tree, first parent)
   ↓ emitRunTerminal  ->  COMPLETE / ACCEPTED for the first time
@@ -156,12 +177,14 @@ is plausible and is **not assumed**.
 The plan therefore verifies, in descending strength:
 
 ```text
-1. C^{tree} == the tree built from B + reviewed paths        MUST hold
-2. changed-path set of diff(B,C) == reviewed path set        MUST hold
-3. digest(diff(B,C)) == D                                    MEASURED, and
-                                                             recorded as a
-                                                             measurement
+1. C^{tree} == the BOUND T, the tree the reviewer's binding named   MUST hold
+2. changed-path set of diff(B,C) == reviewed path set              MUST hold
+3. digest(diff(B,C)) == D                                          MEASURED
 ```
+
+With `T` in the binding, (3) is properly secondary: exact content identity is
+already carried by (1), and the digest comparison becomes a measurement about
+two *representations* rather than the thing the identity rests on.
 
 If (3) does not hold in practice, the receipt records both digests and says
 they are produced by different mechanisms. It does **not** force them equal, and
@@ -266,8 +289,11 @@ the dangerous seam is not minting `C`, it is what happens to the ref afterwards.
 ## Order of work
 
 ```text
-1  gitx: canonical tree + deterministic commit-tree, with a reconstruct verifier
-2  workflow: mint at acceptance, verify, noteCandidateCommit, before the receipt
+1  gitx: exact NUL-safe paths (capture AND the artifact boundary), canonical
+   tree, pinned serialization, a non-writing verifier         DONE (d9d9a9e, 0960822)
+2  workflow: build T at capture, carry { B, D, T } in the review binding,
+   re-check D and T at acceptance, mint C from the bound T, verify,
+   noteCandidateCommit -- all before the receipt
 3  receipt: CandidateState reads measured work; schema v3
 4  publish: remove the commit path; verify HEAD == C before pushing; guard test
 5  measure whether digest(diff(B,C)) == D, and record the answer either way
