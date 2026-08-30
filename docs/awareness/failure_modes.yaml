@@ -148,7 +148,7 @@ failure_modes:
   - id: failure.sensei_code.a_terminal_reported_a_fact_as_unknown_that_the_run_had_alrea
     title: A terminal reported a fact as unknown that the run had already acquired
     severity: high
-    description: The fact existed and the run held it, but the recording point sat after a control-flow edge that could end the encounter, so the terminal record said the run could not say. Three distinct instances in one day, each in a different subsystem, each invisible to diff review because ordering is not visible in a diff.
+    description: OBSERVED, supporting a candidate invariant that has not been promoted. The fact existed and the run held it, but the recording point sat after a control-flow edge that could end the encounter, so the terminal record said the run could not say. Three distinct instances in one day, each in a different subsystem, each invisible to diff review because ordering is not visible in a diff.
     protects:
       files:
         - internal/workflow/receipt.go
@@ -163,7 +163,7 @@ failure_modes:
   - id: failure.sensei_code.a_record_wore_a_schema_version_whose_vocabulary_it_did_not_s
     title: A record wore a schema version whose vocabulary it did not speak
     severity: high
-    description: A version bump was intended and claimed; the edit silently did not match the file; the emitted artifact then carried a value the stated version does not define. The version string had been decorative rather than evidentiary, so nothing rejected the artifact.
+    description: OBSERVED, supporting a candidate invariant that has not been promoted. A version bump was intended and claimed; the edit silently did not match the file; the emitted artifact then carried a value the stated version does not define. The version string had been decorative rather than evidentiary, so nothing rejected the artifact.
     protects:
       files:
         - internal/runreceipt/receipt.go
