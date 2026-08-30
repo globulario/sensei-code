@@ -80,6 +80,17 @@ const (
 	// OutcomeUnreviewed: the run reached its end and no provider produced a
 	// bounded verdict. A measured absence, never "clean by exhaustion".
 	OutcomeUnreviewed Outcome = "UNREVIEWED"
+	// OutcomeDeferred: the run reached a human-owned authority boundary and the
+	// human declined to answer. Nothing failed and nobody withdrew -- one
+	// question was left standing, and the run ended without touching the
+	// candidate or calling another provider.
+	//
+	// The first real governed run ended this way and emitted NOTHING, because
+	// this terminal was classified non-terminal on the grounds that the run is
+	// resumable. That is true inside the process model and false outside it:
+	// the process exited, and the only account of it was the event stream --
+	// the reconstruction this record exists to abolish.
+	OutcomeDeferred Outcome = "DEFERRED"
 	// OutcomeStopped: a human ended the run. This is a real terminal outcome,
 	// not instrument incompleteness and not workflow failure -- recording it as
 	// FAILED would teach the behavioural record that this task shape breaks,
@@ -96,7 +107,8 @@ const (
 // all -- is not a new outcome, it is an invalid one.
 func (o Outcome) Valid() bool {
 	switch o {
-	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed, OutcomeStopped, OutcomeUnknown:
+	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -387,6 +399,13 @@ type Receipt struct {
 	ReviewerExecutable Value `json:"reviewer_executable"`
 	ReviewVerdict      Value `json:"review_verdict"`
 	ReviewedDigest     Value `json:"reviewed_digest"`
+	// DeferredQuestion is the authority question a DEFERRED run left standing.
+	//
+	// Required when the outcome is DEFERRED: a record saying "a question was
+	// deferred" without saying WHICH is the same shape as a candidate that
+	// cannot name its own commit.
+	DeferredQuestion Value `json:"deferred_question"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -441,6 +460,7 @@ func (r Receipt) Fields() []Field {
 	// verdict. Neither may be said without the evidence that says who, what
 	// and about which candidate revision.
 	reviewed := r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused
+	deferred := r.Outcome == OutcomeDeferred
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -458,6 +478,7 @@ func (r Receipt) Fields() []Field {
 		{"reviewed_digest", r.ReviewedDigest, Observed, reviewed},
 		{"reviewed_tree", r.ReviewedTree, Observed, reviewed},
 		{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest, Rederivable, candidate},
+		{"deferred_question", r.DeferredQuestion, Observed, deferred},
 		{"terminal", r.Terminal, Observed, true},
 	}
 }
@@ -566,6 +587,8 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		missing = append(missing, "outcome UNKNOWN: a record that cannot say what happened is not complete")
 	case r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused:
 		missing = append(missing, r.checkBoundedReview()...)
+	case r.Outcome == OutcomeDeferred && r.ReviewVerdict.State == Known:
+		missing = append(missing, "outcome DEFERRED while a bounded verdict is recorded: a run that stopped at an authority boundary did not also get judged")
 	case r.Outcome == OutcomeUnreviewed && r.ReviewVerdict.State == Known:
 		missing = append(missing, "outcome UNREVIEWED while a bounded verdict is recorded: the condition contradicts the evidence")
 	}

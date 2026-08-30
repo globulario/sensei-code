@@ -553,11 +553,12 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		e.notePlan(taskID, supplied, "")
 	}
 	fail := func(err error) {
-		// A deferred authority decision has already recorded itself, with the
-		// question attached. Reporting it again as a failure or a stop would
-		// describe the same moment three ways, and two of them would be wrong:
-		// nothing failed, and the human did not withdraw from the work — they
-		// declined to answer one question about it.
+		// A deferred authority decision has already recorded itself -- receipt
+		// and terminal event together, with the question attached. Reporting it
+		// again as a failure or a stop would describe the same moment three
+		// ways, and two of them would be wrong: nothing failed, and the human
+		// did not withdraw from the work — they declined to answer one question
+		// about it.
 		if errors.Is(err, errAuthorityDeferred) {
 			return
 		}
@@ -2864,10 +2865,19 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 			// resolved. The question is recorded whole, and the run ends
 			// without touching the candidate, calling a provider, or asking
 			// Sensei anything further.
-			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.WorkflowAwaitingAuthority,
+			//
+			// This goes through the terminal funnel: the process EXITS here,
+			// and the first real governed run ended exactly this way and left
+			// no receipt at all -- an account existing only in the event
+			// stream, which is the reconstruction the receipt exists to
+			// abolish. The event's shape is unchanged, because FindInterrupted
+			// reads it to resume the task.
+			e.noteDeferredQuestion(taskID, decision.Subject, condition)
+			e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
+				runreceipt.OutcomeDeferred, e.candidateStateFor(taskID),
 				"authority decision deferred; the question stands", DeferredAuthority{
 					Condition: condition, Domain: domain, BaseSHA: baseSHA, Decision: decision,
-				}))
+				})
 			return "", errAuthorityDeferred
 		}
 		for _, option := range options {

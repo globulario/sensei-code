@@ -171,6 +171,7 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 func completeReceipt() Receipt {
 	return Receipt{
 		Schema:                    SchemaVersion,
+		DeferredQuestion:          UnknownValue("no authority question was deferred"),
 		PlanState:                 PlanPresent,
 		CandidateState:            CandidatePresent,
 		CandidateCommit:           MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
@@ -518,5 +519,59 @@ func TestAStoppedRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	}
 	if OutcomeStopped == OutcomeFailed {
 		t.Fatal("a human stop must never be recorded as a failure")
+	}
+}
+
+// TestADeferredRunIsACompleteRecordOfARealOutcome closes R1.
+//
+// The first real governed run reached a human-owned authority boundary, the
+// human declined to answer, the process exited -- and it emitted NOTHING,
+// because that terminal was classified non-terminal on the grounds that the run
+// is resumable. True inside the process model; false outside it.
+func TestADeferredRunIsACompleteRecordOfARealOutcome(t *testing.T) {
+	if !OutcomeDeferred.Valid() || !OutcomeDeferred.SufficientForComplete() {
+		t.Fatal("DEFERRED must be a valid outcome sufficient for a complete record")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeDeferred
+	rec.ReviewVerdict = UnknownValue("the run stopped at an authority boundary")
+	rec.ReviewedDigest = UnknownValue("the run stopped at an authority boundary")
+	rec.ReviewedTree = UnknownValue("the run stopped at an authority boundary")
+	rec.Attempts = nil
+	rec.DeferredQuestion = MeasuredValue(
+		"Architectural authority reached a human-owned boundary. — graph coverage is absent for the planned file",
+		"the authority decision the human declined to answer")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / DEFERRED must be representable: %v", missing)
+	}
+	if OutcomeDeferred == OutcomeFailed || OutcomeDeferred == OutcomeStopped {
+		t.Fatal("a deferral is neither a failure nor a withdrawal")
+	}
+}
+
+// A record that says a question was deferred without saying WHICH is the same
+// shape as a candidate that cannot name its own commit.
+func TestADeferredRunMustNameTheQuestion(t *testing.T) {
+	rec := completeReceipt()
+	rec.Outcome = OutcomeDeferred
+	rec.ReviewVerdict = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedDigest = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedTree = UnknownValue("stopped at an authority boundary")
+	rec.Attempts = nil
+	rec.DeferredQuestion = UnknownValue("not recorded")
+	state, missing := rec.Completeness()
+	if state != Incomplete || !strings.Contains(strings.Join(missing, " "), "deferred_question") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}
+
+// A deferral did not also get judged.
+func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
+	rec := completeReceipt() // still carries a bounded verdict
+	rec.Outcome = OutcomeDeferred
+	rec.DeferredQuestion = MeasuredValue("a question", "the authority decision")
+	state, missing := rec.Completeness()
+	if state != Incomplete || !strings.Contains(strings.Join(missing, " "), "did not also get judged") {
+		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }

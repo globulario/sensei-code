@@ -47,8 +47,10 @@ type receiptFacts struct {
 	reviewedTree runreceipt.Value
 	// candRendering is the canonical rendering of the MINTED object, and
 	// digestRelation is how it compares with the rendering the review saw.
-	candRendering                         runreceipt.Value
-	digestRelation                        runreceipt.DigestRelation
+	candRendering  runreceipt.Value
+	digestRelation runreceipt.DigestRelation
+	// deferredQuestion is the authority question a run left standing.
+	deferredQuestion                      runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
 	attempts                              []runreceipt.Attempt
@@ -88,15 +90,16 @@ func freshFacts() *receiptFacts {
 		return runreceipt.UnknownValue("not measured: " + what)
 	}
 	return &receiptFacts{
-		base:          notYet("the run did not reach the start gate"),
-		graph:         notYet("the run did not reach the start gate"),
-		plan:          notYet("no plan was established for this run"),
-		candCommit:    notYet("no candidate was created"),
-		candTree:      notYet("no candidate was created"),
-		candParent:    notYet("no candidate was created"),
-		candDiff:      notYet("no candidate was created"),
-		capturedTree:  notYet("no candidate was captured"),
-		candRendering: notYet("no candidate identity was minted"),
+		base:             notYet("the run did not reach the start gate"),
+		graph:            notYet("the run did not reach the start gate"),
+		plan:             notYet("no plan was established for this run"),
+		candCommit:       notYet("no candidate was created"),
+		candTree:         notYet("no candidate was created"),
+		candParent:       notYet("no candidate was created"),
+		candDiff:         notYet("no candidate was created"),
+		capturedTree:     notYet("no candidate was captured"),
+		candRendering:    notYet("no candidate identity was minted"),
+		deferredQuestion: notYet("no authority question was deferred"),
 		// The relation is UNKNOWN until something measures it, and UNKNOWN is
 		// never sufficient for a complete record of a candidate that exists.
 		digestRelation: runreceipt.RelationUnknown,
@@ -296,6 +299,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		GraphDigest:               facts.graph,
 		PlanState:                 facts.planState,
 		ReviewedTree:              facts.reviewedTree,
+		DeferredQuestion:          facts.deferredQuestion,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
 		CandidateState:            cand,
@@ -496,6 +500,26 @@ func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.So
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
 	e.emitReceipt(taskID, kind, outcome, cand)
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
+}
+
+// noteDeferredQuestion records the authority question a run stopped on.
+//
+// The subject is the question itself; the condition is the certifiability
+// condition that produced the boundary. Both are recorded because an
+// interruption a reader cannot trace back to a condition is one nobody learns
+// from.
+func (e *Engine) noteDeferredQuestion(taskID, subject, condition string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		text := strings.TrimSpace(subject)
+		if c := strings.TrimSpace(condition); c != "" {
+			text = strings.TrimSpace(text + " — " + c)
+		}
+		if text == "" {
+			f.deferredQuestion = runreceipt.UnknownValue("the deferral recorded no question")
+			return
+		}
+		f.deferredQuestion = runreceipt.MeasuredValue(text, "the authority decision the human declined to answer")
+	})
 }
 
 // reviewedTreeFor returns the content identity a DELIVERED VERDICT was bound

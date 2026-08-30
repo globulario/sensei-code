@@ -31,7 +31,13 @@ func TestOnlyEmitRunTerminalEndsARun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("globbing the package: %v", err)
 	}
-	terminal := map[string]bool{"WorkflowCompleted": true, "WorkflowFailed": true, "WorkflowStopped": true}
+	// WorkflowAwaitingAuthority is a run terminal too: the process exits there.
+	// It was omitted on the grounds that the run is resumable, and the first
+	// real governed run ended that way and emitted nothing.
+	terminal := map[string]bool{
+		"WorkflowCompleted": true, "WorkflowFailed": true, "WorkflowStopped": true,
+		"WorkflowAwaitingAuthority": true,
+	}
 	fset := token.NewFileSet()
 	var funnel int
 	for _, path := range files {
