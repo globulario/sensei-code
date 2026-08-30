@@ -49,6 +49,44 @@ type Capture struct {
 	// Binaries are binary members the candidate legitimately holds -- tracked
 	// binaries it modified, or new ones the plan named -- as metadata.
 	Binaries []Artifact
+	// Paths is the exact set of repository-relative paths this candidate
+	// changed, as Git reports them, taken AFTER artifact exclusions.
+	//
+	// It exists because every consumer used to re-derive it from text: this
+	// file split `--numstat` on tabs after TrimSpace, and report.FromDiff
+	// parsed `diff --git a/P b/P` headers and failed open on a quoted path.
+	// A pathname Git quotes was therefore invisible to whichever consumer
+	// looked -- and the canonical candidate identity commit stages exactly
+	// these paths, so an identity built on a lossy set would be exact about
+	// the wrong tree.
+	//
+	// Produced with `--name-status -z`, parsed on NUL boundaries: no trimming,
+	// no tab splitting, no unquoting. Rename detection is deliberately OFF, so
+	// a rename arrives as a deletion at the old path and an addition at the
+	// new one -- which is what a tree builder needs, rather than a
+	// presentation-level encoding it would have to undo.
+	Paths []string
+}
+
+// parseNameStatusZ reads `--name-status -z` output: a status field and a path
+// field, each terminated by NUL. With rename detection off there is never a
+// second path field, so the shape is a strict alternation.
+//
+// Nothing here trims, splits on whitespace, or unquotes. A pathname containing
+// a tab, a newline, a quote or a non-UTF-8 byte survives it unchanged, which is
+// the whole reason this function exists.
+func parseNameStatusZ(out string) []string {
+	fields := strings.Split(out, "\x00")
+	var paths []string
+	for i := 0; i+1 < len(fields); i += 2 {
+		status, path := fields[i], fields[i+1]
+		if status == "" || path == "" {
+			continue
+		}
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	return paths
 }
 
 // oversizedBytes is the size above which a NEW non-binary file is treated as
@@ -123,6 +161,18 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		return Capture{}, err
 	}
 	cap.Diff = diff
+
+	// The exact path set, taken after exclusions so it names what the reviewer
+	// will actually judge. Same base, same boundary, one authority.
+	nameArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--name-status", "-z"}
+	if b := strings.TrimSpace(base); b != "" {
+		nameArgs = append(nameArgs, b)
+	}
+	names, err := r.raw(ctx, append(nameArgs, "--")...)
+	if err != nil {
+		return Capture{}, err
+	}
+	cap.Paths = parseNameStatusZ(names)
 	return cap, nil
 }
 
