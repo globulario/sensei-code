@@ -122,6 +122,29 @@ func (e *Engine) submit(ctx context.Context, task string, how Provenance, observ
 // reports itself stopped rather than failed, so the work remains resumable.
 // A stop is the human withdrawing attention from a task, not a judgement that
 // the work was worthless.
+// TimeOut ends a task because its execution budget expired, and records that
+// cause so the terminal can tell a deadline from a withdrawal.
+func (e *Engine) TimeOut(taskID, budget string) bool {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.executionBudget = runreceipt.MeasuredValue(budget, "the -timeout this invocation was given")
+	})
+	e.mu.Lock()
+	if e.timedOut == nil {
+		e.timedOut = map[string]bool{}
+	}
+	e.timedOut[taskID] = true
+	e.mu.Unlock()
+	return e.Stop(taskID)
+}
+
+// timedOutBy reports whether this task's stop was a deadline rather than a
+// person.
+func (e *Engine) timedOutBy(taskID string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.timedOut[taskID]
+}
+
 func (e *Engine) Stop(taskID string) bool {
 	e.mu.Lock()
 	cancel, ok := e.stops[taskID]

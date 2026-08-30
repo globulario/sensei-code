@@ -36,7 +36,7 @@ func TestOnlyEmitRunTerminalEndsARun(t *testing.T) {
 	// real governed run ended that way and emitted nothing.
 	terminal := map[string]bool{
 		"WorkflowCompleted": true, "WorkflowFailed": true, "WorkflowStopped": true,
-		"WorkflowAwaitingAuthority": true,
+		"WorkflowAwaitingAuthority": true, "WorkflowTimedOut": true,
 	}
 	fset := token.NewFileSet()
 	var funnel int

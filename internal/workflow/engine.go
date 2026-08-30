@@ -91,6 +91,9 @@ type Engine struct {
 	// preflight would describe a possibly-moved graph while appearing to
 	// describe the moment the plan was authorised.
 	routings map[string]routingRecord
+	// timedOut records that a task's cancellation was a deadline, so the
+	// terminal can distinguish an expired budget from a human withdrawal.
+	timedOut map[string]bool
 	// receipts holds what each task has MEASURED so far, recorded at the moment
 	// of measurement rather than reconstructed at the end. See receipt.go.
 	receipts map[string]*receiptFacts
@@ -568,6 +571,15 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		// reported, on a context the cancellation cannot reach, because a run
 		// that goes silent when stopped leaves no account of why it ended.
 		if ctx.Err() != nil {
+			// A deadline and a withdrawal both cancel the context, and they are
+			// different evidence. The invocation owes an account either way.
+			if e.timedOutBy(taskID) {
+				const note = "the execution budget expired; the task was stopped and its candidate left in place"
+				e.emitRunTerminal(taskID, event.WorkflowTimedOut, event.SourceSystem,
+					runreceipt.OutcomeTimedOut, e.candidateStateFor(taskID), note, nil)
+				e.reportOutcome(context.WithoutCancel(ctx), "timed_out", task, note)
+				return
+			}
 			const note = "stopped by the human; the candidate is left as it stands"
 			// A human withdrawing is a real terminal outcome, not a failure:
 			// recording it as one would teach the behavioural record that this

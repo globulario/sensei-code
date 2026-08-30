@@ -49,8 +49,10 @@ type receiptFacts struct {
 	// digestRelation is how it compares with the rendering the review saw.
 	candRendering  runreceipt.Value
 	digestRelation runreceipt.DigestRelation
-	// deferredQuestion is the authority question a run left standing.
+	// deferredQuestion is the authority question a run left standing, and
+	// executionBudget the deadline a timed-out invocation exhausted.
 	deferredQuestion                      runreceipt.Value
+	executionBudget                       runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
 	attempts                              []runreceipt.Attempt
@@ -100,6 +102,7 @@ func freshFacts() *receiptFacts {
 		capturedTree:     notYet("no candidate was captured"),
 		candRendering:    notYet("no candidate identity was minted"),
 		deferredQuestion: notYet("no authority question was deferred"),
+		executionBudget:  notYet("no execution budget expired"),
 		// The relation is UNKNOWN until something measures it, and UNKNOWN is
 		// never sufficient for a complete record of a candidate that exists.
 		digestRelation: runreceipt.RelationUnknown,
@@ -300,6 +303,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		PlanState:                 facts.planState,
 		ReviewedTree:              facts.reviewedTree,
 		DeferredQuestion:          facts.deferredQuestion,
+		ExecutionBudget:           facts.executionBudget,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
 		CandidateState:            cand,

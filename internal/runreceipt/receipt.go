@@ -49,14 +49,15 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
-// v4 adds the DEFERRED outcome and the question it stands on. v3 added the
-// reviewed
+// v5 adds TIMED_OUT, because an expired execution budget is different evidence
+// from a human withdrawing. v4 added the DEFERRED outcome and the question it
+// stands on. v3 added the reviewed
 // tree, the canonical diff-digest relation, and redefines CandidateState to
 // mean MEASURED WORK rather than "a worktree exists". Each changes what a
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v4"
+const SchemaVersion = "sensei-code.governed-run-receipt/v5"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -92,6 +93,13 @@ const (
 	// the process exited, and the only account of it was the event stream --
 	// the reconstruction this record exists to abolish.
 	OutcomeDeferred Outcome = "DEFERRED"
+	// OutcomeTimedOut: the invocation's execution budget expired.
+	//
+	// Deliberately NOT mapped to STOPPED. A human withdrawing and a deadline
+	// expiring are different evidence, and collapsing them would teach every
+	// downstream reader the wrong causal fact about why work ended. The task
+	// may still be resumable; the INVOCATION is over either way.
+	OutcomeTimedOut Outcome = "TIMED_OUT"
 	// OutcomeStopped: a human ended the run. This is a real terminal outcome,
 	// not instrument incompleteness and not workflow failure -- recording it as
 	// FAILED would teach the behavioural record that this task shape breaks,
@@ -109,7 +117,7 @@ const (
 func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
-		OutcomeStopped, OutcomeDeferred, OutcomeUnknown:
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -133,6 +141,10 @@ var vocabularies = map[string][]Outcome{
 	"sensei-code.governed-run-receipt/v4": {
 		OutcomeAccepted, OutcomeRefused, OutcomeFailed,
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeUnknown,
+	},
+	"sensei-code.governed-run-receipt/v5": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown,
 	},
 }
 
@@ -438,6 +450,12 @@ type Receipt struct {
 	ReviewerExecutable Value `json:"reviewer_executable"`
 	ReviewVerdict      Value `json:"review_verdict"`
 	ReviewedDigest     Value `json:"reviewed_digest"`
+	// ExecutionBudget is the deadline a TIMED_OUT invocation exhausted.
+	//
+	// Required when the outcome is TIMED_OUT: a record saying the budget
+	// expired without saying WHAT the budget was cannot be acted on.
+	ExecutionBudget Value `json:"execution_budget"`
+
 	// DeferredQuestion is the authority question a DEFERRED run left standing.
 	//
 	// Required when the outcome is DEFERRED: a record saying "a question was
@@ -500,6 +518,7 @@ func (r Receipt) Fields() []Field {
 	// and about which candidate revision.
 	reviewed := r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused
 	deferred := r.Outcome == OutcomeDeferred
+	timedOut := r.Outcome == OutcomeTimedOut
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -518,6 +537,7 @@ func (r Receipt) Fields() []Field {
 		{"reviewed_tree", r.ReviewedTree, Observed, reviewed},
 		{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest, Rederivable, candidate},
 		{"deferred_question", r.DeferredQuestion, Observed, deferred},
+		{"execution_budget", r.ExecutionBudget, Observed, timedOut},
 		{"terminal", r.Terminal, Observed, true},
 	}
 }

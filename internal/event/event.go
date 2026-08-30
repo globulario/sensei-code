@@ -103,6 +103,12 @@ const (
 	// stage 1 it grants nothing and skips nothing — it is a measurement,
 	// emitted so the tier can be judged from real runs rather than intuition.
 	RoutineClassified Kind = "routine.classified"
+	// WorkflowTimedOut ends an invocation whose execution budget expired.
+	//
+	// Distinct from WorkflowStopped: a human withdrawing and a deadline
+	// expiring are different evidence about why work ended. The TASK may still
+	// be resumable; the INVOCATION is over either way, and it owes an account.
+	WorkflowTimedOut Kind = "workflow.timed_out"
 	// RunReceipt is the governed run's own account of itself: the identities
 	// it measured, the candidate it produced, who reviewed it, and how it
 	// ended, in one typed record whose completeness is checkable without

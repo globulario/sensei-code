@@ -138,7 +138,7 @@ func runHeadless(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 	if !*quiet {
 		fmt.Printf("task %s  session %s\n", taskID, sessionID)
 	}
-	return streamUntilSettled(ctx, engine, events, taskID, *asJSON, *quiet)
+	return streamUntilSettled(ctx, engine, events, taskID, *asJSON, *quiet, *timeout)
 }
 
 // loadSuppliedPlan reads a plan file and validates it as a bound. Anything the
@@ -166,10 +166,48 @@ func loadSuppliedPlan(path string) (workflow.SuppliedPlan, error) {
 type runControl interface {
 	DeferAuthority(taskID string) bool
 	Stop(taskID string) bool
+	TimeOut(taskID, budget string) bool
+}
+
+// terminalGrace bounds how long an invocation waits for its own account. It is
+// a variable so a test can shrink it; production never changes it.
+var terminalGrace = 15 * time.Second
+
+// drainUntilTerminal keeps rendering until the engine emits the terminal it
+// owes, or a grace window closes.
+//
+// The grace is bounded because a hung engine must not hold the process open,
+// and it is not zero because an invocation that ends without its own account
+// forces every later reader back into the event stream.
+func drainUntilTerminal(events <-chan event.Event, taskID string, enc *json.Encoder, asJSON, quiet bool, code int) int {
+	grace := time.NewTimer(terminalGrace)
+	defer grace.Stop()
+	for {
+		select {
+		case <-grace.C:
+			fmt.Fprintln(os.Stderr, "sensei-code run: the engine did not account for this invocation within the grace window")
+			return code
+		case ev, ok := <-events:
+			if !ok {
+				return code
+			}
+			if ev.TaskID != "" && ev.TaskID != taskID {
+				continue
+			}
+			if asJSON {
+				_ = enc.Encode(ev)
+			} else if !quiet || terminal(ev.Kind) {
+				fmt.Println(renderEvent(ev))
+			}
+			if terminal(ev.Kind) {
+				return code
+			}
+		}
+	}
 }
 
 // streamUntilSettled renders the run and returns when it settles.
-func streamUntilSettled(ctx context.Context, engine runControl, events <-chan event.Event, taskID string, asJSON, quiet bool) int {
+func streamUntilSettled(ctx context.Context, engine runControl, events <-chan event.Event, taskID string, asJSON, quiet bool, budget time.Duration) int {
 	enc := json.NewEncoder(os.Stdout)
 	deferred := false
 	for {
@@ -177,9 +215,20 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 		case <-ctx.Done():
 			// A timeout stops computation; it does not decide anything. The
 			// candidate is left as it stands so the work can be resumed.
-			engine.Stop(taskID)
+			//
+			// It does NOT exit here. Returning the moment the deadline fired
+			// ended the process before the engine could terminalize, so a
+			// timed-out invocation produced no terminal event and no receipt,
+			// and the only account of it was the event stream -- the
+			// reconstruction the receipt exists to abolish. The invocation
+			// waits, briefly and boundedly, for its own account.
+			spent := budget.String()
+			if budget <= 0 {
+				spent = "no deadline was configured; the context ended for another reason"
+			}
+			engine.TimeOut(taskID, spent)
 			fmt.Fprintln(os.Stderr, "sensei-code run: timed out; the task was stopped and its candidate left in place")
-			return exitTimeout
+			return drainUntilTerminal(events, taskID, enc, asJSON, quiet, exitTimeout)
 		case ev, ok := <-events:
 			if !ok {
 				return exitFailed
@@ -226,7 +275,8 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 func terminal(k event.Kind) bool {
 	switch k {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
-		event.WorkflowObserved, event.WorkflowAwaitingAuthority, event.AuthorityRequired:
+		event.WorkflowTimedOut, event.WorkflowObserved,
+		event.WorkflowAwaitingAuthority, event.AuthorityRequired:
 		return true
 	}
 	return false

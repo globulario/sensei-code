@@ -14,7 +14,15 @@ import (
 type fakeControl struct {
 	deferred []string
 	stopped  []string
+	timedOut []string
 	canDefer bool
+}
+
+// TimeOut records that the stop was a DEADLINE, which is different evidence
+// from a human withdrawing.
+func (f *fakeControl) TimeOut(taskID, budget string) bool {
+	f.timedOut = append(f.timedOut, taskID+" "+budget)
+	return f.Stop(taskID)
 }
 
 func (f *fakeControl) DeferAuthority(taskID string) bool {
@@ -49,7 +57,7 @@ func TestOutcomesHaveDistinctExitCodes(t *testing.T) {
 		event.WorkflowAwaitingAuthority: exitAwaitingAuthority,
 	}
 	for kind, want := range cases {
-		got := streamUntilSettled(context.Background(), &fakeControl{}, feed(ev("t1", kind)), "t1", false, true)
+		got := streamUntilSettled(context.Background(), &fakeControl{}, feed(ev("t1", kind)), "t1", false, true, 0)
 		if got != want {
 			t.Fatalf("%s exited %d, want %d", kind, got, want)
 		}
@@ -69,7 +77,7 @@ func TestOutcomesHaveDistinctExitCodes(t *testing.T) {
 func TestAHumanOwnedDecisionIsDeferredNotAnswered(t *testing.T) {
 	ctrl := &fakeControl{canDefer: true}
 	code := streamUntilSettled(context.Background(), ctrl,
-		feed(ev("t1", event.AuthorityRequired), ev("t1", event.WorkflowStopped)), "t1", false, true)
+		feed(ev("t1", event.AuthorityRequired), ev("t1", event.WorkflowStopped)), "t1", false, true, 0)
 	if len(ctrl.deferred) != 1 || ctrl.deferred[0] != "t1" {
 		t.Fatalf("the question was not deferred: %v", ctrl.deferred)
 	}
@@ -81,7 +89,7 @@ func TestAHumanOwnedDecisionIsDeferredNotAnswered(t *testing.T) {
 // A stop with no authority question is an ordinary stop, not a deferred one.
 func TestAPlainStopIsNotReportedAsDeferredAuthority(t *testing.T) {
 	ctrl := &fakeControl{}
-	if code := streamUntilSettled(context.Background(), ctrl, feed(ev("t1", event.WorkflowStopped)), "t1", false, true); code != exitStopped {
+	if code := streamUntilSettled(context.Background(), ctrl, feed(ev("t1", event.WorkflowStopped)), "t1", false, true, 0); code != exitStopped {
 		t.Fatalf("exit %d, want %d", code, exitStopped)
 	}
 	if len(ctrl.deferred) != 0 {
@@ -93,7 +101,7 @@ func TestAPlainStopIsNotReportedAsDeferredAuthority(t *testing.T) {
 // bus would otherwise report each other's outcomes.
 func TestAnotherTasksEventsAreIgnored(t *testing.T) {
 	code := streamUntilSettled(context.Background(), &fakeControl{},
-		feed(ev("other", event.WorkflowFailed), ev("t1", event.WorkflowCompleted)), "t1", false, true)
+		feed(ev("other", event.WorkflowFailed), ev("t1", event.WorkflowCompleted)), "t1", false, true, 0)
 	if code != exitCompleted {
 		t.Fatalf("exit %d: another task's failure settled this run", code)
 	}
@@ -102,10 +110,12 @@ func TestAnotherTasksEventsAreIgnored(t *testing.T) {
 // A timeout stops computation and says so. It decides nothing, and the
 // candidate is left where it stands so the work can be resumed.
 func TestTimeoutStopsTheTaskRatherThanAbandoningIt(t *testing.T) {
+	defer func(d time.Duration) { terminalGrace = d }(terminalGrace)
+	terminalGrace = 20 * time.Millisecond
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	ctrl := &fakeControl{}
-	code := streamUntilSettled(ctx, ctrl, make(chan event.Event), "t1", false, true)
+	code := streamUntilSettled(ctx, ctrl, make(chan event.Event), "t1", false, true, 0)
 	if code != exitTimeout {
 		t.Fatalf("exit %d, want %d", code, exitTimeout)
 	}
@@ -187,5 +197,46 @@ func TestASuppliedPlanFileIsValidatedBeforeSubmission(t *testing.T) {
 	p, err := loadSuppliedPlan(good)
 	if err != nil || p.Digest == "" {
 		t.Fatalf("a valid plan was refused: %v", err)
+	}
+}
+
+// TestATimeoutWaitsForItsOwnAccount closes the gap Task A found.
+//
+// The timeout used to call Stop and return immediately, so the process exited
+// before the engine could terminalize: a timed-out invocation emitted no
+// terminal event and no receipt, and the only account of it was the event
+// stream. It now records the deadline as the CAUSE and waits, boundedly, for
+// the engine's own terminal.
+func TestATimeoutWaitsForItsOwnAccount(t *testing.T) {
+	ctrl := &fakeControl{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // the deadline has already fired
+
+	events := make(chan event.Event, 1)
+	events <- ev("t1", event.WorkflowTimedOut)
+	code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, 25*time.Minute)
+
+	if code != exitTimeout {
+		t.Fatalf("exit = %d, want exitTimeout", code)
+	}
+	if len(ctrl.timedOut) != 1 || !strings.Contains(ctrl.timedOut[0], "25m") {
+		t.Fatalf("the deadline was not recorded as the cause: %v", ctrl.timedOut)
+	}
+	if len(ctrl.stopped) != 1 {
+		t.Fatalf("the task was not stopped: %v", ctrl.stopped)
+	}
+}
+
+// A hung engine must not hold the process open forever.
+func TestATimeoutGivesUpOnAnEngineThatNeverAccounts(t *testing.T) {
+	defer func(d time.Duration) { terminalGrace = d }(terminalGrace)
+	terminalGrace = 20 * time.Millisecond
+	ctrl := &fakeControl{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	events := make(chan event.Event) // nothing will ever arrive
+	close(events)
+	if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, time.Minute); code != exitTimeout {
+		t.Fatalf("exit = %d, want exitTimeout", code)
 	}
 }

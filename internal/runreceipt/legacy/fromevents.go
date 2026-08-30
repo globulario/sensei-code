@@ -104,6 +104,7 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 	rec.CandidateCommitDiffDigest = runreceipt.UnknownValue("no candidate identity was minted, so nothing was rendered from one")
 	rec.CandidateDigestRelation = runreceipt.RelationUnknown
 	rec.DeferredQuestion = runreceipt.UnknownValue("the event stream does not record a deferred authority question")
+	rec.ExecutionBudget = runreceipt.UnknownValue("the event stream does not record an execution budget")
 
 	// Facts the historical stream never measured. Each says so, and why. A
 	// governor emitting its own receipt supplies these; an adapter cannot.
