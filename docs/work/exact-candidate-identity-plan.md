@@ -166,6 +166,21 @@ GIT_AUTHOR_* GIT_COMMITTER_* fixed
 worker's scratch file cannot enter `C` — the property `publish.CommitArgs`
 already protects, kept.
 
+## A pathname is not repaired until it is also READ exactly
+
+Exact bytes are not enough if the receiver may read them as a pattern. Git
+interprets pathspec magic after `--`, so a file genuinely named `:(glob)*`
+survives the NUL-safe capture intact and is then reinterpreted:
+
+```text
+exact bytes -> git pathspec interpretation -> wrong semantic pathname
+```
+
+`GIT_LITERAL_PATHSPECS=1` on every place a measured pathname goes back to git.
+Both uses are proven load-bearing by removing them and watching a test fail:
+without it the canonical tree gains a file no reviewer saw, and the artifact
+boundary's `reset` empties the entire reviewed set.
+
 ## The risk this plan is most likely to break on
 
 **`digest(diff(B,C))` may not equal `D`.** They are produced by different
@@ -198,7 +213,19 @@ and discovering step 5 needs v4:
 CandidateDigest             the reviewed CandidateCapture digest, D
 CandidateCommitDiffDigest   recomputed from diff(B,C)
 CandidateDigestRelation     MATCH | DIFFER | UNKNOWN, read by enumeration
+ReviewedTree                the tree the review verdict was BOUND to
 ```
+
+`ReviewedTree` is required for a bounded ACCEPTED or REFUSED, and v3 binds
+
+```text
+CandidateTree == ReviewedTree
+```
+
+Without it a receipt could state `CandidateTree = T` and `ReviewedDigest = D`
+while proving nothing about whether the verdict was bound to `T` — sending a
+later adjudicator back into the event stream, which is the work the receipt
+exists to eliminate.
 
 `UNKNOWN` is the honest value before step 5 has measured anything, and it is
 never sufficient for COMPLETE once both digests are present.
@@ -289,8 +316,9 @@ the dangerous seam is not minting `C`, it is what happens to the ref afterwards.
 ## Order of work
 
 ```text
-1  gitx: exact NUL-safe paths (capture AND the artifact boundary), canonical
-   tree, pinned serialization, a non-writing verifier         DONE (d9d9a9e, 0960822)
+1  gitx: exact NUL-safe paths (capture AND the artifact boundary), literal
+   pathspecs, fail-closed parsers, canonical tree, pinned serialization,
+   a non-writing verifier            DONE (d9d9a9e, 0960822, ebb645b)
 2  workflow: build T at capture, carry { B, D, T } in the review binding,
    re-check D and T at acceptance, mint C from the bound T, verify,
    noteCandidateCommit -- all before the receipt
