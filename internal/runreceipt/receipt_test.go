@@ -159,7 +159,7 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 			}
 		}
 	}
-	for _, o := range []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed, OutcomeUnknown} {
+	for _, o := range []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed, OutcomeStopped, OutcomeUnknown} {
 		if strings.Contains(strings.ToLower(string(o)), "admit") {
 			t.Fatalf("outcome %q would let a run admit itself", o)
 		}

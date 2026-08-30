@@ -93,6 +93,12 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 	// from "the events do not say", so the adapter says UNKNOWN rather than
 	// choosing. A governor emitting its own receipt knows which it is.
 	rec.CandidateState = runreceipt.CandidateUnknown
+	// The historical stream does not record whether a plan governed the run in
+	// a way this adapter can read, and UNKNOWN is the answer rather than a
+	// convenient NONE. Leaving it at Go's zero value would have been a third
+	// instance of the raw-zero pattern, inside the package that exists to
+	// remove it.
+	rec.PlanState = runreceipt.PlanUnknown
 
 	// Facts the historical stream never measured. Each says so, and why. A
 	// governor emitting its own receipt supplies these; an adapter cannot.

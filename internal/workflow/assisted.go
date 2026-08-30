@@ -293,6 +293,8 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	// The conversational lane opens a record too. It produces no candidate and
 	// receives no review, and the receipt says both rather than staying silent.
 	e.beginReceipt(taskID)
+	// The conversational lane never plans, and that is a fact about the lane.
+	e.notePlanAbsent(taskID)
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TaskCreated, task, nil))
 	e.announceMode(taskID, assistedMode())
 

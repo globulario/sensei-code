@@ -545,6 +545,13 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// its first step still emits a receipt, and that receipt says it never
 	// reached the gate rather than saying nothing at all.
 	e.beginReceipt(taskID)
+	// A supplied plan governs the run from its first instruction, so its
+	// identity is recorded before anything can fail. Waiting until the plan is
+	// assembled would let an early failure report no plan for a run that was
+	// handed one.
+	if supplied := e.planDigest(taskID); supplied != "" {
+		e.notePlan(taskID, supplied, "")
+	}
 	fail := func(err error) {
 		// A deferred authority decision has already recorded itself, with the
 		// question attached. Reporting it again as a failure or a stop would
@@ -628,7 +635,12 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// overridable by the architect's decision, because an architect handed a
 	// stale or uncertifiable graph produces a confident, specific plan built on
 	// invariants that no longer hold — which reads as excellent work.
-	start, err := certifyStartForLane(workspaceStatus, preflight, repositoryHead(ctx, e.Repo), e.observes(taskID))
+	// One reading of the repository head, carried through the start and checked
+	// against the base the candidate is actually cut from. Reading it twice let
+	// the receipt name one base while the candidate was rooted at another if
+	// the repository moved in between.
+	head := repositoryHead(ctx, e.Repo)
+	start, err := certifyStartForLane(workspaceStatus, preflight, head, e.observes(taskID))
 	if err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 		e.reportOutcome(ctx, "blocked", task, err.Error())
@@ -636,7 +648,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		return
 	}
 
-	e.noteWorld(taskID, repositoryHead(ctx, e.Repo), start.GraphDigest())
+	e.noteWorld(taskID, head, start.GraphDigest())
 
 	// The observation lane leaves here, before the change lifecycle begins.
 	//
@@ -681,6 +693,15 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		fail(err)
 		return
 	}
+	// The receipt names the base the start gate read. If the candidate is cut
+	// from a different commit, the repository moved between the two reads and
+	// every later claim about "the base" would name one of two things.
+	if head != "" && identity.BaseSHA != "" && identity.BaseSHA != head {
+		fail(fmt.Errorf(
+			"the repository moved between the certified start and the candidate: the start read %s and the candidate is cut from %s",
+			short(head), short(identity.BaseSHA)))
+		return
+	}
 	if bound, bindErr := identity.BindGraph(e.Repo.Root, start.GraphBuildCommit(), start.SourceRepoCommit()); bindErr == nil {
 		identity = bound
 	}
@@ -708,7 +729,9 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	}
 	if decision.Decision == "reply" {
 		e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.ArchitectSpoke, decision.Message, decision))
-		// A conversational answer carries no plan and no review.
+		// A conversational answer carries no plan and no review. Claimed, not
+		// implied: this branch returns before the plan is ever assembled.
+		e.notePlanAbsent(taskID)
 		e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
 			runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 		return

@@ -49,7 +49,12 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
-const SchemaVersion = "sensei-code.governed-run-receipt/v1"
+// v2 added the PlanState axis and the STOPPED outcome. Both change what a
+// COMPLETE receipt means, so a v1 reader would misread a v2 record and a v2
+// reader would find v1 records missing a required axis. Leaving the version at
+// v1 through that change would be the fabricated specimen this comment warns
+// about, written by the schema's own author.
+const SchemaVersion = "sensei-code.governed-run-receipt/v2"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?

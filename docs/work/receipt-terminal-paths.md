@@ -45,15 +45,25 @@ Facts are recorded **at the moment of measurement**, never derived at the end:
 ```text
 beginReceipt          before anything can fail -- so a run that dies at step one
                       still emits a record saying what it never reached
-noteAwarenessProducer the executable this run launches for awareness
-noteWorld             base commit + graph build commit, at the certified start
+noteServingProducer   /proc/<pid>/exe of the process that ANSWERED this run's
+                      awareness initialize -- measured after the launch, never
+                      the image that was merely intended to serve
+noteWorld             the base commit read ONCE at the certified start, and the
+                      LIVE GRAPH DIGEST (not the graph build commit: they are
+                      different facts and neither stands in for the other)
+notePlan /            the plan axis is asserted, never implied: a supplied plan
+notePlanAbsent        is recorded before anything can fail, a lane that never
+                      plans CLAIMS NONE, and a run that cannot say says UNKNOWN
 notePlan              the identity of the bound this run carried
 noteCandidateCreated  the worktree exists (measured: the engine created it)
 noteCandidateDigest   sha256 of the candidate diff, as the review binding uses
 noteReviewerAssigned  one attempt opens; delivery UNKNOWN until a verdict lands
 noteReviewDelivered   the verdict binds to the attempt that gave it
-emitReceipt           Outcome and CandidateState are PARAMETERS, so a new
-                      terminal path must decide both
+emitRunTerminal       the ONE way a run ends: receipt then terminal event,
+                      inseparable. Outcome and CandidateState are PARAMETERS,
+                      so a new terminal path decides both; Terminal records the
+                      terminal EVENT, never the outcome again under a second
+                      name
 ```
 
 ## Findings
@@ -73,8 +83,8 @@ measured. That is the Exact Candidate Admission slice, and this is its driver.
 
 The engine refuses to record a human stop as a failure, and it is right to:
 recording it as FAILED would teach the behavioural record that the task shape
-breaks. The schema's outcomes are ACCEPTED / REFUSED / FAILED / UNREVIEWED /
-UNKNOWN, so a stopped run is recorded as UNKNOWN and is INCOMPLETE.
+breaks. The vocabulary had no member for it, so the run was recorded as UNKNOWN
+and was INCOMPLETE.
 
 The gap was a **missing vocabulary member**, not a missing measurement, and the
 decision was to add it. `STOPPED` is sufficient for `COMPLETE`: a human chose to
@@ -142,6 +152,23 @@ candidateExists bool                            the raw-zero evidentiary pattern
                                                 a positive claim, no record reads UNKNOWN.
 the terminal guard was approximate              emitRunTerminal is now the single funnel.
 ```
+
+## Schema version
+
+The receipt is **v2**. `PlanState` is a new required axis and `STOPPED` extends
+the outcome vocabulary: both change what COMPLETE means, so a v1 reader would
+misread a v2 record and a v2 reader would find v1 records missing an axis.
+Leaving the version at v1 through that change would have been the fabricated
+specimen the version comment warns about.
+
+## One base, read once
+
+The repository head was read twice around the start boundary -- once entering
+the gate, once for the receipt -- while `candidate.Establish` pinned the
+candidate's base independently. If the repository moved in between, the receipt
+could name one base while the candidate was rooted at another. The head is now
+read once, carried through the start, and the run **refuses** if the candidate's
+base differs from it.
 
 ## What this slice did not do
 

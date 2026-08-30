@@ -2,6 +2,8 @@ package workflow
 
 import (
 	"go/ast"
+
+	"github.com/globulario/sensei-code/internal/event"
 	"go/parser"
 	"go/token"
 	"os"
@@ -87,7 +89,7 @@ func TestOnlyEmitRunTerminalEndsARun(t *testing.T) {
 func TestARunThatDiesBeforeTheGateStillSaysWhatItNeverReached(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
-	r := e.emitReceipt("task-1", runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
 
 	state, missing := r.Completeness()
 	if state != runreceipt.Incomplete {
@@ -105,13 +107,63 @@ func TestARunThatDiesBeforeTheGateStillSaysWhatItNeverReached(t *testing.T) {
 			t.Errorf("missing should name %s: %v", want, missing)
 		}
 	}
-	// The plan is NOT owed: a run that died before planning carried no plan,
-	// and NONE with a recorded absence is the truthful account of that.
-	if r.PlanState != runreceipt.PlanNone {
-		t.Errorf("plan state = %s, want NONE", r.PlanState)
+	// The plan axis must NOT claim NONE here. A run that dies at step one does
+	// not know whether a plan governs it -- a supplied plan may already exist --
+	// so it says UNKNOWN and is incomplete for saying so.
+	if r.PlanState != runreceipt.PlanUnknown {
+		t.Errorf("plan state = %s, want UNKNOWN: an early death cannot deny a plan it may have been handed", r.PlanState)
+	}
+	if !strings.Contains(joined, "plan_state") {
+		t.Errorf("missing should name plan_state: %v", missing)
 	}
 	if strings.Contains(joined, "plan_digest") {
-		t.Errorf("a run with no plan does not owe a plan digest: %v", missing)
+		t.Errorf("a run that cannot say whether it has a plan does not owe a digest: %v", missing)
+	}
+}
+
+// A supplied plan governs from the first instruction, so an early failure must
+// report it rather than reporting no plan.
+func TestAnEarlyFailureStillNamesASuppliedPlan(t *testing.T) {
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	e.notePlan("task-1", "990090fd50446fedcdf60f11e3256ede", "")
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
+	if r.PlanState != runreceipt.PlanPresent {
+		t.Fatalf("plan state = %s, want PRESENT", r.PlanState)
+	}
+	if r.PlanDigest.State != runreceipt.Known || !strings.Contains(r.PlanDigest.Source, "supplied") {
+		t.Fatalf("plan digest = %+v", r.PlanDigest)
+	}
+}
+
+// The terminal field records the terminal EVENT. Recording the outcome there
+// made Outcome quietly into two fields.
+func TestTheTerminalFieldRecordsTheEventNotTheOutcome(t *testing.T) {
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	r := e.emitReceipt("task-1", event.WorkflowCompleted, runreceipt.OutcomeAccepted, runreceipt.CandidateNone)
+	if r.Terminal.Text != string(event.WorkflowCompleted) {
+		t.Fatalf("terminal = %q, want %q", r.Terminal.Text, event.WorkflowCompleted)
+	}
+	if r.Terminal.Text == string(r.Outcome) {
+		t.Fatal("the terminal event and the outcome are different facts and must not be the same field twice")
+	}
+}
+
+// A lane that never plans CLAIMS so; it does not inherit the claim.
+func TestALaneWithNoPlanClaimsItRatherThanInheritingIt(t *testing.T) {
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	if got := func() runreceipt.PlanState {
+		r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+		return r.PlanState
+	}(); got != runreceipt.PlanUnknown {
+		t.Fatalf("an unasserted plan axis = %s, want UNKNOWN", got)
+	}
+	e.notePlanAbsent("task-1")
+	r := e.emitReceipt("task-1", event.WorkflowCompleted, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	if r.PlanState != runreceipt.PlanNone || r.PlanDigest.State != runreceipt.Unknown {
+		t.Fatalf("after claiming no plan: state=%s digest=%+v", r.PlanState, r.PlanDigest)
 	}
 }
 
@@ -126,7 +178,7 @@ func TestTheEngineNeverInfersAReviewItDidNotMeasure(t *testing.T) {
 	if got := e.reviewedOutcome("task-1"); got != runreceipt.OutcomeUnreviewed {
 		t.Fatalf("outcome = %s: an assignment is not a verdict", got)
 	}
-	r := e.emitReceipt("task-1", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	if len(r.Attempts) != 1 || r.Attempts[0].DeliveredVerdict() {
 		t.Fatalf("attempts = %+v: an assigned reviewer that never returned has not delivered", r.Attempts)
 	}
@@ -134,7 +186,7 @@ func TestTheEngineNeverInfersAReviewItDidNotMeasure(t *testing.T) {
 	if got := e.reviewedOutcome("task-1"); got != runreceipt.OutcomeAccepted {
 		t.Fatalf("outcome = %s after a measured acceptance", got)
 	}
-	r = e.emitReceipt("task-1", runreceipt.OutcomeAccepted, runreceipt.CandidateNone)
+	r = e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeAccepted, runreceipt.CandidateNone)
 	if len(r.Attempts) != 1 || !r.Attempts[0].DeliveredVerdict() {
 		t.Fatalf("the verdict must bind to the attempt that gave it: %+v", r.Attempts)
 	}
@@ -155,7 +207,7 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 	e.noteReviewerAssigned("task-1", "codex")
 	e.noteReviewDelivered("task-1", "codex", "accept", "b4f471f096d13f2b")
 
-	r := e.emitReceipt("task-1", e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
+	r := e.emitReceipt("task-1", event.WorkflowFailed, e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
 	if r.CandidateState != runreceipt.CandidatePresent || r.Outcome != runreceipt.OutcomeAccepted {
 		t.Fatalf("state=%s outcome=%s", r.CandidateState, r.Outcome)
 	}
@@ -184,54 +236,9 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 	defer func() { governorIdentityFn = restore }()
 	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteCandidateCommit("task-1", "cccc", "tttt", "f01592b0f0828605ed254047fc064f41dacc78f2")
-	r = e.emitReceipt("task-1", e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
+	r = e.emitReceipt("task-1", event.WorkflowFailed, e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
 	if state, missing := r.Completeness(); state != runreceipt.Complete {
 		t.Fatalf("with a committed candidate the record should be complete: %v", missing)
-	}
-}
-
-// FINDING 2. A human-stopped run has no outcome in this vocabulary. Recording
-// it as FAILED would teach the record that the task shape breaks, which the
-// engine explicitly refuses to do. So the receipt says UNKNOWN and is
-// INCOMPLETE, and the gap is visible rather than papered over.
-func TestAStoppedRunHasNoOutcomeInThisVocabularyYet(t *testing.T) {
-	e := &Engine{}
-	e.beginReceipt("task-1")
-	e.noteWorld("task-1", "f01592b0", "fac399f8225f")
-	e.notePlan("task-1", "990090fd", "")
-	r := e.emitReceipt("task-1", runreceipt.OutcomeUnknown, runreceipt.CandidateNone)
-	if r.Outcome != runreceipt.OutcomeUnknown {
-		t.Fatalf("outcome = %s", r.Outcome)
-	}
-	if state, missing := r.Completeness(); state != runreceipt.Incomplete ||
-		!strings.Contains(strings.Join(missing, " "), "outcome UNKNOWN") {
-		t.Fatalf("state=%s missing=%v", state, missing)
-	}
-	for _, o := range []runreceipt.Outcome{runreceipt.OutcomeAccepted, runreceipt.OutcomeRefused,
-		runreceipt.OutcomeFailed, runreceipt.OutcomeUnreviewed, runreceipt.OutcomeUnknown} {
-		if string(o) == "STOPPED" {
-			t.Fatal("if STOPPED is added, this test records the decision rather than the gap")
-		}
-	}
-}
-
-// FINDING 3. A conversational answer carries no plan, and plan_digest is
-// unconditionally required, so that terminal cannot be complete. Unlike
-// finding 1 this is not a missing measurement: the artifact does not exist.
-func TestAConversationalAnswerCarriesNoPlanAndSaysSo(t *testing.T) {
-	e := &Engine{}
-	e.beginReceipt("task-1")
-	e.noteWorld("task-1", "f01592b0", "fac399f8225f")
-	e.notePlan("task-1", "", "") // the architect replied instead of planning
-	r := e.emitReceipt("task-1", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
-	if r.PlanDigest.State != runreceipt.Unknown {
-		t.Fatalf("plan digest = %+v, want an explicit absence", r.PlanDigest)
-	}
-	if !strings.Contains(r.PlanDigest.Detail, "no plan text") {
-		t.Errorf("the reason must say the artifact does not exist, got %q", r.PlanDigest.Detail)
-	}
-	if state, _ := r.Completeness(); state != runreceipt.Incomplete {
-		t.Fatal("plan_digest is unconditionally required, so this terminal is incomplete")
 	}
 }
 
@@ -240,7 +247,7 @@ func TestAnArchitectsPlanNowHasAnIdentityToo(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
 	e.notePlan("task-1", "", "two repairs, both in the governed loop")
-	r := e.emitReceipt("task-1", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	if r.PlanDigest.State != runreceipt.Known || len(r.PlanDigest.Text) != 64 {
 		t.Fatalf("plan digest = %+v, want a sha256 of the architect's plan text", r.PlanDigest)
 	}
@@ -250,7 +257,7 @@ func TestAnArchitectsPlanNowHasAnIdentityToo(t *testing.T) {
 	// A supplied plan keeps its own identity, and the source says which it is.
 	e.beginReceipt("task-2")
 	e.notePlan("task-2", "990090fd", "ignored when a supplied digest exists")
-	r2 := e.emitReceipt("task-2", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	r2 := e.emitReceipt("task-2", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	if r2.PlanDigest.Text != "990090fd" || !strings.Contains(r2.PlanDigest.Source, "supplied") {
 		t.Fatalf("supplied plan digest = %+v", r2.PlanDigest)
 	}
@@ -303,7 +310,7 @@ func TestTheServingProducerIsTheProcessThatAnswered(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
 	e.noteServingProducer("task-1", os.Getpid(), true)
-	r := e.emitReceipt("task-1", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
 	if r.ServingProducer.State != runreceipt.Known {
 		t.Fatalf("serving producer = %+v", r.ServingProducer)
 	}
@@ -313,7 +320,7 @@ func TestTheServingProducerIsTheProcessThatAnswered(t *testing.T) {
 	// A process that never started served nothing, whatever image was resolvable.
 	e.beginReceipt("task-2")
 	e.noteServingProducer("task-2", 0, false)
-	r2 := e.emitReceipt("task-2", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+	r2 := e.emitReceipt("task-2", event.WorkflowFailed, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
 	if r2.ServingProducer.State != runreceipt.Unknown ||
 		!strings.Contains(r2.ServingProducer.Detail, "nothing served this run") {
 		t.Fatalf("a failed launch must serve nothing: %+v", r2.ServingProducer)
@@ -325,7 +332,7 @@ func TestTheGraphDigestIsNotTheBuildCommit(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
 	e.noteWorld("task-1", "f01592b0", "") // a start with no live digest
-	r := e.emitReceipt("task-1", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
 	if r.GraphDigest.State != runreceipt.Unknown {
 		t.Fatalf("graph digest = %+v, want an explicit absence", r.GraphDigest)
 	}
@@ -333,7 +340,7 @@ func TestTheGraphDigestIsNotTheBuildCommit(t *testing.T) {
 		t.Errorf("the reason must name the distinction, got %q", r.GraphDigest.Detail)
 	}
 	e.noteWorld("task-1", "f01592b0", "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64")
-	r = e.emitReceipt("task-1", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+	r = e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
 	if r.GraphDigest.State != runreceipt.Known || !strings.Contains(r.GraphDigest.Source, "live_store_graph_digest") {
 		t.Fatalf("graph digest = %+v", r.GraphDigest)
 	}
@@ -369,7 +376,7 @@ func TestAStoppedRunIsCompleteAndSaysStopped(t *testing.T) {
 	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteWorld("task-1", "f01592b0", "42e6e12c")
 	e.notePlan("task-1", "990090fd", "")
-	r := e.emitReceipt("task-1", runreceipt.OutcomeStopped, e.candidateStateFor("task-1"))
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeStopped, e.candidateStateFor("task-1"))
 	state, missing := r.Completeness()
 	if state != runreceipt.Complete {
 		t.Fatalf("COMPLETE / STOPPED must be representable: %v", missing)
@@ -393,7 +400,7 @@ func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
 	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteWorld("task-1", "f01592b0", "42e6e12c")
 	e.notePlan("task-1", "", "") // the architect replied instead of planning
-	r := e.emitReceipt("task-1", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	if r.PlanState != runreceipt.PlanNone {
 		t.Fatalf("plan state = %s, want NONE", r.PlanState)
 	}
@@ -406,7 +413,7 @@ func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
 	e.noteWorld("task-2", "f01592b0", "42e6e12c")
 	e.notePlan("task-2", "990090fd", "")
 	e.withReceipt("task-2", func(f *receiptFacts) { f.planState = runreceipt.PlanNone })
-	r2 := e.emitReceipt("task-2", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	r2 := e.emitReceipt("task-2", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	if state, missing := r2.Completeness(); state != runreceipt.Incomplete ||
 		!strings.Contains(strings.Join(missing, " "), "plan_state is NONE") {
 		t.Fatalf("state=%s missing=%v", state, missing)

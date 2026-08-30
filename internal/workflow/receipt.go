@@ -88,10 +88,14 @@ func freshFacts() *receiptFacts {
 		verdict:    notYet("no bounded verdict was returned"),
 		digest:     notYet("no bounded verdict was returned"),
 		serving:    notYet("the awareness process had not been launched"),
-		// Opening states, asserted rather than defaulted: at the start of a run
-		// nothing has been created and no plan has been established.
+		// Opening states. Nothing has been CREATED yet, so the candidate axis
+		// opens at NONE as a positive claim. The plan axis does NOT: a supplied
+		// plan may already exist before the first step succeeds, and a resumed
+		// task with no restored record certainly cannot claim there is no plan.
+		// Opening at NONE would have let an early failure deny a plan that
+		// exists. It opens UNKNOWN and is asserted by whoever establishes it.
 		candidateState: runreceipt.CandidateNone,
-		planState:      runreceipt.PlanNone,
+		planState:      runreceipt.PlanUnknown,
 	}
 }
 
@@ -122,6 +126,19 @@ func (e *Engine) noteWorld(taskID, base, graphDigest string) {
 			return
 		}
 		f.graph = runreceipt.MeasuredValue(graphDigest, "sensei preflight authority.live_store_graph_digest_sha256")
+	})
+}
+
+// notePlanAbsent asserts that this run carries no plan at all.
+//
+// A conversational lane never plans, and saying so is a measurement of the
+// lane's shape rather than a default. It is separate from notePlan so that "no
+// plan" is always something a caller CLAIMED, never something a struct's zero
+// value implied.
+func (e *Engine) notePlanAbsent(taskID string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.planState = runreceipt.PlanNone
+		f.plan = runreceipt.UnknownValue("this lane carries no plan")
 	})
 }
 
@@ -219,7 +236,7 @@ func (e *Engine) noteReviewDelivered(taskID, provider, decision, candidateDigest
 // Outcome and CandidateState are parameters rather than derived state, so a new
 // terminal path must decide both. Deriving them here would be the convenience
 // that lets the next author skip the question, and the question is the point.
-func (e *Engine) emitReceipt(taskID string, outcome runreceipt.Outcome, cand runreceipt.CandidateState) runreceipt.Receipt {
+func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runreceipt.Outcome, cand runreceipt.CandidateState) runreceipt.Receipt {
 	e.mu.Lock()
 	f := e.receipts[taskID]
 	if f == nil {
@@ -251,8 +268,11 @@ func (e *Engine) emitReceipt(taskID string, outcome runreceipt.Outcome, cand run
 		ReviewVerdict:        facts.verdict,
 		ReviewedDigest:       facts.digest,
 		Attempts:             facts.attempts,
-		Terminal:             runreceipt.MeasuredValue(string(outcome), "the terminal path this run took"),
-		Outcome:              outcome,
+		// The terminal EVENT, not the outcome. Recording the outcome here made
+		// Outcome quietly into two fields, and a reader comparing them would
+		// have been comparing a fact with itself.
+		Terminal: runreceipt.MeasuredValue(string(terminal), "the terminal event this run emitted"),
+		Outcome:  outcome,
 	}
 	state, missing := r.Completeness()
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RunReceipt,
@@ -403,6 +423,6 @@ func (e *Engine) noteServingProducer(taskID string, pid int, launched bool) {
 // an answer instead of deciding one.
 func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.Source,
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
-	e.emitReceipt(taskID, outcome, cand)
+	e.emitReceipt(taskID, kind, outcome, cand)
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
 }
