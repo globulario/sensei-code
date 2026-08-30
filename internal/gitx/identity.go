@@ -99,31 +99,22 @@ func (r Repo) CanonicalTree(ctx context.Context, base string, paths []string) (s
 	return strings.TrimSpace(tree), nil
 }
 
-// CanonicalCommit mints the identity commit for (base, tree), deterministically.
+// CanonicalCommitBytes is the exact serialized commit object for these inputs.
 //
-// Every field is fixed: the parent, the tree, the authorship, the message, and
-// the timestamps -- which are DERIVED FROM THE BASE rather than read from a
-// clock, because a clock would make the same candidate content produce a
-// different object on every run and identity would stop being reconstructible.
-func (r Repo) CanonicalCommit(ctx context.Context, base, tree string) (string, error) {
-	when, err := r.canonicalStamp(ctx, base)
-	if err != nil {
-		return "", err
-	}
-	env := append(os.Environ(),
-		"GIT_AUTHOR_NAME="+CanonicalName,
-		"GIT_AUTHOR_EMAIL="+CanonicalEmail,
-		"GIT_AUTHOR_DATE="+when,
-		"GIT_COMMITTER_NAME="+CanonicalName,
-		"GIT_COMMITTER_EMAIL="+CanonicalEmail,
-		"GIT_COMMITTER_DATE="+when,
-	)
-	out, err := r.envInput(ctx, env, canonicalMessage(base, tree),
-		"commit-tree", tree, "-p", base)
-	if err != nil {
-		return "", fmt.Errorf("mint the candidate identity commit: %w", err)
-	}
-	return strings.TrimSpace(out), nil
+// The serialization is OURS, byte for byte, rather than whatever a git
+// porcelain happens to emit: that is what makes a fixed test vector possible,
+// and what makes a future stray newline or reordered header visible instead of
+// silent. Every field is an input or a constant; nothing is read from the
+// environment or a clock.
+func CanonicalCommitBytes(base, tree, stamp string) []byte {
+	var b strings.Builder
+	b.WriteString("tree " + tree + "\n")
+	b.WriteString("parent " + base + "\n")
+	b.WriteString("author " + CanonicalName + " <" + CanonicalEmail + "> " + stamp + "\n")
+	b.WriteString("committer " + CanonicalName + " <" + CanonicalEmail + "> " + stamp + "\n")
+	b.WriteString("\n")
+	b.WriteString(canonicalMessage(base, tree))
+	return []byte(b.String())
 }
 
 // canonicalStamp is the base's committer time plus one second, at +0000.
@@ -142,13 +133,55 @@ func (r Repo) canonicalStamp(ctx context.Context, base string) (string, error) {
 	return strconv.FormatInt(secs+1, 10) + " +0000", nil
 }
 
-// VerifyCanonicalCommit reconstructs the commit that (base, tree) must produce
-// and reports whether the recorded object is exactly it.
+// ExpectedCanonicalSHA is the identity (base, tree) MUST produce, computed
+// without writing anything.
+//
+// Verification that mints the object it verifies is not verification: an
+// earlier draft called CanonicalCommit from VerifyCanonicalCommit, so every
+// check wrote a reconstructed commit into .git/objects. A verifier must be able
+// to run against a repository it does not modify. `hash-object` without -w
+// computes and discards, and it uses the repository's own object format rather
+// than assuming SHA-1.
+func (r Repo) ExpectedCanonicalSHA(ctx context.Context, base, tree string) (string, error) {
+	stamp, err := r.canonicalStamp(ctx, base)
+	if err != nil {
+		return "", err
+	}
+	out, err := r.stdinOutput(ctx, nil, string(CanonicalCommitBytes(base, tree, stamp)),
+		"hash-object", "-t", "commit", "--stdin")
+	if err != nil {
+		return "", fmt.Errorf("compute the canonical identity: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// MintCanonicalCommit writes the exact canonical bytes and returns the object.
+//
+// It writes OUR serialization rather than asking commit-tree to build one, so
+// the object stored is the object CanonicalCommitBytes specifies -- the thing
+// the test vector pins and the verifier recomputes.
+func (r Repo) MintCanonicalCommit(ctx context.Context, base, tree string) (string, error) {
+	stamp, err := r.canonicalStamp(ctx, base)
+	if err != nil {
+		return "", err
+	}
+	out, err := r.stdinOutput(ctx, nil, string(CanonicalCommitBytes(base, tree, stamp)),
+		"hash-object", "-t", "commit", "-w", "--stdin")
+	if err != nil {
+		return "", fmt.Errorf("mint the candidate identity commit: %w", err)
+	}
+	return strings.TrimSpace(out), nil
+}
+
+// VerifyCanonicalCommit reports whether the recorded object is exactly the
+// identity (base, tree) produces. It computes and compares; it WRITES NOTHING.
 //
 // This is the verification that needs no signature: a forged author string
-// survives inspection, a forged identity does not survive reconstruction.
+// survives inspection, a forged identity does not survive reconstruction. And a
+// verifier that minted the object it verifies would leave the repository
+// holding a reconstruction of every claim it ever checked.
 func (r Repo) VerifyCanonicalCommit(ctx context.Context, base, tree, recorded string) error {
-	expected, err := r.CanonicalCommit(ctx, base, tree)
+	expected, err := r.ExpectedCanonicalSHA(ctx, base, tree)
 	if err != nil {
 		return err
 	}
@@ -207,11 +240,13 @@ func (r Repo) envOutput(ctx context.Context, env []string, args ...string) (stri
 	return stdout.String(), nil
 }
 
-// envInput is envOutput with stdin, used for the commit message so that not one
-// byte of it passes through argv quoting.
-func (r Repo) envInput(ctx context.Context, env []string, stdin string, args ...string) (string, error) {
+// stdinOutput runs git with an optional environment and a stdin payload, so
+// that not one byte of the commit object passes through argv quoting.
+func (r Repo) stdinOutput(ctx context.Context, env []string, stdin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", r.Root}, args...)...)
-	cmd.Env = env
+	if env != nil {
+		cmd.Env = env
+	}
 	cmd.Stdin = strings.NewReader(stdin)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr

@@ -108,7 +108,12 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	for _, p := range intended {
 		want[filepath.ToSlash(strings.TrimPrefix(strings.TrimSpace(p), "./"))] = true
 	}
-	numstatArgs := []string{"diff", "--no-ext-diff", "--numstat"}
+	// -z and --no-renames for the same reason Paths uses them: this loop
+	// decides which paths are ARTIFACTS and resets them out of the candidate,
+	// so a pathname it misreads is a file excluded or kept by the wrong name.
+	// The exact path set downstream cannot repair a boundary decision already
+	// made against a mangled name.
+	numstatArgs := []string{"diff", "--no-ext-diff", "--no-renames", "--numstat", "-z"}
 	if b := strings.TrimSpace(base); b != "" {
 		numstatArgs = append(numstatArgs, b)
 	}
@@ -117,8 +122,12 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		return Capture{}, err
 	}
 	var cap Capture
-	for _, line := range strings.Split(numstat, "\n") {
-		parts := strings.SplitN(strings.TrimSpace(line), "\t", 3)
+	for _, record := range strings.Split(numstat, "\x00") {
+		// Each record is "added\tdeleted\tpath". Only the first two tabs are
+		// separators; everything after them is the pathname's own bytes, which
+		// may themselves contain a tab. TrimSpace is deliberately absent: a
+		// pathname may begin or end with whitespace.
+		parts := strings.SplitN(record, "\t", 3)
 		if len(parts) != 3 {
 			continue
 		}

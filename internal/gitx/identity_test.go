@@ -1,10 +1,14 @@
 package gitx
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -118,7 +122,7 @@ func TestTheCanonicalCommitIsAFunctionOfItsInputs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	first, err := r.CanonicalCommit(ctx, base, tree)
+	first, err := r.MintCanonicalCommit(ctx, base, tree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +142,7 @@ func TestTheCanonicalCommitIsAFunctionOfItsInputs(t *testing.T) {
 	t.Setenv("GIT_AUTHOR_DATE", "2001-02-03T04:05:06 +0900")
 	t.Setenv("GIT_COMMITTER_DATE", "2001-02-03T04:05:06 +0900")
 
-	second, err := r.CanonicalCommit(ctx, base, tree)
+	second, err := r.MintCanonicalCommit(ctx, base, tree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -158,7 +162,7 @@ func TestTheCanonicalCommitsFirstParentIsExactlyTheBase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := r.CanonicalCommit(ctx, base, tree)
+	c, err := r.MintCanonicalCommit(ctx, base, tree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,7 +203,7 @@ func TestWorkerHistoryDoesNotDetermineTheIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := r.CanonicalCommit(ctx, base, tree)
+	c, err := r.MintCanonicalCommit(ctx, base, tree)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,5 +246,101 @@ func TestACanonicalTreeRefusesAnEmptyCandidate(t *testing.T) {
 	r, base := repoWithBase(t)
 	if _, err := r.CanonicalTree(context.Background(), base, nil); err == nil {
 		t.Fatal("an empty path set produced a tree; a run that changed nothing is not a candidate")
+	}
+}
+
+// TestTheCanonicalSerializationIsPinned is the fixed test vector.
+//
+// The other tests prove this implementation agrees with itself. This one pins
+// the exact bytes and the exact object id, so a stray newline, a reordered
+// header or a changed message makes a visible failure rather than a silently
+// different identity for every candidate ever minted afterwards.
+func TestTheCanonicalSerializationIsPinned(t *testing.T) {
+	const (
+		base  = "1111111111111111111111111111111111111111"
+		tree  = "2222222222222222222222222222222222222222"
+		stamp = "1700000001 +0000"
+		want  = "tree 2222222222222222222222222222222222222222\n" +
+			"parent 1111111111111111111111111111111111111111\n" +
+			"author Sensei Code Candidate Identity <candidate-identity@sensei-code.invalid> 1700000001 +0000\n" +
+			"committer Sensei Code Candidate Identity <candidate-identity@sensei-code.invalid> 1700000001 +0000\n" +
+			"\n" +
+			"sensei-code candidate identity\n\nbase: 1111111111111111111111111111111111111111\ntree: 2222222222222222222222222222222222222222\n"
+		wantSHA1 = "44a62d723545fa84101419632ec6cb93d3b62717"
+	)
+	got := string(CanonicalCommitBytes(base, tree, stamp))
+	if got != want {
+		t.Fatalf("the canonical serialization moved.\n got: %q\nwant: %q", got, want)
+	}
+	sum := sha1.Sum([]byte("commit " + strconv.Itoa(len(want)) + "\x00" + want))
+	if hex.EncodeToString(sum[:]) != wantSHA1 {
+		t.Fatalf("object id = %s, pinned %s", hex.EncodeToString(sum[:]), wantSHA1)
+	}
+}
+
+// A verifier must be able to run against a repository it does not modify.
+func TestVerificationWritesNothing(t *testing.T) {
+	ctx := context.Background()
+	r, base := repoWithBase(t)
+	os.WriteFile(filepath.Join(r.Root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
+	tree, err := r.CanonicalTree(ctx, base, []string{"main.go"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := r.ExpectedCanonicalSHA(ctx, base, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The object must NOT be in the store yet: computing an identity is not
+	// creating one.
+	if err := exec.Command("git", "-C", r.Root, "cat-file", "-e", expected+"^{object}").Run(); err == nil {
+		t.Fatal("computing the expected identity wrote the object; verification must not mint what it verifies")
+	}
+	// Verification against a not-yet-minted identity is a mismatch, not a write.
+	if err := r.VerifyCanonicalCommit(ctx, base, tree, strings.Repeat("0", 40)); err == nil {
+		t.Fatal("verification accepted a wrong object")
+	}
+	if err := exec.Command("git", "-C", r.Root, "cat-file", "-e", expected+"^{object}").Run(); err == nil {
+		t.Fatal("verification wrote the reconstructed object into the store")
+	}
+	// Minting is the separate, deliberate act.
+	minted, err := r.MintCanonicalCommit(ctx, base, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if minted != expected {
+		t.Fatalf("minted %s, expected %s", short12(minted), short12(expected))
+	}
+	if err := exec.Command("git", "-C", r.Root, "cat-file", "-e", minted+"^{object}").Run(); err != nil {
+		t.Fatalf("the minted object is not in the store: %v", err)
+	}
+}
+
+// The artifact boundary decides which paths are excluded, so IT must read
+// pathnames exactly too: an exact path set downstream cannot repair a boundary
+// decision already made against a mangled name.
+func TestTheArtifactBoundaryExcludesAnAwkwardlyNamedArtifactByItsExactName(t *testing.T) {
+	r, base := repoWithBase(t)
+	awkward := "build\toutput.bin"
+	elf := append([]byte{0x7f, 'E', 'L', 'F', 2, 1, 1, 0}, bytes.Repeat([]byte{0x00, 0xff, 0x13}, 1024)...)
+	if err := os.WriteFile(filepath.Join(r.Root, awkward), elf, 0o644); err != nil {
+		t.Skipf("this filesystem will not hold %q: %v", awkward, err)
+	}
+	os.WriteFile(filepath.Join(r.Root, "main.go"), []byte("package main\n\nfunc main() {}\n"), 0o644)
+
+	cap, err := r.CandidateCapture(context.Background(), base, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cap.Excluded) != 1 {
+		t.Fatalf("excluded = %+v, want exactly the awkward artifact", cap.Excluded)
+	}
+	if cap.Excluded[0].Path != awkward {
+		t.Fatalf("excluded path = %q, want the exact pathname %q", cap.Excluded[0].Path, awkward)
+	}
+	for _, p := range cap.Paths {
+		if p == awkward {
+			t.Fatal("the excluded artifact remained in the reviewed path set")
+		}
 	}
 }
