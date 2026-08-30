@@ -736,6 +736,17 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 			runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 		return
 	}
+	// The bound this run carries is recorded HERE, the moment the architect
+	// produced it -- before routing, and therefore before any authority
+	// boundary a routing decision can reach.
+	//
+	// It used to be recorded after the task context was assembled, which is
+	// after routing. A run that deferred to a human during routing therefore
+	// reported "plan_state UNKNOWN" about a plan that demonstrably existed:
+	// the escalation is literally "Authority for THIS PLAN, by lane". Third
+	// instance in one day of a fact recorded after the terminal that needs it.
+	e.notePlan(taskID, e.planDigest(taskID), decision.Plan)
+
 	// The plan is published as information, not as a gate.
 	//
 	// There used to be a rendezvous here: "Implement this plan? 1/2". It asked
@@ -770,7 +781,6 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
 	}
-	e.notePlan(taskID, e.planDigest(taskID), plan)
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
 		fail(errors.New("candidate worktree capability is not granted"))
