@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -11,19 +12,26 @@ import (
 	"github.com/globulario/sensei-code/internal/runreceipt"
 )
 
-// TestEveryTerminalPathEmitsAReceipt is the wiring itself, not a description.
+// TestOnlyEmitRunTerminalEndsARun makes the pairing an invariant instead of a
+// convention.
 //
-// A run that ends without a receipt is a run whose account has to be
-// reconstructed afterwards from the event stream -- the architecture that cost
-// C5. A new terminal path must not be able to skip it quietly, so the guard is
-// structural: any function that emits a run terminal must also emit a receipt.
-func TestEveryTerminalPathEmitsAReceipt(t *testing.T) {
+// The previous version asked whether a function contained BOTH a terminal kind
+// and some emitReceipt call, which a function with three terminal exits and one
+// receipt would have passed. This one requires that a run-terminal event is
+// only ever CONSTRUCTED inside emitRunTerminal, where the receipt is emitted
+// first and cannot be omitted.
+//
+// Its limit, stated rather than hidden: it inspects direct arguments, so a
+// terminal kind stashed in a variable and passed to e.emit elsewhere would
+// evade it. That is a deliberate evasion, not the accidental drift this guards.
+func TestOnlyEmitRunTerminalEndsARun(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatalf("globbing the package: %v", err)
 	}
+	terminal := map[string]bool{"WorkflowCompleted": true, "WorkflowFailed": true, "WorkflowStopped": true}
 	fset := token.NewFileSet()
-	terminals := []string{"WorkflowCompleted", "WorkflowFailed", "WorkflowStopped"}
+	var funnel int
 	for _, path := range files {
 		if strings.HasSuffix(path, "_test.go") {
 			continue
@@ -37,28 +45,40 @@ func TestEveryTerminalPathEmitsAReceipt(t *testing.T) {
 			if !ok || fn.Body == nil {
 				continue
 			}
-			var emitsTerminal, emitsReceipt bool
+			inFunnel := fn.Name.Name == "emitRunTerminal"
+			if inFunnel {
+				funnel++
+			}
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
-				sel, ok := n.(*ast.SelectorExpr)
+				call, ok := n.(*ast.CallExpr)
 				if !ok {
 					return true
 				}
-				for _, k := range terminals {
-					if sel.Sel.Name == k {
-						emitsTerminal = true
-					}
+				sel, ok := call.Fun.(*ast.SelectorExpr)
+				if !ok || sel.Sel.Name != "New" {
+					return true
 				}
-				if sel.Sel.Name == "emitReceipt" {
-					emitsReceipt = true
+				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "event" {
+					return true
+				}
+				for _, arg := range call.Args {
+					kind, ok := arg.(*ast.SelectorExpr)
+					if !ok || !terminal[kind.Sel.Name] {
+						continue
+					}
+					if !inFunnel {
+						t.Errorf("%s: %s constructs a run-terminal event directly. "+
+							"Every run ends through emitRunTerminal, which emits the receipt first; "+
+							"a run whose account must be reconstructed afterwards is the architecture that cost C5.",
+							path, fn.Name.Name)
+					}
 				}
 				return true
 			})
-			if emitsTerminal && !emitsReceipt {
-				t.Errorf("%s: %s emits a run terminal without emitting a receipt. "+
-					"A run whose account must be reconstructed afterwards is the architecture that cost C5.",
-					path, fn.Name.Name)
-			}
 		}
+	}
+	if funnel != 1 {
+		t.Fatalf("expected exactly one emitRunTerminal, found %d", funnel)
 	}
 }
 
@@ -80,10 +100,18 @@ func TestARunThatDiesBeforeTheGateStillSaysWhatItNeverReached(t *testing.T) {
 		t.Errorf("candidate state = %s: no worktree was created, and that is a positive fact", r.CandidateState)
 	}
 	joined := strings.Join(missing, " ")
-	for _, want := range []string{"base_commit", "graph_digest", "plan_digest"} {
+	for _, want := range []string{"base_commit", "graph_digest"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("missing should name %s: %v", want, missing)
 		}
+	}
+	// The plan is NOT owed: a run that died before planning carried no plan,
+	// and NONE with a recorded absence is the truthful account of that.
+	if r.PlanState != runreceipt.PlanNone {
+		t.Errorf("plan state = %s, want NONE", r.PlanState)
+	}
+	if strings.Contains(joined, "plan_digest") {
+		t.Errorf("a run with no plan does not owe a plan digest: %v", missing)
 	}
 }
 
@@ -154,7 +182,7 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 			runreceipt.MeasuredValue(strings.Repeat("a", 64), "sha256 of the executable this process is running")
 	}
 	defer func() { governorIdentityFn = restore }()
-	e.noteAwarenessProducer("task-1", "go")
+	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteCandidateCommit("task-1", "cccc", "tttt", "f01592b0f0828605ed254047fc064f41dacc78f2")
 	r = e.emitReceipt("task-1", e.reviewedOutcome("task-1"), e.candidateStateFor("task-1"))
 	if state, missing := r.Completeness(); state != runreceipt.Complete {
@@ -266,23 +294,121 @@ func TestAModifiedBuildRefusesToNameItsCommit(t *testing.T) {
 	}
 }
 
-// The awareness executable is measured as an IMAGE, and says so. C5 found a
-// frozen "producer" naming a file nobody had shown to be executing.
-func TestTheAwarenessExecutableIsMeasuredAsAnImageNotAProcess(t *testing.T) {
+// The serving producer is the PROCESS that answered, not the image that was
+// intended to. C5 found a frozen "producer" field naming a file nobody had
+// shown to be executing; measuring the resolvable image before launch would
+// have been the same mistake one level down -- it would read KNOWN even when
+// the process failed to start.
+func TestTheServingProducerIsTheProcessThatAnswered(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
-	e.noteAwarenessProducer("task-1", "go")
+	e.noteServingProducer("task-1", os.Getpid(), true)
 	r := e.emitReceipt("task-1", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
 	if r.ServingProducer.State != runreceipt.Known {
 		t.Fatalf("serving producer = %+v", r.ServingProducer)
 	}
-	if !strings.Contains(r.ServingProducer.Source, "launched for awareness") {
-		t.Errorf("the source must say what was measured, got %q", r.ServingProducer.Source)
+	if !strings.Contains(r.ServingProducer.Source, "answered this run") {
+		t.Errorf("the source must say the process answered, got %q", r.ServingProducer.Source)
 	}
+	// A process that never started served nothing, whatever image was resolvable.
 	e.beginReceipt("task-2")
-	e.noteAwarenessProducer("task-2", "definitely-not-on-path-xyz")
+	e.noteServingProducer("task-2", 0, false)
 	r2 := e.emitReceipt("task-2", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
-	if r2.ServingProducer.State != runreceipt.Unknown || r2.ServingProducer.Detail == "" {
-		t.Fatalf("an unresolvable command must be an explained absence: %+v", r2.ServingProducer)
+	if r2.ServingProducer.State != runreceipt.Unknown ||
+		!strings.Contains(r2.ServingProducer.Detail, "nothing served this run") {
+		t.Fatalf("a failed launch must serve nothing: %+v", r2.ServingProducer)
+	}
+}
+
+// The graph DIGEST and the graph BUILD COMMIT are different facts.
+func TestTheGraphDigestIsNotTheBuildCommit(t *testing.T) {
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	e.noteWorld("task-1", "f01592b0", "") // a start with no live digest
+	r := e.emitReceipt("task-1", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+	if r.GraphDigest.State != runreceipt.Unknown {
+		t.Fatalf("graph digest = %+v, want an explicit absence", r.GraphDigest)
+	}
+	if !strings.Contains(r.GraphDigest.Detail, "build commit is a different fact") {
+		t.Errorf("the reason must name the distinction, got %q", r.GraphDigest.Detail)
+	}
+	e.noteWorld("task-1", "f01592b0", "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64")
+	r = e.emitReceipt("task-1", runreceipt.OutcomeFailed, runreceipt.CandidateNone)
+	if r.GraphDigest.State != runreceipt.Known || !strings.Contains(r.GraphDigest.Source, "live_store_graph_digest") {
+		t.Fatalf("graph digest = %+v", r.GraphDigest)
+	}
+}
+
+// Candidate and plan states are STATES, not Go zero values.
+func TestCandidateAndPlanStatesAreRecordedNotInferred(t *testing.T) {
+	e := &Engine{}
+	if got := e.candidateStateFor("no-such-task"); got != runreceipt.CandidateUnknown {
+		t.Fatalf("a task with no record = %s, want UNKNOWN rather than a convenient NONE", got)
+	}
+	e.beginReceipt("task-1")
+	if got := e.candidateStateFor("task-1"); got != runreceipt.CandidateNone {
+		t.Fatalf("a fresh run = %s, want NONE as a positive claim", got)
+	}
+	e.noteCandidateCreated("task-1")
+	if got := e.candidateStateFor("task-1"); got != runreceipt.CandidatePresent {
+		t.Fatalf("after a worktree is created = %s", got)
+	}
+}
+
+// A stopped run is a complete record of a real outcome.
+func TestAStoppedRunIsCompleteAndSaysStopped(t *testing.T) {
+	restore := governorIdentityFn
+	governorIdentityFn = func() (runreceipt.Value, runreceipt.Value) {
+		return runreceipt.MeasuredValue("3e5ade13", "runtime/debug build info vcs.revision"),
+			runreceipt.MeasuredValue(strings.Repeat("a", 64), "sha256 of the executable this process is running")
+	}
+	defer func() { governorIdentityFn = restore }()
+
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	e.noteServingProducer("task-1", os.Getpid(), true)
+	e.noteWorld("task-1", "f01592b0", "42e6e12c")
+	e.notePlan("task-1", "990090fd", "")
+	r := e.emitReceipt("task-1", runreceipt.OutcomeStopped, e.candidateStateFor("task-1"))
+	state, missing := r.Completeness()
+	if state != runreceipt.Complete {
+		t.Fatalf("COMPLETE / STOPPED must be representable: %v", missing)
+	}
+	if r.Outcome != runreceipt.OutcomeStopped {
+		t.Fatalf("outcome = %s", r.Outcome)
+	}
+}
+
+// A conversational answer has NO plan, and that is now a complete record.
+func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
+	restore := governorIdentityFn
+	governorIdentityFn = func() (runreceipt.Value, runreceipt.Value) {
+		return runreceipt.MeasuredValue("3e5ade13", "runtime/debug build info vcs.revision"),
+			runreceipt.MeasuredValue(strings.Repeat("a", 64), "sha256 of the executable this process is running")
+	}
+	defer func() { governorIdentityFn = restore }()
+
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	e.noteServingProducer("task-1", os.Getpid(), true)
+	e.noteWorld("task-1", "f01592b0", "42e6e12c")
+	e.notePlan("task-1", "", "") // the architect replied instead of planning
+	r := e.emitReceipt("task-1", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	if r.PlanState != runreceipt.PlanNone {
+		t.Fatalf("plan state = %s, want NONE", r.PlanState)
+	}
+	if state, missing := r.Completeness(); state != runreceipt.Complete {
+		t.Fatalf("a run with no plan is a complete record of a run with no plan: %v", missing)
+	}
+	// And a plan claimed absent while a digest is recorded is a contradiction.
+	e.beginReceipt("task-2")
+	e.noteServingProducer("task-2", os.Getpid(), true)
+	e.noteWorld("task-2", "f01592b0", "42e6e12c")
+	e.notePlan("task-2", "990090fd", "")
+	e.withReceipt("task-2", func(f *receiptFacts) { f.planState = runreceipt.PlanNone })
+	r2 := e.emitReceipt("task-2", runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
+	if state, missing := r2.Completeness(); state != runreceipt.Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "plan_state is NONE") {
+		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }

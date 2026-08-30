@@ -21,8 +21,8 @@ import (
 	"encoding/hex"
 	"io"
 	"os"
-	"os/exec"
 	"runtime/debug"
+	"strconv"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/event"
@@ -40,8 +40,15 @@ type receiptFacts struct {
 	provider, executable, verdict, digest      runreceipt.Value
 	serving                                    runreceipt.Value
 	attempts                                   []runreceipt.Attempt
-	// candidateExists is measured when the worktree is created.
-	candidateExists bool
+	// candidateState and planState are STATES, not booleans.
+	//
+	// An earlier draft used `candidateExists bool`, which reintroduced exactly
+	// the ambiguity just removed from Attempt.Delivered: false conflated
+	// "measured: no candidate" with "nobody recorded anything". A run's record
+	// opens at NONE -- a positive claim that nothing has been created yet --
+	// and a task with no open record reads UNKNOWN.
+	candidateState runreceipt.CandidateState
+	planState      runreceipt.PlanState
 }
 
 // beginReceipt opens the record for a task before anything is established.
@@ -80,7 +87,11 @@ func freshFacts() *receiptFacts {
 		executable: notYet("the engine does not measure the reviewer executable"),
 		verdict:    notYet("no bounded verdict was returned"),
 		digest:     notYet("no bounded verdict was returned"),
-		serving:    notYet("the engine does not measure the awareness process it consults"),
+		serving:    notYet("the awareness process had not been launched"),
+		// Opening states, asserted rather than defaulted: at the start of a run
+		// nothing has been created and no plan has been established.
+		candidateState: runreceipt.CandidateNone,
+		planState:      runreceipt.PlanNone,
 	}
 }
 
@@ -95,10 +106,22 @@ func (e *Engine) withReceipt(taskID string, apply func(*receiptFacts)) {
 }
 
 // noteWorld records the base and the graph the start gate certified.
-func (e *Engine) noteWorld(taskID, base, graphBuildCommit string) {
+// noteWorld records the base and the digest of the graph actually served.
+//
+// The graph BUILD COMMIT is a different fact and must not stand in for the
+// digest: one names the generation that produced the rules, the other the bytes
+// that answered this run. An earlier draft put the build commit into
+// GraphDigest, which is one measured fact carrying a different claim -- the
+// exact pattern this chain keeps repairing.
+func (e *Engine) noteWorld(taskID, base, graphDigest string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		f.base = runreceipt.MeasuredValue(base, "git rev-parse HEAD, at the certified start")
-		f.graph = runreceipt.MeasuredValue(graphBuildCommit, "sensei preflight authority.graph_build_commit")
+		if strings.TrimSpace(graphDigest) == "" {
+			f.graph = runreceipt.UnknownValue(
+				"the certified start did not carry a live graph digest; the build commit is a different fact and does not stand in for it")
+			return
+		}
+		f.graph = runreceipt.MeasuredValue(graphDigest, "sensei preflight authority.live_store_graph_digest_sha256")
 	})
 }
 
@@ -112,13 +135,18 @@ func (e *Engine) noteWorld(taskID, base, graphBuildCommit string) {
 func (e *Engine) notePlan(taskID, suppliedDigest, planText string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		if strings.TrimSpace(suppliedDigest) != "" {
+			f.planState = runreceipt.PlanPresent
 			f.plan = runreceipt.MeasuredValue(suppliedDigest, "sha256 of the supplied plan, as handed in")
 			return
 		}
 		if strings.TrimSpace(planText) == "" {
+			// A conversational answer carries no plan. NONE is the claim, and
+			// the digest is the recorded absence that claim requires.
+			f.planState = runreceipt.PlanNone
 			f.plan = runreceipt.UnknownValue("no plan text was produced for this run")
 			return
 		}
+		f.planState = runreceipt.PlanPresent
 		sum := sha256.Sum256([]byte(planText))
 		f.plan = runreceipt.MeasuredValue(hex.EncodeToString(sum[:]), "sha256 of the architect's plan text")
 	})
@@ -211,6 +239,7 @@ func (e *Engine) emitReceipt(taskID string, outcome runreceipt.Outcome, cand run
 		BaseCommit:           facts.base,
 		PlanDigest:           facts.plan,
 		GraphDigest:          facts.graph,
+		PlanState:            facts.planState,
 		CandidateState:       cand,
 		CandidateCommit:      facts.candCommit,
 		CandidateTree:        facts.candTree,
@@ -238,7 +267,7 @@ func (e *Engine) emitReceipt(taskID string, outcome runreceipt.Outcome, cand run
 // knows. Terminal paths that cannot see the candidate from where they stand --
 // the generic failure closure, above all -- read this rather than assuming.
 func (e *Engine) noteCandidateCreated(taskID string) {
-	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateExists = true })
+	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateState = runreceipt.CandidatePresent })
 }
 
 // candidateStateFor reports what the engine measured about the candidate's
@@ -251,10 +280,7 @@ func (e *Engine) candidateStateFor(taskID string) runreceipt.CandidateState {
 	if !ok || f == nil {
 		return runreceipt.CandidateUnknown
 	}
-	if f.candidateExists {
-		return runreceipt.CandidatePresent
-	}
-	return runreceipt.CandidateNone
+	return f.candidateState
 }
 
 // reviewedOutcome is the outcome of a path that ends with whatever the reviewer
@@ -342,14 +368,41 @@ func fileDigest(locate func() (string, error), source string) runreceipt.Value {
 // executing. This one is the file this process actually launched, and the
 // source says exactly that -- not "the producer", which would be a claim about
 // a process rather than a measurement of an image.
-func (e *Engine) noteAwarenessProducer(taskID, command string) {
+func (e *Engine) noteServingProducer(taskID string, pid int, launched bool) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		if strings.TrimSpace(command) == "" {
-			f.serving = runreceipt.UnknownValue("no awareness command is configured")
+		if !launched || pid <= 0 {
+			f.serving = runreceipt.UnknownValue("the awareness process did not start, so nothing served this run")
+			return
+		}
+		exe := "/proc/" + strconv.Itoa(pid) + "/exe"
+		if _, err := os.Stat(exe); err != nil {
+			// Not every platform can name a running process's image. Saying so
+			// is the measurement; substituting the file we intended to launch
+			// would be an image standing in for a process.
+			f.serving = runreceipt.UnknownValue(
+				"the serving process (pid " + strconv.Itoa(pid) + ") answered, but this platform does not expose its executable: " + err.Error())
 			return
 		}
 		f.serving = fileDigest(
-			func() (string, error) { return exec.LookPath(command) },
-			"sha256 of the executable this run launched for awareness")
+			func() (string, error) { return exe, nil },
+			"sha256 of pid "+strconv.Itoa(pid)+", the process that answered this run's awareness initialize")
 	})
+}
+
+// emitRunTerminal is the ONE way a governed run ends.
+//
+// Receipt and terminal event are emitted together, in that order, so they
+// cannot come apart. An earlier draft paired them by convention and guarded the
+// pairing with a test that asked only whether a function contained BOTH calls
+// somewhere -- which a function with three terminal exits and one receipt would
+// have passed. Convention guarded by an approximate test is how the pairing
+// would have drifted.
+//
+// Outcome and CandidateState stay call-site parameters: centralising the
+// mechanism must not centralise the judgement, or a new terminal path inherits
+// an answer instead of deciding one.
+func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.Source,
+	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
+	e.emitReceipt(taskID, outcome, cand)
+	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
 }

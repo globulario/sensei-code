@@ -109,6 +109,19 @@ func Start(ctx context.Context, dir, command string, args []string) (*Client, er
 	return c, nil
 }
 
+// ServingPID is the process that answered this client's initialize.
+//
+// It is the identity of what ACTUALLY served awareness, as opposed to the image
+// that was resolved before launch. A file on disk that was intended to run is
+// not evidence that it ran: C5 recorded a "producer" nothing had been shown to
+// execute, and the distinction is the same one level down.
+func (c *Client) ServingPID() (int, bool) {
+	if c == nil || c.cmd == nil || c.cmd.Process == nil {
+		return 0, false
+	}
+	return c.cmd.Process.Pid, true
+}
+
 // withStderr attaches what the Sensei server reported on stderr, so an
 // unavailable surface names its cause instead of failing opaquely.
 func (c *Client) withStderr(err error) error {

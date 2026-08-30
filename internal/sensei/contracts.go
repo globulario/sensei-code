@@ -117,7 +117,13 @@ type Authority struct {
 	SeedState            SeedState      `json:"seed_state"`
 	BuildProvenanceState string         `json:"build_provenance_state"`
 	GraphBuildCommit     string         `json:"graph_build_commit"`
-	SourceRepoCommit     string         `json:"source_repo_commit"`
+	// LiveStoreGraphDigest is the digest of the graph actually being served.
+	// It is NOT the build commit: one identifies the generation that produced
+	// the rules, the other identifies the bytes answering this run. A receipt
+	// that pours one into the other makes one measured fact carry a different
+	// claim.
+	LiveStoreGraphDigest string `json:"live_store_graph_digest_sha256"`
+	SourceRepoCommit     string `json:"source_repo_commit"`
 }
 
 // Certifiable reports whether Sensei vouches for its own answers right now.

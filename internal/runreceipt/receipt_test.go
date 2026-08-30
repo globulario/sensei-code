@@ -169,6 +169,7 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 func completeReceipt() Receipt {
 	return Receipt{
 		Schema:               SchemaVersion,
+		PlanState:            PlanPresent,
 		CandidateState:       CandidatePresent,
 		CandidateCommit:      MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
 		CandidateTree:        MeasuredValue("tttttttttttttttttttttttttttttttttttttttt", "git rev-parse refs/heads/sensei-code/task-1^{tree}"),
@@ -446,5 +447,68 @@ func TestClaimingNoCandidateRequiresTheAbsenceToBeReadable(t *testing.T) {
 		if !strings.Contains(strings.Join(missing, " "), "not unreadable") {
 			t.Errorf("%s: missing = %v", st, missing)
 		}
+	}
+}
+
+// --- the plan axis: the third instance of conditional evidence -------------
+
+func TestAPresentPlanRequiresItsIdentity(t *testing.T) {
+	rec := completeReceipt()
+	rec.PlanDigest = UnknownValue("not measured")
+	state, missing := rec.Completeness()
+	if state != Incomplete || !strings.Contains(strings.Join(missing, " "), "plan_digest") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}
+
+// A conversational answer genuinely has no plan. Requiring a digest for an
+// artifact that does not exist is the wrong predicate, not rigour.
+func TestARunWithNoPlanIsCompleteWhenItSaysSo(t *testing.T) {
+	rec := completeReceipt()
+	rec.PlanState = PlanNone
+	rec.PlanDigest = UnknownValue("the architect replied instead of planning")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("state = %s (%v)", state, missing)
+	}
+}
+
+func TestAPlanNamedWhileClaimingNoneIsInconsistent(t *testing.T) {
+	rec := completeReceipt()
+	rec.PlanState = PlanNone // the digest is still measured
+	state, missing := rec.Completeness()
+	if state != Incomplete || !strings.Contains(strings.Join(missing, " "), "plan_state is NONE") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}
+
+func TestAPlanStateThatCannotSayIsNeverComplete(t *testing.T) {
+	if PlanState("MAYBE").Valid() {
+		t.Fatal("membership must be read by enumeration")
+	}
+	for _, bad := range []PlanState{PlanUnknown, "MAYBE", ""} {
+		rec := completeReceipt()
+		rec.PlanState = bad
+		if state, _ := rec.Completeness(); state != Incomplete {
+			t.Fatalf("plan_state %q yielded %s", bad, state)
+		}
+	}
+}
+
+// A human stop is a real outcome, not instrument incompleteness and not
+// failure. COMPLETE / STOPPED is a fully meaningful record.
+func TestAStoppedRunIsACompleteRecordOfARealOutcome(t *testing.T) {
+	if !OutcomeStopped.Valid() || !OutcomeStopped.SufficientForComplete() {
+		t.Fatal("STOPPED must be a valid outcome sufficient for a complete record")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeStopped
+	rec.ReviewVerdict = UnknownValue("the human ended the run before a verdict")
+	rec.ReviewedDigest = UnknownValue("the human ended the run before a verdict")
+	rec.Attempts = nil
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / STOPPED must be representable: %v", missing)
+	}
+	if OutcomeStopped == OutcomeFailed {
+		t.Fatal("a human stop must never be recorded as a failure")
 	}
 }

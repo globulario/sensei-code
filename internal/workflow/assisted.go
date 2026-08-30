@@ -297,8 +297,8 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	e.announceMode(taskID, assistedMode())
 
 	fail := func(err error) {
-		e.emitReceipt(taskID, runreceipt.OutcomeFailed, runreceipt.CandidateNone)
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowFailed, err.Error(), nil))
+		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, runreceipt.CandidateNone, err.Error(), nil)
 	}
 	if task == "" {
 		fail(errEmptyTask)
@@ -472,8 +472,8 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			"architect conversation identity not recorded: "+err.Error(), nil))
 	}
-	e.emitReceipt(taskID, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
-	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowCompleted, "", nil))
+	e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
+		runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone, "", nil)
 }
 
 // continuityPresence maps a resumption onto the typed availability vocabulary

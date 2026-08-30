@@ -10,10 +10,10 @@ open. **No schema requirement was relaxed to make a path complete.**
 lane / function          terminal              Outcome              CandidateState   complete today?
 ------------------------------------------------------------------------------------------------
 execute (fail)           WorkflowFailed        FAILED               measured         depends how far it got
-execute (fail, ctx done) WorkflowStopped       UNKNOWN  <-- F2      measured         NO
-execute (architect reply)WorkflowCompleted     UNREVIEWED           NONE             NO  <-- F3
+execute (fail, ctx done) WorkflowStopped       STOPPED              measured         yes
+execute (architect reply)WorkflowCompleted     UNREVIEWED           NONE (plan NONE) yes
 implement (inspect)      WorkflowCompleted     from the review      NONE             yes
-implement (publish open) WorkflowStopped       UNKNOWN  <-- F2      measured         NO
+implement (publish open) WorkflowStopped       STOPPED              measured         yes
 implement (terminal)     Completed / Failed    from the review,     PRESENT          NO  <-- F1
                                                FAILED if publishing
                                                did not complete
@@ -21,13 +21,22 @@ runCandidate             CandidateNotAuditable (not a run terminal: it returns a
                                                reaches execute's fail, which emits the receipt)
 resumeAuthority x4       WorkflowFailed        FAILED               measured         no (resume measures little)
 Resume                   WorkflowFailed        FAILED               measured         no
-runAssisted x2           Completed / Failed    UNREVIEWED / FAILED  NONE             NO  <-- F3
+runAssisted x2           Completed / Failed    UNREVIEWED / FAILED  NONE (plan NONE) yes
 awaitChoice              AwaitingAuthority     not terminal: the run is resumable and settles later
 ```
 
-`TestEveryTerminalPathEmitsAReceipt` parses the package and fails if any
-function emitting a run terminal does not also emit a receipt. The wiring is
-enforced, not described.
+**`emitRunTerminal` is the only way a run ends.** Receipt and terminal event are
+emitted together, in that order, so they cannot come apart.
+`TestOnlyEmitRunTerminalEndsARun` fails if a run-terminal event is constructed
+anywhere else. An earlier guard asked only whether a function contained *both* a
+terminal kind and *some* receipt call, which a function with three terminal
+exits and one receipt would have passed — convention guarded by an approximate
+test is how the pairing would have drifted. Its remaining limit is stated in the
+test: it inspects direct arguments, so a kind stashed in a variable would evade
+it. That is deliberate evasion, not accidental drift.
+
+Outcome and CandidateState stay call-site parameters: centralising the mechanism
+must not centralise the judgement.
 
 ## What the governor measures, and when
 
@@ -60,18 +69,19 @@ experiment. `noteCandidateCommit` exists and is called nowhere; the test proves
 that the same run becomes COMPLETE the moment a committed candidate can be
 measured. That is the Exact Candidate Admission slice, and this is its driver.
 
-### F2 — a stopped run has no outcome in this vocabulary
+### F2 — RESOLVED: `STOPPED` is now an outcome
 
 The engine refuses to record a human stop as a failure, and it is right to:
 recording it as FAILED would teach the behavioural record that the task shape
 breaks. The schema's outcomes are ACCEPTED / REFUSED / FAILED / UNREVIEWED /
 UNKNOWN, so a stopped run is recorded as UNKNOWN and is INCOMPLETE.
 
-The gap is a **missing vocabulary member**, not a missing measurement. It is
-left visible rather than papered over. A `STOPPED` outcome is a schema decision,
-and the test records the gap so that adding it is a deliberate act.
+The gap was a **missing vocabulary member**, not a missing measurement, and the
+decision was to add it. `STOPPED` is sufficient for `COMPLETE`: a human chose to
+end the run, and the instrument recorded that fact completely. It is never
+mapped to `FAILED`, and a known outcome is no longer left as `UNKNOWN`.
 
-### F3 — conversational terminals carry no plan
+### F3 — RESOLVED: a `PlanState` axis
 
 `plan_digest` is unconditionally required, but an architect's conversational
 reply and the assisted lane produce no plan at all. Unlike F1 this is not a
@@ -88,11 +98,15 @@ measurable from inside the process all along:
 
 ```text
 governor_binary_sha256   sha256 of os.Executable()               NOW MEASURED
-serving_producer         sha256 of the awareness executable      NOW MEASURED
-                         this run launched (an IMAGE, and the
-                         source says so -- C5 found a "producer"
-                         field naming a file nobody had shown to
-                         be executing)
+serving_producer         sha256 of /proc/<pid>/exe for the       NOW MEASURED
+                         process that answered this run's MCP
+                         initialize -- the PROCESS, not the image
+                         that was intended to serve. Measuring the
+                         resolvable image before launch would have
+                         read KNOWN even when the process failed to
+                         start: the C5 sensei-f3 mistake one level
+                         down. A platform that cannot name a running
+                         process's image says so.
 governor_commit          runtime/debug vcs.revision              NOW MEASURED,
                                                                  and refused when
                                                                  vcs.modified
@@ -110,6 +124,24 @@ plans had a digest. The bound that governs a run is an artifact, and an artifact
 a run cannot name is one no later reader can check a candidate against. The
 receipt now digests the architect's plan text, and `Source` distinguishes the
 two rather than one field silently meaning two things.
+
+## Four binding fixes found by reviewing the wiring
+
+```text
+GraphDigest carried the graph BUILD COMMIT      one measured fact, a different claim.
+                                                The live digest is on the wire and is now
+                                                decoded; the build commit does not stand in
+                                                for it, and a start without a digest yields
+                                                UNKNOWN and an incomplete receipt.
+ServingProducer measured the intended IMAGE     it read KNOWN even if the launch then failed.
+before launch                                   It is now the process that ANSWERED.
+candidateExists bool                            the raw-zero evidentiary pattern, back one
+                                                slice after being removed from
+                                                Attempt.Delivered. Now an explicit
+                                                CandidateState: a fresh run opens at NONE as
+                                                a positive claim, no record reads UNKNOWN.
+the terminal guard was approximate              emitRunTerminal is now the single funnel.
+```
 
 ## What this slice did not do
 
