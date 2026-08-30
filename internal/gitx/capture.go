@@ -53,11 +53,16 @@ type Capture struct {
 	// candidate's CONTENT IDENTITY and the immutable centre of the capture --
 	// Diff is rendered FROM it, not from a second look at the worktree.
 	//
-	// Two sequential reads of a mutable worktree leave a seam that a later
-	// equality check cannot always close: Diff renders a kept binary as
-	// "Binary files differ" rather than bytes, so different binary content can
-	// produce an identical Diff while the tree moves underneath it. Deriving
-	// Diff from Tree means there is one measurement, and Diff describes it.
+	// Two sequential reads of a mutable worktree leave a seam: the content can
+	// move between the read that produced the review text and the read that
+	// produced the tree. Deriving Diff from Tree means there is one measurement
+	// and one representation of it, with no instant in between.
+	//
+	// (An earlier version of this comment argued that a kept binary renders as
+	// "Binary files differ" and so different bytes could share a Diff. That is
+	// wrong and was measured to be wrong: git also emits an `index <old>..<new>`
+	// line, whose abbreviated blob hashes distinguish them. The seam above is
+	// the reason; the binary corner is not.)
 	//
 	// A candidate that changed nothing has Tree equal to the base's own tree,
 	// which is how "produced no work" is MEASURED rather than inferred.
@@ -79,6 +84,69 @@ type Capture struct {
 	// new one -- which is what a tree builder needs, rather than a
 	// presentation-level encoding it would have to undo.
 	Paths []string
+}
+
+// validateBoundaryAgainstTree re-asks the artifact question of the frozen tree.
+//
+// Every load-bearing claim must ultimately refer to T: if T is the content
+// authority, then artifact admissibility has to hold of T and not merely of
+// whatever the worktree held when the classification loop ran.
+func (r Repo) validateBoundaryAgainstTree(ctx context.Context, base, tree string, want map[string]bool) error {
+	out, err := r.raw(ctx, "diff", "--no-ext-diff", "--no-renames", "--numstat", "-z", base, tree, "--")
+	if err != nil {
+		return err
+	}
+	records := strings.Split(out, "\x00")
+	if n := len(records); n > 0 && records[n-1] == "" {
+		records = records[:n-1]
+	}
+	for _, record := range records {
+		parts := strings.SplitN(record, "\t", 3)
+		if len(parts) != 3 {
+			return fmt.Errorf("malformed --numstat -z record while validating the frozen tree: %q", record)
+		}
+		added, deleted, path := parts[0], parts[1], parts[2]
+		if want[path] || r.existsAt(ctx, base, path) {
+			continue
+		}
+		if added == "-" && deleted == "-" {
+			return fmt.Errorf("the frozen candidate tree holds %q as a new binary the plan did not name; "+
+				"the artifact boundary allowed it against different bytes", path)
+		}
+		size, err := r.sizeInTree(ctx, tree, path)
+		if err != nil {
+			return err
+		}
+		if size > oversizedBytes {
+			return fmt.Errorf("the frozen candidate tree holds %q at %d bytes, over the %d MiB limit, and the plan did not name it; "+
+				"the artifact boundary allowed it against different bytes", path, size, oversizedBytes>>20)
+		}
+	}
+	return nil
+}
+
+// sizeInTree is a blob's size AS THE FROZEN TREE HOLDS IT, not as the worktree
+// happens to hold it now.
+func (r Repo) sizeInTree(ctx context.Context, tree, path string) (int64, error) {
+	out, err := r.envOutput(ctx, append(os.Environ(), "GIT_LITERAL_PATHSPECS=1"),
+		"ls-tree", "-l", "-z", tree, "--", path)
+	if err != nil {
+		return 0, err
+	}
+	record := strings.TrimSuffix(out, "\x00")
+	head, _, ok := strings.Cut(record, "\t")
+	if !ok {
+		return 0, fmt.Errorf("cannot read the size of %q in tree %s", path, tree)
+	}
+	fields := strings.Fields(head)
+	if len(fields) != 4 {
+		return 0, fmt.Errorf("cannot read the size of %q in tree %s: %q", path, tree, head)
+	}
+	size, err := strconv.ParseInt(fields[3], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("cannot read the size of %q in tree %s: %w", path, tree, err)
+	}
+	return size, nil
 }
 
 // literalPathOutput runs git with pathspec magic DISABLED.
@@ -140,9 +208,18 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 	if _, err := r.output(ctx, "add", "--intent-to-add", "--", "."); err != nil {
 		return Capture{}, err
 	}
+	// The intended set is compared against pathnames Git reported EXACTLY, so it
+	// must not normalise them either. A plan naming " asset.bin" or "asset.bin "
+	// -- with real leading or trailing whitespace, which is data in a pathname
+	// -- would otherwise fail to match its own measured path and be excluded as
+	// an unplanned artifact. TrimSpace here undid, on one side, the exactness
+	// the other side had just gained.
+	//
+	// The "./" prefix is still dropped: Git never reports a path that way, so it
+	// can only be a human writing "./x" for "x".
 	want := map[string]bool{}
 	for _, p := range intended {
-		want[filepath.ToSlash(strings.TrimPrefix(strings.TrimSpace(p), "./"))] = true
+		want[filepath.ToSlash(strings.TrimPrefix(p, "./"))] = true
 	}
 	// -z and --no-renames for the same reason Paths uses them: this loop
 	// decides which paths are ARTIFACTS and resets them out of the candidate,
@@ -242,6 +319,16 @@ func (r Repo) CandidateCapture(ctx context.Context, base string, intended []stri
 		return cap, nil
 	}
 	if cap.Tree, err = r.CanonicalTree(ctx, base, cap.Paths); err != nil {
+		return Capture{}, err
+	}
+
+	// The boundary decision was made against a MUTABLE worktree, before T
+	// existed. Now that the content is frozen, the same decision is re-asked of
+	// it: a path could have changed between classification and the tree build,
+	// leaving a capture whose exclusion metadata describes bytes the reviewer
+	// will never see. Failing is the only honest answer -- silently rebuilding
+	// or reinterpreting T would make the boundary describe whichever read won.
+	if err := r.validateBoundaryAgainstTree(ctx, base, cap.Tree, want); err != nil {
 		return Capture{}, err
 	}
 

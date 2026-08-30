@@ -552,3 +552,75 @@ func TestDifferentBinaryContentAlwaysMovesTheTree(t *testing.T) {
 		t.Fatal("a capture with a base must carry a content identity")
 	}
 }
+
+// An intended path is compared against a pathname Git reported exactly, so the
+// intended set must not normalise whitespace either. Trimming on one side undid
+// the exactness the other side had just gained.
+func TestAnIntendedPathKeepsItsWhitespace(t *testing.T) {
+	r, base := repoWithBase(t)
+	name := " asset.bin"
+	elf := append([]byte{0x7f, 'E', 'L', 'F', 2, 1, 1, 0}, bytes.Repeat([]byte{0x00, 0xff, 0x13}, 1024)...)
+	if err := os.WriteFile(filepath.Join(r.Root, name), elf, 0o644); err != nil {
+		t.Skipf("this filesystem will not hold %q: %v", name, err)
+	}
+	cap, err := r.CandidateCapture(context.Background(), base, []string{name})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range cap.Excluded {
+		if a.Path == name {
+			t.Fatalf("an intended output was excluded because its name was trimmed before comparison: %+v", a)
+		}
+	}
+	var kept bool
+	for _, a := range cap.Binaries {
+		if a.Path == name {
+			kept = true
+		}
+	}
+	if !kept {
+		t.Fatalf("the intended binary is not recorded as kept: %+v", cap.Binaries)
+	}
+}
+
+// The artifact boundary decides against a MUTABLE worktree, before T exists.
+// Once the content is frozen the same question is re-asked of it, so a capture
+// cannot ship exclusion metadata that describes bytes the reviewer never sees.
+func TestTheBoundaryDecisionIsRevalidatedAgainstTheFrozenTree(t *testing.T) {
+	ctx := context.Background()
+	r, base := repoWithBase(t)
+
+	// A tree that holds a new, unplanned binary -- the state the boundary would
+	// have refused had it seen these bytes.
+	elf := append([]byte{0x7f, 'E', 'L', 'F', 2, 1, 1, 0}, bytes.Repeat([]byte{0x00, 0xff, 0x13}, 1024)...)
+	os.WriteFile(filepath.Join(r.Root, "sneaked.bin"), elf, 0o644)
+	tree, err := r.CanonicalTree(ctx, base, []string{"sneaked.bin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = r.validateBoundaryAgainstTree(ctx, base, tree, map[string]bool{})
+	if err == nil {
+		t.Fatal("a frozen tree holding an unplanned new binary passed the boundary re-check")
+	}
+	if !strings.Contains(err.Error(), "sneaked.bin") {
+		t.Errorf("the refusal must name the path, got %v", err)
+	}
+	// Named by the plan, the same tree is fine.
+	if err := r.validateBoundaryAgainstTree(ctx, base, tree, map[string]bool{"sneaked.bin": true}); err != nil {
+		t.Fatalf("an intended output was refused: %v", err)
+	}
+}
+
+func TestAnOversizedUnplannedFileInTheFrozenTreeIsRefused(t *testing.T) {
+	ctx := context.Background()
+	r, base := repoWithBase(t)
+	big := bytes.Repeat([]byte("text\n"), (oversizedBytes/5)+16)
+	os.WriteFile(filepath.Join(r.Root, "generated.txt"), big, 0o644)
+	tree, err := r.CanonicalTree(ctx, base, []string{"generated.txt"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.validateBoundaryAgainstTree(ctx, base, tree, map[string]bool{}); err == nil {
+		t.Fatal("a frozen tree holding an unplanned oversized file passed the boundary re-check")
+	}
+}
