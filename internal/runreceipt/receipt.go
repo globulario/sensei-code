@@ -49,13 +49,14 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
-// v2 added the PlanState axis and the STOPPED outcome. v3 adds the reviewed
+// v4 adds the DEFERRED outcome and the question it stands on. v3 added the
+// reviewed
 // tree, the canonical diff-digest relation, and redefines CandidateState to
 // mean MEASURED WORK rather than "a worktree exists". Each changes what a
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v3"
+const SchemaVersion = "sensei-code.governed-run-receipt/v4"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?

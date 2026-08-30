@@ -575,3 +575,38 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }
+
+// TestTheSchemaVersionPinsItsVocabulary makes a silent version drift impossible.
+//
+// DEFERRED once shipped under the v3 label: the bump was written, the
+// replacement silently did not match, the commit message claimed v4, and a real
+// run emitted a v4 feature under a v3 version. That is exactly the fabricated
+// specimen the version comment warns about, produced by the author of the
+// comment.
+//
+// Pinning the version ALONGSIDE the vocabulary means adding an outcome without
+// moving the version fails here, rather than being caught by someone reading a
+// receipt from a live run.
+func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
+	const version = "sensei-code.governed-run-receipt/v4"
+	if SchemaVersion != version {
+		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
+	}
+	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
+		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeUnknown}
+	for _, o := range outcomes {
+		if !o.Valid() {
+			t.Errorf("%q is enumerated here but not Valid()", o)
+		}
+	}
+	// Every value Valid() accepts must be one this test names, or the
+	// vocabulary grew without the version moving.
+	for _, candidate := range []Outcome{"ADMITTED", "DEFERED", "PENDING", "VOID", "BLOCKED"} {
+		if candidate.Valid() {
+			t.Errorf("%q is valid but not pinned by this test", candidate)
+		}
+	}
+	if len(outcomes) != 7 {
+		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
+	}
+}
