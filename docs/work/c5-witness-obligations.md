@@ -97,3 +97,23 @@ and whichever exists must have its exact diff preserved — with a recorded
 reason if that diff is empty, and a cross-check that refuses a run reporting
 no candidate state while candidate refs sit in the subject. **32 cases, 32
 passed.**
+
+
+## Fourth pre-run amendment
+
+One ordering defect remained, and it was C4's mistake in miniature: the
+closure gate rejected `FALSIFIER` lines in the end capture as well as the
+start one, so a run that produced a complete record and then truthfully
+measured a candidate whose first parent was not X would have been reported
+VOID. The branch meant to report an isolation FAIL was unreachable for
+precisely the cases it existed to classify, and a real measurement would have
+vanished into an instrument verdict.
+
+Completeness and verdict are now separate judgements in that order. The start
+gate still refuses falsifiers, because a subject that is not what the freeze
+says is a precondition refusal before anything is governed. The end and
+closed gates check only that the capture is *complete* — a falsifier count, a
+terminal classification line, a ref section — and say nothing about what it
+found. The runner holds the capture's status until both gates pass and then
+classifies, with three exit codes: complete-and-held, VOID, and valid witness
+with isolation FAIL. **35 cases, 35 passed.**

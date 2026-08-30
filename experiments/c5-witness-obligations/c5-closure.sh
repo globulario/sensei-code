@@ -30,12 +30,24 @@ req_measured() {
     bad "UNMEASURED FIELD in $1: $2 (records 'unknown'; the producer must be measured, not guessed)"
   fi
 }
+# START ONLY. A falsifier before the governor runs is a PRECONDITION refusal:
+# the subject was not what the freeze says, so nothing may be governed.
 no_falsifier() {
   [ -s "$R/$1" ] || return 0
   if grep -q "FALSIFIER" "$R/$1"; then
     bad "FALSIFIER RECORDED in $1:"; grep -n "FALSIFIER" "$R/$1" | sed 's/^/    /'
   fi
   grep -q "^ISOLATION GATE: PASS" "$R/$1" || bad "NO ISOLATION-GATE PASS LINE in $1"
+}
+# END. Completeness ONLY -- never the verdict. A complete end capture that
+# records a falsifier is a VALID WITNESS reporting an isolation FAIL; treating
+# it as VOID would collapse FAIL into VOID and lose exactly the measurement the
+# run exists to make. C4's lesson is an ORDER: complete first, judge second.
+complete_capture() {
+  [ -s "$R/$1" ] || { bad "MISSING ARTIFACT: $1"; return; }
+  grep -qE "^falsifiers fired: [0-9]+" "$R/$1" || bad "TRUNCATED CAPTURE $1: no falsifier count -- the capture did not run to completion"
+  grep -qE "^ISOLATION GATE: (PASS|FAILED)" "$R/$1" || bad "TRUNCATED CAPTURE $1: no terminal classification line"
+  grep -q "^refs (classified against the frozen table):" "$R/$1" || bad "INCOMPLETE CAPTURE $1: no ref classification section"
 }
 
 req_file C5.run
@@ -50,10 +62,9 @@ for f in "governor commit (source) " "governor binary path " "governor binary sh
 req_measured C5.run "producer serving at start "
 
 if [ "$PHASE" = "end" ] || [ "$PHASE" = "closed" ]; then
-  req_file C5.subject.end.txt
+  complete_capture C5.subject.end.txt
   req_file C5.log
   req_file C5.extract.txt
-  no_falsifier C5.subject.end.txt
   [ -f "$R/C5.receipts.jsonl" ] || bad "MISSING ARTIFACT: C5.receipts.jsonl (must exist even when empty)"
   for f in "governor commit at end " "governor binary path at end " "governor binary sha256 at end " \
            "producer binary path at end " "producer binary sha256 at end " \

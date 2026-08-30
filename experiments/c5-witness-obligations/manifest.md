@@ -107,7 +107,9 @@ runs/C5.extract.txt             REQUIRED  the mechanical extraction from the log
 
 `c5-closure.sh` checks each artifact and each named field and **exits
 non-zero** when one is missing. It runs at start — before the governor — and
-at end, before any verdict is read. A non-zero exit is the void path:
+at end, before any verdict is read. A non-zero exit is the void path, and it
+judges **completeness only**; see "Fourth pre-run amendment" for the order
+that keeps FAIL from collapsing into VOID:
 
 > **Missing expected evidence makes the witness VOID.** Not degraded, not
 > reported-and-continued. C4's instrument was incomplete and its contents
@@ -353,3 +355,47 @@ Seven new cases prove it: `G13` (materialisation transcript deleted), `G14`
 and with its diff), `G17`/`G18` (empty diff without and with a recorded
 reason), `G19` (candidate refs present while the run reports no candidate
 state).
+
+
+## Fourth pre-run amendment — classification order
+
+The gate rejected `FALSIFIER` lines in the **end** capture as well as the
+start one. So a run that completed perfectly, recorded every artifact and
+every field, and then truthfully measured
+
+```text
+candidate first parent != X   [FALSIFIER]
+```
+
+would have been reported `WITNESS VOID (end closure)`, and the branch meant
+to report `isolation FAILS` was **unreachable for exactly the cases it
+exists to classify**. That is C4's mistake in miniature — a real measurement
+disappearing into an instrument verdict — caught before execution instead of
+after.
+
+The frozen distinction is an ORDER, and it is now the code's shape:
+
+```text
+instrument complete?
+    NO  -> VOID           (nothing may be adjudicated)
+    YES -> read the held capture status
+              CAP_RC = 0  -> the isolation predicate held
+              CAP_RC != 0 -> VALID WITNESS, isolation FAIL   <- adjudicate it
+```
+
+- **START** keeps rejecting falsifiers: a subject that is not what the freeze
+  says is a precondition refusal, before anything is governed.
+- **END / CLOSED** check that `C5.subject.end.txt` is *complete* — it has a
+  `falsifiers fired: N` count, a terminal `ISOLATION GATE: PASS|FAILED` line,
+  and its ref-classification section — and say nothing about what it found.
+  A truncated capture is VOID; a complete one reporting a falsifier is a
+  valid witness.
+- The runner **holds** the end capture's exit status until both gates pass,
+  then classifies. Its exit codes are three-valued: `0` complete and the
+  predicate held, `1` VOID, `2` valid witness with isolation FAIL.
+
+`G20` supplies a complete end capture containing a real falsifier and
+requires closure to **pass** (so FAIL survives as FAIL); `G21` supplies a
+truncated one and requires VOID; `R2` asserts structurally that the runner
+interprets the held status only after both gates and that FAIL has its own
+exit code. **35 cases, 35 passed.**

@@ -30,7 +30,7 @@ CLOSURE="$RUNS/C5.closure.txt"
 # Harness pins. Recording a hash proves what ran; REFUSING a hash keeps an
 # edited harness from running at all. A frozen witness needs the second.
 PIN_CAPTURE=ecfd73e899c9261fddb5c05b1ef27795fb8e908d445376873029d30522dbee18
-PIN_CLOSURE=7481974a89b540a589b7b0d170fe1008a24ada5640d0a0bd53c1a2a20f5ff9cf
+PIN_CLOSURE=064047d45d0f56f753c32e9a6baba92a6c04f2a2a6d821c1ac2712a2afc10cc7
 PIN_EXTRACT=dfad93f2bf7a5ba57f9a2dadcbfb075148b2fe9b847f1f6b1446fe600391d6a3
 
 die() { echo "C5 ABORT: $*" >&2; exit 1; }
@@ -196,9 +196,23 @@ fi
 [ -s "$RUNS/C5.receipts.jsonl" ] || echo "(C5.receipts.jsonl preserved EMPTY: the run emitted no derive receipts)" >> "$RUN"
 
 # ---- 8. end capture + end gate + closed gate -----------------------------
+# Order matters, and it is the whole C4 lesson: COMPLETENESS first, VERDICT
+# second. The end capture is taken and its exit status is HELD -- the closure
+# gate judges only whether the instrument is complete. A complete record that
+# reports a falsifier is a valid witness reporting an isolation FAIL, not a
+# void one; collapsing FAIL into VOID would discard the measurement the run
+# exists to make.
+#   exit 0 = complete witness, isolation predicate held
+#   exit 1 = VOID   (the instrument is incomplete; nothing may be adjudicated)
+#   exit 2 = FAIL   (a valid witness; the isolation predicate did not hold)
 CAP_RC=0
 bash "$HERE/c5-capture.sh" "$RUNS/C5.subject.end.txt" "end" "$SUBJ" "$X" "$EXPECT_CAND" || CAP_RC=$?
-gate end || { echo "WITNESS VOID (end closure)"; exit 1; }
-gate closed || { echo "WITNESS VOID (closure receipt loop)"; exit 1; }
-[ $CAP_RC -eq 0 ] || { echo "END CAPTURE RECORDED A FALSIFIER -> isolation FAILS"; exit 1; }
+gate end || { echo "WITNESS VOID (end closure): the instrument is incomplete"; exit 1; }
+gate closed || { echo "WITNESS VOID (closure receipt loop): the instrument is incomplete"; exit 1; }
+if [ $CAP_RC -ne 0 ]; then
+  echo "isolation FAIL (end capture recorded a falsifier) -- VALID WITNESS, adjudicate it" >> "$RUN"
+  echo "C5 VALID WITNESS, isolation FAIL: the end capture recorded a falsifier; exit $EXIT_RC, candidate committed $COMMITTED, artifacts in $RUNS"
+  exit 2
+fi
+echo "isolation predicate held at both endpoints" >> "$RUN"
 echo "C5 complete: exit $EXIT_RC, candidate committed $COMMITTED, artifacts in $RUNS"

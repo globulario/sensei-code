@@ -133,6 +133,12 @@ mk_end_uncommitted; : > "$R/C5.candidate.diff"
           check G18 0 "an empty candidate diff with the reason recorded" bash "$CLO" "$R" end
 mk_end;   echo diff > "$R/C5.candidate.diff"; sed -i "s|^candidate state exists yes|candidate state exists no|" "$R/C5.run"
           check G19 1 "candidate-shaped refs exist but the run reports no candidate state" bash "$CLO" "$R" end
+# The C4 lesson as an ORDER: a complete record that reports a falsifier is a
+# VALID WITNESS reporting FAIL. Only an incomplete record is VOID.
+mk_end;   echo diff > "$R/C5.candidate.diff"; cp "$W/c7.txt" "$R/C5.subject.end.txt"
+          check G20 0 "COMPLETE end capture containing a real FALSIFIER -> closure passes, so FAIL stays FAIL and is not swallowed as VOID" bash "$CLO" "$R" end
+mk_end;   echo diff > "$R/C5.candidate.diff"; head -6 "$W/c7.txt" > "$R/C5.subject.end.txt"
+          check G21 1 "TRUNCATED end capture (no falsifier count, no terminal line) -> VOID" bash "$CLO" "$R" end
 mk_end;   echo diff > "$R/C5.candidate.diff"; check G11 1 "closed phase with no C5.closure.txt receipt" bash "$CLO" "$R" closed
 mk_end;   echo diff > "$R/C5.candidate.diff"
           printf 'instrument closure OK (start)\ninstrument closure OK (end)\n' > "$R/C5.closure.txt"
@@ -175,6 +181,16 @@ if [ $R1RC -ne 0 ] && grep -q "harness drift" <<<"$R1OUT" && [ ! -e "$W/never" ]
   PASS=$((PASS+1)); echo "PASS  R1  an edited capture script is refused before any subject is materialised" >> "$OUT"
 else
   FAIL=$((FAIL+1)); echo "FAIL  R1  a drifted harness was not refused (rc=$R1RC): $R1OUT" >> "$OUT"
+fi
+
+# The runner's three-valued contract, asserted structurally: the held capture
+# status is interpreted AFTER both gates, and FAIL has its own exit code.
+N=$((N+1))
+if awk '/^gate end \|\|/{g=NR} /if \[ \$CAP_RC -ne 0 \]/{c=NR} END{exit !(g && c && g<c)}' "$HERE/c5-run.sh" \
+   && grep -q "^  exit 2$" "$HERE/c5-run.sh"; then
+  PASS=$((PASS+1)); echo "PASS  R2  the runner holds the capture status until after both gates, and FAIL exits 2 while VOID exits 1" >> "$OUT"
+else
+  FAIL=$((FAIL+1)); echo "FAIL  R2  the runner still decides the isolation verdict before or inside closure" >> "$OUT"
 fi
 
 { echo; echo "cases run $N   passed $PASS   failed $FAIL"
