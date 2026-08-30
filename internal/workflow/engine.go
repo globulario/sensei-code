@@ -1326,11 +1326,37 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// everything gathered before a rewrite is evidence about different
 		// bytes. The diff is therefore re-read afterwards and the certifying
 		// checks are bound to the digest of what will actually be reviewed.
-		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff)
+		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff, tc.Files)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+
+		// The content identity is re-measured HERE, after validation, because
+		// validation can rewrite the candidate: a formatter changes the bytes,
+		// and the capture taken before it froze a tree nobody will ever review.
+		// Everything downstream -- audit, review, receipt, decision, mint --
+		// was reading that pre-validation tree while the reviewer read
+		// post-format text, so an accepted candidate that had not moved since
+		// its verdict was refused at the mint as though it had.
+		//
+		// Canonically: against the recorded base and the plan's declared paths,
+		// through the same capture the mint will later re-measure with.
+		reviewed, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
+		if err != nil {
+			return false, plan, lastReview, lastAudit, fmt.Errorf("re-measure the candidate after validation: %w", err)
+		}
+		// The re-measurement is not trusted on its own. The evidence bundle and
+		// the diff validation returned must both be about exactly this
+		// capture's canonical rendering; if they are not, the proof, the
+		// reviewed text and the content identity are three measurements of
+		// different bytes and there is no honest way to pick one. Fail closed
+		// here rather than let the disagreement surface as a movement refusal
+		// at the mint, which names the wrong cause.
+		if err := certifiedAgainstCapture(evidence, taskID, reviewed.Diff, diff); err != nil {
+			return false, plan, lastReview, lastAudit, err
+		}
+		capture, diff = reviewed, reviewed.Diff
 
 		// Post-creation inspection of every declared prospective surface
 		// (sensei#312). The authorization was for a shape; a candidate whose
@@ -4478,7 +4504,13 @@ func oneLine(s string) string {
 // candidate, so the diff is re-read after formatting and the certifying checks
 // are bound to that. Returning the new diff rather than mutating in place makes
 // it impossible for a caller to keep using the pre-format bytes by accident.
-func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
+//
+// intended are the plan's declared paths, and they are passed through to the
+// re-read for the same reason the first capture takes them: the boundary keeps
+// an artifact the plan named and refuses one it did not. Re-reading through a
+// different boundary would return a diff the caller's own capture of the same
+// worktree disagrees with, over a file both of them are right about.
+func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string, intended []string) (validation.Bundle, string, error) {
 	permits := func(kind validation.CheckKind) (bool, string) {
 		var capability broker.Capability
 		switch kind {
@@ -4531,10 +4563,11 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
 		before := validation.Digest(diff)
 		runner.Run(ctx, taskID, before, formats)
-		reread, err := repo.CandidateDiff(ctx, base)
+		recapture, err := repo.CandidateCapture(ctx, base, intended)
 		if err != nil {
 			return validation.Bundle{}, diff, err
 		}
+		reread := recapture.Diff
 		// The formatter's own evidence is discarded above, but WHETHER IT
 		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
 		// about the candidate, and later identity reasoning depends on it.
@@ -4553,6 +4586,40 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
 	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
 	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+}
+
+// certifiedAgainstCapture refuses unless the validation evidence and the diff
+// validation returned are both about one exact content identity: the canonical
+// rendering of the capture the run is about to bind every downstream artifact
+// to.
+//
+// Every check in the bundle is examined, not just the bundle's own binding: a
+// bundle that reads as complete while one check speaks about other bytes proves
+// less than it appears to. A bundle with no checks at all is not turned into a
+// failure here -- a repository may configure no certifying checks, and that is
+// a configuration fact rather than stale evidence -- but its binding must still
+// name this candidate's post-validation content.
+func certifiedAgainstCapture(b validation.Bundle, taskID, rendered, returned string) error {
+	if returned != rendered {
+		return fmt.Errorf(
+			"validation returned a diff of %d bytes and the candidate's canonical rendering is %d bytes: "+
+				"the text the reviewer would read and the content identity it would be bound to are different bytes",
+			len(returned), len(rendered))
+	}
+	digest := validation.Digest(rendered)
+	if b.CandidateID != taskID || b.DiffDigest != digest {
+		return fmt.Errorf(
+			"the validation evidence is bound to candidate %q at %s, not to %q at its post-validation content %s",
+			b.CandidateID, shortDigest(b.DiffDigest), taskID, shortDigest(digest))
+	}
+	for _, c := range b.Checks {
+		if !c.Certifies(taskID, digest) {
+			return fmt.Errorf(
+				"the %s check %q certifies candidate %q at %s, not this candidate's post-validation content %s",
+				c.Kind, c.Command, c.CandidateID, shortDigest(c.DiffDigest), shortDigest(digest))
+		}
+	}
+	return nil
 }
 
 func checksOf(kind validation.CheckKind, commands []config.Command) []validation.Check {
