@@ -217,3 +217,60 @@ admission authority (criterion 2).
 Approved scope: proceed through admission and integration. **Stop at the
 criterion-8 deployment boundary.** Do not force it, and do not declare
 succession until 8 and then canonical 9 both pass.
+
+## A1 execution record: admission and integration, stopped before merge
+
+Admission (owner's decision, criteria 1-4) is DONE and holds:
+
+    refs/sensei-code/admitted/a1/6016791c6ec722301c038b96f0268cdbf2190bc8
+        -> 6016791c6ec722301c038b96f0268cdbf2190bc8
+
+  1 acts on exactly C, not an equivalent                              PASS
+  2 authority is the owner's decision, not the J1-R receipt           PASS
+  3 the decision names exact C -- in the ref itself                   PASS
+  4 no rebase/squash/rewrite: C^1 and C^{tree} unchanged, and C
+    still reconstructs byte-exact from (B,T)                          PASS
+
+Integration into the branch is DONE as an ordinary merge (bafb17a), C
+byte-identical and an ancestor of the branch head. Criteria 5-7 remain
+UNANSWERED because M does not exist: M is main read back AFTER merge, and
+the PR has not merged.
+
+M IS BLOCKED, AND NOT BY C. Both gate failures at bafb17a are pre-existing
+on this branch and reproduce at C's own parent:
+
+  (a) TestATimeoutWaitsForItsOwnAccount fails ~50% of runs. The test hands
+      streamUntilSettled a CANCELLED ctx and a BUFFERED WorkflowTimedOut, so
+      both select cases are ready and Go chooses uniformly at random. It was
+      stable at 157a742 and became nondeterministic at 2d5b31c, whose
+      "fourth repair" added `case event.WorkflowTimedOut: return exitTimeout`
+      to the main loop -- a second way to settle the same world, added with no
+      test of its own, and described as instrumentation only.
+
+      This is not a flaky test to be retried. The two available deterministic
+      fixes give OPPOSITE answers to a real question: when the invocation's
+      deadline and an engine terminal are both already true, WHICH ONE
+      ACCOUNTS FOR THE ENDING? Giving ctx priority records the deadline as the
+      cause but would misreport an already-completed run as timed out. Giving
+      delivered events priority makes the engine's account win and the
+      falsifier fail honestly. Choosing is an authority question, not a repair.
+
+  (b) The Sensei gate fails closed with CANNOT VERIFY, not with a finding:
+        experiments/j1r-revision-identity/runs/J1R.complete-accepted.log
+          [scope] rpc error: ResourceExhausted, 5647072 vs 4194304
+      A 5.6 MB committed run log exceeds the gate's 4 MB gRPC message limit,
+      so one changed file could not be evaluated and the gate refused to
+      claim the diff was proved. The refusal is CORRECT. The class is latent,
+      not unique: experiments/b3-self-grounding/runs/N3.log is 4.5 MB and
+      already on main; it will do the same the next time it is in a diff.
+
+      Evidence is what makes these experiments readable. Shrinking or deleting
+      a run log to obtain a green gate would trade the record for the gate,
+      which is the trade this experiment exists to refuse. The owner decides.
+
+Criterion 8 was never reached; it is not the blocker. Criterion 9 is not
+attempted. Succession is NOT declared.
+
+The branch has been red since 2d5b31c -- every head from 2d5b31c onward
+failed, and 157a742 was the last green. Admission and integration did not
+turn it red and cannot turn it green.
