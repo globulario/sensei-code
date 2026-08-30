@@ -610,3 +610,36 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
 	}
 }
+
+// TestAReceiptMustSpeakTheLanguageItsVersionDefines gives the version string
+// evidentiary meaning rather than making it decorative metadata.
+func TestAReceiptMustSpeakTheLanguageItsVersionDefines(t *testing.T) {
+	const v3 = "sensei-code.governed-run-receipt/v3"
+	if err := SpeaksItsVersion(v3, OutcomeDeferred); err == nil {
+		t.Fatal("v3 + DEFERRED must be invalid: DEFERRED was added in v4")
+	}
+	if err := SpeaksItsVersion(SchemaVersion, OutcomeDeferred); err != nil {
+		t.Fatalf("v4 + DEFERRED must be valid: %v", err)
+	}
+	if err := SpeaksItsVersion(v3, OutcomeStopped); err != nil {
+		t.Fatalf("v3 + STOPPED must be valid: %v", err)
+	}
+	// An unrecognised version is reported, never assumed permissive.
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v99", OutcomeAccepted); err == nil {
+		t.Fatal("an unknown schema version must not be treated as permissive")
+	}
+	// And a whole receipt wearing the wrong label is INCOMPLETE for that reason.
+	rec := completeReceipt()
+	rec.Schema = v3
+	rec.Outcome = OutcomeDeferred
+	rec.ReviewVerdict = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedDigest = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedTree = UnknownValue("stopped at an authority boundary")
+	rec.Attempts = nil
+	rec.DeferredQuestion = MeasuredValue("a question", "the authority decision")
+	state, missing := rec.Completeness()
+	joined := strings.Join(missing, " ")
+	if state != Incomplete || !strings.Contains(joined, "not in the vocabulary") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}

@@ -115,6 +115,44 @@ func (o Outcome) Valid() bool {
 	return false
 }
 
+// vocabularies pins which outcomes each schema version DEFINES.
+//
+// The version is evidentiary, not decorative. DEFERRED once shipped under the
+// v3 label -- a receipt speaking a language its own version does not define --
+// and a reader given that artifact would have had to guess whether "v3" meant
+// v3 or "v3 plus whatever was added later". Pinning the vocabulary per version
+// makes that unguessable:
+//
+//	v3 + DEFERRED   invalid
+//	v4 + DEFERRED   valid
+var vocabularies = map[string][]Outcome{
+	"sensei-code.governed-run-receipt/v3": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed,
+		OutcomeUnreviewed, OutcomeStopped, OutcomeUnknown,
+	},
+	"sensei-code.governed-run-receipt/v4": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed,
+		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeUnknown,
+	},
+}
+
+// SpeaksItsVersion reports whether an outcome belongs to the vocabulary the
+// stated schema version defines. An unknown version is reported as such rather
+// than assumed permissive: a reader that has never heard of a schema cannot
+// vouch for what it may say.
+func SpeaksItsVersion(schema string, o Outcome) error {
+	allowed, known := vocabularies[schema]
+	if !known {
+		return fmt.Errorf("schema %q is not a version this reader defines, so nothing it says can be checked against a vocabulary", schema)
+	}
+	for _, a := range allowed {
+		if a == o {
+			return nil
+		}
+	}
+	return fmt.Errorf("outcome %q is not in the vocabulary %s defines", o, schema)
+}
+
 // SufficientForComplete reports whether o can appear in a COMPLETE receipt.
 // UNKNOWN is representable -- a reader must be able to say the record does not
 // state what happened -- but a record that cannot say what happened is not a
@@ -503,6 +541,12 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	var missing []string
 	if r.Schema != SchemaVersion {
 		missing = append(missing, fmt.Sprintf("schema %q is not %q", r.Schema, SchemaVersion))
+	}
+	// The record must speak the language its own version defines, whatever
+	// version that is. This catches an artifact carrying semantics added after
+	// the label it wears.
+	if err := SpeaksItsVersion(r.Schema, r.Outcome); err != nil {
+		missing = append(missing, err.Error())
 	}
 
 	// Every value is validated, wherever it lives. An earlier draft walked
