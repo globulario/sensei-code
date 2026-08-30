@@ -1,0 +1,101 @@
+{
+  "completeness": "INCOMPLETE",
+  "missing": [
+    "candidate_state UNKNOWN: a record that cannot say whether a candidate exists is not complete"
+  ],
+  "receipt": {
+    "schema": "sensei-code.governed-run-receipt/v6",
+    "governor_commit": {
+      "text": "f6b4755ff4d12591e9e802b2094b16a938260cc2",
+      "state": "KNOWN",
+      "source": "runtime/debug build info vcs.revision"
+    },
+    "governor_binary_sha256": {
+      "text": "6abb67016f3df9387b5a90e28991035391931802afa1dab21bfaa3e94f786b04",
+      "state": "KNOWN",
+      "source": "sha256 of the executable this process is running (/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/c9-gov)"
+    },
+    "base_commit": {
+      "text": "f6b4755ff4d12591e9e802b2094b16a938260cc2",
+      "state": "KNOWN",
+      "source": "git rev-parse HEAD, at the certified start"
+    },
+    "plan_digest": {
+      "text": "8a8173d1d1a133963164dd83128ae2288951813b900cda3cc724ff47ddcc4db1",
+      "state": "KNOWN",
+      "source": "sha256 of the supplied plan, as handed in"
+    },
+    "graph_digest": {
+      "text": "367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9",
+      "state": "KNOWN",
+      "source": "sensei preflight authority.live_store_graph_digest_sha256"
+    },
+    "candidate_commit": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no candidate was created"
+    },
+    "candidate_tree": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no candidate was created"
+    },
+    "candidate_first_parent": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no candidate was created"
+    },
+    "candidate_digest": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no candidate was created"
+    },
+    "candidate_commit_diff_digest": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no candidate identity was minted"
+    },
+    "candidate_digest_relation": "UNKNOWN",
+    "serving_producer": {
+      "text": "b5b6113661ee8afeac19bfd7b239272005249fadd1c9137ceaf7d77c13384988",
+      "state": "KNOWN",
+      "source": "sha256 of pid 1818948, the process that answered this run's awareness initialize (/proc/1818948/exe)"
+    },
+    "reviewer_provider": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no reviewer was assigned"
+    },
+    "reviewer_executable": {
+      "state": "UNKNOWN",
+      "detail": "not measured: the engine does not measure the reviewer executable"
+    },
+    "review_verdict": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no bounded verdict was returned"
+    },
+    "reviewed_digest": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no bounded verdict was returned"
+    },
+    "formatter_mutation": {
+      "text": "UNCHANGED",
+      "state": "KNOWN",
+      "source": "the candidate diff digest compared across the formatter step"
+    },
+    "execution_budget": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no execution budget expired"
+    },
+    "deferred_question": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no authority question was deferred"
+    },
+    "reviewed_tree": {
+      "state": "UNKNOWN",
+      "detail": "not measured: no bounded review was delivered"
+    },
+    "plan_state": "PRESENT",
+    "candidate_state": "UNKNOWN",
+    "terminal": {
+      "text": "workflow.failed",
+      "state": "KNOWN",
+      "source": "the terminal event this run emitted"
+    },
+    "outcome": "FAILED"
+  }
+}

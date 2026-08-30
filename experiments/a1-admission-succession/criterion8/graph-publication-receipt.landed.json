@@ -1,0 +1,13 @@
+{
+  "receipt": {
+    "Domain": "github.com/globulario/sensei-code",
+    "Revision": "f6b4755ff4d12591e9e802b2094b16a938260cc2",
+    "Tree": "ad916f771bbc07523c92ff299c27af53c852aacd",
+    "State": "CLEAN_EXACT",
+    "SourceRoot": "/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/M/docs/awareness",
+    "SourceDigest": "cff0d6113939b6f986b873dffad22847491669d903d1254386ef57c18cdf9c23"
+  },
+  "receipt_iri": "https://globular.io/awareness/publication/receipt/sha256-2223c940bcf84f767593f58ad798f64055edb4e766673bf87c46f89692c978f7",
+  "graph_generation": "367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9",
+  "triple_count": 164839
+}

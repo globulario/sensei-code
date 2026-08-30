@@ -1,0 +1,1 @@
+workflow.failed: the supplied plan needs a revision the run cannot make: a bounded knowledge gap must be closed first: graph coverage is absent for the planned files: no anchors fired, no files examined — coverage thin for this area. A supplied plan is not revised by the architect; supply a revised plan

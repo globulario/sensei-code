@@ -323,3 +323,433 @@ and succeed a change to itself. On the way it exposed two hidden assumptions in
 the governor: that whoever notices an ending may declare it, and that evidence
 is small. Neither was written down anywhere. Both were found by trying to
 integrate a change through the machinery rather than by reasoning about it.
+
+## The dependency door, and what walked through it
+
+The cross-repository blocker was opened WITHOUT touching C, #127, or any
+evidence artifact.
+
+  sensei    v1.6.1, cut from the exact v1.6.0 commit 6b2c9c64 plus ONE commit
+            (30 lines, 3 files, 1 new package). It deliberately excludes the
+            549 commits main had accumulated, so consuming the verifier
+            capability did not also consume unrelated semantics.
+            The release-line call sites were MEASURED, not ported from main:
+            v1.6.0 carries server, client.Dial and client.DialConn, and the
+            gate dials through DialConn -- the site a first pass on main had
+            missed while every test still passed.
+
+  action    globulario/sensei-action#16, one line, sensei-ref v1.6.0 -> v1.6.1.
+            The owner merged 411c13e and read main back: the deployed default
+            is v1.6.1. Not inferred.
+
+THE EXPERIMENT, on an unmodified head:
+
+    head             aa5c5e33, byte-identical before and after
+    evidence         the same 5.6 MB J1R.complete-accepted.log
+    gate             the same enforcing gate, same 45-file diff
+    only variable    the deployed verifier
+
+    v1.6.0 verifier  CANNOT VERIFY (ResourceExhausted, 5647072 vs 4194304)
+    v1.6.1 verifier  PASS, 45 file(s) evaluated, 0 blocking, 0 advisory
+
+  CI confirms the ref it actually ran: "using prebuilt Sensei bundle (v1.6.1,
+  linux-amd64)". The pre-bump run at the SAME head had Go verification already
+  green and only the gate failing, so the verifier is isolated as the sole
+  cause of the change in outcome.
+
+## Criteria 5-7, established against M
+
+M := f6b4755ff4d12591e9e802b2094b16a938260cc2
+
+  read back from `git ls-remote origin refs/heads/main` AFTER GitHub completed
+  the merge -- not the PR head, not a local ref, not the value GitHub reported.
+  It happens to equal the reported merge commit; that was CHECKED, not assumed.
+
+  5  authoritative resulting state read back                        PASS
+  6  not applicable under Architecture B: M != C, because merging C
+     necessarily integrated the branch up to its parent              N/A
+  7  exact C byte-identical and reachable from M                    PASS
+
+     reachable   C is an ancestor of M, via bafb17a then f6b4755
+     identical   C reconstructs to 6016791c from (B,T) by independent
+                 recomputation of its commit bytes, after the merge
+     content     both of C's blobs are bit-identical in M:
+                   engine.go              a7ed967e678a99546f96288acf905dc592d23f9f
+                   postvalidation_test.go 456576c9ab7070cb0547bac52d55cea56ccdb8bf
+     ref         refs/sensei-code/admitted/a1/6016791c... still names exactly C
+
+  C's P1 repair is live in M at internal/workflow/engine.go:1356.
+
+## STOP
+
+Criterion 8 is NOT attempted. Succession is NOT declared. Criterion 9 remains
+forbidden until 8 establishes regenerated authoritative knowledge for exact M.
+
+## Two scars, retained so they cannot mutate the interpretation
+
+  Neither is a finding about the system under test.
+
+  1. During local verification the enforcing gate hung twice. Cause: several
+     awareness-graph servers sharing one Oxigraph backend. Laboratory
+     infrastructure contention, mine, not a transport regression. With a single
+     server the gate is reliable. Recorded so a future hang is not misread as
+     evidence about v1.6.1.
+
+  2. The released `sensei` binary rejects `--version` ("unknown command"), and
+     `awg` warns that it is deprecated in favour of `sensei`. Pre-existing,
+     cosmetic, untouched.
+
+## What A1 has actually shown so far
+
+A1 was designed to ask whether a system can admit and succeed a change to
+itself. Getting from "candidate accepted" to "next world exists" forced three
+dependencies to state their own authority, and each had been silently assumed:
+
+  who owns an ending          the engine, not whoever notices first
+  how large evidence may be   larger than one message, or the verifier must
+                              say so rather than fail on it silently
+  what a pin deploys          a read-back default, not an inferred one
+
+None was written down anywhere. All three were found by trying to move a change
+through the machinery rather than by reasoning about it.
+
+## Criterion 8: BLOCKED. Two of three identities established.
+
+Performed from a clean detached worktree at exactly M
+(f6b4755, `git status --porcelain` empty), publishing the sensei-code slice
+in place with `sensei build --repo github.com/globulario/sensei-code`.
+
+NO --force. NO topology override. The topology safeguard did not refuse: the
+per-domain path is non-destructive by construction, so the whole-graph
+override the earlier attempt would have needed was never reached.
+
+  2 PUBLISHED IDENTITY                                            PASS
+      marker written and read back
+        digest 4ead3c19756c59686d7551caa6b8b22fab134b41d5f4f0cafe2aa3b8d651fd64
+        triple_count 164587
+      store read back: 164587 triples (was 164506)
+      closure PROVEN: 178/178 projected, 0 missing, 0 foreign provenance,
+        0 unresolved attribution, 0 duplicate canonical subjects
+      DETERMINISTIC: republished from the same worktree, identical digest and
+        identical count (164587 -> 164587), so the generation is a function of
+        its input rather than of the run.
+
+  3 SERVING IDENTITY                          PASS, but not where it counts
+      On a server started AFTER publication, live graph digest == marker
+      digest, freshness "live store matches expected validated graph
+      artifact". The graph being answered IS the generation produced for M.
+
+      The configured endpoint is NOT that server. .sensei/config.yaml and
+      .mcp.json both bind to localhost:10122, a long-running process started
+      2026-08-22 that pinned its expected marker at startup. It now reports:
+
+        Live graph digest:   (unstamped)
+        Seed state:          stale
+        Freshness state:     stale
+        Freshness detail:    live store missing expected graph marker 42e6e12c...
+
+      That is the safeguard WORKING. It is refusing to claim it serves a
+      generation it cannot verify, and it must not be forced. Restarting it is
+      a deployment action on the owner's process, not a repair this experiment
+      may perform on its own authority.
+
+  1 SOURCE IDENTITY                                              NOT PROVEN
+      Regeneration WAS performed from exact M. That is operationally true and
+      it is not self-evidencing, which is the whole difference this project
+      exists to insist on.
+
+      Nothing in the published artifact records a repository revision:
+        - the marker node carries digest, triple count, version, label -- and
+          no revision
+        - grep for f6b4755 in the generated slice: 0 hits, and there is no
+          commit/revision provenance predicate of any kind
+        - the transaction file certifies the awareness-graph repo (afc39e9d,
+          the v1.6.1 commit) and per-file content digests of the ag_awareness,
+          ag_generated, svc_* trees -- 138 entries, NONE of them sensei-code's
+          docs/awareness
+        - the closure report names a certified_source_root, which is a
+          filesystem PATH, not a commit
+
+      So the chain is bound at one end and testified at the other:
+
+        serving --[digest 4ead3c19]--> published      cryptographic
+        published --[my say-so]-----> M               testimony
+
+      A graph that cannot state which revision produced it cannot later prove
+      that a governed run inherited M. This is the same law this project keeps
+      re-deriving: every representation preserves its predicate. The
+      publication preserves CONTENT identity and drops REVISION identity.
+
+VERDICT: criterion 8 is BLOCKED, on two independent grounds, neither of which
+may be forced:
+
+  a  the published authoritative knowledge does not bind itself to M, so
+     "the served graph describes f6b4755" is not provable from the artifact;
+  b  the endpoint a governed run would inherit does not serve that generation
+     and correctly says so.
+
+CRITERION 9 IS NOT ATTEMPTED. Succession is NOT declared. Under (a) a passing
+criterion 9 would not mean what it claims: a run could inherit generation
+4ead3c19 and no artifact would show that generation is M's.
+
+STATE LEFT BEHIND, and how to undo it. The live store's sensei-code slice was
+replaced (164506 -> 164587 triples) under the owner's explicit authorisation.
+The whole store was snapshotted beforehand and can be restored. The owner's
+:10122 process was NOT restarted and NOT reconfigured.
+
+## Criterion 8: PASS. All three identities close, and the testimony arrow is gone.
+
+The gap #128 found was a missing capability, not a broken digest. It was
+repaired in globulario/sensei as `feat/domain-publication-receipt` (da29a0e7),
+NOT by weakening criterion 8 and NOT by editing any evidence artifact.
+
+WHAT WAS BUILT. Revision provenance as a first-class PER-DOMAIN publication
+identity. Not on the whole-store marker: the store is multi-domain and one
+generation covers every domain in it, so a revision stamped there would be a
+lie about all but one.
+
+  GENERATION IS NOT A FIELD OF THE RECEIPT, for a structural reason. The
+  generation digest is computed over content that CONTAINS the receipt, so a
+  receipt naming its generation would have to be hashed before it existed. The
+  binding is inverted, and is stronger:
+
+      the receipt commits to the revision      (its own digest)
+      the generation commits to the receipt    (by containing it)
+
+  Neither half is self-referential; neither can change without breaking the
+  other. Closure is omitted for the same class of reason -- it is proven after
+  promotion, so a receipt could only ever say PENDING, a value that becomes
+  false the moment the proof lands and is never revised.
+
+  CLEAN_EXACT IS EARNED: resolvable HEAD, resolvable tree for the source root,
+  and no uncommitted change under that root INCLUDING UNTRACKED FILES. A
+  publication that compiled an untracked YAML did not come from the commit it
+  names, and that difference is invisible in the compiled output.
+
+THE THREE IDENTITIES, measured
+
+  1 SOURCE IDENTITY                                                  PASS
+      Read back from the authoritative store, then RECOMPUTED: the per-domain
+      pointer resolves to a receipt whose fields hash to the IRI it is stored
+      under.
+        revision  f6b4755ff4d12591e9e802b2094b16a938260cc2
+        state     CLEAN_EXACT
+        tree      ad916f771bbc07523c92ff299c27af53c852aacd
+        content   cff0d6113939b6f986b873dffad22847491669d903d1254386ef57c18cdf9c23
+        receipts retained: 2  (history preserved, not repainted)
+
+  2 PUBLISHED IDENTITY                                               PASS
+        generation 367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9
+        164839 triples, closure PROVEN 40/40
+        IDEMPOTENT: three consecutive publishes of identical state left the
+        count at 164839 -> 164839 -> 164839, so receipts do not grow without
+        bound while a CHANGED state still adds one and keeps the old.
+
+  3 SERVING IDENTITY                                                 PASS
+        the CONFIGURED endpoint -- localhost:10122, unchanged, same process,
+        same flags -- answers with live graph digest 367a4c6d..., 164839
+        triples, freshness "live store matches expected validated graph
+        artifact".
+
+  The chain now reads, with no testimony arrow anywhere in it:
+
+      serving --[digest 367a4c6d]--> generation --[containment]--> receipt
+              --[receipt digest]--> revision f6b4755
+
+A CORRECTION TO THIS RECORD. It previously said :10122 "pinned its expected
+marker at startup". That was wrong. The process re-validates: without being
+restarted it moved from stale to current on its own once the store held a
+generation it could verify. Its earlier stale answer was a correct refusal of a
+specific unverifiable state, not a permanent pin, and the authorised restart
+turned out to be unnecessary. It was never performed.
+
+WHAT DOES NOT YET EXIST, stated rather than glossed. The server's typed query
+API has a closed class vocabulary with no member for a publication receipt, so
+the serving process cannot be ASKED for its revision provenance -- `sensei
+query --mode by_id` on the receipt IRI returns `unsupported class "https"`.
+The binding is cryptographic and complete; the read path is the store, not the
+server's typed surface. A governed execution that wants to state which world it
+inherited must currently read the store directly. That is an ergonomic gap and
+it is the natural next piece of work.
+
+Two pre-existing conditions, neither caused by this change and neither hidden:
+  - the sensei domain reports UNPROVEN because no prior closure proof exists
+    for it to carry forward; receipts are untagged and SliceDigest counts only
+    tagged subjects, so they cannot have caused it;
+  - cmd/awg's TestThePromotionGateAdmitsOnlyIndependentlyVerifiedEvidence fails
+    identically on clean main and on this branch.
+
+CRITERION 9 IS NOT ATTEMPTED. Succession is NOT declared.
+
+## Criterion 8, re-established under LANDED governance
+
+The prior PASS was produced by a publisher that existed only as a local binary.
+The owner refused that as the certifying authority for the first
+self-succession experiment -- correctly, and for the same reason this whole
+experiment exists: an authority nobody else can inspect is testimony wearing a
+digest.
+
+So it was landed first, then re-run.
+
+  LANDED           globulario/sensei PR #314, merged as e2f7cb7b.
+                   All gates green on the merged head 035994b2: build-and-test,
+                   activation, real-oxigraph, build-and-smoke, review on ubuntu
+                   and windows, darwin-arm64 and windows-amd64 compiles, and
+                   the Sensei gate itself.
+
+  A GATE CAUGHT WHAT LOCAL TESTING STRUCTURALLY COULD NOT. The first push
+  failed:
+
+      STALE: docs/awareness/generated/awareness_graph_go_import_graph.yaml
+
+  Adding golang/publication changed the Go import graph, and the corpus had no
+  component describing it. My local differential ran `go test` and could never
+  have found this, because it is not a test -- it is a corpus-freshness gate.
+  The claim "no additional failure introduced" was true of the test suite and
+  FALSE of the branch. Repaired by regenerating the graph; the diff is exactly
+  the new module declaring itself and its one dependency.
+
+  RE-RUN, from a clean detached worktree at exactly M, with the publisher built
+  FROM LANDED MAIN e2f7cb7b:
+
+      source revision f6b4755ff4d12591e9e802b2094b16a938260cc2 (CLEAN_EXACT)
+      closure PROVEN 40/40
+      store 164839 -> 164839  (idempotent: the landed publisher reproduced the
+                               local one exactly, no drift, and the receipt IRI
+                               is unchanged at 2223c940)
+
+  RESTARTED, step 5, the existing configured process: same binary, same 14
+  arguments captured from /proc before stopping it, no endpoint change and no
+  freshness bypass. It came up at 15:52:40Z and reported:
+
+      Live graph digest  367a4c6d...
+      Live graph triples 164839
+      Seed state         current
+      Freshness state    current
+      Freshness detail   live store matches expected validated graph artifact
+
+THE CHAIN, every link measured after the restart
+
+    :10122  --[digest 367a4c6d, 164839 triples]-->  G
+    G       --[containment]-------------------->    R
+    R       --[recomputed identity 2223c940]--->    revision f6b4755
+    receipts retained: 2, history preserved
+
+  SOURCE IDENTITY     PASS      M -> R          cryptographic
+  PUBLISHED IDENTITY  PASS      G -> R          cryptographic
+  SERVING IDENTITY    PASS      :10122 -> G     read back after restart
+
+CRITERION 8: PASS.
+
+Criterion 9 remains untouched. Succession is NOT declared.
+
+Still true, and still the next piece of work: the typed query API has no class
+for a publication receipt, so the serving process cannot be ASKED for its
+revision provenance. `sensei query --mode by_id` on the receipt IRI answers
+`unsupported class "https"`. Criterion 9 must therefore read the store to state
+which world it inherited, rather than asking the endpoint it inherited it from.
+
+## Criterion 9: PASS. Two governed executions, both starting from M + G.
+
+The owner separated the two roles after the first run refused early, and the
+chronology is clean because both runs inherited the SAME unmoved world: main
+stayed f6b4755 and :10122 kept serving 367a4c6d across both.
+
+### Run 1 -- the identity witness (the next governed execution after M)
+
+Started from a clean checkout at exact M. Refused on a bounded knowledge gap:
+the planned file was new, so preflight answered EMPTY / UNKNOWN_IMPACT and the
+run routed to a knowledge-gap refusal before reaching a worker. A correct
+governed refusal.
+
+Its own immutable evidence states the world it inherited:
+
+    base_commit   f6b4755ff4d12591e9e802b2094b16a938260cc2   (M)
+                  "git rev-parse HEAD, at the certified start"
+    graph_digest  367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9   (G)
+                  "sensei preflight authority.live_store_graph_digest_sha256"
+
+Composed with criterion 8: the run says code = M and graph = G; G contains R;
+R's recomputed identity names M. Both sides of the inherited world agree on M,
+and the run states this itself rather than being told by an observer.
+
+### Run 2 -- the behavioural witness (P1)
+
+Same clean world. The governor was built from a real clone at exact M so it
+carried a VCS stamp, which produced a fact stronger than the criterion asked
+for:
+
+    governor_commit  f6b4755ff4d12591e9e802b2094b16a938260cc2   (vcs.modified=false)
+    base_commit      f6b4755ff4d12591e9e802b2094b16a938260cc2
+    graph_digest     367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9
+
+The execution was governed BY M, not merely started from it.
+
+THE CONTROLLED CONDITION was derived from the code, not guessed. validate()
+binds the certifying bundle to validation.Digest(diff) after the format re-read,
+and the certifying checks run AFTER that binding, so a check that mutates a
+declared path makes reviewed.Diff differ from diff at the recapture -- exactly
+the seam certifiedAgainstCapture guards. The real test suite ran first, so
+validation genuinely succeeded on state S before the mutation.
+
+THE RESULT, matching the frozen prediction exactly:
+
+    no bounded implementor produced an acceptable candidate:
+      claude: validation returned a diff of 472 bytes and the candidate's
+              canonical rendering is 641 bytes: the text the reviewer would read
+              and the content identity it would be bound to are different bytes
+      codex:  identical
+
+    candidate_commit  UNKNOWN: not measured: no candidate was created
+    candidate_tree    UNKNOWN: not measured: no candidate was created
+    review_verdict    UNKNOWN: not measured: no bounded verdict was returned
+
+REFUSAL AT CAPTURE CERTIFICATION. The mint was never reached, so the older
+movement-refusal path -- which names the wrong cause -- never ran. Two
+independent implementors reproduced it. C's semantic change is ALIVE in M, not
+merely present in it as bytes.
+
+## A defect found by the witness, recorded and NOT repaired here
+
+    A capture-certification refusal occurs after workers and validation have
+    run but before a canonical candidate is created. The terminal funnel leaves
+    candidate_state=UNKNOWN, making the receipt INCOMPLETE even though the
+    execution knows enough to state the candidate outcome.
+
+UNKNOWN is architecturally wrong here. The terminal record must distinguish
+"no canonical candidate was created because capture certification refused it"
+from "we do not know", which is the second candidate law -- evidence before
+dependent control flow -- failing inside the very seam C introduced.
+
+IT IS NOT REPAIRED IN THIS EXPERIMENT, and the reason is not convenience.
+Repairing it produces a governor NEWER than M, and a rerun under that governor
+could no longer show that M governed this behaviour. Fixing first would destroy
+the experiment it was meant to improve. The owner also declined to promote
+"COMPLETE receipt" into a criterion after seeing the result, which would have
+been moving the goalposts. It is the first post-A1 governance repair instead.
+
+## A1 RESULT
+
+    criterion 1-8               PASS
+    criterion 9                 PASS
+    P1 causal witness           PASS
+    terminal accounting         DEFECT FOUND (candidate_state UNKNOWN)
+
+    A1 succession               PROVEN
+    A1 implementation quality   NOT PERFECT
+
+The full chain, every link measured rather than asserted:
+
+    C  --admitted (owner, exact object)-->  admitted ref
+       --integrated (ordinary merge)---->   M
+       --regenerated--------------------->  knowledge generation G bound to M
+       --served------------------------->   configured endpoint :10122 answers G
+       --inherited---------------------->   next governed execution starts M + G
+       --governed----------------------->   M's own semantics fire at the seam
+
+WHAT THIS IS, stated narrowly. Not autonomous self-permission. Not unrestricted
+recursive self-modification. Sensei-Code can change itself, prove the successor
+world, inherit that world, and govern from it while external authority is
+preserved at every admission boundary. Every step that increased authority was
+taken by the owner; the system proved the steps, and refused the ones it could
+not prove.
