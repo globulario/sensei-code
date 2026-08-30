@@ -486,7 +486,7 @@ invariants:
     title: A claimed resulting state is established by reading the resulting state, not by the operation intended to produce it
     severity: high
     status: active
-    description: 'Intent, a successful invocation, or an operation''s nominal effect is not evidence of its postcondition. A claim about resulting state must be preceded by a read of that state. Discovered by execution: a schema version bump was written, the edit silently did not match the file, the commit message claimed the new version, and a real governed run then emitted a v4 outcome under a v3 label -- the exact defect the version comment existed to prevent, produced by the author of that comment.'
+    description: 'CANDIDATE, awaiting governed review. Repeated execution produced evidence consistent with this rule: that a claim about resulting state must be established by reading that state after the operation intended to produce it, and that intent or nominal success is not evidence of the postcondition. One observed failure mode: a schema version bump was written, the edit silently did not match the file, the commit message claimed the new version, and a real governed run then emitted a v4 outcome under a v3 label. The named tests encode the CURRENT falsifiers; they do not establish that the rule holds generally. Determine whether this candidate deserves promotion, refinement, narrowing, or rejection -- five incidents may be too thin a base for a law of this scope.'
     protects:
       files:
         - internal/runreceipt/receipt.go
@@ -501,7 +501,7 @@ invariants:
     title: Evidence is bound and recorded before control flow that can terminate on it
     severity: high
     status: active
-    description: 'A fact required by any possible terminal boundary must be acquired from the authority that establishes its semantics, and bound and recorded, before the code that can terminate using it runs. Evidence acquisition and evidence recording must not sit on opposite sides of a control-flow boundary. Four manifestations found by execution: the graph digest read from the wrong decoded result; a captured tree named ''reviewed'' before any review existed; the plan recorded after the routing that escalates on it; and the fix for that third case placed after the very call that terminates.'
+    description: 'CANDIDATE, awaiting governed review. Repeated execution produced evidence consistent with this rule: that a fact required by any possible terminal boundary must be acquired from the authority establishing its semantics, and bound and recorded, before the code that can terminate using it runs -- so that acquisition and recording do not sit on opposite sides of a control-flow boundary. Four observed failure modes: the graph digest read from the wrong decoded result; a captured tree named reviewed before any review existed; the plan recorded after the routing that escalates on it; and the repair for that third case placed after the very call that terminates. The named tests encode the CURRENT falsifiers; they do not establish that the rule holds generally. Determine whether this candidate deserves promotion, refinement, narrowing, or rejection.'
     protects:
       files:
         - internal/workflow/receipt.go
