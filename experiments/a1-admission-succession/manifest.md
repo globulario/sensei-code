@@ -648,3 +648,108 @@ for a publication receipt, so the serving process cannot be ASKED for its
 revision provenance. `sensei query --mode by_id` on the receipt IRI answers
 `unsupported class "https"`. Criterion 9 must therefore read the store to state
 which world it inherited, rather than asking the endpoint it inherited it from.
+
+## Criterion 9: PASS. Two governed executions, both starting from M + G.
+
+The owner separated the two roles after the first run refused early, and the
+chronology is clean because both runs inherited the SAME unmoved world: main
+stayed f6b4755 and :10122 kept serving 367a4c6d across both.
+
+### Run 1 -- the identity witness (the next governed execution after M)
+
+Started from a clean checkout at exact M. Refused on a bounded knowledge gap:
+the planned file was new, so preflight answered EMPTY / UNKNOWN_IMPACT and the
+run routed to a knowledge-gap refusal before reaching a worker. A correct
+governed refusal.
+
+Its own immutable evidence states the world it inherited:
+
+    base_commit   f6b4755ff4d12591e9e802b2094b16a938260cc2   (M)
+                  "git rev-parse HEAD, at the certified start"
+    graph_digest  367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9   (G)
+                  "sensei preflight authority.live_store_graph_digest_sha256"
+
+Composed with criterion 8: the run says code = M and graph = G; G contains R;
+R's recomputed identity names M. Both sides of the inherited world agree on M,
+and the run states this itself rather than being told by an observer.
+
+### Run 2 -- the behavioural witness (P1)
+
+Same clean world. The governor was built from a real clone at exact M so it
+carried a VCS stamp, which produced a fact stronger than the criterion asked
+for:
+
+    governor_commit  f6b4755ff4d12591e9e802b2094b16a938260cc2   (vcs.modified=false)
+    base_commit      f6b4755ff4d12591e9e802b2094b16a938260cc2
+    graph_digest     367a4c6d25c126965a3ed89a62383dd07008e1403979f8ff80409a3fdf573fa9
+
+The execution was governed BY M, not merely started from it.
+
+THE CONTROLLED CONDITION was derived from the code, not guessed. validate()
+binds the certifying bundle to validation.Digest(diff) after the format re-read,
+and the certifying checks run AFTER that binding, so a check that mutates a
+declared path makes reviewed.Diff differ from diff at the recapture -- exactly
+the seam certifiedAgainstCapture guards. The real test suite ran first, so
+validation genuinely succeeded on state S before the mutation.
+
+THE RESULT, matching the frozen prediction exactly:
+
+    no bounded implementor produced an acceptable candidate:
+      claude: validation returned a diff of 472 bytes and the candidate's
+              canonical rendering is 641 bytes: the text the reviewer would read
+              and the content identity it would be bound to are different bytes
+      codex:  identical
+
+    candidate_commit  UNKNOWN: not measured: no candidate was created
+    candidate_tree    UNKNOWN: not measured: no candidate was created
+    review_verdict    UNKNOWN: not measured: no bounded verdict was returned
+
+REFUSAL AT CAPTURE CERTIFICATION. The mint was never reached, so the older
+movement-refusal path -- which names the wrong cause -- never ran. Two
+independent implementors reproduced it. C's semantic change is ALIVE in M, not
+merely present in it as bytes.
+
+## A defect found by the witness, recorded and NOT repaired here
+
+    A capture-certification refusal occurs after workers and validation have
+    run but before a canonical candidate is created. The terminal funnel leaves
+    candidate_state=UNKNOWN, making the receipt INCOMPLETE even though the
+    execution knows enough to state the candidate outcome.
+
+UNKNOWN is architecturally wrong here. The terminal record must distinguish
+"no canonical candidate was created because capture certification refused it"
+from "we do not know", which is the second candidate law -- evidence before
+dependent control flow -- failing inside the very seam C introduced.
+
+IT IS NOT REPAIRED IN THIS EXPERIMENT, and the reason is not convenience.
+Repairing it produces a governor NEWER than M, and a rerun under that governor
+could no longer show that M governed this behaviour. Fixing first would destroy
+the experiment it was meant to improve. The owner also declined to promote
+"COMPLETE receipt" into a criterion after seeing the result, which would have
+been moving the goalposts. It is the first post-A1 governance repair instead.
+
+## A1 RESULT
+
+    criterion 1-8               PASS
+    criterion 9                 PASS
+    P1 causal witness           PASS
+    terminal accounting         DEFECT FOUND (candidate_state UNKNOWN)
+
+    A1 succession               PROVEN
+    A1 implementation quality   NOT PERFECT
+
+The full chain, every link measured rather than asserted:
+
+    C  --admitted (owner, exact object)-->  admitted ref
+       --integrated (ordinary merge)---->   M
+       --regenerated--------------------->  knowledge generation G bound to M
+       --served------------------------->   configured endpoint :10122 answers G
+       --inherited---------------------->   next governed execution starts M + G
+       --governed----------------------->   M's own semantics fire at the seam
+
+WHAT THIS IS, stated narrowly. Not autonomous self-permission. Not unrestricted
+recursive self-modification. Sensei-Code can change itself, prove the successor
+world, inherit that world, and govern from it while external authority is
+preserved at every admission boundary. Every step that increased authority was
+taken by the owner; the system proved the steps, and refused the ones it could
+not prove.
