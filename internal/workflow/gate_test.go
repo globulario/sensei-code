@@ -288,3 +288,30 @@ func TestAnUnreadableHeadDoesNotBlockTheOtherChecks(t *testing.T) {
 		t.Fatalf("an unknown repository head refused an otherwise certifiable start: %v", err)
 	}
 }
+
+// TestTheGraphDigestComesFromWhereSenseiReportsIt pins the source.
+//
+// The first real governed run emitted a receipt saying the certified start
+// "did not carry a live graph digest" while the digest was sitting in the
+// workspace contract the gate had already decoded. The receipt was right that
+// it had not been given one; the accessor was looking in the wrong result.
+func TestTheGraphDigestComesFromWhereSenseiReportsIt(t *testing.T) {
+	const digest = "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64"
+	var start certifiedStart
+	start.workspace.GraphAuthority = &sensei.Authority{LiveStoreGraphDigest: digest}
+	if got := start.GraphDigest(); got != digest {
+		t.Fatalf("GraphDigest() = %q, want the workspace contract's digest", got)
+	}
+	// The build commit is a DIFFERENT fact and never stands in for it.
+	var only certifiedStart
+	only.workspace.GraphAuthority = &sensei.Authority{GraphBuildCommit: "fac399f8225f"}
+	if got := only.GraphDigest(); got != "" {
+		t.Fatalf("GraphDigest() = %q; the build commit must not stand in for the digest", got)
+	}
+	// A workspace that reports none, with preflight carrying it, still resolves.
+	var viaPreflight certifiedStart
+	viaPreflight.preflight.Authority.LiveStoreGraphDigest = digest
+	if got := viaPreflight.GraphDigest(); got != digest {
+		t.Fatalf("GraphDigest() = %q, want the preflight digest when it is the only one", got)
+	}
+}
