@@ -79,7 +79,7 @@ func runAuditRepair(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 	// Phase 1: observation, to its own terminal state.
 	observation := engine.SubmitObservation(ctx, strings.TrimSpace(*task))
 	fmt.Printf("observation %s  session %s\n", observation, sessionID)
-	if code := streamUntilSettled(ctx, engine, events, observation, false, *quiet); code != exitObserved {
+	if code := streamUntilSettled(ctx, engine, events, observation, false, *quiet, *timeout); code != exitObserved {
 		fmt.Fprintf(os.Stderr, "sensei-code audit-repair: the audit did not complete (exit %d); opening no repair work\n", code)
 		return code
 	}
@@ -128,7 +128,7 @@ func runAuditRepair(ctx context.Context, repo gitx.Repo, cfg config.Config, args
 		fmt.Printf("\n=== repair %s from %s\n", f.ID, f.ObservationTask)
 		repair := engine.SubmitGovernedUnattended(ctx, f.RepairObjective())
 		fmt.Printf("repair task %s\n", repair)
-		if code := streamUntilSettled(ctx, engine, events, repair, false, *quiet); code != exitCompleted {
+		if code := streamUntilSettled(ctx, engine, events, repair, false, *quiet, *timeout); code != exitCompleted {
 			worst = code
 		}
 	}

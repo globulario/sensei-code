@@ -1,0 +1,91 @@
+{
+ "completeness": "COMPLETE",
+ "missing": null,
+ "receipt": {
+  "schema": "sensei-code.governed-run-receipt/v4",
+  "governor_commit": {
+   "text": "e563539971b47b1d043ccd07e2449b79bd6cc619",
+   "state": "KNOWN",
+   "source": "runtime/debug build info vcs.revision"
+  },
+  "governor_binary_sha256": {
+   "text": "b5b3082465671953aeafa38d360f8c5099c5189feeaeb0adc515dc72bf12a3f7",
+   "state": "KNOWN",
+   "source": "sha256 of the executable this process is running (/tmp/claude-1000/-home-dave-Documents-github-com-globulario-sensei-code/0c05292b-ad66-420a-9985-54db3e81471f/scratchpad/sensei-code-v4d)"
+  },
+  "base_commit": {
+   "text": "e563539971b47b1d043ccd07e2449b79bd6cc619",
+   "state": "KNOWN",
+   "source": "git rev-parse HEAD, at the certified start"
+  },
+  "plan_digest": {
+   "text": "4ffec80130b9899ced0f22e0a6b81e6b7a356605a5e72b5fba7b2d469a95d113",
+   "state": "KNOWN",
+   "source": "sha256 of the architect's plan text"
+  },
+  "graph_digest": {
+   "text": "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64",
+   "state": "KNOWN",
+   "source": "sensei preflight authority.live_store_graph_digest_sha256"
+  },
+  "candidate_commit": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no candidate was created"
+  },
+  "candidate_tree": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no candidate was created"
+  },
+  "candidate_first_parent": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no candidate was created"
+  },
+  "candidate_digest": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no candidate was created"
+  },
+  "candidate_commit_diff_digest": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no candidate identity was minted"
+  },
+  "candidate_digest_relation": "UNKNOWN",
+  "serving_producer": {
+   "text": "b5b6113661ee8afeac19bfd7b239272005249fadd1c9137ceaf7d77c13384988",
+   "state": "KNOWN",
+   "source": "sha256 of pid 2628110, the process that answered this run's awareness initialize (/proc/2628110/exe)"
+  },
+  "reviewer_provider": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no reviewer was assigned"
+  },
+  "reviewer_executable": {
+   "state": "UNKNOWN",
+   "detail": "not measured: the engine does not measure the reviewer executable"
+  },
+  "review_verdict": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no bounded verdict was returned"
+  },
+  "reviewed_digest": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no bounded verdict was returned"
+  },
+  "deferred_question": {
+   "text": "Authorize the exact \u201cartefacts\u201d to \u201cartifacts\u201d comment change despite the open graph-coverage gap, or defer it until a later mechanical derivation covers this file? \u2014 a bounded knowledge gap was not closed by investigation: graph coverage is absent for the planned files: no anchors fired, no files examined \u2014 coverage thin for this area",
+   "state": "KNOWN",
+   "source": "the authority decision the human declined to answer"
+  },
+  "reviewed_tree": {
+   "state": "UNKNOWN",
+   "detail": "not measured: no bounded review was delivered"
+  },
+  "plan_state": "PRESENT",
+  "candidate_state": "NONE",
+  "terminal": {
+   "text": "workflow.awaiting_authority",
+   "state": "KNOWN",
+   "source": "the terminal event this run emitted"
+  },
+  "outcome": "DEFERRED"
+ }
+}

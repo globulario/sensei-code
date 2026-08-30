@@ -122,6 +122,50 @@ func (e *Engine) submit(ctx context.Context, task string, how Provenance, observ
 // reports itself stopped rather than failed, so the work remains resumable.
 // A stop is the human withdrawing attention from a task, not a judgement that
 // the work was worthless.
+// TimeOut ends a task because its execution budget expired, and records that
+// cause so the terminal can tell a deadline from a withdrawal.
+//
+// A DEADLINE REQUESTS A TERMINAL; IT DOES NOT ESTABLISH ONE. The engine owns
+// terminal truth, so a timeout may only claim a task that is still live. If the
+// task has already settled -- completed, failed, deferred, stopped -- the
+// timeout LOST, and it must change nothing: not the timedOut cause the terminal
+// funnel reads, and not the execution budget on an account that is already
+// closed. Reporting false lets the caller consume the ending that really
+// happened instead of announcing one that did not.
+//
+// The claim is taken atomically, by removing the cancel from the live set under
+// the same lock that tests for it. Testing liveness and then stopping in a
+// second step would let a task settle in between, and the timeout would mark a
+// cause for a terminal it did not cause.
+func (e *Engine) TimeOut(taskID, budget string) bool {
+	e.mu.Lock()
+	cancel, live := e.stops[taskID]
+	if !live {
+		e.mu.Unlock()
+		return false
+	}
+	delete(e.stops, taskID)
+	if e.timedOut == nil {
+		e.timedOut = map[string]bool{}
+	}
+	e.timedOut[taskID] = true
+	e.mu.Unlock()
+
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.executionBudget = runreceipt.MeasuredValue(budget, "the -timeout this invocation was given")
+	})
+	cancel()
+	return true
+}
+
+// timedOutBy reports whether this task's stop was a deadline rather than a
+// person.
+func (e *Engine) timedOutBy(taskID string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.timedOut[taskID]
+}
+
 func (e *Engine) Stop(taskID string) bool {
 	e.mu.Lock()
 	cancel, ok := e.stops[taskID]

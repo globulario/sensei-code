@@ -171,6 +171,9 @@ func TestAReceiptCannotAdmitAnything(t *testing.T) {
 func completeReceipt() Receipt {
 	return Receipt{
 		Schema:                    SchemaVersion,
+		FormatterMutationState:    MeasuredValue(string(FormatterUnchanged), "no formatter is configured"),
+		ExecutionBudget:           UnknownValue("no execution budget expired"),
+		DeferredQuestion:          UnknownValue("no authority question was deferred"),
 		PlanState:                 PlanPresent,
 		CandidateState:            CandidatePresent,
 		CandidateCommit:           MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
@@ -518,5 +521,187 @@ func TestAStoppedRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	}
 	if OutcomeStopped == OutcomeFailed {
 		t.Fatal("a human stop must never be recorded as a failure")
+	}
+}
+
+// TestADeferredRunIsACompleteRecordOfARealOutcome closes R1.
+//
+// The first real governed run reached a human-owned authority boundary, the
+// human declined to answer, the process exited -- and it emitted NOTHING,
+// because that terminal was classified non-terminal on the grounds that the run
+// is resumable. True inside the process model; false outside it.
+func TestADeferredRunIsACompleteRecordOfARealOutcome(t *testing.T) {
+	if !OutcomeDeferred.Valid() || !OutcomeDeferred.SufficientForComplete() {
+		t.Fatal("DEFERRED must be a valid outcome sufficient for a complete record")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeDeferred
+	rec.ReviewVerdict = UnknownValue("the run stopped at an authority boundary")
+	rec.ReviewedDigest = UnknownValue("the run stopped at an authority boundary")
+	rec.ReviewedTree = UnknownValue("the run stopped at an authority boundary")
+	rec.Attempts = nil
+	rec.DeferredQuestion = MeasuredValue(
+		"Architectural authority reached a human-owned boundary. — graph coverage is absent for the planned file",
+		"the authority decision the human declined to answer")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / DEFERRED must be representable: %v", missing)
+	}
+	if OutcomeDeferred == OutcomeFailed || OutcomeDeferred == OutcomeStopped {
+		t.Fatal("a deferral is neither a failure nor a withdrawal")
+	}
+}
+
+// A record that says a question was deferred without saying WHICH is the same
+// shape as a candidate that cannot name its own commit.
+func TestADeferredRunMustNameTheQuestion(t *testing.T) {
+	rec := completeReceipt()
+	rec.Outcome = OutcomeDeferred
+	rec.ReviewVerdict = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedDigest = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedTree = UnknownValue("stopped at an authority boundary")
+	rec.Attempts = nil
+	rec.DeferredQuestion = UnknownValue("not recorded")
+	state, missing := rec.Completeness()
+	if state != Incomplete || !strings.Contains(strings.Join(missing, " "), "deferred_question") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}
+
+// A deferral did not also get judged.
+func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
+	rec := completeReceipt() // still carries a bounded verdict
+	rec.Outcome = OutcomeDeferred
+	rec.DeferredQuestion = MeasuredValue("a question", "the authority decision")
+	state, missing := rec.Completeness()
+	if state != Incomplete || !strings.Contains(strings.Join(missing, " "), "did not also get judged") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}
+
+// TestTheSchemaVersionPinsItsVocabulary makes a silent version drift impossible.
+//
+// DEFERRED once shipped under the v3 label: the bump was written, the
+// replacement silently did not match, the commit message claimed v4, and a real
+// run emitted a v4 feature under a v3 version. That is exactly the fabricated
+// specimen the version comment warns about, produced by the author of the
+// comment.
+//
+// Pinning the version ALONGSIDE the vocabulary means adding an outcome without
+// moving the version fails here, rather than being caught by someone reading a
+// receipt from a live run.
+func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
+	const version = "sensei-code.governed-run-receipt/v6"
+	if SchemaVersion != version {
+		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
+	}
+	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
+		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown}
+	for _, o := range outcomes {
+		if !o.Valid() {
+			t.Errorf("%q is enumerated here but not Valid()", o)
+		}
+	}
+	// Every value Valid() accepts must be one this test names, or the
+	// vocabulary grew without the version moving.
+	for _, candidate := range []Outcome{"ADMITTED", "DEFERED", "PENDING", "VOID", "BLOCKED", "TIMEDOUT"} {
+		if candidate.Valid() {
+			t.Errorf("%q is valid but not pinned by this test", candidate)
+		}
+	}
+	if len(outcomes) != 8 {
+		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
+	}
+}
+
+// TestAReceiptMustSpeakTheLanguageItsVersionDefines gives the version string
+// evidentiary meaning rather than making it decorative metadata.
+func TestAReceiptMustSpeakTheLanguageItsVersionDefines(t *testing.T) {
+	const v3 = "sensei-code.governed-run-receipt/v3"
+	if err := SpeaksItsVersion(v3, OutcomeDeferred); err == nil {
+		t.Fatal("v3 + DEFERRED must be invalid: DEFERRED was added in v4")
+	}
+	if err := SpeaksItsVersion(SchemaVersion, OutcomeDeferred); err != nil {
+		t.Fatalf("v4 + DEFERRED must be valid: %v", err)
+	}
+	if err := SpeaksItsVersion(v3, OutcomeStopped); err != nil {
+		t.Fatalf("v3 + STOPPED must be valid: %v", err)
+	}
+	// An unrecognised version is reported, never assumed permissive.
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v99", OutcomeAccepted); err == nil {
+		t.Fatal("an unknown schema version must not be treated as permissive")
+	}
+	// And a whole receipt wearing the wrong label is INCOMPLETE for that reason.
+	rec := completeReceipt()
+	rec.Schema = v3
+	rec.Outcome = OutcomeDeferred
+	rec.ReviewVerdict = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedDigest = UnknownValue("stopped at an authority boundary")
+	rec.ReviewedTree = UnknownValue("stopped at an authority boundary")
+	rec.Attempts = nil
+	rec.DeferredQuestion = MeasuredValue("a question", "the authority decision")
+	state, missing := rec.Completeness()
+	joined := strings.Join(missing, " ")
+	if state != Incomplete || !strings.Contains(joined, "not in the vocabulary") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+}
+
+// A timeout is not a withdrawal: an expired budget and a human stepping back are
+// different evidence, and a reader that cannot tell them apart learns the wrong
+// causal fact about why work ended.
+func TestATimedOutRunIsACompleteRecordOfARealOutcome(t *testing.T) {
+	if !OutcomeTimedOut.Valid() || !OutcomeTimedOut.SufficientForComplete() {
+		t.Fatal("TIMED_OUT must be a valid outcome sufficient for a complete record")
+	}
+	if OutcomeTimedOut == OutcomeStopped || OutcomeTimedOut == OutcomeFailed {
+		t.Fatal("a timeout is neither a withdrawal nor a failure")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeTimedOut
+	rec.ExecutionBudget = MeasuredValue("25m0s", "the -timeout this invocation was given")
+	// A timeout AFTER a bounded verdict is the ordinary shape of a revision
+	// cycle that ran out of budget, and must not read as a contradiction.
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / TIMED_OUT after a REVISE must be representable: %v", missing)
+	}
+	// And it must name the budget it exhausted.
+	rec.ExecutionBudget = UnknownValue("not recorded")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "execution_budget") {
+		t.Fatalf("state=%s missing=%v", state, missing)
+	}
+	// v4 does not define TIMED_OUT.
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v4", OutcomeTimedOut); err == nil {
+		t.Fatal("v4 + TIMED_OUT must be invalid: TIMED_OUT was added in v5")
+	}
+}
+
+// The formatter fact is instrumentation, and it obeys the same laws as every
+// other fact: a closed vocabulary, a stated source, and no silent gap.
+func TestTheFormatterMutationFactIsMeasuredAndClosed(t *testing.T) {
+	for _, v := range []FormatterMutation{FormatterMutated, FormatterUnchanged, FormatterUnsaid} {
+		if !v.Valid() {
+			t.Errorf("%q is enumerated but not valid", v)
+		}
+	}
+	for _, bad := range []FormatterMutation{"YES", "NO", "CHANGED", ""} {
+		if bad.Valid() {
+			t.Errorf("%q must not be a valid formatter fact", bad)
+		}
+	}
+	// UNKNOWN is an acceptable VALUE; an unstated field is not.
+	rec := completeReceipt()
+	rec.FormatterMutationState = MeasuredValue(string(FormatterUnsaid), "validation had not run")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("UNKNOWN must be an acceptable value: %v", missing)
+	}
+	rec.FormatterMutationState = UnknownValue("not recorded")
+	if state, _ := rec.Completeness(); state != Incomplete {
+		t.Fatal("a candidate that exists must STATE the formatter fact, even as UNKNOWN")
+	}
+	rec.FormatterMutationState = MeasuredValue("PROBABLY", "a guess")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "formatter_mutation") {
+		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }

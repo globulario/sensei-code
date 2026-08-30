@@ -49,13 +49,17 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
-// v2 added the PlanState axis and the STOPPED outcome. v3 adds the reviewed
+// v6 adds the formatter-mutation fact, because an attribution procedure that
+// depends on evidence the system deliberately discards can only answer UNKNOWN.
+// v5 added TIMED_OUT, because an expired execution budget is different evidence
+// from a human withdrawing. v4 added the DEFERRED outcome and the question it
+// stands on. v3 added the reviewed
 // tree, the canonical diff-digest relation, and redefines CandidateState to
 // mean MEASURED WORK rather than "a worktree exists". Each changes what a
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v3"
+const SchemaVersion = "sensei-code.governed-run-receipt/v6"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -80,6 +84,24 @@ const (
 	// OutcomeUnreviewed: the run reached its end and no provider produced a
 	// bounded verdict. A measured absence, never "clean by exhaustion".
 	OutcomeUnreviewed Outcome = "UNREVIEWED"
+	// OutcomeDeferred: the run reached a human-owned authority boundary and the
+	// human declined to answer. Nothing failed and nobody withdrew -- one
+	// question was left standing, and the run ended without touching the
+	// candidate or calling another provider.
+	//
+	// The first real governed run ended this way and emitted NOTHING, because
+	// this terminal was classified non-terminal on the grounds that the run is
+	// resumable. That is true inside the process model and false outside it:
+	// the process exited, and the only account of it was the event stream --
+	// the reconstruction this record exists to abolish.
+	OutcomeDeferred Outcome = "DEFERRED"
+	// OutcomeTimedOut: the invocation's execution budget expired.
+	//
+	// Deliberately NOT mapped to STOPPED. A human withdrawing and a deadline
+	// expiring are different evidence, and collapsing them would teach every
+	// downstream reader the wrong causal fact about why work ended. The task
+	// may still be resumable; the INVOCATION is over either way.
+	OutcomeTimedOut Outcome = "TIMED_OUT"
 	// OutcomeStopped: a human ended the run. This is a real terminal outcome,
 	// not instrument incompleteness and not workflow failure -- recording it as
 	// FAILED would teach the behavioural record that this task shape breaks,
@@ -96,10 +118,58 @@ const (
 // all -- is not a new outcome, it is an invalid one.
 func (o Outcome) Valid() bool {
 	switch o {
-	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed, OutcomeStopped, OutcomeUnknown:
+	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown:
 		return true
 	}
 	return false
+}
+
+// vocabularies pins which outcomes each schema version DEFINES.
+//
+// The version is evidentiary, not decorative. DEFERRED once shipped under the
+// v3 label -- a receipt speaking a language its own version does not define --
+// and a reader given that artifact would have had to guess whether "v3" meant
+// v3 or "v3 plus whatever was added later". Pinning the vocabulary per version
+// makes that unguessable:
+//
+//	v3 + DEFERRED   invalid
+//	v4 + DEFERRED   valid
+var vocabularies = map[string][]Outcome{
+	"sensei-code.governed-run-receipt/v3": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed,
+		OutcomeUnreviewed, OutcomeStopped, OutcomeUnknown,
+	},
+	"sensei-code.governed-run-receipt/v4": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed,
+		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeUnknown,
+	},
+	"sensei-code.governed-run-receipt/v5": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown,
+	},
+	// v6 changes the receipt's SHAPE rather than its outcome vocabulary.
+	"sensei-code.governed-run-receipt/v6": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown,
+	},
+}
+
+// SpeaksItsVersion reports whether an outcome belongs to the vocabulary the
+// stated schema version defines. An unknown version is reported as such rather
+// than assumed permissive: a reader that has never heard of a schema cannot
+// vouch for what it may say.
+func SpeaksItsVersion(schema string, o Outcome) error {
+	allowed, known := vocabularies[schema]
+	if !known {
+		return fmt.Errorf("schema %q is not a version this reader defines, so nothing it says can be checked against a vocabulary", schema)
+	}
+	for _, a := range allowed {
+		if a == o {
+			return nil
+		}
+	}
+	return fmt.Errorf("outcome %q is not in the vocabulary %s defines", o, schema)
 }
 
 // SufficientForComplete reports whether o can appear in a COMPLETE receipt.
@@ -215,6 +285,35 @@ const (
 func (p PlanState) Valid() bool {
 	switch p {
 	case PlanPresent, PlanNone, PlanUnknown:
+		return true
+	}
+	return false
+}
+
+// FormatterMutation says whether validation's formatter actually changed
+// candidate bytes.
+//
+// It is INSTRUMENTATION, not a repair. The formatter's own evidence is
+// deliberately discarded by the validation design ("it describes the candidate
+// before the rewrite"), which left no way to measure whether a rewrite
+// happened -- so an attribution procedure that depended on it could return only
+// UNKNOWN. If formatter mutation is load-bearing for later identity reasoning,
+// its OCCURRENCE cannot be among the things discarded.
+type FormatterMutation string
+
+const (
+	// FormatterMutated: the formatter ran and changed candidate bytes.
+	FormatterMutated FormatterMutation = "MUTATED"
+	// FormatterUnchanged: it ran and changed nothing, or none is configured.
+	FormatterUnchanged FormatterMutation = "UNCHANGED"
+	// FormatterUnsaid: validation never reached the formatter.
+	FormatterUnsaid FormatterMutation = "UNKNOWN"
+)
+
+// Valid reads membership by enumeration.
+func (f FormatterMutation) Valid() bool {
+	switch f {
+	case FormatterMutated, FormatterUnchanged, FormatterUnsaid:
 		return true
 	}
 	return false
@@ -387,6 +486,24 @@ type Receipt struct {
 	ReviewerExecutable Value `json:"reviewer_executable"`
 	ReviewVerdict      Value `json:"review_verdict"`
 	ReviewedDigest     Value `json:"reviewed_digest"`
+	// FormatterMutationState carries a FormatterMutation, measured like any
+	// other fact. Required whenever a candidate exists -- UNKNOWN is an
+	// acceptable VALUE, but the field may not go unstated.
+	FormatterMutationState Value `json:"formatter_mutation"`
+
+	// ExecutionBudget is the deadline a TIMED_OUT invocation exhausted.
+	//
+	// Required when the outcome is TIMED_OUT: a record saying the budget
+	// expired without saying WHAT the budget was cannot be acted on.
+	ExecutionBudget Value `json:"execution_budget"`
+
+	// DeferredQuestion is the authority question a DEFERRED run left standing.
+	//
+	// Required when the outcome is DEFERRED: a record saying "a question was
+	// deferred" without saying WHICH is the same shape as a candidate that
+	// cannot name its own commit.
+	DeferredQuestion Value `json:"deferred_question"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -441,6 +558,8 @@ func (r Receipt) Fields() []Field {
 	// verdict. Neither may be said without the evidence that says who, what
 	// and about which candidate revision.
 	reviewed := r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused
+	deferred := r.Outcome == OutcomeDeferred
+	timedOut := r.Outcome == OutcomeTimedOut
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -458,6 +577,9 @@ func (r Receipt) Fields() []Field {
 		{"reviewed_digest", r.ReviewedDigest, Observed, reviewed},
 		{"reviewed_tree", r.ReviewedTree, Observed, reviewed},
 		{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest, Rederivable, candidate},
+		{"deferred_question", r.DeferredQuestion, Observed, deferred},
+		{"execution_budget", r.ExecutionBudget, Observed, timedOut},
+		{"formatter_mutation", r.FormatterMutationState, Observed, candidate},
 		{"terminal", r.Terminal, Observed, true},
 	}
 }
@@ -481,6 +603,12 @@ func (r Receipt) Completeness() (Completeness, []string) {
 	var missing []string
 	if r.Schema != SchemaVersion {
 		missing = append(missing, fmt.Sprintf("schema %q is not %q", r.Schema, SchemaVersion))
+	}
+	// The record must speak the language its own version defines, whatever
+	// version that is. This catches an artifact carrying semantics added after
+	// the label it wears.
+	if err := SpeaksItsVersion(r.Schema, r.Outcome); err != nil {
+		missing = append(missing, err.Error())
 	}
 
 	// Every value is validated, wherever it lives. An earlier draft walked
@@ -566,8 +694,16 @@ func (r Receipt) Completeness() (Completeness, []string) {
 		missing = append(missing, "outcome UNKNOWN: a record that cannot say what happened is not complete")
 	case r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused:
 		missing = append(missing, r.checkBoundedReview()...)
+	case r.Outcome == OutcomeDeferred && r.ReviewVerdict.State == Known:
+		missing = append(missing, "outcome DEFERRED while a bounded verdict is recorded: a run that stopped at an authority boundary did not also get judged")
 	case r.Outcome == OutcomeUnreviewed && r.ReviewVerdict.State == Known:
 		missing = append(missing, "outcome UNREVIEWED while a bounded verdict is recorded: the condition contradicts the evidence")
+	}
+
+	if r.FormatterMutationState.State == Known &&
+		!FormatterMutation(r.FormatterMutationState.Text).Valid() {
+		missing = append(missing, fmt.Sprintf(
+			"formatter_mutation %q is not a value this schema defines", r.FormatterMutationState.Text))
 	}
 
 	// The canonical rendering relation. Once C^{tree} == T and C^1 == B, a

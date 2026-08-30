@@ -1,0 +1,14 @@
+contract_unknown:
+  - id: contract_unknown.sensei_code.candidate_law_a_claimed_resulting_state_must_be_read_not_inf
+    kind: contract_unknown
+    title: 'Candidate law: a claimed resulting state must be read, not inferred from the operation intended to produce it'
+    description: 'CANDIDATE, awaiting governed review. Repeated execution produced evidence consistent with this rule. It is NOT asserted as true and has not been promoted; the named tests encode the CURRENT falsifiers and do not establish that the rule holds generally. Determine whether it deserves promotion, refinement, narrowing or rejection -- six incidents from one author in one codebase over one day may be too thin a base for a law of this scope. FALSIFIER: a governed claim about resulting state whose only evidence is the operation intended to create it, with no read-back.'
+    proposed_contract: A claim about resulting state is established by reading that state after the operation intended to produce it. Intent, a successful invocation, or an operation's nominal effect is not evidence of its postcondition.
+    source_files:
+      - internal/runreceipt/receipt.go
+    evidence:
+      - 'run R6: a governed run emitted COMPLETE / DEFERRED under schema v3 while DEFERRED is a v4 value; the bump was written, the edit silently did not match the file, and the commit message claimed v4'
+      - six claims in one session asserted a resulting state that a read-back falsified, including the reframing commit that claimed to reword two files and reworded one
+      - 'this proposal itself: --kind invariant wrote status:active entries into the canonical corpus while the accompanying claim said ''candidates awaiting governed review'''
+      - 'falsifier tests: internal/runreceipt/receipt_test.go:TestTheSchemaVersionPinsItsVocabulary and TestAReceiptMustSpeakTheLanguageItsVersionDefines'
+    domain: github.com/globulario/sensei-code

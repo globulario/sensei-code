@@ -47,8 +47,13 @@ type receiptFacts struct {
 	reviewedTree runreceipt.Value
 	// candRendering is the canonical rendering of the MINTED object, and
 	// digestRelation is how it compares with the rendering the review saw.
-	candRendering                         runreceipt.Value
-	digestRelation                        runreceipt.DigestRelation
+	candRendering  runreceipt.Value
+	digestRelation runreceipt.DigestRelation
+	// deferredQuestion is the authority question a run left standing, and
+	// executionBudget the deadline a timed-out invocation exhausted.
+	deferredQuestion                      runreceipt.Value
+	executionBudget                       runreceipt.Value
+	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
 	attempts                              []runreceipt.Attempt
@@ -88,15 +93,21 @@ func freshFacts() *receiptFacts {
 		return runreceipt.UnknownValue("not measured: " + what)
 	}
 	return &receiptFacts{
-		base:          notYet("the run did not reach the start gate"),
-		graph:         notYet("the run did not reach the start gate"),
-		plan:          notYet("no plan was established for this run"),
-		candCommit:    notYet("no candidate was created"),
-		candTree:      notYet("no candidate was created"),
-		candParent:    notYet("no candidate was created"),
-		candDiff:      notYet("no candidate was created"),
-		capturedTree:  notYet("no candidate was captured"),
-		candRendering: notYet("no candidate identity was minted"),
+		base:             notYet("the run did not reach the start gate"),
+		graph:            notYet("the run did not reach the start gate"),
+		plan:             notYet("no plan was established for this run"),
+		candCommit:       notYet("no candidate was created"),
+		candTree:         notYet("no candidate was created"),
+		candParent:       notYet("no candidate was created"),
+		candDiff:         notYet("no candidate was created"),
+		capturedTree:     notYet("no candidate was captured"),
+		candRendering:    notYet("no candidate identity was minted"),
+		deferredQuestion: notYet("no authority question was deferred"),
+		executionBudget:  notYet("no execution budget expired"),
+		// Stated, not defaulted: a candidate that never reached validation has
+		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
+		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
+			"validation had not run when this record was opened"),
 		// The relation is UNKNOWN until something measures it, and UNKNOWN is
 		// never sufficient for a complete record of a candidate that exists.
 		digestRelation: runreceipt.RelationUnknown,
@@ -296,6 +307,9 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		GraphDigest:               facts.graph,
 		PlanState:                 facts.planState,
 		ReviewedTree:              facts.reviewedTree,
+		DeferredQuestion:          facts.deferredQuestion,
+		ExecutionBudget:           facts.executionBudget,
+		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
 		CandidateState:            cand,
@@ -496,6 +510,49 @@ func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.So
 	outcome runreceipt.Outcome, cand runreceipt.CandidateState, summary string, payload any) {
 	e.emitReceipt(taskID, kind, outcome, cand)
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
+}
+
+// noteFormatterMutation records whether validation's formatter changed
+// candidate bytes. Instrumentation only: it repairs nothing and decides
+// nothing, it merely stops the occurrence from being unobservable.
+func (e *Engine) noteFormatterMutation(taskID string, mutated bool) {
+	state := runreceipt.FormatterUnchanged
+	if mutated {
+		state = runreceipt.FormatterMutated
+	}
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.formatterMutation = runreceipt.MeasuredValue(string(state),
+			"the candidate diff digest compared across the formatter step")
+	})
+}
+
+// noteNoFormatterConfigured records that nothing could have rewritten the
+// candidate, which is a measurement rather than an absence of one.
+func (e *Engine) noteNoFormatterConfigured(taskID string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.formatterMutation = runreceipt.MeasuredValue(string(runreceipt.FormatterUnchanged),
+			"no formatter is configured, so nothing rewrote the candidate")
+	})
+}
+
+// noteDeferredQuestion records the authority question a run stopped on.
+//
+// The subject is the question itself; the condition is the certifiability
+// condition that produced the boundary. Both are recorded because an
+// interruption a reader cannot trace back to a condition is one nobody learns
+// from.
+func (e *Engine) noteDeferredQuestion(taskID, subject, condition string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		text := strings.TrimSpace(subject)
+		if c := strings.TrimSpace(condition); c != "" {
+			text = strings.TrimSpace(text + " — " + c)
+		}
+		if text == "" {
+			f.deferredQuestion = runreceipt.UnknownValue("the deferral recorded no question")
+			return
+		}
+		f.deferredQuestion = runreceipt.MeasuredValue(text, "the authority decision the human declined to answer")
+	})
 }
 
 // reviewedTreeFor returns the content identity a DELIVERED VERDICT was bound

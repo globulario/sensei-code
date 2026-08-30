@@ -91,6 +91,9 @@ type Engine struct {
 	// preflight would describe a possibly-moved graph while appearing to
 	// describe the moment the plan was authorised.
 	routings map[string]routingRecord
+	// timedOut records that a task's cancellation was a deadline, so the
+	// terminal can distinguish an expired budget from a human withdrawal.
+	timedOut map[string]bool
 	// receipts holds what each task has MEASURED so far, recorded at the moment
 	// of measurement rather than reconstructed at the end. See receipt.go.
 	receipts map[string]*receiptFacts
@@ -553,11 +556,12 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		e.notePlan(taskID, supplied, "")
 	}
 	fail := func(err error) {
-		// A deferred authority decision has already recorded itself, with the
-		// question attached. Reporting it again as a failure or a stop would
-		// describe the same moment three ways, and two of them would be wrong:
-		// nothing failed, and the human did not withdraw from the work — they
-		// declined to answer one question about it.
+		// A deferred authority decision has already recorded itself -- receipt
+		// and terminal event together, with the question attached. Reporting it
+		// again as a failure or a stop would describe the same moment three
+		// ways, and two of them would be wrong: nothing failed, and the human
+		// did not withdraw from the work — they declined to answer one question
+		// about it.
 		if errors.Is(err, errAuthorityDeferred) {
 			return
 		}
@@ -567,6 +571,15 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		// reported, on a context the cancellation cannot reach, because a run
 		// that goes silent when stopped leaves no account of why it ended.
 		if ctx.Err() != nil {
+			// A deadline and a withdrawal both cancel the context, and they are
+			// different evidence. The invocation owes an account either way.
+			if e.timedOutBy(taskID) {
+				const note = "the execution budget expired; the task was stopped and its candidate left in place"
+				e.emitRunTerminal(taskID, event.WorkflowTimedOut, event.SourceSystem,
+					runreceipt.OutcomeTimedOut, e.candidateStateFor(taskID), note, nil)
+				e.reportOutcome(context.WithoutCancel(ctx), "timed_out", task, note)
+				return
+			}
 			const note = "stopped by the human; the candidate is left as it stands"
 			// A human withdrawing is a real terminal outcome, not a failure:
 			// recording it as one would teach the behavioural record that this
@@ -769,7 +782,6 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
 	}
-	e.notePlan(taskID, e.planDigest(taskID), plan)
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
 		fail(errors.New("candidate worktree capability is not granted"))
@@ -1314,11 +1326,37 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// everything gathered before a rewrite is evidence about different
 		// bytes. The diff is therefore re-read afterwards and the certifying
 		// checks are bound to the digest of what will actually be reviewed.
-		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff)
+		evidence, diff, err := e.validate(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate, diff, tc.Files)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ValidationRun, evidence.Render(), evidence))
+
+		// The content identity is re-measured HERE, after validation, because
+		// validation can rewrite the candidate: a formatter changes the bytes,
+		// and the capture taken before it froze a tree nobody will ever review.
+		// Everything downstream -- audit, review, receipt, decision, mint --
+		// was reading that pre-validation tree while the reviewer read
+		// post-format text, so an accepted candidate that had not moved since
+		// its verdict was refused at the mint as though it had.
+		//
+		// Canonically: against the recorded base and the plan's declared paths,
+		// through the same capture the mint will later re-measure with.
+		reviewed, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
+		if err != nil {
+			return false, plan, lastReview, lastAudit, fmt.Errorf("re-measure the candidate after validation: %w", err)
+		}
+		// The re-measurement is not trusted on its own. The evidence bundle and
+		// the diff validation returned must both be about exactly this
+		// capture's canonical rendering; if they are not, the proof, the
+		// reviewed text and the content identity are three measurements of
+		// different bytes and there is no honest way to pick one. Fail closed
+		// here rather than let the disagreement surface as a movement refusal
+		// at the mint, which names the wrong cause.
+		if err := certifiedAgainstCapture(evidence, taskID, reviewed.Diff, diff); err != nil {
+			return false, plan, lastReview, lastAudit, err
+		}
+		capture, diff = reviewed, reviewed.Diff
 
 		// Post-creation inspection of every declared prospective surface
 		// (sensei#312). The authorization was for a shape; a candidate whose
@@ -1736,6 +1774,8 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	d := supplied.decision
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
+	// Before routing, for the same reason: routing can terminate this run.
+	e.notePlan(taskID, supplied.Digest, d.Plan)
 	routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 	if err != nil {
 		return architectureDecision{}, err
@@ -1851,6 +1891,17 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				lastErr = errors.New("architect returned PROCEED without a plan")
 				continue
 			}
+			// Record the bound BEFORE routing, because routing is control flow
+			// that can terminate this run: it escalates, the human defers, and
+			// resolveArchitectureIn returns an error. Anything recorded after
+			// this call does not exist for a deferred run.
+			//
+			// The first attempt at this fix recorded the plan in execute, after
+			// resolveArchitecture RETURNS -- which a deferral never reaches. The
+			// law is about control-flow boundaries, not about source order, and
+			// I put it on the wrong side of one while fixing exactly that bug.
+			e.notePlan(taskID, e.planDigest(taskID), d.Plan)
+
 			// The architect proposes; it does not decide whether the proposal
 			// carries architectural authority. A confident model proceeding
 			// through a region the graph cannot cover is the exact failure this
@@ -2864,10 +2915,19 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 			// resolved. The question is recorded whole, and the run ends
 			// without touching the candidate, calling a provider, or asking
 			// Sensei anything further.
-			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.WorkflowAwaitingAuthority,
+			//
+			// This goes through the terminal funnel: the process EXITS here,
+			// and the first real governed run ended exactly this way and left
+			// no receipt at all -- an account existing only in the event
+			// stream, which is the reconstruction the receipt exists to
+			// abolish. The event's shape is unchanged, because FindInterrupted
+			// reads it to resume the task.
+			e.noteDeferredQuestion(taskID, decision.Subject, condition)
+			e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
+				runreceipt.OutcomeDeferred, e.candidateStateFor(taskID),
 				"authority decision deferred; the question stands", DeferredAuthority{
 					Condition: condition, Domain: domain, BaseSHA: baseSHA, Decision: decision,
-				}))
+				})
 			return "", errAuthorityDeferred
 		}
 		for _, option := range options {
@@ -4444,7 +4504,13 @@ func oneLine(s string) string {
 // candidate, so the diff is re-read after formatting and the certifying checks
 // are bound to that. Returning the new diff rather than mutating in place makes
 // it impossible for a caller to keep using the pre-format bytes by accident.
-func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string) (validation.Bundle, string, error) {
+//
+// intended are the plan's declared paths, and they are passed through to the
+// re-read for the same reason the first capture takes them: the boundary keeps
+// an artifact the plan named and refuses one it did not. Re-reading through a
+// different boundary would return a diff the caller's own capture of the same
+// worktree disagrees with, over a file both of them are right about.
+func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string, intended []string) (validation.Bundle, string, error) {
 	permits := func(kind validation.CheckKind) (bool, string) {
 		var capability broker.Capability
 		switch kind {
@@ -4495,12 +4561,21 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	// Formatting first, and its evidence is deliberately discarded from the
 	// certifying bundle: it describes the candidate before the rewrite.
 	if formats := checksOf(validation.Format, e.Config.Validation.Format); len(formats) != 0 {
-		runner.Run(ctx, taskID, validation.Digest(diff), formats)
-		reread, err := repo.CandidateDiff(ctx, base)
+		before := validation.Digest(diff)
+		runner.Run(ctx, taskID, before, formats)
+		recapture, err := repo.CandidateCapture(ctx, base, intended)
 		if err != nil {
 			return validation.Bundle{}, diff, err
 		}
+		reread := recapture.Diff
+		// The formatter's own evidence is discarded above, but WHETHER IT
+		// REWROTE ANYTHING is not the formatter's evidence -- it is a fact
+		// about the candidate, and later identity reasoning depends on it.
+		// Measured here because this is the only point where both sides exist.
+		e.noteFormatterMutation(taskID, before != validation.Digest(reread))
 		diff = reread
+	} else {
+		e.noteNoFormatterConfigured(taskID)
 	}
 
 	var checks []validation.Check
@@ -4511,6 +4586,40 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
 	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
 	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+}
+
+// certifiedAgainstCapture refuses unless the validation evidence and the diff
+// validation returned are both about one exact content identity: the canonical
+// rendering of the capture the run is about to bind every downstream artifact
+// to.
+//
+// Every check in the bundle is examined, not just the bundle's own binding: a
+// bundle that reads as complete while one check speaks about other bytes proves
+// less than it appears to. A bundle with no checks at all is not turned into a
+// failure here -- a repository may configure no certifying checks, and that is
+// a configuration fact rather than stale evidence -- but its binding must still
+// name this candidate's post-validation content.
+func certifiedAgainstCapture(b validation.Bundle, taskID, rendered, returned string) error {
+	if returned != rendered {
+		return fmt.Errorf(
+			"validation returned a diff of %d bytes and the candidate's canonical rendering is %d bytes: "+
+				"the text the reviewer would read and the content identity it would be bound to are different bytes",
+			len(returned), len(rendered))
+	}
+	digest := validation.Digest(rendered)
+	if b.CandidateID != taskID || b.DiffDigest != digest {
+		return fmt.Errorf(
+			"the validation evidence is bound to candidate %q at %s, not to %q at its post-validation content %s",
+			b.CandidateID, shortDigest(b.DiffDigest), taskID, shortDigest(digest))
+	}
+	for _, c := range b.Checks {
+		if !c.Certifies(taskID, digest) {
+			return fmt.Errorf(
+				"the %s check %q certifies candidate %q at %s, not this candidate's post-validation content %s",
+				c.Kind, c.Command, c.CandidateID, shortDigest(c.DiffDigest), shortDigest(digest))
+		}
+	}
+	return nil
 }
 
 func checksOf(kind validation.CheckKind, commands []config.Command) []validation.Check {

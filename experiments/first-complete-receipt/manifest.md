@@ -1,4 +1,4 @@
-# The first COMPLETE governed-run receipt
+# Seven governed runs: progressive falsification of a self-describing record
 
 Three ordinary governed runs, recorded because they are the first non-VOID
 execution artifacts this chain has produced, and because the two that failed
@@ -14,13 +14,25 @@ parent, and **the loop never committed its candidate**. The main success path
 could not produce a complete account of itself. Steps 1-3 of Exact Candidate
 Identity were meant to close that. These runs asked whether they did.
 
-## The three runs
+## The seven runs
 
 ```text
-R1  deferred authority        NO RECEIPT AT ALL
-R2  incomplete                COMPLETE-shaped but INCOMPLETE for one true reason
-R3  complete                  COMPLETE / ACCEPTED
+R1  deferred authority     NO RECEIPT AT ALL
+R2  accepted identity      INCOMPLETE: GraphDigest read from the wrong result
+R3  accepted identity      COMPLETE / ACCEPTED / MATCH
+R4  deferred authority     receipt EXISTS; INCOMPLETE: plan_state UNKNOWN
+R5  deferred authority     INCOMPLETE, PREDICTED before the run: the fix sat
+                           outside the function containing the terminating edge
+R6  deferred authority     COMPLETE / DEFERRED -- but labelled schema v3 while
+                           carrying a v4 outcome
+R7  deferred authority     COMPLETE / DEFERRED, schema v4. The coherent specimen.
 ```
+
+**The value is not that every run succeeded. It is that the sequence is
+progressive falsification: each artifact explains why the next change existed.**
+
+No defect in this sequence was found by review. All five were found by
+execution, and none escaped into a merge.
 
 ### R1 — the receipt that was never emitted
 
@@ -126,13 +138,119 @@ Every identity closes:
 `d0a7e9bf` is reconstructible by anyone holding `(f0858b69, 3e810fbd)`. No
 signature and no trust in the machine that produced it.
 
+### R4 — the receipt exists, and immediately finds the next gap
+
+v4 added `OutcomeDeferred` and a required `DeferredQuestion`, and routed the
+deferral through the terminal funnel. The rerun of R1's exact scenario emitted a
+record naming the question — and was INCOMPLETE for a new, true reason:
+
+```text
+plan_state UNKNOWN: a record that cannot say whether a plan governed the run
+                    is not complete
+```
+
+Honest, and the wiring was wrong. `notePlan` ran after the task context was
+assembled, which is **after** authority routing — so a run deferring *during*
+routing reported no plan about a plan the router had just escalated on. The
+escalation is literally "Authority for THIS PLAN, by lane".
+
+### R5 — a failure predicted before it was observed
+
+The first fix moved `notePlan` into `execute`, after `resolveArchitecture`
+returns. But `routePlan` is called **inside** `resolveArchitectureIn`: a
+deferral escalates there and the function returns an error, so the new recording
+point is never reached.
+
+That was found by reading the call graph and **stated before the run reported
+it**. R5 is the confirmation, not the discovery — the only run in this sequence
+whose outcome was predicted rather than learned.
+
+> The law is about control-flow boundaries, not source order. The fix for the
+> third instance was placed on the wrong side of one.
+
+### R6 — correct behaviour, wrong label
+
+Recording the plan immediately before each `routePlan` call produced
+`COMPLETE / DEFERRED` with every required fact. Its schema field read
+
+```text
+sensei-code.governed-run-receipt/v3
+```
+
+while carrying a v4 outcome. The v4 bump had been written, the replacement
+silently did not match the file, and the commit message claimed v4.
+
+**R6 proves the behaviour and is not a valid v4 specimen.** A mislabelled
+artifact cannot be the canonical proof of the schema it misnames.
+
+The repair went further than the label: `vocabularies` now pins which outcomes
+each version DEFINES, and `SpeaksItsVersion` checks a record against its own
+label, so `v3 + DEFERRED` is invalid and an unknown version is reported rather
+than assumed permissive. The version string became evidence instead of metadata.
+
+### R7 — the coherent specimen
+
+```text
+schema             sensei-code.governed-run-receipt/v4
+completeness       COMPLETE          missing: none
+outcome            DEFERRED
+plan_state         PRESENT
+candidate_state    NONE
+governor_commit    e563539971b47b1d043ccd07e2449b79bd6cc619
+base_commit        e563539971b47b1d043ccd07e2449b79bd6cc619
+plan_digest        4ffec80130b9899ced0f22e0a6b81e6b7a356605…
+graph_digest       42e6e12cd5737530c4c8d054f8178cde849b72ca…
+serving_producer   b5b6113661ee8afeac19bfd7b239272005249fad…
+terminal           workflow.awaiting_authority
+deferred_question  "Authorize the exact 'artefacts' to 'artifacts' comment
+                    change despite the open graph-coverage gap, or defer it…"
+```
+
+The question names the exact change and the exact reason it cannot proceed. A
+reader can act on that sentence without touching the event stream, which is the
+difference between a receipt and a log line.
+
+## Two candidate laws, and their specimens
+
+These runs produced five defects in two families. Both are proposed to Sensei as
+**candidates**, not asserted as authority.
+
+**Postcondition verification** — a claimed resulting state must be established
+by READING the resulting state after the operation intended to produce it.
+Intent, successful invocation, or an operation's nominal effect is not evidence
+of its postcondition.
+
+```text
+specimen: schema v4 intended -> commit claimed v4 -> constant remained v3
+          -> a real run emitted a v4 outcome under a v3 label
+```
+
+**Evidence before dependent control flow** — a load-bearing fact must be
+acquired from the authority that establishes its semantics, and bound and
+recorded, before any control-flow edge that depends on it can terminate the
+encounter.
+
+```text
+GraphDigest    the fact existed; the wrong evidentiary source was read
+ReviewedTree   the tree existed; "reviewed" was asserted before any review
+PlanDigest     the plan existed; recording happened after routing could defer
+the fix        the correction itself sat outside the function holding the
+               terminating edge
+```
+
+Its falsifier is mechanical rather than editorial: for a fact F required by
+terminal R, if a path exists from `acquire(F)` to a terminating edge dependent
+on R with no dominating `record(F)` from F's establishing authority, the law is
+violated.
+
 ## What these runs do NOT establish
 
 - **Nothing is admitted.** All three candidates are retained and unpublished.
   There is no X+1, and self-hosting has not happened.
 - **A comment-only change proves the wiring, not the judgement.** Nothing here
   says the loop handles substantial work.
-- **R1's gap is open.** A deferred-authority exit still emits no receipt.
+- **R1 is closed** (R7), but only for the authority-deferral shape these runs
+  exercised. Other non-terminal exits have not been surveyed.
 - The external-witness size claim (673 lines → ~100) remains unmeasured: no new
   witness was built.
 
