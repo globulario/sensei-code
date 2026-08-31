@@ -194,21 +194,34 @@ failure_modes:
       - 'WORKING REPAIR: a second awareness-graph on :10122 with flags identical to the :10120 unit; workspace status then reports composition complete, coverage sufficient, no limitations, and sensei gate --enforce verifies'
       - 'REPAIR THAT BREAKS CERTIFICATION: an instance on :10122 carrying sensei-code''s own marker and home domain -- its Metadata RPC stalls and workspace composition reads unavailable'
       - 'a preservation commit of a candidate changes custody without changing content, and can invalidate workspace-bound evidence: verify-admission returned admission.verify.base_revision_changed until the original base plus uncommitted three-file diff was reconstructed'
-  - id: failure.sensei_code.narrow_write_scope_less_admissible_than_broad_one
+  - id: failure.sensei_code.acceptance_decision_has_no_identifiable_governing_test
     title: Sensei cannot identify the governing test for the function that decides acceptance
-    severity: warning
-    description: 'internal/workflow/gate.go holds judgeCandidate, which decides whether a candidate may be accepted, and it carries ZERO governing rules and no required-test relationship. TestUnverifiableAuditIsNotAcceptance is plainly load-bearing over it -- it is what keeps a reviewer ACCEPT from becoming candidate acceptance over an audit that could not be performed -- and Sensei cannot see that, because no invariant claims the file. internal/taskstate has the same gap. A write scope containing only either of them is refused with ''write or high-risk scope has no identifiable required Test'', while the SAME work inside a wider envelope containing internal/workflow/engine.go is admitted, because THAT file carries invariants with named tests. A narrowly scoped, more honest task is therefore LESS admissible than a broader one, which pressures authors toward wider envelopes -- the opposite of what bounded scope is for. This is NOT a reason to weaken admission: the refusal is correct, and the defect is that coverage is concentrated in the orchestration file and absent from the decision one. The repair is to add and publish invariant and required-test bindings for gate.go and taskstate through the marker-owning publication process, not to relax the rule or to borrow anchors from an unrelated file in the same task.'
+    severity: high
+    description: 'internal/workflow/gate.go holds judgeCandidate, which decides whether a candidate may be accepted, and it carries ZERO governing rules and no required-test relationship. TestUnverifiableAuditIsNotAcceptance is load-bearing over it -- it is what keeps a reviewer ACCEPT from becoming candidate acceptance over an audit that could not be performed -- and Sensei cannot see that, because no invariant claims the file. A write scope containing only gate.go is therefore refused with ''write or high-risk scope has no identifiable required Test'', while the same work inside a wider envelope containing internal/workflow/engine.go is admitted, because THAT file carries invariants with named tests. The refusal is correct; the defect is that coverage is concentrated in the orchestration file and absent from the decision one. THE PROOF IS NAMED HERE rather than left for the publisher to invent: the required_tests binding below is the relationship the marker-owning process should publish.'
     protects:
       files:
         - internal/workflow/gate.go
+    required_tests:
+      - internal/workflow/gate_test.go:TestUnverifiableAuditIsNotAcceptance
+      - internal/workflow/gate_test.go:TestReviewerMayStillAcceptWhatSenseiPermits
+    related_invariants:
+      - sensei_code.admission.the_chain_is_senseis_and_only_it_establishes_admission
+      - sensei_code.evidence.counts_carry_their_provenance
+    evidence:
+      - 'prepare-change over internal/workflow/gate.go and gate_test.go -> Inspect admitted, Modify waiting, blocker.agent.5ab07c4759c3 ''write or high-risk scope has no identifiable required Test'''
+      - 'preflight over those two files: PREFLIGHT_STATUS_EMPTY, LOW_RISK, CONFIDENCE_LOW, anchors=0, and no invariant in docs/awareness/invariants.yaml names gate.go -- while internal/workflow/engine.go beside it returns PREFLIGHT_STATUS_OK, ARCHITECTURE_SENSITIVE, CONFIDENCE_HIGH, anchors=6, named by 7 invariants'
+      - 'severity high rather than warning: this is degraded governance coverage on the acceptance path itself, and the repository already classifies file-level invisibility from missing anchors as high; critical would overstate it because admission still fails closed'
+      - 'roadmap consequence: stage 2 of the observation layer is DEFERRED, not failed, because its target cannot satisfy the dogfood precondition; stage 3 on engine.go advances first, where the mechanism can be tested rather than worked around'
+  - id: failure.sensei_code.narrow_write_scope_less_admissible_than_broad_one
+    title: An ungoverned package makes a narrow write scope less admissible than a broader one
+    severity: warning
+    description: 'internal/taskstate is indexed by the graph but carries no governing rule and no required-test relationship, so a write scope containing only that package is refused with ''write or high-risk scope has no identifiable required Test''. Recorded SEPARATELY from the acceptance-decision gap because it does not share its proof: gate.go has a known load-bearing test to bind, and taskstate has none yet, so the two need different repairs. A narrowly scoped, more honest task is less admissible than a broader one, which pressures authors toward wider envelopes -- the opposite of what bounded scope is for. This is NOT a reason to weaken admission: the repair is to publish the missing bindings through the marker-owning process, not to relax the rule or borrow anchors from an unrelated package in the same task.'
+    protects:
+      files:
         - internal/taskstate/state.go
     related_invariants:
       - sensei_code.evidence.counts_carry_their_provenance
-      - sensei_code.admission.the_chain_is_senseis_and_only_it_establishes_admission
     evidence:
-      - '2026-08-31: prepare-change over internal/taskstate/state.go and state_test.go alone -> Inspect admitted, Modify waiting, blocker.agent.5ab07c4759c3 ''write or high-risk scope has no identifiable required Test'''
-      - 'the same blocker over internal/workflow/gate.go and gate_test.go, which is the stronger case: preflight returns PREFLIGHT_STATUS_EMPTY, LOW_RISK, CONFIDENCE_LOW, anchors=0, and no invariant in docs/awareness/invariants.yaml names gate.go -- while internal/workflow/engine.go beside it returns PREFLIGHT_STATUS_OK, ARCHITECTURE_SENSITIVE, CONFIDENCE_HIGH, anchors=6, named by 7 invariants'
-      - 'roadmap consequence: stage 2 of the observation layer is DEFERRED, not failed, because its target cannot satisfy the dogfood precondition; stage 3 on engine.go advances first, as the place where the mechanism can be tested rather than worked around'
-      - the same work as part of a six-file envelope including internal/workflow -> Modify admitted immediately
-      - 'preflight over the two files: ''Coverage: sufficient=true anchors=0 (2/2 file(s) examined in the graph -- no governing rule applies)'', and no invariant in docs/awareness/invariants.yaml mentions taskstate'
-      - 'consequence accepted rather than worked around: stage 1 of the observation-layer work was hand-built under review instead of governed, and stages 2 and 3 remain governed because internal/workflow carries real anchors'
+      - '2026-08-31: prepare-change over internal/taskstate/state.go and state_test.go alone -> Inspect admitted, Modify waiting, same blocker'
+      - 'the same work as part of a six-file envelope including internal/workflow -> Modify admitted immediately'
+      - 'consequence accepted rather than worked around: stage 1 of the observation-layer work was hand-built under review instead of governed'
