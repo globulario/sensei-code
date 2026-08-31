@@ -566,6 +566,10 @@ type Observation struct {
 // passes, because it quotes the value it refused.
 const unsourcedNote = "unsourced observation of"
 
+// overrodeNote explains a cleared disagreement. It is one fixed sentence rather
+// than a per-case message so that normalizing twice cannot append twice.
+const overrodeNote = "overrode survives only on a sourced admission observation holding a known admission value; cleared"
+
 // noteOnce prepends an explanation unless it is already there. Normalization
 // runs both when an observation is recorded and when one is read back, so a
 // note that appended every time would rewrite stored Detail on each load.
@@ -573,48 +577,69 @@ func noteOnce(detail, msg string) string {
 	if strings.Contains(detail, msg) {
 		return detail
 	}
-	return strings.TrimSpace(msg + ": " + detail)
+	return prefixNote(detail, msg)
 }
 
-// normalize applies the two refusals this model exists for: an unsourced
-// observation and an unrecognized value both become unobserved, and both say
-// so rather than disappearing.
+// prefixNote puts an explanation in front of whatever detail already said,
+// without leaving a dangling separator when there was nothing there.
+func prefixNote(detail, msg string) string {
+	if strings.TrimSpace(detail) == "" {
+		return msg
+	}
+	return msg + ": " + detail
+}
+
+// normalize enforces every rule this model has, in one pass and with no early
+// return.
+//
+// It runs at all three boundaries -- when an observation is recorded, when one
+// is read from a file, and when one is projected -- because Observations is an
+// exported slice and a caller can fill it directly or decode straight into it.
+// A rule enforced at only one of those is a rule with a way around it.
+//
+// The order matters: provenance and vocabulary are settled first, and the
+// Overrode placement rule is applied LAST, over whatever they left. An earlier
+// version returned early for an unsourced observation and never reached that
+// rule, so a record with no provenance at all could still assert the
+// reviewer/audit disagreement.
+//
+// It is idempotent: normalizing an already-normalized observation returns it
+// unchanged, because it runs on every read.
 func (o Observation) normalize() Observation {
-	if strings.TrimSpace(o.Producer) == "" || strings.TrimSpace(o.Source) == "" {
-		// Keyed on the refusal, not on the value: normalization runs again on
-		// every load, and by then the value it refused is already UNOBSERVED.
-		// Noting that a second time would append a fresh sentence per read and
-		// bury the original value under the record of having removed it.
+	sourced := strings.TrimSpace(o.Producer) != "" && strings.TrimSpace(o.Source) != ""
+	if !sourced {
+		// Keyed on the refusal, not on the value: by the second pass the value
+		// it refused is already UNOBSERVED, and re-noting would bury the
+		// original under the record of having removed it.
 		if !strings.Contains(o.Detail, unsourcedNote) {
-			o.Detail = strings.TrimSpace(unsourcedNote + " " + string(o.Dimension) +
-				" recording " + strconv.Quote(o.Value) + ": " + o.Detail)
+			o.Detail = prefixNote(o.Detail, unsourcedNote+" "+string(o.Dimension)+
+				" recording "+strconv.Quote(o.Value))
 		}
 		o.Value = unobserved
-		return o
 	}
-	members, known := vocabularies[o.Dimension]
-	if !known {
+
+	members, knownDimension := vocabularies[o.Dimension]
+	switch {
+	case !knownDimension:
 		// The record keeps it -- something was observed and saying so is the
 		// point -- but an unrecognized dimension is not one of the six, so no
 		// governed projection may present it. See Current and Historical.
 		o.Detail = noteOnce(o.Detail, "unrecognized dimension "+strconv.Quote(string(o.Dimension)))
 		o.Value = unobserved
-		o.Overrode = false
-		return o
-	}
-	// Overrode means one thing: a reviewer accepted while the audit refused, so
-	// admission could not be established. A free boolean on any dimension would
-	// let a scope or evaluator observation assert a disagreement it does not
-	// represent, so it is legal only where it has that meaning.
-	if o.Overrode && o.Dimension != DimAdmission {
-		o.Detail = noteOnce(o.Detail, "overrode is meaningful only on "+string(DimAdmission)+
-			"; dropped from a "+string(o.Dimension)+" observation")
-		o.Overrode = false
-	}
-	if !members[o.Value] {
+	case !members[o.Value]:
 		o.Detail = noteOnce(o.Detail, "unrecognized value "+strconv.Quote(o.Value)+
 			" for dimension "+string(o.Dimension))
 		o.Value = unobserved
+	}
+
+	// Overrode means one thing: a reviewer accepted while the audit refused, so
+	// admission could not be established. It may therefore survive only on an
+	// observation that could actually carry that event -- sourced, a known
+	// admission dimension, and holding a real admission value. Anything else
+	// would assert a disagreement it does not represent.
+	if o.Overrode && !(sourced && knownDimension && o.Dimension == DimAdmission && o.Value != unobserved) {
+		o.Detail = noteOnce(o.Detail, overrodeNote)
+		o.Overrode = false
 	}
 	return o
 }
@@ -642,7 +667,13 @@ func (s *State) Record(o Observation) {
 // become a current claim about a candidate.
 func (s State) Current(candidate CandidateIdentity) map[Dimension]Observation {
 	current := map[Dimension]Observation{}
-	for _, o := range s.Observations {
+	for _, raw := range s.Observations {
+		// Normalize a COPY. Observations is exported, so an entry can arrive
+		// here without having passed Record or Load -- filled in directly, or
+		// decoded straight into the slice. Projection is the last boundary and
+		// it refuses the same things the others do. It does not write back:
+		// selecting must not edit the record it is reading.
+		o := raw.normalize()
 		if !o.Dimension.Known() {
 			continue
 		}
@@ -664,7 +695,8 @@ func (s State) Current(candidate CandidateIdentity) map[Dimension]Observation {
 // true of that candidate; it simply is not a claim about this one.
 func (s State) Historical(candidate CandidateIdentity) []Observation {
 	var out []Observation
-	for _, o := range s.Observations {
+	for _, raw := range s.Observations {
+		o := raw.normalize()
 		if !o.Dimension.Known() || o.Dimension.RunScoped() {
 			continue
 		}

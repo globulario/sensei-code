@@ -549,7 +549,7 @@ func TestOverrodeIsLegalOnlyOnAdmission(t *testing.T) {
 	if s.Observations[0].Overrode {
 		t.Fatal("a scope observation asserted a reviewer/audit disagreement")
 	}
-	if !strings.Contains(s.Observations[0].Detail, "overrode is meaningful only on admission") {
+	if !strings.Contains(s.Observations[0].Detail, overrodeNote) {
 		t.Fatalf("dropping it was not explained: %q", s.Observations[0].Detail)
 	}
 
@@ -643,7 +643,7 @@ func TestPersistedIllegalOverrodeIsCleared(t *testing.T) {
 	if got.Overrode {
 		t.Fatal("a persisted scope observation asserted a reviewer/audit disagreement")
 	}
-	if !strings.Contains(got.Detail, "overrode is meaningful only on admission") {
+	if !strings.Contains(got.Detail, overrodeNote) {
 		t.Fatalf("clearing it was not explained: %q", got.Detail)
 	}
 }
@@ -762,5 +762,168 @@ func TestV1FileCarryingObservationsIsAlsoNormalized(t *testing.T) {
 	}
 	if got := loaded.Current(candidateA())[DimAudit]; got.Value == string(AuditPass) {
 		t.Fatal("an unsourced AUDIT_PASS reached the projection through the v1 path")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Projection is the third boundary.
+//
+// Observations is an exported slice: a caller can fill it directly, or decode
+// straight into it, without ever passing Record or Load. A rule enforced only
+// at production and persistence is a rule with a way around it.
+// ---------------------------------------------------------------------------
+
+// directly builds a state the way a caller bypassing Record would.
+func directly(obs ...Observation) State {
+	return State{TaskID: "t-direct", SessionID: "s", Observations: obs}
+}
+
+func TestDirectlyConstructedUnsourcedObservationIsNotProjected(t *testing.T) {
+	s := directly(Observation{
+		Dimension: DimAudit, Value: string(AuditPass), Candidate: candidateA(),
+		ObservedAt: time.Unix(10, 0),
+	})
+	if got := s.Current(candidateA())[DimAudit]; got.Value == string(AuditPass) {
+		t.Fatal("an unsourced AUDIT_PASS was projected because it never passed Record or Load")
+	}
+}
+
+func TestDirectlyConstructedUnknownValueIsNotProjected(t *testing.T) {
+	s := directly(Observation{
+		Dimension: DimAudit, Value: "AUDIT_FINE_PROBABLY", Candidate: candidateA(),
+		Producer: "sensei:audit", Source: "event:candidate.audited/11", ObservedAt: time.Unix(10, 0),
+	})
+	got := s.Current(candidateA())[DimAudit]
+	if got.Value != unobserved {
+		t.Fatalf("a sourced but undefined audit value projected as %q", got.Value)
+	}
+	if !strings.Contains(got.Detail, "AUDIT_FINE_PROBABLY") {
+		t.Fatalf("the original value was not preserved in the projection: %q", got.Detail)
+	}
+}
+
+func TestDirectlyConstructedIllegalOverrodeIsNotProjected(t *testing.T) {
+	s := directly(Observation{
+		Dimension: DimScope, Value: string(ScopeCompliant), Candidate: candidateA(),
+		Overrode: true, Producer: "system:verify", Source: "cmd:sensei verify-admission",
+		ObservedAt: time.Unix(10, 0),
+	})
+	if s.Current(candidateA())[DimScope].Overrode {
+		t.Fatal("a scope observation projected a reviewer/audit disagreement")
+	}
+}
+
+func TestDirectlyConstructedUnknownDimensionIsNotProjected(t *testing.T) {
+	s := directly(Observation{
+		Dimension: "correctness", Value: "CERTIFIED", Candidate: candidateA(),
+		Producer: "reviewer:codex", Source: "event:review.completed/12", ObservedAt: time.Unix(10, 0),
+	})
+	if len(s.Current(candidateA())) != 0 {
+		t.Fatalf("an undefined dimension was projected: %+v", s.Current(candidateA()))
+	}
+	if len(s.Historical(candidateB())) != 0 {
+		t.Fatalf("an undefined dimension was projected as history: %+v", s.Historical(candidateB()))
+	}
+}
+
+// Projection reads; it does not edit the record it is reading.
+func TestProjectionDoesNotMutateTheRecord(t *testing.T) {
+	raw := Observation{
+		Dimension: DimAudit, Value: string(AuditPass), Candidate: candidateA(),
+		ObservedAt: time.Unix(10, 0),
+	}
+	s := directly(raw)
+	_ = s.Current(candidateA())
+	_ = s.Historical(candidateB())
+	if s.Observations[0].Value != string(AuditPass) || s.Observations[0].Detail != "" {
+		t.Fatalf("projection rewrote the stored observation: %+v", s.Observations[0])
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Overrode is an event, and only an observation that could carry that event may
+// assert it: sourced, a known admission dimension, holding a real admission
+// value.
+// ---------------------------------------------------------------------------
+
+func TestOverrodeRequiresProvenanceDimensionAndValue(t *testing.T) {
+	cases := []struct {
+		name string
+		obs  Observation
+		want bool
+	}{
+		{"unsourced admission", Observation{
+			Dimension: DimAdmission, Value: string(AdmissionDeferred), Candidate: candidateA(),
+			Overrode: true, ObservedAt: time.Unix(10, 0)}, false},
+		{"unsourced scope", Observation{
+			Dimension: DimScope, Value: string(ScopeCompliant), Candidate: candidateA(),
+			Overrode: true, ObservedAt: time.Unix(10, 0)}, false},
+		{"unsourced evaluator", Observation{
+			Dimension: DimEvaluator, Value: string(EvaluatorUnreachable),
+			Overrode: true, ObservedAt: time.Unix(10, 0)}, false},
+		{"unknown admission value", Observation{
+			Dimension: DimAdmission, Value: "ADMITTED_ISH", Candidate: candidateA(),
+			Overrode: true, Producer: "engine", Source: "event:gate/1", ObservedAt: time.Unix(10, 0)}, false},
+		{"unknown dimension", Observation{
+			Dimension: "correctness", Value: string(AdmissionDeferred), Candidate: candidateA(),
+			Overrode: true, Producer: "engine", Source: "event:gate/2", ObservedAt: time.Unix(10, 0)}, false},
+		{"the real disagreement", Observation{
+			Dimension: DimAdmission, Value: string(AdmissionDeferred), Candidate: candidateA(),
+			Overrode: true, Producer: "engine", Source: "event:gate/3", ObservedAt: time.Unix(10, 0)}, true},
+	}
+
+	for _, c := range cases {
+		// recorded
+		var s State
+		s.Record(c.obs)
+		if got := s.Observations[0].Overrode; got != c.want {
+			t.Fatalf("%s: recorded Overrode = %v, want %v (detail %q)", c.name, got, c.want, s.Observations[0].Detail)
+		}
+		if !c.want && !strings.Contains(s.Observations[0].Detail, overrodeNote) &&
+			!strings.Contains(s.Observations[0].Detail, unsourcedNote) &&
+			!strings.Contains(s.Observations[0].Detail, "unrecognized") {
+			t.Fatalf("%s: clearing it was not explained: %q", c.name, s.Observations[0].Detail)
+		}
+
+		// directly constructed, then projected
+		direct := directly(c.obs)
+		if got := direct.Current(candidateA())[c.obs.Dimension].Overrode; got != c.want {
+			t.Fatalf("%s: projected Overrode = %v, want %v", c.name, got, c.want)
+		}
+
+		// through a save and a load
+		dir := t.TempDir()
+		saved := State{TaskID: "t-ovr", SessionID: "s", Observations: []Observation{c.obs}}
+		if err := saved.Save(dir); err != nil {
+			t.Fatal(err)
+		}
+		loaded, _, err := Load(dir, "t-ovr")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := loaded.Observations[0].Overrode; got != c.want {
+			t.Fatalf("%s: reloaded Overrode = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
+// Historical is a projection too. An earlier candidate's record is still
+// rendered to a reader, so it must be refused on the same terms as a current
+// one -- otherwise the way to publish an unsourced verdict is to let a later
+// candidate arrive first.
+func TestHistoricalProjectionIsAlsoNormalized(t *testing.T) {
+	s := directly(Observation{
+		Dimension: DimAudit, Value: string(AuditPass), Candidate: candidateA(),
+		ObservedAt: time.Unix(10, 0),
+	})
+	hist := s.Historical(candidateB())
+	if len(hist) != 1 {
+		t.Fatalf("the earlier candidate's record was not retained: %+v", hist)
+	}
+	if hist[0].Value == string(AuditPass) {
+		t.Fatal("an unsourced AUDIT_PASS was published as history")
+	}
+	if hist[0].Value != unobserved {
+		t.Fatalf("history projected %q", hist[0].Value)
 	}
 }
