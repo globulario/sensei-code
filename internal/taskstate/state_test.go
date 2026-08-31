@@ -2,6 +2,7 @@ package taskstate
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -210,5 +211,297 @@ func TestEmptyOpenListSaysSoRatherThanImplyingDone(t *testing.T) {
 	}
 	if !strings.Contains(out, "before assuming it is done") {
 		t.Fatal("an empty findings list implied the work was finished")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Run dimensions.
+// ---------------------------------------------------------------------------
+
+func candidateA() CandidateIdentity {
+	return CandidateIdentity{BaseSHA: "76dcea91d867", DiffDigest: "aebb428c68ab"}
+}
+
+func candidateB() CandidateIdentity {
+	return CandidateIdentity{BaseSHA: "76dcea91d867", DiffDigest: "db93955b9e3e"}
+}
+
+func sourced(dim Dimension, value string, c CandidateIdentity, at time.Time) Observation {
+	return Observation{
+		Dimension: dim, Value: value, Candidate: c,
+		Producer: "reviewer:codex", Source: "event:review.completed/1", ObservedAt: at,
+	}
+}
+
+// An observation without a producer or a source is an assertion, not a
+// measurement. It must not enter the record as knowledge, and the omission must
+// be visible rather than silently dropped.
+func TestUnsourcedObservationBecomesUnobserved(t *testing.T) {
+	var s State
+	s.Record(Observation{Dimension: DimReview, Value: string(ReviewAccept), Candidate: candidateA()})
+	got := s.Observations[0]
+	if got.Value != unobserved {
+		t.Fatalf("unsourced observation was recorded as %q", got.Value)
+	}
+	if !strings.Contains(got.Detail, "unsourced") || !strings.Contains(got.Detail, "ACCEPT") {
+		t.Fatalf("detail does not name the omission or keep the value: %q", got.Detail)
+	}
+}
+
+// A value this build does not know is not a value it may act on. It becomes
+// unobserved and keeps the original, so a future member cannot read as a
+// present one and cannot vanish either.
+func TestUnknownVocabularyValueBecomesUnobservedAndKeepsTheOriginal(t *testing.T) {
+	var s State
+	s.Record(Observation{
+		Dimension: DimAudit, Value: "AUDIT_PROBABLY_FINE", Candidate: candidateA(),
+		Producer: "sensei:audit", Source: "event:candidate.audited/9",
+	})
+	got := s.Observations[0]
+	if got.Value != unobserved {
+		t.Fatalf("unknown value was accepted as %q", got.Value)
+	}
+	if !strings.Contains(got.Detail, "AUDIT_PROBABLY_FINE") {
+		t.Fatalf("original value was lost: %q", got.Detail)
+	}
+}
+
+// An observation that names no candidate may be recorded -- some facts are
+// about the run -- but it can never become a current claim ABOUT a candidate.
+func TestCandidatelessObservationIsNeverCurrent(t *testing.T) {
+	var s State
+	s.Record(Observation{
+		Dimension: DimReview, Value: string(ReviewAccept),
+		Producer: "reviewer:claude", Source: "event:review.completed/2",
+	})
+	if o, ok := s.Current(candidateA())[DimReview]; ok {
+		t.Fatalf("an observation with no candidate identity became current: %+v", o)
+	}
+}
+
+// Identity is content, not custody: the same diff at the same base is the same
+// candidate whether it is committed or not, and a preservation commit that
+// changes only the commit SHA must not change selection.
+func TestIdentityIsContentNotCustody(t *testing.T) {
+	var s State
+	uncommitted := sourced(DimReview, string(ReviewAccept), candidateA(), time.Unix(10, 0))
+	s.Record(uncommitted)
+	preserved := sourced(DimScope, string(ScopeCompliant), candidateA(), time.Unix(20, 0))
+	preserved.CommitSHA = "b26f46c81ce9" // custody changed, content did not
+	s.Record(preserved)
+
+	current := s.Current(candidateA())
+	if current[DimReview].Value != string(ReviewAccept) {
+		t.Fatalf("the uncommitted observation was not selected: %+v", current[DimReview])
+	}
+	if current[DimScope].Value != string(ScopeCompliant) {
+		t.Fatalf("a commit SHA changed selection: %+v", current[DimScope])
+	}
+}
+
+// A later candidate makes an earlier candidate's observations historical, not
+// false. Selection must not carry candidate A's failure onto candidate B, and
+// must not delete it either.
+func TestEarlierCandidateStaysHistorical(t *testing.T) {
+	var s State
+	s.Record(sourced(DimImplementation, string(ImplementationRefused), candidateA(), time.Unix(10, 0)))
+	s.Record(sourced(DimReview, string(ReviewAccept), candidateB(), time.Unix(20, 0)))
+
+	current := s.Current(candidateB())
+	if _, ok := current[DimImplementation]; ok {
+		t.Fatal("candidate A's implementation state described candidate B")
+	}
+	if current[DimReview].Value != string(ReviewAccept) {
+		t.Fatalf("candidate B's own verdict was not selected: %+v", current[DimReview])
+	}
+	hist := s.Historical(candidateB())
+	if len(hist) != 1 || hist[0].Value != string(ImplementationRefused) {
+		t.Fatalf("candidate A's record was not retained as history: %+v", hist)
+	}
+}
+
+// Evaluator availability is a fact about the run, so it is selected whatever
+// the candidate -- and it is never derived from the audit state, which is a
+// separate dimension answering a different question.
+func TestEvaluatorIsRunScopedAndSeparateFromAudit(t *testing.T) {
+	var s State
+	s.Record(Observation{
+		Dimension: DimEvaluator, Value: string(EvaluatorUnreachable),
+		Producer: "system:client", Source: "cmd:awareness_preflight", ObservedAt: time.Unix(10, 0),
+	})
+	s.Record(sourced(DimAudit, string(AuditCannotVerify), candidateA(), time.Unix(20, 0)))
+
+	current := s.Current(candidateA())
+	if current[DimEvaluator].Value != string(EvaluatorUnreachable) {
+		t.Fatalf("a run-scoped observation was not selected: %+v", current[DimEvaluator])
+	}
+	if current[DimAudit].Value != string(AuditCannotVerify) {
+		t.Fatalf("audit state changed: %+v", current[DimAudit])
+	}
+	if current[DimImplementation].Value != "" {
+		t.Fatalf("an unreachable evaluator wrote an implementation state: %+v", current[DimImplementation])
+	}
+}
+
+// The disagreement is the interesting event: a reviewer accepted, the audit
+// could not certify, and admission was therefore deferred rather than refused.
+// All three, and the override, must survive a save and reload.
+func TestOverrodeAndDisagreementSurviveReload(t *testing.T) {
+	dir := t.TempDir()
+	s := State{TaskID: "t-1", SessionID: "s-1", Phase: Reviewing}
+	s.Record(sourced(DimReview, string(ReviewAccept), candidateA(), time.Unix(10, 0)))
+	s.Record(sourced(DimAudit, string(AuditCannotVerify), candidateA(), time.Unix(11, 0)))
+	deferred := sourced(DimAdmission, string(AdmissionDeferred), candidateA(), time.Unix(12, 0))
+	deferred.Overrode = true
+	deferred.Detail = "Sensei audit could not verify this candidate"
+	s.Record(deferred)
+	if err := s.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, ok, err := Load(dir, "t-1")
+	if err != nil || !ok {
+		t.Fatalf("load: %v ok=%v", err, ok)
+	}
+	current := loaded.Current(candidateA())
+	if current[DimReview].Value != string(ReviewAccept) {
+		t.Fatalf("reviewer verdict lost: %+v", current[DimReview])
+	}
+	if current[DimAudit].Value != string(AuditCannotVerify) {
+		t.Fatalf("audit state lost: %+v", current[DimAudit])
+	}
+	if current[DimAdmission].Value != string(AdmissionDeferred) {
+		t.Fatalf("admission was not deferred: %+v", current[DimAdmission])
+	}
+	if !current[DimAdmission].Overrode {
+		t.Fatal("Overrode did not survive serialization: the disagreement was silently resolved")
+	}
+}
+
+// A version 1 session predates every dimension. Every one of them must read as
+// unobserved, and none may default to success.
+func TestV1SessionReadsAsUnobserved(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-v1", `{"version":1,"task_id":"t-v1","session_id":"s","phase":"reviewing","evidence":{"diff_bytes":10}}`)
+
+	loaded, ok, err := Load(dir, "t-v1")
+	if err != nil || !ok {
+		t.Fatalf("a v1 session did not load: %v ok=%v", err, ok)
+	}
+	if loaded.Version != Version {
+		t.Fatalf("v1 was not projected to %d: %d", Version, loaded.Version)
+	}
+	for _, d := range []Dimension{DimImplementation, DimReview, DimAudit, DimEvaluator, DimScope, DimAdmission} {
+		if o, present := loaded.Current(candidateA())[d]; present && o.Value != unobserved {
+			t.Fatalf("%s defaulted to %q on a session that never observed it", d, o.Value)
+		}
+	}
+}
+
+// Reading is not writing. Inspecting an old session must leave it exactly as it
+// was found, or inspection becomes a mutation nobody authorized.
+func TestLoadingV1WritesNothing(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-v1", `{"version":1,"task_id":"t-v1","session_id":"s","phase":"reviewing","evidence":{"audit_verdict":"pass"}}`)
+	file := filepath.Join(dir, ".sensei-code", "tasks", "t-v1.json")
+	before, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeBody, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, _, err := Load(dir, "t-v1"); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterBody, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) || string(afterBody) != string(beforeBody) {
+		t.Fatal("loading a v1 session rewrote it: reading must not be a write")
+	}
+}
+
+// A version this build does not know is not an old version. Guessing at it is
+// how a future shape gets read as a present one, so it is refused.
+func TestUnknownFutureVersionIsRefusedNotUpgraded(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-v3", `{"version":3,"task_id":"t-v3","session_id":"s"}`)
+	_, ok, err := Load(dir, "t-v3")
+	if err == nil {
+		t.Fatal("a future version was accepted")
+	}
+	if ok {
+		t.Fatal("a future version reported a usable state")
+	}
+	if !strings.Contains(err.Error(), "version 3") {
+		t.Fatalf("refusal does not name the version it refused: %v", err)
+	}
+}
+
+// A legacy audit verdict is translated only where the mapping is exact, and the
+// result is stamped as migrated so it is never mistaken for something this
+// version observed. An unrecognized one keeps its original string.
+func TestV1AuditVerdictProjectionCarriesItsProvenance(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-map", `{"version":1,"task_id":"t-map","session_id":"s","evidence":{"audit_verdict":"cannot_verify"}}`)
+	mapped, _, err := Load(dir, "t-map")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(mapped.Observations) != 1 {
+		t.Fatalf("expected one projected observation, got %+v", mapped.Observations)
+	}
+	if got := mapped.Observations[0]; got.Value != string(AuditCannotVerify) ||
+		got.Producer != "migration:v1" || got.Source != "taskstate.v1 Evidence.AuditVerdict" {
+		t.Fatalf("projection lost its provenance or its value: %+v", got)
+	}
+
+	writeV1(t, dir, "t-odd", `{"version":1,"task_id":"t-odd","session_id":"s","evidence":{"audit_verdict":"probably ok"}}`)
+	odd, _, err := Load(dir, "t-odd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := odd.Observations[0]
+	if got.Value != unobserved {
+		t.Fatalf("an unrecognized legacy verdict was translated to %q", got.Value)
+	}
+	if !strings.Contains(got.Detail, "probably ok") {
+		t.Fatalf("the original legacy string was discarded: %q", got.Detail)
+	}
+}
+
+func writeV1(t *testing.T, repoRoot, taskID, body string) {
+	t.Helper()
+	dir := filepath.Join(repoRoot, ".sensei-code", "tasks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, taskID+".json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Identity is the diff AND the base it was derived from. The same change
+// applied to a different base is a different candidate, and observations about
+// one must never be selected for the other.
+func TestSameDiffOnADifferentBaseIsADifferentCandidate(t *testing.T) {
+	rebased := CandidateIdentity{BaseSHA: "0000000rebase", DiffDigest: candidateA().DiffDigest}
+	if candidateA().Equal(rebased) {
+		t.Fatal("the same diff at a different base compared equal: the base is not part of the identity")
+	}
+
+	var s State
+	s.Record(sourced(DimReview, string(ReviewAccept), candidateA(), time.Unix(10, 0)))
+	if o, ok := s.Current(rebased)[DimReview]; ok {
+		t.Fatalf("a verdict about another base was selected for this candidate: %+v", o)
 	}
 }
