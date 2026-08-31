@@ -145,3 +145,51 @@ failure_modes:
     evidence:
       - 'live preflight over [internal/workflow/engine.go, internal/workflow/zz_not_in_graph.go] on graph 42e6e12c: status OK, sufficient=true, direct_anchor_count=3, file_count=2, indexed_file_count=1'
       - 'same over [engine.go, internal/workflow/relevance.go] (real, unindexed): identical counts; relevance.go alone: sufficient=false indexed=0'
+  - id: failure.sensei_code.terminal_summary_contradicts_per_worker_outcomes
+    title: Terminal aggregation loses per-worker outcome attribution and can contradict an accepted review
+    severity: high
+    description: The run's terminal message asserts one aggregate cause -- 'no bounded implementor produced an acceptable candidate' -- built from per-worker lane states that were individually truthful and jointly contradicted it. Candidate acceptance, evaluator availability, scope compliance, admission, and correctness certification are INDEPENDENT dimensions; collapsing them into one summary states a cause the run did not establish. A terminal summary must be derived from the latest per-worker states, and must name which dimension ended the run. Evaluator unavailability must DEFER admission, never rewrite an accepted candidate as unacceptable.
+    protects:
+      files:
+        - internal/workflow/engine.go
+    related_invariants:
+      - sensei_code.report.states_what_it_does_not_establish
+      - sensei_code.evidence.counts_carry_their_provenance
+    evidence:
+      - 'witness B session-20260831T003000, candidate aebb428c68ab: reviewer returned ACCEPT at 01:25:30 after verifying the candidate against internal/sensei/mcp.go source behaviour'
+      - same instant, run.receipt INCOMPLETE / FAILED with summary 'no bounded implementor produced an acceptable candidate'
+      - 'the per-worker detail was truthful: the codex lane read ''Sensei could not verify this candidate and no edit to it would change that ... reason codes: evaluator_unavailable'' -- correct attribution to an environmental condition, discarded by the summary above it'
+      - 'verification-only rerun against frozen candidate b26f46c81ce9e8ff884e95d85ff8a9765e02e574: sensei gate --enforce PASS 0 blocking, verify-admission scope_compliant -- the candidate was acceptable while the run reported that none was'
+  - id: failure.sensei_code.stale_lane_failure_reported_as_current_outcome
+    title: Cycle accounting carries a stale lane failure across later revisions and an acceptance
+    severity: high
+    description: 'A per-worker lane verdict is frozen when it is first reached and is quoted at terminal time as the current outcome, even after the candidate has been revised and independently accepted. The identical-diff detector is the usual source: it reads only the diff digest, so a cycle whose CORRECT answer produced no diff -- a returned unexecuted request, an out-of-envelope deliverable, a refusal to edit without admission -- is recorded as the worker ignoring feedback. A lane verdict must be re-evaluated against the newest candidate and review, or explicitly marked historical, before it may appear in a terminal message.'
+    protects:
+      files:
+        - internal/workflow/engine.go
+    related_invariants:
+      - sensei_code.report.states_what_it_does_not_establish
+      - sensei_code.evidence.counts_carry_their_provenance
+    evidence:
+      - 'witness B: the claude lane verdict was recorded at 01:02:51Z and quotes the 00:58:46Z review, whose only blocking finding required a deliverable that cannot appear in a diff (return an unexecuted sensei propose request, do not edit docs/awareness); the worker complied exactly and reported ''What this cycle changed: Nothing in the code'''
+      - codex independently reached the same correct answer at 01:04 and was recorded the same way -- two implementers, one finding, both labelled non-convergent
+      - by 01:25 the candidate had been revised twice more (14464 -> 16166 -> 16593 bytes) and accepted; the terminal message still quoted the 01:02 lane state
+      - 'witness A precedent, session-20260830T222300: both lanes refused to edit for lack of admission -- codex said ''Blocked before mutation: Sensei workspace status reports task_identity: not_requested'' -- and both were reported as producing an identical diff after being asked to revise'
+  - id: failure.sensei_code.configured_evaluator_endpoint_has_no_supervised_process
+    title: Admission is deferred by an unserved configured evaluator endpoint
+    severity: high
+    description: DEPLOYMENT AND AVAILABILITY, not engine semantics. .sensei/config.yaml names the evaluator at localhost:10122 and no supervised process serves it, so every Sensei call spends its first hop on a refused address and scoped calls fall back to an endpoint that cancels them. Diff audit then returns evaluator_unavailable and admission cannot be established. Evaluator unavailability must DEFER admission -- it must not be repaired by weakening the fail-closed gate, and must not be repaired by silently changing the authority referent to whichever endpoint happens to answer. Scope compliance is not correctness certification, and neither is a reachable evaluator.
+    protects:
+      files:
+        - .sensei/config.yaml
+    related_invariants:
+      - sensei_code.sensei_boundary.refusal_carries_its_reason
+      - sensei_code.admission.the_chain_is_senseis_and_only_it_establishes_admission
+    evidence:
+      - 'witness B 01:19:30Z, diff audit of the candidate that was accepted six minutes later: decision cannot_verify, availability cannot_verify, findings_count 0 -- silence, not a pass'
+      - 'the terminal message at 01:25:30Z named the cause: ''Sensei audit could not verify this candidate and no edit to it would change that ... reason codes: evaluator_unavailable, evaluator_unavailable, evaluator_unavailable ... awareness-graph transport failed on all configured addresses: localhost:10122: connection refused; localhost:10120: stream terminated by RST_STREAM with error code: CANCEL; localhost:9090: context deadline exceeded'''
+      - the only serving instance was systemd awg-awareness-graph.service on :10120, configured for a DIFFERENT repository (-home-domain github.com/globulario/services, -awareness-dir services/docs/awareness, -no-seed)
+      - 'that unit does not start at boot: systemd finds an ordering cycle awg-awareness-graph -> awg-oxigraph -> default.target and deletes its start job'
+      - 'WORKING REPAIR: a second awareness-graph on :10122 with flags identical to the :10120 unit; workspace status then reports composition complete, coverage sufficient, no limitations, and sensei gate --enforce verifies'
+      - 'REPAIR THAT BREAKS CERTIFICATION: an instance on :10122 carrying sensei-code''s own marker and home domain -- its Metadata RPC stalls and workspace composition reads unavailable'
+      - 'a preservation commit of a candidate changes custody without changing content, and can invalidate workspace-bound evidence: verify-admission returned admission.verify.base_revision_changed until the original base plus uncommitted three-file diff was reconstructed'
