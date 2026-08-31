@@ -560,3 +560,207 @@ func TestOverrodeIsLegalOnlyOnAdmission(t *testing.T) {
 		t.Fatal("the disagreement was dropped from the observation that represents it")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Persisted observations are not trusted.
+//
+// Record normalizes what this process produces, which says nothing about what a
+// FILE contains. A task state can be hand-edited, written by another build, or
+// serialized directly, and an unsourced AUDIT_PASS on disk is exactly as false
+// as one in memory.
+// ---------------------------------------------------------------------------
+
+// writeV2 writes a task state file with a raw observations array, bypassing
+// Record entirely -- which is precisely the path a corrupt file takes.
+func writeV2(t *testing.T, repoRoot, taskID, observations string) string {
+	t.Helper()
+	dir := filepath.Join(repoRoot, ".sensei-code", "tasks")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := filepath.Join(dir, taskID+".json")
+	body := `{"version":2,"task_id":"` + taskID + `","session_id":"s","observations":[` + observations + `]}`
+	if err := os.WriteFile(file, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return file
+}
+
+func TestPersistedUnsourcedObservationIsNotServedAsEvidence(t *testing.T) {
+	dir := t.TempDir()
+	writeV2(t, dir, "t-unsourced", `{"dimension":"audit","value":"AUDIT_PASS",
+		"candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},
+		"observed_at":"2026-08-31T01:00:00Z"}`)
+
+	loaded, _, err := Load(dir, "t-unsourced")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.Current(candidateA())[DimAudit]
+	if got.Value == string(AuditPass) {
+		t.Fatal("a file asserted AUDIT_PASS with no producer or source and it was served as evidence")
+	}
+	if got.Value != unobserved {
+		t.Fatalf("value = %q, want %q", got.Value, unobserved)
+	}
+	if !strings.Contains(got.Detail, "unsourced") || !strings.Contains(got.Detail, "AUDIT_PASS") {
+		t.Fatalf("the refusal did not name what it refused: %q", got.Detail)
+	}
+}
+
+func TestPersistedUnknownValueBecomesUnobserved(t *testing.T) {
+	dir := t.TempDir()
+	writeV2(t, dir, "t-odd", `{"dimension":"review","value":"ACCEPT_WITH_VIBES",
+		"candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},
+		"producer":"reviewer:codex","source":"event:review.completed/3",
+		"observed_at":"2026-08-31T01:00:00Z"}`)
+
+	loaded, _, err := Load(dir, "t-odd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.Current(candidateA())[DimReview]
+	if got.Value != unobserved {
+		t.Fatalf("an unknown persisted verdict was served as %q", got.Value)
+	}
+	if !strings.Contains(got.Detail, "ACCEPT_WITH_VIBES") {
+		t.Fatalf("the original value was discarded: %q", got.Detail)
+	}
+}
+
+func TestPersistedIllegalOverrodeIsCleared(t *testing.T) {
+	dir := t.TempDir()
+	writeV2(t, dir, "t-ovr", `{"dimension":"scope","value":"COMPLIANT","overrode":true,
+		"candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},
+		"producer":"system:verify","source":"cmd:sensei verify-admission",
+		"observed_at":"2026-08-31T01:00:00Z"}`)
+
+	loaded, _, err := Load(dir, "t-ovr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := loaded.Current(candidateA())[DimScope]
+	if got.Overrode {
+		t.Fatal("a persisted scope observation asserted a reviewer/audit disagreement")
+	}
+	if !strings.Contains(got.Detail, "overrode is meaningful only on admission") {
+		t.Fatalf("clearing it was not explained: %q", got.Detail)
+	}
+}
+
+func TestPersistedUnknownDimensionCannotBeProjected(t *testing.T) {
+	dir := t.TempDir()
+	writeV2(t, dir, "t-dim", `{"dimension":"correctness","value":"CERTIFIED",
+		"candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},
+		"producer":"reviewer:codex","source":"event:review.completed/4",
+		"observed_at":"2026-08-31T01:00:00Z"}`)
+
+	loaded, _, err := Load(dir, "t-dim")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Observations) != 1 {
+		t.Fatalf("the record dropped the observation: %+v", loaded.Observations)
+	}
+	if !strings.Contains(loaded.Observations[0].Detail, "correctness") {
+		t.Fatalf("the original dimension name was lost: %q", loaded.Observations[0].Detail)
+	}
+	if len(loaded.Current(candidateA())) != 0 {
+		t.Fatalf("an undefined dimension entered the current projection: %+v", loaded.Current(candidateA()))
+	}
+	if len(loaded.Historical(candidateB())) != 0 {
+		t.Fatalf("an undefined dimension was classified as history: %+v", loaded.Historical(candidateB()))
+	}
+}
+
+// Refusing to serve what a file claims must not repair the file. Reading is not
+// writing, and it is not writing here either -- including the order and the
+// timestamps of what was read.
+func TestLoadNormalizationWritesNothingAndKeepsOrder(t *testing.T) {
+	dir := t.TempDir()
+	file := writeV2(t, dir, "t-order",
+		`{"dimension":"audit","value":"AUDIT_PASS","candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},"observed_at":"2026-08-31T01:00:00Z"},`+
+			`{"dimension":"review","value":"ACCEPT","candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},"producer":"reviewer:codex","source":"event:review.completed/5","observed_at":"2026-08-31T02:00:00Z"}`)
+	before, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeBody, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, _, err := Load(dir, "t-order")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := os.Stat(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	afterBody, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(before.ModTime()) || string(afterBody) != string(beforeBody) {
+		t.Fatal("load-time normalization rewrote the file")
+	}
+	if len(loaded.Observations) != 2 ||
+		loaded.Observations[0].Dimension != DimAudit ||
+		loaded.Observations[1].Dimension != DimReview {
+		t.Fatalf("append order changed: %+v", loaded.Observations)
+	}
+	if !loaded.Observations[0].ObservedAt.Equal(time.Date(2026, 8, 31, 1, 0, 0, 0, time.UTC)) ||
+		!loaded.Observations[1].ObservedAt.Equal(time.Date(2026, 8, 31, 2, 0, 0, 0, time.UTC)) {
+		t.Fatalf("timestamps were altered: %+v", loaded.Observations)
+	}
+}
+
+// Normalization runs on record AND on load, so it must be idempotent: a stored
+// explanation must not gain a second copy of itself every time the file is read.
+func TestLoadNormalizationIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	s := State{TaskID: "t-idem", SessionID: "s"}
+	s.Record(Observation{Dimension: DimAudit, Value: "AUDIT_PASS", Candidate: candidateA()})
+	if err := s.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	first, _, err := Load(dir, "t-idem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	second, _, err := Load(dir, "t-idem")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Observations[0].Detail != second.Observations[0].Detail {
+		t.Fatalf("detail grew on a second pass:\n first: %q\nsecond: %q",
+			first.Observations[0].Detail, second.Observations[0].Detail)
+	}
+	if strings.Count(second.Observations[0].Detail, "unsourced") != 1 {
+		t.Fatalf("the explanation was duplicated: %q", second.Observations[0].Detail)
+	}
+}
+
+// A version 1 file has no observations of its own, but a file is whatever it
+// says it is: one can carry both an old version number and an observations
+// array. The projection must not be a way in past normalization.
+func TestV1FileCarryingObservationsIsAlsoNormalized(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-v1-obs", `{"version":1,"task_id":"t-v1-obs","session_id":"s",
+		"observations":[{"dimension":"audit","value":"AUDIT_PASS",
+		"candidate":{"base_sha":"76dcea91d867","diff_digest":"aebb428c68ab"},
+		"observed_at":"2026-08-31T01:00:00Z"}]}`)
+
+	loaded, _, err := Load(dir, "t-v1-obs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := loaded.Current(candidateA())[DimAudit]; got.Value == string(AuditPass) {
+		t.Fatal("an unsourced AUDIT_PASS reached the projection through the v1 path")
+	}
+}

@@ -167,14 +167,34 @@ func Load(repoRoot, taskID string) (State, bool, error) {
 	// an unrecognized shape is not an old shape, and reading must never write.
 	switch s.Version {
 	case Version:
-		return s, true, nil
+		return normalizePersisted(s), true, nil
 	case 1:
-		return upgradeFromV1(s), true, nil
+		return normalizePersisted(upgradeFromV1(s)), true, nil
 	default:
 		return State{}, false, fmt.Errorf(
 			"task state for %s is version %d, which this build does not support (it understands %d, and upgrades 1)",
 			taskID, s.Version, Version)
 	}
+}
+
+// normalizePersisted applies the record's own rules to observations that came
+// from disk.
+//
+// Record normalizes what this process produces, which says nothing about what a
+// file contains: a task state can be hand-edited, written by another build, or
+// serialized directly, and an unsourced AUDIT_PASS in a file is exactly as
+// false as one in memory. Loading is where that is caught, because everything
+// downstream reads the loaded state and would otherwise treat it as governance
+// evidence this process never measured.
+//
+// It changes nothing else: order and timestamps are preserved, the malformed
+// original is kept in Detail, and NOTHING IS WRITTEN BACK -- reading a corrupt
+// file must not repair the file, only refuse to serve what it claims.
+func normalizePersisted(s State) State {
+	for i := range s.Observations {
+		s.Observations[i] = s.Observations[i].normalize()
+	}
+	return s
 }
 
 // RecordWorker appends a worker, keeping the order and avoiding a duplicate
@@ -542,13 +562,33 @@ type Observation struct {
 	ObservedAt time.Time `json:"observed_at"`
 }
 
+// unsourcedNote marks a refusal whose message would otherwise change between
+// passes, because it quotes the value it refused.
+const unsourcedNote = "unsourced observation of"
+
+// noteOnce prepends an explanation unless it is already there. Normalization
+// runs both when an observation is recorded and when one is read back, so a
+// note that appended every time would rewrite stored Detail on each load.
+func noteOnce(detail, msg string) string {
+	if strings.Contains(detail, msg) {
+		return detail
+	}
+	return strings.TrimSpace(msg + ": " + detail)
+}
+
 // normalize applies the two refusals this model exists for: an unsourced
 // observation and an unrecognized value both become unobserved, and both say
 // so rather than disappearing.
 func (o Observation) normalize() Observation {
 	if strings.TrimSpace(o.Producer) == "" || strings.TrimSpace(o.Source) == "" {
-		o.Detail = strings.TrimSpace("unsourced observation of " + string(o.Dimension) +
-			" recording " + strconv.Quote(o.Value) + ": " + o.Detail)
+		// Keyed on the refusal, not on the value: normalization runs again on
+		// every load, and by then the value it refused is already UNOBSERVED.
+		// Noting that a second time would append a fresh sentence per read and
+		// bury the original value under the record of having removed it.
+		if !strings.Contains(o.Detail, unsourcedNote) {
+			o.Detail = strings.TrimSpace(unsourcedNote + " " + string(o.Dimension) +
+				" recording " + strconv.Quote(o.Value) + ": " + o.Detail)
+		}
 		o.Value = unobserved
 		return o
 	}
@@ -557,7 +597,7 @@ func (o Observation) normalize() Observation {
 		// The record keeps it -- something was observed and saying so is the
 		// point -- but an unrecognized dimension is not one of the six, so no
 		// governed projection may present it. See Current and Historical.
-		o.Detail = strings.TrimSpace("unrecognized dimension " + strconv.Quote(string(o.Dimension)) + ": " + o.Detail)
+		o.Detail = noteOnce(o.Detail, "unrecognized dimension "+strconv.Quote(string(o.Dimension)))
 		o.Value = unobserved
 		o.Overrode = false
 		return o
@@ -567,13 +607,13 @@ func (o Observation) normalize() Observation {
 	// let a scope or evaluator observation assert a disagreement it does not
 	// represent, so it is legal only where it has that meaning.
 	if o.Overrode && o.Dimension != DimAdmission {
-		o.Detail = strings.TrimSpace("overrode is meaningful only on " + string(DimAdmission) +
-			"; dropped from a " + string(o.Dimension) + " observation: " + o.Detail)
+		o.Detail = noteOnce(o.Detail, "overrode is meaningful only on "+string(DimAdmission)+
+			"; dropped from a "+string(o.Dimension)+" observation")
 		o.Overrode = false
 	}
 	if !members[o.Value] {
-		o.Detail = strings.TrimSpace("unrecognized value " + strconv.Quote(o.Value) +
-			" for dimension " + string(o.Dimension) + ": " + o.Detail)
+		o.Detail = noteOnce(o.Detail, "unrecognized value "+strconv.Quote(o.Value)+
+			" for dimension "+string(o.Dimension))
 		o.Value = unobserved
 	}
 	return o
