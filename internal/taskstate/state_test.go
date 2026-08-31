@@ -867,9 +867,23 @@ func TestOverrodeRequiresProvenanceDimensionAndValue(t *testing.T) {
 		{"unknown dimension", Observation{
 			Dimension: "correctness", Value: string(AdmissionDeferred), Candidate: candidateA(),
 			Overrode: true, Producer: "engine", Source: "event:gate/2", ObservedAt: time.Unix(10, 0)}, false},
-		{"the real disagreement", Observation{
+		// ADMITTED and NOT_REQUESTED are known admission values and still
+		// contradict the event: one says admission WAS established, the other
+		// that none was sought, while Overrode says something prevented it.
+		{"admission established", Observation{
+			Dimension: DimAdmission, Value: string(AdmissionAdmitted), Candidate: candidateA(),
+			Overrode: true, Producer: "engine", Source: "event:gate/4", ObservedAt: time.Unix(10, 0)}, false},
+		{"admission not requested", Observation{
+			Dimension: DimAdmission, Value: string(AdmissionNotRequested), Candidate: candidateA(),
+			Overrode: true, Producer: "engine", Source: "event:gate/5", ObservedAt: time.Unix(10, 0)}, false},
+		// The two outcomes judgeCandidate reaches when the audit does not permit
+		// acceptance: it could not verify, or it said no.
+		{"the real disagreement, deferred", Observation{
 			Dimension: DimAdmission, Value: string(AdmissionDeferred), Candidate: candidateA(),
 			Overrode: true, Producer: "engine", Source: "event:gate/3", ObservedAt: time.Unix(10, 0)}, true},
+		{"the real disagreement, refused", Observation{
+			Dimension: DimAdmission, Value: string(AdmissionRefused), Candidate: candidateA(),
+			Overrode: true, Producer: "engine", Source: "event:gate/6", ObservedAt: time.Unix(10, 0)}, true},
 	}
 
 	for _, c := range cases {

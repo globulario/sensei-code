@@ -568,7 +568,21 @@ const unsourcedNote = "unsourced observation of"
 
 // overrodeNote explains a cleared disagreement. It is one fixed sentence rather
 // than a per-case message so that normalizing twice cannot append twice.
-const overrodeNote = "overrode survives only on a sourced admission observation holding a known admission value; cleared"
+const overrodeNote = "overrode survives only on a sourced admission observation whose outcome is one admission could not reach; cleared"
+
+// overrodeCompatible enumerates the admission outcomes that CAN carry the
+// disagreement, rather than accepting any known value.
+//
+// Overrode says a reviewer accepted while the audit refused, so admission could
+// not be established. ADMITTED contradicts that -- it was established -- and
+// NOT_REQUESTED contradicts it too, since nothing was sought and so nothing was
+// prevented. What remains is the pair judgeCandidate actually reaches when
+// audit.ReviewerMayAccept() is false: DEFERRED, where the audit could not
+// verify, and REFUSED, where it said no.
+var overrodeCompatible = map[AdmissionState]bool{
+	AdmissionDeferred: true,
+	AdmissionRefused:  true,
+}
 
 // noteOnce prepends an explanation unless it is already there. Normalization
 // runs both when an observation is recorded and when one is read back, so a
@@ -635,9 +649,11 @@ func (o Observation) normalize() Observation {
 	// Overrode means one thing: a reviewer accepted while the audit refused, so
 	// admission could not be established. It may therefore survive only on an
 	// observation that could actually carry that event -- sourced, a known
-	// admission dimension, and holding a real admission value. Anything else
-	// would assert a disagreement it does not represent.
-	if o.Overrode && !(sourced && knownDimension && o.Dimension == DimAdmission && o.Value != unobserved) {
+	// admission dimension, and an outcome CONSISTENT with admission having been
+	// prevented. Accepting any known admission value let one record say both
+	// that admission was established and that something stopped it.
+	if o.Overrode && !(sourced && knownDimension && o.Dimension == DimAdmission &&
+		overrodeCompatible[AdmissionState(o.Value)]) {
 		o.Detail = noteOnce(o.Detail, overrodeNote)
 		o.Overrode = false
 	}
