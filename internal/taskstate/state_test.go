@@ -941,3 +941,50 @@ func TestHistoricalProjectionIsAlsoNormalized(t *testing.T) {
 		t.Fatalf("history projected %q", hist[0].Value)
 	}
 }
+
+// A run-scoped dimension describes the run, not a candidate. Current() selects
+// run-scoped observations whatever the candidate, so one carrying a candidate
+// identity would reach a consumer asking about a DIFFERENT candidate while its
+// own field still named the first -- evidence that contradicts itself.
+func TestRunScopedObservationCannotCarryACandidateIdentity(t *testing.T) {
+	obs := Observation{
+		Dimension: DimEvaluator, Value: string(EvaluatorUnreachable), Candidate: candidateA(),
+		Producer: "system:client", Source: "cmd:awareness_preflight", ObservedAt: time.Unix(10, 0),
+	}
+
+	// recorded
+	var s State
+	s.Record(obs)
+	if s.Observations[0].Candidate != (CandidateIdentity{}) {
+		t.Fatalf("a run-scoped observation kept a candidate identity: %+v", s.Observations[0].Candidate)
+	}
+	if !strings.Contains(s.Observations[0].Detail, candidateA().DiffDigest) {
+		t.Fatalf("what the identity said was not preserved: %q", s.Observations[0].Detail)
+	}
+	got := s.Current(candidateB())[DimEvaluator]
+	if got.Value != string(EvaluatorUnreachable) {
+		t.Fatalf("the run-scoped fact stopped being selected: %+v", got)
+	}
+	if got.Candidate != (CandidateIdentity{}) {
+		t.Fatalf("a consumer asking about B received an observation naming %+v", got.Candidate)
+	}
+
+	// directly constructed, then projected
+	if c := directly(obs).Current(candidateB())[DimEvaluator].Candidate; c != (CandidateIdentity{}) {
+		t.Fatalf("projection published a contradictory identity: %+v", c)
+	}
+
+	// persisted, then reloaded
+	dir := t.TempDir()
+	saved := State{TaskID: "t-run", SessionID: "s", Observations: []Observation{obs}}
+	if err := saved.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, _, err := Load(dir, "t-run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Observations[0].Candidate != (CandidateIdentity{}) {
+		t.Fatalf("a persisted run-scoped observation kept its candidate: %+v", loaded.Observations[0].Candidate)
+	}
+}

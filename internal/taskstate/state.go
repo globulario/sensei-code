@@ -646,6 +646,20 @@ func (o Observation) normalize() Observation {
 		o.Value = unobserved
 	}
 
+	// A run-scoped dimension describes the RUN, not a candidate. Carrying a
+	// candidate identity on one is a contradiction the projection would
+	// otherwise publish: Current(B) selects run-scoped observations whatever
+	// the candidate, so an evaluator record naming A would reach a consumer
+	// asking about B while its own field still said A. The identity is cleared
+	// and what it said is kept, because the fact that something was there is
+	// worth more than the field that could not mean anything.
+	if o.Dimension.RunScoped() && o.Candidate != (CandidateIdentity{}) {
+		o.Detail = noteOnce(o.Detail, "run-scoped "+string(o.Dimension)+
+			" observation carried candidate identity "+strconv.Quote(o.Candidate.BaseSHA+"/"+o.Candidate.DiffDigest)+
+			"; cleared, because it describes the run and not a candidate")
+		o.Candidate = CandidateIdentity{}
+	}
+
 	// Overrode means one thing: a reviewer accepted while the audit refused, so
 	// admission could not be established. It may therefore survive only on an
 	// observation that could actually carry that event -- sourced, a known
