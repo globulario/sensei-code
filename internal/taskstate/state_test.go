@@ -505,3 +505,58 @@ func TestSameDiffOnADifferentBaseIsADifferentCandidate(t *testing.T) {
 		t.Fatalf("a verdict about another base was selected for this candidate: %+v", o)
 	}
 }
+
+// The set of dimensions is closed. A name this build does not define is kept in
+// the append-only record -- something was observed and dropping it would hide
+// that -- but it must never appear in a governed projection, where a renderer
+// or a resume path could read its presence as meaningful.
+func TestUnknownDimensionIsRecordedButNeverProjected(t *testing.T) {
+	var s State
+	s.Record(Observation{
+		Dimension: "correctness", Value: "CERTIFIED", Candidate: candidateA(),
+		Producer: "reviewer:codex", Source: "event:review.completed/7",
+	})
+
+	if len(s.Observations) != 1 {
+		t.Fatalf("the observation was dropped from the record: %+v", s.Observations)
+	}
+	kept := s.Observations[0]
+	if kept.Value != unobserved {
+		t.Fatalf("an undefined dimension carried a value: %q", kept.Value)
+	}
+	if !strings.Contains(kept.Detail, "correctness") || !strings.Contains(kept.Detail, "unrecognized dimension") {
+		t.Fatalf("the original dimension name was not preserved: %q", kept.Detail)
+	}
+	if _, ok := s.Current(candidateA())["correctness"]; ok {
+		t.Fatal("an undefined dimension became a current claim")
+	}
+	if len(s.Current(candidateA())) != 0 {
+		t.Fatalf("an undefined dimension entered the current projection: %+v", s.Current(candidateA()))
+	}
+	if h := s.Historical(candidateB()); len(h) != 0 {
+		t.Fatalf("an undefined dimension was classified as candidate history: %+v", h)
+	}
+}
+
+// Overrode names one thing: a reviewer accepted while the audit refused, so
+// admission could not be established. Anywhere else it would assert a
+// disagreement the observation does not represent.
+func TestOverrodeIsLegalOnlyOnAdmission(t *testing.T) {
+	var s State
+	scope := sourced(DimScope, string(ScopeCompliant), candidateA(), time.Unix(10, 0))
+	scope.Overrode = true
+	s.Record(scope)
+	if s.Observations[0].Overrode {
+		t.Fatal("a scope observation asserted a reviewer/audit disagreement")
+	}
+	if !strings.Contains(s.Observations[0].Detail, "overrode is meaningful only on admission") {
+		t.Fatalf("dropping it was not explained: %q", s.Observations[0].Detail)
+	}
+
+	admission := sourced(DimAdmission, string(AdmissionDeferred), candidateA(), time.Unix(11, 0))
+	admission.Overrode = true
+	s.Record(admission)
+	if !s.Observations[1].Overrode {
+		t.Fatal("the disagreement was dropped from the observation that represents it")
+	}
+}

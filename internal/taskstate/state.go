@@ -356,6 +356,14 @@ const (
 	DimAdmission      Dimension = "admission"
 )
 
+// Known reports whether this is one of the six dimensions this build defines.
+// The set is closed and is read by membership: a name from a future version, or
+// a mistake, is not a dimension here, and nothing may project it as one.
+func (d Dimension) Known() bool {
+	_, ok := vocabularies[d]
+	return ok
+}
+
 // RunScoped reports whether a dimension describes the run rather than a
 // candidate. Evaluator availability is a fact about the environment during the
 // run; the rest are claims about a specific candidate and are selected by its
@@ -546,9 +554,22 @@ func (o Observation) normalize() Observation {
 	}
 	members, known := vocabularies[o.Dimension]
 	if !known {
+		// The record keeps it -- something was observed and saying so is the
+		// point -- but an unrecognized dimension is not one of the six, so no
+		// governed projection may present it. See Current and Historical.
 		o.Detail = strings.TrimSpace("unrecognized dimension " + strconv.Quote(string(o.Dimension)) + ": " + o.Detail)
 		o.Value = unobserved
+		o.Overrode = false
 		return o
+	}
+	// Overrode means one thing: a reviewer accepted while the audit refused, so
+	// admission could not be established. A free boolean on any dimension would
+	// let a scope or evaluator observation assert a disagreement it does not
+	// represent, so it is legal only where it has that meaning.
+	if o.Overrode && o.Dimension != DimAdmission {
+		o.Detail = strings.TrimSpace("overrode is meaningful only on " + string(DimAdmission) +
+			"; dropped from a " + string(o.Dimension) + " observation: " + o.Detail)
+		o.Overrode = false
 	}
 	if !members[o.Value] {
 		o.Detail = strings.TrimSpace("unrecognized value " + strconv.Quote(o.Value) +
@@ -582,6 +603,9 @@ func (s *State) Record(o Observation) {
 func (s State) Current(candidate CandidateIdentity) map[Dimension]Observation {
 	current := map[Dimension]Observation{}
 	for _, o := range s.Observations {
+		if !o.Dimension.Known() {
+			continue
+		}
 		switch {
 		case o.Dimension.RunScoped():
 		case !candidate.Known() || !o.Candidate.Equal(candidate):
@@ -601,7 +625,7 @@ func (s State) Current(candidate CandidateIdentity) map[Dimension]Observation {
 func (s State) Historical(candidate CandidateIdentity) []Observation {
 	var out []Observation
 	for _, o := range s.Observations {
-		if o.Dimension.RunScoped() {
+		if !o.Dimension.Known() || o.Dimension.RunScoped() {
 			continue
 		}
 		if o.Candidate.Known() && !o.Candidate.Equal(candidate) {
