@@ -194,3 +194,18 @@ failure_modes:
       - 'WORKING REPAIR: a second awareness-graph on :10122 with flags identical to the :10120 unit; workspace status then reports composition complete, coverage sufficient, no limitations, and sensei gate --enforce verifies'
       - 'REPAIR THAT BREAKS CERTIFICATION: an instance on :10122 carrying sensei-code''s own marker and home domain -- its Metadata RPC stalls and workspace composition reads unavailable'
       - 'a preservation commit of a candidate changes custody without changing content, and can invalidate workspace-bound evidence: verify-admission returned admission.verify.base_revision_changed until the original base plus uncommitted three-file diff was reconstructed'
+  - id: failure.sensei_code.client_deadline_reported_as_backend_unavailability
+    title: A scoped-preflight deadline expiry is reported as backend unavailability
+    severity: high
+    description: 'The client reports ''preflight unavailable: awareness-graph backend is unreachable; this is not an empty/no-guidance result'' for a call that the evaluator answers correctly, deterministically, just after the client''s budget. Reachability and latency are different facts and must not share one message. The reporting path must distinguish at least five outcomes: connection refused or otherwise unreachable; transport reset; CLIENT DEADLINE EXCEEDED; server-declared refusal; and success. Raising the timeout without correcting the classification only hides the false attribution until a larger envelope crosses the new threshold.'
+    protects:
+      files:
+        - internal/sensei/mcp.go
+    related_invariants:
+      - sensei_code.sensei_boundary.refusal_carries_its_reason
+      - sensei_code.evidence.counts_carry_their_provenance
+    evidence:
+      - 'measured 2026-08-31 with both evaluators serving, oxigraph answering ASK in 10ms and load average 0.8: an identical scoped preflight over the same six files succeeds from sensei preflight -addr localhost:10122 in 7.6s, repeatably, warm or cold'
+      - 2 files 2.7s, 6 files 7.6s; witness B ran a 3-file envelope at roughly 4s and its scoped preflights succeeded, so the budget lies between those
+      - 'the run''s message named it unreachable on all three addresses: ''localhost:10122: stream terminated by RST_STREAM with error code: CANCEL; localhost:10120: context deadline exceeded'' -- a cancel issued by the client and a deadline of its own, reported as the backend''s absence'
+      - 'consequence: an envelope of about six files cannot currently be governed on this machine, which silently pushes work toward smaller envelopes for a reason nobody chose'
