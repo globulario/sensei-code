@@ -27,10 +27,16 @@ it by port instead (section 3a).
 
 ## Files
 
+All paths below are relative to this directory
+(`docs/work/evaluator-availability-repair/`), so the commands can be run as
+written from it. An earlier revision wrote `<DRAFT>/` and `<DRAFT>/drop-ins/`,
+which matched neither the layout nor each other -- a reviewed procedure that
+could not install the reviewed files.
+
 | draft | install path |
 |---|---|
-| `awg-awareness-graph-10122.service` | `~/.config/systemd/user/awg-awareness-graph-10122.service` |
-| `drop-ins/awg-oxigraph.service.d__10-break-ordering-cycle.conf` | `~/.config/systemd/user/awg-oxigraph.service.d/10-break-ordering-cycle.conf` |
+| `units/awg-awareness-graph-10122.service` | `~/.config/systemd/user/awg-awareness-graph-10122.service` |
+| `units/awg-oxigraph.service.d__10-break-ordering-cycle.conf` | `~/.config/systemd/user/awg-oxigraph.service.d/10-break-ordering-cycle.conf` |
 
 INSTALL EXACTLY THOSE TWO FILES. A third finding (the :10120 unit's
 StartLimit* keys sitting in [Service], where systemd ignores them) is written up
@@ -41,7 +47,7 @@ produced the behaviour.
 ## 1. Review BEFORE installing (reads only)
 
     # syntax + semantics of the draft, from the scratchpad copy
-    systemd-analyze --user verify <DRAFT>/awg-awareness-graph-10122.service
+    systemd-analyze --user verify units/awg-awareness-graph-10122.service
 
     # the cycle as it stands today
     systemctl --user list-dependencies default.target | grep -i awg
@@ -51,8 +57,8 @@ produced the behaviour.
 ## 2. Install, then inspect the EFFECTIVE units before starting anything
 
     mkdir -p ~/.config/systemd/user/awg-oxigraph.service.d
-    cp <DRAFT>/awg-awareness-graph-10122.service ~/.config/systemd/user/
-    cp <DRAFT>/drop-ins/awg-oxigraph.service.d__10-break-ordering-cycle.conf \
+    cp units/awg-awareness-graph-10122.service ~/.config/systemd/user/
+    cp units/awg-oxigraph.service.d__10-break-ordering-cycle.conf \
        ~/.config/systemd/user/awg-oxigraph.service.d/10-break-ordering-cycle.conf
     systemctl --user daemon-reload
 
@@ -120,14 +126,43 @@ Identify it by PORT, never by a recorded PID (see the note above):
 ## 5. Restart behaviour
 
     systemctl --user restart awg-awareness-graph-10122.service
-    # repeat section 4; then prove the retry bound is real:
-    systemctl --user stop awg-oxigraph.service
-    systemctl --user start awg-awareness-graph-10122.service   # ExecStartPre must fail loudly
-    journalctl --user -u awg-awareness-graph-10122.service -n 20 --no-pager
-    #   expect the named reason "oxigraph did not answer ..." and a FAILED unit,
-    #   not an eternally activating one
+    # repeat section 4.
+
+### The negative test, corrected
+
+An earlier revision said: stop Oxigraph, then start the evaluator, and expect
+ExecStartPre to fail with "oxigraph did not answer". THAT EXPERIMENT DOES NOT
+CREATE ITS OWN NEGATIVE CONDITION. The unit declares
+`Requires=awg-oxigraph.service`, so starting it makes systemd START OXIGRAPH
+FIRST; by the time ExecStartPre runs, the endpoint answers and the guard
+passes. The step would have been recorded as a passing negative control while
+never once exercising the failure path -- a false proof, not a weak one.
+
+Two separate checks, each of which actually creates the condition it names:
+
+    # (a) the guard's own behaviour, exercised directly against a dead port.
+    # Nothing is stopped and no unit is involved, so Requires= cannot rescue it.
+    /bin/bash -lc 'i=0; while [ $i -lt 3 ]; do /usr/bin/curl -sS -f -X POST \
+      -H "Content-Type: application/sparql-query" --data "ASK {}" \
+      "http://127.0.0.1:9/query" >/dev/null && exit 0; i=$((i+1)); sleep 1; done; \
+      echo "oxigraph did not answer at http://127.0.0.1:9/query within 3s" >&2; exit 1'
+    echo "exit=$?"    # expect exit=1 and the named reason on stderr
+
+    # (b) the unit's behaviour when the dependency genuinely cannot start.
+    # Masking is what makes the dependency unsatisfiable; stopping does not.
+    systemctl --user mask awg-oxigraph.service
+    systemctl --user start awg-awareness-graph-10122.service   # expect failure
+    systemctl --user is-active awg-awareness-graph-10122.service   # NOT "activating"
+    systemctl --user status awg-awareness-graph-10122.service --no-pager | head -20
+    systemctl --user unmask awg-oxigraph.service
     systemctl --user start awg-oxigraph.service
     systemctl --user start awg-awareness-graph-10122.service
+
+(a) proves the guard reports a named reason rather than hanging. (b) proves the
+unit reaches a terminal `failed` state a human can see, rather than sitting in
+`activating` forever. Neither claims to prove the other, and (b) fails on the
+DEPENDENCY, not on ExecStartPre -- stated because the distinction is exactly
+what the earlier step blurred.
 
 ## 6. Reboot checklist — the only thing that closes the failure mode
 
