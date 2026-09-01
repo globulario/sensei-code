@@ -262,11 +262,15 @@ invariants:
     description: "Capability flags read as guarantees. When push is not granted a pre-push hook is installed and the worker's git is pointed at it, so git refuses the push rather than the worker being asked not to. The guard lives outside the candidate so it cannot be committed into the change it protects."
     protects:
       files:
-        - internal/gitguard/
-        - internal/gitguard/gitguard.go
+        - internal/broker/
+        - internal/broker/broker.go
     required_tests:
-      - internal/gitguard/gitguard_test.go:TestGuardActuallyRefusesAPush
-      - internal/gitguard/gitguard_test.go:TestGuardDoesNotLiveInTheDirectoryItProtects
+      - internal/broker/broker_test.go:TestWorkerCannotPushWhenPushIsDenied
+      - internal/broker/broker_test.go:TestWorkerCannotForcePushWhenOnlyForceIsDenied
+      - internal/broker/broker_test.go:TestBranchDeletionIsRefusedAsAForcePush
+      - internal/broker/broker_test.go:TestGrantedPushIsNotObstructed
+      - internal/broker/broker_test.go:TestGuardsAreNeverInstalledInsideTheCandidate
+      - internal/broker/broker_test.go:TestGuardDirIsOutsideTheWorktreeByConstruction
 
   - id: sensei_code.evidence.counts_carry_their_provenance
     title: A reported figure states whether it is an exact total, a lower bound, or unpublished
@@ -371,7 +375,7 @@ invariants:
         - internal/session/
         - internal/session/store.go
     required_tests:
-      - internal/session/interrupted_test.go:TestUnapprovedTaskIsNotResumable
+      - internal/session/interrupted_test.go:TestTaskWithoutAPlanIsNotResumable
       - internal/session/interrupted_test.go:TestFinishedTasksAreNotResumable
 
   - id: sensei_code.command.unknown_input_is_never_run_as_a_task
