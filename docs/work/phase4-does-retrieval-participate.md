@@ -89,3 +89,80 @@ sealed subjects.
 
 **A sealed population is a finite resource. It should not be spent answering a
 question a grep can answer.**
+
+---
+
+# CORRECTION, same day: the answer above is true and misleading
+
+Written after checking what the ordinary path already does, which I should have
+done before writing the section above.
+
+## A prospective-knowledge mechanism already exists and is wired
+
+`golang/server/package_inference.go`:
+
+> `inferPackageAnchors` finds anchors carried by OTHER files in the same package
+> directory, **excluding anything already anchored directly to this file**.
+
+That is the same idea as `prospective.Retrieve`'s same-directory signal,
+including the exclusion of direct anchors. It is computed by `collectImpact`,
+returned as its fourth value, and **briefing consumes it** — `!inference.empty()`
+produces `BRIEFING_STATUS_INFERRED_ONLY`.
+
+The store primitive it needs already exists too: `ImpactForPackage(ctx,
+pathPrefix)`. The "missing query" I named above is not missing.
+
+## What IS true, and it is narrower and more useful
+
+```
+briefing     consumes package inference        surfaces it as INFERRED_ONLY
+preflight    DISCARDS it                       impact, _, _, _, err := collectImpact(...)
+```
+
+**Preflight — the surface that produces the governance verdict — throws away
+sibling knowledge that `collectImpact` already computed for it.** The fourth
+return value is discarded at `preflight.go:149`.
+
+So prospective knowledge does participate, in the surface that *advises*, and
+not in the surface that *decides*.
+
+## And E duplicated it
+
+`golang/prospective` is a second implementation of a mechanism that already
+exists and is already wired. I built a new layer instead of making existing
+machinery participate — the exact inversion of the ordering the commissioning
+document specifies:
+
+> reuse existing machinery → strengthen shared abstraction → improve
+> deterministic applicability/retrieval → only then consider additional learned
+> machinery
+
+That is a semantic-compression regression, introduced by the step meant to close
+a capability gap, and found only because Phase 4 asked whether the thing
+participates rather than whether it works.
+
+## What this changes about the next repair
+
+Not "build the missing query". The candidate repair is now much smaller and
+targets participation rather than capability:
+
+```
+preflight consumes the packageInference collectImpact already returns,
+as GUIDANCE with provenance, never as authority
+```
+
+And the open question about `golang/prospective` is whether its type discipline
+(`Basis` closed, `AuthorityEligible` a method, no numeric score) should be
+applied TO the existing inference mechanism — or whether the package should be
+withdrawn as duplication. That is an owner decision, not mine to take by
+merging.
+
+## The honest shape of my own error
+
+```
+I asked   "does MY mechanism participate?"        answer: no
+I claimed "does ANY mechanism participate?"       answer: yes, one does
+```
+
+Same collapse this program keeps finding: a narrower question answered, a
+broader claim reported.
