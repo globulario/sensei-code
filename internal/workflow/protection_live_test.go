@@ -40,7 +40,15 @@ func TestEverythingSenseiProtectsIsRefused(t *testing.T) {
 	root := liveRepoRoot(t)
 	protected := protectedFiles(t, root)
 	if len(protected) == 0 {
-		t.Skip("no protection snapshot to read, so the delegation was never exercised")
+		// AN EMPTY PROTECTION SET IS THE WORST STATE, NOT AN ABSENCE OF WORK.
+		//
+		// This skipped here. "Nothing is protected" is precisely the condition
+		// this test exists to make impossible, so a configuration that empties
+		// the snapshot used to turn the test GREEN -- false-green evidence
+		// debt hiding the exact class of defect the checker exists to detect.
+		t.Fatal("the protection snapshot yielded no file to test: either nothing is " +
+			"protected, or the snapshot could not be read as protecting anything. " +
+			"Both are defects, and neither is a reason for this test to pass.")
 	}
 	t.Logf("effective protection snapshot lists %d path(s); testing the %d that are files",
 		len(protected), len(protected))
@@ -96,9 +104,16 @@ func protectedFiles(t *testing.T, root string) []string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(root, ".sensei", "project", "protection-coverage.yaml"))
 	if err != nil {
-		t.Skipf("no protection snapshot: %v", err)
+		// The snapshot is a COMMITTED REPOSITORY ARTIFACT. Its absence is a
+		// defect in this repository, not a limitation of the environment the
+		// test happens to run in.
+		t.Fatalf("no protection snapshot at .sensei/project/protection-coverage.yaml: %v; "+
+			"it is committed to this repository, so its absence is a defect and not a "+
+			"reason to stop checking", err)
 	}
 	var files []string
+	var declared []string
+	var dead []string
 	var counts []string
 	for _, line := range strings.Split(string(raw), "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -115,12 +130,33 @@ func protectedFiles(t *testing.T, root string) []string {
 		if path == "" {
 			continue
 		}
+		declared = append(declared, path)
 		info, err := os.Stat(filepath.Join(root, path))
-		if err != nil || info.IsDir() {
+		if err != nil {
+			// A DEAD REFERENT, not a path to skip past. The snapshot claims to
+			// protect something that is not there, so either the protection is
+			// fictional or the file moved without the snapshot following.
+			dead = append(dead, path)
+			continue
+		}
+		if info.IsDir() {
 			continue
 		}
 		files = append(files, path)
 	}
 	t.Logf("snapshot: %s", strings.Join(counts, " "))
+	if len(declared) == 0 {
+		t.Fatal("the protection snapshot declares no path at all; an empty protection " +
+			"set is the worst state this test could find, not an absence of work")
+	}
+	if len(dead) > 0 {
+		t.Fatalf("the protection snapshot names %d path(s) that do not exist: %s. "+
+			"A dead referent cannot be protected, and silently skipping it lets the "+
+			"snapshot claim coverage it does not have", len(dead), strings.Join(dead, ", "))
+	}
+	if len(files) == 0 {
+		t.Fatalf("the snapshot declares %d path(s) but none is a file, so this test has "+
+			"no subject; coverage is absent rather than satisfied", len(declared))
+	}
 	return files
 }
