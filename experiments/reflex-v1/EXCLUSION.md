@@ -183,3 +183,33 @@ the same move as reporting an unmeasured value as zero.
 
 **Nothing here reopens the seal.** The four remain unobserved, and this record
 is about the manifest, not about the files.
+
+## Reporting rule for F, frozen before the result exists
+
+The strata are reported separately, always. **The aggregate-touched subjects
+never increase the nominal blind sample size.**
+
+```
+4/4 never-observed  +  2/2 aggregate-touched
+    → stronger than 4/4 alone, and still reported as TWO STRATA
+
+3/4 never-observed  +  2/2 aggregate-touched
+    → NOT "5/6 success"
+    → the miss in the clean stratum is the scientifically interesting part,
+      and merging would bury exactly the observation worth having
+```
+
+The clean stratum is the result. The touched stratum can strengthen
+interpretation when it agrees and must not rescue the headline when it does not.
+
+This is written now, while both numbers are unknown, because a reporting rule
+chosen after seeing the outcome is not a rule — it is a description of the
+outcome. Same reason the task text and pass criteria were frozen before
+publication.
+
+And it is the session's own law applied to its own bookkeeping:
+
+```
+contaminated       != merely a smaller sample
+aggregate-touched  != never observed
+```
