@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/globulario/sensei-code/internal/evidence"
 	"os"
 	"path/filepath"
 	"strings"
@@ -641,7 +642,11 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		fail(fmt.Errorf("Sensei preflight: %w", err))
 		return
 	}
-	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
+	// The start gate's verdict decides whether the lane may proceed at all, so
+	// its request travels with it (self-improvement program, priority 4).
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
+		e.preflightRecord(preflightArgs, preflight.Structured,
+			sensei.RepositoryRevision(workspaceStatus), sensei.LiveGraphDigest(workspaceStatus))))
 
 	// The start gate runs before the architect is consulted. Its refusal is not
 	// overridable by the architect's decision, because an architect handed a
@@ -2295,7 +2300,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// exists to trigger. Emitted BEFORE decoding, so a decode failure still
 	// leaves the question on the record.
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
-		firstText(result), preflightRecord(args, result.Structured)))
+		firstText(result), e.preflightRecord(args, result.Structured, start.SourceRepoCommit(), start.GraphDigest())))
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -4252,7 +4257,9 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			fail(fmt.Errorf("Sensei preflight: %w", err))
 			return
 		}
-		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight), preflight.Structured))
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
+			e.preflightRecord(preflightArgs, preflight.Structured,
+				sensei.RepositoryRevision(workspaceStatus), sensei.LiveGraphDigest(workspaceStatus))))
 
 		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
 		if err != nil {
@@ -4979,15 +4986,16 @@ func indentOrNone(status string) string {
 // preflightRecord pairs a preflight REQUEST with its result so a session
 // preserves the causal input, not only the verdict.
 //
-// The request is added under a reserved key rather than replacing the payload:
-// every existing reader of a sensei.result payload looks for result fields such
-// as risk_class, and this must not move them. The result map is copied rather
-// than mutated, because the caller decodes the same structure afterwards.
-func preflightRecord(args, structured map[string]any) map[string]any {
-	rec := make(map[string]any, len(structured)+1)
-	for k, v := range structured {
-		rec[k] = v
-	}
-	rec["request"] = args
-	return rec
+// It now delegates to internal/evidence, which is the ONE way this workflow
+// records an evidence-producing call. #137 repaired a single call site; an
+// audit then found that one of six preflight sites recorded its request, so
+// the class was open and copying this helper five times would have left the
+// sixth to be forgotten.
+func (e *Engine) preflightRecord(args, structured map[string]any, revision, graphDigest string) map[string]any {
+	return evidence.Envelope{
+		Operation:   "awareness_preflight",
+		Request:     args,
+		Revision:    revision,
+		GraphDigest: graphDigest,
+	}.Record(structured)
 }

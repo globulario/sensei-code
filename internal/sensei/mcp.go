@@ -329,3 +329,40 @@ func RepositoryDomain(result ToolResult) string {
 	}
 	return strings.TrimSpace(domain)
 }
+
+// RepositoryRevision reads the revision the workspace receipt is bound to.
+//
+// It is the SUBJECT half of a causal envelope: a verdict is reproducible only
+// against the revision it was asked about. Returns "" when Sensei stated none,
+// so a record says the revision was not captured rather than inventing one.
+func RepositoryRevision(result ToolResult) string {
+	binding, ok := result.Structured["binding"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	rev, ok := binding["revision"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(rev)
+}
+
+// LiveGraphDigest reads the digest of the graph actually serving this run.
+//
+// It is the WORLD half: the same question against a different knowledge
+// generation is a different experiment, and #134 could not be replayed partly
+// because nothing recorded which generation had answered. This is deliberately
+// the live digest and NOT the build commit -- one identifies the bytes that
+// answered, the other the generation that produced the rules, and pouring one
+// into the other makes a measured fact carry a different claim.
+func LiveGraphDigest(result ToolResult) string {
+	auth, ok := result.Structured["graph_authority"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	d, ok := auth["live_store_graph_digest_sha256"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(d)
+}

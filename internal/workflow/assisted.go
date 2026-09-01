@@ -401,7 +401,9 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		}
 		if preflight, pfErr := sc.CallTool("awareness_preflight", args); pfErr == nil {
 			preflightEvidence = firstText(preflight)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence, preflight.Structured))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence,
+				e.preflightRecord(args, preflight.Structured,
+					sensei.RepositoryRevision(workspaceStatus), sensei.LiveGraphDigest(workspaceStatus))))
 			if decision, decodeErr := sensei.DecodePreflight(preflight); decodeErr == nil {
 				consulted.Add(preflightSource(decision))
 				if !decision.Authority.Certifiable() {
