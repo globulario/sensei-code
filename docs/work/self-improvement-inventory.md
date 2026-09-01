@@ -10,7 +10,11 @@ That was not stated and made several paths look nonexistent:
 
 ```
 globulario/sensei        52b4ae5c   items 1, 2, 3, 7   (golang/server, docs/awareness)
-globulario/sensei-code   main       items 4, 5, 6      (internal/, experiments/)
+globulario/sensei-code   335f419f   items 4, 5, 6      (internal/, experiments/)
+
+Both are PINNED. Re-running items 4-6 against a later `main` can produce
+different numbers while this document still presents them as the 2026-09-01
+measurements, which is how a stale figure keeps being cited as current.
 ```
 
 The commands, so the numbers can be re-run and disagreed with:
@@ -25,7 +29,7 @@ git log -1 --format="%h %cI" -- docs/awareness/
 sensei briefing --file golang/server/preflight.go | grep -E "Build commit|Build time"
 
 # 3  dangling baseline composition                           [sensei]
-awk -F"\t" '"'"'!/^#/ && NF>=2 {split($1,a,"#"); print a[2]}'"'"' \
+awk -F'\t' '!/^#/ && NF>=2 {split($1,a,"#"); print a[2]}' \
   docs/awareness/dangling_refs_baseline.tsv | sort | uniq -c
 
 # 4  causal envelope of acceptance-critical records          [sensei-code]
@@ -139,7 +143,9 @@ same PR as the rest of the class.
 | `engine.go:4250` | no |
 | `assisted.go:402` | no |
 
-**One of six.** The program document anticipated this: #137 is an exemplar, not
+**One of seven** — corrected above, and stated here too because a summary line
+that still said "six" left the count and the Priority D audit scope internally
+contradictory. The program document anticipated this: #137 is an exemplar, not
 the end of the class. `awareness_audit_diff` (`engine.go:1426`) and
 `awareness_edit_check` (`routine.go:360`) were not checked for the request half
 and belong in the same audit.
