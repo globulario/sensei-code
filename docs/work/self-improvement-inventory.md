@@ -1,8 +1,39 @@
 # Self-improvement program: repository-grounded inventory
 
 The program document asks for this before any change is proposed. Every number
-here was measured on 2026-09-01, not estimated, and the commands are stated so
-they can be re-run and disagreed with.
+here was measured on 2026-09-01, not estimated.
+
+## How to reproduce, and against what
+
+Two repositories are measured, and most of the counts are in the OTHER one.
+That was not stated and made several paths look nonexistent:
+
+```
+globulario/sensei        52b4ae5c   items 1, 2, 3, 7   (golang/server, docs/awareness)
+globulario/sensei-code   main       items 4, 5, 6      (internal/, experiments/)
+```
+
+The commands, so the numbers can be re-run and disagreed with:
+
+```bash
+# 1  surfaces reconstructing governed subject state          [sensei]
+grep -c "GetDirectInvariants()\|DirectInvariants" golang/server/*.go
+grep -n "isPrimaryStatus(n.GetStatus()" golang/server/*.go | grep -v _test
+
+# 2  knowledge identity chain                                [sensei]
+git log -1 --format="%h %cI" -- docs/awareness/
+sensei briefing --file golang/server/preflight.go | grep -E "Build commit|Build time"
+
+# 3  dangling baseline composition                           [sensei]
+awk -F"\t" '"'"'!/^#/ && NF>=2 {split($1,a,"#"); print a[2]}'"'"' \
+  docs/awareness/dangling_refs_baseline.tsv | sort | uniq -c
+
+# 4  causal envelope of acceptance-critical records          [sensei-code]
+grep -rn '"'"'CallTool("awareness_preflight"'"'"' internal/ | grep -v _test
+
+# 7  semantic-compression candidates                         [sensei]
+grep -rn "primaryOnly(\|capNodes(" golang/server/*.go | grep -v _test | wc -l
+```
 
 Two of the seven items produced a worse answer than expected, and one produced
 a better one. Those are marked.
@@ -91,9 +122,17 @@ unverifiable rather than verified-good.
 Preflight is the decisive evidence-producing call. Sites that issue one, and
 whether the request is recorded beside the result:
 
+**CORRECTED: it is one of SEVEN, not one of six.** Codex found a site this
+inventory missed, and it is arguably the most acceptance-critical of them:
+`internal/assist/packet.go` stores its preflight in a digest-bound
+`ContextPacket`, and `internal/assist/handoff.go` compares a handoff's changed
+files against that packet's scope **to accept or reject it**. Repaired in the
+same PR as the rest of the class.
+
 | site | records request |
 |---|---|
 | `engine.go:2279` (`routePlan`) | **yes** — #137 |
+| `assist/packet.go:134` (**missed by this inventory**) | no → now yes |
 | `engine.go:639` (start gate) | no |
 | `engine.go:945` | no |
 | `engine.go:2569` | no |
@@ -107,12 +146,19 @@ and belong in the same audit.
 
 ## 5. Review outcome → future candidate ranking
 
-**No such path exists.**
+**No such path exists** — but the packages I searched were the wrong ones, and
+the conclusion survives only because the right ones were checked afterwards.
 
-`internal/derived/`, `internal/architect/` and `internal/decision/` retain review
-outcomes, and nothing consumes them to rank or generate anything. Searching those
-packages for outcome-conditioned ranking, scoring, priors or weights returns
-nothing.
+`internal/derived` stores INFERENCE outcomes, `internal/decision` records
+architectural decision proposals, and `internal/architect` implements reporting
+and commands. None of them owns implementation-review verdicts. Those are
+persisted through `internal/taskstate`, `internal/runreceipt` and
+`internal/workflow`.
+
+Re-checked there: those packages retain review outcomes and **nothing consumes
+them to rank or generate anything**. The answer is unchanged; the reasoning that
+reached it first was wrong, and a right answer from the wrong evidence is worth
+recording as such.
 
 Priority 8 asks whether the loop exists before asking to improve it. It does not.
 That is a clean answer and it means Priority 8 is a build, not an audit — and it
