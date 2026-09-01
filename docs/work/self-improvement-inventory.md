@@ -10,7 +10,12 @@ That was not stated and made several paths look nonexistent:
 
 ```
 globulario/sensei        52b4ae5c   items 1, 2, 3, 7   (golang/server, docs/awareness)
-globulario/sensei-code   335f419f   items 4, 5, 6      (internal/, experiments/)
+globulario/sensei-code   335f419f   items 4, 5         (internal/)
+globulario/sensei-code   experiment/reflex-v1   item 6   (experiments/reflex-v1)
+
+Item 6 is on a BRANCH, not on main. Pinning it to 335f419f made it
+irreproducible: `git ls-tree -r 335f419f -- experiments/reflex-v1` returns
+nothing. A revision that does not contain the evidence is not a pin.
 
 Both are PINNED. Re-running items 4-6 against a later `main` can produce
 different numbers while this document still presents them as the 2026-09-01
@@ -143,17 +148,38 @@ same PR as the rest of the class.
 | `engine.go:4250` | no |
 | `assisted.go:402` | no |
 
-**One of seven** — corrected above, and stated here too because a summary line
-that still said "six" left the count and the Priority D audit scope internally
-contradictory. The program document anticipated this: #137 is an exemplar, not
+**One of EIGHT.** The count has now been wrong three times — six, then seven,
+then eight — and each correction was reported with the same confidence as the
+figure it replaced. The eighth is `internal/architect/run.go:104`, which the
+stated reproducer command returns and which records nothing either.
+
+That is worth more than the number: a count I recompute after being corrected is
+not more trustworthy for having been corrected once. The reproducer command is
+the artifact that can be checked; the prose figure is not. The program document anticipated this: #137 is an exemplar, not
 the end of the class. `awareness_audit_diff` (`engine.go:1426`) and
 `awareness_edit_check` (`routine.go:360`) were not checked for the request half
 and belong in the same audit.
 
 ## 5. Review outcome → future candidate ranking
 
-**No such path exists** — but the packages I searched were the wrong ones, and
-the conclusion survives only because the right ones were checked afterwards.
+**CORRECTED: a review-outcome loop DOES exist, within a run.**
+
+`internal/workflow/engine.go:1627-1630` consumes a `roles.Revise` verdict —
+`feedback = review.Instruction()` — and `implementationPrompt` injects it into
+the next implementer cycle as `REVIEW FEEDBACK TO RECONCILE`. A review outcome
+already changes what the implementing agent does, in the same run.
+
+What does not exist is the CROSS-RUN loop Priority 8 describes: outcomes
+retained with provenance and scope, altering future *ranking or generation*.
+
+My original claim — "no such path exists" — collapsed those two into one, which
+is the failure mode this entire program is about, committed in the document that
+inventories it. The distinction matters for the ordering: Priority 8 is not a
+build from nothing, it is an extension from within-run feedback to across-run
+learning, and the existing loop is where it should attach.
+
+The packages I searched were also the wrong ones, and the conclusion about
+cross-run ranking survives only because the right ones were checked afterwards.
 
 `internal/derived` stores INFERENCE outcomes, `internal/decision` records
 architectural decision proposals, and `internal/architect` implements reporting
