@@ -149,20 +149,49 @@ Two separate checks, each of which actually creates the condition it names:
     echo "exit=$?"    # expect exit=1 and the named reason on stderr
 
     # (b) the unit's behaviour when the dependency genuinely cannot start.
-    # Masking is what makes the dependency unsatisfiable; stopping does not.
+    #
+    # THREE THINGS MUST BE TRUE BEFORE `start` MEANS ANYTHING, and an earlier
+    # revision established only one of them. `start` on an ALREADY-ACTIVE unit
+    # is a no-op that exits 0 -- so masking Oxigraph under a running evaluator
+    # and then calling start proves nothing at all, and prints success. The
+    # evaluator must be stopped first, and Oxigraph must be both masked AND
+    # stopped, because masking does not stop a unit that is already running.
+
+    systemctl --user stop awg-awareness-graph-10122.service
+    systemctl --user is-active awg-awareness-graph-10122.service
+    #   MUST print "inactive" (or "failed"). If it prints "active", STOP:
+    #   the next start is a no-op and the whole check is void.
+
     systemctl --user mask awg-oxigraph.service
-    systemctl --user start awg-awareness-graph-10122.service   # expect failure
-    systemctl --user is-active awg-awareness-graph-10122.service   # NOT "activating"
+    systemctl --user stop awg-oxigraph.service
+    systemctl --user is-active awg-oxigraph.service     # MUST print inactive/failed
+    ss -ltn | grep 7878 || echo "7878 clear — the dependency is genuinely down"
+
+    systemctl --user start awg-awareness-graph-10122.service   # expect NON-ZERO exit
+    echo "start exit=$?"                                       # expect non-zero
+    systemctl --user is-active awg-awareness-graph-10122.service
+    #   expect "failed" or "inactive" -- NOT "activating", and NOT "active"
     systemctl --user status awg-awareness-graph-10122.service --no-pager | head -20
+
+    # restore
     systemctl --user unmask awg-oxigraph.service
     systemctl --user start awg-oxigraph.service
     systemctl --user start awg-awareness-graph-10122.service
+    systemctl --user is-active awg-oxigraph.service awg-awareness-graph-10122.service
 
 (a) proves the guard reports a named reason rather than hanging. (b) proves the
 unit reaches a terminal `failed` state a human can see, rather than sitting in
 `activating` forever. Neither claims to prove the other, and (b) fails on the
 DEPENDENCY, not on ExecStartPre -- stated because the distinction is exactly
 what the earlier step blurred.
+
+WHY (b) CARRIES ITS OWN PRECONDITION CHECKS. This step has now been wrong twice
+in the same way: first `Requires=` restarted the dependency before the guard
+ran, then `start` on a still-running evaluator was a no-op. Both versions would
+have been ticked as passing. A negative control that cannot distinguish "the
+failure did not happen" from "the experiment did not run" is not weak evidence,
+it is false evidence -- so the preconditions are asserted inline, and the step
+says explicitly when to STOP rather than record a result.
 
 ## 6. Reboot checklist — the only thing that closes the failure mode
 
