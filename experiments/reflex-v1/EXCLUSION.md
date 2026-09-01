@@ -123,3 +123,63 @@ recorded so the result can be read with it rather than despite it.
 this document and in nothing that runs. A sweep respected it; a debugging step
 did not; an aggregate count did not. Each time the list was correct and each
 time nothing consulted it. Prose is not a guard.
+
+---
+
+# CARDINALITY, frozen before F and stated with its cause
+
+The manifest declared **seven**. Later text said **six**. That drift is resolved
+here rather than allowed to sit, because a subject count that changes quietly
+is exactly the kind of small discrepancy that poisons an otherwise clean
+experiment.
+
+## The exact manifest, and what happened to each
+
+```
+1  golang/server/code_symbol.go            AGGREGATE-TOUCHED   grep counts only
+2  golang/server/controlstate_provider.go  SEALED              never observed
+3  golang/server/intent_triggers.go        SEALED              never observed
+4  golang/server/provenance.go             SEALED              never observed
+5  golang/server/query.go                  AGGREGATE-TOUCHED   grep counts only
+6  golang/server/runtime_evidence.go       SEALED              never observed
+7  golang/server/surface_limits.go         CONTAMINATED        source read; REMOVED
+```
+
+```
+declared            7
+removed             1   (contaminated)
+remaining subjects  6
+never observed      4
+```
+
+## Was the cardinality fixed before any subject-specific observation?
+
+**No, and that must not be glossed.**
+
+Seven was fixed before inspection, in `9b9ccaa`. The reduction to six was **not
+produced by the frozen selection rule** — it was forced by a disclosed
+contamination: `surface_limits.go` was read while debugging a `#318` repair. The
+count changed *because of* a subject-specific observation, which is precisely
+the thing a frozen cardinality is supposed to exclude.
+
+The same applies, more weakly, to subjects 1 and 5. Their `aggregate-touched`
+marking exists because a uniform `grep -c` over every non-test file in
+`golang/server` returned counts for them: no source read, but a non-zero
+observation, and one that biases what I would expect to find.
+
+## What F may therefore claim
+
+Report the strata SEPARATELY. Do not report "six sealed subjects".
+
+```
+n = 4   never observed          the clean result
+n = 2   aggregate-touched       reported beside it, never merged into it
+n = 1   contaminated            excluded, not a subject
+```
+
+A result that only holds across all six, and not across the four, is a weaker
+result and must be described as one. Merging the strata to reach a rounder n is
+the same move as reporting an unmeasured value as zero.
+
+**Nothing here reopens the seal.** The four remain unobserved, and this record
+is about the manifest, not about the files.
