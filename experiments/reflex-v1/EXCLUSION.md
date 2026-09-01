@@ -9,11 +9,11 @@ the systematic decision/list audit of `golang/server` in `globulario/sensei#318`
 > exclusion is **experimental isolation, not evidence that they are clean.**
 
 ```
-1  golang/server/code_symbol.go
+1  golang/server/code_symbol.go            <-- aggregate-touched 2026-09-01
 2  golang/server/controlstate_provider.go
 3  golang/server/intent_triggers.go
 4  golang/server/provenance.go
-5  golang/server/query.go
+5  golang/server/query.go                 <-- aggregate-touched 2026-09-01
 6  golang/server/runtime_evidence.go
 7  golang/server/surface_limits.go     <-- CONTAMINATED 2026-09-01, see below
 ```
@@ -93,3 +93,33 @@ not enforced, and this is the second time in this session that a rule stated in
 a document failed to bind an action taken minutes later. If the remaining six
 matter, the list belongs somewhere a tool consults — not somewhere a person is
 expected to remember.
+
+## AGGREGATE TOUCH: subjects 1 and 5, 2026-09-01
+
+While inventorying which surfaces reconstruct governed subject state, a uniform
+`grep -c` ran across **every** non-test file in `golang/server`, the six sealed
+subjects included. No source was read. What that produced for two of them:
+
+```
+code_symbol.go   anchors=1  decisions=0  lifecycle=0
+query.go         anchors=1  decisions=0  lifecycle=0
+```
+
+(The same line printed for `surface_limits.go`, already contaminated and removed.)
+
+**What this does and does not tell me.** It says those two files contain no
+governance-verdict assignment and no lifecycle predicate — so they are unlikely
+to hold a cap-before-decision defect. That is weak, but it is not nothing: it
+biases what I would expect to find, and expectation is what a blind test is
+supposed to withhold.
+
+**Disposition: they remain subjects, marked aggregate-touched.** The reflex test
+asks whether SENSEI surfaces the law, not whether I can predict where it is, and
+a count of grep matches does not reach the semantic question. But the by-hand
+verification step afterwards is mine, and it is now made with a prior. That is
+recorded so the result can be read with it rather than despite it.
+
+**The recurring mechanism, third instance today.** The exclusion list exists in
+this document and in nothing that runs. A sweep respected it; a debugging step
+did not; an aggregate count did not. Each time the list was correct and each
+time nothing consulted it. Prose is not a guard.
