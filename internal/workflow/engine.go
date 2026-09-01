@@ -637,6 +637,14 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	if domain := sensei.RepositoryDomain(workspaceStatus); domain != "" {
 		preflightArgs["domain"] = domain
 	}
+	// THE SUBJECT REVISION IS CAPTURED BEFORE THE QUESTION IS ASKED.
+	//
+	// Reading HEAD after the response attaches the CHECKOUT AS IT IS NOW to a
+	// verdict whose question was issued against the checkout as it was then. If
+	// HEAD moves while the call is in flight the envelope pairs an answer with
+	// a subject it was never asked about -- a smaller version of the #134
+	// defect, produced by the repair for it.
+	subjectRevision := repositoryHead(ctx, e.Repo)
 	preflight, err := sc.CallTool("awareness_preflight", preflightArgs)
 	if err != nil {
 		fail(fmt.Errorf("Sensei preflight: %w", err))
@@ -646,7 +654,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// its request travels with it (self-improvement program, priority 4).
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
 		e.preflightRecord(preflightArgs, preflight.Structured,
-			repositoryHead(ctx, e.Repo), sensei.PreflightGraphDigest(preflight))))
+			subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
 	// The start gate runs before the architect is consulted. Its refusal is not
 	// overridable by the architect's decision, because an architect handed a
@@ -2281,6 +2289,8 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
 	}
+	// Captured BEFORE the call, for the same reason as the start gates.
+	subjectRevision := repositoryHead(ctx, e.Repo)
 	result, err := sc.CallTool("awareness_preflight", args)
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, fmt.Errorf("Sensei scoped preflight: %w", err)
@@ -2300,7 +2310,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// exists to trigger. Emitted BEFORE decoding, so a decode failure still
 	// leaves the question on the record.
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
-		firstText(result), e.preflightRecord(args, result.Structured, repositoryHead(ctx, e.Repo), sensei.PreflightGraphDigest(result))))
+		firstText(result), e.preflightRecord(args, result.Structured, subjectRevision, sensei.PreflightGraphDigest(result))))
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -4252,6 +4262,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		if domain := sensei.RepositoryDomain(workspaceStatus); domain != "" {
 			preflightArgs["domain"] = domain
 		}
+		// THE SUBJECT REVISION IS CAPTURED BEFORE THE QUESTION IS ASKED.
+		//
+		// Reading HEAD after the response attaches the CHECKOUT AS IT IS NOW to a
+		// verdict whose question was issued against the checkout as it was then. If
+		// HEAD moves while the call is in flight the envelope pairs an answer with
+		// a subject it was never asked about -- a smaller version of the #134
+		// defect, produced by the repair for it.
+		subjectRevision := repositoryHead(ctx, e.Repo)
 		preflight, err := sc.CallTool("awareness_preflight", preflightArgs)
 		if err != nil {
 			fail(fmt.Errorf("Sensei preflight: %w", err))
@@ -4259,7 +4277,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
 			e.preflightRecord(preflightArgs, preflight.Structured,
-				repositoryHead(ctx, e.Repo), sensei.PreflightGraphDigest(preflight))))
+				subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
 		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
 		if err != nil {

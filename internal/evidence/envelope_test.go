@@ -18,12 +18,25 @@ func TestAVerdictWithoutItsRequestIsNotReplayable(t *testing.T) {
 		t.Errorf("the missing request is not named: %v", verdict.Missing())
 	}
 
-	full := Envelope{
+	// The question alone is NOT enough. Replaying against an unknown revision
+	// and an unknown graph generation runs a NEW experiment that happens to
+	// share a question.
+	question := Envelope{
 		Operation: "awareness_preflight",
 		Request:   map[string]any{"task": "widen the boundary", "files": []string{"a.go"}, "mode": "compact"},
 	}
+	if !question.HasQuestion() {
+		t.Fatal("an envelope carrying operation and request has its question")
+	}
+	if question.Replayable() {
+		t.Fatal("an envelope with no revision and no graph generation called itself replayable, " +
+			"while Missing() named both as absent -- two answers from one type")
+	}
+	full := question
+	full.Revision = "abc123"
+	full.GraphDigest = "digest"
 	if !full.Replayable() {
-		t.Fatal("an envelope carrying operation and request is replayable")
+		t.Fatal("a complete envelope is not replayable")
 	}
 }
 
@@ -37,9 +50,13 @@ func TestAPartialEnvelopeNamesWhatIsMissing(t *testing.T) {
 			t.Errorf("%q is absent and unnamed: %v", want, m)
 		}
 	}
-	// Weakened is not impossible: the request is what decides replayability.
-	if !e.Replayable() {
-		t.Error("a missing revision made the record unreplayable; it weakens a replay, it does not prevent one")
+	// The weaker property survives, so a caller can report "the question is
+	// here, the world is not" rather than choosing between true and false.
+	if !e.HasQuestion() {
+		t.Error("the question was lost as well as the world")
+	}
+	if e.Replayable() {
+		t.Error("a partial envelope called itself replayable")
 	}
 }
 

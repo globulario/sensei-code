@@ -73,12 +73,27 @@ func (e Envelope) payload() map[string]any {
 	return p
 }
 
-// Replayable reports whether this envelope carries enough to reconstruct the
-// call. It is deliberately strict about the ONE field whose absence created
-// #134, and deliberately quiet about the others: a missing revision weakens a
-// replay, a missing REQUEST makes it impossible.
-func (e Envelope) Replayable() bool {
+// HasQuestion reports whether the QUESTION survived. It is the property whose
+// absence created #134, and it is necessary rather than sufficient.
+func (e Envelope) HasQuestion() bool {
 	return strings.TrimSpace(e.Operation) != "" && len(e.Request) > 0
+}
+
+// Replayable reports whether this envelope carries enough to RECONSTRUCT the
+// call -- question, subject and world.
+//
+// An earlier version returned true on the question alone, reasoning that a
+// missing revision merely "weakens" a replay. That is the softer half of the
+// same mistake: replaying against an unknown revision and an unknown graph
+// generation does not reproduce the experiment, it runs a NEW one that happens
+// to share a question. Missing() already named those fields as absent while
+// this method called the record replayable -- two answers from one type.
+//
+// The distinction is preserved rather than collapsed: HasQuestion is the weaker
+// property and is still available, so a caller can say "the question survived,
+// the world did not" instead of choosing between true and false.
+func (e Envelope) Replayable() bool {
+	return e.HasQuestion() && len(e.Missing()) == 0
 }
 
 // Missing names what a replay would lack, so a caller can report a partial

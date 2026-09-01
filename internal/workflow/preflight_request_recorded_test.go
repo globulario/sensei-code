@@ -227,3 +227,49 @@ func TestTheEnvelopeDigestComesFromTheAnsweringPreflight(t *testing.T) {
 		}
 	}
 }
+
+// The subject revision is captured BEFORE the question is asked.
+//
+// Reading HEAD after the response attaches the checkout as it is NOW to a
+// verdict whose question was issued against the checkout as it was THEN. If
+// HEAD moves while the call is in flight, the envelope pairs an answer with a
+// subject it was never asked about — a smaller version of the #134 defect,
+// produced by the repair for it.
+func TestTheSubjectRevisionIsCapturedBeforeTheCall(t *testing.T) {
+	for _, file := range []string{"internal/workflow/engine.go", "internal/workflow/assisted.go"} {
+		src := rawSource(t, file)
+		lines := strings.Split(src, "\n")
+		for i, line := range lines {
+			if !strings.Contains(line, `CallTool("awareness_preflight"`) {
+				continue
+			}
+			// Anything recording a revision must have captured it above this
+			// call, not below it.
+			window := strings.Join(lines[i:min(i+30, len(lines))], "\n")
+			if !strings.Contains(window, "preflightRecord(") {
+				continue
+			}
+			// Only a revision read INSIDE the record call is the defect. A
+			// repositoryHead elsewhere in the window -- certifyStart takes one
+			// legitimately -- is a different question asked at a different
+			// moment, and flagging it made this test fail on correct code.
+			for _, l := range strings.Split(window, "\n") {
+				if strings.Contains(l, "preflightRecord(") && strings.Contains(l, "repositoryHead(") {
+					t.Errorf("%s: the envelope reads its revision inside the record call near line %d; "+
+						"it must be captured before the question is asked", file, i+1)
+				}
+			}
+			// The multi-line form: the record spans lines, so check the
+			// argument that follows it too.
+			if j := strings.Index(window, "preflightRecord("); j >= 0 {
+				call := window[j:]
+				if end := strings.Index(call, "))"); end > 0 {
+					if strings.Contains(call[:end], "repositoryHead(") {
+						t.Errorf("%s: the envelope reads its revision inside the record call near line %d; "+
+							"it must be captured before the question is asked", file, i+1)
+					}
+				}
+			}
+		}
+	}
+}
