@@ -230,3 +230,15 @@ failure_modes:
       - '2026-08-31: prepare-change over internal/taskstate/state.go and state_test.go alone -> Inspect admitted, Modify waiting, same blocker'
       - 'the same work as part of a six-file envelope including internal/workflow -> Modify admitted immediately'
       - 'consequence accepted rather than worked around: stage 1 of the observation-layer work was hand-built under review instead of governed'
+  - id: failure.sensei_code.a_test_binding_outlived_its_referent_and_kept_reading_as_cov
+    title: A test binding outlived its referent and kept reading as coverage
+    description: 'Authored YAML binds proofs by writing ''<path>_test.go:TestName''. Nothing validated either half. internal/gitguard/ was deleted when the capability broker replaced it, and the critical invariant sensei_code.capability.declared_push_refusal_is_enforced kept protecting the deleted directory and naming two tests in the deleted file. sensei_code.resume.never_skips_a_human_decision (also critical) named TestUnapprovedTaskIsNotResumable, which no longer exists under that name. Both entries read as fully proven. Neither could ever fail. Found by checking the rule rather than assuming it, after the owner stated it as a law: a reference is not evidence that its referent exists.'
+    protects:
+      files:
+        - docs/awareness/invariants.yaml
+    required_tests:
+      - internal/derived/binding_referents_test.go:TestEveryAuthoredTestBindingResolves
+    evidence:
+      - 6805 authored bindings checked; 3 dead across 2 critical invariants; the check fails on the corpus before the repair and passes after, which is its own falsifier
+      - a commented-out template binding (path/to/config_test.go) is documentation, not a claim, and is skipped -- an earlier count of 4 was wrong for that reason
+    contract: 'Every authored required_tests binding must resolve: the named _test.go file must exist and must declare the named function. A binding that resolves to nothing is not weak coverage, it is ZERO coverage that reads as full coverage.'

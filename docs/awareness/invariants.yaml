@@ -262,11 +262,15 @@ invariants:
     description: "Capability flags read as guarantees. When push is not granted a pre-push hook is installed and the worker's git is pointed at it, so git refuses the push rather than the worker being asked not to. The guard lives outside the candidate so it cannot be committed into the change it protects."
     protects:
       files:
-        - internal/gitguard/
-        - internal/gitguard/gitguard.go
+        - internal/broker/
+        - internal/broker/broker.go
     required_tests:
-      - internal/gitguard/gitguard_test.go:TestGuardActuallyRefusesAPush
-      - internal/gitguard/gitguard_test.go:TestGuardDoesNotLiveInTheDirectoryItProtects
+      - internal/broker/broker_test.go:TestWorkerCannotPushWhenPushIsDenied
+      - internal/broker/broker_test.go:TestWorkerCannotForcePushWhenOnlyForceIsDenied
+      - internal/broker/broker_test.go:TestBranchDeletionIsRefusedAsAForcePush
+      - internal/broker/broker_test.go:TestGrantedPushIsNotObstructed
+      - internal/broker/broker_test.go:TestGuardsAreNeverInstalledInsideTheCandidate
+      - internal/broker/broker_test.go:TestGuardDirIsOutsideTheWorktreeByConstruction
 
   - id: sensei_code.evidence.counts_carry_their_provenance
     title: A reported figure states whether it is an exact total, a lower bound, or unpublished
@@ -360,18 +364,20 @@ invariants:
       - internal/behavioral/behavioral_test.go:TestRecordSurfacesARefusalInsteadOfReportingSuccess
 
   - id: sensei_code.resume.never_skips_a_human_decision
-    title: A task still awaiting approval is never resumed
+    title: A pending human decision survives resume and is carried verbatim
     severity: critical
     status: active
     repo: github.com/globulario/sensei-code
     domain: repo
-    description: "Resuming re-enters implementation only, so a task whose plan was never approved has no candidate to continue and resuming it would skip a decision the human never made. Sensei evidence is re-read on resume rather than restored from the log, because the graph may have moved while the process was gone."
+    description: "The human decision this protects is the AUTHORITY BOUNDARY (workflow.awaiting_authority), not the plan. /run authorizes the task; the plan is information, not an approval gate. A task interrupted at a deferred authority decision IS offered for resume and carries its question verbatim, so the decision is answered rather than lost or silently re-derived; once answered it is no longer pending. A task that never produced a plan is not offered for a DIFFERENT reason -- there is no candidate to continue, so offering it would restart the work rather than resume it. Sensei evidence is re-read on resume rather than restored from the log, because the graph may have moved while the process was gone.\n\nSUPERSEDES A FALSE STATEMENT, recorded rather than quietly edited. This entry previously read \"A task still awaiting approval is never resumed\" and described an unapproved PLAN as the pending human decision. Under the current architecture that is backwards twice: the plan is not an approval gate, and a deferred authority decision is precisely what resume DOES offer. Its two bound tests passed throughout, because they prove continuity (no plan, nothing to continue) and never proved the approval claim the entry made. The binding resolved; the meaning had moved."
     protects:
       files:
         - internal/session/
         - internal/session/store.go
     required_tests:
-      - internal/session/interrupted_test.go:TestUnapprovedTaskIsNotResumable
+      - internal/session/interrupted_test.go:TestDeferredAuthorityIsResumableAndCarriesItsQuestion
+      - internal/session/interrupted_test.go:TestAnsweredAuthorityIsNoLongerPending
+      - internal/session/interrupted_test.go:TestTaskWithoutAPlanIsNotResumable
       - internal/session/interrupted_test.go:TestFinishedTasksAreNotResumable
 
   - id: sensei_code.command.unknown_input_is_never_run_as_a_task
