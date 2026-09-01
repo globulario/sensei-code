@@ -114,3 +114,22 @@ So the real question each landing must answer is not "does it merge" but: **is
 the regenerated graph the union of what the four reviewers actually saw?** The
 code composition is provably not at risk; the derived composition is the whole
 of it.
+
+### Disjointness, confirmed rather than assumed
+
+Every `id:` added to `invariants.yaml`, `required_tests.yaml`, and
+`failure_modes.yaml` by each of the four branches, intersected:
+
+```
+#321  1 failure_mode + 4 required_tests   (reachability)
+#322  1 invariant    + 7 required_tests   (subjectstate, change_impact)
+#323  1 invariant    + 2 required_tests   (baseline classification)
+#324  1 invariant    + 4 required_tests   (prospective)
+
+collisions: none
+```
+
+So union-resolving the sources is legitimate **for these four specifically**.
+The check is cheap and must be repeated for any later set, because the shortcut
+is not a property of the file format — it is a property of these entries
+happening not to touch each other.
