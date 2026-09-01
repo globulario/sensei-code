@@ -133,3 +133,55 @@ So union-resolving the sources is legitimate **for these four specifically**.
 The check is cheap and must be repeated for any later set, because the shortcut
 is not a property of the file format — it is a property of these entries
 happening not to touch each other.
+
+## What landing #321 actually cost (2026-09-01)
+
+Three things the plan did not anticipate, recorded because the next landing
+will meet all three.
+
+### 1. An automated commit moves main's corpus after every merge
+
+`chore(awareness): auto-rebuild seed + stamp from authored corpus` lands on
+`main` after a merge and regenerates the derived corpus. So the moment #321
+landed, **every open branch was behind main's corpus**, and the reachability
+check correctly reported the branch's serving graph as unordered against the
+admitted one.
+
+The consequence is structural, not incidental: **every open PR goes red after
+every merge**, and stays red until it takes main again. That is the reachability
+check doing exactly its job — the branch really is not current — but it means
+the cost of landing one PR is a forced update of all the others.
+
+I first read that red as *non-determinism*, because the same test passed on one
+branch and failed on another with no logic change between them. It was not
+flaky. The runs straddled the bot's commit. I was reading the clock, not the
+code, and said so before checking whether `origin/main` was what I thought it
+was — it was not; my local ref was stale by one commit.
+
+**The check to run first:** `git fetch origin && git rev-parse origin/main`,
+before concluding anything about a reachability failure.
+
+### 2. The union rule has to survive batching
+
+The rule was written above, before the landing began: **sources union-resolve,
+generated truth regenerates.** I applied it correctly by hand on #322, then
+wrote a loop that resolved all four conflicts on #323 and #324 with
+`git checkout --ours` — correct for the three generated artifacts, wrong for
+`required_tests.yaml`.
+
+It silently dropped #321's `required_test` entries from both branches, and the
+seed regenerated from that truncated source, producing **a graph missing
+knowledge that had already landed**. Caught by checking for two specific
+landed ids rather than by trusting the merge, and repaired by union against
+`origin/main`.
+
+The lesson is not "be careful". It is that a rule with two branches applied by
+hand becomes one branch when it is batched, and the batch is where it breaks.
+Verify the landed ids are present after every merge; the check is one `grep`.
+
+### 3. Reviewer quota is the real rate limit
+
+The window granted **one** review. #321 landed on it; #322's request bounced
+minutes later. At that rate the remaining PRs cost one window each, and every
+landing forces an update-and-reverify of all the others — so the queue does not
+drain at one per window, it drains more slowly than that.
