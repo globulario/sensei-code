@@ -2280,6 +2280,22 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, fmt.Errorf("Sensei scoped preflight: %w", err)
 	}
+	// RECORD THE QUESTION, NOT ONLY THE ANSWER.
+	//
+	// This is the preflight whose verdict decides routing, and it emitted
+	// nothing at all. sensei-code#134 preserved a run that stopped at the
+	// authority boundary carrying "human_approval_required (blast radius
+	// cluster)" and NOT the request that produced it -- so when the upstream
+	// repair was ready the specimen could not be replayed, and the escalation
+	// no longer reproduced even on the binary that had produced it. The witness
+	// became a historical observation instead of an experiment.
+	//
+	// A preserved verdict is not a preserved experiment. An authority boundary
+	// that records the answer without the question cannot support the review it
+	// exists to trigger. Emitted BEFORE decoding, so a decode failure still
+	// leaves the question on the record.
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
+		firstText(result), preflightRecord(args, result.Structured)))
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -4958,4 +4974,20 @@ func indentOrNone(status string) string {
 		b.WriteString("  " + line + "\n")
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// preflightRecord pairs a preflight REQUEST with its result so a session
+// preserves the causal input, not only the verdict.
+//
+// The request is added under a reserved key rather than replacing the payload:
+// every existing reader of a sensei.result payload looks for result fields such
+// as risk_class, and this must not move them. The result map is copied rather
+// than mutated, because the caller decodes the same structure afterwards.
+func preflightRecord(args, structured map[string]any) map[string]any {
+	rec := make(map[string]any, len(structured)+1)
+	for k, v := range structured {
+		rec[k] = v
+	}
+	rec["request"] = args
+	return rec
 }
