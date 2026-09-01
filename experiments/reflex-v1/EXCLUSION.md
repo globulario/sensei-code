@@ -213,3 +213,49 @@ And it is the session's own law applied to its own bookkeeping:
 contaminated       != merely a smaller sample
 aggregate-touched  != never observed
 ```
+
+## OPEN PROTOCOL GAP: the surface is not frozen, and it now matters
+
+The manifest freezes the task text, the subjects, the selection rule, the tiers
+and the outcomes. **It never names which surface F queries.** "Run against each
+subject" was written when the choice looked immaterial.
+
+It is not immaterial. Measured 2026-09-01:
+
+```
+briefing    CONSUMES package inference   -> surfaces sibling anchors (INFERRED_ONLY)
+preflight   DISCARDS it                  -> impact, _, _, _, err := collectImpact(...)
+```
+
+Those are different experiments. `inferPackageAnchors` returns anchors carried
+by other files in the same package — the very mechanism by which a law about a
+sibling could reach an unanchored subject. One surface uses it; the other throws
+it away.
+
+**I will not choose the surface now.** I know which one is more likely to
+produce a positive result, and selecting on that basis after learning it is
+exactly the post-hoc tuning the seal exists to prevent. Choosing the favourable
+surface would not be a smaller sin than editing the task text; it would be the
+same sin with a longer name.
+
+So this is an **owner decision**, and either answer makes F meaningful:
+
+```
+BRIEFING    tests whether an ALREADY-PARTICIPATING mechanism carries a learned
+            law to an unobserved subject. Narrower, and honestly reported as
+            "the advising surface", not "Sensei".
+
+PREFLIGHT   tests the surface that produces the GOVERNANCE VERDICT, which
+            currently discards sibling knowledge. Expect 0/4 unless preflight is
+            first repaired to consume what it already receives — and that repair
+            must land, and be reviewed, BEFORE F, not after seeing a result.
+
+BOTH        strongest, reported as two separate experiments and never merged,
+            under the same rule as the strata.
+```
+
+**What must not happen:** running one, disliking the result, and then running
+the other. The surface is chosen once, recorded here, and F runs against it.
+
+Found by Phase 4 asking whether the machinery participates, before the sealed
+subjects were spent on a question whose answer depended on an unrecorded choice.
