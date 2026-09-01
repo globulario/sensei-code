@@ -69,3 +69,48 @@ E  #324 prospective            see the ownership decision below
 
 `sensei-code` has no cross-branch file overlap with these, so its three land
 independently.
+
+## Measured composition risk (2026-09-01)
+
+The ordering above was chosen on reasoning. Here is the measurement, taken by
+diffing each branch against its merge-base with `main`:
+
+**The Go code is disjoint across all four.** `#321` owns
+`golang/reachability` plus the two emitters; `#322` owns `golang/subjectstate`
+plus `change_impact.go`; `#323` owns one test file under `cmd/awg`; `#324` owns
+`golang/prospective`. No pair touches the same Go file.
+
+**Every pair overlaps anyway, and the overlap is entirely generated truth:**
+
+```
+docs/awareness/generated/awareness_graph_annotation_report.yaml
+docs/awareness/generated/awareness_graph_code_symbols.yaml
+docs/awareness/generated/awareness_graph_go_import_graph.yaml
+golang/server/embeddata/awareness.nt
+golang/server/embeddata/awareness.transaction.tsv
+```
+
+plus the append-mostly sources `invariants.yaml` and `required_tests.yaml`.
+
+Three consequences, none of which ordering can avoid:
+
+1. **The regeneration round is not a contingency, it is the plan.** Merging any
+   one of these leaves the other three conflicting on generated files. That is
+   true for all 4×3 orderings, so no sequence avoids it. Each of the three
+   remaining PRs will need a new head, CI, and a fresh exact-head review.
+
+2. **The conflicts must not be resolved by hand.** Generated truth is
+   reconciled by regenerating it from the union of the sources — never by
+   editing the artifact until it merges. A hand-merged `.nt` file is a graph
+   nobody derived, asserting whatever the resolution happened to produce.
+
+3. **The source YAML may be union-resolved, and only that.** Each PR appends
+   distinct entries to `invariants.yaml` and `required_tests.yaml`; taking both
+   sides is the correct resolution there precisely because the entries are
+   disjoint. If two PRs ever edited the SAME entry, this shortcut would be
+   wrong, and the check is to confirm disjointness rather than to assume it.
+
+So the real question each landing must answer is not "does it merge" but: **is
+the regenerated graph the union of what the four reviewers actually saw?** The
+code composition is provably not at risk; the derived composition is the whole
+of it.
