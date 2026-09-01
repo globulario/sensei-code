@@ -1,0 +1,44 @@
+[Unit]
+# Supervised evaluator for the address sensei-code's .sensei/config.yaml names
+# (server.addr: localhost:10122). Closes
+# failure.sensei_code.configured_evaluator_endpoint_has_no_supervised_process.
+#
+# AUTHORITY REFERENT IS COPIED VERBATIM from awg-awareness-graph.service. The
+# live store is the globulario/services publication, so this instance must
+# vouch for that corpus with that marker. An instance carrying sensei-code's
+# own marker and home domain was tried and is WRONG: its Metadata RPC stalls
+# and `sensei workspacecontract` then reads composition_state: unavailable.
+# Only the port and the unit identity differ from the :10120 unit.
+#
+# NOTE: sensei/scripts/install-sensei-user-services.sh deletes the awg-* pair
+# and installs sensei-awareness-graph.service with -require-store=true, which
+# crash-loops against this store. Re-apply this unit after any sensei reinstall,
+# exactly as the :10120 unit's header already warns.
+Description=Local AWG awareness-graph on :10122 (globulario/services referent, cold-start mode)
+Requires=awg-oxigraph.service
+After=awg-oxigraph.service
+
+# Retry bounding lives in [Unit], not [Service]. The :10120 unit places these
+# in [Service], where systemd ignores them -- the journal says so on every
+# load: "Unknown key name 'StartLimitIntervalSec' in section 'Service'".
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+[Service]
+Type=simple
+SyslogIdentifier=awg-awareness-graph-10122
+WorkingDirectory=/home/dave/Documents/github.com/globulario/services
+Environment=AWG_REPO_ROOT=/home/dave/Documents/github.com/globulario/sensei
+ExecStartPre=/bin/bash -lc 'i=0; while [ $i -lt 15 ]; do /usr/bin/curl -sS -f -X POST -H "Content-Type: application/sparql-query" --data "ASK {}" "http://127.0.0.1:7878/query" >/dev/null && exit 0; i=$((i+1)); sleep 1; done; echo "oxigraph did not answer at http://127.0.0.1:7878/query within 15s" >&2; exit 1'
+ExecStart=/home/dave/Documents/github.com/globulario/sensei/bin/awareness-graph \
+  -addr :10122 \
+  -oxigraph-url http://127.0.0.1:7878/query \
+  -no-seed \
+  -graph-marker-file /home/dave/Documents/github.com/globulario/services/.sensei/graph-authority.json \
+  -home-domain github.com/globulario/services \
+  -awareness-dir /home/dave/Documents/github.com/globulario/services/docs/awareness
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
