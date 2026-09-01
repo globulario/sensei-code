@@ -90,3 +90,58 @@ of my own cap-law entries cited tests that did not exist yet.
 
 **Owed:** after #321, #323 and #324 land, propose one invariant plus its
 failure_mode, binding all three tests by exact name. Not before.
+
+## What it found on its first CI run
+
+The repair earned its keep immediately, and not in the way I expected.
+
+Making the helpers **fail** rather than skip turned CI red at `041abab8` and
+named four tests:
+
+```
+TestARealCitationIsVerifiedFromGitNotFromTheCandidate
+TestEvidenceTheClaimantIntroducedCannotEstablishItsOwnAuthority
+TestVerifiedEvidenceIsAVerdictAboutCitationsOnly
+TestACitationOnTheClaimantsOwnLineIsNotIndependent
+```
+
+**They had never executed in CI.** `build-and-test` checked out with
+`fetch-depth: 2` — enough for the commit-scope guard, not enough for anything
+needing the admitted branch. On a push event `HEAD` is the branch tip rather
+than a merge commit and `origin/main` is never fetched, so no promotion base
+resolved, all four skipped, and the package printed `ok`.
+
+#323 then went red for the same underlying reason: its selector reads
+`git log --diff-filter=D`, and there is no deletion history at depth 2. Worse,
+`homeDomainPath` had been asking `git log --all` of a two-commit history in
+every CI run, so every path read as foreign and
+`TestNoHomeDomainProofEdgeHidesBehindTheBaseline` passed with no corpus to
+check against.
+
+Two PRs, one cause: **provenance questions asked of a history CI does not
+have.** Fixed with `fetch-depth: 0` (~60 MB pack, seconds).
+
+### The evidence that replaced the vacuous one
+
+The old claim was "zero `--- SKIP` lines," which is zero either way. The new
+one is a chain that could have come out otherwise:
+
+> `baseCommit` fatals when it cannot resolve a base. All four tests call it.
+> CI is green at `da39611b`. Therefore a base was resolved, therefore they ran.
+
+Without the fetch-depth repair, that same chain produces red — and did.
+
+**This is the difference the whole document is about.** The first claim was
+compatible with every world. The second is false in the world where the fix
+did not work.
+
+## The sequence, which is the point
+
+A falsifier of mine that could not fail
+→ the guard it was hiding
+→ four more skips standing where failures belong
+→ four tests that had never run, reported by CI itself
+→ a fifth passing with nothing to check against.
+
+None of it came from reading the code more carefully. Each step was forced by
+turning a silence into a failure.
