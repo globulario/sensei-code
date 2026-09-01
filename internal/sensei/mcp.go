@@ -366,3 +366,21 @@ func LiveGraphDigest(result ToolResult) string {
 	}
 	return strings.TrimSpace(d)
 }
+
+// PreflightGraphDigest reads the live graph digest out of a PREFLIGHT response.
+//
+// It exists because taking the digest from an earlier sensei_workspace_status
+// call pairs a verdict with a graph generation that may already have been
+// replaced: two RPCs, two moments, and an envelope claiming they were one. The
+// digest that belongs with a verdict is the one the answering response carried.
+func PreflightGraphDigest(result ToolResult) string {
+	auth, ok := result.Structured["authority"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	d, ok := auth["live_store_graph_digest_sha256"].(string)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(d)
+}

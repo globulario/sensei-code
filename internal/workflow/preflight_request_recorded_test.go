@@ -182,3 +182,48 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// The envelope's revision is the GOVERNED CHECKOUT, not the graph's source
+// commit — and the codebase already said so.
+//
+// gate.go's own comment on GraphSourceCommit reads: "It is emphatically not the
+// candidate's base: the two differ whenever the graph has not been rebuilt
+// since the last commit, and conflating them records a human decision against a
+// commit nobody was working on."
+//
+// I used SourceRepoCommit() as the envelope's revision anyway, in a file whose
+// neighbour documents the exact mistake. A replay would then check the wrong
+// source and could not reproduce the run.
+func TestTheEnvelopeRevisionIsTheGovernedCheckoutNotTheGraphSource(t *testing.T) {
+	for _, file := range []string{"internal/workflow/engine.go", "internal/workflow/assisted.go"} {
+		src := rawSource(t, file)
+		for _, line := range strings.Split(src, "\n") {
+			if !strings.Contains(line, "preflightRecord(") {
+				continue
+			}
+			for _, wrong := range []string{"SourceRepoCommit()", "GraphSourceCommit()", "GraphBuildCommit()"} {
+				if strings.Contains(line, wrong) {
+					t.Errorf("%s: an envelope records %s as its subject revision; that is the commit the "+
+						"GRAPH was built from, not the checkout the change is against", file, wrong)
+				}
+			}
+		}
+	}
+}
+
+// The digest belongs to the response that ANSWERED, not to an earlier call.
+//
+// Every site took it from the preceding sensei_workspace_status response. Two
+// RPCs are two moments: if the live graph is replaced between them the event
+// pairs a new verdict with an old generation, and in the assisted lane a failed
+// workspace call followed by a successful preflight paired a verdict with no
+// generation at all.
+func TestTheEnvelopeDigestComesFromTheAnsweringPreflight(t *testing.T) {
+	for _, file := range []string{"internal/workflow/engine.go", "internal/workflow/assisted.go"} {
+		src := rawSource(t, file)
+		if strings.Contains(src, "LiveGraphDigest(workspaceStatus)") {
+			t.Errorf("%s: an envelope takes its graph generation from the workspace-status call "+
+				"rather than from the preflight that produced the verdict", file)
+		}
+	}
+}

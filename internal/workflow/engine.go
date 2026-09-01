@@ -646,7 +646,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// its request travels with it (self-improvement program, priority 4).
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
 		e.preflightRecord(preflightArgs, preflight.Structured,
-			sensei.RepositoryRevision(workspaceStatus), sensei.LiveGraphDigest(workspaceStatus))))
+			repositoryHead(ctx, e.Repo), sensei.PreflightGraphDigest(preflight))))
 
 	// The start gate runs before the architect is consulted. Its refusal is not
 	// overridable by the architect's decision, because an architect handed a
@@ -2300,7 +2300,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// exists to trigger. Emitted BEFORE decoding, so a decode failure still
 	// leaves the question on the record.
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
-		firstText(result), e.preflightRecord(args, result.Structured, start.SourceRepoCommit(), start.GraphDigest())))
+		firstText(result), e.preflightRecord(args, result.Structured, repositoryHead(ctx, e.Repo), sensei.PreflightGraphDigest(result))))
 	scoped, err := sensei.DecodePreflight(result)
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -4259,7 +4259,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.SenseiResult, firstText(preflight),
 			e.preflightRecord(preflightArgs, preflight.Structured,
-				sensei.RepositoryRevision(workspaceStatus), sensei.LiveGraphDigest(workspaceStatus))))
+				repositoryHead(ctx, e.Repo), sensei.PreflightGraphDigest(preflight))))
 
 		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
 		if err != nil {
