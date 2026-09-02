@@ -23,7 +23,11 @@ func loadLedger(t *testing.T, root string) []Attempt {
 		return nil
 	})
 	if err != nil || len(out) == 0 {
-		t.Skipf("ledger %s absent", root)
+		// The ledger is tracked. An empty read is either a missing corpus or a
+		// parse that matched nothing, and both are defects: a stability claim
+		// measured over zero attempts is not a weaker claim, it is no claim.
+		t.Fatalf("ledger %s yielded no attempt (err=%v): it is tracked in this "+
+			"repository, so stability cannot be measured and must not be assumed", root, err)
 	}
 	return out
 }
