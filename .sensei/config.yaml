@@ -13,9 +13,9 @@ store:
     # Directory for Oxigraph's RocksDB data.
     data_dir: .sensei/data
     # SPARQL query endpoint (used by the gRPC server).
-    query_url: http://localhost:7878/query
+    query_url: http://localhost:7882/query
     # Graph Store endpoint (used by sensei build to load triples).
-    store_url: http://localhost:7878/store?default
+    store_url: http://localhost:7882/store?default
 # gRPC server configuration.
 server:
     addr: localhost:10122
