@@ -70,6 +70,27 @@ required deleting the file the law is actually anchored to. Real recall for
 these two defects was not 0.34 or rank 42. It was **1 of 1, twice**, on the
 direct path.
 
+## A third instance, found after this was written
+
+Repairing criterion 4 (sensei-code#148) produced the same shape a third time.
+The defect — `awareness_audit_diff` emitting its verdict six times and its
+request never — is governed by
+
+```
+sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
+  protects: internal/evidence/envelope.go
+            internal/workflow/engine.go     <- the file carrying the defect
+  contract: "Every governed call whose result is emitted as a durable record
+             carries its causal envelope"
+```
+
+Directly anchored to the file, and the contract states the violated rule in one
+sentence. Its own structural test walked preflight sites only, so the invariant
+named every governed call while the check covered one tool.
+
+**Three for three.** Every defect this session produced was governed by a law
+directly anchored to the file it was written in.
+
 ## The consequence for the program's ordering
 
 Priority 6 exists because "Sensei often knows the law but does not bring it to
