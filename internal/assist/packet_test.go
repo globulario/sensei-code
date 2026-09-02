@@ -246,7 +246,7 @@ func TestObservedDistinguishesStaleFromPresent(t *testing.T) {
 			},
 		},
 	}
-	got := observed("awareness_preflight", stale)
+	got := observed("awareness_preflight", stale, nil)
 	if got.State != Stale {
 		t.Fatalf("a stale graph was classified %q, not stale", got.State)
 	}
@@ -277,7 +277,7 @@ func TestObservedDistinguishesProvenEmptyFromAbsent(t *testing.T) {
 			},
 		},
 	}
-	got := observed("awareness_preflight", empty)
+	got := observed("awareness_preflight", empty, nil)
 	if got.State != EmptyProven {
 		t.Fatalf("a certified empty answer was classified %q", got.State)
 	}
@@ -287,7 +287,7 @@ func TestObservedDistinguishesProvenEmptyFromAbsent(t *testing.T) {
 	}
 
 	// And it remains distinct from silence.
-	silent := observed("awareness_preflight", sensei.ToolResult{})
+	silent := observed("awareness_preflight", sensei.ToolResult{}, nil)
 	if silent.State != Absent {
 		t.Fatalf("silence was classified %q, not absent", silent.State)
 	}
@@ -310,7 +310,7 @@ func TestStalenessBeatsEmptiness(t *testing.T) {
 			},
 		},
 	}
-	if got := observed("awareness_preflight", both); got.State != Stale {
+	if got := observed("awareness_preflight", both, nil); got.State != Stale {
 		t.Fatalf("an empty answer from a stale graph was recorded as %q", got.State)
 	}
 }
@@ -325,12 +325,12 @@ func TestEverySurfaceStateIsReachable(t *testing.T) {
 		"seed_state":            "SEED_STATE_CURRENT",
 	}
 	seen := map[Presence]bool{
-		observed("s", sensei.ToolResult{}).State: true,
-		observed("s", sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_OK", "authority": healthy}}).State:    true,
-		observed("s", sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_EMPTY", "authority": healthy}}).State: true,
+		observed("s", sensei.ToolResult{}, nil).State: true,
+		observed("s", sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_OK", "authority": healthy}}, nil).State:    true,
+		observed("s", sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_EMPTY", "authority": healthy}}, nil).State: true,
 		observed("s", sensei.ToolResult{Structured: map[string]any{"authority": map[string]any{
 			"authoritative": true, "graph_freshness_state": "GRAPH_FRESHNESS_STATE_STALE", "seed_state": "SEED_STATE_CURRENT",
-		}}}).State: true,
+		}}}, nil).State: true,
 		UnavailableObservation("s", "no sensei").State: true,
 	}
 	for _, want := range []Presence{Present, EmptyProven, Absent, Stale, Unavailable} {
@@ -418,5 +418,49 @@ func TestTheDrawerShowsFailedSourcesRatherThanOmittingThem(t *testing.T) {
 	}
 	if !strings.Contains(fine.Render(), "empty-proven") {
 		t.Errorf("a healthy turn renders no state:\n%s", fine.Render())
+	}
+}
+
+// The packet's preflight evidence gates HANDOFF ACCEPTANCE, so it is
+// acceptance-critical by the program's own definition — and it preserved a
+// verdict without its question.
+//
+// The inventory's "one of six" preflight call sites was WRONG: this is a
+// seventh, and arguably the most consequential, because handoff.go compares a
+// handoff's changed files against this packet's scope to accept or reject it.
+// A rejected handoff could not be re-examined against the question the packet
+// actually asked.
+func TestAnObservationCarriesTheRequestThatProducedIt(t *testing.T) {
+	args := map[string]any{"task": "widen the boundary", "files": []string{"a.go"}, "mode": "compact"}
+	got := observed("sensei:awareness_preflight",
+		sensei.ToolResult{Structured: map[string]any{"status": "PREFLIGHT_STATUS_OK"}}, args)
+
+	if got.Request == nil {
+		t.Fatal("an observation preserved its verdict and not the question that produced it")
+	}
+	if got.Request["task"] != "widen the boundary" {
+		t.Errorf("the request is present but wrong: %+v", got.Request)
+	}
+	// The result must still be there: this is additive.
+	if got.Structured == nil {
+		t.Error("recording the request displaced the result")
+	}
+
+	// Every presence state must carry it, not only the happy one. A packet
+	// whose evidence was STALE or ABSENT is exactly the one somebody will want
+	// to re-examine.
+	for _, c := range []struct {
+		name string
+		res  sensei.ToolResult
+	}{
+		{"absent", sensei.ToolResult{}},
+		{"stale", sensei.ToolResult{Structured: map[string]any{"authority": map[string]any{
+			"authoritative": true, "graph_freshness_state": "GRAPH_FRESHNESS_STATE_STALE",
+			"seed_state": "SEED_STATE_CURRENT", "build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED"}}}},
+	} {
+		o := observed("sensei:awareness_preflight", c.res, args)
+		if o.Request == nil {
+			t.Errorf("a %s observation dropped its request; that is the one most likely to be re-examined", c.name)
+		}
 	}
 }

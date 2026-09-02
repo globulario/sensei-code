@@ -25,7 +25,10 @@ func TestARefusalRecordsWhatItActuallyClaimed(t *testing.T) {
 		matches, _ := filepath.Glob(
 			filepath.Join("../../benchmark/proof-v6/transcripts", task, "COLD", "*.log"))
 		if len(matches) == 0 {
-			t.Skipf("%s transcript absent", task)
+			// Transcripts are tracked. Their absence means the evidence this
+			// adjudication is checked against is gone, which is a finding.
+			t.Fatalf("%s transcript is absent: it is tracked in this repository, so "+
+				"the adjudication has no evidence to be checked against", task)
 		}
 		b, err := os.ReadFile(matches[0])
 		if err != nil {
