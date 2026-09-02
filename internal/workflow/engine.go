@@ -1436,6 +1436,15 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if base := strings.TrimSpace(tc.Identity.BaseSHA); base != "" {
 			auditArgs["expected_head"] = base
 		}
+		// THE QUESTION IS BOUND TO THE ANSWER BEFORE EITHER IS EMITTED.
+		//
+		// auditRecord is built once and reused by every emit below, so the
+		// request cannot survive on some paths and vanish on others -- which is
+		// how one of six preflight sites came to record its request while five
+		// did not.
+		auditEvidence := func(structured map[string]any) map[string]any {
+			return e.auditRecord(auditArgs, structured, tc.Identity.BaseSHA, start.GraphBuildCommit())
+		}
 		audit, err := sc.CallTool("awareness_audit_diff", auditArgs)
 		if err != nil {
 			// No verdict was obtained for this candidate. That is structural,
@@ -1443,12 +1452,20 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// tool errored, and another executor handed the same candidate
 			// would fail the same way. Returning an ordinary error here sent
 			// it down the handoff path anyway (#89, second review).
+			//
+			// THE REQUEST IS PRESERVED EVEN THOUGH THERE IS NO RESULT, and this
+			// is the path where it matters most. "Sensei could not audit this"
+			// is the one verdict that says nothing about the candidate, so
+			// without the request there is nothing left to tell a refused
+			// candidate from a malformed question. This emitted nil.
 			reason := auditCallFailure(err)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason, nil))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
+				auditEvidence(nil)))
 			return false, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		lastAudit = firstText(audit)
-		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit, audit.Structured))
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateAudited, lastAudit,
+			auditEvidence(audit.Structured)))
 
 		// The audit is decoded before the reviewer is consulted. The reviewer
 		// still receives the prose, because prose is what a model reasons over,
@@ -1456,7 +1473,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		verdict, err := sensei.DecodeDiffAudit(audit)
 		if err != nil {
 			reason := auditCallFailure(err)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason, audit.Structured))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
+				auditEvidence(audit.Structured)))
 			return false, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		// Surface why an audit did not pass at the moment it happens, rather
@@ -1466,17 +1484,18 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// field.
 		if !verdict.ReviewerMayAccept() {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-				"Sensei audit did not clear this candidate: "+verdict.Diagnostic(), audit.Structured))
+				"Sensei audit did not clear this candidate: "+verdict.Diagnostic(), auditEvidence(audit.Structured)))
 		}
 		// A structural refusal is about the payload, not the change. No
 		// reviewer can judge it and no further implementor can fix it without
 		// a new candidate, so it is named here and the run ends here (#89).
 		if reason := structuralAuditFailure(verdict); reason != "" {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason, audit.Structured))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, reason,
+				auditEvidence(audit.Structured)))
 			return false, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, audit.Structured))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, auditEvidence(audit.Structured)))
 		}
 		// A candidate that is byte-identical to the previous cycle means the
 		// worker read the feedback and produced the same thing again. Running
@@ -1605,7 +1624,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// next revision instruction instead.
 			if judged := judgeCandidate(string(review.Decision), verdict); !judged.Accepted {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-					"reviewer accepted but Sensei refused; the refusal governs: "+judged.Refusal, audit.Structured))
+					"reviewer accepted but Sensei refused; the refusal governs: "+judged.Refusal, auditEvidence(audit.Structured)))
 				// A refusal the worker cannot act on must stop the loop rather
 				// than drive it. An audit that could not run objects to the
 				// environment, not to the candidate, so sending it back produces
@@ -5009,6 +5028,35 @@ func indentOrNone(status string) string {
 // audit then found that one of six preflight sites recorded its request, so
 // the class was open and copying this helper five times would have left the
 // sixth to be forgotten.
+// auditRecord pairs the DIFF AUDIT REQUEST with its verdict.
+//
+// awareness_audit_diff is the record that decides admission -- a reviewer may
+// not accept over a failing audit -- and it emitted its verdict six times
+// carrying no request at all. That is sensei-code#134 one level up: a preserved
+// verdict is not a preserved experiment, now sitting on the record that governs
+// acceptance rather than on one that reports an escalation.
+//
+// expected_head is why this is not cosmetic. It is a CORRECTNESS input: the
+// comment at the call site records that omitting it and pinning the wrong one
+// both yield cannot_verify, through different doors. A preserved cannot_verify
+// with no preserved expected_head cannot distinguish "this candidate is
+// unverifiable" from "we asked the question wrongly", and those call for
+// opposite responses.
+//
+// The diff is carried in full rather than as a digest. Envelope.Request is "the
+// exact input", and a digest would need a referent the record does not carry --
+// the candidate worktree is transient and may be gone by the time anyone reads
+// this. The alternative was considered and is recorded in the PR; a digest whose
+// referent has expired is the shape this package exists to refuse.
+func (e *Engine) auditRecord(args, structured map[string]any, revision, graphDigest string) map[string]any {
+	return evidence.Envelope{
+		Operation:   "awareness_audit_diff",
+		Request:     args,
+		Revision:    revision,
+		GraphDigest: graphDigest,
+	}.Record(structured)
+}
+
 func (e *Engine) preflightRecord(args, structured map[string]any, revision, graphDigest string) map[string]any {
 	return evidence.Envelope{
 		Operation:   "awareness_preflight",
