@@ -59,6 +59,19 @@ That is criterion 1 measured a third way. It is also why "laws autonomously
 surfaced: 0" is not yet evidence about retrieval *quality*: retrieval did not
 run. Nothing was ranked badly; nothing was ranked.
 
+## Measured afterwards: the graph held both laws directly
+
+`criterion-5-the-graph-already-knew.md` measures the counterfactual, and it is
+sharper than "retrieval did not run". For both defects the governing law was
+**directly anchored to a file that was changed, and was the only thing the graph
+says about that file** — rank 1 of 1, twice. #335's law even prescribes the
+repair it needed ("one evaluation answering two surfaces, never a second
+evaluation that agrees today").
+
+So `laws autonomously surfaced: 0` is not a retrieval score. Nothing needed
+inferring or ranking. The cheapest possible retrieval case failed, because the
+surface could not serve.
+
 ## One deterministic gate did fire, and it is not the same thing
 
 `yaml2nt`'s dangling-reference ratchet — added by #323 for exactly this class —
@@ -143,3 +156,6 @@ against a generation that does not contain the laws being retrieved.
 
 That is the honest ordering. Not "retrieval is next" — retrieval is *blocked*,
 and the block is one deliberate human action, not a missing mechanism.
+
+And per the counterfactual above, for these two specimens retrieval was not even
+the mechanism that was needed. Improving it would have prevented neither defect.
