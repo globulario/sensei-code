@@ -110,7 +110,11 @@ func TestCampaignCapacityIsJudgedOnTheBindingWindow(t *testing.T) {
 	b, err := os.ReadFile(
 		"../../benchmark/repair-verification-v1/transcripts/internal-gitx-a4fa351/COLD/1.log")
 	if err != nil {
-		t.Skip("arm 1 transcript absent")
+		// Tracked fixture: the comment above says it is kept "so the parser is
+		// tested against what a provider actually emits". If it disappears the
+		// parser is tested against nothing.
+		t.Fatalf("arm 1 transcript is absent: %v; it is tracked in this repository as the "+
+			"fixture this parser is tested against", err)
 	}
 	q, err := parseQuota(string(b))
 	if err != nil {
