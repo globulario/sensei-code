@@ -87,10 +87,11 @@ a derived summary owes the same envelope is a real question and it is left open
 here rather than answered by making the numbers tidier. Classification stops
 where structure stops.
 
-## Why the repair is not in this PR
+## The repair, and the choice it turned on
 
-The fix has one design question a reviewer should decide, and shipping a choice
-unreviewed is the wrong way to settle it:
+Written after this audit and landed in #148. It is recorded here because the
+audit is what named the call, and because the choice it turned on is the part a
+reader should be able to disagree with:
 
 **does the diff body belong in the record?** `auditArgs["diff"]` is the
 question, and `Envelope.Request` is documented as "the exact input". But the
@@ -103,11 +104,24 @@ forbidden shape, because those pins give the digest a **referent**. The known-ba
 version of this is a question that "survives only as a digest with no referent".
 A digest whose referent is pinned in the same record is a different thing.
 
-Both readings are defensible. That is precisely when the choice belongs to a
-reviewer rather than to the implementer who found the defect.
+Both readings are defensible. **#148 took the first**: the diff is carried in
+full, on the grounds that the candidate worktree is transient and may be gone
+when anyone reads the record, so a digest's referent can expire while the record
+outlives it. The cost is real and is stated in that PR rather than hidden — the
+diff now appears in the audit events — and a reviewer who weighs event size
+differently should say so there.
 
 ## Criterion 4 verdict
 
-**FAIL, narrowly and specifically.** Not "evidence records are unreplayable" —
-the preflight class is closed and four sites carry a complete envelope. The
-failure is one call, and it is the one that decides acceptance.
+**FAIL at the time of this audit, narrowly and specifically.** Not "evidence
+records are unreplayable" — the preflight class was already closed and four
+sites carried a complete envelope. The failure was one call, and it was the one
+that decides acceptance.
+
+**Closed by #148.** `awareness_audit_diff` now carries its request on all seven
+emits including the transport-failure path, and
+`TestEveryGovernedCallSiteIsClassified` replaces the preflight-only walk with a
+scan over every governed call in `internal/` and `cmd/`, classified `record` or
+`context: <why>` in both directions. That is what makes `internal/evidence`'s
+stated guarantee — "a new site cannot quietly omit the half that makes a record
+replayable" — mechanical rather than a convention.

@@ -21,10 +21,18 @@ GUARD constitutional moves          0            with one reversal, declared
 ```
 
 `Judge` returns **unmeasured**: `independent findings were not measured in both
-campaigns`. Campaign 001 counted 26 Codex findings. This campaign has two open
-pull requests that no independent reviewer has finished reading. Recording 0
-would claim no findings exist when nobody has looked — the exact substitution
-this package types `Measured` to prevent.
+campaigns`. Campaign 001 counted 26 Codex findings. This campaign produced six
+pull requests across the two repositories, and **no independent reviewer read
+any of them**: `Hosted adversarial review` is SKIPPED on every check run in this
+repository for want of a provider key, and the reviews attached at merge were
+written by the same actor that wrote the changes. Recording 0 would claim no
+findings exist when nobody has looked — the exact substitution this package
+types `Measured` to prevent.
+
+That is also the honest reason this campaign cannot be compared to 001: 001's 26
+findings came from a reviewer that was not the implementer, and this campaign
+has no such number at all. The two are not a trend of one metric; one of them is
+missing the metric.
 
 ## Laws autonomously surfaced: 0, for the second time
 
