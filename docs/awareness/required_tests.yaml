@@ -13,3 +13,17 @@ required_tests:
         - sensei_code.provider.authentication_is_not_readiness
       files:
         - internal/doctor/doctor.go
+  - id: internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest
+    title: The diff audit record carries the request that produced it
+    protects:
+      invariants:
+        - sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
+      files:
+        - internal/workflow/engine.go
+  - id: internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified
+    title: Every governed call site is classified as record or context
+    protects:
+      invariants:
+        - sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
+      files:
+        - internal/workflow/engine.go
