@@ -28,8 +28,16 @@ const (
 )
 
 type Observation struct {
-	State      Presence       `json:"state"`
-	Source     string         `json:"source"`
+	State  Presence `json:"state"`
+	Source string   `json:"source"`
+	// Request is the exact input that produced this observation.
+	//
+	// Without it the packet preserves a verdict and not an experiment. That
+	// matters more here than almost anywhere: the packet's preflight evidence
+	// gates handoff acceptance, so a rejected handoff could not be re-examined
+	// against the question the packet actually asked. Additive and omitempty,
+	// so packets written before it still decode.
+	Request    map[string]any `json:"request,omitempty"`
 	Text       string         `json:"text,omitempty"`
 	Structured map[string]any `json:"structured,omitempty"`
 	Reason     string         `json:"reason,omitempty"`
@@ -114,7 +122,8 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	if err != nil {
 		return ContextPacket{}, fmt.Errorf("resolve HEAD: %w", err)
 	}
-	workspace, err := caller.CallTool("sensei_workspace_status", map[string]any{"repo": repo.Root})
+	workspaceArgs := map[string]any{"repo": repo.Root}
+	workspace, err := caller.CallTool("sensei_workspace_status", workspaceArgs)
 	if err != nil {
 		return ContextPacket{}, fmt.Errorf("Sensei workspace status: %w", err)
 	}
@@ -135,11 +144,11 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 	if err != nil {
 		return ContextPacket{}, fmt.Errorf("Sensei preflight: %w", err)
 	}
-	workspaceStatus := observed("sensei:sensei_workspace_status", workspace)
+	workspaceStatus := observed("sensei:sensei_workspace_status", workspace, workspaceArgs)
 	if err := requireEvidence("workspace status", workspaceStatus); err != nil {
 		return ContextPacket{}, err
 	}
-	preflightStatus := observed("sensei:awareness_preflight", preflight)
+	preflightStatus := observed("sensei:awareness_preflight", preflight, preflightArgs)
 	if err := requireEvidence("preflight", preflightStatus); err != nil {
 		return ContextPacket{}, err
 	}
@@ -183,19 +192,21 @@ func Build(ctx context.Context, repo gitx.Repo, caller SenseiCaller, taskID, tas
 //
 // Staleness is checked before emptiness, because "nothing here" from a graph
 // that cannot vouch for itself is not proof of anything.
-func observed(source string, result sensei.ToolResult) Observation {
+func observed(source string, result sensei.ToolResult, request map[string]any) Observation {
 	text := firstText(result)
 	if strings.TrimSpace(text) == "" && len(result.Structured) == 0 {
 		return Observation{
-			State:  Absent,
-			Source: source,
-			Reason: "Sensei returned neither text nor structured content",
+			State:   Absent,
+			Source:  source,
+			Request: request,
+			Reason:  "Sensei returned neither text nor structured content",
 		}
 	}
 	if authority, ok := sensei.AuthorityOf(result); ok && !authority.Certifiable() {
 		return Observation{
 			State:      Stale,
 			Source:     source,
+			Request:    request,
 			Reason:     authority.Diagnostic(),
 			Text:       text,
 			Structured: result.Structured,
@@ -205,6 +216,7 @@ func observed(source string, result sensei.ToolResult) Observation {
 		return Observation{
 			State:      EmptyProven,
 			Source:     source,
+			Request:    request,
 			Reason:     reason,
 			Text:       text,
 			Structured: result.Structured,
@@ -213,6 +225,7 @@ func observed(source string, result sensei.ToolResult) Observation {
 	return Observation{
 		State:      Present,
 		Source:     source,
+		Request:    request,
 		Text:       text,
 		Structured: result.Structured,
 	}

@@ -515,3 +515,21 @@ invariants:
     evidence:
       - campaign 001 records autonomously surfaced prior laws as MEASURED zero, distinguished from unmeasured, so a later campaign cannot reinterpret the baseline
     contract: 'A self-improvement claim requires evidence that prior governed experience CHANGED A LATER DECISION OR ACTION. Evidence that the experience was recorded, admitted, published or retrievable is necessary and not sufficient. The causal chain must be reconstructible: which prior lesson, reaching which later subject, retrieved by what relationship, surfaced at what point, and what the agent did differently because of it.'
+  - id: sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
+    title: A verdict is recorded with the question that produced it
+    status: active
+    description: 'sensei-code#134 preserved a run that stopped at the human authority boundary carrying ''human_approval_required (blast radius cluster)'' and NOT the request that produced it. When the upstream repair landed the specimen could not be replayed, and the escalation no longer reproduced even on the binary that had produced it -- so a post-repair ''local/none'' would have looked exactly like proof and established nothing. #137 repaired one call site; an audit then found ONE OF SIX preflight sites recording its request, so the class was open. internal/evidence is now the single way this workflow records such a call, and a structural test refuses a new emitting site that omits the request. Sites that emit nothing are listed with the reason, so an exemption is a statement rather than an omission.'
+    protects:
+      files:
+        - internal/evidence/envelope.go
+        - internal/workflow/engine.go
+    forbidden_fixes:
+      - 'record the envelope INSTEAD of the result: every existing reader looks for result fields such as risk_class, and displacing them trades one loss for another'
+    required_tests:
+      - internal/evidence/envelope_test.go:TestAVerdictWithoutItsRequestIsNotReplayable
+      - internal/evidence/envelope_test.go:TestTheEnvelopeDoesNotDisplaceTheResult
+      - internal/evidence/envelope_test.go:TestAnUncapturedFieldIsAbsentNotEmpty
+      - internal/workflow/preflight_request_recorded_test.go:TestEveryEmittedPreflightCarriesItsRequest
+    evidence:
+      - one of six preflight call sites recorded its request before this change; all emitting sites now do, and dropping one fails TestEveryEmittedPreflightCarriesItsRequest
+    contract: 'Every governed call whose result is emitted as a durable record carries its causal envelope: the operation, the exact request, the revision the subject was read at, and the knowledge generation that answered. A record missing its request is a historical observation and must not be cited as replayable proof. An uncaptured field is ABSENT from the record, never present-and-empty, because an empty revision claims one was captured.'

@@ -399,9 +399,15 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 		if domain != "" {
 			args["domain"] = domain
 		}
+		// Captured BEFORE the question is asked: reading HEAD afterwards
+		// attaches the checkout as it is now to a verdict asked about the
+		// checkout as it was then.
+		subjectRevision := repositoryHead(ctx, e.Repo)
 		if preflight, pfErr := sc.CallTool("awareness_preflight", args); pfErr == nil {
 			preflightEvidence = firstText(preflight)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence, preflight.Structured))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, preflightEvidence,
+				e.preflightRecord(args, preflight.Structured,
+					subjectRevision, sensei.PreflightGraphDigest(preflight))))
 			if decision, decodeErr := sensei.DecodePreflight(preflight); decodeErr == nil {
 				consulted.Add(preflightSource(decision))
 				if !decision.Authority.Certifiable() {

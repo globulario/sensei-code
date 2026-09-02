@@ -3,6 +3,20 @@ name: Phase 1 PR
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+  # VERIFY THE MERGED STATE, NOT ONLY THE PROPOSED ONE.
+  #
+  # This workflow ran on pull_request only, so main was never tested after a
+  # merge. Every gate here answered a question about a branch, and the state
+  # that actually ships was never exercised.
+  #
+  # That is not hypothetical. In globulario/sensei, which DOES run CI on main,
+  # the merges of #318, #320 and #321 each left main red and nobody looked --
+  # the failing test family passes on every branch and fails only when HEAD is
+  # on the admitted branch, a state no pull request can be in. Here the same
+  # class would be invisible rather than merely unwatched, because the run does
+  # not exist at all.
+  push:
+    branches: [main]
 
 permissions:
   contents: read
