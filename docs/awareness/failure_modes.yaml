@@ -242,3 +242,16 @@ failure_modes:
       - 6805 authored bindings checked; 3 dead across 2 critical invariants; the check fails on the corpus before the repair and passes after, which is its own falsifier
       - a commented-out template binding (path/to/config_test.go) is documentation, not a claim, and is skipped -- an earlier count of 4 was wrong for that reason
     contract: 'Every authored required_tests binding must resolve: the named _test.go file must exist and must declare the named function. A binding that resolves to nothing is not weak coverage, it is ZERO coverage that reads as full coverage.'
+  - id: failure.the_acceptance_record_emitted_its_verdict_six_times_and_its
+    title: The acceptance record emitted its verdict six times and its request never
+    severity: high
+    description: 'awareness_audit_diff is the record that decides admission -- a reviewer may not accept over a failing audit. Its request is built with diff, task, domain and expected_head, and its result was emitted six times as audit.Structured with auditArgs attached to none of them; the transport-failure path emitted nil, preserving neither. #139 closed the preflight class and generalised the contract to ''every governed call whose result is emitted as a durable record'', but its structural test walked preflight call sites only, so the highest-stakes record in the system sat outside the check that names it. expected_head makes this a correctness loss rather than a cosmetic one: omitting it and pinning the wrong one both yield cannot_verify through different doors, so a preserved cannot_verify with no preserved expected_head cannot distinguish an unverifiable candidate from a wrongly asked question, and those call for opposite responses.'
+    protects:
+      files:
+        - internal/workflow/engine.go
+    related_invariants:
+      - sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
+    required_tests:
+      - internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified
+    evidence:
+      - removing Request from auditRecord fails TestTheAuditRecordCarriesItsRequest on both the diff and expected_head; an unclassified new governed call site fails TestEveryGovernedCallSiteIsClassified; a scan pattern matching nothing fails its vacuous-pass guard
