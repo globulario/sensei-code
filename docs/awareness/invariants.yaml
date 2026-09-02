@@ -488,6 +488,33 @@ invariants:
       - internal/workflow/unexamined_test.go:TestAnUnexaminedPlannedFileIsCoveredOnlyByADerivationOverIt
       - internal/workflow/unexamined_test.go:TestAnUnexaminedFileUnderAnOperationalGrantOpensNoGap
     contract: 'Coverage is a per-file property: the scoped preflight''s region verdict vouches for a planned file only if the graph examined that file; a file it never examined is uncovered whatever its neighbours carry'
+  - id: sensei_code.improvement.stored_knowledge_is_not_improved_behavior
+    title: Governed knowledge that is not reachable or not consulted cannot improve behavior by existing
+    status: active
+    description: 'Measured 2026-09-01: the live evaluator was 159 admitted corpus changes behind, and golang/prospective -- the retrieval machinery built to bring prior law to a change -- was imported by nothing outside its own package and never called in production. So ''autonomously surfaced prior laws = 0'' had a STRUCTURAL cause, not a behavioural one: nothing called it, and the zero would have survived publication. A reflex experiment run in that state would have produced an ambiguous negative that looked like a learning failure.'
+    protects:
+      files:
+        - docs/work/phase4-does-retrieval-participate.md
+    forbidden_fixes:
+      - 'cite corpus growth, invariant count or published artifacts as evidence of improved behavior: they measure that knowledge exists, which is the premise rather than the claim'
+    evidence:
+      - grep for golang/prospective outside its own package returns nothing; Retrieve has no production caller; the live store build was 96f19456f5fb from 2026-08-20 while the corpus had moved 159 corpus-touching commits ahead
+    contract: Knowledge improves future behavior only by being REACHABLE by the deciding surface and CONSULTED early enough to affect reasoning. Storing it establishes neither. A corpus entry, an invariant, a test binding or a published artifact is evidence that knowledge exists -- never evidence that it participated. built != wired, wired != consulted, consulted != early enough to affect reasoning.
+  - id: sensei_code.improvement.a_claim_needs_a_changed_decision_not_a_stored_lesson
+    title: A self-improvement claim requires a changed decision, not a stored lesson
+    status: active
+    description: 'The campaign guards exist because the cheapest way to converge is to delete the evidence that says you have not. This invariant is the same rule applied to the headline claim: a campaign may report knowledge stored, laws admitted, artifacts published and retrieval available, and still have changed no decision. Campaign 001 is exactly that case -- 21 findings repaired, 38 falsifiers added, and autonomously surfaced prior laws measured at zero.'
+    protects:
+      files:
+        - internal/campaign/campaign.go
+    forbidden_fixes:
+      - 'reinterpret an earlier campaign''s measured zero because a later campaign performed better: the baseline is the thing being beaten and may not move'
+    required_tests:
+      - internal/campaign/campaign_test.go:TestAGuardMovingTheWrongWayVoidsTheCampaign
+      - internal/campaign/campaign_test.go:TestTheReportShowsUnmeasuredAsUnmeasured
+    evidence:
+      - campaign 001 records autonomously surfaced prior laws as MEASURED zero, distinguished from unmeasured, so a later campaign cannot reinterpret the baseline
+    contract: 'A self-improvement claim requires evidence that prior governed experience CHANGED A LATER DECISION OR ACTION. Evidence that the experience was recorded, admitted, published or retrievable is necessary and not sufficient. The causal chain must be reconstructible: which prior lesson, reaching which later subject, retrieved by what relationship, surfaced at what point, and what the agent did differently because of it.'
   - id: sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
     title: A verdict is recorded with the question that produced it
     status: active
