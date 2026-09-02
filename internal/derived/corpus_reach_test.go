@@ -30,9 +30,14 @@ func TestDerivedCoverageReachesTheBenchmarkCorpus(t *testing.T) {
 		dirs[strings.Trim(r.Dir, "/")] = true
 	}
 
-	b, err := os.ReadFile("../../benchmark/repair-verification-v2/manifest.json")
+	// The manifest is TRACKED IN GIT, so its absence is a defect in this
+	// repository rather than a limitation of the environment. Skipping here
+	// retired the reachability check silently whenever the corpus moved.
+	const manifest = "../../benchmark/repair-verification-v2/manifest.json"
+	b, err := os.ReadFile(manifest)
 	if err != nil {
-		t.Skip("corpus absent")
+		t.Fatalf("corpus manifest %s is absent: %v; it is tracked in this repository, "+
+			"so this is a defect and not a reason to stop checking reachability", manifest, err)
 	}
 	var m struct {
 		Tasks []struct {

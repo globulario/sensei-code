@@ -291,17 +291,45 @@ func TestEveryAuthoredTestBindingResolves(t *testing.T) {
 // resolver would refuse it, so the guarantee does not quietly depend on nobody
 // ever writing one.
 func TestBindingsResolveThroughTheParserNotTheBytes(t *testing.T) {
-	const file = "internal/workflow/routine_test.go"
-	raw, err := os.ReadFile(filepath.Join(repoRoot, file))
-	if err != nil {
-		t.Skipf("fixture file is gone (%v) — this test no longer has a subject", err)
+	// THE FIXTURE IS CONSTRUCTED, NOT FOUND.
+	//
+	// This used to read internal/workflow/routine_test.go and require it to
+	// still contain the literal "func TestOldGuard(" inside a string. Both
+	// halves were skips: a deleted file, or a renamed function, retired the
+	// test silently -- while its own comment above says the guarantee must not
+	// "quietly depend on nobody ever writing one". It quietly depended on
+	// somebody having written one.
+	//
+	// Building the risky shape here means two unrelated edits can no longer
+	// retire the check, and the case under test is guaranteed to be present.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "specimen_test.go")
+	const specimen = `package specimen
+
+// A diff quoted in a comment, and the same text inside a string literal.
+// Neither declares anything.
+//
+//	-func TestOldGuard(t *testing.T) {
+const patch = "func TestOldGuard(t *testing.T) {\n"
+
+func TestActuallyDeclared(t *testing.T) {}
+`
+	if err := os.WriteFile(path, []byte(specimen), 0o644); err != nil {
+		t.Fatalf("cannot write specimen: %v", err)
 	}
-	if !strings.Contains(string(raw), "func TestOldGuard(") {
-		t.Skip("the fixture string that made this a real risk is gone")
-	}
-	declared, _, err := testFuncs(filepath.Join(repoRoot, file))
+
+	declared, _, err := testFuncs(path)
 	if err != nil {
-		t.Fatalf("parsing %s: %v", file, err)
+		t.Fatalf("parsing specimen: %v", err)
+	}
+	// The fixture must actually contain the risky shape, or the assertion below
+	// passes for the wrong reason.
+	if !strings.Contains(specimen, "func TestOldGuard(") {
+		t.Fatal("the specimen no longer contains the byte sequence that makes this a risk")
+	}
+	if !declared["TestActuallyDeclared"] {
+		t.Fatal("the parser missed a genuinely declared test, so a negative result below " +
+			"would prove nothing about string literals")
 	}
 	if declared["TestOldGuard"] {
 		t.Fatal("the resolver accepted a function that exists only inside a string literal")
