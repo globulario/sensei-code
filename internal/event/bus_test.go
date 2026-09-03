@@ -1,6 +1,9 @@
 package event
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestBusPublish(t *testing.T) {
 	b := NewBus()
@@ -44,4 +47,84 @@ func TestCancelClosesTheChannelAndPublishSkipsIt(t *testing.T) {
 
 	// A second cancel is a no-op rather than a double close.
 	cancel()
+}
+
+// The property the non-blocking send exists for.
+//
+// A subscriber that stops reading must not stop the publisher. Before this,
+// Publish blocked on a full channel while holding the read lock, so any wedged
+// observer stopped the workflow mid-run — silently, and with the cause
+// somewhere else entirely.
+func TestAStalledSubscriberCannotBlockPublish(t *testing.T) {
+	b := NewBus()
+	stalled, cancel := b.Subscribe(1)
+	defer cancel()
+	_ = stalled // deliberately never read
+
+	done := make(chan struct{})
+	go func() {
+		for i := 0; i < 1000; i++ {
+			b.Publish(New("s", "t", SourceSensei, Status, "tick", nil))
+		}
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a subscriber that stopped reading stopped the publisher")
+	}
+}
+
+// One wedged observer must not starve the others.
+func TestAHealthySubscriberKeepsReceivingWhileAnotherIsStalled(t *testing.T) {
+	b := NewBus()
+	_, cancelStalled := b.Subscribe(1)
+	defer cancelStalled()
+	healthy, cancelHealthy := b.Subscribe(8)
+	defer cancelHealthy()
+
+	for i := 0; i < 4; i++ {
+		b.Publish(New("s", "t", SourceSensei, Status, "tick", nil))
+	}
+	for i := 0; i < 4; i++ {
+		select {
+		case got := <-healthy:
+			if got.Summary != "tick" {
+				t.Fatalf("healthy subscriber got %q", got.Summary)
+			}
+		default:
+			t.Fatalf("the healthy subscriber received only %d of 4 events", i)
+		}
+	}
+}
+
+// A skipped delivery is a gap in what a watcher saw. Counting it is what lets
+// "the transcript looks complete" and "the transcript is complete" be told
+// apart, so the drop must not be silent.
+func TestASkippedDeliveryIsCountedRatherThanSilent(t *testing.T) {
+	b := NewBus()
+	if b.Dropped() != 0 {
+		t.Fatalf("a fresh bus has already dropped %d", b.Dropped())
+	}
+	_, cancel := b.Subscribe(1)
+	defer cancel()
+
+	for i := 0; i < 5; i++ {
+		b.Publish(New("s", "t", SourceSensei, Status, "tick", nil))
+	}
+	// One fits in the buffer; the rest have nowhere to go.
+	if got := b.Dropped(); got != 4 {
+		t.Fatalf("dropped %d of 5 deliveries into a buffer of 1, want 4", got)
+	}
+}
+
+// Delivering to nobody is not a drop. A run with no watcher attached has not
+// lost anything.
+func TestPublishingToNobodyDropsNothing(t *testing.T) {
+	b := NewBus()
+	b.Publish(New("s", "t", SourceSensei, Status, "tick", nil))
+	if got := b.Dropped(); got != 0 {
+		t.Fatalf("publishing with no subscribers counted %d drops", got)
+	}
 }
