@@ -120,6 +120,11 @@ type Engine struct {
 	// reviewAttempts counts reviews per task across every worker, so the
 	// record has one sequence a handoff does not restart.
 	reviewAttempts map[string]int
+
+	// Runners resolves which adapter answers as a role. Nil means the provider
+	// command line, which is every path today; see runners.go for why a
+	// resolver's refusal is never recovered from by building the CLI anyway.
+	Runners RunnerResolver
 }
 
 // closureBudget is how many rounds one condition gets to close its own gap.
@@ -1210,11 +1215,16 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				strings.Join(guidance, "\n"), nil))
 		}
 		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
-		impl := agent.CLI{Name: worker.Name, Label: config.DisplayName(worker.Name), Command: worker.Command, Args: worker.Args, NoGraph: !worker.ConsumesGraph(), Source: sourceFor(worker.Name), SessionID: e.SessionID, Env: guardEnv, UnsetEnv: provider.SessionOnlyEnv}
+		impl, err := e.resolveRunner(RunnerSpec{
+			Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
+		})
+		if err != nil {
+			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
+		}
 		// The worker's own text is the artifact of a read-only plan. Discarding
 		// it left an inspection with nothing to show but a transcript nobody
 		// had judged.
-		result, err := impl.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
+		result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			return false, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 		}
@@ -1870,7 +1880,12 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 // directory, so the observation lane can run the architect somewhere the
 // governed checkout is not.
 func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt, workspace string) (architectureDecision, error) {
-	architect := agent.CLI{Name: e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name), Command: e.Config.Architect.Command, Args: e.Config.Architect.Args, NoGraph: !e.Config.Architect.ConsumesGraph(), Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
+	architect, err := e.resolveRunner(RunnerSpec{
+		Role: roles.Architect, Agent: e.Config.Architect, Source: event.SourceArchitect, TaskID: taskID,
+	})
+	if err != nil {
+		return architectureDecision{}, err
+	}
 	var lastErr error
 	// rounds bounds the whole resolution, which attempt does not.
 	//
@@ -1902,7 +1917,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		if attempt > 1 {
 			p += "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
 		}
-		result, err := architect.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
+		result, err := architect.Runner.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			lastErr = err
 			continue
@@ -2195,7 +2210,12 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 var errReviewRefused = errors.New("review refused")
 
 func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agent, packet roles.IndependentReviewPacket, binding roles.Binding, implementer string) (roles.ReviewVerdict, error) {
-	reviewer := agent.CLI{Name: cfg.Name, Label: config.DisplayName(cfg.Name), Command: cfg.Command, Args: cfg.Args, NoGraph: !cfg.ConsumesGraph(), Source: event.SourceReviewer, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv}
+	reviewer, err := e.resolveRunner(RunnerSpec{
+		Role: roles.Reviewer, Agent: cfg, Source: event.SourceReviewer, TaskID: taskID,
+	})
+	if err != nil {
+		return roles.ReviewVerdict{}, err
+	}
 	prompt := reviewPrompt(packet)
 	var lastErr error
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -2203,7 +2223,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		if attempt > 1 {
 			p += "\n\nReturn ONLY the required JSON object."
 		}
-		result, err := reviewer.Run(ctx, agent.Request{
+		result, err := reviewer.Runner.Run(ctx, agent.Request{
 			Role: roles.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p,
 			Session: roles.Fresh, Graph: e.graphFor(taskID),
 		}, e.emit)
