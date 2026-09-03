@@ -151,6 +151,18 @@ func authorityFor(r roles.Role) (authority.Level, bool) {
 // thing a request decides is what was asked.
 type Request struct {
 	// Principal identifies the party connecting.
+	//
+	// Today it is a label the client states, and it is therefore worth exactly
+	// what the thing that established it is worth — which, over an
+	// unauthenticated transport, is nothing. Nothing in this package lets a
+	// stated identity buy authority it was not granted, and qualify.go
+	// deliberately refuses to read two different stated names as two different
+	// review contexts.
+	//
+	// The transport that eventually carries this must not treat a
+	// client-supplied identity as the authority-bearing one. A client label may
+	// be recorded as evidence; the identity a decision is attributed to has to
+	// be minted or bound by the authenticated transport.
 	Principal ID `json:"principal"`
 	// Workspace is the repository this registration is about, named by the
 	// domain Sensei owns rather than by a local path: two checkouts of one
