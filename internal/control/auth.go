@@ -27,6 +27,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/principal"
@@ -60,17 +61,38 @@ func Mint() (Credential, error) {
 	return credentialFor(hex.EncodeToString(b[:])), nil
 }
 
+// TokenLength is the exact representation Mint produces: 64 lowercase hex
+// characters over 32 random bytes.
+const TokenLength = 2 * tokenBytes
+
 // FromToken rebuilds a credential from a token an operator already holds, so a
 // restarted server can keep the same identity rather than inventing a second
 // principal for the same party.
 //
-// An empty token is refused. A server whose credential is the empty string
-// would authenticate a request that presented nothing.
+// It requires the same strength Mint produces, and that is not pedantry about
+// format. The bearer boundary is worth exactly what the weakest token that can
+// pass through it is worth, and an operator-supplied secret is the path where a
+// three-character value arrives -- SENSEI_CODE_CONTROL_TOKEN=abc, set once
+// while trying something out, silently turning a 256-bit boundary into a
+// guessable one. A credential that came from the environment is not a weaker
+// kind of credential; it is the same kind, obtained differently.
 func FromToken(token string) (Credential, error) {
-	if strings.TrimSpace(token) == "" {
+	t := strings.TrimSpace(token)
+	if t == "" {
 		return Credential{}, errors.New("a control credential cannot be empty")
 	}
-	return credentialFor(token), nil
+	if len(t) != TokenLength {
+		return Credential{}, fmt.Errorf(
+			"a control credential must be %d hex characters, the same strength this server mints; got %d",
+			TokenLength, len(t))
+	}
+	if t != strings.ToLower(t) {
+		return Credential{}, errors.New("a control credential must be lowercase hex, so one secret has one spelling and one principal")
+	}
+	if _, err := hex.DecodeString(t); err != nil {
+		return Credential{}, fmt.Errorf("a control credential must be hex, the same representation this server mints: %w", err)
+	}
+	return credentialFor(t), nil
 }
 
 func credentialFor(token string) Credential {

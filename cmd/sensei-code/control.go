@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -21,14 +22,52 @@ import (
 
 // tokenEnv supplies a stable credential across restarts.
 //
-// The lifecycle is deliberately blunt and stated rather than clever: with the
-// variable set, the token — and therefore the remote principal derived from it
-// — survives a restart; without it, every start mints a new one and rotation
-// IS restarting. There is no token file, because a token on disk is a
-// credential with a lifetime nobody decided, and no rotation endpoint, because
-// a surface that can reissue its own credential is a surface that can be talked
-// into reissuing its own credential.
+// The lifecycle is deliberately blunt and stated rather than clever:
+//
+//	set      the token, and the principal derived from it, survive a restart.
+//	         Nothing is written and nothing is printed -- the operator already
+//	         has the secret, and handing it back is the only way this process
+//	         could turn it into a log entry.
+//	unset    a token is minted for this run, written to a 0600 file, and
+//	         removed on a clean shutdown. Rotation IS restarting.
+//
+// There is no rotation endpoint, because a surface that can reissue its own
+// credential is a surface that can be talked into reissuing its own credential.
 const tokenEnv = "SENSEI_CODE_CONTROL_TOKEN"
+
+// tokenFile is where a minted credential is left for the operator to read.
+//
+// A file rather than stdout, and the distinction is not fussiness. Under
+// systemd, Docker, CI or a captured terminal, stdout is durable storage owned
+// by somebody else, and a secret printed there outlives the process that
+// created it by however long the log is kept. A file has an owner, a mode, and
+// a lifetime this process controls.
+func tokenFile(repoRoot string) string {
+	return filepath.Join(repoRoot, ".sensei-code", "control-token")
+}
+
+// writeMintedToken leaves a freshly minted credential where the operator can
+// read it, and nowhere else.
+func writeMintedToken(repoRoot string, cred control.Credential) (string, error) {
+	path := tokenFile(repoRoot)
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return "", err
+	}
+	// Truncated and recreated with an explicit mode rather than written over,
+	// so a file left world-readable by something else does not stay that way.
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(cred.Token() + "\n"); err != nil {
+		return "", err
+	}
+	return path, nil
+}
 
 // runControlSurface serves the remote control surface for this repository.
 //
@@ -56,9 +95,20 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		return err
 	}
 
-	cred, err := credentialFromEnvOrMint()
+	cred, supplied, err := credentialFromEnvOrMint()
 	if err != nil {
 		return err
+	}
+	tokenAt := ""
+	if !supplied {
+		tokenAt, err = writeMintedToken(repo.Root, cred)
+		if err != nil {
+			return fmt.Errorf("the minted control credential could not be stored: %w", err)
+		}
+		// The credential dies with the process that minted it. A clean shutdown
+		// takes the file with it; a kill leaves it, which is why the next start
+		// truncates and recreates it.
+		defer os.Remove(tokenAt)
 	}
 
 	sessionID := session.ID(time.Now())
@@ -80,7 +130,7 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	}
 	defer server.Close()
 
-	printControlBanner(server, cred)
+	printControlBanner(server, cred, tokenAt, supplied)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -91,12 +141,17 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	return server.Serve()
 }
 
-// credentialFromEnvOrMint resolves the credential without ever writing it down.
-func credentialFromEnvOrMint() (control.Credential, error) {
+// credentialFromEnvOrMint resolves the credential and reports whether the
+// operator supplied it. A supplied secret is never written down and never
+// printed back; only a minted one has a bootstrap step, because only a minted
+// one is not already in somebody's hands.
+func credentialFromEnvOrMint() (control.Credential, bool, error) {
 	if supplied := strings.TrimSpace(os.Getenv(tokenEnv)); supplied != "" {
-		return control.FromToken(supplied)
+		cred, err := control.FromToken(supplied)
+		return cred, true, err
 	}
-	return control.Mint()
+	cred, err := control.Mint()
+	return cred, false, err
 }
 
 // controlDomain asks Sensei which repository this checkout is, and refuses to
@@ -122,18 +177,24 @@ func controlDomain(ctx context.Context, repo gitx.Repo, cfg config.Config) (stri
 	return domain, nil
 }
 
-// printControlBanner shows the operator what to configure, once, on stdout.
+// printControlBanner shows the operator what to configure — and never the
+// secret.
 //
-// The token is printed here and nowhere else. It does not go through the event
-// bus and it is not appended to the session store: those are the durable record
-// of a run, and a live credential copied into a file whose whole purpose is to
-// be read later is a credential with a much longer life than anybody intended.
-func printControlBanner(server *control.Server, cred control.Credential) {
+// The token reaches stdout in no case. A minted one is named by its path; a
+// supplied one is not mentioned at all, because the operator already has it and
+// printing it back is precisely how a secret that was handed to this process in
+// an environment variable ends up in a journal.
+func printControlBanner(server *control.Server, cred control.Credential, tokenAt string, supplied bool) {
 	fmt.Println("Sensei Code control surface")
 	fmt.Println("  workspace   ", server.Workspace())
 	fmt.Println("  endpoint     http://" + server.Addr() + control.Endpoint)
+	fmt.Println("  protocol     MCP " + control.SupportedProtocolVersion)
 	fmt.Println("  principal   ", cred.Principal())
-	fmt.Println("  token        " + cred.Token())
+	if supplied {
+		fmt.Println("  credential   supplied through " + tokenEnv + " and not repeated here")
+	} else {
+		fmt.Println("  credential   minted for this run · " + tokenAt + " (mode 0600, removed on shutdown)")
+	}
 	fmt.Println()
 	fmt.Println("  Bound to loopback only. Expose it deliberately through a tunnel;")
 	fmt.Println("  this surface will not bind a public interface.")
@@ -142,9 +203,9 @@ func printControlBanner(server *control.Server, cred control.Credential) {
 	fmt.Println("  session it receives.")
 	fmt.Println("  Read-only in this version: no architecture or review can be submitted,")
 	fmt.Println("  and nothing here advances a task.")
-	if strings.TrimSpace(os.Getenv(tokenEnv)) == "" {
-		fmt.Println("  This token was minted for this run. Restarting mints another;")
-		fmt.Println("  set " + tokenEnv + " to keep one identity across restarts.")
+	if !supplied {
+		fmt.Println("  Restarting mints another credential; set " + tokenEnv)
+		fmt.Println("  to a 64-character hex secret to keep one identity across restarts.")
 	}
 	fmt.Println()
 }

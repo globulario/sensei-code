@@ -84,6 +84,9 @@ func (h *harness) post(token, body string) (*http.Response, []byte) {
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	req.Header.Set(protocolVersionHeader, SupportedProtocolVersion)
 	resp, err := h.http.Client().Do(req)
 	if err != nil {
 		h.t.Fatalf("do: %v", err)
@@ -609,9 +612,16 @@ func TestGraphFreshnessIsReportedUnavailableRatherThanAssumedCurrent(t *testing.
 	}
 }
 
-// ---------- 14, 16. one state model ----------
+// ---------- 14, 16. one canonical task model ----------
 
-func TestALocalMutationIsVisibleRemotelyWithoutASecondStateModel(t *testing.T) {
+// The claim being tested is about the DURABLE model, not about a shared
+// pointer. A control process builds its own Engine, bus and session, exactly as
+// a TUI process does; what the two share is the repository and the canonical
+// task records under it. So this asserts that the remote surface re-reads that
+// record rather than answering from anything it kept -- which is what makes a
+// local change visible remotely with nothing synchronized, and what would fail
+// immediately if this package cached a task.
+func TestARecordedMutationIsVisibleRemotelyWithoutASecondStateModel(t *testing.T) {
 	h := newHarness(t)
 	arch := h.register(roles.Architect)
 
@@ -627,15 +637,15 @@ func TestALocalMutationIsVisibleRemotelyWithoutASecondStateModel(t *testing.T) {
 
 	second := h.call("inspect_task", map[string]any{"role_session": arch, "task": "task-1"})
 	if got := text(t, second.Result.StructuredContent, "workflow_state"); got != string(taskstate.Accepted) {
-		t.Fatalf("the remote reader saw %q after a local mutation; it is reading a copy", got)
+		t.Fatalf("the remote reader saw %q after the record moved on; it is answering from a copy", got)
 	}
 
-	// And a task created locally after registration appears without anything
-	// being synchronized.
+	// And a task recorded after registration appears without anything being
+	// synchronized.
 	h.writeTask(taskstate.State{TaskID: "task-2", Task: "another", Phase: taskstate.Planning})
 	work := h.call("get_work", map[string]any{"role_session": arch})
 	if !strings.Contains(mustJSON(t, work.Result.StructuredContent), "task-2") {
-		t.Fatal("a task created locally is invisible remotely")
+		t.Fatal("a task recorded after registration is invisible remotely")
 	}
 }
 
