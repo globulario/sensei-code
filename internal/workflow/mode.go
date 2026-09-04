@@ -65,6 +65,23 @@ const (
 	// SubmittedUnattended it establishes no human presence; what it adds is
 	// that the plan's author is also outside the run. See PlanSupplied.
 	SubmittedWithSuppliedPlan Provenance = "submitted unattended with an externally supplied plan; no human presence was established"
+	// SubmittedByLocalOperator is a task placed into a running headless
+	// orchestrator by somebody with local access to it.
+	//
+	// It is deliberately NOT RequestedByHuman, and the difference is the point.
+	// What this establishes is that the submitter reached a 0600 socket inside
+	// the repository, as the user running the process, on the machine running
+	// it -- which a remote client cannot do, because a TCP tunnel forwards a
+	// port and not a filesystem. That is real local authority over this
+	// process. It is not evidence that a person typed anything: a script with
+	// local access submits identically, and Objective.HumanAuthorized stays
+	// false here for exactly the reason it is false for a headless run.
+	//
+	// The value exists so the record can say WHICH authority placed the
+	// objective. "Unattended" would understate it -- somebody with local
+	// access did this deliberately -- and "requested by the human" would
+	// overstate it in precisely the way the comment above refuses.
+	SubmittedByLocalOperator Provenance = "submitted by a local operator with access to this process; no human presence was established"
 	// ObservationUnattended is an unattended read-only observation run.
 	ObservationUnattended Provenance = "observation submitted unattended; reads only, admits nothing"
 )

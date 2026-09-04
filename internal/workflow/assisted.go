@@ -75,6 +75,21 @@ func (e *Engine) SubmitGovernedWithPlan(ctx context.Context, task string, plan S
 	return e.submit(ctx, task, SubmittedWithSuppliedPlan, false, func(taskID string) { e.supplyPlan(taskID, plan) })
 }
 
+// SubmitGovernedLocal is a governed run an operator placed into this process
+// from the machine it is running on.
+//
+// Same workflow, same gates, its own honest provenance. It goes through submit
+// like every other entry point, so task identity is minted in one place and the
+// provenance is stamped from the ENTRYPOINT rather than from anything the task
+// text, a payload or a connected client could set.
+//
+// This is the entry a headless orchestrator needs and the remote control
+// surface must never have. A remote role holder architects and reviews; the
+// objective that causes workers to run is not its to originate.
+func (e *Engine) SubmitGovernedLocal(ctx context.Context, task string) string {
+	return e.submit(ctx, task, SubmittedByLocalOperator, false)
+}
+
 // SubmitObservation starts a read-only run: read the repository, report what
 // was found, admit nothing.
 //

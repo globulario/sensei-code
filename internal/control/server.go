@@ -73,6 +73,11 @@ type Server struct {
 
 	ln  net.Listener
 	srv *http.Server
+
+	// local is the operator's objective channel: a Unix socket, reachable from
+	// this machine and not through the tunnel that carries the remote role.
+	local     net.Listener
+	localPath string
 }
 
 // Options configure a control server. Everything here is decided by the

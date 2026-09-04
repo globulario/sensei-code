@@ -119,6 +119,22 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	bus := event.NewBus()
 	engine := workflow.New(repo, cfg, bus, store, sessionID)
 
+	// The operator placed an objective and then watched a silent terminal.
+	//
+	// A headless orchestrator that reports nothing is one where a run can fail
+	// at the start gate and the only person who could act on it is looking at a
+	// banner. Terminal events and status lines are printed; the full stream is
+	// in the session record either way.
+	events, unsubscribe := bus.Subscribe(512)
+	defer unsubscribe()
+	go func() {
+		for ev := range events {
+			if terminal(ev.Kind) || ev.Kind == event.TaskCreated || ev.Kind == event.ModeSelected {
+				fmt.Println(renderEvent(ev))
+			}
+		}
+	}()
+
 	server, err := control.New(engine, cred, control.Options{
 		Addr: *addr, Workspace: domain, LeaseTTL: *ttl,
 	})
@@ -138,6 +154,25 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		return err
 	}
 	defer server.Close()
+
+	// The operator's objective channel. Bound before the remote surface starts
+	// serving, and refused if another process already owns it -- exactly one
+	// process may own the engine for a repository, and two control processes
+	// racing for the same socket is how that stops being true.
+	if err := server.ListenLocal(repo.Root); err != nil {
+		return err
+	}
+	defer server.CloseLocal()
+	go func() {
+		// SubmitGovernedLocal, and nothing else reachable from here. The
+		// channel carries an objective; how it is carried out stays this
+		// process's decision.
+		if err := server.ServeLocal(func(task string) string {
+			return engine.SubmitGovernedLocal(ctx, task)
+		}); err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code control: the objective channel stopped:", err)
+		}
+	}()
 
 	printControlBanner(server, cred, tokenAt, supplied)
 
@@ -197,6 +232,7 @@ func printControlBanner(server *control.Server, cred control.Credential, tokenAt
 	fmt.Println("Sensei Code control surface")
 	fmt.Println("  workspace   ", server.Workspace())
 	fmt.Println("  endpoint     http://" + server.Addr() + control.Endpoint)
+	fmt.Println("  objectives   " + server.LocalAddr() + " (mode 0600, this machine only)")
 	fmt.Println("  protocol     MCP " + control.SupportedProtocolVersion)
 	fmt.Println("  principal   ", cred.Principal())
 	if supplied {
@@ -211,6 +247,9 @@ func printControlBanner(server *control.Server, cred control.Credential, tokenAt
 	fmt.Println("  must still register for architect or reviewer and present the role")
 	fmt.Println("  session it receives.")
 	fmt.Println("  " + control.RoleContract)
+	fmt.Println("  Place work with: sensei-code submit --task \"...\"")
+	fmt.Println("  That channel is a local socket, not the remote surface: an")
+	fmt.Println("  objective is the operator's to authorize, never the remote architect's.")
 	if !supplied {
 		fmt.Println("  Restarting mints another credential; set " + tokenEnv)
 		fmt.Println("  to a 64-character hex secret to keep one identity across restarts.")

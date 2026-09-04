@@ -68,6 +68,9 @@ func main() {
 		case "control":
 			fatalIf(runControlSurface(ctx, repo, cfg, os.Args[2:]))
 			return
+		case "submit":
+			fatalIf(runSubmit(repo, os.Args[2:]))
+			return
 		case "context":
 			fatalIf(runContext(ctx, repo, cfg, os.Args[2:]))
 			return

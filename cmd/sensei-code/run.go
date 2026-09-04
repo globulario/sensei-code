@@ -52,6 +52,15 @@ const (
 	// caller that cannot tell the two apart will either treat every audit as a
 	// no-op or go looking for a change that was never supposed to exist.
 	exitObserved = 6
+	// exitAwaitingReview means the candidate stands and the independent review
+	// this task requires has not happened.
+	//
+	// Its own code, for the same reason it has its own event kind: nothing
+	// failed, and nothing was admitted. A caller that read it as exitFailed
+	// would learn that this task shape breaks, and one that read it as
+	// exitCompleted would be told a change was accepted that no independent
+	// reviewer ever looked at.
+	exitAwaitingReview = 7
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
@@ -302,6 +311,8 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitStopped, true
 	case event.WorkflowAwaitingAuthority:
 		return exitAwaitingAuthority, true
+	case event.WorkflowAwaitingReview:
+		return exitAwaitingReview, true
 	}
 	return 0, false
 }
@@ -312,7 +323,7 @@ func terminal(k event.Kind) bool {
 	switch k {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
-		event.WorkflowAwaitingAuthority, event.AuthorityRequired:
+		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.AuthorityRequired:
 		return true
 	}
 	return false

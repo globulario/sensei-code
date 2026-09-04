@@ -55,6 +55,7 @@ var publicCommands = []command{
 	// the command that configures clients.
 	{Name: "mcp", Summary: "configure each agent's access to the Sensei MCP server"},
 	{Name: "control", Summary: "serve this instance's remote control surface over loopback"},
+	{Name: "submit", Args: "--task \"...\"", Summary: "place one objective into the running control process"},
 	{Name: "routine-scan", Summary: "classify tracked files by how routine a change to them would be"},
 	{Name: "help", Summary: "show this help"},
 }
