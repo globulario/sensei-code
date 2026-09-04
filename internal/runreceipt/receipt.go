@@ -59,7 +59,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v7"
+const SchemaVersion = "sensei-code.governed-run-receipt/v8"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -108,6 +108,21 @@ const (
 	// and recording it as UNKNOWN would leave a known outcome unnamed.
 	// COMPLETE / STOPPED is a fully meaningful record.
 	OutcomeStopped Outcome = "STOPPED"
+	// OutcomeReviewObligationUnmet: a bounded verdict accepted the candidate,
+	// and it could not discharge the independent review this task requires.
+	//
+	// It exists because the existing vocabulary cannot say this without lying.
+	// ACCEPTED is what the gate refused. REFUSED means "a bounded verdict that
+	// was not an acceptance", and this one was. UNREVIEWED means no verdict was
+	// produced, and the validator below already refuses UNREVIEWED beside a
+	// known verdict -- correctly, because the condition would contradict the
+	// evidence. FAILED would teach the behavioural record that this task shape
+	// breaks, when nothing about the candidate is wrong.
+	//
+	// So the fact gets its own name: the candidate stands, the review that
+	// accepted it established no independence, and the obligation is open. It
+	// is a terminal outcome and it is not a success.
+	OutcomeReviewObligationUnmet Outcome = "REVIEW_OBLIGATION_UNMET"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -119,7 +134,8 @@ const (
 func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
-		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown:
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
+		OutcomeUnknown:
 		return true
 	}
 	return false
@@ -160,6 +176,14 @@ var vocabularies = map[string][]Outcome{
 		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeUnknown,
 	},
+	// v8 adds REVIEW_OBLIGATION_UNMET: a candidate accepted by a review that
+	// could not discharge the independent look the task requires. A v7 receipt
+	// carrying it would be speaking a language its own version does not define.
+	"sensei-code.governed-run-receipt/v8": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -174,6 +198,12 @@ var candidateVocabularies = map[string][]CandidateState{
 	"sensei-code.governed-run-receipt/v5": {CandidateNone, CandidatePresent, CandidateUnknown},
 	"sensei-code.governed-run-receipt/v6": {CandidateNone, CandidatePresent, CandidateUnknown},
 	"sensei-code.governed-run-receipt/v7": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v8 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	// Listed anyway, because an unlisted version is unreadable rather than
+	// permissive.
+	"sensei-code.governed-run-receipt/v8": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }

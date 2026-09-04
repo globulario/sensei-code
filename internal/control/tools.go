@@ -12,17 +12,35 @@ import (
 	"github.com/globulario/sensei-code/internal/taskstate"
 )
 
-// The tool surface is semantic and deliberately small.
+// The tool surface is semantic and deliberately small: five reads and two typed
+// submissions.
 //
 // There is no tool here that runs a command, writes a file, constructs a worker
-// invocation, mutates a task record, or admits a change — and in this slice
-// there is none that submits an architectural decision or a review either. A
-// surface that cannot express an operation cannot be argued into performing it,
-// which is a stronger guarantee than a surface that can express it and checks.
+// invocation, mutates a task record, admits a change, publishes, merges, or
+// creates a task. A surface that cannot express an operation cannot be argued
+// into performing it, which is a stronger guarantee than a surface that can
+// express it and checks.
 //
-// Every tool that touches a task passes through heldLease. Reaching this
-// surface is authentication; doing anything on it requires a lease that is
-// held, that grants the operation, and that belongs to the party presenting it.
+// The absence of a task-creating verb is the load-bearing one. An architect
+// lease is architectural authority, never human objective authority: holding
+// one must not mean this principal may invent development work and cause
+// workers to execute it.
+//
+// The two submissions answer a question the engine already asked. There is no
+// queue, no "hold this until it is wanted", and no way to answer a question
+// nobody asked. Every tool that touches a task passes through heldLease:
+// reaching this surface is authentication; doing anything on it requires a
+// lease that is held, that grants the operation, and that belongs to the party
+// presenting it.
+
+// RoleContract is what a remote role holder may and may not do, in one
+// sentence, said in the handshake and in every grant.
+//
+// It lives in one place because it used to live in three, and after the
+// submission verbs shipped all three still said the surface was read-only.
+// Product wording that contradicts the product is worse than none: a client is
+// entitled to believe what the server tells it about itself.
+const RoleContract = "A remote architect or reviewer may answer the exact turns this engine issues, and nothing else: it may not create tasks, execute workers, mutate candidates, claim independence, admit, publish or merge."
 
 // toolDescriptors is what tools/list returns. Written out rather than derived
 // from the handlers, because the description is the contract a remote model
@@ -64,6 +82,40 @@ func toolDescriptors() []map[string]any {
 			"description": "List the tasks this instance holds canonical state for, with the workflow phase each is in. " +
 				"Read-only: observing a task does not advance it.",
 			"inputSchema": leaseSchema(),
+		},
+		{
+			"name": "submit_architecture",
+			"description": "Answer an open architect turn with a bounded architectural decision. It is parsed and " +
+				"checked by exactly the path a local architect's answer takes: claims are resolved against the graph, " +
+				"scope and certifiability are routed, and a decision crossing human authority escalates. " +
+				"It requires the exact turn_id the engine issued; you do not choose which task it is about.",
+			"inputSchema": map[string]any{
+				"type": "object", "required": []string{"role_session", "turn_id", "decision"},
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"role_session": map[string]any{"type": "string"},
+					"turn_id":      map[string]any{"type": "string"},
+					"decision": map[string]any{"type": "object",
+						"description": "the bounded architect decision, in the same shape a local architect returns"},
+				},
+			},
+		},
+		{
+			"name": "submit_review",
+			"description": "Answer an open reviewer turn with accept, revise or escalate. It is about the exact " +
+				"candidate the turn names; a verdict that arrives after the worker has revised is refused as stale. " +
+				"A review given through this surface is ADVISORY: this project cannot observe whether your context " +
+				"was isolated from the work, so it satisfies no adversarial-review obligation and is never admission.",
+			"inputSchema": map[string]any{
+				"type": "object", "required": []string{"role_session", "turn_id", "review"},
+				"additionalProperties": false,
+				"properties": map[string]any{
+					"role_session": map[string]any{"type": "string"},
+					"turn_id":      map[string]any{"type": "string"},
+					"review": map[string]any{"type": "object",
+						"description": "decision (accept|revise|escalate), summary, instructions, findings"},
+				},
+			},
 		},
 		{
 			"name": "inspect_task",
@@ -111,6 +163,10 @@ func (s *Server) callTool(raw json.RawMessage) (any, *rpcError) {
 		return s.getWork(call.Arguments)
 	case "inspect_task":
 		return s.inspectTask(call.Arguments)
+	case "submit_architecture":
+		return s.submitArchitecture(call.Arguments)
+	case "submit_review":
+		return s.submitReview(call.Arguments)
 	}
 	// Read by membership. An unknown tool is refused rather than approximated.
 	return nil, &rpcError{Code: codeInvalidParams,
@@ -192,8 +248,8 @@ func (s *Server) registerRole(raw json.RawMessage) (any, *rpcError) {
 		"granted":   granted,
 		"refused":   refused,
 		"notice": "This role session grants what its capabilities list says and nothing else. " +
-			"This slice is read-only: no architecture or review can be submitted, nothing here advances a task, " +
-			"and no review conducted through this surface can be independent.",
+			RoleContract + " No review conducted through this surface can be independent: " +
+			"this project cannot observe whether your context was isolated from the work it judges.",
 	}), nil
 }
 
@@ -277,7 +333,11 @@ func (s *Server) releaseRole(raw json.RawMessage) (any, *rpcError) {
 	if err != nil {
 		return toolError(err.Error()), nil
 	}
-	return toolResult(map[string]any{"released": leaseView(released)}), nil
+	// Giving the role back must not leave the engine waiting on a party that
+	// has left. Every turn this session was asked wakes with a typed refusal,
+	// which enters the ordinary recovery ladder rather than hanging the run.
+	woken := s.turns.AbandonSession(p.RoleSession, fmt.Errorf("%w: the role session was released", ErrTurnAbandoned))
+	return toolResult(map[string]any{"released": leaseView(released), "turns_abandoned": woken}), nil
 }
 
 func (s *Server) renewRole(raw json.RawMessage) (any, *rpcError) {
@@ -324,7 +384,9 @@ func (s *Server) getWork(raw json.RawMessage) (any, *rpcError) {
 		return toolError("the canonical task record could not be read: " + err.Error()), nil
 	}
 	work := make([]map[string]any, 0, len(ids))
+	recorded := make(map[string]bool, len(ids))
 	for _, id := range ids {
+		recorded[id] = true
 		// Read, and only read. Nothing on this path calls the engine, resolves
 		// a runner, or writes a record: observing what a task is waiting for
 		// must not be what moves it.
@@ -333,14 +395,32 @@ func (s *Server) getWork(raw json.RawMessage) (any, *rpcError) {
 			work = append(work, map[string]any{"task": id, "record": noRecord(id)})
 			continue
 		}
-		work = append(work, workView(id, state, found))
+		view := workView(id, state, found)
+		if turn, ok := s.waitingTurnFor(id, lease); ok {
+			view["waiting_on"] = string(turn.Role)
+			view["turn"] = turnView(turn)
+		}
+		work = append(work, view)
+	}
+	// A turn may be open for a task that has no canonical record yet -- the
+	// architect is asked before anything is written. Reporting only recorded
+	// tasks would hide exactly the turn this role exists to answer.
+	for _, turn := range s.turns.Waiting("") {
+		if turn.RoleSession != lease.ID || recorded[turn.TaskID] {
+			continue
+		}
+		work = append(work, map[string]any{
+			"task": turn.TaskID, "record": noRecord(turn.TaskID),
+			"waiting_on": string(turn.Role), "turn": turnView(turn),
+		})
 	}
 	return toolResult(map[string]any{
 		"workspace": s.workspace,
 		"role":      string(lease.Role),
 		"work":      work,
-		"notice": "This surface is read-only. No task here is waiting on a decision from this role, " +
-			"because remote architecture and review submission do not exist in this slice.",
+		"notice": "A turn listed here is a question the engine is waiting on; answer it with " +
+			"submit_architecture or submit_review, presenting its exact turn_id. Nothing here advances a task, " +
+			"and a review given through this surface is advisory.",
 	}), nil
 }
 
@@ -402,4 +482,112 @@ func toolError(message string) map[string]any {
 		"structuredContent": map[string]any{"refused": message},
 		"isError":           true,
 	}
+}
+
+// The two submission verbs, and nothing else.
+//
+// Each requires an active lease that grants the operation, held by the party
+// presenting it, and the EXACT turn the engine issued. Calling one when the
+// workflow is not waiting for it refuses: there is no queue here, no "hold this
+// until it is wanted", and no way to answer a question nobody asked.
+//
+// Neither reads the payload for identity. What a submission is ABOUT was
+// decided when the turn was opened -- which task, which base, which exact
+// candidate -- and the payload supplies only what the party thinks.
+
+type submitParams struct {
+	RoleSession string          `json:"role_session"`
+	TurnID      string          `json:"turn_id"`
+	Decision    json.RawMessage `json:"decision,omitempty"`
+	Review      json.RawMessage `json:"review,omitempty"`
+}
+
+func (s *Server) submitArchitecture(raw json.RawMessage) (any, *rpcError) {
+	var p submitParams
+	if err := decodeStrict(raw, &p); err != nil {
+		return nil, &rpcError{Code: codeInvalidParams, Message: err.Error()}
+	}
+	if len(bytes.TrimSpace(p.Decision)) == 0 {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "submit_architecture carried no decision"}
+	}
+	if len(bytes.TrimSpace(p.Review)) != 0 {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "submit_architecture does not take a review"}
+	}
+	// Handed on verbatim. The engine's existing architect parser decides
+	// whether this is a bounded decision, and a weaker check here would be a
+	// second opinion that the strict one never sees.
+	turn, err := s.submitTurn(roles.Architect, p.RoleSession, p.TurnID, p.Decision)
+	if err != nil {
+		return toolError(err.Error()), nil
+	}
+	return toolResult(map[string]any{
+		"accepted_for": turnView(turn),
+		"notice": "The decision was delivered to the turn that asked for it. It now enters the same " +
+			"contradiction, scope and certifiability checks a local architect's answer enters, and it may " +
+			"still be refused or escalated by them.",
+	}), nil
+}
+
+func (s *Server) submitReview(raw json.RawMessage) (any, *rpcError) {
+	var p submitParams
+	if err := decodeStrict(raw, &p); err != nil {
+		return nil, &rpcError{Code: codeInvalidParams, Message: err.Error()}
+	}
+	if len(bytes.TrimSpace(p.Review)) == 0 {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "submit_review carried no review"}
+	}
+	if len(bytes.TrimSpace(p.Decision)) != 0 {
+		return nil, &rpcError{Code: codeInvalidParams, Message: "submit_review does not take an architecture decision"}
+	}
+	turn, err := s.submitTurn(roles.Reviewer, p.RoleSession, p.TurnID, p.Review)
+	if err != nil {
+		return toolError(err.Error()), nil
+	}
+	return toolResult(map[string]any{
+		"accepted_for": turnView(turn),
+		"review_kind":  "advisory",
+		"notice": "Delivered to the turn that asked for it, about the exact candidate that turn names. " +
+			"This review is advisory: this project cannot observe whether your context was isolated from the " +
+			"work it judges, so it satisfies no adversarial-review obligation and is not Sensei admission, " +
+			"verification or completion.",
+	}), nil
+}
+
+// waitingTurnFor reports the open turn this lease was asked, if any.
+func (s *Server) waitingTurnFor(taskID string, lease principal.Lease) (Turn, bool) {
+	for _, t := range s.turns.Waiting(taskID) {
+		if t.RoleSession == lease.ID {
+			return t, true
+		}
+	}
+	return Turn{}, false
+}
+
+// turnView is what a role holder is told about the question it was asked.
+//
+// It carries the request the engine issued and the exact subject binding, which
+// is what makes the turn answerable. It carries no credential, no argv, no
+// worktree path and no worker capability: the remote role decides, and the
+// mechanics of carrying that decision out are not its business.
+func turnView(t Turn) map[string]any {
+	view := map[string]any{
+		"turn_id":    t.ID,
+		"task":       t.TaskID,
+		"role":       string(t.Role),
+		"request":    t.Request,
+		"created_at": t.CreatedAt,
+		"expires_at": t.ExpiresAt,
+	}
+	subject := map[string]any{"task": t.Binding.TaskID}
+	if t.Binding.BaseSHA != "" {
+		subject["base_sha"] = t.Binding.BaseSHA
+	}
+	if t.Binding.CandidateDigest != "" {
+		subject["candidate_digest"] = t.Binding.CandidateDigest
+	}
+	if t.Binding.CandidateTree != "" {
+		subject["candidate_tree"] = t.Binding.CandidateTree
+	}
+	view["subject"] = subject
+	return view
 }

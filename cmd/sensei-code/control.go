@@ -125,6 +125,15 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	if err != nil {
 		return err
 	}
+	// The server becomes this engine's runner resolver. Without this line the
+	// rendezvous exists and nothing ever reaches it: every architect and
+	// reviewer turn would take the configured command line, and a remote role
+	// holder would register, inspect, and be asked nothing.
+	//
+	// One engine owner per orchestrated run: this process owns this engine, and
+	// the resolver it consults is this process's own server.
+	engine.Runners = server
+
 	if err := server.Listen(*addr); err != nil {
 		return err
 	}
@@ -201,8 +210,7 @@ func printControlBanner(server *control.Server, cred control.Credential, tokenAt
 	fmt.Println("  The token authenticates a connection. It grants no role: a client")
 	fmt.Println("  must still register for architect or reviewer and present the role")
 	fmt.Println("  session it receives.")
-	fmt.Println("  Read-only in this version: no architecture or review can be submitted,")
-	fmt.Println("  and nothing here advances a task.")
+	fmt.Println("  " + control.RoleContract)
 	if !supplied {
 		fmt.Println("  Restarting mints another credential; set " + tokenEnv)
 		fmt.Println("  to a 64-character hex secret to keep one identity across restarts.")

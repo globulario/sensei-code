@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/principal"
@@ -58,6 +59,18 @@ type Server struct {
 	// serve.
 	workspace string
 
+	// turns is the pending-turn registry: what the engine is currently waiting
+	// on. It is not workflow state -- a turn exists only while a call is
+	// blocked on it, and losing the registry loses no task.
+	turns   *rendezvous
+	turnTTL time.Duration
+
+	// delegations remember which principal a task's role was handed to, so a
+	// delegated role that vanishes is a refusal rather than a silent
+	// substitution.
+	delegatedMu sync.Mutex
+	delegations map[string]delegation
+
 	ln  net.Listener
 	srv *http.Server
 }
@@ -73,6 +86,10 @@ type Options struct {
 	LeaseTTL time.Duration
 	// Now is the clock, injectable so lease expiry is testable without waiting.
 	Now func() time.Time
+	// TurnTTL bounds how long the engine waits for a remote answer. A blocked
+	// workflow is worse than a failed one: a failure enters the recovery
+	// ladder, a hang enters nothing.
+	TurnTTL time.Duration
 }
 
 // DefaultAddr binds the loopback interface on a port the OS chooses.
@@ -99,11 +116,17 @@ func New(engine *workflow.Engine, cred Credential, opts Options) (*Server, error
 	if workspace == "" {
 		return nil, errors.New("a control surface must know which repository it serves")
 	}
+	ttl := opts.TurnTTL
+	if ttl <= 0 {
+		ttl = DefaultTurnTTL
+	}
 	return &Server{
 		engine:    engine,
 		cred:      cred,
 		leases:    principal.NewRegistry(opts.LeaseTTL, opts.Now),
 		workspace: workspace,
+		turns:     newRendezvous(opts.Now),
+		turnTTL:   ttl,
 	}, nil
 }
 
@@ -477,8 +500,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
 		// for holding a role on it.
 		"instructions": "Authentication reaches this surface and grants no role. " +
 			"Call register_role to request architect or reviewer, and present the returned " +
-			"role session on every later call. This slice is read-only: no architecture or " +
-			"review may be submitted, and nothing here advances a task.",
+			"role session on every later call. " + RoleContract,
 	}, nil
 }
 

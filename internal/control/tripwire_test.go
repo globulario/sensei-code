@@ -102,44 +102,89 @@ func TestTheRemoteSurfaceStampsNoSessionProvenance(t *testing.T) {
 	}
 }
 
-// The stop boundary of this slice, expressed as a property of the code rather
-// than of the tool list: there is no adapter here, so there is nothing for the
-// workflow to call, so nothing a remote client says can reach a task.
-func TestTheRemoteSurfaceIsNotAWorkflowAdapter(t *testing.T) {
-	banned := map[string]string{
-		"github.com/globulario/sensei-code/internal/agent":    "an adapter would let a remote answer serve a role turn",
+// The boundary moved deliberately in this slice: a remote runner now DOES
+// implement agent.Runner, because a remote answer has to reach the same
+// workflow path a local one does. What must remain impossible is that the
+// runner executes anything.
+//
+// The tripwire is evolved rather than deleted. It was "nothing here can serve a
+// turn"; it is now "serving a turn is all it can do".
+func TestTheRemoteRunnerAnswersAndExecutesNothing(t *testing.T) {
+	// Banned everywhere, including the command that starts the surface: nothing
+	// in this direction may cause a process to run or hold a capability
+	// envelope.
+	everywhere := map[string]string{
 		"github.com/globulario/sensei-code/internal/broker":   "the capability envelope is not this surface's to hold",
 		"github.com/globulario/sensei-code/internal/processx": "this surface runs no process",
+		"os/exec": "a remote role holder must not be able to cause a command to run",
+	}
+	// Banned in the package a remote client actually reaches. The command is
+	// excluded because it legitimately builds the Engine, which needs the
+	// repository -- that is the operator starting a server, not a remote role
+	// touching a checkout.
+	inPackage := map[string]string{
+		"github.com/globulario/sensei-code/internal/gitx":      "a remote role does not touch the repository",
+		"github.com/globulario/sensei-code/internal/candidate": "a remote role does not mutate a candidate",
+		"github.com/globulario/sensei-code/internal/admission": "admission is Sensei's, not this surface's",
+		"github.com/globulario/sensei-code/internal/publish":   "publication is human-owned",
 	}
 	for path, file := range controlFiles(t) {
 		for _, imp := range file.Imports {
 			p := strings.Trim(imp.Path.Value, `"`)
-			if why, bad := banned[p]; bad {
+			if why, bad := everywhere[p]; bad {
+				t.Fatalf("%s imports %s: %s", path, p, why)
+			}
+			if why, bad := inPackage[p]; bad && !strings.Contains(path, "cmd") {
 				t.Fatalf("%s imports %s: %s", path, p, why)
 			}
 		}
 	}
 
-	// And nothing here is named as one.
+	// Exactly one Run method, on the remote runner. A second one would be a
+	// second thing the workflow can call, arrived at without anyone deciding.
+	var receivers []string
 	for path, file := range controlFiles(t) {
 		for _, decl := range file.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
 			if !ok || fn.Recv == nil || fn.Name.Name != "Run" {
 				continue
 			}
-			t.Fatalf("%s declares a Run method; agent.Runner is satisfied by exactly that shape", path)
+			receivers = append(receivers, path+" "+receiverName(fn))
 		}
+	}
+	if len(receivers) != 1 || !strings.HasSuffix(receivers[0], "remoteRunner") {
+		t.Fatalf("agent.Runner is implemented by %v; exactly one remote runner may serve a turn", receivers)
 	}
 }
 
-// The surface a remote client can reach is the read-only five. A submission
-// verb appearing here is the boundary of this slice moving without anyone
-// deciding to move it.
-func TestNoSubmissionOrExecutionVerbExistsInThisSlice(t *testing.T) {
+func receiverName(fn *ast.FuncDecl) string {
+	if fn.Recv == nil || len(fn.Recv.List) == 0 {
+		return ""
+	}
+	switch t := fn.Recv.List[0].Type.(type) {
+	case *ast.StarExpr:
+		if id, ok := t.X.(*ast.Ident); ok {
+			return id.Name
+		}
+	case *ast.Ident:
+		return t.Name
+	}
+	return ""
+}
+
+// The surface a remote client can reach is the five read verbs plus exactly two
+// typed submissions. Anything else appearing here is the boundary moving
+// without anyone deciding to move it.
+//
+// start_task is on the list deliberately and is not an oversight to be filled
+// in later. An architect lease is architectural authority, not human objective
+// authority: holding one must never mean this principal may invent development
+// work and cause workers to execute it.
+func TestOnlyTheTwoTypedSubmissionVerbsExist(t *testing.T) {
 	source := readSource(t)
 	for _, verb := range []string{
-		"submit_architecture", "submit_review", "advance_task", "admit_change",
-		"run_shell", "write_file", "invoke_worker",
+		"advance_task", "admit_change", "complete_task", "merge", "commit",
+		"run_shell", "write_file", "invoke_worker", "run_worker", "exec", "start_task", "delegate_task",
 	} {
 		// The strings appear in principal's capability vocabulary and in test
 		// expectations; what must not appear is a TOOL by that name, which is
@@ -184,4 +229,53 @@ func selectorName(n ast.Node) string {
 		return ""
 	}
 	return pkg.Name + "." + sel.Sel.Name
+}
+
+// Product wording that contradicts the product is worse than none: a client is
+// entitled to believe what the server tells it about itself.
+//
+// This exists because it happened. The submission verbs shipped and three
+// separate strings -- the handshake instructions, the registration notice and
+// the operator banner -- still told every client the surface was read-only and
+// that no architecture or review could be submitted. Each was true when
+// written; none was true when read.
+func TestNoShippingStringStillCallsThisSurfaceReadOnly(t *testing.T) {
+	for path, source := range map[string]string{
+		"internal/control": readSource(t),
+		"cmd/sensei-code/control.go": func() string {
+			raw, err := os.ReadFile(filepath.Join("..", "..", "cmd", "sensei-code", "control.go"))
+			if err != nil {
+				t.Fatalf("read control.go: %v", err)
+			}
+			return string(raw)
+		}(),
+	} {
+		for _, stale := range []string{
+			"no architecture or review can be submitted",
+			"no architecture or review may be submitted",
+			"Read-only in this version",
+			"This slice is read-only",
+		} {
+			if strings.Contains(source, stale) {
+				t.Fatalf("%s still tells clients %q, which stopped being true when the submission verbs shipped",
+					path, stale)
+			}
+		}
+	}
+}
+
+// The one sentence a client is given about what it may do says what is
+// actually true, including the absence that matters most.
+func TestTheRoleContractNamesWhatARemoteRoleMayNotDo(t *testing.T) {
+	for _, must := range []string{"answer the exact turns", "create tasks", "execute workers",
+		"mutate candidates", "claim independence", "admit", "publish", "merge"} {
+		if !strings.Contains(RoleContract, must) {
+			t.Fatalf("the role contract does not mention %q: %s", must, RoleContract)
+		}
+	}
+	// And it is said in the handshake and in the grant, not only in a comment.
+	source := readSource(t)
+	if strings.Count(source, "RoleContract") < 3 {
+		t.Fatalf("the role contract is declared but barely used (%d references)", strings.Count(source, "RoleContract"))
+	}
 }

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/roles"
 )
 
 type Store struct {
@@ -130,6 +131,15 @@ type Interrupted struct {
 	// TestEditRecord is the existing-test edit authorization the router
 	// recorded (M2.2), carried byte for byte for the same reason.
 	TestEditRecord json.RawMessage
+	// AwaitingReview marks a task whose candidate stands and whose required
+	// independent review has not happened.
+	//
+	// It is carried because resuming such a task is not resuming ordinary
+	// work. The candidate was accepted by a reviewer; what is missing is a
+	// reviewer whose independence could be established. Handing it to an
+	// implementer would ask a worker to change code nobody objected to, purely
+	// because a process restarted.
+	AwaitingReview bool
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -142,6 +152,10 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		planned  bool
 		deferred bool
 		done     bool
+		// reviewFromVerdict records that Review holds a bounded verdict's
+		// instruction, so a later status line cannot replace an obligation
+		// with a sentence about it.
+		reviewFromVerdict bool
 	}
 	order := []string{}
 	byTask := map[string]*partial{}
@@ -195,6 +209,60 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it
 			// stands is that it can be picked back up.
+		case event.WorkflowAwaitingReview:
+			// Not terminal. The invocation is over and the task is not: the
+			// candidate stands, and the independent review it owes can still
+			// be obtained. This case exists because emitting the condition as
+			// WorkflowFailed made it invisible here, and a task nobody could
+			// find again is not "preserved awaiting review" however carefully
+			// the receipt says so.
+			p.AwaitingReview = true
+		case event.ReviewCompleted:
+			// A bounded verdict may END the awaiting-review state, and this is
+			// where the difference between a latch and a reconstruction lives.
+			//
+			// The session log is append-only and the interactive process reuses
+			// it, so "this task once awaited a review" stays true forever. What
+			// a resume needs is what the task owes NOW. A REVISE or an ESCALATE
+			// says the candidate is no longer in "nothing is wrong, only an
+			// independent look is missing" -- it owes a change, or an
+			// architectural answer -- and resuming into a review would ask the
+			// same question again while the finding nobody acted on aged.
+			//
+			// ACCEPT deliberately does NOT clear it. An advisory accept is
+			// followed by a fresh WorkflowAwaitingReview, and a crash between
+			// those two events must not turn a candidate nobody objected to
+			// into implementation work. Neither does ReviewStarted: a process
+			// that died mid-review still owes the review.
+			var verdict roles.ReviewVerdict
+			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &verdict) == nil {
+				switch roles.Decision(strings.ToLower(strings.TrimSpace(string(verdict.Decision)))) {
+				case roles.Revise, roles.Escalate:
+					p.AwaitingReview = false
+				}
+				// The latest bounded verdict is what the next actor is handed,
+				// rendered by the SAME method that tells a live worker what to
+				// fix.
+				//
+				// Instruction() and not Summary. The summary is presentation --
+				// "proof incomplete" -- and the obligation is the findings: what
+				// was claimed, the file to open, the correction or the missing
+				// proof, and any explicit instructions. A restart that handed
+				// the worker the summary would silently weaken the brief from
+				// "here is the file and the fix" to a sentence, and the loss
+				// would be invisible because both are non-empty strings.
+				//
+				// Rendering here rather than re-implementing it: a second
+				// renderer in this package would drift from the one the live
+				// path uses, and the resumed worker would be told something
+				// slightly different from what the interrupted one was told.
+				// Instruction() already falls back to the summary when a
+				// verdict carries nothing more specific.
+				if instruction := strings.TrimSpace(verdict.Instruction()); instruction != "" {
+					p.Review = instruction
+					p.reviewFromVerdict = true
+				}
+			}
 		case event.WorkflowAwaitingAuthority:
 			// Also not terminal, and resumable even with no plan: a question
 			// deferred during architecture is the ordinary case, and it is
@@ -210,7 +278,13 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.AwaitingAuthority = nil
 
 		}
-		if e.Source == event.SourceReviewer && e.Kind == event.Status && strings.TrimSpace(e.Summary) != "" {
+		// A reviewer's status line is the fallback, for records written before
+		// ReviewCompleted carried a payload. It must not overwrite a bounded
+		// verdict's instruction: a status line is presentation, the instruction
+		// is the obligation, and the reviewer emits several status lines around
+		// an advisory accept that would otherwise be the last thing written.
+		if !p.reviewFromVerdict &&
+			e.Source == event.SourceReviewer && e.Kind == event.Status && strings.TrimSpace(e.Summary) != "" {
 			p.Review = e.Summary
 		}
 	}

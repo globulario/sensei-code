@@ -347,3 +347,93 @@ func fieldNames(t reflect.Type) []string {
 	}
 	return out
 }
+
+// The missing fact has a name, and the name satisfies nothing.
+func TestAnUnverifiedSessionIsNeverIndependent(t *testing.T) {
+	for _, mode := range []Session{Unverified, Continue, "", "isolated", "fresh-ish"} {
+		p := Provenance{Role: Reviewer, SessionMode: mode}
+		if p.Independent() {
+			t.Fatalf("session %q reported independence", mode)
+		}
+	}
+	if !(Provenance{SessionMode: Fresh}).Independent() {
+		t.Fatal("Fresh stopped meaning independent")
+	}
+}
+
+func TestTheSessionVocabularyIsClosed(t *testing.T) {
+	for _, s := range AllSessions {
+		if !s.Valid() {
+			t.Fatalf("%s is in the closed set and reports invalid", s)
+		}
+	}
+	for _, s := range []Session{"", "external", "unknown"} {
+		if s.Valid() {
+			t.Fatalf("%q is not a session mode and it validated", s)
+		}
+	}
+}
+
+// A function taking a ReviewVerdict must not accept an Advisory. This is the
+// whole reason it is a type rather than a flag: the flag version is the one
+// where a caller that counts reviews forgets to read the flag.
+func TestAnAdvisoryVerdictIsNotAReviewVerdict(t *testing.T) {
+	counted := func(ReviewVerdict) {}
+	_ = counted
+	typ := reflect.TypeOf(Advisory{})
+	if typ.ConvertibleTo(reflect.TypeOf(ReviewVerdict{})) {
+		t.Fatal("an Advisory converts to a ReviewVerdict, so a counter could take one by accident")
+	}
+	if NewAdvisory(ReviewVerdict{Decision: Accept}).SatisfiesAdversarialObligation() {
+		t.Fatal("an advisory accept satisfied an adversarial obligation")
+	}
+}
+
+// An advisory verdict that records isolation contradicts itself, and the safe
+// reading is that the recording is wrong.
+func TestAnAdvisoryVerdictMayNotClaimIndependence(t *testing.T) {
+	binding := Binding{TaskID: "t1"}
+	claiming := NewAdvisory(ReviewVerdict{
+		Provenance: Provenance{TaskID: "t1", Role: Reviewer, Provider: "remote", SessionMode: Fresh},
+		Decision:   Accept, Summary: "looks fine",
+	})
+	if err := claiming.Validate(binding, "claude"); err == nil {
+		t.Fatal("an advisory verdict claiming a fresh session was accepted")
+	}
+
+	honest := NewAdvisory(ReviewVerdict{
+		Provenance: Provenance{TaskID: "t1", Role: Reviewer, Provider: "remote", SessionMode: Unverified},
+		Decision:   Accept, Summary: "looks fine",
+	})
+	if err := honest.Validate(binding, "claude"); err != nil {
+		t.Fatalf("an honest advisory verdict was refused: %v", err)
+	}
+	// And the same verdict is inadmissible as an adversarial one.
+	if err := honest.ReviewVerdict.Validate(binding, "claude"); err == nil {
+		t.Fatal("an unverified review passed the adversarial validator")
+	}
+}
+
+// Every other check the adversarial validator makes still applies.
+func TestAnAdvisoryVerdictKeepsEveryOtherRule(t *testing.T) {
+	binding := Binding{TaskID: "t1", CandidateDigest: "aaaa"}
+	base := Provenance{TaskID: "t1", Role: Reviewer, Provider: "remote",
+		SessionMode: Unverified, CandidateDigest: "aaaa"}
+
+	stale := base
+	stale.CandidateDigest = "bbbb"
+	if err := NewAdvisory(ReviewVerdict{Provenance: stale, Decision: Accept, Summary: "s"}).Validate(binding, ""); err == nil {
+		t.Fatal("an advisory review of another revision was accepted")
+	}
+	if err := NewAdvisory(ReviewVerdict{Provenance: base, Decision: Accept, Summary: "s"}).Validate(binding, "remote"); err == nil {
+		t.Fatal("an advisory self-review was accepted")
+	}
+	if err := NewAdvisory(ReviewVerdict{Provenance: base, Decision: Accept, Summary: ""}).Validate(binding, ""); err == nil {
+		t.Fatal("an advisory review with no summary was accepted")
+	}
+	accepting := ReviewVerdict{Provenance: base, Decision: Accept, Summary: "s",
+		Findings: []Finding{{ID: "1", Severity: Blocking, Claim: "c", Reference: "a.go", Reason: "r"}}}
+	if err := NewAdvisory(accepting).Validate(binding, ""); err == nil {
+		t.Fatal("an advisory verdict accepted over its own blocking finding")
+	}
+}
