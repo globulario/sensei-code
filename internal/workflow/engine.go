@@ -484,6 +484,15 @@ type taskContext struct {
 	// EvidenceSnapshot is what the candidate contained at the last audit, kept
 	// so a handover states the position rather than describing it.
 	EvidenceSnapshot taskstate.Evidence
+	// AwaitingReview marks a resumed task whose candidate stands and whose
+	// required independent review has not happened.
+	//
+	// It changes exactly one thing: the first cycle reviews what is already in
+	// the worktree instead of calling an implementer. Nothing objected to this
+	// candidate, so asking a worker to change it because a process restarted
+	// would be the loop inventing work -- and it would move the very bytes the
+	// missing review is owed about.
+	AwaitingReview bool
 }
 
 // intent renders the architect's stated reasoning for the roles downstream.
@@ -1222,21 +1231,37 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.GuidanceDelivered,
 				strings.Join(guidance, "\n"), nil))
 		}
-		prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
-		impl, err := e.resolveRunner(RunnerSpec{
-			Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
-		})
-		if err != nil {
-			return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
+		report := ""
+		// A resumed awaiting-review task reviews the candidate it already has
+		// before anything touches it. Only the first cycle: if that review asks
+		// for a revision, the ordinary loop resumes and cycle two calls a worker
+		// with the finding, which is the right reason to call one.
+		//
+		// Nothing objected to this candidate. Sending a worker at it because a
+		// process restarted would be the loop inventing work, and it would move
+		// the very bytes the missing review is owed about.
+		if cycle == 1 && tc.AwaitingReview {
+			tc.AwaitingReview = false
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				"resuming at the review boundary: the candidate stands and owes an independent review, "+
+					"so it is reviewed before any worker is called", nil))
+		} else {
+			prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
+			impl, err := e.resolveRunner(RunnerSpec{
+				Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
+			})
+			if err != nil {
+				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
+			}
+			// The worker's own text is the artifact of a read-only plan.
+			// Discarding it left an inspection with nothing to show but a
+			// transcript nobody had judged.
+			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
+			if err != nil {
+				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
+			}
+			report = strings.TrimSpace(result.Text)
 		}
-		// The worker's own text is the artifact of a read-only plan. Discarding
-		// it left an inspection with nothing to show but a transcript nobody
-		// had judged.
-		result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
-		if err != nil {
-			return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
-		}
-		report := strings.TrimSpace(result.Text)
 
 		candidate := gitx.Repo{Root: workspace}
 		capture, err := candidate.CandidateCapture(ctx, tc.Identity.BaseSHA, tc.Files)
@@ -4080,7 +4105,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.OpenFindings(openFindingsWith(review, audit, nil, e.AdvisoryObligations(taskID)))
 			_ = state.Save(e.Repo.Root)
 			e.reportUndeliveredNotes(taskID)
-			e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceReviewer,
+			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
 				runreceipt.OutcomeReviewObligationUnmet, e.candidateStateFor(taskID),
 				"the candidate stands and this task's required independent review has not happened; "+
 					"it is preserved awaiting one",
@@ -4548,9 +4573,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Prospective:     bound.Prospective,
 			PlanSource:      bound.Source,
 			PlanDigest:      task.PlanDigest,
+			AwaitingReview:  task.AwaitingReview,
 		}
 		carried := ""
-		if r := strings.TrimSpace(task.Review); r != "" {
+		if task.AwaitingReview {
+			carried = "This candidate stands and was accepted by a reviewer whose independence could not be " +
+				"established. Nothing about it was objected to. What it owes is an independent review, not a change."
+		} else if r := strings.TrimSpace(task.Review); r != "" {
 			carried = "This candidate was interrupted before it converged. Its changes are already present.\n\nThe last review said:\n" + r
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,

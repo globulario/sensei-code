@@ -145,6 +145,22 @@ const (
 	// resuming asks the same one rather than re-deriving it from a graph that
 	// may have moved.
 	WorkflowAwaitingAuthority Kind = "workflow.awaiting_authority"
+	// WorkflowAwaitingReview is a candidate that stands, was accepted by a
+	// reviewer, and still owes the independent review its task requires.
+	//
+	// Its own kind rather than a flavour of failure, for the same reason
+	// WorkflowStopped is: nothing failed. The worker converged, the reviewer
+	// judged, and one obligation was left undischarged because the party that
+	// judged could not be shown to be independent of the work. Emitting this as
+	// WorkflowFailed made the task terminal to FindInterrupted, so a run whose
+	// receipt said "the obligation remains" and whose task record said
+	// "reviewing" was, to the continuity layer, done -- three layers telling the
+	// truth and the fourth quietly disagreeing.
+	//
+	// Terminal for the INVOCATION and not for the TASK. The candidate is
+	// preserved and the next invocation resumes at the review boundary rather
+	// than sending a worker back to fix code nobody objected to.
+	WorkflowAwaitingReview Kind = "workflow.awaiting_review"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record

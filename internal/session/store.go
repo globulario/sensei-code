@@ -130,6 +130,15 @@ type Interrupted struct {
 	// TestEditRecord is the existing-test edit authorization the router
 	// recorded (M2.2), carried byte for byte for the same reason.
 	TestEditRecord json.RawMessage
+	// AwaitingReview marks a task whose candidate stands and whose required
+	// independent review has not happened.
+	//
+	// It is carried because resuming such a task is not resuming ordinary
+	// work. The candidate was accepted by a reviewer; what is missing is a
+	// reviewer whose independence could be established. Handing it to an
+	// implementer would ask a worker to change code nobody objected to, purely
+	// because a process restarted.
+	AwaitingReview bool
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -195,6 +204,14 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it
 			// stands is that it can be picked back up.
+		case event.WorkflowAwaitingReview:
+			// Not terminal. The invocation is over and the task is not: the
+			// candidate stands, and the independent review it owes can still
+			// be obtained. This case exists because emitting the condition as
+			// WorkflowFailed made it invisible here, and a task nobody could
+			// find again is not "preserved awaiting review" however carefully
+			// the receipt says so.
+			p.AwaitingReview = true
 		case event.WorkflowAwaitingAuthority:
 			// Also not terminal, and resumable even with no plan: a question
 			// deferred during architecture is the ordinary case, and it is
