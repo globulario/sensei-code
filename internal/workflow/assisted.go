@@ -86,8 +86,25 @@ func (e *Engine) SubmitGovernedWithPlan(ctx context.Context, task string, plan S
 // This is the entry a headless orchestrator needs and the remote control
 // surface must never have. A remote role holder architects and reviews; the
 // objective that causes workers to run is not its to originate.
-func (e *Engine) SubmitGovernedLocal(ctx context.Context, task string) string {
-	return e.submit(ctx, task, SubmittedByLocalOperator, false)
+func (e *Engine) SubmitGovernedLocal(ctx context.Context, task string) Submission {
+	return Submission{
+		TaskID:     e.submit(ctx, task, SubmittedByLocalOperator, false),
+		Provenance: SubmittedByLocalOperator,
+	}
+}
+
+// Submission is what an entry point actually recorded.
+//
+// It exists because a transport was predicting it. The local channel returned
+// the provenance constant it expected the engine to stamp, which agreed with
+// what the engine stamped -- until one of them changed. Two answers to "what
+// was recorded" is the defect class this repository keeps finding, and the
+// second answer is always the one that looks like presentation.
+//
+// The entry point mints this. Nothing else may.
+type Submission struct {
+	TaskID     string
+	Provenance Provenance
 }
 
 // SubmitObservation starts a read-only run: read the repository, report what

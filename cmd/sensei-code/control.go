@@ -167,7 +167,7 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		// SubmitGovernedLocal, and nothing else reachable from here. The
 		// channel carries an objective; how it is carried out stays this
 		// process's decision.
-		if err := server.ServeLocal(func(task string) string {
+		if err := server.ServeLocal(func(task string) workflow.Submission {
 			return engine.SubmitGovernedLocal(ctx, task)
 		}); err != nil {
 			fmt.Fprintln(os.Stderr, "sensei-code control: the objective channel stopped:", err)
@@ -248,8 +248,10 @@ func printControlBanner(server *control.Server, cred control.Credential, tokenAt
 	fmt.Println("  session it receives.")
 	fmt.Println("  " + control.RoleContract)
 	fmt.Println("  Place work with: sensei-code submit --task \"...\"")
-	fmt.Println("  That channel is a local socket, not the remote surface: an")
-	fmt.Println("  objective is the operator's to authorize, never the remote architect's.")
+	fmt.Println("  From a terminal on this machine. That channel is a local socket, not the")
+	fmt.Println("  remote surface, and it refuses processes this orchestrator launched: an")
+	fmt.Println("  objective is the operator's to authorize, never a worker's or the remote")
+	fmt.Println("  architect's.")
 	if !supplied {
 		fmt.Println("  Restarting mints another credential; set " + tokenEnv)
 		fmt.Println("  to a 64-character hex secret to keep one identity across restarts.")

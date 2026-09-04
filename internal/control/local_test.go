@@ -28,19 +28,39 @@ type localHarness struct {
 	taskIDs   []string
 }
 
+// operatorPeer is what the kernel reports for a person at a shell: this user,
+// a controlling terminal, and a process this orchestrator did not launch.
+func operatorPeer(net.Conn) (peer, error) {
+	return peer{PID: 4242, UID: uint32(os.Getuid()), GID: uint32(os.Getgid()), Terminal: 34816}, nil
+}
+
 func newLocalHarness(t *testing.T) *localHarness {
 	t.Helper()
+	// The tests below are about the channel, so they run with the kernel
+	// reporting an operator. What this project DECIDES about those facts is
+	// never substituted -- see TestOnlyAnOperatorMayOriginateAnObjective, and
+	// the worker witness, which uses the real kernel and no stub at all.
+	return newLocalHarnessWithPeer(t, operatorPeer)
+}
+
+// newLocalHarnessWithPeer builds the channel with a stated observation. Passing
+// nil means the kernel's own, which is what the worker witness uses.
+func newLocalHarnessWithPeer(t *testing.T, observe func(net.Conn) (peer, error)) *localHarness {
+	t.Helper()
 	h := newHarness(t)
+	h.server.peerFor = observe
 	lh := &localHarness{harness: h}
 	if err := h.server.ListenLocal(h.root); err != nil {
 		t.Fatalf("bind the objective channel: %v", err)
 	}
 	t.Cleanup(func() { h.server.CloseLocal() })
-	go h.server.ServeLocal(func(task string) string {
+	go h.server.ServeLocal(func(task string) workflow.Submission {
 		lh.submitted = append(lh.submitted, task)
 		id := "task-" + task
 		lh.taskIDs = append(lh.taskIDs, id)
-		return id
+		// The engine's own entry point is what stamps this; the recorder
+		// stands in for it and returns what SubmitGovernedLocal returns.
+		return workflow.Submission{TaskID: id, Provenance: workflow.SubmittedByLocalOperator}
 	})
 	return lh
 }

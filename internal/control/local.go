@@ -111,7 +111,7 @@ func (s *Server) ListenLocal(repoRoot string) error {
 func (s *Server) LocalAddr() string { return s.localPath }
 
 // ServeLocal accepts objectives until the listener is closed.
-func (s *Server) ServeLocal(submit func(task string) string) error {
+func (s *Server) ServeLocal(submit func(task string) workflow.Submission) error {
 	if s.local == nil {
 		return errors.New("the control surface was asked to accept objectives before it bound a local socket")
 	}
@@ -150,9 +150,18 @@ const maxLocalSubmissionBytes = 64 << 10
 // refusal, and a hang is the failure this project has the least vocabulary for.
 const localDeadline = 10 * time.Second
 
-func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) string) {
+func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow.Submission) {
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(localDeadline))
+
+	// Who is on the other end, established from the socket before a single
+	// byte of the request is read. A payload cannot influence this, and a
+	// refusal here never reaches the engine.
+	if err := s.authorizeObjective(conn); err != nil {
+		writeLocalError(conn, err.Error())
+		return
+	}
+
 	var in LocalSubmission
 	dec := json.NewDecoder(io.LimitReader(conn, maxLocalSubmissionBytes))
 	// Strict, for the same reason register_role is strict: the fields that must
@@ -180,16 +189,31 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) string) 
 	// there is no argument here that could influence it. An operator with local
 	// access places an objective; what that establishes is recorded by the
 	// engine, not chosen by the submitter.
-	taskID := submit(task)
+	// The provenance reported is the one the ENTRY POINT recorded, returned by
+	// it. The channel used to predict it with the same constant, which agreed
+	// until one of them changed -- and a transport that predicts the record is
+	// a second answer to what happened.
+	recorded := submit(task)
 	_ = json.NewEncoder(conn).Encode(LocalAccepted{
-		TaskID:     taskID,
-		Provenance: string(workflow.SubmittedByLocalOperator),
+		TaskID:     recorded.TaskID,
+		Provenance: string(recorded.Provenance),
 		Workspace:  s.workspace,
 	})
 }
 
+// writeLocalError sends the reason and then drains whatever the caller was
+// still sending.
+//
+// Without the drain the operator sees "connection reset by peer" instead of the
+// refusal. Closing a socket that still has unread data in its receive buffer
+// resets it, and the reset arrives before the reply the caller was waiting for
+// -- so the one refusal a person most needs to read (this caller has no
+// controlling terminal) is replaced by a transport error that explains nothing.
+// It happens exactly on the paths that refuse before reading the request, which
+// is every authority refusal.
 func writeLocalError(conn net.Conn, message string) {
 	_ = json.NewEncoder(conn).Encode(map[string]string{"error": message})
+	_, _ = io.Copy(io.Discard, io.LimitReader(conn, maxLocalSubmissionBytes))
 }
 
 // SubmitLocalObjective is the client half: connect, say one thing, read the
@@ -240,4 +264,73 @@ func SubmitLocalObjective(repoRoot, task string) (LocalAccepted, error) {
 		return LocalAccepted{}, errors.New("the control process accepted the objective and named no task")
 	}
 	return accepted, nil
+}
+
+// authorizeObjective decides whether the party on the other end may originate
+// governed work.
+//
+// The file mode establishes the OS user and stops there. That is not the
+// question. The governed workers this orchestrator launches run as that same
+// user, the broker states plainly that there is no process sandbox, and each
+// worker is handed an absolute path under the canonical repository in its guard
+// environment -- so a worker implementing one objective could open this socket
+// and originate another. It was demonstrated before this function existed; see
+// TestAGovernedWorkerCannotOriginateAnObjective.
+//
+// So two facts are established from the socket, both by the kernel and neither
+// from the request:
+//
+//	the peer is not a process this orchestrator launched
+//	the peer has a controlling terminal
+//
+// The first is what separates an operator from a worker: workers are this
+// process's descendants. The second is what separates a person at a shell from
+// a background process, and it is the same evidence /run rests on -- human
+// provenance comes from the interactive entry point rather than from words in
+// the request.
+//
+// WHAT THIS DOES NOT ESTABLISH, stated because the alternative is a reader
+// assuming otherwise. It is not proof that a human typed. A determined
+// same-UID process could daemonize out of the descendant check and allocate a
+// pseudo-terminal to pass the other, and nothing here would notice, because
+// there is no sandbox between this orchestrator and the processes it runs. What
+// this establishes is "an interactive process this orchestrator did not
+// launch". That is a real narrowing of "anything running as this user" and it
+// is not a proof of personhood. An automation principal that legitimately needs
+// this authority should be introduced deliberately, as its own authority type,
+// rather than by widening this check until it lets one through.
+func (s *Server) authorizeObjective(conn net.Conn) error {
+	observe := s.peerFor
+	if observe == nil {
+		observe = inspectPeer
+	}
+	if !peerInspectionSupported() && s.peerFor == nil {
+		return errors.New("this platform cannot establish who is on the other end of the objective channel, " +
+			"so it will not accept one; locality alone is not authority to originate governed work")
+	}
+	p, err := observe(conn)
+	if err != nil {
+		return fmt.Errorf("the objective was refused because the caller could not be established: %w", err)
+	}
+	return mayOriginateObjective(p, uint32(os.Getuid()))
+}
+
+// mayOriginateObjective is the judgement, separated from the observation.
+//
+// Split so that a test can substitute what the kernel SAID without substituting
+// what this project DECIDES about it. A test that could stub the decision would
+// be checking that a stub returns what it was told to.
+func mayOriginateObjective(p peer, selfUID uint32) error {
+	if p.UID != selfUID {
+		return fmt.Errorf("the objective channel belongs to uid %d and the caller is uid %d", selfUID, p.UID)
+	}
+	if p.Descendant {
+		return fmt.Errorf("pid %d is a process this orchestrator launched, and a worker may not originate "+
+			"governed work: implementing one objective does not confer the authority to create another", p.PID)
+	}
+	if p.Terminal == 0 {
+		return fmt.Errorf("pid %d has no controlling terminal; an objective is placed by an operator at one, "+
+			"and running as this user is not by itself authority to originate governed work", p.PID)
+	}
+	return nil
 }
