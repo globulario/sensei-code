@@ -73,6 +73,18 @@ type Server struct {
 
 	ln  net.Listener
 	srv *http.Server
+
+	// local is the operator's objective channel: a Unix socket, reachable from
+	// this machine and not through the tunnel that carries the remote role.
+	local     net.Listener
+	localPath string
+	// peerFor observes who is on the other end of the objective channel.
+	//
+	// Nil means the kernel, which is every path in this repository. It exists
+	// so a test can supply what the kernel WOULD have said -- a worker's shape,
+	// an operator's shape -- without supplying the answer this project derives
+	// from it. mayOriginateObjective is never substituted.
+	peerFor func(net.Conn) (peer, error)
 }
 
 // Options configure a control server. Everything here is decided by the
