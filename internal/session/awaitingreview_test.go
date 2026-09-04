@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/event"
@@ -165,5 +166,97 @@ func TestAnUnreadableVerdictDoesNotDischargeTheObligation(t *testing.T) {
 		if !found(t, events).AwaitingReview {
 			t.Fatalf("an unreadable verdict (%s) discharged the obligation", string(payload))
 		}
+	}
+}
+
+// reviseVerdict is a verdict whose obligation is NOT in its summary.
+//
+// Built this way on purpose: if the reconstruction hands the next actor the
+// summary, "proof incomplete" is all it gets, and it has no file to open and
+// no correction to make. Every assertion below is on something only
+// Instruction() renders.
+func reviseVerdict(taskID string) event.Event {
+	v := roles.ReviewVerdict{
+		Provenance: roles.Provenance{TaskID: taskID, Role: roles.Reviewer, Provider: "codex"},
+		Decision:   roles.Revise,
+		Summary:    "proof incomplete",
+		Findings: []roles.Finding{{
+			ID: "f1", Severity: roles.Blocking,
+			Claim:      "mutation witness absent",
+			Reference:  "internal/workflow/reviewgate_test.go",
+			Reason:     "the test passes against the unrepaired code",
+			Correction: "add a fail-then-pass mutation control",
+		}},
+		Instructions: "preserve the existing exact-candidate binding",
+	}
+	payload, _ := json.Marshal(v)
+	var raw json.RawMessage = payload
+	return event.Event{
+		SessionID: "s", TaskID: taskID, Source: event.SourceReviewer,
+		Kind: event.ReviewCompleted, Summary: "REVISE: proof incomplete", Payload: raw,
+	}
+}
+
+// The next actor receives the OBLIGATION, not a sentence about it.
+//
+// Before this, a restart weakened the brief from "here is the file and the fix"
+// to the summary alone -- and the loss was invisible, because both are
+// non-empty strings and the field was populated either way.
+func TestAResumedWorkerReceivesTheFindingAndNotOnlyTheSummary(t *testing.T) {
+	events := append(begun("task-1"),
+		event.New("s", "task-1", event.SourceReviewer, event.WorkflowAwaitingReview, "owes a review", nil),
+		reviseVerdict("task-1"),
+		event.New("s", "task-1", event.SourceUser, event.WorkflowStopped, "stopped", nil),
+	)
+
+	task := found(t, events)
+	if task.AwaitingReview {
+		t.Fatal("a revised task still claims to await an independent review")
+	}
+	for _, must := range []string{
+		"mutation witness absent",
+		"internal/workflow/reviewgate_test.go",
+		"add a fail-then-pass mutation control",
+		"preserve the existing exact-candidate binding",
+	} {
+		if !strings.Contains(task.Review, must) {
+			t.Fatalf("the resumed worker would not be told %q:\n%s", must, task.Review)
+		}
+	}
+	// It is the canonical rendering, not a second one written here.
+	var v roles.ReviewVerdict
+	if err := json.Unmarshal(reviseVerdict("task-1").Payload, &v); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if task.Review != v.Instruction() {
+		t.Fatalf("the reconstruction diverged from ReviewVerdict.Instruction():\n got %q\nwant %q",
+			task.Review, v.Instruction())
+	}
+}
+
+// A verdict carrying nothing more specific still yields its summary, so the
+// fallback the live path relies on is preserved rather than replaced.
+func TestAVerdictWithNoFindingsStillYieldsItsSummary(t *testing.T) {
+	events := append(begun("task-1"),
+		event.New("s", "task-1", event.SourceReviewer, event.WorkflowAwaitingReview, "owes a review", nil),
+		verdictEvent("task-1", roles.Revise, "the proof is missing"),
+	)
+	if got := found(t, events).Review; got != "the proof is missing" {
+		t.Fatalf("Review = %q", got)
+	}
+}
+
+// A reviewer's status line is presentation. It must not replace an obligation.
+func TestAStatusLineDoesNotOverwriteABoundedInstruction(t *testing.T) {
+	events := append(begun("task-1"),
+		reviseVerdict("task-1"),
+		// The kind of line the reviewer emits around an advisory accept.
+		event.New("s", "task-1", event.SourceReviewer, event.Status,
+			"advisory accept: satisfies no adversarial-review obligation", nil),
+		event.New("s", "task-1", event.SourceUser, event.WorkflowStopped, "stopped", nil),
+	)
+	got := found(t, events).Review
+	if !strings.Contains(got, "add a fail-then-pass mutation control") {
+		t.Fatalf("a status line replaced the finding the worker must act on:\n%s", got)
 	}
 }

@@ -348,11 +348,19 @@ func TestPostValidationStubProcess(t *testing.T) {
 	role, record := args[1], args[2]
 	switch role {
 	case "implementor":
-		// The prompt is read and discarded: a stub that varied with it would be
-		// a very small language model, and then a failure would be ambiguous.
-		// It must be drained, though -- a worker that exits without reading its
-		// prompt fails the parent's write, not its own exit status.
-		_, _ = io.Copy(io.Discard, os.Stdin)
+		// The prompt does not change what the stub DOES -- a stub that varied
+		// with it would be a very small language model, and then a failure
+		// would be ambiguous. It is recorded when a caller asks, so a test can
+		// read the bytes the worker received rather than the engine's claim
+		// about them. It must be drained either way: a worker that exits
+		// without reading its prompt fails the parent's write, not its own
+		// exit status.
+		prompt, _ := io.ReadAll(os.Stdin)
+		if record != "" {
+			if err := os.WriteFile(record, prompt, 0o644); err != nil {
+				exitStub(err)
+			}
+		}
 		wd, err := os.Getwd()
 		if err != nil {
 			exitStub(err)

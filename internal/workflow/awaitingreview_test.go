@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -206,4 +207,73 @@ func withPlan(events []event.Event, taskID, plan string) []event.Event {
 		event.New("s", taskID, event.SourceArchitect, event.PlanProposed, plan, nil),
 	}
 	return append(out, events...)
+}
+
+// The other end of the continuity law: what FindInterrupted reconstructs is
+// what the worker is actually told.
+//
+// The two halves were separately correct once and still broke the law between
+// them -- the reconstruction carried the verdict's summary, so the resumed
+// worker was handed "proof incomplete" with no file to open. This drives the
+// real chain: a persistent event log, the real reconstruction, and the prompt
+// the implementor process received on stdin.
+func TestTheReconstructedInstructionReachesTheResumedWorkersPrompt(t *testing.T) {
+	verdict := roles.ReviewVerdict{
+		Provenance: roles.Provenance{TaskID: "task-1", Role: roles.Reviewer, Provider: "codex"},
+		Decision:   roles.Revise,
+		Summary:    "proof incomplete",
+		Findings: []roles.Finding{{
+			ID: "f1", Severity: roles.Blocking,
+			Claim:      "mutation witness absent",
+			Reference:  "internal/workflow/reviewgate_test.go",
+			Reason:     "the test passes against the unrepaired code",
+			Correction: "add a fail-then-pass mutation control",
+		}},
+		Instructions: "preserve the existing exact-candidate binding",
+	}
+	payload, err := json.Marshal(verdict)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	// The session as a later process finds it.
+	events := []event.Event{
+		event.New("s", "task-1", event.SourceUser, event.TaskCreated, "do the thing", nil),
+		event.New("s", "task-1", event.SourceArchitect, event.PlanProposed, "the bounded plan", nil),
+		event.New("s", "task-1", event.SourceReviewer, event.WorkflowAwaitingReview, "owes a review", nil),
+		{SessionID: "s", TaskID: "task-1", Source: event.SourceReviewer,
+			Kind: event.ReviewCompleted, Summary: "REVISE: proof incomplete", Payload: payload},
+		event.New("s", "task-1", event.SourceUser, event.WorkflowStopped, "stopped", nil),
+	}
+	found := session.FindInterrupted(events)
+	if len(found) != 1 {
+		t.Fatalf("the task is not resumable: %d found", len(found))
+	}
+	task := found[0]
+	if task.AwaitingReview {
+		t.Fatal("a revised task still claims to await an independent review")
+	}
+
+	// Resume hands that reconstruction to the worker as carried context. Run
+	// the loop with it and read what the implementor process actually got.
+	h := newGateHarness(t, requiresIndependentReview(), roles.Fresh, "accept")
+	if _, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, task.Review); err != nil {
+		t.Fatalf("the resumed loop failed: %v", err)
+	}
+
+	prompt, err := os.ReadFile(h.workerSaw)
+	if err != nil {
+		t.Fatalf("the worker recorded no prompt: %v", err)
+	}
+	for _, must := range []string{
+		"mutation witness absent",
+		"internal/workflow/reviewgate_test.go",
+		"add a fail-then-pass mutation control",
+		"preserve the existing exact-candidate binding",
+	} {
+		if !strings.Contains(string(prompt), must) {
+			t.Fatalf("the resumed worker was never told %q; it received:\n%s", must, prompt)
+		}
+	}
 }

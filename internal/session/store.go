@@ -152,6 +152,10 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		planned  bool
 		deferred bool
 		done     bool
+		// reviewFromVerdict records that Review holds a bounded verdict's
+		// instruction, so a later status line cannot replace an obligation
+		// with a sentence about it.
+		reviewFromVerdict bool
 	}
 	order := []string{}
 	byTask := map[string]*partial{}
@@ -230,25 +234,33 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// those two events must not turn a candidate nobody objected to
 			// into implementation work. Neither does ReviewStarted: a process
 			// that died mid-review still owes the review.
-			var verdict struct {
-				Decision string `json:"decision"`
-				Summary  string `json:"summary"`
-			}
+			var verdict roles.ReviewVerdict
 			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &verdict) == nil {
-				switch roles.Decision(strings.ToLower(strings.TrimSpace(verdict.Decision))) {
+				switch roles.Decision(strings.ToLower(strings.TrimSpace(string(verdict.Decision)))) {
 				case roles.Revise, roles.Escalate:
 					p.AwaitingReview = false
 				}
-				// The latest bounded verdict is what the next actor is handed.
+				// The latest bounded verdict is what the next actor is handed,
+				// rendered by the SAME method that tells a live worker what to
+				// fix.
 				//
-				// Read here rather than only from the reviewer's status line,
-				// because the REVISE branch emits its status as the SYSTEM. A
-				// task that was advisory-accepted, resumed, and then revised
-				// would otherwise carry the older advisory-accept text forward
-				// and hand the next worker a message about an obligation
-				// instead of the finding it is supposed to fix.
-				if s := strings.TrimSpace(verdict.Summary); s != "" {
-					p.Review = s
+				// Instruction() and not Summary. The summary is presentation --
+				// "proof incomplete" -- and the obligation is the findings: what
+				// was claimed, the file to open, the correction or the missing
+				// proof, and any explicit instructions. A restart that handed
+				// the worker the summary would silently weaken the brief from
+				// "here is the file and the fix" to a sentence, and the loss
+				// would be invisible because both are non-empty strings.
+				//
+				// Rendering here rather than re-implementing it: a second
+				// renderer in this package would drift from the one the live
+				// path uses, and the resumed worker would be told something
+				// slightly different from what the interrupted one was told.
+				// Instruction() already falls back to the summary when a
+				// verdict carries nothing more specific.
+				if instruction := strings.TrimSpace(verdict.Instruction()); instruction != "" {
+					p.Review = instruction
+					p.reviewFromVerdict = true
 				}
 			}
 		case event.WorkflowAwaitingAuthority:
@@ -266,7 +278,13 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.AwaitingAuthority = nil
 
 		}
-		if e.Source == event.SourceReviewer && e.Kind == event.Status && strings.TrimSpace(e.Summary) != "" {
+		// A reviewer's status line is the fallback, for records written before
+		// ReviewCompleted carried a payload. It must not overwrite a bounded
+		// verdict's instruction: a status line is presentation, the instruction
+		// is the obligation, and the reviewer emits several status lines around
+		// an advisory accept that would otherwise be the last thing written.
+		if !p.reviewFromVerdict &&
+			e.Source == event.SourceReviewer && e.Kind == event.Status && strings.TrimSpace(e.Summary) != "" {
 			p.Review = e.Summary
 		}
 	}

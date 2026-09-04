@@ -50,7 +50,9 @@ type gateHarness struct {
 	tc     *taskContext
 	work   string
 	worker config.Agent
-	events <-chan event.Event
+	// workerSaw is where the implementor stub writes the prompt it received.
+	workerSaw string
+	events    <-chan event.Event
 }
 
 func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decision string) *gateHarness {
@@ -64,7 +66,8 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 		t.Fatalf("create the candidate worktree: %v", err)
 	}
 	record := t.TempDir()
-	implCommand, implArgs := stubProcess(t, "implementor", "")
+	workerSaw := filepath.Join(record, "worker-prompt.txt")
+	implCommand, implArgs := stubProcess(t, "implementor", workerSaw)
 	senseiCommand, senseiArgs := stubProcess(t, "sensei", filepath.Join(record, "audited-diff.txt"))
 	sc, err := sensei.Start(ctx, repo.Root, senseiCommand, senseiArgs)
 	if err != nil {
@@ -107,7 +110,7 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	e.beginReceipt("task-1")
 
 	return &gateHarness{
-		engine: e, sc: sc, work: workspace, worker: worker,
+		engine: e, sc: sc, work: workspace, worker: worker, workerSaw: workerSaw,
 		events: events,
 		tc: &taskContext{
 			Task: "print a number from main", Mode: ModeModify,
