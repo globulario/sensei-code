@@ -191,3 +191,86 @@ func roleOrUnknown(r Role) string {
 	}
 	return r.Label()
 }
+
+// Advisory is a reviewer's conclusion whose independence was never established.
+//
+// It is a distinct type rather than a flag on ReviewVerdict, and the distinction
+// is load-bearing in the only way that matters in Go: a function taking a
+// ReviewVerdict cannot be handed one of these. Somewhere downstream there will
+// be a caller that counts reviews, and the flag version of this design is the
+// one where that caller forgets to read the flag. Here it cannot compile.
+//
+// What it IS: a real review, by a real party, with real findings, about an exact
+// candidate. It may return REVISE and drive the repair loop, and it may
+// afterwards return ACCEPT. What it is NOT: evidence that anybody independent
+// looked. The adversarial-independence invariant is not weakened by this type;
+// it is the reason this type exists instead of a looser ReviewVerdict.
+type Advisory struct {
+	ReviewVerdict
+}
+
+// NewAdvisory types a verdict whose isolation was not established.
+func NewAdvisory(v ReviewVerdict) Advisory { return Advisory{ReviewVerdict: v} }
+
+// SatisfiesAdversarialObligation is always false, and is a method rather than a
+// comment so that a caller asking the question gets the answer in code.
+func (a Advisory) SatisfiesAdversarialObligation() bool { return false }
+
+// Validate refuses an advisory verdict that cannot govern the next branch of
+// the loop.
+//
+// It shadows ReviewVerdict.Validate deliberately: every check there applies
+// except the independence one, which is not skipped so much as inapplicable --
+// this type exists precisely for the case where independence was not
+// established. Everything else is unchanged, including the exact-candidate
+// binding and the refusal to let an author review its own work.
+//
+// It additionally refuses a verdict that CLAIMS independence. An advisory
+// verdict marked Fresh is a contradiction: something recorded isolation for a
+// turn nobody observed, and the safe reading of that is that the recording is
+// wrong rather than that the isolation is real.
+func (a Advisory) Validate(b Binding, implementer string) error {
+	if a.Provenance.Independent() {
+		return errors.New("this review was typed advisory and its provenance claims an independent session; one of the two is wrong, and it is not safe to assume it is the typing")
+	}
+	if !a.Decision.Valid() {
+		return fmt.Errorf("review decision must be accept, revise, or escalate, got %q", a.Decision)
+	}
+	if a.Provenance.Role != Reviewer {
+		return fmt.Errorf("a %s cannot conclude a review", roleOrUnknown(a.Provenance.Role))
+	}
+	if err := b.Verify(a.Provenance); err != nil {
+		if b.Stale(a.Provenance) {
+			return fmt.Errorf("this review is about an earlier revision of the candidate and no longer applies: %w", err)
+		}
+		return err
+	}
+	if impl := strings.TrimSpace(implementer); impl != "" && strings.EqualFold(impl, strings.TrimSpace(a.Provenance.Provider)) {
+		return fmt.Errorf("%s implemented this candidate and cannot also review it", a.Provenance.Provider)
+	}
+	if strings.TrimSpace(a.Summary) == "" {
+		return errors.New("review returned no summary")
+	}
+	for i, f := range a.Findings {
+		if !f.Severity.Valid() {
+			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
+		}
+		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
+			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
+		}
+	}
+	if a.Decision == Revise && strings.TrimSpace(a.Instructions) == "" && len(a.Findings) == 0 {
+		return errors.New("review asked for a revision without saying what to change")
+	}
+	if a.Decision == Accept && len(a.Blocking()) != 0 {
+		return fmt.Errorf("review accepted while recording %d blocking finding(s)", len(a.Blocking()))
+	}
+	return nil
+}
+
+// Describe is the line the record carries, written so an advisory accept cannot
+// be read as more than it is.
+func (a Advisory) Describe() string {
+	return "advisory " + string(a.Decision) + " by " + a.Provenance.Provider +
+		" (session " + string(a.Provenance.SessionMode) + "): satisfies no adversarial-review obligation, and is not admission"
+}

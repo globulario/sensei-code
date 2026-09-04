@@ -103,8 +103,43 @@ const (
 	// discard the dialogue the human is having.
 	Continue Session = "continue"
 	// Fresh opens a provider session that inherits nothing.
+	//
+	// It is a claim this project is entitled to make only about a process it
+	// started: agent.CLI launches the provider, chooses the mode, and reports
+	// what it actually ran. Fresh means observed, not intended.
 	Fresh Session = "fresh"
+	// Unverified is a context this project did not open and cannot observe.
+	//
+	// It exists because a remote agent's conversation lives on the far side of
+	// a transport, and neither of the other two values can honestly describe
+	// it. Fresh would be a claim of isolation nobody checked -- the exact claim
+	// the adversarial-independence invariant exists to require evidence for.
+	// Continue would assert an inheritance that may not have happened. The zero
+	// value is not available either: it already means "the caller stated no
+	// preference, apply the role's default", which is a request, and this is a
+	// finding.
+	//
+	// So the missing fact gets a name. Independent() reads Fresh and only
+	// Fresh, so a turn recorded as Unverified satisfies no adversarial
+	// obligation anywhere, forever, without any caller having to remember.
+	Unverified Session = "unverified"
 )
+
+// AllSessions is the closed vocabulary.
+var AllSessions = []Session{Continue, Fresh, Unverified}
+
+// Valid reads the closed set by membership. An unknown session mode is a
+// configuration error, not a new kind of isolation.
+func (s Session) Valid() bool {
+	for _, known := range AllSessions {
+		if s == known {
+			return true
+		}
+	}
+	return false
+}
+
+func (s Session) String() string { return string(s) }
 
 // SessionMode is the default session for a role, and adversarial roles get
 // Fresh by construction rather than by remembering to pass it.
