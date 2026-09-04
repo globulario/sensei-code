@@ -32,6 +32,16 @@ type Request struct {
 	// "continue", so an adversarial role that nobody remembered to configure
 	// still starts clean.
 	Session roles.Session
+	// Binding is the exact artifact this turn is about: task, base, candidate
+	// digest and tree.
+	//
+	// Carried by the request rather than reconstructed by whoever answers,
+	// because the producer must not author its own subject. A local CLI turn
+	// does not need it -- the engine stamps provenance itself when the process
+	// returns -- but a turn answered over a transport does: the far side has to
+	// be told which object it is being asked about, and a late answer has to be
+	// checkable against it. Zero means the caller asserted nothing.
+	Binding roles.Binding
 	// Graph is the awareness graph the engine verified for this run, handed to
 	// the agent as an execution-scoped MCP binding.
 	//

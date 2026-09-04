@@ -120,6 +120,14 @@ type Engine struct {
 	// reviewAttempts counts reviews per task across every worker, so the
 	// record has one sequence a handoff does not restart.
 	reviewAttempts map[string]int
+	// advisoryObligations holds, per task, the adversarial-review obligations
+	// an advisory verdict did NOT discharge.
+	//
+	// Kept so the obligation survives the verdict that failed to satisfy it. An
+	// advisory ACCEPT ends the review loop functionally, and the thing that
+	// must not follow is a receipt that reads as though somebody independent
+	// looked. These entries travel into the task's open findings.
+	advisoryObligations map[string][]string
 
 	// Runners resolves which adapter answers as a role. Nil means the provider
 	// command line, which is every path today; see runners.go for why a
@@ -1277,8 +1285,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				if err := e.policyFor(taskID).Check(worker.Name, assignment); err != nil {
 					return false, plan, lastReview, lastAudit, err
 				}
-				review, err := e.resolveReview(ctx, taskID, assignment,
+				review, advisory, err := e.resolveReview(ctx, taskID, assignment,
 					inspectionPacket(*tc, binding, start, plan, report), worker.Name)
+				_ = advisory
 				if err != nil {
 					return false, plan, lastReview, lastAudit, err
 				}
@@ -1574,8 +1583,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// conditions that were never true.
 		e.classifyForDarkRun(sc, start, taskID, tc, diff)
 
-		review, err := e.resolveReview(ctx, taskID, assignment,
+		review, advisory, err := e.resolveReview(ctx, taskID, assignment,
 			reviewPacket(*tc, binding, start, plan, diff, lastAudit, evidence.Render()), worker.Name)
+		_ = advisory
 		if err != nil {
 			return false, plan, lastReview, lastAudit, err
 		}
@@ -2165,7 +2175,13 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 //
 // A provider that cannot produce a bounded verdict costs a fallback, not a
 // person's attention: being out of quota is not an architectural finding.
-func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment roles.Assignment, packet roles.IndependentReviewPacket, implementer string) (roles.ReviewVerdict, error) {
+// resolveReview returns the verdict and whether it was ADVISORY -- a review
+// whose isolation from the work it judges could not be established, because the
+// party that gave it answered over a transport this project cannot watch.
+//
+// The bool is returned rather than carried on the verdict so that a caller has
+// to receive it. A field would be a field somebody forgets to read.
+func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment roles.Assignment, packet roles.IndependentReviewPacket, implementer string) (roles.ReviewVerdict, bool, error) {
 	binding := packet.Provenance.Binding()
 	attempt := e.nextReviewAttempt(taskID)
 	var lastErr error
@@ -2186,35 +2202,38 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			"independent review of candidate "+shortDigest(packet.Provenance.CandidateDigest),
 			map[string]any{"candidate": packet.Provenance.CandidateDigest, "review_attempt": attempt}))
 
-		verdict, err := e.askReviewer(ctx, taskID, cfg, packet, binding, implementer)
+		verdict, advisory, err := e.askReviewer(ctx, taskID, cfg, packet, binding, implementer)
 		if err == nil {
 			e.reportReview(taskID, verdict)
-			return verdict, nil
+			if advisory {
+				e.reportAdvisory(taskID, verdict)
+			}
+			return verdict, advisory, nil
 		}
 		lastErr = err
 		if errors.Is(err, errReviewRefused) {
 			// The verdict was structurally inadmissible -- self-review, or a
 			// review of another revision. Another provider would not fix that,
 			// and retrying would only produce it again.
-			return roles.ReviewVerdict{}, err
+			return roles.ReviewVerdict{}, false, err
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			config.DisplayName(cfg.Name)+" could not produce a bounded review; trying the next independent reviewer",
 			map[string]string{"error": err.Error()}))
 	}
-	return roles.ReviewVerdict{}, fmt.Errorf("no independent reviewer produced a bounded decision: %w", lastErr)
+	return roles.ReviewVerdict{}, false, fmt.Errorf("no independent reviewer produced a bounded decision: %w", lastErr)
 }
 
 // errReviewRefused marks a verdict the workflow will not accept from any
 // provider, as opposed to one this provider simply failed to produce.
 var errReviewRefused = errors.New("review refused")
 
-func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agent, packet roles.IndependentReviewPacket, binding roles.Binding, implementer string) (roles.ReviewVerdict, error) {
+func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agent, packet roles.IndependentReviewPacket, binding roles.Binding, implementer string) (roles.ReviewVerdict, bool, error) {
 	reviewer, err := e.resolveRunner(RunnerSpec{
 		Role: roles.Reviewer, Agent: cfg, Source: event.SourceReviewer, TaskID: taskID,
 	})
 	if err != nil {
-		return roles.ReviewVerdict{}, err
+		return roles.ReviewVerdict{}, false, err
 	}
 	prompt := reviewPrompt(packet)
 	var lastErr error
@@ -2225,10 +2244,10 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		}
 		result, err := reviewer.Runner.Run(ctx, agent.Request{
 			Role: roles.Reviewer, TaskID: taskID, Workspace: e.Repo.Root, Prompt: p,
-			Session: roles.Fresh, Graph: e.graphFor(taskID),
+			Session: roles.Fresh, Graph: e.graphFor(taskID), Binding: binding,
 		}, e.emit)
 		if err != nil {
-			return roles.ReviewVerdict{}, err
+			return roles.ReviewVerdict{}, false, err
 		}
 		var d reviewDecision
 		if err := decodeModelJSON(result.Text, &d); err != nil {
@@ -2237,7 +2256,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		}
 		verdict := roles.ReviewVerdict{
 			Provenance: roles.Provenance{
-				TaskID: taskID, Role: roles.Reviewer, Provider: cfg.Name,
+				TaskID: taskID, Role: roles.Reviewer, Provider: reviewer.Name,
 				SessionID: e.SessionID, SessionMode: result.Session,
 				BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
 				CandidateTree:    binding.CandidateTree,
@@ -2249,16 +2268,92 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 			Instructions: d.Instructions,
 			Findings:     numberFindings(d.Findings),
 		}
+		// A turn this project did not open cannot be certified as isolated, so
+		// it takes the advisory path -- every other rule, none of the standing.
+		// The branch reads the mode the RUNNER reported, not one the reviewer
+		// asked for: a party that could report its own isolation would be
+		// answering the question it is being asked.
+		if result.Session == roles.Unverified {
+			advisory := roles.NewAdvisory(verdict)
+			if err := advisory.Validate(binding, implementer); err != nil {
+				if advisoryIsInadmissible(verdict, binding, implementer) {
+					return roles.ReviewVerdict{}, false, fmt.Errorf("%w: %v", errReviewRefused, err)
+				}
+				lastErr = err
+				continue
+			}
+			return verdict, true, nil
+		}
 		if err := verdict.Validate(binding, implementer); err != nil {
 			if reviewIsInadmissible(verdict, binding, implementer) {
-				return roles.ReviewVerdict{}, fmt.Errorf("%w: %v", errReviewRefused, err)
+				return roles.ReviewVerdict{}, false, fmt.Errorf("%w: %v", errReviewRefused, err)
 			}
 			lastErr = err
 			continue
 		}
-		return verdict, nil
+		return verdict, false, nil
 	}
-	return roles.ReviewVerdict{}, lastErr
+	return roles.ReviewVerdict{}, false, lastErr
+}
+
+// advisoryIsInadmissible separates a verdict no party may give from one this
+// party merely got wrong. It is reviewIsInadmissible without the independence
+// clause, which is the one thing an advisory verdict is not being asked for.
+func advisoryIsInadmissible(v roles.ReviewVerdict, b roles.Binding, implementer string) bool {
+	if b.Mismatch(v.Provenance) != "" {
+		return true
+	}
+	return implementer != "" && strings.EqualFold(implementer, v.Provenance.Provider)
+}
+
+// noteAdvisoryObligation records an adversarial-review obligation that an
+// advisory verdict left standing.
+func (e *Engine) noteAdvisoryObligation(taskID, detail string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.advisoryObligations == nil {
+		e.advisoryObligations = make(map[string][]string)
+	}
+	for _, have := range e.advisoryObligations[taskID] {
+		if have == detail {
+			return
+		}
+	}
+	e.advisoryObligations[taskID] = append(e.advisoryObligations[taskID], detail)
+}
+
+// AdvisoryObligations is what this task still owes an independent reviewer.
+// Empty means nothing advisory happened, never that an obligation was met.
+func (e *Engine) AdvisoryObligations(taskID string) []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]string(nil), e.advisoryObligations[taskID]...)
+}
+
+// reportAdvisory records what an advisory review is worth, in the record, at
+// the moment it happens.
+//
+// Written here rather than left to a reader of the transcript, because the
+// thing that must not happen is an advisory ACCEPT being counted later as an
+// independent one. The obligation it does not discharge is named in the same
+// breath as the verdict that did not discharge it.
+func (e *Engine) reportAdvisory(taskID string, v roles.ReviewVerdict) {
+	advisory := roles.NewAdvisory(v)
+	policy := e.policyFor(taskID)
+	e.emit(event.New(e.SessionID, taskID, event.SourceReviewer, event.Status,
+		advisory.Describe(), map[string]any{
+			"review_kind":                  "advisory",
+			"independent_review":           false,
+			"decision":                     string(v.Decision),
+			"provider":                     v.Provenance.Provider,
+			"session_mode":                 string(v.Provenance.SessionMode),
+			"candidate":                    v.Provenance.CandidateDigest,
+			"adversarial_obligation_unmet": policy.CrossProviderReview,
+			"obligation_reason":            policy.Reason,
+		}))
+	if policy.CrossProviderReview {
+		e.noteAdvisoryObligation(taskID, advisory.Describe()+"; this task's measured risk requires an independent review, and has not had one")
+	}
 }
 
 // reviewIsInadmissible separates a verdict no provider may give from one this
@@ -3944,7 +4039,12 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			}
 			state.Phase = taskstate.Accepted
 			state.Evidence = tc.EvidenceSnapshot
-			state.OpenFindings(nil)
+			// Acceptance clears what the reviewer raised and answered. It does
+			// NOT clear an obligation nobody discharged: an advisory ACCEPT
+			// ends the loop and establishes no independent review, and a task
+			// record that forgot that at exactly the moment it reads
+			// "accepted" is the receipt this project exists to refuse.
+			state.OpenFindings(openFindingsWith("", "", nil, e.AdvisoryObligations(taskID)))
 			_ = state.Save(e.Repo.Root)
 			e.reportUndeliveredNotes(taskID)
 
@@ -4481,6 +4581,16 @@ func (e *Engine) authorityDecisions(taskID string) []taskstate.AuthorityDecision
 // openFindings turns what the last cycle produced into the list the next worker
 // has to clear. An empty list is left empty rather than padded: inventing a
 // finding to look thorough would send the next worker after nothing.
+// openFindingsWith is openFindings plus the obligations an advisory review left
+// standing, so the durable record of the task says what was never established.
+func openFindingsWith(review, audit string, cause error, obligations []string) []taskstate.Finding {
+	out := openFindings(review, audit, cause)
+	for _, o := range obligations {
+		out = append(out, taskstate.Finding{Source: "review obligation", Detail: o})
+	}
+	return out
+}
+
 func openFindings(review, audit string, cause error) []taskstate.Finding {
 	var out []taskstate.Finding
 	if r := strings.TrimSpace(review); r != "" {

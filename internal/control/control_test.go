@@ -737,7 +737,7 @@ func TestMalformedAndUnknownRequestsFailClosed(t *testing.T) {
 	}
 }
 
-func TestTheToolSurfaceIsExactlyTheReadOnlyFive(t *testing.T) {
+func TestTheToolSurfaceIsExactlyFiveReadsAndTwoSubmissions(t *testing.T) {
 	h := newHarness(t)
 	_, raw := h.post(h.cred.Token(), `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	var out rpcResult
@@ -748,20 +748,24 @@ func TestTheToolSurfaceIsExactlyTheReadOnlyFive(t *testing.T) {
 	for _, tool := range out.Result.Tools {
 		got[tool["name"].(string)] = true
 	}
-	want := []string{"register_role", "release_role", "renew_role", "get_work", "inspect_task"}
+	want := []string{"register_role", "release_role", "renew_role", "get_work", "inspect_task",
+		"submit_architecture", "submit_review"}
 	for _, name := range want {
 		if !got[name] {
 			t.Fatalf("tools/list is missing %s: %v", name, got)
 		}
 	}
 	if len(got) != len(want) {
-		t.Fatalf("the surface exposes %v; this slice is the read-only five", got)
+		t.Fatalf("the surface exposes %v; this slice is five reads and two typed submissions", got)
 	}
 	// Named individually rather than by counting, because the failure worth
 	// catching is a specific verb appearing, not the number changing.
+	// start_task is named here on purpose: an architect lease is architectural
+	// authority, never human objective authority, so holding one must not mean
+	// this principal may invent development work and have it executed.
 	for _, forbidden := range []string{
-		"submit_architecture", "submit_review", "exec", "run_shell", "write_file",
-		"admit_change", "invoke_worker", "advance_task",
+		"exec", "run_shell", "write_file", "admit_change", "invoke_worker",
+		"advance_task", "complete_task", "start_task", "delegate_task",
 	} {
 		if got[forbidden] {
 			t.Fatalf("the read-only surface exposes %s", forbidden)
