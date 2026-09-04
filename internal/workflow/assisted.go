@@ -27,7 +27,6 @@ import (
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/investigate"
 	"github.com/globulario/sensei-code/internal/project"
-	"github.com/globulario/sensei-code/internal/provider"
 	"github.com/globulario/sensei-code/internal/retrieval"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/runreceipt"
@@ -491,13 +490,14 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	}
 
 	conversation := e.conversationSoFar(task, 40)
-	architect := agent.CLI{
-		NoGraph: !e.Config.Architect.ConsumesGraph(),
-		Name:    e.Config.Architect.Name, Label: config.DisplayName(e.Config.Architect.Name),
-		Command: e.Config.Architect.Command, Args: e.Config.Architect.Args,
-		Source: event.SourceArchitect, SessionID: e.SessionID, UnsetEnv: provider.SessionOnlyEnv,
+	architect, err := e.resolveRunner(RunnerSpec{
+		Role: roles.Architect, Agent: e.Config.Architect, Source: event.SourceArchitect, TaskID: taskID,
+	})
+	if err != nil {
+		fail(err)
+		return
 	}
-	result, err := architect.Run(ctx, agent.Request{
+	result, err := architect.Runner.Run(ctx, agent.Request{
 		Role: roles.Architect, TaskID: taskID, Workspace: e.Repo.Root, Graph: e.graphFor(taskID),
 		Prompt: assistedPrompt(e.Repo.Root, domain, config.DisplayName(e.Config.Architect.Name), task, conversation,
 			observations, workspaceEvidence, preflightEvidence, renderRetrieved(retrieved),
