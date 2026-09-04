@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/roles"
 )
 
 type Store struct {
@@ -212,6 +213,44 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// find again is not "preserved awaiting review" however carefully
 			// the receipt says so.
 			p.AwaitingReview = true
+		case event.ReviewCompleted:
+			// A bounded verdict may END the awaiting-review state, and this is
+			// where the difference between a latch and a reconstruction lives.
+			//
+			// The session log is append-only and the interactive process reuses
+			// it, so "this task once awaited a review" stays true forever. What
+			// a resume needs is what the task owes NOW. A REVISE or an ESCALATE
+			// says the candidate is no longer in "nothing is wrong, only an
+			// independent look is missing" -- it owes a change, or an
+			// architectural answer -- and resuming into a review would ask the
+			// same question again while the finding nobody acted on aged.
+			//
+			// ACCEPT deliberately does NOT clear it. An advisory accept is
+			// followed by a fresh WorkflowAwaitingReview, and a crash between
+			// those two events must not turn a candidate nobody objected to
+			// into implementation work. Neither does ReviewStarted: a process
+			// that died mid-review still owes the review.
+			var verdict struct {
+				Decision string `json:"decision"`
+				Summary  string `json:"summary"`
+			}
+			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &verdict) == nil {
+				switch roles.Decision(strings.ToLower(strings.TrimSpace(verdict.Decision))) {
+				case roles.Revise, roles.Escalate:
+					p.AwaitingReview = false
+				}
+				// The latest bounded verdict is what the next actor is handed.
+				//
+				// Read here rather than only from the reviewer's status line,
+				// because the REVISE branch emits its status as the SYSTEM. A
+				// task that was advisory-accepted, resumed, and then revised
+				// would otherwise carry the older advisory-accept text forward
+				// and hand the next worker a message about an obligation
+				// instead of the finding it is supposed to fix.
+				if s := strings.TrimSpace(verdict.Summary); s != "" {
+					p.Review = s
+				}
+			}
 		case event.WorkflowAwaitingAuthority:
 			// Also not terminal, and resumable even with no plan: a question
 			// deferred during architecture is the ordinary case, and it is
