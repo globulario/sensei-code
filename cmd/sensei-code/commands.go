@@ -48,7 +48,13 @@ var publicCommands = []command{
 	{Name: "logout", Summary: "disconnect a provider using its native authentication"},
 	{Name: "context", Summary: "build an assisted context packet from live Sensei evidence"},
 	{Name: "handoff", Summary: "bind agent continuity to an exact context packet"},
-	{Name: "mcp", Summary: "serve Sensei Code's own MCP surface"},
+	// `mcp` configures each AGENT's route to Sensei. `control` is the opposite
+	// direction: a capable agent reaching in to hold a role here. The summary
+	// below used to read "serve Sensei Code's own MCP surface", which described
+	// neither -- it named the thing `control` actually does while pointing at
+	// the command that configures clients.
+	{Name: "mcp", Summary: "configure each agent's access to the Sensei MCP server"},
+	{Name: "control", Summary: "serve this instance's remote control surface over loopback"},
 	{Name: "routine-scan", Summary: "classify tracked files by how routine a change to them would be"},
 	{Name: "help", Summary: "show this help"},
 }
