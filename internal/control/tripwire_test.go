@@ -230,3 +230,52 @@ func selectorName(n ast.Node) string {
 	}
 	return pkg.Name + "." + sel.Sel.Name
 }
+
+// Product wording that contradicts the product is worse than none: a client is
+// entitled to believe what the server tells it about itself.
+//
+// This exists because it happened. The submission verbs shipped and three
+// separate strings -- the handshake instructions, the registration notice and
+// the operator banner -- still told every client the surface was read-only and
+// that no architecture or review could be submitted. Each was true when
+// written; none was true when read.
+func TestNoShippingStringStillCallsThisSurfaceReadOnly(t *testing.T) {
+	for path, source := range map[string]string{
+		"internal/control": readSource(t),
+		"cmd/sensei-code/control.go": func() string {
+			raw, err := os.ReadFile(filepath.Join("..", "..", "cmd", "sensei-code", "control.go"))
+			if err != nil {
+				t.Fatalf("read control.go: %v", err)
+			}
+			return string(raw)
+		}(),
+	} {
+		for _, stale := range []string{
+			"no architecture or review can be submitted",
+			"no architecture or review may be submitted",
+			"Read-only in this version",
+			"This slice is read-only",
+		} {
+			if strings.Contains(source, stale) {
+				t.Fatalf("%s still tells clients %q, which stopped being true when the submission verbs shipped",
+					path, stale)
+			}
+		}
+	}
+}
+
+// The one sentence a client is given about what it may do says what is
+// actually true, including the absence that matters most.
+func TestTheRoleContractNamesWhatARemoteRoleMayNotDo(t *testing.T) {
+	for _, must := range []string{"answer the exact turns", "create tasks", "execute workers",
+		"mutate candidates", "claim independence", "admit", "publish", "merge"} {
+		if !strings.Contains(RoleContract, must) {
+			t.Fatalf("the role contract does not mention %q: %s", must, RoleContract)
+		}
+	}
+	// And it is said in the handshake and in the grant, not only in a comment.
+	source := readSource(t)
+	if strings.Count(source, "RoleContract") < 3 {
+		t.Fatalf("the role contract is declared but barely used (%d references)", strings.Count(source, "RoleContract"))
+	}
+}

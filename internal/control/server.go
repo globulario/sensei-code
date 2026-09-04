@@ -500,8 +500,7 @@ func (s *Server) initialize(raw json.RawMessage) (any, *rpcError) {
 		// for holding a role on it.
 		"instructions": "Authentication reaches this surface and grants no role. " +
 			"Call register_role to request architect or reviewer, and present the returned " +
-			"role session on every later call. This slice is read-only: no architecture or " +
-			"review may be submitted, and nothing here advances a task.",
+			"role session on every later call. " + RoleContract,
 	}, nil
 }
 

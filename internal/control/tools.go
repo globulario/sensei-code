@@ -12,17 +12,35 @@ import (
 	"github.com/globulario/sensei-code/internal/taskstate"
 )
 
-// The tool surface is semantic and deliberately small.
+// The tool surface is semantic and deliberately small: five reads and two typed
+// submissions.
 //
 // There is no tool here that runs a command, writes a file, constructs a worker
-// invocation, mutates a task record, or admits a change — and in this slice
-// there is none that submits an architectural decision or a review either. A
-// surface that cannot express an operation cannot be argued into performing it,
-// which is a stronger guarantee than a surface that can express it and checks.
+// invocation, mutates a task record, admits a change, publishes, merges, or
+// creates a task. A surface that cannot express an operation cannot be argued
+// into performing it, which is a stronger guarantee than a surface that can
+// express it and checks.
 //
-// Every tool that touches a task passes through heldLease. Reaching this
-// surface is authentication; doing anything on it requires a lease that is
-// held, that grants the operation, and that belongs to the party presenting it.
+// The absence of a task-creating verb is the load-bearing one. An architect
+// lease is architectural authority, never human objective authority: holding
+// one must not mean this principal may invent development work and cause
+// workers to execute it.
+//
+// The two submissions answer a question the engine already asked. There is no
+// queue, no "hold this until it is wanted", and no way to answer a question
+// nobody asked. Every tool that touches a task passes through heldLease:
+// reaching this surface is authentication; doing anything on it requires a
+// lease that is held, that grants the operation, and that belongs to the party
+// presenting it.
+
+// RoleContract is what a remote role holder may and may not do, in one
+// sentence, said in the handshake and in every grant.
+//
+// It lives in one place because it used to live in three, and after the
+// submission verbs shipped all three still said the surface was read-only.
+// Product wording that contradicts the product is worse than none: a client is
+// entitled to believe what the server tells it about itself.
+const RoleContract = "A remote architect or reviewer may answer the exact turns this engine issues, and nothing else: it may not create tasks, execute workers, mutate candidates, claim independence, admit, publish or merge."
 
 // toolDescriptors is what tools/list returns. Written out rather than derived
 // from the handlers, because the description is the contract a remote model
@@ -230,8 +248,8 @@ func (s *Server) registerRole(raw json.RawMessage) (any, *rpcError) {
 		"granted":   granted,
 		"refused":   refused,
 		"notice": "This role session grants what its capabilities list says and nothing else. " +
-			"This slice is read-only: no architecture or review can be submitted, nothing here advances a task, " +
-			"and no review conducted through this surface can be independent.",
+			RoleContract + " No review conducted through this surface can be independent: " +
+			"this project cannot observe whether your context was isolated from the work it judges.",
 	}), nil
 }
 

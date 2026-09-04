@@ -69,21 +69,21 @@ func TestAReviewFromAnUnobservedSessionIsAdvisory(t *testing.T) {
 	e, _ := reviewEngine(t, answeringRunner{text: verdictJSON("accept", "looks fine"), mode: roles.Unverified}, "remote:abc")
 	assignment := roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}
 
-	verdict, advisory, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude")
+	res, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude")
 	if err != nil {
 		t.Fatalf("resolveReview: %v", err)
 	}
-	if !advisory {
+	if !res.Advisory() {
 		t.Fatal("a review from a session nobody observed was counted as independent")
 	}
-	if verdict.Provenance.SessionMode != roles.Unverified {
-		t.Fatalf("the recorded session mode is %q", verdict.Provenance.SessionMode)
+	if res.Provenance().SessionMode != roles.Unverified {
+		t.Fatalf("the recorded session mode is %q", res.Provenance().SessionMode)
 	}
-	if verdict.Provenance.Independent() {
+	if res.Provenance().Independent() {
 		t.Fatal("the recorded provenance claims independence")
 	}
-	if verdict.Decision != roles.Accept {
-		t.Fatalf("the decision was lost: %q", verdict.Decision)
+	if res.Decision() != roles.Accept {
+		t.Fatalf("the decision was lost: %q", res.Decision())
 	}
 }
 
@@ -93,14 +93,14 @@ func TestAReviewFromAnObservedFreshSessionIsNotAdvisory(t *testing.T) {
 	e, _ := reviewEngine(t, answeringRunner{text: verdictJSON("accept", "looks fine"), mode: roles.Fresh}, "codex")
 	assignment := roles.Assignment{Role: roles.Reviewer, Provider: "codex"}
 
-	verdict, advisory, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude")
+	res, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude")
 	if err != nil {
 		t.Fatalf("resolveReview: %v", err)
 	}
-	if advisory {
+	if res.Advisory() {
 		t.Fatal("an observed fresh session was downgraded to advisory")
 	}
-	if !verdict.Provenance.Independent() {
+	if !res.Provenance().Independent() {
 		t.Fatal("an observed fresh session lost its standing")
 	}
 }
@@ -128,24 +128,24 @@ func TestTheEngineStampsTheSubjectAndTheReviewerCannot(t *testing.T) {
 	e, _ := reviewEngine(t, answeringRunner{text: string(forged), mode: roles.Unverified}, "remote:abc")
 	binding := reviewBinding()
 
-	verdict, advisory, err := e.resolveReview(context.Background(), "task-1",
+	res, err := e.resolveReview(context.Background(), "task-1",
 		roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}, packetFor(binding), "claude")
 	if err != nil {
 		t.Fatalf("resolveReview: %v", err)
 	}
-	if !advisory {
+	if !res.Advisory() {
 		t.Fatal("a forged provenance bought independence")
 	}
-	if verdict.Provenance.TaskID != binding.TaskID ||
-		verdict.Provenance.CandidateDigest != binding.CandidateDigest ||
-		verdict.Provenance.BaseSHA != binding.BaseSHA {
-		t.Fatalf("the reviewer chose its own subject: %+v", verdict.Provenance)
+	if res.Provenance().TaskID != binding.TaskID ||
+		res.Provenance().CandidateDigest != binding.CandidateDigest ||
+		res.Provenance().BaseSHA != binding.BaseSHA {
+		t.Fatalf("the reviewer chose its own subject: %+v", res.Provenance())
 	}
-	if verdict.Provenance.SessionMode != roles.Unverified {
-		t.Fatalf("the reviewer chose its own session mode: %q", verdict.Provenance.SessionMode)
+	if res.Provenance().SessionMode != roles.Unverified {
+		t.Fatalf("the reviewer chose its own session mode: %q", res.Provenance().SessionMode)
 	}
-	if verdict.Provenance.Provider != "remote:abc" {
-		t.Fatalf("the reviewer chose its own name: %q", verdict.Provenance.Provider)
+	if res.Provenance().Provider != "remote:abc" {
+		t.Fatalf("the reviewer chose its own name: %q", res.Provenance().Provider)
 	}
 }
 
@@ -154,7 +154,7 @@ func TestAnAdvisorySelfReviewIsStillRefused(t *testing.T) {
 	assignment := roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}
 
 	// The implementer is the same party that is reviewing.
-	if _, _, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "remote:abc"); err == nil {
+	if _, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "remote:abc"); err == nil {
 		t.Fatal("an advisory self-review was accepted")
 	}
 }
@@ -170,42 +170,51 @@ func TestAnAdvisoryReviseStillCarriesItsInstructions(t *testing.T) {
 	e, _ := reviewEngine(t, answeringRunner{text: string(raw), mode: roles.Unverified}, "remote:abc")
 	assignment := roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}
 
-	verdict, advisory, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude")
+	res, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude")
 	if err != nil {
 		t.Fatalf("resolveReview: %v", err)
 	}
-	if !advisory || verdict.Decision != roles.Revise {
-		t.Fatalf("advisory=%v decision=%q", advisory, verdict.Decision)
+	if !res.Advisory() || res.Decision() != roles.Revise {
+		t.Fatalf("advisory=%v decision=%q", res.Advisory(), res.Decision())
 	}
-	if !strings.Contains(verdict.Instruction(), "a_test.go") {
-		t.Fatalf("the worker would not learn what to change: %q", verdict.Instruction())
+	if !strings.Contains(res.Instruction(), "a_test.go") {
+		t.Fatalf("the worker would not learn what to change: %q", res.Instruction())
 	}
 }
 
-// The whole point of the typing. An advisory ACCEPT ends the loop and
-// establishes no independent review, and the obligation it did not discharge is
-// recorded at the moment it fails to discharge it.
-func TestAnAdvisoryAcceptLeavesTheIndependentReviewObligationUnmet(t *testing.T) {
+// The standing decides whether a transition may open. The obligation itself is
+// recorded where the gate refuses -- see reviewgate_test.go for the loop-level
+// proof; this is the predicate that gate consults.
+func TestAnAdvisoryAcceptUnlocksNothingAPolicyGatesOnIndependence(t *testing.T) {
 	e, _ := reviewEngine(t, answeringRunner{text: verdictJSON("accept", "fine"), mode: roles.Unverified}, "remote:abc")
 	// Sensei's unclassified reading is high risk, which is what an unrouted
 	// task carries, so this task requires an independent review.
-	if !e.policyFor("task-1").CrossProviderReview {
+	required := e.policyFor("task-1")
+	if !required.CrossProviderReview {
 		t.Fatal("this test needs a policy that requires independent review")
 	}
-	assignment := roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}
 
-	if _, advisory, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude"); err != nil || !advisory {
-		t.Fatalf("advisory=%v err=%v", advisory, err)
+	res, err := e.resolveReview(context.Background(), "task-1",
+		roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}, packetFor(reviewBinding()), "claude")
+	if err != nil {
+		t.Fatalf("resolveReview: %v", err)
 	}
+	if res.SatisfiesAdversarialObligation() {
+		t.Fatal("a review from a session nobody observed satisfied an adversarial obligation")
+	}
+	if res.Unlocks(required) {
+		t.Fatal("an advisory accept unlocked a transition gated on independent review")
+	}
+	// Where nothing is required, there is nothing for it to stand in for.
+	if !res.Unlocks(roles.Policy{}) {
+		t.Fatal("an advisory accept was blocked by a policy that requires nothing")
+	}
+	// And the obligation, once the gate records it, says what is missing.
+	e.obligationLeftOpen("task-1", res.Verdict(), required)
 	open := e.AdvisoryObligations("task-1")
-	if len(open) == 0 {
-		t.Fatal("an advisory accept discharged the obligation it cannot discharge")
+	if len(open) == 0 || !strings.Contains(open[0], "has not had one") {
+		t.Fatalf("the obligation does not say what is missing: %v", open)
 	}
-	if !strings.Contains(open[0], "advisory") || !strings.Contains(open[0], "has not had one") {
-		t.Fatalf("the obligation does not say what is missing: %q", open[0])
-	}
-	// And it travels into the task's durable open findings, so a record that
-	// reads "accepted" still says what was never established.
 	findings := openFindingsWith("", "", nil, open)
 	if len(findings) == 0 || findings[0].Source != "review obligation" {
 		t.Fatalf("the obligation does not reach the task record: %+v", findings)
@@ -216,7 +225,7 @@ func TestAnAdvisoryAcceptLeavesTheIndependentReviewObligationUnmet(t *testing.T)
 func TestAnIndependentAcceptLeavesNoObligationBehind(t *testing.T) {
 	e, _ := reviewEngine(t, answeringRunner{text: verdictJSON("accept", "fine"), mode: roles.Fresh}, "codex")
 	assignment := roles.Assignment{Role: roles.Reviewer, Provider: "codex"}
-	if _, _, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude"); err != nil {
+	if _, err := e.resolveReview(context.Background(), "task-1", assignment, packetFor(reviewBinding()), "claude"); err != nil {
 		t.Fatalf("resolveReview: %v", err)
 	}
 	if open := e.AdvisoryObligations("task-1"); len(open) != 0 {
@@ -228,18 +237,18 @@ func TestAnIndependentAcceptLeavesNoObligationBehind(t *testing.T) {
 func TestNeitherKindOfReviewerAcceptClaimsAdmission(t *testing.T) {
 	for _, mode := range []roles.Session{roles.Unverified, roles.Fresh} {
 		e, _ := reviewEngine(t, answeringRunner{text: verdictJSON("accept", "fine"), mode: mode}, "codex")
-		verdict, _, err := e.resolveReview(context.Background(), "task-1",
+		res, err := e.resolveReview(context.Background(), "task-1",
 			roles.Assignment{Role: roles.Reviewer, Provider: "codex"}, packetFor(reviewBinding()), "claude")
 		if err != nil {
 			t.Fatalf("%s: %v", mode, err)
 		}
-		rendered := strings.ToLower(verdict.Summary + " " + string(verdict.Decision))
+		rendered := strings.ToLower(res.Summary() + " " + string(res.Decision()))
 		for _, forbidden := range []string{"admitted", "admission", "verified", "completed"} {
 			if strings.Contains(rendered, forbidden) {
 				t.Fatalf("a %s reviewer accept rendered as %q", mode, rendered)
 			}
 		}
-		if !verdict.Accepts() {
+		if !res.Verdict().Accepts() {
 			t.Fatalf("%s: the reviewer's own conclusion was lost", mode)
 		}
 	}
@@ -249,7 +258,7 @@ func TestNeitherKindOfReviewerAcceptClaimsAdmission(t *testing.T) {
 func TestAMalformedRemoteReviewFailsClosed(t *testing.T) {
 	for _, text := range []string{"", "not json", `{"decision":"maybe","summary":"s"}`, `{"decision":"accept"}`} {
 		e, _ := reviewEngine(t, answeringRunner{text: text, mode: roles.Unverified}, "remote:abc")
-		if _, _, err := e.resolveReview(context.Background(), "task-1",
+		if _, err := e.resolveReview(context.Background(), "task-1",
 			roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}, packetFor(reviewBinding()), "claude"); err == nil {
 			t.Fatalf("a malformed remote review was accepted: %q", text)
 		}
@@ -260,7 +269,7 @@ func TestAMalformedRemoteReviewFailsClosed(t *testing.T) {
 // thereby delegate implementation.
 func TestTheResolverIsAskedWhichRoleItIsFilling(t *testing.T) {
 	e, resolver := reviewEngine(t, answeringRunner{text: verdictJSON("accept", "fine"), mode: roles.Unverified}, "remote:abc")
-	if _, _, err := e.resolveReview(context.Background(), "task-1",
+	if _, err := e.resolveReview(context.Background(), "task-1",
 		roles.Assignment{Role: roles.Reviewer, Provider: "remote:abc"}, packetFor(reviewBinding()), "claude"); err != nil {
 		t.Fatalf("resolveReview: %v", err)
 	}

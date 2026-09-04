@@ -147,8 +147,8 @@ func taskView(taskID string, state taskstate.State, found bool) map[string]any {
 
 	// The graph generation the record's Sensei facts were read at — and NOT a
 	// statement that they are still current. Answering that means asking the
-	// live graph, which this read-only surface does not do, so the freshness
-	// question is reported unavailable rather than silently answered "fine".
+	// live graph, which this surface never queries, so the freshness question
+	// is reported unavailable rather than silently answered "fine".
 	// A stale generation presented as a current one is the failure that makes
 	// injected context worse than no context.
 	if state.GraphBuildCommit == "" {
@@ -157,7 +157,7 @@ func taskView(taskID string, state taskstate.State, found bool) map[string]any {
 		view["graph_generation"] = assist.Observation{
 			State: assist.Unavailable, Source: recordSource(taskID),
 			Structured: map[string]any{"recorded_graph_build_commit": state.GraphBuildCommit, "observed_at": state.ObservedAt},
-			Reason:     "this is the generation the record was written at; whether it is still current was not checked by this read-only surface",
+			Reason:     "this is the generation the record was written at; whether it is still current was not checked, because this surface does not query the live graph",
 		}
 	}
 

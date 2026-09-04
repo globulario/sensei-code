@@ -138,8 +138,8 @@ func TestTheGovernedLoopBindsTheCandidateTheFormatterProduced(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the governed candidate loop failed: %v", err)
 	}
-	if !accepted {
-		t.Fatal("the loop did not accept the candidate, so nothing was bound to a verdict")
+	if !accepted.Accepted() {
+		t.Fatalf("the loop concluded %q, so nothing was bound to a verdict", accepted)
 	}
 
 	// The state the formatter left behind, measured the way the mint measures.

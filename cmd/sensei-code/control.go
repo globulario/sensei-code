@@ -210,8 +210,7 @@ func printControlBanner(server *control.Server, cred control.Credential, tokenAt
 	fmt.Println("  The token authenticates a connection. It grants no role: a client")
 	fmt.Println("  must still register for architect or reviewer and present the role")
 	fmt.Println("  session it receives.")
-	fmt.Println("  Read-only in this version: no architecture or review can be submitted,")
-	fmt.Println("  and nothing here advances a task.")
+	fmt.Println("  " + control.RoleContract)
 	if !supplied {
 		fmt.Println("  Restarting mints another credential; set " + tokenEnv)
 		fmt.Println("  to a 64-character hex secret to keep one identity across restarts.")
