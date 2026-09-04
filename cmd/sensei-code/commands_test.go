@@ -167,3 +167,17 @@ func TestTheCommandTableIsWellFormed(t *testing.T) {
 		}
 	}
 }
+
+// The rendezvous exists and nothing reaches it unless the server is installed
+// as the engine's resolver. Without this the remote role holder registers,
+// inspects, and is asked nothing -- a slice that passes its own unit tests and
+// does nothing in the product.
+func TestTheControlCommandInstallsTheServerAsTheEnginesResolver(t *testing.T) {
+	source, err := os.ReadFile("control.go")
+	if err != nil {
+		t.Fatalf("read control.go: %v", err)
+	}
+	if !strings.Contains(string(source), "engine.Runners = server") {
+		t.Fatal("sensei-code control builds an engine and a server and never connects them")
+	}
+}
