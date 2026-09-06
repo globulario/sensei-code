@@ -75,7 +75,8 @@ func TestResolverCarriesOnlyBoundArchitectForItsProvider(t *testing.T) {
 	res := Resolver{Provider: "chatgpt", Reviewer: reviewRunner, Fallback: fb}
 
 	got, err := res.Resolve(workflow.RunnerSpec{
-		Role: roles.Architect, Agent: config.Agent{Name: "chatgpt"}, Architecture: architectureBinding(),
+		Role: roles.Architect, Agent: config.Agent{Name: "chatgpt"}, TaskID: architectureBinding().TaskID,
+		Architecture: architectureBinding(),
 	})
 	if err != nil {
 		t.Fatalf("bound architect: %v", err)
@@ -91,7 +92,7 @@ func TestResolverCarriesOnlyBoundArchitectForItsProvider(t *testing.T) {
 		t.Fatalf("architect identity/fallback changed: name=%q fallback=%v", got.Name, fb.saw)
 	}
 
-	_, err = res.Resolve(workflow.RunnerSpec{Role: roles.Architect, Agent: config.Agent{Name: "chatgpt"}})
+	_, err = res.Resolve(workflow.RunnerSpec{Role: roles.Architect, Agent: config.Agent{Name: "chatgpt"}, TaskID: architectureBinding().TaskID})
 	if err == nil || !strings.Contains(err.Error(), ErrUnboundArchitecture.Error()) {
 		t.Fatalf("unbound carried architect did not fail closed: %v", err)
 	}
