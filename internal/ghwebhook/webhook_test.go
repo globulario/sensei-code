@@ -937,3 +937,122 @@ func TestASinkFailureIsReportedWithoutEchoingItsError(t *testing.T) {
 		t.Errorf("the response echoes the sink's error: %s", body(rec))
 	}
 }
+
+// ------------------------------------------------------- the path boundary
+
+// Globular routes the WHOLE webhook FQDN to this port. One FQDN maps to one
+// backend with prefix "/" in the external-domain projection, so every public
+// path — /, /admin, /.env, /mcp — arrives here.
+//
+// That makes the path boundary this listener's own responsibility rather than
+// the edge's. Exactly one path is served, by exactly one method; everything
+// else is refused without the handler running. These pins exist because the
+// property they protect moved: it used to be enforced upstream, and nothing
+// here would have noticed it stopping.
+
+func TestOnlyTheWebhookPathIsServed(t *testing.T) {
+	srv, sink := newTestServer(t)
+	payload := defaultComment().bytes(t)
+	signature := sign(testSecret, payload)
+
+	// Correctly signed, so a 404 can only be about the path. A surface that
+	// served the handler on any of these would be reachable publicly at a name
+	// nobody reviewed.
+	otherPaths := []string{
+		"/",
+		"/mcp",
+		"/github",
+		"/github/",
+		"/github/webhook/",
+		"/github/webhook/extra",
+		"/github/webhooks",
+		"/webhook",
+		"/admin",
+		"/.env",
+		"/health",
+	}
+	for _, path := range otherPaths {
+		t.Run(path, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(payload))
+			req.Header.Set(SignatureHeader, signature)
+			req.Header.Set(EventHeader, "issue_comment")
+			req.Header.Set(DeliveryHeader, "d-path")
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, req)
+
+			// 404 for an unserved path; a 3xx is acceptable only as Go's own
+			// path cleaning, which does not run the handler either. What must
+			// never happen is the handler answering.
+			if rec.Code == http.StatusOK {
+				t.Fatalf("%s was served: the listener answers on a path it does not own", path)
+			}
+			if rec.Code != http.StatusNotFound && (rec.Code < 300 || rec.Code >= 400) {
+				t.Errorf("%s: status %d, want 404 (or a redirect from path cleaning)", path, rec.Code)
+			}
+		})
+	}
+	if n := len(sink.deliveries()); n != 0 {
+		t.Errorf("requests to unserved paths produced %d sink deliveries", n)
+	}
+}
+
+// Exactly one method on the one path that is served.
+func TestOnlyPOSTIsServedOnTheWebhookPath(t *testing.T) {
+	srv, sink := newTestServer(t)
+	payload := defaultComment().bytes(t)
+
+	for _, method := range []string{
+		http.MethodGet, http.MethodHead, http.MethodPut, http.MethodDelete,
+		http.MethodPatch, http.MethodOptions, http.MethodConnect, http.MethodTrace,
+	} {
+		t.Run(method, func(t *testing.T) {
+			req := httptest.NewRequest(method, Endpoint, bytes.NewReader(payload))
+			req.Header.Set(SignatureHeader, sign(testSecret, payload))
+			req.Header.Set(EventHeader, "issue_comment")
+			req.Header.Set(DeliveryHeader, "d-method")
+			rec := httptest.NewRecorder()
+			srv.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("%s: status %d, want 405", method, rec.Code)
+			}
+			if allow := rec.Header().Get("Allow"); allow != http.MethodPost {
+				t.Errorf("%s: Allow = %q, want %q", method, allow, http.MethodPost)
+			}
+		})
+	}
+	if n := len(sink.deliveries()); n != 0 {
+		t.Errorf("non-POST methods produced %d sink deliveries", n)
+	}
+}
+
+// The mux serves one pattern and no more. A second registration -- a health
+// endpoint, a status page, a debug handler -- would be publicly reachable the
+// moment it was added, because the whole FQDN arrives here.
+func TestTheListenerRegistersExactlyOnePattern(t *testing.T) {
+	src, err := os.ReadFile("server.go")
+	if err != nil {
+		t.Fatalf("read server.go: %v", err)
+	}
+	text := string(src)
+
+	at := strings.Index(text, "func (s *Server) Handler()")
+	if at < 0 {
+		t.Fatal("Handler is gone")
+	}
+	handler := text[at:]
+	if end := strings.Index(handler, "\n}\n"); end > 0 {
+		handler = handler[:end]
+	}
+
+	if n := strings.Count(handler, "mux.Handle"); n != 1 {
+		t.Errorf("the mux registers %d patterns, want exactly 1: the whole FQDN routes here, so every pattern is public", n)
+	}
+	if !strings.Contains(handler, "mux.HandleFunc(Endpoint,") {
+		t.Error("the one registered pattern is not Endpoint")
+	}
+	// A trailing slash would make it a subtree and serve every path beneath it.
+	if strings.HasSuffix(Endpoint, "/") {
+		t.Errorf("Endpoint %q ends in a slash, making it a subtree pattern that serves every path beneath it", Endpoint)
+	}
+}
