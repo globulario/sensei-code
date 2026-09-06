@@ -19,10 +19,11 @@ import (
 // reviewer name. Architect turns keep the configured architect name. GitHub is
 // represented in the label and event metadata only.
 //
-// Architecture is captured only when the workflow supplies a complete binding
-// to objective + base + graph. An unbound architect turn is refused, never
-// silently routed to the local CLI, because that would change who decided while
-// making the transcript look continuous.
+// A governed architect turn is captured only with a complete binding to
+// objective + base + graph. If it has a task id but no binding it is refused,
+// never silently routed to the local CLI. A bare resolver probe with no task id
+// and no binding is not a task turn at all and continues to the composed
+// fallback, preserving the resolver's existing non-task behavior.
 //
 //	engine
 //	  └── Resolver
@@ -30,14 +31,12 @@ import (
 //	        ├── reviewer  + Provider                → review Runner
 //	        └── everything else                     → Fallback
 type Resolver struct {
-	// Provider is the semantic provider carried over GitHub, e.g. "chatgpt".
 	Provider string
 	// Reviewer holds the shared mailbox/App configuration and serves reviews.
 	// Architect runners are built per turn from this transport plus the exact
 	// workflow-supplied architecture binding, so no mutable binding is shared
 	// across concurrent tasks.
 	Reviewer *Runner
-	// Fallback serves every other role/provider. Required and never bypassed.
 	Fallback workflow.RunnerResolver
 }
 
@@ -45,7 +44,6 @@ const ResolverLabel = "ChatGPT via GitHub"
 
 var ErrBridgeUnavailable = errors.New("the assigned provider's github transport is not available for this turn")
 
-// Resolve implements workflow.RunnerResolver.
 func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 	if r.carries(spec.Agent.Name) {
 		switch spec.Role {
@@ -53,12 +51,14 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 			if r.Reviewer == nil {
 				return workflow.Resolved{}, fmt.Errorf("%w: provider %s", ErrBridgeUnavailable, spec.Agent.Name)
 			}
-			return workflow.Resolved{
-				Runner: r.Reviewer,
-				Name:   spec.Agent.Name,
-				Label:  ResolverLabel,
-			}, nil
+			return workflow.Resolved{Runner: r.Reviewer, Name: spec.Agent.Name, Label: ResolverLabel}, nil
 		case roles.Architect:
+			// No task means there is no governed architecture subject to carry.
+			// This is distinct from a real task whose binding was lost: the latter
+			// is a refusal below, not a fallback.
+			if strings.TrimSpace(spec.TaskID) == "" && !spec.Architecture.Valid() {
+				break
+			}
 			if r.Reviewer == nil {
 				return workflow.Resolved{}, fmt.Errorf("%w: provider %s", ErrBridgeUnavailable, spec.Agent.Name)
 			}
@@ -73,11 +73,7 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 				SessionID:    r.Reviewer.SessionID,
 				Wait:         r.Reviewer.Wait,
 			}
-			return workflow.Resolved{
-				Runner: architect,
-				Name:   spec.Agent.Name,
-				Label:  ResolverLabel,
-			}, nil
+			return workflow.Resolved{Runner: architect, Name: spec.Agent.Name, Label: ResolverLabel}, nil
 		}
 	}
 	if r.Fallback == nil {
