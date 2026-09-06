@@ -29,12 +29,17 @@ var lowerHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // BindArchitecture computes the objective identity from the exact submitted
 // bytes. It does not trim or normalize them: two objectives that render alike
 // but differ in bytes are two inputs, and a reply to one must not answer the
-// other.
+// other. An absent objective produces no digest at all, so a missing workflow
+// record cannot masquerade as the perfectly valid SHA-256 of an empty string.
 func BindArchitecture(taskID, objective, baseSHA, graphBuildCommit string) ArchitectureBinding {
-	sum := sha256.Sum256([]byte(objective))
+	digest := ""
+	if objective != "" {
+		sum := sha256.Sum256([]byte(objective))
+		digest = hex.EncodeToString(sum[:])
+	}
 	return ArchitectureBinding{
 		TaskID:           strings.TrimSpace(taskID),
-		ObjectiveDigest:  hex.EncodeToString(sum[:]),
+		ObjectiveDigest:  digest,
 		BaseSHA:          strings.TrimSpace(baseSHA),
 		GraphBuildCommit: strings.TrimSpace(graphBuildCommit),
 	}
@@ -57,7 +62,7 @@ func (b ArchitectureBinding) Same(other ArchitectureBinding) bool {
 // CheckObjective proves the digest still names the objective text in hand.
 func (b ArchitectureBinding) CheckObjective(objective string) error {
 	want := BindArchitecture(b.TaskID, objective, b.BaseSHA, b.GraphBuildCommit).ObjectiveDigest
-	if b.ObjectiveDigest != want {
+	if want == "" || b.ObjectiveDigest != want {
 		return fmt.Errorf("objective digest %s does not name the supplied objective %s", b.ObjectiveDigest, want)
 	}
 	return nil
