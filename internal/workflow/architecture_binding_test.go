@@ -35,3 +35,23 @@ func TestArchitectBindingComesFromWorkflowTruthBeforeResolver(t *testing.T) {
 		t.Fatal("the resolver can see the architect turn before the workflow has attached its objective/world binding")
 	}
 }
+
+// Binding truth and presentation truth are separate surfaces and must agree.
+// The architecture digest is minted from the durable objective record, while
+// the remote architect consumes the rendered prompt. Both currently originate
+// from the exact same task variable. Pin that composition so a later refactor
+// cannot normalize/rewrite one path while leaving the other unchanged and still
+// produce a perfectly valid, perfectly misleading envelope.
+func TestArchitectReadsTheSameObjectiveBytesTheWorkflowRecorded(t *testing.T) {
+	raw, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(raw)
+	if !strings.Contains(src, "e.recordObjective(taskID, Objective{Text: task, Provenance: how})") {
+		t.Fatal("the durable objective is no longer recorded from the governed task bytes this proof names")
+	}
+	if !strings.Contains(src, "config.DisplayName(e.Config.Architect.Name), task, conversation,") {
+		t.Fatal("architecturePrompt no longer receives the same governed task bytes recorded as the objective")
+	}
+}
