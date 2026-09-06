@@ -162,70 +162,39 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	if err != nil {
 		return err
 	}
-	// The server becomes this engine's runner resolver. Without this line the
+	// The server becomes this engine's runner resolver. Without this the
 	// rendezvous exists and nothing ever reaches it: every architect and
 	// reviewer turn would take the configured command line, and a remote role
 	// holder would register, inspect, and be asked nothing.
 	//
 	// One engine owner per orchestrated run: this process owns this engine, and
-	// the resolver it consults is this process's own server.
-	engine.Runners = server
-
-	// With the GitHub bridge configured, reviewer turns assigned to the carried
-	// provider go over GitHub and EVERYTHING else still reaches the server
-	// above. Composition, not replacement: routing other roles straight to the
-	// command line would bypass the control resolver and silently disable
-	// remote architect semantics.
+	// the resolver it consults is this process's own server -- or, with the
+	// GitHub review bridge configured, a bridge that still falls back to it.
 	//
-	// Off by default. The package existing changes nothing; only these flags do.
-	if strings.TrimSpace(*ghIssue) != "" {
-		box := ghbridge.Issue{
-			Dir:    repo.Root,
-			Number: strings.TrimSpace(*ghIssue),
-			ExpectedReviewer: ghbridge.Principal{
-				UserID: *ghReviewerID,
-				Login:  strings.TrimSpace(*ghReviewerLogin),
-			},
-		}
-		if !box.Valid() {
-			return errors.New("the github review bridge needs an issue number and an expected reviewer " +
-				"(-github-reviewer-id, or -github-reviewer-login): a mailbox that cannot authenticate a " +
-				"sender would read any parseable comment as an answer")
-		}
-		// Selection, completeness and refusal all live in ghbridge.AppConfig so
-		// every permutation is testable rather than being a shape in main.
-		api, aerr := ghbridge.AppConfig{
+	// Composed rather than decided here: composeEngineResolver is where the
+	// bridge's off/refuse/install outcomes live, so they are provable without
+	// binding a socket.
+	runners, err := composeEngineResolver(server, repo.Root, engine.SessionID, githubBridgeConfig{
+		Issue:         *ghIssue,
+		ReviewerID:    *ghReviewerID,
+		ReviewerLogin: *ghReviewerLogin,
+		Provider:      *ghProvider,
+		Remote:        *ghRemote,
+		Wait:          *ghWait,
+		App: ghbridge.AppConfig{
 			AppID:          *ghAppID,
 			InstallationID: *ghInstallID,
 			PrivateKeyPath: *ghKeyPath,
 			Owner:          *ghOwner,
 			Repo:           *ghRepo,
-		}.Client()
-		if aerr != nil {
-			return aerr
-		}
-		box.API = api
-
-		engine.Runners = ghbridge.Resolver{
-			Provider: strings.TrimSpace(*ghProvider),
-			Reviewer: &ghbridge.Runner{
-				Issue:        box,
-				RepoDir:      repo.Root,
-				Remote:       strings.TrimSpace(*ghRemote),
-				NewRequestID: ghbridge.NewRequestID,
-				SessionID:    engine.SessionID,
-				Wait:         *ghWait,
-			},
-			Fallback: server,
-		}
-
-		transport := "operator gh credentials"
-		if box.API != nil {
-			transport = fmt.Sprintf("github app %d installation %d (%s/%s)",
-				*ghAppID, *ghInstallID, strings.TrimSpace(*ghOwner), strings.TrimSpace(*ghRepo))
-		}
-		fmt.Printf("github review bridge: issue #%s, reviewer %s, carrying provider %q, mailbox via %s\n",
-			box.Number, box.ExpectedReviewer, strings.TrimSpace(*ghProvider), transport)
+		},
+	})
+	if err != nil {
+		return err
+	}
+	engine.Runners = runners.Resolver
+	if runners.Banner != "" {
+		fmt.Println(runners.Banner)
 	}
 
 	if err := server.Listen(*addr); err != nil {
@@ -261,6 +230,108 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		_ = server.Close()
 	}()
 	return server.Serve()
+}
+
+// githubBridgeConfig is the operator's GitHub review bridge configuration,
+// exactly as the flags supplied it. Nothing here is inferred: neither the
+// mailbox, the reviewer, the carried provider, nor the repository the App
+// addresses.
+type githubBridgeConfig struct {
+	Issue         string
+	ReviewerID    int64
+	ReviewerLogin string
+	Provider      string
+	Remote        string
+	Wait          time.Duration
+	App           ghbridge.AppConfig
+}
+
+// engineResolver is what an engine will consult for its role turns, plus the
+// one line the operator reads about it.
+//
+// The banner travels WITH the resolver rather than being printed where the
+// decision was made, so the two cannot disagree. A startup line announcing App
+// transport over a runner that actually holds the operator's gh credentials is
+// not a cosmetic defect: it is the machine's activity appearing under a
+// person's identity, reported as though it were not.
+type engineResolver struct {
+	Resolver workflow.RunnerResolver
+	// Banner is empty when the bridge is off.
+	Banner string
+}
+
+// composeEngineResolver decides what serves this engine's role turns.
+//
+// Extracted from runControlSurface so this composition is provable without
+// binding a socket. It is the whole of the decision and it has three outcomes:
+//
+//	bridge off        -> base, unchanged
+//	bridge misconfigured -> refusal, and NOTHING installed
+//	bridge configured -> ghbridge.Resolver over base
+//
+// The middle outcome is the one worth stating twice. A refusal returns no
+// resolver at all rather than a partly-built one: half a bridge installed is a
+// mailbox that cannot authenticate its sender, or a machine identity that
+// quietly became a person's.
+//
+// COMPOSITION, not replacement. base stays reachable for every role and every
+// other reviewer provider; routing anything straight to the command line here
+// would bypass the control resolver and silently disable remote architect
+// semantics.
+func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID string, gh githubBridgeConfig) (engineResolver, error) {
+	// Off by default. The package existing changes nothing; only configuration
+	// does.
+	if strings.TrimSpace(gh.Issue) == "" {
+		return engineResolver{Resolver: base}, nil
+	}
+
+	box := ghbridge.Issue{
+		Dir:    repoRoot,
+		Number: strings.TrimSpace(gh.Issue),
+		ExpectedReviewer: ghbridge.Principal{
+			UserID: gh.ReviewerID,
+			Login:  strings.TrimSpace(gh.ReviewerLogin),
+		},
+	}
+	if !box.Valid() {
+		return engineResolver{}, errors.New("the github review bridge needs an issue number and an expected reviewer " +
+			"(-github-reviewer-id, or -github-reviewer-login): a mailbox that cannot authenticate a " +
+			"sender would read any parseable comment as an answer")
+	}
+
+	// Selection, completeness and refusal all live in ghbridge.AppConfig so
+	// every permutation is testable rather than being a shape in main.
+	api, err := gh.App.Client()
+	if err != nil {
+		return engineResolver{}, err
+	}
+	box.API = api
+
+	resolver := ghbridge.Resolver{
+		Provider: strings.TrimSpace(gh.Provider),
+		Reviewer: &ghbridge.Runner{
+			Issue:        box,
+			RepoDir:      repoRoot,
+			Remote:       strings.TrimSpace(gh.Remote),
+			NewRequestID: ghbridge.NewRequestID,
+			SessionID:    sessionID,
+			Wait:         gh.Wait,
+		},
+		Fallback: base,
+	}
+
+	// Read off the mailbox that was actually installed, never off the
+	// configuration that was meant to build it.
+	transport := "operator gh credentials"
+	if box.API != nil {
+		transport = fmt.Sprintf("github app %d installation %d (%s/%s)",
+			gh.App.AppID, gh.App.InstallationID,
+			strings.TrimSpace(gh.App.Owner), strings.TrimSpace(gh.App.Repo))
+	}
+	banner := fmt.Sprintf("github review bridge: issue #%s, reviewer %s, carrying provider %q, mailbox via %s",
+		box.Number, box.ExpectedReviewer, strings.TrimSpace(gh.Provider), transport)
+
+	return engineResolver{Resolver: resolver, Banner: banner}, nil
 }
 
 // credentialFromEnvOrMint resolves the credential and reports whether the

@@ -168,16 +168,28 @@ func TestTheCommandTableIsWellFormed(t *testing.T) {
 	}
 }
 
-// The rendezvous exists and nothing reaches it unless the server is installed
-// as the engine's resolver. Without this the remote role holder registers,
+// The rendezvous exists and nothing reaches it unless the composed resolver is
+// installed on the engine. Without this the remote role holder registers,
 // inspects, and is asked nothing -- a slice that passes its own unit tests and
 // does nothing in the product.
-func TestTheControlCommandInstallsTheServerAsTheEnginesResolver(t *testing.T) {
+//
+// A source check, and it stays one on purpose. WHAT composeEngineResolver
+// produces is proved behaviourally in control_test.go; this pins the last wire,
+// which is the assignment itself, and an assignment that is missing cannot be
+// observed by calling the function that was never called.
+//
+// Two facts, because the composition has two ends that regressed independently:
+// the control server is what the resolver is composed over, and the result is
+// what the engine consults.
+func TestTheControlCommandInstallsTheComposedResolverOnTheEngine(t *testing.T) {
 	source, err := os.ReadFile("control.go")
 	if err != nil {
 		t.Fatalf("read control.go: %v", err)
 	}
-	if !strings.Contains(string(source), "engine.Runners = server") {
-		t.Fatal("sensei-code control builds an engine and a server and never connects them")
+	if !strings.Contains(string(source), "composeEngineResolver(server,") {
+		t.Error("sensei-code control composes its resolver over something other than its own server")
+	}
+	if !strings.Contains(string(source), "engine.Runners = runners.Resolver") {
+		t.Error("sensei-code control builds an engine and a resolver and never connects them")
 	}
 }
