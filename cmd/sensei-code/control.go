@@ -16,6 +16,7 @@ import (
 	"github.com/globulario/sensei-code/internal/control"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/ghbridge"
+	"github.com/globulario/sensei-code/internal/ghwebhook"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
@@ -104,6 +105,19 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	ghKeyPath := fs.String("github-app-key", "", "path to the GitHub App private key (content is never read into config or logs)")
 	ghOwner := fs.String("github-owner", "", "repository owner the mailbox lives under; never inferred from cwd or remote")
 	ghRepo := fs.String("github-repo", "", "repository name the mailbox lives in; never inferred from cwd or remote")
+	// GitHub webhook ingress, off unless explicitly configured. A SECOND
+	// listener, deliberately not the MCP one: that surface authenticates a
+	// Bearer credential and this one authenticates an HMAC over raw bytes, and
+	// one surface holding both regimes is how a request authenticated under one
+	// rule gets served by the other. Loopback only -- the public edge is a
+	// reverse proxy in front of this process, not this socket.
+	//
+	// Only the secret's PATH is configuration. The content never is.
+	whAddr := fs.String("github-webhook-addr", "", "loopback address for GitHub webhook ingress; enables the webhook listener")
+	whSecret := fs.String("github-webhook-secret-file", "", "path to the webhook HMAC secret (content is never read into config, argv or logs)")
+	whInstall := fs.Int64("github-webhook-installation-id", 0, "the one App installation whose deliveries are accepted")
+	whRepoID := fs.Int64("github-webhook-repository-id", 0, "numeric repository id the deliveries must be for")
+	whRepo := fs.String("github-webhook-repository", "", "expected repository full name, owner/name")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -197,6 +211,37 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		fmt.Println(runners.Banner)
 	}
 
+	// GitHub webhook ingress. Built before anything binds, so a wrong secret
+	// path, a world-readable key or a non-loopback address is a startup refusal
+	// rather than a surprise on GitHub's first delivery.
+	//
+	// The sink is an observation and nothing else. This process gains a way to
+	// LEARN that a comment was posted; it gains no way to act on one. A signed
+	// webhook is transport truth, not objective authority, and the ingress
+	// cannot reach the engine even if a later author wants it to -- the import
+	// boundary is pinned in internal/ghwebhook.
+	webhook, err := ghwebhook.Config{
+		Addr:           *whAddr,
+		SecretFile:     *whSecret,
+		InstallationID: *whInstall,
+		RepositoryID:   *whRepoID,
+		Repository:     *whRepo,
+	}.Server(ghwebhook.NewObservationSink(os.Stdout))
+	if err != nil {
+		return err
+	}
+	if webhook != nil {
+		if err := webhook.Listen(); err != nil {
+			return err
+		}
+		defer webhook.Close()
+		go func() {
+			if err := webhook.Serve(); err != nil {
+				fmt.Fprintln(os.Stderr, "sensei-code control: the github webhook ingress stopped:", err)
+			}
+		}()
+	}
+
 	if err := server.Listen(*addr); err != nil {
 		return err
 	}
@@ -222,6 +267,7 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	}()
 
 	printControlBanner(server, cred, tokenAt, supplied)
+	printWebhookBanner(webhook, *whSecret, *whRepo)
 
 	ctx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -405,5 +451,31 @@ func printControlBanner(server *control.Server, cred control.Credential, tokenAt
 		fmt.Println("  Restarting mints another credential; set " + tokenEnv)
 		fmt.Println("  to a 64-character hex secret to keep one identity across restarts.")
 	}
+	fmt.Println()
+}
+
+// printWebhookBanner shows the operator what the webhook ingress is bound to —
+// and never the secret.
+//
+// The secret's PATH is reported and its CONTENT is not, which is the whole of
+// the distinction this slice keeps. The path is what the operator needs in
+// order to read the value into GitHub's App settings form; printing the value
+// itself would put it in whatever journal is capturing this process's stdout,
+// where it would outlive the process by however long the log is kept.
+func printWebhookBanner(webhook *ghwebhook.Server, secretPath, repository string) {
+	if webhook == nil {
+		return
+	}
+	fmt.Println("GitHub webhook ingress")
+	fmt.Println("  endpoint     http://" + webhook.Addr() + ghwebhook.Endpoint)
+	fmt.Println("  repository  ", repository)
+	fmt.Println("  secret       " + strings.TrimSpace(secretPath) + " (path only; the value is never printed)")
+	fmt.Println()
+	fmt.Println("  Bound to loopback only. Publish it through the existing reverse proxy;")
+	fmt.Println("  this listener will not bind a public interface.")
+	fmt.Println("  A valid signature proves GitHub delivered those exact bytes. It does not")
+	fmt.Println("  prove an objective was authorized, that the sender is an architect or a")
+	fmt.Println("  reviewer, or that a comment should execute anything. Deliveries are")
+	fmt.Println("  observed and nothing else in this slice.")
 	fmt.Println()
 }
