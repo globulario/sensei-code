@@ -1,30 +1,28 @@
-// Package ghbridge carries reviewer turns between Sensei Code, running on
-// Dave's machine, and a reviewer that can read and write GitHub but cannot
-// reach this machine.
+// Package ghbridge carries architect and reviewer turns between Sensei Code,
+// running on Dave's machine, and ChatGPT through a GitHub mailbox.
 //
 // GitHub is a MAILBOX. It executes nothing: no Actions, no hosted worker, no
-// remote Claude. Sensei Code still orchestrates, Claude still implements
-// locally, and the graph still governs.
+// remote Claude. Sensei Code still orchestrates and Claude still implements
+// locally.
 //
-// Two separations are load-bearing here, and both were got wrong once.
+// The identity on each side of implementation is different, and deliberately
+// so. A review is about candidate content: task, base sha, candidate digest and
+// candidate tree. The commit this package pushes is only a PROJECTION of that
+// binding so a remote reviewer can read the exact tree. Architecture happens
+// before candidate content exists, so its separate envelope is bound instead to
+// task, exact objective digest, candidate base and graph build commit. Neither
+// protocol invents the other's subject merely to reuse an envelope.
 //
-// First: candidate content identity is NOT a Git commit. The subject of a
-// review is the workflow binding — task, base sha, candidate digest, candidate
-// tree — which the engine already owns. The commit this package pushes is a
-// PROJECTION of that binding so a remote party can read it through GitHub, and
-// nothing more. It is not admission, acceptance, merge authority, or candidate
-// minting, and it never becomes the identity.
-//
-// Second: the transport envelope is NOT the review result. The marker says
-// WHICH answer this is; the body says WHAT it says, in the reviewer JSON
-// contract the workflow parser already owns. A verdict field in the marker
-// would be a second representation of a decision that agrees with the first
-// only until it doesn't.
+// The transport envelope is also NOT the role result. A marker says WHICH
+// question an answer belongs to; the body says WHAT the architect or reviewer
+// answered, in the JSON contract the workflow parser already owns. Putting a
+// decision or verdict in the marker would create a second representation that
+// agrees with the body only until it doesn't.
 //
 // GitHub is transport, not authority. A comment author, a GitHub login and a
-// commit author are all things a party with write access can produce, so none
-// of them may raise a review above advisory. Turns answered here are stamped
-// roles.Unverified by the orchestrator.
+// commit author are all transport facts. None establishes Dave's objective
+// authorization, model identity, or reviewer independence. Turns answered here
+// are stamped roles.Unverified by the orchestrator.
 package ghbridge
 
 import (
@@ -38,14 +36,15 @@ import (
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
-// Kind names what a request asks for.
+// Kind names what a candidate-review request asks for.
 //
-// Only review exists. Architecture is deliberately absent: an architect turn
-// happens BEFORE a candidate exists, so it has no candidate digest or tree to
-// bind to, and pretending this protocol fits it would mean inventing a subject.
+// Architecture deliberately uses its own pre-candidate envelope in
+// architecture.go, because it has an objective/world subject rather than a
+// candidate digest/tree subject. Kind therefore remains the closed vocabulary
+// of the review protocol instead of pretending both protocols share identity.
 type Kind string
 
-// KindReview is the only kind this bridge serves.
+// KindReview is the only kind in the candidate-review envelope.
 const KindReview Kind = "review"
 
 // Valid reads the closed set by membership.
