@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -193,23 +194,51 @@ func (r *recordingResolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved
 	return workflow.Resolved{Name: "fallback", Label: "Fallback"}, nil
 }
 
-func TestReviewerGoesToTheBridgeAndEverythingElseToTheFallback(t *testing.T) {
+// The bridge carries the ASSIGNED reviewer. It must not rename the assignment:
+// RoleAssigned.Provider and ReviewVerdict.Provider have to agree.
+func TestTheBridgePreservesTheAssignedProviderIdentity(t *testing.T) {
 	fb := &recordingResolver{}
-	res := Resolver{Reviewer: &Runner{}, Fallback: fb}
+	res := Resolver{Provider: "chatgpt", Reviewer: &Runner{}, Fallback: fb}
 
-	got, err := res.Resolve(workflow.RunnerSpec{Role: roles.Reviewer})
+	got, err := res.Resolve(workflow.RunnerSpec{
+		Role: roles.Reviewer, Agent: config.Agent{Name: "chatgpt"}})
 	if err != nil {
-		t.Fatalf("reviewer: %v", err)
+		t.Fatalf("assigned chatgpt reviewer: %v", err)
 	}
-	if got.Name != ResolverName || got.Label != ResolverLabel {
-		t.Errorf("reviewer resolved to %s/%s", got.Name, got.Label)
+	if got.Name != "chatgpt" {
+		t.Errorf("resolved provider = %q, want the assignment's own name \"chatgpt\"", got.Name)
+	}
+	if got.Label != ResolverLabel {
+		t.Errorf("label = %q, want %q", got.Label, ResolverLabel)
 	}
 	if len(fb.saw) != 0 {
-		t.Errorf("reviewer turn reached the fallback: %v", fb.saw)
+		t.Errorf("the carried reviewer reached the fallback: %v", fb.saw)
 	}
+}
 
+// A reviewer assigned to a DIFFERENT provider is not this bridge's turn.
+func TestAnotherAssignedReviewerReachesTheExistingResolver(t *testing.T) {
+	fb := &recordingResolver{}
+	res := Resolver{Provider: "chatgpt", Reviewer: &Runner{}, Fallback: fb}
+
+	got, err := res.Resolve(workflow.RunnerSpec{
+		Role: roles.Reviewer, Agent: config.Agent{Name: "codex"}})
+	if err != nil {
+		t.Fatalf("codex reviewer: %v", err)
+	}
+	if got.Name != "fallback" {
+		t.Errorf("an assigned codex reviewer was captured by the github bridge: %s", got.Name)
+	}
+	if len(fb.saw) != 1 || fb.saw[0] != roles.Reviewer {
+		t.Errorf("fallback saw %v, want one reviewer turn", fb.saw)
+	}
+}
+
+func TestNonReviewerRolesAlwaysReachTheExistingResolver(t *testing.T) {
+	fb := &recordingResolver{}
+	res := Resolver{Provider: "chatgpt", Reviewer: &Runner{}, Fallback: fb}
 	for _, role := range []roles.Role{roles.Architect, roles.Implementer} {
-		got, err := res.Resolve(workflow.RunnerSpec{Role: role})
+		got, err := res.Resolve(workflow.RunnerSpec{Role: role, Agent: config.Agent{Name: "chatgpt"}})
 		if err != nil {
 			t.Fatalf("%s: %v", role, err)
 		}
@@ -222,18 +251,32 @@ func TestReviewerGoesToTheBridgeAndEverythingElseToTheFallback(t *testing.T) {
 	}
 }
 
-// If the bridge is selected and cannot serve, it REFUSES. workflow never
-// recovers from a resolver refusal, so this is what prevents a remote reviewer
-// quietly becoming the local one.
-func TestUnavailableBridgeRefusesRatherThanSubstitutingTheLocalReviewer(t *testing.T) {
+// An unconfigured Resolver captures nothing rather than everything.
+func TestAnUnconfiguredBridgeCarriesNothing(t *testing.T) {
 	fb := &recordingResolver{}
-	res := Resolver{Reviewer: nil, Fallback: fb}
-	_, err := res.Resolve(workflow.RunnerSpec{Role: roles.Reviewer})
+	res := Resolver{Reviewer: &Runner{}, Fallback: fb}
+	got, err := res.Resolve(workflow.RunnerSpec{Role: roles.Reviewer, Agent: config.Agent{Name: "chatgpt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "fallback" {
+		t.Errorf("a bridge with no configured provider captured a reviewer turn: %s", got.Name)
+	}
+}
+
+// If the carried reviewer's transport cannot serve, REFUSE. workflow never
+// recovers from a resolver refusal, so this is what stops a remote reviewer
+// quietly becoming the local one. The engine may still pick an explicitly
+// recorded fallback reviewer through its own assignment ladder.
+func TestUnavailableTransportRefusesRatherThanSubstituting(t *testing.T) {
+	fb := &recordingResolver{}
+	res := Resolver{Provider: "chatgpt", Reviewer: nil, Fallback: fb}
+	_, err := res.Resolve(workflow.RunnerSpec{Role: roles.Reviewer, Agent: config.Agent{Name: "chatgpt"}})
 	if !errors.Is(err, ErrBridgeUnavailable) {
 		t.Fatalf("expected ErrBridgeUnavailable, got %v", err)
 	}
 	if len(fb.saw) != 0 {
-		t.Fatal("an unavailable bridge handed the reviewer role to the fallback")
+		t.Fatal("an unavailable transport handed the carried reviewer to the fallback")
 	}
 }
 
@@ -245,7 +288,7 @@ func TestTransportAnswersAreUnverifiedAndNeverIndependent(t *testing.T) {
 	if roles.Unverified == roles.Fresh {
 		t.Fatal("Unverified and Fresh collapsed — a transport answer would claim an observed session")
 	}
-	p := roles.Provenance{TaskID: "T-1", Role: roles.Reviewer, Provider: ResolverName,
+	p := roles.Provenance{TaskID: "T-1", Role: roles.Reviewer, Provider: "chatgpt",
 		SessionMode: roles.Unverified}
 	if p.Independent() {
 		t.Fatal("an unverified transport answer reported itself independent")

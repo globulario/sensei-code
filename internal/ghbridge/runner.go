@@ -39,7 +39,10 @@ type Runner struct {
 	Poll time.Duration
 	// SessionID identifies the engine session for emitted events.
 	SessionID string
-	// Wait bounds the whole exchange. Zero means "until the context ends".
+	// Wait bounds the whole exchange. Zero uses DefaultWait rather than waiting
+	// indefinitely: the control path bounds its remote turns by a TTL, and a
+	// bridge that blocked forever would let a task sit on a party that is never
+	// going to answer.
 	Wait time.Duration
 }
 
@@ -48,6 +51,10 @@ var ErrNotReviewer = errors.New("the github bridge serves the reviewer role only
 
 // ErrUnboundSubject reports a turn with no exact artifact to review.
 var ErrUnboundSubject = errors.New("no exact candidate binding to review")
+
+// DefaultWait bounds an exchange whose Wait is unset. Finite by construction:
+// there is no indefinite default here.
+const DefaultWait = 30 * time.Minute
 
 // Run publishes the exact candidate, asks for a review of it, and waits.
 func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Event)) (agent.Result, error) {
@@ -93,12 +100,12 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			}))
 	}
 
-	wctx := ctx
-	if r.Wait > 0 {
-		var cancel context.CancelFunc
-		wctx, cancel = context.WithTimeout(ctx, r.Wait)
-		defer cancel()
+	wait := r.Wait
+	if wait <= 0 {
+		wait = DefaultWait
 	}
+	wctx, cancel := context.WithTimeout(ctx, wait)
+	defer cancel()
 
 	// A timeout leaves the task durable and pending. Nothing in this path
 	// completes or discards work: the engine may ask again, and the next ask
@@ -116,10 +123,12 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 				"request_id":     requestID,
 				"candidate_tree": subject.CandidateTree,
 				"review_commit":  subject.ReviewCommit,
-				// Recorded for the transcript. It proves nothing about who
-				// reviewed; see the package doc.
-				"github_author": review.Author,
-				"transport":     "github",
+				// The authenticated sender, recorded for the transcript. It
+				// says WHO answered; it does not raise the session mode and it
+				// is not the provider identity — those are separate facts.
+				"github_author":    review.Author,
+				"github_author_id": review.AuthorID,
+				"transport":        "github",
 			}))
 	}
 

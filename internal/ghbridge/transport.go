@@ -10,15 +10,59 @@ import (
 	"time"
 )
 
-// The transport half: posting a request and reading replies from one pull
-// request. Deliberately thin, and deliberately shelling out to `gh` the way
+// The transport half: posting a request and reading answers from one dedicated
+// issue. Deliberately thin, and deliberately shelling out to `gh` the way
 // internal/publish already does, so credentials stay where gh keeps them.
 //
 // Worker isolation: this runs in the Sensei Code process. The Claude worker
 // never receives these credentials, so a worker cannot post a comment that
-// would parse as a review from the remote party. That matters even though the
-// bridge is advisory — a forged marker would corrupt the loop's evidence even
-// if it could not unlock a gate.
+// would be read as an answer from the remote reviewer.
+
+// Principal is the GitHub identity permitted to answer on this mailbox.
+//
+// It establishes WHO sent an advisory result. It does not establish
+// independence and it never raises SessionMode: a turn answered over a
+// transport stays roles.Unverified however well authenticated the sender is.
+//
+// UserID is the strongest identity available and is preferred: a numeric user
+// id is immutable, while a login can be changed and reused. Login is carried
+// for display, and is the match only when no id was configured.
+type Principal struct {
+	UserID int64
+	Login  string
+}
+
+// Configured reports whether this principal can authenticate anybody.
+//
+// A mailbox with no expected responder authenticates NOBODY rather than
+// everybody: an unconfigured bridge that accepted any parseable comment would
+// let any account with write access post an advisory ACCEPT.
+func (p Principal) Configured() bool { return p.UserID != 0 || strings.TrimSpace(p.Login) != "" }
+
+// Matches reports whether a comment author is this principal.
+func (p Principal) Matches(authorID int64, authorLogin string) bool {
+	if !p.Configured() {
+		return false
+	}
+	if p.UserID != 0 {
+		return authorID == p.UserID
+	}
+	return strings.EqualFold(strings.TrimSpace(p.Login), strings.TrimSpace(authorLogin))
+}
+
+// String describes the principal for diagnostics.
+func (p Principal) String() string {
+	switch {
+	case p.UserID != 0 && p.Login != "":
+		return fmt.Sprintf("%s (id %d)", p.Login, p.UserID)
+	case p.UserID != 0:
+		return fmt.Sprintf("user id %d", p.UserID)
+	case p.Login != "":
+		return p.Login + " (login only)"
+	default:
+		return "no expected reviewer configured"
+	}
+}
 
 // Issue names the dedicated GitHub issue acting as the mailbox.
 //
@@ -34,14 +78,22 @@ type Issue struct {
 	// "current issue" for gh to infer, and inferring one would be a guess about
 	// where a review request went.
 	Number string
+	// ExpectedReviewer is the only GitHub identity whose comments are read as
+	// answers. Never inferred from the issue creator, the repository owner, a
+	// commit author, the current gh login, or author_association — each of those
+	// is a different fact, and treating one as the reviewer would authenticate
+	// whoever happened to satisfy it.
+	ExpectedReviewer Principal
+}
+
+// Valid reports whether this mailbox can be addressed and can authenticate.
+func (i Issue) Valid() bool {
+	return strings.TrimSpace(i.Number) != "" && i.ExpectedReviewer.Configured()
 }
 
 func (i Issue) args(rest ...string) []string {
 	return append(append([]string(nil), rest...), i.Number)
 }
-
-// Valid reports whether this mailbox can be addressed at all.
-func (i Issue) Valid() bool { return strings.TrimSpace(i.Number) != "" }
 
 func run(ctx context.Context, dir string, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
@@ -53,9 +105,11 @@ func run(ctx context.Context, dir string, args []string) (string, error) {
 // PostRequest publishes a review request for one exact candidate.
 //
 // The marker is emitted by Sensei Code and by nothing else: the remote party
-// answers requests, it does not create them. Returns the request unchanged so a
-// caller can record what it asked for.
+// answers requests, it does not create them.
 func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
+	if !box.Valid() {
+		return errors.New("a review request needs a mailbox issue number and an expected reviewer")
+	}
 	marker, err := r.Marker()
 	if err != nil {
 		return err
@@ -66,63 +120,74 @@ func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
 	}
 	args := box.args("issue", "comment")
 	args = append(args, "--body", body)
-	if !box.Valid() {
-		return errors.New("a review request needs the mailbox issue number")
-	}
 	if out, err := run(ctx, box.Dir, args); err != nil {
 		return fmt.Errorf("gh issue comment: %w: %s", err, out)
 	}
 	return nil
 }
 
-type ghComment struct {
-	Body   string `json:"body"`
-	Author struct {
-		Login string `json:"login"`
-	} `json:"author"`
-	CreatedAt time.Time `json:"createdAt"`
+// restComment is the REST shape, used instead of `gh issue view --json
+// comments` because that view exposes only the author's login. An immutable
+// numeric user id is the identity worth authenticating against.
+type restComment struct {
+	Body string `json:"body"`
+	User struct {
+		Login  string `json:"login"`
+		ID     int64  `json:"id"`
+		NodeID string `json:"node_id"`
+	} `json:"user"`
 }
 
-type ghIssueView struct {
-	Comments []ghComment `json:"comments"`
-}
-
-// Reviews reads every parseable review currently on the pull request.
+// Reviews reads every answer on the mailbox that came from the configured
+// reviewer.
 //
-// Unparseable comments are skipped silently and on purpose: a pull request is a
-// place people talk, and ordinary conversation is not a malformed review.
+// Authentication happens BEFORE identity matching and before anything reaches
+// the workflow: a perfectly formed marker from another GitHub account is not an
+// answer, it is a comment. Comments from anyone else are skipped silently — an
+// issue is a place people talk.
 func Reviews(ctx context.Context, box Issue) ([]Review, error) {
-	args := box.args("issue", "view")
-	args = append(args, "--json", "comments")
-	out, err := run(ctx, box.Dir, args)
-	if err != nil {
-		return nil, fmt.Errorf("gh issue view: %w: %s", err, out)
+	if !box.Valid() {
+		return nil, errors.New("reading the mailbox needs an issue number and an expected reviewer")
 	}
-	var view ghIssueView
-	if jerr := json.Unmarshal([]byte(out), &view); jerr != nil {
+	path := "repos/{owner}/{repo}/issues/" + box.Number + "/comments"
+	out, err := run(ctx, box.Dir, []string{"api", "--paginate", path})
+	if err != nil {
+		return nil, fmt.Errorf("gh api %s: %w: %s", path, err, out)
+	}
+	var comments []restComment
+	if jerr := json.Unmarshal([]byte(out), &comments); jerr != nil {
 		return nil, fmt.Errorf("gh returned a body this bridge could not read: %w", jerr)
 	}
 	var found []Review
-	for _, c := range view.Comments {
-		if rev, ok := ParseReview(c.Body, c.Author.Login); ok {
+	for _, c := range comments {
+		if !box.ExpectedReviewer.Matches(c.User.ID, c.User.Login) {
+			continue
+		}
+		if rev, ok := ParseReview(c.Body, c.User.Login); ok {
+			rev.AuthorID = c.User.ID
 			found = append(found, rev)
 		}
 	}
 	return found, nil
 }
 
-// ErrNoAnswer reports that no review answering this request has appeared yet.
-var ErrNoAnswer = errors.New("no review answering that request has been posted yet")
+// ErrNoAnswer reports that no review answering this request appeared in time.
+var ErrNoAnswer = errors.New("no review answering that request was posted")
 
-// AwaitReview polls until a review answering THIS request appears.
+// AwaitReview polls until an answer to THIS request appears.
 //
-// Answering is the strict three-way match, so a reply to an earlier request, or
-// a review of a superseded candidate, does not end the wait. That is the point:
-// when Claude repairs C1 into C2, the review of C1 is still sitting on the pull
-// request, and a looser match would let it satisfy the request for C2.
+// Answering is the strict match on request id and every identity field, so a
+// reply to an earlier request, or a review of a superseded candidate, does not
+// end the wait. That is the point: when Claude repairs C1 into C2, the review of
+// C1 is still sitting on the mailbox.
 //
-// The context is the caller's deadline. A timeout leaves the task durable and
-// pending in Sensei Code — nothing here completes or discards work.
+// A mailbox read failure ends the turn immediately. It is NOT "no answer yet":
+// polling through a gh auth failure or a network outage would turn a broken
+// mailbox into a silent timeout, and the turn would fail much later for a
+// reason unrelated to the real one.
+//
+// A timeout leaves the task durable and pending. Nothing here completes or
+// discards work.
 func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration) (Review, error) {
 	if err := r.Validate(); err != nil {
 		return Review{}, err
@@ -132,11 +197,16 @@ func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration)
 	}
 	for {
 		revs, err := Reviews(ctx, box)
-		if err == nil {
-			for _, rev := range revs {
-				if rev.Answers(r) {
-					return rev, nil
-				}
+		if err != nil {
+			// Distinguish "the mailbox is unreadable" from "nobody answered".
+			if ctx.Err() != nil {
+				return Review{}, ctx.Err()
+			}
+			return Review{}, fmt.Errorf("reading the review mailbox: %w", err)
+		}
+		for _, rev := range revs {
+			if rev.Answers(r) {
+				return rev, nil
 			}
 		}
 		select {

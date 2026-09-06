@@ -237,12 +237,17 @@ func TestFromBindingLiftsTheWorkflowIdentity(t *testing.T) {
 	}
 }
 
-func TestIssueMailboxNeedsItsNumber(t *testing.T) {
+func TestIssueMailboxNeedsANumberAndAReviewer(t *testing.T) {
 	if (Issue{Dir: "/tmp"}).Valid() {
 		t.Error("an issue with no number should not be addressable")
 	}
-	if !(Issue{Dir: "/tmp", Number: "7"}).Valid() {
-		t.Error("a numbered issue should be addressable")
+	// A number alone is no longer enough: a mailbox that cannot authenticate a
+	// sender would read any parseable comment as an answer.
+	if (Issue{Dir: "/tmp", Number: "7"}).Valid() {
+		t.Error("a mailbox with no expected reviewer reported itself usable")
+	}
+	if !(Issue{Dir: "/tmp", Number: "7", ExpectedReviewer: Principal{UserID: 42}}).Valid() {
+		t.Error("a fully configured mailbox should be addressable")
 	}
 	got := (Issue{Number: "7"}).args("issue", "comment")
 	if len(got) != 3 || got[2] != "7" {

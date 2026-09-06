@@ -170,9 +170,15 @@ type Review struct {
 	// interprets it: prose that does not satisfy the reviewer JSON contract
 	// fails at the parser, which is why "LGTM, ship it" cannot become ACCEPT.
 	Body string
-	// Author is recorded for the transcript only, and proves nothing about who
-	// reviewed. See the package doc.
-	Author string
+	// Author and AuthorID record the GitHub account the answer came from.
+	//
+	// They are set by the transport AFTER it has authenticated the comment
+	// against the mailbox's configured reviewer — they are the result of that
+	// check, never the basis for it, and a parser cannot populate them from the
+	// comment body. They establish WHO sent an advisory result and nothing
+	// more: no GitHub property raises SessionMode above roles.Unverified.
+	Author   string
+	AuthorID int64
 }
 
 // Validate states the rules for a reply to be routable at all.
