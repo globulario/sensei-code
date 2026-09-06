@@ -351,6 +351,13 @@ func TestALocallyPlacedTaskIsTheOneTheRemoteRoleIsAskedAbout(t *testing.T) {
 // helpers ------------------------------------------------------------------
 
 // rawLocal sends exact bytes on the channel and reports the refusal, if any.
+// rawLocal speaks the wire directly, so a malformed message can be sent that
+// the typed client would refuse to construct.
+//
+// It performs the same handshake the real client does: read the verdict for
+// this connection, and only then send. An authority refusal arrives instead of
+// readiness and is returned as-is, so callers testing malformed BODIES and
+// callers testing refused CALLERS both get the error they are asking about.
 func rawLocal(t *testing.T, root, body string) error {
 	t.Helper()
 	conn, err := net.Dial("unix", LocalSocketPath(root))
@@ -358,6 +365,21 @@ func rawLocal(t *testing.T, root, body string) error {
 		return err
 	}
 	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	dec := json.NewDecoder(conn)
+
+	// The authority verdict for this connection, before anything is sent.
+	var ready map[string]any
+	if err := dec.Decode(&ready); err != nil {
+		return err
+	}
+	if msg, ok := ready["error"].(string); ok && msg != "" {
+		return errors.New(msg)
+	}
+	if r, ok := ready["ready"].(bool); !ok || !r {
+		return errors.New("the channel did not acknowledge readiness")
+	}
+
 	if _, err := conn.Write([]byte(body)); err != nil {
 		return err
 	}
@@ -365,9 +387,8 @@ func rawLocal(t *testing.T, root, body string) error {
 	if unix, ok := conn.(*net.UnixConn); ok {
 		_ = unix.CloseWrite()
 	}
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 	var reply map[string]any
-	if err := json.NewDecoder(conn).Decode(&reply); err != nil {
+	if err := dec.Decode(&reply); err != nil {
 		return err
 	}
 	if msg, ok := reply["error"].(string); ok && msg != "" {

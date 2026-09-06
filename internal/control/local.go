@@ -1,7 +1,6 @@
 package control
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,6 +68,38 @@ type LocalAccepted struct {
 	TaskID     string `json:"task_id"`
 	Provenance string `json:"provenance"`
 	Workspace  string `json:"workspace"`
+}
+
+// LocalReady is the readiness acknowledgement sent once the authority decision
+// for a connection has been made and passed.
+//
+// It exists so a caller may take a DURABLE step between being authorized and
+// sending its objective. The motivating case is the GitHub objective proposal:
+// its approval receipt is an at-most-once token, and a caller who was never
+// going to be authorized must not consume one. Before this message existed the
+// only way to learn the verdict was to submit, so a refused caller had already
+// spent the token by the time it was refused.
+//
+// The authority decision is still made exactly ONCE, from the socket, before
+// this is written. Readiness reports that decision; it does not defer, repeat
+// or re-open it, and the objective that arrives afterwards is read on the same
+// connection whose peer was judged.
+type LocalReady struct {
+	Ready     bool   `json:"ready"`
+	Workspace string `json:"workspace"`
+}
+
+// localReply is every shape this channel can answer with, decoded as one type.
+//
+// One struct rather than three speculative decodes: the caller must be able to
+// tell a refusal from readiness from an acceptance without guessing which it is
+// about to read.
+type localReply struct {
+	Error      string `json:"error,omitempty"`
+	Ready      bool   `json:"ready,omitempty"`
+	TaskID     string `json:"task_id,omitempty"`
+	Provenance string `json:"provenance,omitempty"`
+	Workspace  string `json:"workspace,omitempty"`
 }
 
 // ListenLocal binds the local submission socket.
@@ -162,6 +193,19 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 		return
 	}
 
+	// Authorized, and said so before reading anything. A caller that must take
+	// a durable at-most-once step of its own now knows the verdict, which is the
+	// difference between spending that step on a refusal and not.
+	if err := json.NewEncoder(conn).Encode(LocalReady{Ready: true, Workspace: s.workspace}); err != nil {
+		return
+	}
+	// The window is restarted, not extended, because the caller is expected to
+	// do durable work between readiness and the objective. Leaving the original
+	// deadline would turn an authorized caller's disk write into a timeout, and
+	// a timeout after readiness is the ambiguous case this channel is trying to
+	// make rarer rather than more common.
+	_ = conn.SetDeadline(time.Now().Add(localDeadline))
+
 	var in LocalSubmission
 	dec := json.NewDecoder(io.LimitReader(conn, maxLocalSubmissionBytes))
 	// Strict, for the same reason register_role is strict: the fields that must
@@ -216,54 +260,131 @@ func writeLocalError(conn net.Conn, message string) {
 	_, _ = io.Copy(io.Discard, io.LimitReader(conn, maxLocalSubmissionBytes))
 }
 
-// SubmitLocalObjective is the client half: connect, say one thing, read the
-// answer.
+// AuthorizedLocalSubmission is an open connection whose peer has ALREADY been
+// judged by the server, held so the caller can act before it submits.
 //
-// It lives here so the process that submits and the process that accepts agree
-// about the message by construction rather than by two people keeping two
-// encoders in step. It creates no engine and runs nothing.
-func SubmitLocalObjective(repoRoot, task string) (LocalAccepted, error) {
+// The point of holding it is that authority and submission happen over the same
+// connection. Re-dialing to submit would mean a second connection, a second
+// peer, and a second judgement — and the value a caller took a durable step on
+// would be a verdict about somebody else.
+type AuthorizedLocalSubmission struct {
+	conn      net.Conn
+	dec       *json.Decoder
+	workspace string
+	used      bool
+}
+
+// DialLocalObjective connects and returns only once the server has authorized
+// this caller.
+//
+// A refusal is returned HERE, before the caller has done anything it cannot
+// undo. That ordering is the whole reason this exists: an unauthorized
+// same-UID process learns it may not originate governed work without first
+// consuming anything that belongs to a pending proposal.
+func DialLocalObjective(repoRoot string) (*AuthorizedLocalSubmission, error) {
+	path := LocalSocketPath(repoRoot)
+	conn, err := net.Dial("unix", path)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"no control process is accepting objectives at %s; start one with `sensei-code control`: %w", path, err)
+	}
+	_ = conn.SetDeadline(time.Now().Add(localDeadline))
+
+	// Bounded across the whole exchange: a readiness line and one answer.
+	dec := json.NewDecoder(io.LimitReader(conn, 2*maxLocalSubmissionBytes))
+	var reply localReply
+	if err := dec.Decode(&reply); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("the control process did not answer the objective handshake: %w", err)
+	}
+	if msg := strings.TrimSpace(reply.Error); msg != "" {
+		_ = conn.Close()
+		return nil, errors.New(msg)
+	}
+	if !reply.Ready {
+		// Neither a refusal nor readiness. Treated as a refusal rather than
+		// proceeding: an unrecognized answer is not permission.
+		_ = conn.Close()
+		return nil, errors.New("the control process did not authorize this caller to place an objective")
+	}
+	return &AuthorizedLocalSubmission{conn: conn, dec: dec, workspace: reply.Workspace}, nil
+}
+
+// Workspace is the repository the authorizing process serves.
+func (a *AuthorizedLocalSubmission) Workspace() string { return a.workspace }
+
+// Close releases the authorized connection. Safe to call after Submit.
+func (a *AuthorizedLocalSubmission) Close() error {
+	if a == nil || a.conn == nil {
+		return nil
+	}
+	return a.conn.Close()
+}
+
+// Submit sends the objective on the connection that was authorized, and reads
+// the answer.
+//
+// One objective per authorized connection. The server reads one and answers
+// once, so a second call here would block on a reply nobody is going to send;
+// refusing is the honest version of that.
+func (a *AuthorizedLocalSubmission) Submit(task string) (LocalAccepted, error) {
+	if a == nil || a.conn == nil {
+		return LocalAccepted{}, errors.New("the objective connection is not open")
+	}
+	if a.used {
+		return LocalAccepted{}, errors.New("this authorized connection has already carried its one objective")
+	}
+	a.used = true
+
 	objective := strings.TrimSpace(task)
 	if objective == "" {
 		return LocalAccepted{}, errors.New("an objective cannot be empty")
 	}
-	path := LocalSocketPath(repoRoot)
-	conn, err := net.Dial("unix", path)
-	if err != nil {
-		return LocalAccepted{}, fmt.Errorf(
-			"no control process is accepting objectives at %s; start one with `sensei-code control`: %w", path, err)
-	}
-	defer conn.Close()
-
-	_ = conn.SetDeadline(time.Now().Add(localDeadline))
-	if err := json.NewEncoder(conn).Encode(LocalSubmission{Task: objective}); err != nil {
+	_ = a.conn.SetDeadline(time.Now().Add(localDeadline))
+	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{Task: objective}); err != nil {
 		return LocalAccepted{}, err
 	}
 	// The write half is closed so the far side sees the end of the message
 	// rather than waiting for bytes that are not coming. Without it a
 	// well-formed exchange still works and a truncated one deadlocks -- the
 	// worse half to leave to a timeout.
-	if unix, ok := conn.(*net.UnixConn); ok {
+	if unix, ok := a.conn.(*net.UnixConn); ok {
 		_ = unix.CloseWrite()
 	}
-	raw, err := io.ReadAll(io.LimitReader(conn, maxLocalSubmissionBytes))
+
+	var reply localReply
+	if err := a.dec.Decode(&reply); err != nil {
+		return LocalAccepted{}, fmt.Errorf("the control process answered something this client cannot read: %w", err)
+	}
+	if msg := strings.TrimSpace(reply.Error); msg != "" {
+		return LocalAccepted{}, errors.New(msg)
+	}
+	if strings.TrimSpace(reply.TaskID) == "" {
+		return LocalAccepted{}, errors.New("the control process accepted the objective and named no task")
+	}
+	return LocalAccepted{
+		TaskID:     reply.TaskID,
+		Provenance: reply.Provenance,
+		Workspace:  reply.Workspace,
+	}, nil
+}
+
+// SubmitLocalObjective is the client half for a caller with nothing to do
+// between authorization and submission: connect, say one thing, read the
+// answer.
+//
+// Written in terms of the handshake rather than beside it, so the ordinary
+// path and the proposal path cannot drift into two protocols.
+func SubmitLocalObjective(repoRoot, task string) (LocalAccepted, error) {
+	if strings.TrimSpace(task) == "" {
+		return LocalAccepted{}, errors.New("an objective cannot be empty")
+	}
+	auth, err := DialLocalObjective(repoRoot)
 	if err != nil {
 		return LocalAccepted{}, err
 	}
-	var refusal struct {
-		Error string `json:"error"`
-	}
-	if json.Unmarshal(raw, &refusal) == nil && strings.TrimSpace(refusal.Error) != "" {
-		return LocalAccepted{}, errors.New(refusal.Error)
-	}
-	var accepted LocalAccepted
-	if err := json.Unmarshal(bytes.TrimSpace(raw), &accepted); err != nil {
-		return LocalAccepted{}, fmt.Errorf("the control process answered something this client cannot read: %w", err)
-	}
-	if strings.TrimSpace(accepted.TaskID) == "" {
-		return LocalAccepted{}, errors.New("the control process accepted the objective and named no task")
-	}
-	return accepted, nil
+	defer auth.Close()
+	return auth.Submit(task)
 }
 
 // authorizeObjective decides whether the party on the other end may originate

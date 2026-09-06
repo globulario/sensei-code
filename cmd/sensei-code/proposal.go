@@ -16,7 +16,25 @@ import (
 	"github.com/globulario/sensei-code/internal/gitx"
 )
 
-type proposalSubmitter func(repoRoot, task string) (control.LocalAccepted, error)
+// authorizedSubmitter is an already-authorized objective connection.
+//
+// An interface rather than the concrete type so a test can observe WHEN the
+// authority decision happened relative to the approval receipt, which is the
+// property this file exists to get right.
+type authorizedSubmitter interface {
+	Submit(task string) (control.LocalAccepted, error)
+	Close() error
+}
+
+// localAuthorizer establishes local authority and hands back the connection it
+// was established on. Refusal is an error, returned before the caller has done
+// anything durable.
+type localAuthorizer func(repoRoot string) (authorizedSubmitter, error)
+
+// dialLocalObjective is the production authorizer.
+func dialLocalObjective(repoRoot string) (authorizedSubmitter, error) {
+	return control.DialLocalObjective(repoRoot)
+}
 
 func runProposal(repo gitx.Repo, args []string) error {
 	if len(args) == 0 {
@@ -78,7 +96,7 @@ func runProposal(repo gitx.Repo, args []string) error {
 		if err != nil {
 			return err
 		}
-		return approveObjectiveProposal(repo.Root, id, os.Stdout, control.SubmitLocalObjective)
+		return approveObjectiveProposal(repo.Root, id, os.Stdout, dialLocalObjective)
 	default:
 		return fmt.Errorf("unknown proposal command %q; expected list, show, or approve", args[0])
 	}
@@ -92,13 +110,51 @@ func proposalCommentID(raw string) (int64, error) {
 	return id, nil
 }
 
-func approveObjectiveProposal(repoRoot string, commentID int64, out io.Writer, submit proposalSubmitter) error {
+// approveObjectiveProposal turns a pending proposal into governed work, in the
+// one order that is safe.
+//
+//	establish local authority on the connection
+//	  -> durable BeginApproval
+//	  -> send the exact stored objective on THAT SAME authorized connection
+//	  -> task acceptance
+//	  -> CompleteApproval
+//
+// Authority first, and the reason is that the approval receipt is an
+// at-most-once token. It used to be written before the objective was sent, and
+// the authority decision happens inside the server AFTER the connection is
+// made — so a same-UID caller with no controlling terminal, or a governed
+// descendant, could run this, spend the token, and only then be refused. No
+// task was created and the proposal was permanently unapprovable: an authority
+// refusal was consuming the very thing authority was supposed to protect. Any
+// local process able to run the CLI could destroy a pending proposal without
+// holding any authority at all.
+//
+// The fail-closed semantics after BeginApproval are UNCHANGED and deliberately
+// so. Once the objective is on the wire, whether a task was created is not
+// safely inferable from a failure, and the attempt stays durable rather than
+// being retried into a second Claude. What moved is only the line between "was
+// never allowed to try" and "tried and lost the answer" — the first is not
+// ambiguous and must not be charged as though it were.
+//
+// authorizeObjective remains the single authority decision. This does not
+// duplicate it, re-implement it, or pre-check it locally; it asks the server
+// once and then keeps that connection.
+func approveObjectiveProposal(repoRoot string, commentID int64, out io.Writer, authorize localAuthorizer) error {
 	store := ghwebhook.NewProposalStore(repoRoot)
 	p, err := store.Load(commentID)
 	if err != nil {
 		return err
 	}
 	printProposal(out, p)
+
+	// Authority BEFORE anything durable. A refusal here leaves the proposal
+	// exactly as it was found, still approvable by someone who does hold it.
+	conn, err := authorize(repoRoot)
+	if err != nil {
+		return fmt.Errorf("proposal %d was not approved because this caller may not originate governed work; "+
+			"the proposal is untouched and remains pending: %w", commentID, err)
+	}
+	defer conn.Close()
 
 	nonce, err := approvalNonce()
 	if err != nil {
@@ -110,10 +166,9 @@ func approveObjectiveProposal(repoRoot string, commentID int64, out io.Writer, s
 	}
 
 	// The exact immutable stored string, not text from argv and not text fetched
-	// from GitHub again, crosses the existing local authority boundary here.
-	// That server independently requires same UID, not a governed descendant,
-	// and a controlling terminal before it will create a task.
-	accepted, err := submit(repoRoot, p.Objective)
+	// from GitHub again, crosses the local authority boundary here — on the
+	// connection whose peer that boundary already judged.
+	accepted, err := conn.Submit(p.Objective)
 	if err != nil {
 		return fmt.Errorf("proposal %d entered fail-closed approval state with nonce %s before the local objective channel returned success; do not retry automatically because whether a task was created is not safely inferable: %w",
 			commentID, attempt.Nonce, err)
