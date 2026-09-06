@@ -160,8 +160,8 @@ Headless governed run:
 
 GitHub objective proposals:
   ChatGPT may post [sensei-code:objective-proposal] plus a strict JSON objective.
-  The signed webhook records it as inert data only. `sensei-code proposal approve
-  <comment-id>` selects those exact stored bytes and crosses the existing local
+  The signed webhook records it as inert data only. sensei-code proposal approve
+  <comment-id> selects those exact stored bytes and crosses the existing local
   objective authority boundary; GitHub identity itself never authorizes work.
 
 Read-only lanes:
