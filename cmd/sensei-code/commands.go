@@ -51,11 +51,12 @@ var publicCommands = []command{
 	// `mcp` configures each AGENT's route to Sensei. `control` is the opposite
 	// direction: a capable agent reaching in to hold a role here. The summary
 	// below used to read "serve Sensei Code's own MCP surface", which described
-	// neither -- it named the thing `control` actually does while pointing at
+	// neither: it named the thing `control` actually does while pointing at
 	// the command that configures clients.
 	{Name: "mcp", Summary: "configure each agent's access to the Sensei MCP server"},
 	{Name: "control", Summary: "serve this instance's remote control surface over loopback"},
 	{Name: "submit", Args: "--task \"...\"", Summary: "place one objective into the running control process"},
+	{Name: "proposal", Args: "list|show|approve ...", Summary: "inspect or approve inert objective proposals received through GitHub"},
 	{Name: "routine-scan", Summary: "classify tracked files by how routine a change to them would be"},
 	{Name: "help", Summary: "show this help"},
 }
