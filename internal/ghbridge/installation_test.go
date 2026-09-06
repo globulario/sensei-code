@@ -120,7 +120,7 @@ func TestValidKeyProducesAnAcceptedRS256Assertion(t *testing.T) {
 
 	auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273,
 		PrivateKeyPath: path, APIBase: srv.URL}
-	tok, exp, err := auth.Token(context.Background())
+	tok, exp, err := auth.token(context.Background())
 	if err != nil {
 		t.Fatalf("Token: %v", err)
 	}
@@ -149,7 +149,7 @@ func TestUnreadableOrInvalidKeyRefuses(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273, PrivateKeyPath: tc.path}
-			_, _, err := auth.Token(context.Background())
+			_, _, err := auth.token(context.Background())
 			if err == nil {
 				t.Fatal("expected refusal")
 			}
@@ -171,7 +171,7 @@ func TestTokenEndpointFailureRefuses(t *testing.T) {
 
 	auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273,
 		PrivateKeyPath: path, APIBase: srv.URL}
-	_, _, err := auth.Token(context.Background())
+	_, _, err := auth.token(context.Background())
 	if err == nil {
 		t.Fatal("expected refusal")
 	}
@@ -198,13 +198,13 @@ func TestTokenIsCachedUntilNearExpiryThenRefreshed(t *testing.T) {
 	auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273,
 		PrivateKeyPath: path, APIBase: srv.URL, Now: func() time.Time { return clock }}
 
-	first, _, err := auth.Token(context.Background())
+	first, _, err := auth.token(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Well inside the window: reused, no second call.
 	clock = now.Add(30 * time.Minute)
-	second, _, err := auth.Token(context.Background())
+	second, _, err := auth.token(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestTokenIsCachedUntilNearExpiryThenRefreshed(t *testing.T) {
 
 	// Inside the refresh margin: minted again.
 	clock = now.Add(59 * time.Minute)
-	third, _, err := auth.Token(context.Background())
+	third, _, err := auth.token(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestTokenShapeIsNeverAssumed(t *testing.T) {
 		}))
 		auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273,
 			PrivateKeyPath: path, APIBase: srv.URL}
-		got, _, err := auth.Token(context.Background())
+		got, _, err := auth.token(context.Background())
 		srv.Close()
 		if err != nil {
 			t.Fatalf("token %q refused: %v", shape, err)
@@ -267,7 +267,7 @@ func TestUnparseableExpiryFallsBackToAShortLife(t *testing.T) {
 	defer srv.Close()
 	auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273,
 		PrivateKeyPath: path, APIBase: srv.URL}
-	_, exp, err := auth.Token(context.Background())
+	_, exp, err := auth.token(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestUnconfiguredAuthMintsNothing(t *testing.T) {
 		if a.Configured() {
 			t.Errorf("%+v reported itself configured", a)
 		}
-		if _, _, err := a.Token(context.Background()); err == nil {
+		if _, _, err := a.token(context.Background()); err == nil {
 			t.Error("an unconfigured auth minted a token")
 		}
 	}
@@ -310,7 +310,7 @@ func TestSecretMaterialNeverAppearsInErrors(t *testing.T) {
 
 	auth := &InstallationAuth{AppID: 4850747, InstallationID: 159521273,
 		PrivateKeyPath: path, APIBase: srv.URL}
-	_, _, terr := auth.Token(context.Background())
+	_, _, terr := auth.token(context.Background())
 	if terr == nil {
 		t.Fatal("expected refusal")
 	}

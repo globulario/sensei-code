@@ -81,7 +81,7 @@ type InstallationAuth struct {
 	Now func() time.Time
 
 	mu        sync.Mutex
-	token     string
+	cached    string
 	expiresAt time.Time
 }
 
@@ -111,13 +111,23 @@ func (a *InstallationAuth) httpClient() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second}
 }
 
-// Token returns a live installation access token and its expiry.
+// token returns a live installation access token and its expiry.
+//
+// Deliberately UNEXPORTED. The law is
+//
+//	private key -> JWT -> installation token -> Authorization header
+//
+// and an exported accessor would add "-> any caller who imports this package",
+// which is a different and much weaker law. AppClient consumes this internally;
+// nothing outside ghbridge can obtain the credential. A live proof that needs to
+// demonstrate App authentication does so through an AppClient operation — a
+// repository read or a comment post — rather than by exporting the secret.
 //
 // A cached token is reused until tokenRefreshMargin before the expiry GitHub
 // stated. Nothing here inspects the token's length or shape: GitHub has changed
 // that format before, and code that validated it would have started refusing
 // valid credentials.
-func (a *InstallationAuth) Token(ctx context.Context) (string, time.Time, error) {
+func (a *InstallationAuth) token(ctx context.Context) (string, time.Time, error) {
 	if !a.Configured() {
 		return "", time.Time{}, errors.New("github app authentication is not configured (app id, installation id and private key path are all required)")
 	}
@@ -125,8 +135,8 @@ func (a *InstallationAuth) Token(ctx context.Context) (string, time.Time, error)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if a.token != "" && a.now().Add(tokenRefreshMargin).Before(a.expiresAt) {
-		return a.token, a.expiresAt, nil
+	if a.cached != "" && a.now().Add(tokenRefreshMargin).Before(a.expiresAt) {
+		return a.cached, a.expiresAt, nil
 	}
 
 	assertion, err := a.mintJWT()
@@ -179,9 +189,9 @@ func (a *InstallationAuth) Token(ctx context.Context) (string, time.Time, error)
 		exp = a.now().Add(10 * time.Minute)
 	}
 
-	a.token = out.Token
+	a.cached = out.Token
 	a.expiresAt = exp
-	return a.token, a.expiresAt, nil
+	return a.cached, a.expiresAt, nil
 }
 
 // mintJWT builds the RS256 App assertion.

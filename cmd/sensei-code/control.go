@@ -187,32 +187,25 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 				Login:  strings.TrimSpace(*ghReviewerLogin),
 			},
 		}
-		// With an App id given, the mailbox speaks as the installation and the
-		// repository is stated rather than inferred. Incomplete App
-		// configuration is a startup error: a half-configured App that fell
-		// back to gh would post as the operator.
-		if *ghAppID != 0 {
-			api := &ghbridge.AppClient{
-				Auth: &ghbridge.InstallationAuth{
-					AppID:          *ghAppID,
-					InstallationID: *ghInstallID,
-					PrivateKeyPath: strings.TrimSpace(*ghKeyPath),
-				},
-				Owner: strings.TrimSpace(*ghOwner),
-				Repo:  strings.TrimSpace(*ghRepo),
-			}
-			if !api.Configured() {
-				return errors.New("the github app transport needs -github-app-id, -github-installation-id, " +
-					"-github-app-key, -github-owner and -github-repo; refusing rather than falling back to " +
-					"the operator's gh credentials")
-			}
-			box.API = api
-		}
 		if !box.Valid() {
 			return errors.New("the github review bridge needs an issue number and an expected reviewer " +
 				"(-github-reviewer-id, or -github-reviewer-login): a mailbox that cannot authenticate a " +
 				"sender would read any parseable comment as an answer")
 		}
+		// Selection, completeness and refusal all live in ghbridge.AppConfig so
+		// every permutation is testable rather than being a shape in main.
+		api, aerr := ghbridge.AppConfig{
+			AppID:          *ghAppID,
+			InstallationID: *ghInstallID,
+			PrivateKeyPath: *ghKeyPath,
+			Owner:          *ghOwner,
+			Repo:           *ghRepo,
+		}.Client()
+		if aerr != nil {
+			return aerr
+		}
+		box.API = api
+
 		engine.Runners = ghbridge.Resolver{
 			Provider: strings.TrimSpace(*ghProvider),
 			Reviewer: &ghbridge.Runner{
@@ -225,6 +218,7 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 			},
 			Fallback: server,
 		}
+
 		transport := "operator gh credentials"
 		if box.API != nil {
 			transport = fmt.Sprintf("github app %d installation %d (%s/%s)",
