@@ -78,6 +78,13 @@ type Issue struct {
 	// "current issue" for gh to infer, and inferring one would be a guess about
 	// where a review request went.
 	Number string
+	// API, when set, performs the mailbox's REST operations as the GitHub App
+	// installation instead of through the operator's gh credentials. Selecting
+	// it is deliberate and there is NO fallback: an App transport that could
+	// silently revert to a person's credentials would post machine-originated
+	// mailbox activity under that person's identity, which is the thing this
+	// slice exists to stop being true.
+	API *AppClient
 	// ExpectedReviewer is the only GitHub identity whose comments are read as
 	// answers. Never inferred from the issue creator, the repository owner, a
 	// commit author, the current gh login, or author_association — each of those
@@ -118,6 +125,13 @@ func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
 	if strings.TrimSpace(note) != "" {
 		body += "\n" + strings.TrimSpace(note) + "\n"
 	}
+	if box.API != nil {
+		if !box.API.Configured() {
+			return errors.New("the github app transport was selected but is not configured; " +
+				"refusing rather than posting as the operator's gh account")
+		}
+		return box.API.PostComment(ctx, box.Number, body)
+	}
 	args := box.args("issue", "comment")
 	args = append(args, "--body", body)
 	if out, err := run(ctx, box.Dir, args); err != nil {
@@ -149,20 +163,31 @@ func Reviews(ctx context.Context, box Issue) ([]Review, error) {
 	if !box.Valid() {
 		return nil, errors.New("reading the mailbox needs an issue number and an expected reviewer")
 	}
-	// DEFERRED (post-PR6): `gh api --paginate` emits one JSON value PER PAGE,
-	// not one array, so this decode fails the moment the mailbox crosses a
-	// pagination boundary. The fix is --slurp, or decoding a stream of arrays,
-	// and it must not change answer ordering or the authentication above.
-	// Left as-is deliberately for the first witness rather than widened into
-	// now; the mailbox is one issue with a handful of comments.
-	path := "repos/{owner}/{repo}/issues/" + box.Number + "/comments"
-	out, err := run(ctx, box.Dir, []string{"api", "--paginate", path})
-	if err != nil {
-		return nil, fmt.Errorf("gh api %s: %w: %s", path, err, out)
-	}
 	var comments []restComment
-	if jerr := json.Unmarshal([]byte(out), &comments); jerr != nil {
-		return nil, fmt.Errorf("gh returned a body this bridge could not read: %w", jerr)
+	if box.API != nil {
+		if !box.API.Configured() {
+			return nil, errors.New("the github app transport was selected but is not configured; " +
+				"refusing rather than reading as the operator's gh account")
+		}
+		var err error
+		if comments, err = box.API.ListComments(ctx, box.Number); err != nil {
+			return nil, err
+		}
+	} else {
+		// DEFERRED (post-PR6): `gh api --paginate` emits one JSON value PER
+		// PAGE, not one array, so this decode fails the moment the mailbox
+		// crosses a pagination boundary. The App path above follows pages
+		// explicitly and does not have this defect; this branch keeps the
+		// existing behaviour unchanged for installations with no App
+		// configured.
+		path := "repos/{owner}/{repo}/issues/" + box.Number + "/comments"
+		out, err := run(ctx, box.Dir, []string{"api", "--paginate", path})
+		if err != nil {
+			return nil, fmt.Errorf("gh api %s: %w: %s", path, err, out)
+		}
+		if jerr := json.Unmarshal([]byte(out), &comments); jerr != nil {
+			return nil, fmt.Errorf("gh returned a body this bridge could not read: %w", jerr)
+		}
 	}
 	var found []Review
 	for _, c := range comments {

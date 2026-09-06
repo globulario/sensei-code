@@ -94,6 +94,16 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	ghProvider := fs.String("github-review-provider", "chatgpt", "which assigned reviewer provider the GitHub bridge carries")
 	ghRemote := fs.String("github-remote", "origin", "git remote the review snapshot is pushed to")
 	ghWait := fs.Duration("github-review-wait", 0, "how long a GitHub review turn waits for an answer (default 30m)")
+	// GitHub App installation authentication for the mailbox. Selecting it is
+	// deliberate: with an app id configured there is NO fallback to the
+	// operator's gh credentials, because machine-originated mailbox activity
+	// appearing under a person's identity is what this exists to stop.
+	// Only the key PATH is configuration. The key content never is.
+	ghAppID := fs.Int64("github-app-id", 0, "GitHub App id; enables App installation auth for the mailbox")
+	ghInstallID := fs.Int64("github-installation-id", 0, "GitHub App installation id")
+	ghKeyPath := fs.String("github-app-key", "", "path to the GitHub App private key (content is never read into config or logs)")
+	ghOwner := fs.String("github-owner", "", "repository owner the mailbox lives under; never inferred from cwd or remote")
+	ghRepo := fs.String("github-repo", "", "repository name the mailbox lives in; never inferred from cwd or remote")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -177,6 +187,27 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 				Login:  strings.TrimSpace(*ghReviewerLogin),
 			},
 		}
+		// With an App id given, the mailbox speaks as the installation and the
+		// repository is stated rather than inferred. Incomplete App
+		// configuration is a startup error: a half-configured App that fell
+		// back to gh would post as the operator.
+		if *ghAppID != 0 {
+			api := &ghbridge.AppClient{
+				Auth: &ghbridge.InstallationAuth{
+					AppID:          *ghAppID,
+					InstallationID: *ghInstallID,
+					PrivateKeyPath: strings.TrimSpace(*ghKeyPath),
+				},
+				Owner: strings.TrimSpace(*ghOwner),
+				Repo:  strings.TrimSpace(*ghRepo),
+			}
+			if !api.Configured() {
+				return errors.New("the github app transport needs -github-app-id, -github-installation-id, " +
+					"-github-app-key, -github-owner and -github-repo; refusing rather than falling back to " +
+					"the operator's gh credentials")
+			}
+			box.API = api
+		}
 		if !box.Valid() {
 			return errors.New("the github review bridge needs an issue number and an expected reviewer " +
 				"(-github-reviewer-id, or -github-reviewer-login): a mailbox that cannot authenticate a " +
@@ -194,8 +225,13 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 			},
 			Fallback: server,
 		}
-		fmt.Printf("github review bridge: issue #%s, reviewer %s, carrying provider %q\n",
-			box.Number, box.ExpectedReviewer, strings.TrimSpace(*ghProvider))
+		transport := "operator gh credentials"
+		if box.API != nil {
+			transport = fmt.Sprintf("github app %d installation %d (%s/%s)",
+				*ghAppID, *ghInstallID, strings.TrimSpace(*ghOwner), strings.TrimSpace(*ghRepo))
+		}
+		fmt.Printf("github review bridge: issue #%s, reviewer %s, carrying provider %q, mailbox via %s\n",
+			box.Number, box.ExpectedReviewer, strings.TrimSpace(*ghProvider), transport)
 	}
 
 	if err := server.Listen(*addr); err != nil {
