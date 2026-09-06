@@ -617,7 +617,10 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
 		e.reportOutcome(ctx, "failure", task, err.Error())
 	}
-	if task == "" {
+	// Validation without normalization: an all-whitespace objective states
+	// nothing and is refused, while an objective with whitespace around it is
+	// carried exactly as submitted.
+	if strings.TrimSpace(task) == "" {
 		fail(errEmptyTask)
 		return
 	}

@@ -1,6 +1,7 @@
 package control
 
 import (
+	"encoding/json"
 	"net"
 	"os"
 	"strings"
@@ -143,15 +144,16 @@ func TestAnAuthorizedConnectionCarriesOneObjective(t *testing.T) {
 func TestOrdinaryLocalObjectiveSubmissionStillWorks(t *testing.T) {
 	h := newLocalHarness(t)
 
-	accepted, err := SubmitLocalObjective(h.root, "  an ordinary objective  ")
+	const exact = "  an ordinary objective  "
+	accepted, err := SubmitLocalObjective(h.root, exact)
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
 	if accepted.TaskID == "" || accepted.Workspace != testWorkspace {
 		t.Fatalf("acceptance = %+v", accepted)
 	}
-	if len(h.submitted) != 1 || h.submitted[0] != "an ordinary objective" {
-		t.Fatalf("engine saw %q; the objective was not trimmed and forwarded unchanged", h.submitted)
+	if len(h.submitted) != 1 || h.submitted[0] != exact {
+		t.Fatalf("engine saw %q; the objective was not forwarded unchanged", h.submitted)
 	}
 
 	// And it still refuses through the same judgement.
@@ -195,5 +197,64 @@ func TestTheJudgementItselfIsUnchanged(t *testing.T) {
 	}
 	if err := mayOriginateObjective(peer{PID: 4, UID: self + 1, Terminal: 34816}, self); err == nil {
 		t.Error("another uid was allowed")
+	}
+}
+
+// ---------------------------------------------------- exact objective bytes
+
+// The bytes an operator places are the bytes the engine records.
+//
+// A GitHub objective proposal hashes the bytes it stored. If this channel
+// delivered a trimmed version, the recorded objective and the digest that
+// claims to name it would be two different strings — and every architecture
+// envelope built on that digest would be perfectly valid and perfectly wrong.
+// The channel therefore VALIDATES without NORMALIZING: an objective that is
+// only whitespace says nothing and is refused; an objective that merely has
+// whitespace around it is these bytes and no others.
+func TestTheChannelCarriesExactObjectiveBytes(t *testing.T) {
+	exact := []string{
+		"  exact objective bytes  \n",
+		"\n\nleading and trailing newlines\n\n",
+		"\ttab indented objective\t",
+		"trailing space ",
+		" leading space",
+		"interior  double  spaces kept",
+		"unicode  café ✅  padded  ",
+	}
+	for _, want := range exact {
+		h := newLocalHarness(t)
+		if _, err := SubmitLocalObjective(h.root, want); err != nil {
+			t.Fatalf("submit %q: %v", want, err)
+		}
+		if len(h.submitted) != 1 {
+			t.Fatalf("%q: engine saw %d objectives", want, len(h.submitted))
+		}
+		if got := h.submitted[0]; got != want {
+			t.Errorf("the channel altered the objective:\n got  %q\n want %q", got, want)
+		}
+	}
+}
+
+// Only-whitespace still says nothing, and is refused at both ends.
+func TestAnAllWhitespaceObjectiveIsStillRefused(t *testing.T) {
+	for _, blank := range []string{"", "   ", "\n", "\t\n  \r\n"} {
+		h := newLocalHarness(t)
+
+		// The client refuses without troubling the server.
+		if _, err := SubmitLocalObjective(h.root, blank); err == nil {
+			t.Fatalf("the client accepted %q as an objective", blank)
+		}
+		// And the server refuses it on the wire, for a caller that skips the
+		// client. json marshalling of the raw value keeps the bytes exact.
+		raw, err := json.Marshal(LocalSubmission{Task: blank})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := rawLocal(t, h.root, string(raw)); err == nil {
+			t.Fatalf("the server accepted %q as an objective", blank)
+		}
+		if len(h.submitted) != 0 {
+			t.Fatalf("%q reached the engine: %q", blank, h.submitted)
+		}
 	}
 }

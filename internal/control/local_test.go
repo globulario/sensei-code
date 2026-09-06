@@ -69,14 +69,17 @@ func newLocalHarnessWithPeer(t *testing.T, observe func(net.Conn) (peer, error))
 func TestALocalObjectiveReachesTheEnginesSubmissionEntry(t *testing.T) {
 	h := newLocalHarness(t)
 
-	accepted, err := SubmitLocalObjective(h.root, "  repair the parser  ")
+	// Surrounding whitespace is CARRIED, not trimmed. The channel validates
+	// that an objective says something; it does not decide what it says.
+	const exact = "  repair the parser  "
+	accepted, err := SubmitLocalObjective(h.root, exact)
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if len(h.submitted) != 1 || h.submitted[0] != "repair the parser" {
-		t.Fatalf("the engine was handed %v", h.submitted)
+	if len(h.submitted) != 1 || h.submitted[0] != exact {
+		t.Fatalf("the engine was handed %q, want the exact submitted bytes %q", h.submitted, exact)
 	}
-	if accepted.TaskID != "task-repair the parser" {
+	if accepted.TaskID != "task-"+exact {
 		t.Fatalf("the task id was not returned: %q", accepted.TaskID)
 	}
 	if accepted.Workspace != testWorkspace {

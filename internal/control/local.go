@@ -223,8 +223,10 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 		writeLocalError(conn, "the submission carries trailing content; this channel takes one objective")
 		return
 	}
-	task := strings.TrimSpace(in.Task)
-	if task == "" {
+	// Validated on the trimmed form, submitted unchanged -- see Submit. The
+	// server normalizes nothing either, because the bytes an operator placed
+	// are the bytes the objective record must contain.
+	if strings.TrimSpace(in.Task) == "" {
 		writeLocalError(conn, "a submission must carry an objective")
 		return
 	}
@@ -237,7 +239,7 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 	// it. The channel used to predict it with the same constant, which agreed
 	// until one of them changed -- and a transport that predicts the record is
 	// a second answer to what happened.
-	recorded := submit(task)
+	recorded := submit(in.Task)
 	_ = json.NewEncoder(conn).Encode(LocalAccepted{
 		TaskID:     recorded.TaskID,
 		Provenance: string(recorded.Provenance),
@@ -336,12 +338,21 @@ func (a *AuthorizedLocalSubmission) Submit(task string) (LocalAccepted, error) {
 	}
 	a.used = true
 
-	objective := strings.TrimSpace(task)
-	if objective == "" {
+	// VALIDATED on the trimmed form, SENT unchanged. The distinction is the
+	// whole point: an objective that is only whitespace says nothing and is
+	// refused, but an objective that merely has whitespace around it is these
+	// bytes and no others.
+	//
+	// Trimming here silently broke the exact-objective binding. A GitHub
+	// objective proposal hashes the bytes it stored; if the channel delivered a
+	// trimmed version, the recorded objective and the digest that claims to name
+	// it were two different strings, and every architecture envelope built on
+	// that digest was valid and wrong.
+	if strings.TrimSpace(task) == "" {
 		return LocalAccepted{}, errors.New("an objective cannot be empty")
 	}
 	_ = a.conn.SetDeadline(time.Now().Add(localDeadline))
-	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{Task: objective}); err != nil {
+	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{Task: task}); err != nil {
 		return LocalAccepted{}, err
 	}
 	// The write half is closed so the far side sees the end of the message

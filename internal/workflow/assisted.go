@@ -136,7 +136,11 @@ func (e *Engine) submit(ctx context.Context, task string, how Provenance, observ
 	}
 	go func() {
 		defer e.clearStop(taskID)
-		e.run(ctx, taskID, strings.TrimSpace(task), how)
+		// Unchanged bytes. run records these as the objective and the
+		// architecture binding is the SHA-256 of that record, so normalizing
+		// here would make the digest name a string nobody submitted. Emptiness
+		// is validated in execute, on the trimmed form, without rewriting it.
+		e.run(ctx, taskID, task, how)
 	}()
 	return taskID
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -335,5 +336,80 @@ func TestSuccessBindsTheExactStoredObjectiveDigestToTheAcceptedTask(t *testing.T
 	}
 	if second.conn.submits != 0 {
 		t.Fatalf("the second approval reached the objective channel %d times", second.conn.submits)
+	}
+}
+
+// -------------------------------------------------- exact objective bytes
+
+// A proposal whose objective carries surrounding whitespace must submit those
+// bytes unchanged, and its digest must name them.
+//
+// The full invariant this defends:
+//
+//	bytes accepted from the stored proposal
+//	  == bytes sent over the authorized connection
+//	  == bytes recorded as the workflow objective
+//	  == bytes hashed into the architecture binding
+//
+// This test owns the first two links. internal/control owns the wire, and
+// internal/workflow owns the record and the digest.
+func TestAProposalWithWhitespaceSubmitsItsExactBytes(t *testing.T) {
+	const exact = "  exact objective bytes  \n"
+
+	root := t.TempDir()
+	store := ghwebhook.NewProposalStore(root)
+	body, err := json.Marshal(map[string]string{"objective": exact})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := ghwebhook.IssueCommentDelivery{
+		DeliveryID:         "delivery-whitespace",
+		Action:             "created",
+		RepositoryID:       1335129805,
+		RepositoryFullName: "globulario/sensei-code",
+		IssueNumber:        156,
+		CommentID:          4242,
+		CommentBody:        ghwebhook.ObjectiveProposalMarker + "\n" + string(body),
+		SenderID:           1697116,
+		SenderLogin:        "davecourtois",
+	}
+	if _, created, handled, err := store.Record(d); err != nil || !created || !handled {
+		t.Fatalf("record: created=%v handled=%v err=%v", created, handled, err)
+	}
+
+	// Stored exactly, and the digest names those bytes.
+	stored, err := store.Load(4242)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if stored.Objective != exact {
+		t.Fatalf("the proposal store altered the objective:\n got  %q\n want %q", stored.Objective, exact)
+	}
+	if stored.ObjectiveDigest != ghwebhook.DigestObjective(exact) {
+		t.Fatalf("stored digest %s does not name the exact bytes", stored.ObjectiveDigest)
+	}
+
+	// Approved, those exact bytes cross the authorized connection.
+	auth := okAuthorizer(t, root)
+	auth.conn.accepted = control.LocalAccepted{
+		TaskID: "task-4242", Provenance: "submitted-by-local-operator", Workspace: "sensei-code",
+	}
+	if err := approveObjectiveProposal(root, 4242, &bytes.Buffer{}, auth.authorize); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+	if auth.conn.got != exact {
+		t.Fatalf("approval submitted altered bytes:\n got  %q\n want %q", auth.conn.got, exact)
+	}
+
+	// And the receipt binds the digest of those same bytes to the task.
+	a, ok, err := store.Approval(4242)
+	if err != nil || !ok {
+		t.Fatalf("no receipt: ok=%v err=%v", ok, err)
+	}
+	if a.ObjectiveDigest != ghwebhook.DigestObjective(exact) {
+		t.Fatalf("receipt digest %s does not name the exact submitted bytes", a.ObjectiveDigest)
+	}
+	if a.TaskID != "task-4242" {
+		t.Fatalf("receipt task = %q", a.TaskID)
 	}
 }
