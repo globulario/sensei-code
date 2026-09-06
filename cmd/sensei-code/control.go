@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/control"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/ghbridge"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
@@ -83,6 +85,15 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	fs := flag.NewFlagSet("control", flag.ContinueOnError)
 	addr := fs.String("addr", control.DefaultAddr, "loopback address to bind; a non-loopback address is refused")
 	ttl := fs.Duration("lease", 0, "how long a role session holds without renewal (default 15m)")
+	// The GitHub review bridge, off unless explicitly configured. All three
+	// must be given together: an issue nobody answers on, or a mailbox that
+	// cannot authenticate a sender, is not a usable bridge.
+	ghIssue := fs.String("github-review-issue", "", "GitHub issue number acting as the review mailbox; enables the GitHub review bridge")
+	ghReviewerID := fs.Int64("github-reviewer-id", 0, "immutable GitHub user id permitted to answer review requests")
+	ghReviewerLogin := fs.String("github-reviewer-login", "", "GitHub login of that reviewer, for display")
+	ghProvider := fs.String("github-review-provider", "chatgpt", "which assigned reviewer provider the GitHub bridge carries")
+	ghRemote := fs.String("github-remote", "origin", "git remote the review snapshot is pushed to")
+	ghWait := fs.Duration("github-review-wait", 0, "how long a GitHub review turn waits for an answer (default 30m)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -149,6 +160,43 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	// One engine owner per orchestrated run: this process owns this engine, and
 	// the resolver it consults is this process's own server.
 	engine.Runners = server
+
+	// With the GitHub bridge configured, reviewer turns assigned to the carried
+	// provider go over GitHub and EVERYTHING else still reaches the server
+	// above. Composition, not replacement: routing other roles straight to the
+	// command line would bypass the control resolver and silently disable
+	// remote architect semantics.
+	//
+	// Off by default. The package existing changes nothing; only these flags do.
+	if strings.TrimSpace(*ghIssue) != "" {
+		box := ghbridge.Issue{
+			Dir:    repo.Root,
+			Number: strings.TrimSpace(*ghIssue),
+			ExpectedReviewer: ghbridge.Principal{
+				UserID: *ghReviewerID,
+				Login:  strings.TrimSpace(*ghReviewerLogin),
+			},
+		}
+		if !box.Valid() {
+			return errors.New("the github review bridge needs an issue number and an expected reviewer " +
+				"(-github-reviewer-id, or -github-reviewer-login): a mailbox that cannot authenticate a " +
+				"sender would read any parseable comment as an answer")
+		}
+		engine.Runners = ghbridge.Resolver{
+			Provider: strings.TrimSpace(*ghProvider),
+			Reviewer: &ghbridge.Runner{
+				Issue:        box,
+				RepoDir:      repo.Root,
+				Remote:       strings.TrimSpace(*ghRemote),
+				NewRequestID: ghbridge.NewRequestID,
+				SessionID:    engine.SessionID,
+				Wait:         *ghWait,
+			},
+			Fallback: server,
+		}
+		fmt.Printf("github review bridge: issue #%s, reviewer %s, carrying provider %q\n",
+			box.Number, box.ExpectedReviewer, strings.TrimSpace(*ghProvider))
+	}
 
 	if err := server.Listen(*addr); err != nil {
 		return err

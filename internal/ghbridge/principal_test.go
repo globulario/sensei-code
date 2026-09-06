@@ -157,3 +157,32 @@ func TestParsedReviewCarriesNoAuthenticatedIdentity(t *testing.T) {
 		t.Fatalf("a comment body populated the authenticated author: %q", rev.Author)
 	}
 }
+
+// A request id must be unique and unpredictable: it is how a reply says which
+// question it answers, and a predictable id could be answered before the
+// question was asked.
+func TestRequestIDsAreUniqueAndNonEmpty(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 200; i++ {
+		id := NewRequestID()
+		if id == "" {
+			t.Fatal("a request id could not be minted")
+		}
+		if seen[id] {
+			t.Fatalf("request id %q was minted twice", id)
+		}
+		seen[id] = true
+	}
+}
+
+// The identity probe already sitting on the mailbox is not a review, and must
+// stay ignored no matter who posted it.
+func TestTheIdentityProbeIsNotAReview(t *testing.T) {
+	probe := "[sensei-code:identity-probe]\nThis comment identifies the GitHub principal used by this ChatGPT connection. It is not a review."
+	if _, ok := ParseReview(probe, gptLogin); ok {
+		t.Fatal("the identity probe parsed as a review")
+	}
+	if _, ok := ParseRequest(probe); ok {
+		t.Fatal("the identity probe parsed as a review request")
+	}
+}

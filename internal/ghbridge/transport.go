@@ -149,6 +149,12 @@ func Reviews(ctx context.Context, box Issue) ([]Review, error) {
 	if !box.Valid() {
 		return nil, errors.New("reading the mailbox needs an issue number and an expected reviewer")
 	}
+	// DEFERRED (post-PR6): `gh api --paginate` emits one JSON value PER PAGE,
+	// not one array, so this decode fails the moment the mailbox crosses a
+	// pagination boundary. The fix is --slurp, or decoding a stream of arrays,
+	// and it must not change answer ordering or the authentication above.
+	// Left as-is deliberately for the first witness rather than widened into
+	// now; the mailbox is one issue with a handful of comments.
 	path := "repos/{owner}/{repo}/issues/" + box.Number + "/comments"
 	out, err := run(ctx, box.Dir, []string{"api", "--paginate", path})
 	if err != nil {

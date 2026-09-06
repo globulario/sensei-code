@@ -28,6 +28,8 @@
 package ghbridge
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -290,4 +292,19 @@ func ParseReview(body, author string) (Review, bool) {
 // Request id AND the whole subject must match.
 func (r Review) Answers(req Request) bool {
 	return r.RequestID == req.RequestID && r.Subject.Same(req.Subject)
+}
+
+// NewRequestID mints a unique id for one review request.
+//
+// Random rather than sequential: a request id is how a reply says which
+// question it answers, and an id a reader could predict is an id a reader could
+// answer before the question was asked.
+func NewRequestID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		// A request that cannot be uniquely named must not be sent; the caller
+		// surfaces this as a refusal rather than reusing an id.
+		return ""
+	}
+	return "r-" + hex.EncodeToString(b[:])
 }
