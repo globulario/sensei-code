@@ -1,46 +1,77 @@
 {
-  "_comment": [
-    "Durable QUESTIONS, not answers. Each entry says which typed proposition is",
-    "worth checking in this part of the architecture; Sensei recomputes whether it",
-    "holds against the world being assessed, every time.",
-    "",
-    "This file is inert. A recipe on its own provides ZERO coverage — it must be",
-    "revalidated by `sensei derive` in the assessed world before it anchors",
-    "anything. That is why it is safe to commit and safe to let an agent write:",
-    "the worst a forged entry achieves is spending one derivation.",
-    "",
-    "What persists here is the judgment-bearing half an investigation produced —",
-    "knowing WHICH relationship is worth checking. The answer is cheap to recompute."
-  ],
-  "recipes": [
-    {
-      "kind": "field_access_under_lock",
-      "dir": "internal/event",
-      "type": "Bus",
-      "field": "subs",
-      "lock": "mu",
-      "why": "internal/event/bus.go answered PREFLIGHT_STATUS_EMPTY with 'no anchored rules apply'. A closure round read the code and found the discipline worth checking: Publish sends under RLock while the Subscribe cancel closes under Lock. Whether that is WHY the lock exists is a purpose claim no derivation establishes."
-    },
-    {
-      "kind": "state_mutation_confined_to_owner",
-      "dir": "internal/ghbridge",
-      "type": "ArchitectureRunner",
-      "field": "Binding",
-      "search_paths": [
-        "internal/ghbridge"
-      ],
-      "why": "Verify mechanically that the bound objective/base/graph subject carried by ArchitectureRunner.Binding is only set within the owning ghbridge package, where Resolver.Resolve copies it from the workflow-supplied RunnerSpec, rather than being rewritten by transport or prompt handling.",
-      "provenance": {
-        "origin_task": "task-1788749553905987265",
-        "origin_gap": "graph coverage is absent for the planned files: no anchors fired, no files examined — coverage thin for this area",
-        "region": [
-          "internal/ghbridge/architecture_runner.go",
-          "internal/ghbridge/marker_test.go",
-          "internal/ghbridge/runner_test.go"
-        ],
-        "written_at": "2026-09-07T03:02:01Z",
-        "written_by": "closure_round"
-      }
-    }
-  ]
+ "_comment": [
+  "Durable QUESTIONS, not answers. Each entry says which typed proposition is",
+  "worth checking in this part of the architecture; Sensei recomputes whether it",
+  "holds against the world being assessed, every time.",
+  "",
+  "This file is inert. A recipe on its own provides ZERO coverage \u2014 it must be",
+  "revalidated by `sensei derive` in the assessed world before it anchors",
+  "anything. That is why it is safe to commit and safe to let an agent write:",
+  "the worst a forged entry achieves is spending one derivation.",
+  "",
+  "What persists here is the judgment-bearing half an investigation produced \u2014",
+  "knowing WHICH relationship is worth checking. The answer is cheap to recompute."
+ ],
+ "recipes": [
+  {
+   "kind": "field_access_under_lock",
+   "dir": "internal/event",
+   "type": "Bus",
+   "field": "subs",
+   "lock": "mu",
+   "why": "internal/event/bus.go answered PREFLIGHT_STATUS_EMPTY with 'no anchored rules apply'. A closure round read the code and found the discipline worth checking: Publish sends under RLock while the Subscribe cancel closes under Lock. Whether that is WHY the lock exists is a purpose claim no derivation establishes."
+  },
+  {
+   "kind": "state_mutation_confined_to_owner",
+   "dir": "internal/ghbridge",
+   "type": "ArchitectureRunner",
+   "field": "Binding",
+   "search_paths": [
+    "internal/ghbridge"
+   ],
+   "why": "Verify mechanically that the bound objective/base/graph subject carried by ArchitectureRunner.Binding is only set within the owning ghbridge package, where Resolver.Resolve copies it from the workflow-supplied RunnerSpec, rather than being rewritten by transport or prompt handling.",
+   "provenance": {
+    "origin_task": "task-1788749553905987265",
+    "origin_gap": "graph coverage is absent for the planned files: no anchors fired, no files examined \u2014 coverage thin for this area",
+    "region": [
+     "internal/ghbridge/architecture_runner.go",
+     "internal/ghbridge/marker_test.go",
+     "internal/ghbridge/runner_test.go"
+    ],
+    "written_at": "2026-09-07T03:02:01Z",
+    "written_by": "closure_round"
+   }
+  },
+  {
+   "kind": "command_invocation_confined_to",
+   "command": "gh",
+   "owner": "internal/ghbridge",
+   "search_paths": [
+    "internal/ghbridge",
+    "internal/ghwebhook"
+   ],
+   "why": "internal/ghwebhook's package doc states that the ingress establishes only that GitHub delivered these bytes, and that it has no path to anything governed. That prose is checked for IMPORTS by boundary_test.go, but an ingress could reach GitHub as the operator without importing anything -- exec.CommandContext takes a string. This asks the narrower mechanical question the import test cannot: across the bridge and the ingress together, is every gh invocation the bridge's? A gh call appearing under ghwebhook would mean the surface that authenticates deliveries had acquired the ability to act on them as the operator, which is the exact collapse that package exists to prevent."
+  },
+  {
+   "kind": "command_invocation_confined_to",
+   "command": "git",
+   "owner": "internal/ghbridge",
+   "search_paths": [
+    "internal/ghbridge",
+    "internal/ghwebhook"
+   ],
+   "why": "snapshot.go builds the review projection with commit-tree from an already-captured tree, deliberately never re-staging or re-reading the worktree, because a snapshot assembled from the working directory would show a reviewer an artifact the workflow never bound to. That discipline lives in one helper. This asks whether git invocation stays inside the bridge across bridge and ingress, so a second git call site appearing in the ingress -- which has no business touching a worktree at all -- is visible as a change of shape rather than only as a diff."
+  },
+  {
+   "kind": "field_access_under_lock",
+   "dir": "internal/ghbridge",
+   "type": "InstallationAuth",
+   "field": "granted",
+   "lock": "mu",
+   "search_paths": [
+    "internal/ghbridge"
+   ],
+   "why": "granted holds what GitHub said this installation may do, captured from the same response that carries the token and guarded by the same mutex. The pairing is the point: an owner may widen or narrow an installation at any time, so a permission set read outside the lock that guards its token could answer for a grant that no longer exists, and the caller would act on stale authority. Whether the lock exists FOR that reason is a purpose claim no derivation establishes; that every access is under it is checkable."
+  }
+ ]
 }
