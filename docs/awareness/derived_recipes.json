@@ -20,6 +20,27 @@
       "field": "subs",
       "lock": "mu",
       "why": "internal/event/bus.go answered PREFLIGHT_STATUS_EMPTY with 'no anchored rules apply'. A closure round read the code and found the discipline worth checking: Publish sends under RLock while the Subscribe cancel closes under Lock. Whether that is WHY the lock exists is a purpose claim no derivation establishes."
+    },
+    {
+      "kind": "state_mutation_confined_to_owner",
+      "dir": "internal/ghbridge",
+      "type": "ArchitectureRunner",
+      "field": "Binding",
+      "search_paths": [
+        "internal/ghbridge"
+      ],
+      "why": "Verify mechanically that the bound objective/base/graph subject carried by ArchitectureRunner.Binding is only set within the owning ghbridge package, where Resolver.Resolve copies it from the workflow-supplied RunnerSpec, rather than being rewritten by transport or prompt handling.",
+      "provenance": {
+        "origin_task": "task-1788749553905987265",
+        "origin_gap": "graph coverage is absent for the planned files: no anchors fired, no files examined — coverage thin for this area",
+        "region": [
+          "internal/ghbridge/architecture_runner.go",
+          "internal/ghbridge/marker_test.go",
+          "internal/ghbridge/runner_test.go"
+        ],
+        "written_at": "2026-09-07T03:02:01Z",
+        "written_by": "closure_round"
+      }
     }
   ]
 }
