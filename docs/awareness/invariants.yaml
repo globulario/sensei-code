@@ -533,3 +533,212 @@ invariants:
     evidence:
       - one of six preflight call sites recorded its request before this change; all emitting sites now do, and dropping one fails TestEveryEmittedPreflightCarriesItsRequest
     contract: 'Every governed call whose result is emitted as a durable record carries its causal envelope: the operation, the exact request, the revision the subject was read at, and the knowledge generation that answered. A record missing its request is a historical observation and must not be cited as replayable proof. An uncaptured field is ABSENT from the record, never present-and-empty, because an empty revision claims one was captured.'
+  - id: sensei_code.ghwebhook.signature_authenticates_delivery_not_authority
+    title: A GitHub signature authenticates delivery bytes and never authorizes an objective
+    severity: critical
+    status: active
+    description: 'The whole of what the webhook ingress establishes is that GitHub delivered these exact bytes. It does not establish that an objective was authorized, that the sender is an architect or a reviewer, or that a comment should execute anything. The package therefore has no path to the workflow engine: it imports no engine, no resolver and no runner, and that import boundary is pinned by a test rather than left to discipline. SenderID and SenderLogin are metadata carried by an authenticated delivery, never a grant, and no consumer may read them as one. The Sink interface is the entire surface between transport and everything else, so what a delivery can cause is bounded by what that interface can express; widening it, or acquiring an engine handle in order to notify it, is how authenticated quietly becomes authorized.'
+    protects:
+      files:
+        - internal/ghwebhook/
+        - internal/ghwebhook/doc.go
+        - internal/ghwebhook/delivery.go
+        - internal/ghwebhook/sink.go
+    required_tests:
+      - internal/ghwebhook/boundary_test.go:TestTheIngressCannotReachTheWorkflowEngine
+      - internal/ghwebhook/boundary_test.go:TestTheIngressCallsNothingGoverned
+      - internal/ghwebhook/webhook_test.go:TestTheSenderIsMetadataAndNotAuthority
+      - internal/ghwebhook/webhook_test.go:TestTheObservationSinkRecordsMetadataAndNeverTheCommentBody
+    contract: transport authenticity is not authority
+  - id: sensei_code.ghwebhook.signature_precedes_every_interpretation
+    title: The MAC is verified over exactly the received bytes before anything reads them
+    severity: critical
+    status: active
+    description: verify runs over the raw request body before any parse. A verifier that unmarshalled and re-marshalled would authenticate a document GitHub never sent, because key order, escaping and unicode normalization are all things a round trip may change and a MAC will not forgive. The accepted algorithm is stated rather than parsed out of the header, because a verifier that read the algorithm from the message would let the sender choose it, and the sender is the party being authenticated. The comparison is constant-time, since a MAC is exactly the kind of value an attacker can submit repeatedly. No other request fact -- delivery id, event name, action, sender, or source address -- substitutes for the signature, and an event this transport ignores still requires one.
+    protects:
+      files:
+        - internal/ghwebhook/verify.go
+        - internal/ghwebhook/server.go
+    required_tests:
+      - internal/ghwebhook/boundary_test.go:TestNothingParsesTheBodyBeforeTheSignatureIsChecked
+      - internal/ghwebhook/boundary_test.go:TestNoRequestFactSubstitutesForTheSignature
+      - internal/ghwebhook/webhook_test.go:TestABodyChangedAfterSigningIsRefused
+      - internal/ghwebhook/webhook_test.go:TestAUnicodePayloadVerifiesOverTheRawBytes
+      - internal/ghwebhook/webhook_test.go:TestMalformedJSONWithABadSignatureFailsAsAuthentication
+      - internal/ghwebhook/webhook_test.go:TestAnIgnoredEventStillRequiresASignature
+    contract: a signature covers the bytes that arrived, not a re-encoding of them
+  - id: sensei_code.ghwebhook.credential_material_never_leaves_the_process
+    title: Only the path of a credential is configuration; its content never reaches an error, log, response or argv
+    severity: high
+    status: active
+    description: 'The webhook shared secret and the GitHub App installation token are read through a configured path, held in the server or client, and never returned to configuration, logged, printed, embedded in an error, placed in argv, or written to any evidence record. Neither the expected nor the received MAC appears in any message, and one single ErrUnauthenticated covers every way authentication can fail, because reporting which stage failed tells an attacker which half of a forgery attempt was already right. A secret readable by group or other is refused at startup rather than warned about: the entire security of this ingress is that only GitHub and this process know those bytes, and a mode that widens this process to anyone with a login has already ended that.'
+    protects:
+      files:
+        - internal/ghwebhook/verify.go
+        - internal/ghwebhook/server.go
+        - internal/ghbridge/installation.go
+        - internal/ghbridge/apiclient.go
+    required_tests:
+      - internal/ghwebhook/webhook_test.go:TestTheSecretNeverAppearsInAResponse
+      - internal/ghwebhook/webhook_test.go:TestTheSecretNeverAppearsInAStartupError
+      - internal/ghwebhook/webhook_test.go:TestAWorldReadableSecretIsRefused
+      - cmd/sensei-code/webhook_test.go:TestTheWebhookSecretIsConfiguredByPathAndNeverPrinted
+      - internal/ghbridge/installation_test.go:TestSecretMaterialNeverAppearsInErrors
+      - internal/ghbridge/apiclient_test.go:TestInstallationTokenNeverAppearsInTransportErrors
+    contract: an error message must not bring an attacker closer to forging a credential
+  - id: sensei_code.ghwebhook.ingress_and_control_surfaces_stay_separate
+    title: Two authentication regimes must not share a listener, a handler, or a secret
+    severity: high
+    status: active
+    description: The MCP control surface authenticates a Bearer credential on control.Endpoint; the GitHub webhook authenticates HMAC-SHA256 over the body on ghwebhook.Endpoint. They share no socket, no handler, no secret and no code, deliberately. A single surface holding both would eventually authenticate one regime's request with the other's rule, and the resulting failure would be a silent authorization bypass rather than an error. The webhook listener binds loopback only and registers exactly one pattern, absent configuration leaves it off entirely, and partial configuration is a startup refusal rather than a half-authenticated surface.
+    protects:
+      files:
+        - internal/ghwebhook/server.go
+        - internal/ghwebhook/config.go
+        - cmd/sensei-code/control.go
+    required_tests:
+      - cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
+      - cmd/sensei-code/webhook_test.go:TestTheControlCommandBindsTheWebhookOnItsOwnListener
+      - internal/ghwebhook/webhook_test.go:TestAConfiguredListenerIsLoopbackOnly
+      - internal/ghwebhook/webhook_test.go:TestPartialWebhookConfigurationIsAStartupRefusal
+      - internal/ghwebhook/webhook_test.go:TestNoWebhookConfigurationLeavesTheListenerOff
+      - internal/ghwebhook/webhook_test.go:TestTheListenerRegistersExactlyOnePattern
+    contract: one surface holding two authentication rules will eventually apply the wrong one
+  - id: sensei_code.proposal.inert_until_a_local_operator_approves_it
+    title: An objective arriving over a transport stays inert data until local authority accepts that exact record
+    severity: critical
+    status: active
+    description: A comment carrying the objective-proposal marker is persisted as an immutable local record and nothing else. Recording one does not submit an objective, wake a review, create a task, resolve a runner, or touch the workflow engine, and the receiving package cannot reach any of those capabilities. Persisting closes only the transport-to-data gap; authority is a separate later act in which a local operator selects the exact stored comment id and the existing local objective socket accepts that operator under its kernel-observed peer checks. Authority is established before any durable receipt is written and before the checkout is inspected, so an unauthorized caller can neither spend a proposal nor learn the state of one.
+    protects:
+      files:
+        - internal/ghwebhook/proposal.go
+        - internal/ghwebhook/sink.go
+        - cmd/sensei-code/proposal.go
+    required_tests:
+      - cmd/sensei-code/proposal_test.go:TestAnUnauthorizedSameUIDProcessCannotConsumeAPendingProposal
+      - cmd/sensei-code/proposal_test.go:TestAuthorityIsEstablishedBeforeAnyDurableReceipt
+      - cmd/sensei-code/proposal_test.go:TestAuthorityIsDecidedBeforeCleanliness
+      - cmd/sensei-code/proposal_test.go:TestADirtyCheckoutIsRefusedBeforeTheTokenIsSpent
+      - internal/ghwebhook/boundary_test.go:TestTheIngressCallsNothingGoverned
+    contract: receiving an objective is not being authorized to pursue it
+  - id: sensei_code.proposal.approval_is_durable_and_at_most_once
+    title: An uncertain approval must not be retried into a duplicate task
+    severity: critical
+    status: active
+    description: 'BeginApproval writes the durable at-most-once receipt before the local objective channel is called. That ordering is the whole point: if the process dies after the task was accepted but before the receipt can be completed, the receipt remains attempting and a second approval is refused rather than possibly creating the task twice. Redelivery is bound durably on both GitHub identities, because they answer different questions -- the delivery id says whether this delivery was processed before, the comment id says whether this comment already has a proposal. An in-memory set is not that: it forgets on restart, and a restart is precisely when a queued redelivery arrives. Reusing one delivery id for another comment, or one comment id for different objective bytes, is an integrity conflict that is refused rather than overwritten.'
+    protects:
+      files:
+        - internal/ghwebhook/proposal.go
+        - cmd/sensei-code/proposal.go
+    required_tests:
+      - internal/ghwebhook/proposal_test.go:TestApprovalAttemptIsDurableAndAtMostOnce
+      - internal/ghwebhook/proposal_test.go:TestProposalStoreDeduplicatesDeliveryAndCommentDurably
+      - cmd/sensei-code/proposal_test.go:TestALostSubmissionAfterBeginApprovalStaysAttemptingAndCannotRetry
+      - cmd/sensei-code/proposal_test.go:TestAFailureBeforeBeginApprovalLeavesZeroReceipt
+    contract: the receipt for a side effect is written before the side effect, not after
+  - id: sensei_code.proposal.the_approved_objective_keeps_its_exact_bytes
+    title: The bytes a local operator approved are the bytes submitted, identified by their digest
+    severity: critical
+    status: active
+    description: 'The proposal protocol carries the objective as a JSON string so it has one unambiguous identity, refuses unknown fields rather than letting them become future authority knobs, and refuses trailing content. The stored objective is never normalized, trimmed or re-encoded on the way to the task: whitespace inside an approved objective is part of what was approved. Every stored proposal is re-checked against its own digest when loaded, so a record whose bytes and digest disagree fails its immutable identity check instead of being submitted. The digest recorded on the accepted task is the digest of the exact stored bytes, which is what later binds an architect turn to this objective and lets a stale or cross-objective answer be rejected.'
+    protects:
+      files:
+        - internal/ghwebhook/proposal.go
+        - cmd/sensei-code/proposal.go
+    required_tests:
+      - internal/ghwebhook/proposal_test.go:TestObjectiveProposalProtocolIsStrictAndPreservesTheString
+      - cmd/sensei-code/proposal_test.go:TestSuccessBindsTheExactStoredObjectiveDigestToTheAcceptedTask
+      - cmd/sensei-code/proposal_test.go:TestAProposalWithWhitespaceSubmitsItsExactBytes
+    contract: an objective has one byte identity from proposal through approval to task
+  - id: sensei_code.ghbridge.the_engine_owns_the_subject_not_the_transport
+    title: A carried turn is bound by the engine's own facts, and an answer must match every identity field
+    severity: critical
+    status: active
+    description: 'The workflow mints a turn''s binding from its own recorded facts before the resolver is consulted, and the transport never derives identity back out of the rendered prompt. The two protocols keep separate subjects because they happen at different times: a review is about candidate content and binds task, base, candidate digest and candidate tree, while architecture happens before candidate content exists and binds task, exact objective digest, pinned base and graph build commit. Neither invents the other''s subject in order to reuse an envelope. An answer qualifies only when its request id and every binding field match, so a review of one candidate cannot satisfy the request for its repair and a stale or cross-objective architecture answer cannot steer the current task. Identity headers are parsed strictly -- duplicate and unknown fields are refused rather than ignored -- because ambiguity in presentation must never decide which world an answer belongs to, and prose in the payload cannot inject an identity field. The envelope carries no verdict or decision: what the answer says lives in the JSON contract the workflow parser already owns, and a second representation would agree with the body only until it did not.'
+    protects:
+      files:
+        - internal/ghbridge/
+        - internal/ghbridge/marker.go
+        - internal/ghbridge/architecture.go
+        - internal/ghbridge/architecture_runner.go
+        - internal/ghbridge/resolver.go
+        - internal/ghbridge/runner.go
+    required_tests:
+      - internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRoundTripsExactSubject
+      - internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRefusesAmbiguousIdentityHeaders
+      - internal/ghbridge/architecture_test.go:TestArchitectureRunnerRefusesWrongRoleBeforeTransport
+      - internal/ghbridge/marker_test.go:TestProseCannotInjectIdentityFields
+      - internal/ghbridge/marker_test.go:TestFromBindingLiftsTheWorkflowIdentity
+      - internal/ghbridge/marker_test.go:TestAnswersRequiresEveryIdentityField
+      - internal/ghbridge/marker_test.go:TestAReviewOfC1DoesNotAnswerTheRequestForC2
+      - internal/ghbridge/marker_test.go:TestTransportMarkerCarriesNoVerdict
+      - cmd/sensei-code/architecture_bridge_test.go:TestConfiguredBridgeCarriesABoundArchitectTurn
+    contract: the envelope says which question an answer belongs to; it never decides what the question is
+  - id: sensei_code.ghbridge.transport_never_raises_standing
+    title: Carrying a turn over GitHub changes neither the provider identity nor the session mode
+    severity: critical
+    status: active
+    description: 'Three facts stay separate and only the middle one belongs to the bridge: the provider is the identity the workflow assigned, the transport is github, and the session mode is unverified. The resolver returns the assigned provider name unchanged so the provider recorded on the resulting artifact cannot disagree with the provider the engine assigned; GitHub appears only in the resolver label and in event metadata. A turn answered over this transport is stamped roles.Unverified by the orchestrator from the fact that it travelled over a transport at all. It is never read from the reply, and no GitHub property -- comment author, login, commit author, or App installation -- may lift it. Authenticating the configured remote principal grants no objective authority and no reviewer independence, a parsed reply carries no authenticated identity of its own, and the App bot that posts requests cannot answer as the reviewer.'
+    protects:
+      files:
+        - internal/ghbridge/resolver.go
+        - internal/ghbridge/runner.go
+        - internal/ghbridge/architecture_runner.go
+    required_tests:
+      - internal/ghbridge/runner_test.go:TestTheBridgePreservesTheAssignedProviderIdentity
+      - internal/ghbridge/runner_test.go:TestTransportAnswersAreUnverifiedAndNeverIndependent
+      - internal/ghbridge/principal_test.go:TestParsedReviewCarriesNoAuthenticatedIdentity
+      - internal/ghbridge/principal_test.go:TestReviewerIsNeverInferredFromANeighbouringFact
+      - internal/ghbridge/apiclient_test.go:TestTheAppBotCannotAnswerAsTheReviewer
+    contract: no GitHub property may raise a turn above Unverified
+  - id: sensei_code.ghbridge.an_unavailable_bridge_refuses_rather_than_substituting
+    title: A bridge that cannot serve a turn refuses it and never silently becomes the local agent
+    severity: critical
+    status: active
+    description: 'workflow.resolveRunner propagates a resolver''s refusal and has no path that builds the CLI anyway, so a refusal here cannot decay into a quiet local architect or a quiet local review. A real task whose architecture binding is missing is refused for the same reason: answering it locally would attribute a plan to a party that did not write it and leave nothing in the record to show the substitution. A bare resolver probe with no task id and no binding is not a task turn at all and continues to the composed fallback, which preserves existing non-task behavior without widening what a governed turn may do. An unconfigured Provider carries nothing -- the empty string is not a wildcard -- so a half-built bridge cannot quietly become the answer for every provider in the ladder. Partial App configuration refuses instead of selecting a transport, and a selected App transport refuses rather than falling back to the operator''s personal gh credentials. The engine may still choose an explicitly recorded alternative through its own assignment ladder, which is a decision it makes and records, and a different thing from silent substitution by this bridge.'
+    protects:
+      files:
+        - internal/ghbridge/resolver.go
+        - internal/ghbridge/runner.go
+        - internal/ghbridge/architecture_runner.go
+        - internal/ghbridge/apiclient.go
+    required_tests:
+      - internal/ghbridge/runner_test.go:TestUnavailableTransportRefusesRatherThanSubstituting
+      - internal/ghbridge/runner_test.go:TestRunnerRefusesAnUnboundSubject
+      - internal/ghbridge/runner_test.go:TestAnUnconfiguredBridgeCarriesNothing
+      - internal/ghbridge/runner_test.go:TestNonReviewerRolesAlwaysReachTheExistingResolver
+      - internal/ghbridge/architecture_test.go:TestResolverCarriesOnlyBoundArchitectForItsProvider
+      - internal/ghbridge/apiclient_test.go:TestSelectedAppTransportRefusesRatherThanFallingBackToPersonalGH
+      - internal/ghbridge/appconfig_test.go:TestEveryPartialAppConfigurationRefusesAndNeverSelectsGH
+    contract: a refusal must propagate; substitution without a record is worse than a stop
+  - id: sensei_code.ghbridge.a_published_snapshot_is_a_verified_projection
+    title: A published review snapshot is a verified projection of the bound candidate, never a new observation
+    severity: high
+    status: active
+    description: 'The snapshot commit is built from the already-captured candidate tree with git commit-tree, so nothing re-stages files, re-reads the working directory, or derives another diff. A snapshot assembled by git add would be a new observation, and if the worktree had moved since the candidate was captured the reviewer would be shown something the workflow never bound to -- a review of an artifact that exists nowhere in the task''s history. Verification is not ceremony: commit-tree will build a commit from any tree it is handed, so the only thing making this commit a projection of the bound tree is reading its tree and parent back out and comparing them. Publication is for inspection only: not admission, not acceptance, not merge authority, not candidate minting.'
+    protects:
+      files:
+        - internal/ghbridge/snapshot.go
+    required_tests:
+      - internal/ghbridge/runner_test.go:TestSnapshotVerificationRefusesAWrongTree
+      - internal/ghbridge/runner_test.go:TestSnapshotVerificationRefusesAWrongParent
+      - internal/ghbridge/runner_test.go:TestSnapshotVerificationAcceptsATrueProjection
+      - internal/ghbridge/runner_test.go:TestPublishRefusesAMalformedSubject
+    contract: the reviewer must be shown the exact artifact the workflow bound, or nothing
+  - id: sensei_code.ghbridge.every_remote_exchange_is_bounded
+    title: Every exchange with a remote mailbox is bounded and reports why it ended
+    severity: high
+    status: active
+    description: 'DefaultWait is finite by construction and there is no indefinite default: the control path bounds its remote turns by a TTL, and a bridge that blocked forever would let a task wait on a party that will not answer. An unconfigured mailbox is refused immediately rather than polled, so a misconfiguration surfaces as an error instead of a timeout that looks like remote silence. A mailbox read failure is reported immediately and explicitly rather than retried into the deadline, and a cancelled context is reported as cancellation rather than as an absent answer, so the three ways an exchange can end -- refused, failed, and unanswered -- stay distinguishable in the record.'
+    protects:
+      files:
+        - internal/ghbridge/transport.go
+        - internal/ghbridge/architecture_transport.go
+        - internal/ghbridge/runner.go
+        - internal/ghbridge/architecture_runner.go
+    required_tests:
+      - internal/ghbridge/await_test.go:TestDefaultWaitIsFinite
+      - internal/ghbridge/await_test.go:TestUnconfiguredMailboxIsRefusedNotPolled
+      - internal/ghbridge/await_test.go:TestMailboxReadFailureIsImmediateAndExplicit
+      - internal/ghbridge/await_test.go:TestCancellationIsReportedAsCancellation
+    contract: a task must never sit forever on a party that is never going to answer
