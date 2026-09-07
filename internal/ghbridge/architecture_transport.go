@@ -13,25 +13,38 @@ import (
 // is the approved objective at a pinned base and graph generation, not candidate
 // content.
 func PostArchitectureRequest(ctx context.Context, box Issue, r ArchitectureRequest) error {
+	_, err := PublishArchitectureRequest(ctx, box, r)
+	return err
+}
+
+// PublishArchitectureRequest posts the request and returns the comment id
+// GitHub gave it, so a doorbell can point at this exact object.
+//
+// The id is 0 on the legacy gh path, which posts through `gh issue comment` and
+// is not asked for the created identity. That is reported as an unknown
+// locator rather than papered over: a doorbell cannot point at a comment whose
+// name this process never learned, and inventing one would defeat the whole
+// reason the wake carries a locator instead of a copy of the binding.
+func PublishArchitectureRequest(ctx context.Context, box Issue, r ArchitectureRequest) (int64, error) {
 	if !box.Valid() {
-		return errors.New("an architecture request needs a mailbox pull request number and an expected remote principal")
+		return 0, errors.New("an architecture request needs a mailbox pull request number and an expected remote principal")
 	}
 	body, err := r.Marker()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	if box.API != nil {
 		if !box.API.Configured() {
-			return errors.New("the github app transport was selected but is not configured; refusing rather than posting as the operator's gh account")
+			return 0, errors.New("the github app transport was selected but is not configured; refusing rather than posting as the operator's gh account")
 		}
 		return box.API.PostComment(ctx, box.Number, body)
 	}
 	args := box.args("issue", "comment")
 	args = append(args, "--body", body)
 	if out, err := run(ctx, box.Dir, args); err != nil {
-		return fmt.Errorf("gh issue comment: %w: %s", err, out)
+		return 0, fmt.Errorf("gh issue comment: %w: %s", err, out)
 	}
-	return nil
+	return 0, nil
 }
 
 // Architectures reads authenticated architecture answers from the same mailbox

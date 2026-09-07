@@ -140,7 +140,8 @@ func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
 			return errors.New("the github app transport was selected but is not configured; " +
 				"refusing rather than posting as the operator's gh account")
 		}
-		return box.API.PostComment(ctx, box.Number, body)
+		_, err := box.API.PostComment(ctx, box.Number, body)
+		return err
 	}
 	args := box.args("issue", "comment")
 	args = append(args, "--body", body)

@@ -89,6 +89,9 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	// The GitHub review bridge, off unless explicitly configured. All three
 	// must be given together: an issue nobody answers on, or a mailbox that
 	// cannot authenticate a sender, is not a usable bridge.
+	ghDoorbell := fs.Bool("github-doorbell", false,
+		"after publishing a request as the App, post a [sensei-code:wake] locator through the operator's gh "+
+			"credentials; needed only where the remote wake path does not admit App-authored comments")
 	ghMailboxPR := fs.String("github-mailbox-pr", "", "GitHub PULL REQUEST number whose top-level conversation is the architect/reviewer mailbox; enables the GitHub bridge")
 	ghIssue := fs.String("github-review-issue", "", "deprecated alias for -github-mailbox-pr; the mailbox must still be a pull request")
 	ghReviewerID := fs.Int64("github-reviewer-id", 0, "immutable GitHub user id permitted to answer review requests")
@@ -200,6 +203,7 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		Provider:      *ghProvider,
 		Remote:        *ghRemote,
 		Wait:          *ghWait,
+		Doorbell:      *ghDoorbell,
 		App: ghbridge.AppConfig{
 			AppID:          *ghAppID,
 			InstallationID: *ghInstallID,
@@ -311,6 +315,11 @@ type githubBridgeConfig struct {
 	Remote        string
 	Wait          time.Duration
 	App           ghbridge.AppConfig
+	// Doorbell enables the wake locator. Off by default: it exists only for a
+	// remote wake path that cannot see the App, and it posts under the
+	// operator's account, so it is an explicit choice rather than a silent
+	// default.
+	Doorbell bool
 }
 
 // mailboxVerifyTimeout bounds the one startup question asked of GitHub. Finite
@@ -412,7 +421,17 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	}
 	box.API = api
 
+	// The doorbell publishes no protocol content -- one marker and one comment
+	// id -- so posting it under the operator's account does not make asker and
+	// answerer the same principal. The REQUEST stays App-authored, which is the
+	// property reviewer independence actually rests on.
+	var doorbell ghbridge.Doorbell
+	if gh.Doorbell {
+		doorbell = ghbridge.GHDoorbell{Dir: repoRoot, Conversation: box.Number}
+	}
+
 	resolver := ghbridge.Resolver{
+		Doorbell: doorbell,
 		Provider: strings.TrimSpace(gh.Provider),
 		Reviewer: &ghbridge.Runner{
 			Issue:        box,

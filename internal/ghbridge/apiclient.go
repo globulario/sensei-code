@@ -90,11 +90,31 @@ func (c *AppClient) do(ctx context.Context, method, path string, body any) ([]by
 	return out, resp.Header, nil
 }
 
-// PostComment adds one comment to an issue as the App installation.
-func (c *AppClient) PostComment(ctx context.Context, issueNumber, body string) error {
+// PostComment adds one comment to a conversation as the App installation and
+// returns the identity GitHub gave it.
+//
+// The id is returned rather than discarded because a published request needs a
+// name. A doorbell points at THIS comment by number, so the wake signal carries
+// a locator instead of a copy of the binding — and if the doorbell fails, the
+// retry targets the same durable comment rather than minting a second request.
+// Discarding the id would force a second identity to be invented for something
+// GitHub already named.
+func (c *AppClient) PostComment(ctx context.Context, issueNumber, body string) (int64, error) {
 	path := fmt.Sprintf("/repos/%s/%s/issues/%s/comments", c.Owner, c.Repo, strings.TrimSpace(issueNumber))
-	_, _, err := c.do(ctx, http.MethodPost, path, map[string]string{"body": body})
-	return err
+	raw, _, err := c.do(ctx, http.MethodPost, path, map[string]string{"body": body})
+	if err != nil {
+		return 0, err
+	}
+	var created struct {
+		ID int64 `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &created); err != nil {
+		// The comment IS published; only its name was unreadable. Say exactly
+		// that, because a caller must not read this as "nothing was posted" and
+		// publish a second request.
+		return 0, fmt.Errorf("the comment was posted but its id could not be read: %w", err)
+	}
+	return created.ID, nil
 }
 
 // maxCommentPages bounds a mailbox read so a pathological pagination loop

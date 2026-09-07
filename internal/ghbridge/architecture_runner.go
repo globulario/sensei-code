@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
@@ -22,6 +23,10 @@ type ArchitectureRunner struct {
 	Poll         time.Duration
 	SessionID    string
 	Wait         time.Duration
+	// Doorbell, when set, rings a wake signal pointing at the published
+	// request. Nil means the remote actor is expected to see the request
+	// itself, which is the arrangement whenever its wake path admits the App.
+	Doorbell Doorbell
 }
 
 var ErrNotArchitect = errors.New("the github architecture runner serves the architect role only")
@@ -42,8 +47,34 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 		RequestID: r.NewRequestID(),
 		Prompt:    req.Prompt,
 	}
-	if err := PostArchitectureRequest(ctx, r.Issue, request); err != nil {
+	requestComment, err := PublishArchitectureRequest(ctx, r.Issue, request)
+	if err != nil {
 		return agent.Result{}, fmt.Errorf("posting the architecture request: %w", err)
+	}
+
+	// The request is durable from here. A doorbell failure is therefore NOT a
+	// turn failure: the authoritative object exists on GitHub with its complete
+	// binding, and the only thing missing is a nudge to look at it. Failing the
+	// turn would discard a published request and, on the next attempt, mint a
+	// second one for the same objective -- which is how a transport problem
+	// turns into a duplicate governed turn. The locator is reported so a retry
+	// can ring the SAME comment instead.
+	if r.Doorbell != nil && emit != nil && requestComment <= 0 {
+		emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentStarted,
+			"the request was published but its comment id is unknown, so no doorbell can point at it",
+			map[string]any{"request_id": request.RequestID, "transport": "github"}))
+	} else if r.Doorbell != nil {
+		if ringErr := r.Doorbell.Ring(ctx, requestComment); ringErr != nil && emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentStarted,
+				"the doorbell did not ring; the request stands and a retry must ring comment "+
+					strconv.FormatInt(requestComment, 10)+" rather than publish another",
+				map[string]any{
+					"request_id":      request.RequestID,
+					"request_comment": requestComment,
+					"error":           ringErr.Error(),
+					"transport":       "github",
+				}))
+		}
 	}
 
 	if emit != nil {

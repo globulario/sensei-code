@@ -60,6 +60,10 @@ type Resolver struct {
 	// workflow-supplied architecture binding, so no mutable binding is shared
 	// across concurrent tasks.
 	Reviewer *Runner
+	// Doorbell, when set, is carried into each architect turn so a published
+	// request can be pointed at. Nil wherever the remote wake path admits the
+	// App and no locator is needed.
+	Doorbell Doorbell
 	// Fallback serves every other role and every other provider. Required, and
 	// never bypassed.
 	Fallback workflow.RunnerResolver
@@ -116,6 +120,7 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 				Poll:         r.Reviewer.Poll,
 				SessionID:    r.Reviewer.SessionID,
 				Wait:         r.Reviewer.Wait,
+				Doorbell:     r.Doorbell,
 			}
 			return workflow.Resolved{Runner: architect, Name: spec.Agent.Name, Label: ResolverLabel}, nil
 		}
