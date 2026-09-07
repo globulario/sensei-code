@@ -101,8 +101,8 @@ func discoverProposalRepoRoot() string {
 
 // ParseObjectiveProposal recognizes one deliberately tiny protocol:
 //
-//   [sensei-code:objective-proposal]
-//   {"objective":"the exact objective text"}
+//	[sensei-code:objective-proposal]
+//	{"objective":"the exact objective text"}
 //
 // JSON is used for the payload so the objective has one unambiguous string
 // identity. Unknown fields are refused rather than silently becoming future

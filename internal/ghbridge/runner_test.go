@@ -2,8 +2,8 @@ package ghbridge
 
 import (
 	"context"
-	"os"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -139,7 +139,10 @@ func TestSnapshotVerificationAcceptsATrueProjection(t *testing.T) {
 func TestPublishRefusesAMalformedSubject(t *testing.T) {
 	dir, base, tree1, _ := tempRepo(t)
 	ctx := context.Background()
-	for _, tc := range []struct{ name string; s Subject }{
+	for _, tc := range []struct {
+		name string
+		s    Subject
+	}{
 		{"no tree", Subject{TaskID: "T", BaseSHA: base, CandidateDigest: digestC1}},
 		{"no base", Subject{TaskID: "T", CandidateTree: tree1, CandidateDigest: digestC1}},
 	} {

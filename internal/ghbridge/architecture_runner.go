@@ -50,11 +50,11 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 		emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentStarted,
 			"waiting for the remote architect to answer request "+request.RequestID+" on github",
 			map[string]any{
-				"request_id":          request.RequestID,
-				"objective_digest":    r.Binding.ObjectiveDigest,
-				"base":                r.Binding.BaseSHA,
-				"graph_build_commit":  r.Binding.GraphBuildCommit,
-				"transport":           "github",
+				"request_id":         request.RequestID,
+				"objective_digest":   r.Binding.ObjectiveDigest,
+				"base":               r.Binding.BaseSHA,
+				"graph_build_commit": r.Binding.GraphBuildCommit,
+				"transport":          "github",
 			}))
 	}
 
@@ -73,13 +73,13 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 		emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentFinished,
 			"the remote architect answered request "+request.RequestID,
 			map[string]any{
-				"request_id":          request.RequestID,
-				"objective_digest":    r.Binding.ObjectiveDigest,
-				"base":                r.Binding.BaseSHA,
-				"graph_build_commit":  r.Binding.GraphBuildCommit,
-				"github_author":       answer.Author,
-				"github_author_id":    answer.AuthorID,
-				"transport":           "github",
+				"request_id":         request.RequestID,
+				"objective_digest":   r.Binding.ObjectiveDigest,
+				"base":               r.Binding.BaseSHA,
+				"graph_build_commit": r.Binding.GraphBuildCommit,
+				"github_author":      answer.Author,
+				"github_author_id":   answer.AuthorID,
+				"transport":          "github",
 			}))
 	}
 

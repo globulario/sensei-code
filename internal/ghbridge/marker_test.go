@@ -8,13 +8,13 @@ import (
 )
 
 const (
-	baseSHA   = "1a2b3c4d5e6f78901234567890abcdef12345678"
-	treeC1    = "aaaabbbbccccdddd1111222233334444aaaabbbb"
-	treeC2    = "ffffeeeeddddcccc9999888877776666ffffeeee"
-	commitC1  = "9f8e7d6c5b4a39201234567890abcdef87654321"
-	commitC2  = "0102030405060708090a0b0c0d0e0f1011121314"
-	digestC1  = "sha256:candidate-one"
-	digestC2  = "sha256:candidate-two"
+	baseSHA      = "1a2b3c4d5e6f78901234567890abcdef12345678"
+	treeC1       = "aaaabbbbccccdddd1111222233334444aaaabbbb"
+	treeC2       = "ffffeeeeddddcccc9999888877776666ffffeeee"
+	commitC1     = "9f8e7d6c5b4a39201234567890abcdef87654321"
+	commitC2     = "0102030405060708090a0b0c0d0e0f1011121314"
+	digestC1     = "sha256:candidate-one"
+	digestC2     = "sha256:candidate-two"
 	reviewerJSON = `{"decision":"accept","summary":"ok","instructions":"","findings":[]}`
 )
 
