@@ -14,7 +14,7 @@ import (
 // content.
 func PostArchitectureRequest(ctx context.Context, box Issue, r ArchitectureRequest) error {
 	if !box.Valid() {
-		return errors.New("an architecture request needs a mailbox issue number and an expected remote principal")
+		return errors.New("an architecture request needs a mailbox pull request number and an expected remote principal")
 	}
 	body, err := r.Marker()
 	if err != nil {
@@ -40,7 +40,7 @@ func PostArchitectureRequest(ctx context.Context, box Issue, r ArchitectureReque
 // identity grants no objective authority or reviewer independence.
 func Architectures(ctx context.Context, box Issue) ([]ArchitectureResponse, error) {
 	if !box.Valid() {
-		return nil, errors.New("reading the architecture mailbox needs an issue number and an expected remote principal")
+		return nil, errors.New("reading the architecture mailbox needs a pull request number and an expected remote principal")
 	}
 	var comments []restComment
 	if box.API != nil {

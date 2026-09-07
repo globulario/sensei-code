@@ -74,9 +74,19 @@ func (p Principal) String() string {
 type Issue struct {
 	// Dir is the repository working directory gh is invoked from.
 	Dir string
-	// Number is the issue acting as the mailbox. Required: there is no
-	// "current issue" for gh to infer, and inferring one would be a guess about
-	// where a review request went.
+	// Number is the PULL REQUEST whose top-level conversation is the mailbox.
+	// Required: there is no "current conversation" for gh to infer, and
+	// inferring one would be a guess about where a request went.
+	//
+	// A pull request rather than an ordinary issue, because the remote actor is
+	// woken by pull request activity. Both are addressed through GitHub's issues
+	// resource — a PR conversation IS an issue conversation as far as
+	// /issues/{n}/comments is concerned — which is why this type keeps its name
+	// and why no second transport exists. What changed is which conversations
+	// are acceptable, not how they are read. VerifyMailboxIsPullRequest is what
+	// enforces that, and it is deliberately not something this struct can
+	// decide for itself: it takes a network answer, and a type cannot be its own
+	// evidence.
 	Number string
 	// API, when set, performs the mailbox's REST operations as the GitHub App
 	// installation instead of through the operator's gh credentials. Selecting
@@ -115,7 +125,7 @@ func run(ctx context.Context, dir string, args []string) (string, error) {
 // answers requests, it does not create them.
 func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
 	if !box.Valid() {
-		return errors.New("a review request needs a mailbox issue number and an expected reviewer")
+		return errors.New("a review request needs a mailbox pull request number and an expected reviewer")
 	}
 	marker, err := r.Marker()
 	if err != nil {
@@ -161,7 +171,7 @@ type restComment struct {
 // issue is a place people talk.
 func Reviews(ctx context.Context, box Issue) ([]Review, error) {
 	if !box.Valid() {
-		return nil, errors.New("reading the mailbox needs an issue number and an expected reviewer")
+		return nil, errors.New("reading the mailbox needs a pull request number and an expected reviewer")
 	}
 	var comments []restComment
 	if box.API != nil {
@@ -246,4 +256,66 @@ func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration)
 		case <-time.After(every):
 		}
 	}
+}
+
+// ErrNotAPullRequest reports a mailbox number that resolves to an ordinary
+// issue rather than to a pull request.
+var ErrNotAPullRequest = errors.New("the configured mailbox is not a pull request")
+
+// VerifyMailboxIsPullRequest establishes that the configured mailbox number is
+// a pull request in the configured repository.
+//
+// It matters because the remote actor is woken by PULL REQUEST activity. A
+// mailbox aimed at an ordinary issue posts successfully, reads successfully,
+// and is simply never answered — and an unanswered request is exactly what a
+// remote party choosing not to reply looks like. That ambiguity cost four days
+// once already: the request reached issue #156 correctly and nothing woke, and
+// the silence was read as the architect being slow. This check exists so the
+// wrong kind of target is a refusal at startup rather than a silence at
+// runtime.
+//
+// Nothing is inferred. The number and the repository are configuration. The
+// branch, the local git state, the checkout the process runs in and the
+// conversation's own text are facts about this machine rather than about which
+// conversation is the mailbox, and a bridge that read one of them would verify
+// whatever it happened to be run beside.
+//
+// An unavailable GitHub is a REFUSAL, not a pass, per
+// sensei_code.ghbridge.an_unavailable_bridge_refuses_rather_than_substituting:
+// a bridge that cannot establish its own target does not get to assume the
+// target is fine. Both transports authenticate — the App installation when one
+// is selected, gh's own credentials otherwise — and the selected App transport
+// never falls back to the operator's account to answer this question.
+func VerifyMailboxIsPullRequest(ctx context.Context, box Issue) error {
+	number := strings.TrimSpace(box.Number)
+	if number == "" {
+		return errors.New("establishing the mailbox needs a conversation number")
+	}
+
+	if box.API != nil {
+		url, err := box.API.PullRequestURL(ctx, number)
+		if err != nil {
+			return fmt.Errorf("establishing that mailbox #%s is a pull request: %w", number, err)
+		}
+		if url == "" {
+			return fmt.Errorf("%w: %s/%s #%s is an ordinary issue, and the remote actor is woken by "+
+				"pull request activity", ErrNotAPullRequest, box.API.Owner, box.API.Repo, number)
+		}
+		return nil
+	}
+
+	// Same issues resource, read through gh. `.pull_request.url // ""` keeps the
+	// two outcomes apart the same way the App path does: an ordinary issue is an
+	// empty value, and only a failure to ask is an error.
+	out, err := run(ctx, box.Dir, []string{
+		"api", "repos/{owner}/{repo}/issues/" + number, "--jq", `.pull_request.url // ""`,
+	})
+	if err != nil {
+		return fmt.Errorf("establishing that mailbox #%s is a pull request: %w: %s", number, err, out)
+	}
+	if strings.TrimSpace(out) == "" {
+		return fmt.Errorf("%w: #%s is an ordinary issue, and the remote actor is woken by pull request activity",
+			ErrNotAPullRequest, number)
+	}
+	return nil
 }

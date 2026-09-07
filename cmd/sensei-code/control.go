@@ -89,7 +89,8 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	// The GitHub review bridge, off unless explicitly configured. All three
 	// must be given together: an issue nobody answers on, or a mailbox that
 	// cannot authenticate a sender, is not a usable bridge.
-	ghIssue := fs.String("github-review-issue", "", "GitHub issue number acting as the review mailbox; enables the GitHub review bridge")
+	ghMailboxPR := fs.String("github-mailbox-pr", "", "GitHub PULL REQUEST number whose top-level conversation is the architect/reviewer mailbox; enables the GitHub bridge")
+	ghIssue := fs.String("github-review-issue", "", "deprecated alias for -github-mailbox-pr; the mailbox must still be a pull request")
 	ghReviewerID := fs.Int64("github-reviewer-id", 0, "immutable GitHub user id permitted to answer review requests")
 	ghReviewerLogin := fs.String("github-reviewer-login", "", "GitHub login of that reviewer, for display")
 	ghProvider := fs.String("github-review-provider", "chatgpt", "which assigned reviewer provider the GitHub bridge carries")
@@ -188,8 +189,12 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	// Composed rather than decided here: composeEngineResolver is where the
 	// bridge's off/refuse/install outcomes live, so they are provable without
 	// binding a socket.
+	mailboxPR, err := effectiveMailbox(*ghMailboxPR, *ghIssue)
+	if err != nil {
+		return err
+	}
 	runners, err := composeEngineResolver(server, repo.Root, engine.SessionID, githubBridgeConfig{
-		Issue:         *ghIssue,
+		MailboxPR:     mailboxPR,
 		ReviewerID:    *ghReviewerID,
 		ReviewerLogin: *ghReviewerLogin,
 		Provider:      *ghProvider,
@@ -208,6 +213,17 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	}
 	engine.Runners = runners.Resolver
 	if runners.Banner != "" {
+		// Established before the banner prints, so the operator never reads a
+		// healthy-looking mailbox line about a conversation nothing will wake on.
+		// Refusal rather than a warning: a bridge whose requests are structurally
+		// unanswerable is not a degraded bridge, it is a silent one, and silence
+		// here is indistinguishable from a remote party that declined to reply.
+		verifyCtx, cancelVerify := context.WithTimeout(context.Background(), mailboxVerifyTimeout)
+		err := ghbridge.VerifyMailboxIsPullRequest(verifyCtx, runners.Mailbox)
+		cancelVerify()
+		if err != nil {
+			return err
+		}
 		fmt.Println(runners.Banner)
 	}
 
@@ -283,13 +299,52 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 // mailbox, the reviewer, the carried provider, nor the repository the App
 // addresses.
 type githubBridgeConfig struct {
-	Issue         string
+	// MailboxPR is the pull request whose top-level conversation carries
+	// architect and reviewer turns. Named for what it must be rather than for
+	// the REST resource that addresses it: the conversation is reached through
+	// GitHub's issues endpoint, but an ordinary issue is not an acceptable
+	// value, because nothing wakes on one.
+	MailboxPR     string
 	ReviewerID    int64
 	ReviewerLogin string
 	Provider      string
 	Remote        string
 	Wait          time.Duration
 	App           ghbridge.AppConfig
+}
+
+// mailboxVerifyTimeout bounds the one startup question asked of GitHub. Finite
+// for the same reason every remote exchange here is: a bridge that hung while
+// establishing its own target would fail to start in a way that looks like a
+// hang rather than a refusal.
+const mailboxVerifyTimeout = 30 * time.Second
+
+// effectiveMailbox resolves the ONE mailbox target from the PR-specific flag and
+// the deprecated alias.
+//
+// -github-review-issue predates the move to a pull-request conversation and is
+// kept so an existing deployment does not silently lose its mailbox on upgrade.
+// It is an ALIAS, never a second opinion: supplying both with different numbers
+// is refused, because a deployment that disagreed with itself about where
+// requests go would post into one conversation and wait for answers in another,
+// and would look exactly like a remote party that never replied.
+//
+// The alias buys no leniency about what the number must BE. Either flag still
+// has to name a pull request, and VerifyMailboxIsPullRequest establishes that
+// for both.
+func effectiveMailbox(mailboxPR, legacyIssue string) (string, error) {
+	pr, legacy := strings.TrimSpace(mailboxPR), strings.TrimSpace(legacyIssue)
+	switch {
+	case pr == "" && legacy == "":
+		return "", nil
+	case pr != "" && legacy != "" && pr != legacy:
+		return "", fmt.Errorf("-github-mailbox-pr is #%s and -github-review-issue is #%s; "+
+			"they name one mailbox and must not disagree", pr, legacy)
+	case pr != "":
+		return pr, nil
+	default:
+		return legacy, nil
+	}
 }
 
 // engineResolver is what an engine will consult for its role turns, plus the
@@ -304,6 +359,10 @@ type engineResolver struct {
 	Resolver workflow.RunnerResolver
 	// Banner is empty when the bridge is off.
 	Banner string
+	// Mailbox is the conversation actually installed, carried so startup
+	// establishes THAT rather than re-deriving a box from the configuration
+	// that was meant to build it. Zero value when the bridge is off.
+	Mailbox ghbridge.Issue
 }
 
 // composeEngineResolver decides what serves this engine's role turns.
@@ -327,20 +386,20 @@ type engineResolver struct {
 func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID string, gh githubBridgeConfig) (engineResolver, error) {
 	// Off by default. The package existing changes nothing; only configuration
 	// does.
-	if strings.TrimSpace(gh.Issue) == "" {
+	if strings.TrimSpace(gh.MailboxPR) == "" {
 		return engineResolver{Resolver: base}, nil
 	}
 
 	box := ghbridge.Issue{
 		Dir:    repoRoot,
-		Number: strings.TrimSpace(gh.Issue),
+		Number: strings.TrimSpace(gh.MailboxPR),
 		ExpectedReviewer: ghbridge.Principal{
 			UserID: gh.ReviewerID,
 			Login:  strings.TrimSpace(gh.ReviewerLogin),
 		},
 	}
 	if !box.Valid() {
-		return engineResolver{}, errors.New("the github review bridge needs an issue number and an expected reviewer " +
+		return engineResolver{}, errors.New("the github review bridge needs a pull request number and an expected reviewer " +
 			"(-github-reviewer-id, or -github-reviewer-login): a mailbox that cannot authenticate a " +
 			"sender would read any parseable comment as an answer")
 	}
@@ -374,10 +433,10 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			gh.App.AppID, gh.App.InstallationID,
 			strings.TrimSpace(gh.App.Owner), strings.TrimSpace(gh.App.Repo))
 	}
-	banner := fmt.Sprintf("github review bridge: issue #%s, reviewer %s, carrying provider %q, mailbox via %s",
+	banner := fmt.Sprintf("github bridge: PR #%s conversation, reviewer %s, carrying provider %q, mailbox via %s",
 		box.Number, box.ExpectedReviewer, strings.TrimSpace(gh.Provider), transport)
 
-	return engineResolver{Resolver: resolver, Banner: banner}, nil
+	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box}, nil
 }
 
 // credentialFromEnvOrMint resolves the credential and reports whether the

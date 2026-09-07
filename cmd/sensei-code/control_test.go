@@ -62,7 +62,7 @@ func newControlServer(t *testing.T) *control.Server {
 // exactly one field and attribute the outcome to that field.
 func configuredBridge() githubBridgeConfig {
 	return githubBridgeConfig{
-		Issue:         "412",
+		MailboxPR:     "412",
 		ReviewerID:    1697116,
 		ReviewerLogin: "the-reviewer",
 		Provider:      "chatgpt",
@@ -83,7 +83,7 @@ func TestBridgeOffLeavesTheControlServerResolving(t *testing.T) {
 
 	for _, issue := range []string{"", "   "} {
 		gh := configuredBridge()
-		gh.Issue = issue
+		gh.MailboxPR = issue
 
 		got, err := composeEngineResolver(server, testRepoRoot, "sess-compose", gh)
 		if err != nil {

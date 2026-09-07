@@ -250,3 +250,41 @@ func (c AppConfig) Client() (*AppClient, error) {
 		Repo:  strings.TrimSpace(c.Repo),
 	}, nil
 }
+
+// PullRequestURL reports the pull-request URL of a conversation, or "" when the
+// number names an ordinary issue.
+//
+// It reads the ISSUES resource on purpose. That is the resource this mailbox
+// already posts to and reads from, so establishing PR-ness costs no second
+// transport, and GitHub returns a `pull_request` object on an issue that is a
+// pull request. PR-ness is therefore a VALUE here rather than an HTTP status
+// reconstructed out of an error string, which keeps "this is an ordinary issue"
+// distinguishable from "GitHub could not be asked". Collapsing those two is how
+// a mailbox aimed at the wrong kind of target would come to look merely
+// unreachable, and being unanswered is already what the wrong target looks like.
+//
+// The installation token travels in a header and is not part of any error
+// returned here.
+func (c *AppClient) PullRequestURL(ctx context.Context, number string) (string, error) {
+	if !c.Configured() {
+		return "", errors.New("the github app transport was selected but is not configured; refusing rather " +
+			"than establishing the mailbox as the operator's gh account")
+	}
+	path := fmt.Sprintf("/repos/%s/%s/issues/%s", c.Owner, c.Repo, strings.TrimSpace(number))
+	raw, _, err := c.do(ctx, http.MethodGet, path, nil)
+	if err != nil {
+		return "", err
+	}
+	var conversation struct {
+		PullRequest *struct {
+			URL string `json:"url"`
+		} `json:"pull_request"`
+	}
+	if err := json.Unmarshal(raw, &conversation); err != nil {
+		return "", fmt.Errorf("reading %s/%s #%s: %w", c.Owner, c.Repo, strings.TrimSpace(number), err)
+	}
+	if conversation.PullRequest == nil {
+		return "", nil
+	}
+	return conversation.PullRequest.URL, nil
+}
