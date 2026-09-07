@@ -416,7 +416,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 			workspaceEvidence = firstText(workspaceStatus)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, workspaceEvidence, workspaceStatus.Structured))
 			if status, decodeErr := sensei.DecodeWorkspaceStatus(workspaceStatus); decodeErr == nil {
-				e.bindGraph(taskID, status)
+				e.bindGraphDomainOnly(taskID, status)
 				domain = status.Binding.RepositoryDomain
 				if !status.Permits() {
 					observations = append(observations, "workspace identity is incomplete: "+status.Diagnostic())
