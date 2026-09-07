@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/control"
 	"github.com/globulario/sensei-code/internal/ghwebhook"
 	"github.com/globulario/sensei-code/internal/gitx"
@@ -34,6 +36,34 @@ type localAuthorizer func(repoRoot string) (authorizedSubmitter, error)
 // dialLocalObjective is the production authorizer.
 func dialLocalObjective(repoRoot string) (authorizedSubmitter, error) {
 	return control.DialLocalObjective(repoRoot)
+}
+
+// canonicalPrecheck reports whether the repository still satisfies a
+// precondition the governed run will apply later.
+type canonicalPrecheck func(repoRoot string) error
+
+// canonicalIsClean applies EXACTLY the cleanliness predicate
+// candidate.Establish will apply, before the approval token is spent.
+//
+// Not a second opinion about cleanliness -- the same gitx.Repo.IsClean, which
+// is `git status --porcelain` being empty, and the same *candidate.ErrDirtyCanonical
+// so the operator reads one message rather than two that nearly agree. A
+// precheck that drifted from the real gate would be worse than none: it would
+// refuse runs the gate would have allowed, or wave through runs it refuses.
+//
+// It is a PRE-check and not a replacement. The tree can be dirtied between
+// here and Establish, and that later refusal legitimately spends the proposal:
+// by then the objective is on the wire and a task exists. What this removes is
+// only the case that was knowable before anything durable happened.
+func canonicalIsClean(repoRoot string) error {
+	clean, err := gitx.Repo{Root: repoRoot}.IsClean(context.Background())
+	if err != nil {
+		return fmt.Errorf("could not read the state of the canonical checkout %s: %w", repoRoot, err)
+	}
+	if !clean {
+		return &candidate.ErrDirtyCanonical{Repository: repoRoot}
+	}
+	return nil
 }
 
 func runProposal(repo gitx.Repo, args []string) error {
@@ -96,7 +126,7 @@ func runProposal(repo gitx.Repo, args []string) error {
 		if err != nil {
 			return err
 		}
-		return approveObjectiveProposal(repo.Root, id, os.Stdout, dialLocalObjective)
+		return approveObjectiveProposal(repo.Root, id, os.Stdout, dialLocalObjective, canonicalIsClean)
 	default:
 		return fmt.Errorf("unknown proposal command %q; expected list, show, or approve", args[0])
 	}
@@ -139,7 +169,7 @@ func proposalCommentID(raw string) (int64, error) {
 // authorizeObjective remains the single authority decision. This does not
 // duplicate it, re-implement it, or pre-check it locally; it asks the server
 // once and then keeps that connection.
-func approveObjectiveProposal(repoRoot string, commentID int64, out io.Writer, authorize localAuthorizer) error {
+func approveObjectiveProposal(repoRoot string, commentID int64, out io.Writer, authorize localAuthorizer, precheck canonicalPrecheck) error {
 	store := ghwebhook.NewProposalStore(repoRoot)
 	p, err := store.Load(commentID)
 	if err != nil {
@@ -155,6 +185,27 @@ func approveObjectiveProposal(repoRoot string, commentID int64, out io.Writer, a
 			"the proposal is untouched and remains pending: %w", commentID, err)
 	}
 	defer conn.Close()
+
+	// Preconditions the governed run will apply anyway, applied BEFORE the
+	// at-most-once token is spent.
+	//
+	// The first run of this path proved why. An authorized approval created
+	// task-1788748865978691155 with the correct objective, digest and
+	// provenance, and candidate.Establish refused it one second later because
+	// two untracked runtime files made the checkout dirty. The proposal was
+	// spent on a condition that was true before the caller even connected, and
+	// was discoverable in one `git status`.
+	//
+	// Same argument as the authority ordering above, different precondition:
+	// a refusal that was knowable before anything durable happened must not be
+	// charged against a token. This does NOT weaken the later gate -- see
+	// canonicalIsClean.
+	if precheck != nil {
+		if err := precheck(repoRoot); err != nil {
+			return fmt.Errorf("proposal %d was not approved because the repository is not in a state a governed "+
+				"candidate can be cut from; the proposal is untouched and remains pending: %w", commentID, err)
+		}
+	}
 
 	nonce, err := approvalNonce()
 	if err != nil {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,7 +92,12 @@ const wantObjective = "Repair the objective bridge without widening authority.\n
 func seedProposal(t *testing.T) (root string, store *ghwebhook.ProposalStore) {
 	t.Helper()
 	root = t.TempDir()
-	store = ghwebhook.NewProposalStore(root)
+	return root, seedProposalIn(t, root)
+}
+
+func seedProposalIn(t *testing.T, root string) *ghwebhook.ProposalStore {
+	t.Helper()
+	store := ghwebhook.NewProposalStore(root)
 	d := ghwebhook.IssueCommentDelivery{
 		DeliveryID:         "delivery-approval",
 		Action:             "created",
@@ -107,7 +113,7 @@ func seedProposal(t *testing.T) (root string, store *ghwebhook.ProposalStore) {
 	if _, created, handled, err := store.Record(d); err != nil || !created || !handled {
 		t.Fatalf("record: created=%v handled=%v err=%v", created, handled, err)
 	}
-	return root, store
+	return store
 }
 
 func okAuthorizer(t *testing.T, root string) *recordingAuthorizer {
@@ -148,7 +154,7 @@ func TestAnUnauthorizedSameUIDProcessCannotConsumeAPendingProposal(t *testing.T)
 			auth.refuse = refusal
 
 			var out bytes.Buffer
-			err = approveObjectiveProposal(root, testProposalComment, &out, auth.authorize)
+			err = approveObjectiveProposal(root, testProposalComment, &out, auth.authorize, nil)
 			if err == nil {
 				t.Fatal("an unauthorized caller approved the proposal")
 			}
@@ -179,7 +185,7 @@ func TestAnUnauthorizedSameUIDProcessCannotConsumeAPendingProposal(t *testing.T)
 
 			// And it is still approvable by someone who does hold authority.
 			holder := okAuthorizer(t, root)
-			if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, holder.authorize); err != nil {
+			if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, holder.authorize, nil); err != nil {
 				t.Fatalf("the proposal was permanently spent by a refusal: %v", err)
 			}
 			if holder.conn.got != wantObjective {
@@ -198,7 +204,7 @@ func TestAuthorityIsEstablishedBeforeAnyDurableReceipt(t *testing.T) {
 	root, _ := seedProposal(t)
 	auth := okAuthorizer(t, root)
 
-	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize); err != nil {
+	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize, nil); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	if auth.calls != 1 {
@@ -220,7 +226,7 @@ func TestAFailureBeforeBeginApprovalLeavesZeroReceipt(t *testing.T) {
 	// The proposal does not exist: approve refuses before it ever authorizes,
 	// and certainly before anything durable.
 	auth := okAuthorizer(t, root)
-	if err := approveObjectiveProposal(root, 999999, &bytes.Buffer{}, auth.authorize); err == nil {
+	if err := approveObjectiveProposal(root, 999999, &bytes.Buffer{}, auth.authorize, nil); err == nil {
 		t.Fatal("approving a proposal that does not exist succeeded")
 	}
 	if n := countApprovals(t, root); n != 0 {
@@ -231,7 +237,7 @@ func TestAFailureBeforeBeginApprovalLeavesZeroReceipt(t *testing.T) {
 	// is likewise not charged against the proposal.
 	down := okAuthorizer(t, root)
 	down.refuse = errors.New("no control process is accepting objectives; start one with `sensei-code control`")
-	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, down.authorize); err == nil {
+	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, down.authorize, nil); err == nil {
 		t.Fatal("approval succeeded with no control process")
 	}
 	if n := countApprovals(t, root); n != 0 {
@@ -251,7 +257,7 @@ func TestALostSubmissionAfterBeginApprovalStaysAttemptingAndCannotRetry(t *testi
 	auth := okAuthorizer(t, root)
 	auth.conn.submitErr = errors.New("the connection died after the objective was written")
 
-	err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize)
+	err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize, nil)
 	if err == nil {
 		t.Fatal("a lost submission reported success")
 	}
@@ -276,7 +282,7 @@ func TestALostSubmissionAfterBeginApprovalStaysAttemptingAndCannotRetry(t *testi
 
 	// And it cannot be retried into a second submission.
 	retry := okAuthorizer(t, root)
-	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, retry.authorize); err == nil {
+	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, retry.authorize, nil); err == nil {
 		t.Fatal("an ambiguous approval was retried")
 	}
 	if retry.conn.submits != 0 {
@@ -297,7 +303,7 @@ func TestSuccessBindsTheExactStoredObjectiveDigestToTheAcceptedTask(t *testing.T
 
 	auth := okAuthorizer(t, root)
 	var out bytes.Buffer
-	if err := approveObjectiveProposal(root, testProposalComment, &out, auth.authorize); err != nil {
+	if err := approveObjectiveProposal(root, testProposalComment, &out, auth.authorize, nil); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 
@@ -331,7 +337,7 @@ func TestSuccessBindsTheExactStoredObjectiveDigestToTheAcceptedTask(t *testing.T
 
 	// Approved once, and only once.
 	second := okAuthorizer(t, root)
-	if err := approveObjectiveProposal(root, testProposalComment, &out, second.authorize); err == nil {
+	if err := approveObjectiveProposal(root, testProposalComment, &out, second.authorize, nil); err == nil {
 		t.Fatal("a second approval was accepted")
 	}
 	if second.conn.submits != 0 {
@@ -394,7 +400,7 @@ func TestAProposalWithWhitespaceSubmitsItsExactBytes(t *testing.T) {
 	auth.conn.accepted = control.LocalAccepted{
 		TaskID: "task-4242", Provenance: "submitted-by-local-operator", Workspace: "sensei-code",
 	}
-	if err := approveObjectiveProposal(root, 4242, &bytes.Buffer{}, auth.authorize); err != nil {
+	if err := approveObjectiveProposal(root, 4242, &bytes.Buffer{}, auth.authorize, nil); err != nil {
 		t.Fatalf("approve: %v", err)
 	}
 	if auth.conn.got != exact {
@@ -411,5 +417,180 @@ func TestAProposalWithWhitespaceSubmitsItsExactBytes(t *testing.T) {
 	}
 	if a.TaskID != "task-4242" {
 		t.Fatalf("receipt task = %q", a.TaskID)
+	}
+}
+
+// ------------------------------------------------- the cleanliness precheck
+
+// A precondition the governed run will apply anyway must not cost a token to
+// discover.
+//
+// The first real run of this path spent proposal 5561620357 exactly that way:
+// authority passed, BeginApproval wrote the receipt, the task was created with
+// the correct objective and provenance, and candidate.Establish refused one
+// second later because two untracked runtime files made the checkout dirty.
+// That condition was true before the caller connected and readable in one
+// `git status`.
+
+// gitRepo builds a real repository so the precheck is proved against git's own
+// notion of clean, not a restatement of it.
+func gitRepo(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"config", "user.email", "t@example.com"},
+		{"config", "user.name", "t"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git unavailable: %v\n%s", err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "seed.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The real repository ignores .sensei-code/, so the proposal store itself
+	// does not dirty the tree. Without this the fixture would be dirty for a
+	// reason the product never has, and the test would prove the wrong thing.
+	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte(".sensei-code/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-q", "-m", "seed"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return root
+}
+
+// The exact shape that spent the first proposal: UNTRACKED files only.
+func TestADirtyCheckoutIsRefusedBeforeTheTokenIsSpent(t *testing.T) {
+	root := gitRepo(t)
+	seedProposalIn(t, root)
+
+	// Clean at this point, so the run would proceed.
+	if err := canonicalIsClean(root); err != nil {
+		t.Fatalf("a freshly committed repository is not clean: %v", err)
+	}
+
+	// Exactly what dirtied it in the real run: untracked, not modified.
+	if err := os.WriteFile(filepath.Join(root, "briefing-delivery.jsonl"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := canonicalIsClean(root); err == nil {
+		t.Fatal("an untracked file did not make the checkout dirty; the precheck disagrees with candidate.Establish")
+	}
+
+	auth := okAuthorizer(t, root)
+	err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize, canonicalIsClean)
+	if err == nil {
+		t.Fatal("a dirty checkout was approved")
+	}
+	if !strings.Contains(err.Error(), "remains pending") {
+		t.Errorf("the refusal does not say the proposal is untouched: %v", err)
+	}
+	if !strings.Contains(err.Error(), "uncommitted changes") {
+		t.Errorf("the refusal does not carry candidate.Establish's own message: %v", err)
+	}
+
+	// Nothing durable was spent, and nothing was submitted.
+	if n := countApprovals(t, root); n != 0 {
+		t.Fatalf("a dirty checkout left %d approval receipts", n)
+	}
+	if auth.conn.submits != 0 {
+		t.Error("a dirty checkout still submitted an objective")
+	}
+
+	// And the proposal survives: cleaning the tree makes it approvable again.
+	if err := os.Remove(filepath.Join(root, "briefing-delivery.jsonl")); err != nil {
+		t.Fatal(err)
+	}
+	after := okAuthorizer(t, root)
+	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, after.authorize, canonicalIsClean); err != nil {
+		t.Fatalf("the proposal was spent by a dirty-tree refusal: %v", err)
+	}
+	if after.conn.got != wantObjective {
+		t.Errorf("submitted %q", after.conn.got)
+	}
+}
+
+// Authority is still decided FIRST. An unauthorized caller learns that it may
+// not originate work, not the state of the operator's working tree.
+func TestAuthorityIsDecidedBeforeCleanliness(t *testing.T) {
+	root := gitRepo(t)
+	seedProposalIn(t, root)
+	if err := os.WriteFile(filepath.Join(root, "untracked"), []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	auth := okAuthorizer(t, root)
+	auth.refuse = errors.New("pid 5150 has no controlling terminal")
+
+	err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize, canonicalIsClean)
+	if err == nil {
+		t.Fatal("an unauthorized caller was accepted")
+	}
+	if strings.Contains(err.Error(), "uncommitted changes") {
+		t.Errorf("an unauthorized caller was told about the working tree: %v", err)
+	}
+	if !strings.Contains(err.Error(), "controlling terminal") {
+		t.Errorf("the refusal is not the authority one: %v", err)
+	}
+	if n := countApprovals(t, root); n != 0 {
+		t.Fatalf("%d receipts written", n)
+	}
+}
+
+// A precheck failure that is not about cleanliness still refuses before the
+// token is spent, and says what it could not establish.
+func TestAnUnreadableCheckoutRefusesBeforeTheTokenIsSpent(t *testing.T) {
+	root := t.TempDir() // not a git repository at all
+	seedProposalIn(t, root)
+
+	auth := okAuthorizer(t, root)
+	err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, auth.authorize, canonicalIsClean)
+	if err == nil {
+		t.Fatal("a repository whose state could not be read was approved")
+	}
+	if n := countApprovals(t, root); n != 0 {
+		t.Fatalf("%d receipts written for an unreadable checkout", n)
+	}
+	if auth.conn.submits != 0 {
+		t.Error("an unreadable checkout still submitted an objective")
+	}
+}
+
+// The precheck does not REPLACE candidate.Establish's check. The tree can be
+// dirtied after approval begins, and that later refusal legitimately spends the
+// proposal -- by then a task exists.
+func TestTheLaterEstablishCheckIsRetained(t *testing.T) {
+	src, err := os.ReadFile("../../internal/candidate/identity.go")
+	if err != nil {
+		t.Fatalf("read identity.go: %v", err)
+	}
+	text := string(src)
+	if !strings.Contains(text, "clean, err := repo.IsClean()") {
+		t.Fatal("candidate.Establish no longer checks cleanliness; the precheck is not a replacement for it")
+	}
+	if !strings.Contains(text, "&ErrDirtyCanonical{Repository: repoRoot}") {
+		t.Fatal("candidate.Establish no longer refuses a dirty canonical checkout")
+	}
+
+	// And the precheck is genuinely the same predicate, not a lookalike.
+	approve, err := os.ReadFile("proposal.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"gitx.Repo{Root: repoRoot}.IsClean(",
+		"&candidate.ErrDirtyCanonical{Repository: repoRoot}",
+	} {
+		if !strings.Contains(string(approve), want) {
+			t.Errorf("the precheck does not reuse %q; it would drift from the gate it is predicting", want)
+		}
 	}
 }
