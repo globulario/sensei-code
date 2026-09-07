@@ -333,3 +333,90 @@ func lockAnchors(files ...string) []CoverageAnchor {
 	}
 	return out
 }
+
+// The benign state: the graph HAS facts here and none raised a category.
+//
+// Measured on internal/ghbridge/snapshot.go — PREFLIGHT_STATUS_OK, LOW_RISK,
+// blast=local, APPROVAL_GATE_NONE, 2 direct anchors — where this single blind
+// spot matched no marker, read as unrecognised, and escalated the run to a
+// human over a risk channel that had already said no approval was needed.
+func TestTheBenignStateIsReadAsNoSignalNotAsUnknown(t *testing.T) {
+	const measured = "anchors present, no high-risk category fired"
+
+	if got := classifyBlindSpot(measured); got != blindSpotNoSignal {
+		t.Fatalf("classifyBlindSpot(%q) = %v, want no-signal; the most reassuring "+
+			"string in the vocabulary must not produce the strongest stop", measured, got)
+	}
+	r := readBlindSpots([]string{measured})
+	if len(r.Unrecognised) != 0 {
+		t.Errorf("a recognised benign state was still carried as unrecognised: %v", r.Unrecognised)
+	}
+	if len(r.NoSignal) != 1 {
+		t.Fatalf("NoSignal = %v, want the one measured phrasing", r.NoSignal)
+	}
+	if len(r.Coverage) != 0 || len(r.Consequence) != 0 {
+		t.Errorf("benign state leaked into another kind: coverage=%v consequence=%v",
+			r.Coverage, r.Consequence)
+	}
+}
+
+// The repair must not become a fuzzy match. Exact normalised equality only:
+// a string that merely RESEMBLES the benign phrasing is still unknown, and
+// unknown still fails closed.
+func TestOnlyTheExactBenignPhrasingIsRecognised(t *testing.T) {
+	for _, near := range []string{
+		"anchors present",
+		"no high-risk category fired",
+		"anchors present, no high-risk category fired, but the graph is stale",
+		"NO ANCHORS present, no high-risk category fired",
+		"anchors absent, no high-risk category fired",
+		"anchors present; no high-risk category fired",
+	} {
+		if got := classifyBlindSpot(near); got == blindSpotNoSignal {
+			t.Errorf("classifyBlindSpot(%q) = no-signal; only the exact measured "+
+				"phrasing may be recognised, or an unread string acquires a meaning "+
+				"by resembling one that has been", near)
+		}
+	}
+}
+
+// Whitespace and case are normalisation, not a different string.
+func TestTheBenignPhrasingSurvivesNormalisation(t *testing.T) {
+	for _, same := range []string{
+		"  anchors present, no high-risk category fired  ",
+		"Anchors Present, No High-Risk Category Fired",
+	} {
+		if got := classifyBlindSpot(same); got != blindSpotNoSignal {
+			t.Errorf("classifyBlindSpot(%q) = %v, want no-signal", same, got)
+		}
+	}
+}
+
+// The failing-closed default is untouched: anything still unread escalates,
+// and it beats a benign reading in a mixed set.
+func TestUnknownStillFailsClosedBesideABenignSpot(t *testing.T) {
+	r := readBlindSpots([]string{
+		"anchors present, no high-risk category fired",
+		"some future sensei phrasing nobody has classified",
+	})
+	if len(r.Unrecognised) != 1 {
+		t.Fatalf("Unrecognised = %v, want the unread string to survive", r.Unrecognised)
+	}
+	if len(r.NoSignal) != 1 {
+		t.Fatalf("NoSignal = %v, want the benign spot still read", r.NoSignal)
+	}
+}
+
+// A DEGRADED answer carrying "anchors present" contradicts itself, and a
+// self-contradicting instrument is not one to reason from. The degraded path's
+// behaviour is unchanged by this repair.
+func TestABenignSpotDoesNotMakeADegradedAnswerCoverageShaped(t *testing.T) {
+	r := readBlindSpots([]string{
+		"coverage_insufficient: no direct anchors and no indexed files",
+		"anchors present, no high-risk category fired",
+	})
+	if r.degradedIsCoverageShaped() {
+		t.Error("a degraded answer carrying a benign spot was read as coverage-shaped; " +
+			"the rule is that EVERY spot is a recognised coverage marker")
+	}
+}
