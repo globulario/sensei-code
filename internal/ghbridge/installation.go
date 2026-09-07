@@ -15,6 +15,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,6 +84,12 @@ type InstallationAuth struct {
 	mu        sync.Mutex
 	cached    string
 	expiresAt time.Time
+	// granted is what GitHub said this installation may do, captured from the
+	// token response. Guarded by mu with the token it arrived with, because a
+	// refreshed token can carry different grants: an owner may widen or narrow
+	// an installation at any time, and a permission set cached past its token
+	// would answer for a grant that no longer exists.
+	granted map[string]string
 }
 
 // Configured reports whether this auth can mint anything.
@@ -171,8 +178,9 @@ func (a *InstallationAuth) token(ctx context.Context) (string, time.Time, error)
 	}
 
 	var out struct {
-		Token     string `json:"token"`
-		ExpiresAt string `json:"expires_at"`
+		Token       string            `json:"token"`
+		ExpiresAt   string            `json:"expires_at"`
+		Permissions map[string]string `json:"permissions"`
 	}
 	if err := json.Unmarshal(body, &out); err != nil {
 		return "", time.Time{}, fmt.Errorf("installation token response could not be read: %w", err)
@@ -180,6 +188,13 @@ func (a *InstallationAuth) token(ctx context.Context) (string, time.Time, error)
 	if strings.TrimSpace(out.Token) == "" {
 		return "", time.Time{}, errors.New("installation token response carried no token")
 	}
+
+	// GitHub states what this installation may do in the same response that
+	// carries the token, and this package used to discard it. Keeping it is what
+	// lets a missing grant be reported as a missing grant. A permission map is
+	// not credential material -- it names capabilities, never secrets -- so it
+	// may appear in an error where the token beside it never can.
+	a.granted = out.Permissions
 
 	// Expiry is GitHub's statement, not this package's assumption. If it cannot
 	// be parsed, fall back to a conservative short life rather than treating the
@@ -259,4 +274,65 @@ func oneLineLimited(s string, n int) string {
 		return s[:n] + "…"
 	}
 	return s
+}
+
+// ErrMissingPermission reports a capability this installation was never granted.
+var ErrMissingPermission = errors.New("the github app installation lacks a required permission")
+
+// GrantedPermissions reports what GitHub says this installation may do.
+//
+// It mints or reuses a token to learn this, because the grants arrive with the
+// token rather than from a separate endpoint. A copy is returned so a caller
+// cannot mutate what the next check will read.
+func (a *InstallationAuth) GrantedPermissions(ctx context.Context) (map[string]string, error) {
+	if _, _, err := a.token(ctx); err != nil {
+		return nil, err
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make(map[string]string, len(a.granted))
+	for k, v := range a.granted {
+		out[k] = v
+	}
+	return out, nil
+}
+
+// RequireWrite establishes that this installation holds write on a capability.
+//
+// ABSENT and READ are reported differently, because they send an operator to
+// different places: a capability that was never added must be added to the App
+// and the installation update accepted, while one granted read-only is a
+// narrower change. Reporting either as a bare 403 sends them to neither.
+func (a *InstallationAuth) RequireWrite(ctx context.Context, capability string) error {
+	perms, err := a.GrantedPermissions(ctx)
+	if err != nil {
+		return err
+	}
+	level, held := perms[capability]
+	switch {
+	case !held:
+		return fmt.Errorf("%w: %q is not granted to installation %d (granted: %s); add it to the "+
+			"GitHub App under Permissions & events and accept the installation update",
+			ErrMissingPermission, capability, a.InstallationID, describePermissions(perms))
+	case level != "write":
+		return fmt.Errorf("%w: %q is granted %q rather than \"write\" to installation %d; "+
+			"raise it under Permissions & events and accept the installation update",
+			ErrMissingPermission, capability, level, a.InstallationID)
+	}
+	return nil
+}
+
+// describePermissions renders a grant set for an error message. Capability
+// names and levels only: this map never carries a secret, and the token it
+// arrived beside never reaches here.
+func describePermissions(perms map[string]string) string {
+	if len(perms) == 0 {
+		return "none"
+	}
+	names := make([]string, 0, len(perms))
+	for k, v := range perms {
+		names = append(names, k+"="+v)
+	}
+	sort.Strings(names)
+	return strings.Join(names, " ")
 }

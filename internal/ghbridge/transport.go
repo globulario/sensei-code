@@ -301,6 +301,22 @@ func VerifyMailboxIsPullRequest(ctx context.Context, box Issue) error {
 			return fmt.Errorf("%w: %s/%s #%s is an ordinary issue, and the remote actor is woken by "+
 				"pull request activity", ErrNotAPullRequest, box.API.Owner, box.API.Repo, number)
 		}
+		// Being the right KIND of conversation is not the same as being one this
+		// App may post into, and the two were conflated once already: reading
+		// #157 needs only issues:read, so a mailbox that verified perfectly
+		// returned HTTP 403 "Resource not accessible by integration" on the
+		// first request — two seconds after an at-most-once approval receipt had
+		// been spent, which made an unfixable-by-retry configuration error look
+		// like a failed task.
+		//
+		// A PR conversation is reached through the issues endpoint but
+		// authorized against PULL REQUESTS, which is why issues:write is not
+		// enough and why the same endpoint worked for an issue mailbox and not
+		// for this one.
+		if err := box.API.Auth.RequireWrite(ctx, "pull_requests"); err != nil {
+			return fmt.Errorf("the mailbox %s/%s #%s is a pull request this app cannot post to: %w",
+				box.API.Owner, box.API.Repo, number, err)
+		}
 		return nil
 	}
 

@@ -33,17 +33,30 @@ type prMailbox struct {
 	comments     []map[string]any
 	pathsSeen    []string
 	metadataHits int32
+	// grants is what this fake installation reports. Real GitHub returns the
+	// permission set in every token response, so a fake that omitted it would
+	// let a check pass here and fail in production — which is exactly the shape
+	// of the defect these tests exist to prevent.
+	grants map[string]string
 }
 
 func newPRMailbox(t *testing.T, keyPath, number string, isPR bool) (*prMailbox, Issue) {
+	return newPRMailboxWithGrants(t, keyPath, number, isPR,
+		map[string]string{"issues": "write", "pull_requests": "write", "contents": "write", "metadata": "read"})
+}
+
+func newPRMailboxWithGrants(t *testing.T, keyPath, number string, isPR bool, grants map[string]string) (*prMailbox, Issue) {
 	t.Helper()
-	m := &prMailbox{number: number, isPR: isPR}
+	m := &prMailbox{number: number, isPR: isPR, grants: grants}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/app/installations/159521273/access_tokens", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		fmt.Fprintf(w, `{"token":"ghs_installation","expires_at":%q}`,
-			time.Now().Add(time.Hour).UTC().Format(time.RFC3339))
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"token":       "ghs_installation",
+			"expires_at":  time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			"permissions": m.grants,
+		})
 	})
 
 	// Conversation metadata. A PR conversation carries pull_request; an ordinary
@@ -276,5 +289,69 @@ func TestAnUnansweredPRMailboxTurnStillExpires(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("the turn did not respect its bound, took %s", elapsed)
+	}
+}
+
+// The defect this pair exists to prevent: #157 verified as a genuine pull
+// request and the very first post returned HTTP 403, because reading a
+// conversation needs issues:read while posting into a PR conversation is
+// authorized against PULL REQUESTS. Being the right kind of target and being a
+// target this App may write to are different questions, and conflating them
+// spent an at-most-once approval receipt on a task that could never have run.
+func TestAPRMailboxTheAppCannotPostToIsRefused(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	_, box := newPRMailboxWithGrants(t, keyPath, "157", true,
+		map[string]string{"issues": "write", "contents": "write", "metadata": "read"})
+
+	err := VerifyMailboxIsPullRequest(context.Background(), box)
+	if err == nil {
+		t.Fatal("a pull request the app cannot post to was accepted; the first governed " +
+			"request would 403 after an approval receipt had already been spent")
+	}
+	if !errors.Is(err, ErrMissingPermission) {
+		t.Fatalf("refusal did not classify as a missing permission: %v", err)
+	}
+	if !strings.Contains(err.Error(), "pull_requests") {
+		t.Errorf("refusal does not name the missing capability, so an operator cannot act on it: %v", err)
+	}
+	// issues:write is exactly the grant that made the OLD issue mailbox work, so
+	// naming it is what explains why the same endpoint worked before and not now.
+	if !strings.Contains(err.Error(), "issues=write") {
+		t.Errorf("refusal does not show what IS granted: %v", err)
+	}
+}
+
+// Read-only is reported differently from absent, because they send an operator
+// to different remedies.
+func TestAReadOnlyPullRequestGrantIsRefusedAsReadOnly(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	_, box := newPRMailboxWithGrants(t, keyPath, "157", true,
+		map[string]string{"issues": "write", "pull_requests": "read", "metadata": "read"})
+
+	err := VerifyMailboxIsPullRequest(context.Background(), box)
+	if err == nil {
+		t.Fatal("a read-only pull_requests grant was accepted as writable")
+	}
+	if !errors.Is(err, ErrMissingPermission) {
+		t.Fatalf("refusal did not classify as a missing permission: %v", err)
+	}
+	if !strings.Contains(err.Error(), `"read"`) {
+		t.Errorf("refusal does not distinguish read-only from absent: %v", err)
+	}
+}
+
+// A permission map names capabilities, never secrets. The token it arrives
+// beside must not follow it into an error.
+func TestThePermissionRefusalCarriesNoToken(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	_, box := newPRMailboxWithGrants(t, keyPath, "157", true,
+		map[string]string{"issues": "write", "metadata": "read"})
+
+	err := VerifyMailboxIsPullRequest(context.Background(), box)
+	if err == nil {
+		t.Fatal("expected a refusal")
+	}
+	if strings.Contains(err.Error(), "ghs_installation") {
+		t.Fatalf("the installation token reached a permission error: %v", err)
 	}
 }
