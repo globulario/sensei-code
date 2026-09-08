@@ -60,6 +60,25 @@ type Resolver struct {
 	// workflow-supplied architecture binding, so no mutable binding is shared
 	// across concurrent tasks.
 	Reviewer *Runner
+	// Roles is the closed set of role turns this bridge carries.
+	//
+	// Explicit configuration rather than an implied "everything this bridge
+	// knows how to do". A remote party that cannot be relied on for a role
+	// should not be ASKED for that role: a turn that goes out and is never
+	// answered costs the full bounded wait and ends the run, which is a worse
+	// outcome than never having routed it there.
+	//
+	// Narrowing this is not the forbidden fallback. That prohibition is on the
+	// bridge SILENTLY answering locally when it cannot serve a turn it accepted,
+	// which would attribute a plan to a party that did not write it. Declining
+	// to accept the role at all is the opposite: the engine's own ladder serves
+	// it, the record names the provider that actually answered, and nothing is
+	// attributed to anyone. The forbidden fix's own text allows exactly this --
+	// "an explicitly recorded alternative through its own assignment ladder".
+	//
+	// Nil means the historical set, preserved so an existing composition keeps
+	// its meaning. control.go always states it explicitly.
+	Roles map[roles.Role]bool
 	// Doorbell, when set, is carried into each architect turn so a published
 	// request can be pointed at. Nil wherever the remote wake path admits the
 	// App and no locator is needed.
@@ -93,7 +112,7 @@ var ErrBridgeUnavailable = errors.New("the assigned provider's github transport 
 
 // Resolve implements workflow.RunnerResolver.
 func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
-	if r.carries(spec.Agent.Name) {
+	if r.carries(spec.Agent.Name) && r.carriesRole(spec.Role) {
 		switch spec.Role {
 		case roles.Reviewer:
 			if r.Reviewer == nil {
@@ -138,6 +157,20 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 // capturing all of them, so a half-built bridge cannot quietly become the
 // answer for every provider in the ladder. That is why the p != "" test is
 // separate from the comparison rather than folded into it.
+// carriesRole reads the closed set by MEMBERSHIP.
+//
+// A role absent from the set is not carried, and that is decided by asking
+// whether it is present rather than by excluding the ones that are not. Reading
+// a closed vocabulary by exclusion fails open: a role added later would be
+// carried by a bridge nobody configured for it, which is how a transport
+// acquires a turn it was never meant to serve.
+func (r Resolver) carriesRole(role roles.Role) bool {
+	if r.Roles == nil {
+		return role == roles.Architect || role == roles.Reviewer
+	}
+	return r.Roles[role]
+}
+
 func (r Resolver) carries(assigned string) bool {
 	p := strings.TrimSpace(r.Provider)
 	return p != "" && strings.EqualFold(p, strings.TrimSpace(assigned))

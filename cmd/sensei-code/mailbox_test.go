@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/globulario/sensei-code/internal/roles"
 )
 
 // The mailbox is a pull request conversation now, because the remote actor is
@@ -129,5 +131,79 @@ func TestTheControlCommandEstablishesTheMailboxIsAPullRequest(t *testing.T) {
 	banner := strings.Index(src, "fmt.Println(runners.Banner)")
 	if verify < 0 || banner < 0 || verify > banner {
 		t.Error("the mailbox is announced before it is established")
+	}
+}
+
+// The bridge carries an explicit set of roles. Narrowing it is how an operator
+// says "do not ask the remote party for this" — which is the opposite of the
+// forbidden fallback, where the bridge accepts a turn and then answers it
+// locally without saying so.
+func TestTheCarriedRoleVocabularyIsReadByMembership(t *testing.T) {
+	for spec, want := range map[string][]roles.Role{
+		"architect,reviewer": {roles.Architect, roles.Reviewer},
+		"reviewer":           {roles.Reviewer},
+		"architect":          {roles.Architect},
+		" Reviewer , ":       {roles.Reviewer},
+		"none":               nil,
+		"":                   nil,
+	} {
+		t.Run(spec, func(t *testing.T) {
+			got, err := parseBridgeRoles(spec)
+			if err != nil {
+				t.Fatalf("refused a valid spec: %v", err)
+			}
+			if len(got) != len(want) {
+				t.Fatalf("parsed %v, want %v", got, want)
+			}
+			for _, r := range want {
+				if !got[r] {
+					t.Errorf("%v missing from the carried set", r)
+				}
+			}
+		})
+	}
+}
+
+// An unknown word is refused, never ignored. A misspelling silently dropped
+// would leave the operator believing a role is carried while the bridge never
+// accepts it, and the only symptom would be a turn quietly served elsewhere.
+func TestAnUnknownRoleWordIsRefused(t *testing.T) {
+	for _, spec := range []string{"architekt", "implementer", "reviewer,hunter", "all", "*"} {
+		if _, err := parseBridgeRoles(spec); err == nil {
+			t.Errorf("parseBridgeRoles(%q) was accepted; an unread word must not become a silent no-op", spec)
+		}
+	}
+}
+
+// "none" is exclusive: saying none AND naming a role is a contradiction, not a
+// precedence puzzle to resolve quietly.
+func TestNoneCannotBeCombinedWithARole(t *testing.T) {
+	if _, err := parseBridgeRoles("none,reviewer"); err == nil {
+		t.Error("a spec that says none and also names a role was accepted")
+	}
+}
+
+// The operator's line must state what is actually carried, so a narrowed bridge
+// cannot look like a full one.
+func TestTheBannerNamesTheCarriedRoles(t *testing.T) {
+	server := newControlServer(t)
+	for spec, want := range map[string]string{
+		"architect,reviewer": "architect+reviewer",
+		"reviewer":           "reviewer",
+		"none":               "no roles",
+	} {
+		gh := configuredBridge()
+		parsed, err := parseBridgeRoles(spec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gh.Roles = parsed
+		got, err := composeEngineResolver(server, testRepoRoot, "sess-roles", gh)
+		if err != nil {
+			t.Fatalf("%s: %v", spec, err)
+		}
+		if !strings.Contains(got.Banner, want) {
+			t.Errorf("roles %q: banner %q does not say %q", spec, got.Banner, want)
+		}
 	}
 }

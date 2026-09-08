@@ -8,8 +8,10 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // A wake carries one locator and nothing else. These pin that the doorbell
@@ -200,5 +202,65 @@ func TestTheDoorbellIsSeparateFromTheAppTransport(t *testing.T) {
 func TestADoorbellWithNoConversationRefuses(t *testing.T) {
 	if err := (GHDoorbell{Dir: t.TempDir()}).Ring(context.Background(), 42); err == nil {
 		t.Error("a doorbell with no conversation rang anyway")
+	}
+}
+
+// A role the bridge does not carry reaches the engine's own ladder untouched.
+// This is the difference from the forbidden fallback: the bridge never accepts
+// the turn, so nothing is attributed to a party that did not answer it.
+func TestARoleTheBridgeDoesNotCarryReachesTheFallback(t *testing.T) {
+	fb := &recordingResolver{}
+	reviewer := &Runner{Issue: Issue{Number: "157",
+		ExpectedReviewer: Principal{UserID: 1697116, Login: "davecourtois"}}}
+	r := Resolver{
+		Provider: "chatgpt",
+		Roles:    map[roles.Role]bool{roles.Reviewer: true}, // architect NOT carried
+		Reviewer: reviewer,
+		Fallback: fb,
+	}
+
+	_, err := r.Resolve(workflow.RunnerSpec{
+		Role:         roles.Architect,
+		Agent:        config.Agent{Name: "chatgpt"},
+		TaskID:       architectureBinding().TaskID,
+		Architecture: architectureBinding(),
+	})
+	if err != nil {
+		t.Fatalf("an uncarried architect turn errored instead of reaching the ladder: %v", err)
+	}
+	if len(fb.saw) != 1 {
+		t.Fatalf("fallback saw %d turns, want the architect turn", len(fb.saw))
+	}
+
+	// The carried role still goes over the bridge.
+	got, err := r.Resolve(workflow.RunnerSpec{Role: roles.Reviewer, Agent: config.Agent{Name: "chatgpt"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if carried, ok := got.Runner.(*Runner); !ok || carried != reviewer {
+		t.Errorf("a carried role stopped being carried: %T", got.Runner)
+	}
+}
+
+// none means none: every role reaches the ladder, and the bridge accepts nothing.
+func TestABridgeCarryingNoRolesAcceptsNothing(t *testing.T) {
+	fb := &recordingResolver{}
+	r := Resolver{
+		Provider: "chatgpt",
+		Roles:    map[roles.Role]bool{},
+		Reviewer: &Runner{Issue: Issue{Number: "157",
+			ExpectedReviewer: Principal{UserID: 1697116, Login: "davecourtois"}}},
+		Fallback: fb,
+	}
+	for _, role := range []roles.Role{roles.Architect, roles.Reviewer} {
+		if _, err := r.Resolve(workflow.RunnerSpec{
+			Role: role, Agent: config.Agent{Name: "chatgpt"},
+			TaskID: architectureBinding().TaskID, Architecture: architectureBinding(),
+		}); err != nil {
+			t.Fatalf("%v: %v", role, err)
+		}
+	}
+	if len(fb.saw) != 2 {
+		t.Fatalf("fallback saw %d turns, want both", len(fb.saw))
 	}
 }

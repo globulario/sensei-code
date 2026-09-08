@@ -18,6 +18,7 @@ import (
 	"github.com/globulario/sensei-code/internal/ghbridge"
 	"github.com/globulario/sensei-code/internal/ghwebhook"
 	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/workflow"
@@ -89,6 +90,9 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	// The GitHub review bridge, off unless explicitly configured. All three
 	// must be given together: an issue nobody answers on, or a mailbox that
 	// cannot authenticate a sender, is not a usable bridge.
+	ghRoles := fs.String("github-bridge-roles", "architect,reviewer",
+		"comma-separated role turns the GitHub bridge carries: architect, reviewer, or none. "+
+			"A role left out is served by the engine's own assignment ladder and recorded as such")
 	ghDoorbell := fs.Bool("github-doorbell", false,
 		"after publishing a request as the App, post a [sensei-code:wake] locator through the operator's gh "+
 			"credentials; needed only where the remote wake path does not admit App-authored comments")
@@ -196,6 +200,10 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	if err != nil {
 		return err
 	}
+	bridgeRoles, err := parseBridgeRoles(*ghRoles)
+	if err != nil {
+		return err
+	}
 	runners, err := composeEngineResolver(server, repo.Root, engine.SessionID, githubBridgeConfig{
 		MailboxPR:     mailboxPR,
 		ReviewerID:    *ghReviewerID,
@@ -203,6 +211,7 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		Provider:      *ghProvider,
 		Remote:        *ghRemote,
 		Wait:          *ghWait,
+		Roles:         bridgeRoles,
 		Doorbell:      *ghDoorbell,
 		App: ghbridge.AppConfig{
 			AppID:          *ghAppID,
@@ -315,6 +324,8 @@ type githubBridgeConfig struct {
 	Remote        string
 	Wait          time.Duration
 	App           ghbridge.AppConfig
+	// Roles is the closed set of role turns the bridge carries, already parsed.
+	Roles map[roles.Role]bool
 	// Doorbell enables the wake locator. Off by default: it exists only for a
 	// remote wake path that cannot see the App, and it posts under the
 	// operator's account, so it is an explicit choice rather than a silent
@@ -354,6 +365,55 @@ func effectiveMailbox(mailboxPR, legacyIssue string) (string, error) {
 	default:
 		return legacy, nil
 	}
+}
+
+// parseBridgeRoles reads the closed role vocabulary by MEMBERSHIP.
+//
+// Only "architect", "reviewer" and "none" are words here. Anything else is
+// refused rather than ignored, because a misspelling silently dropped would
+// leave the operator believing a role is carried when the bridge never accepts
+// it -- and the symptom would be a turn served locally with no indication that
+// the configuration meant otherwise.
+//
+// "none" is exclusive. Combining it with a role is a contradiction, not a
+// precedence puzzle to resolve quietly.
+func parseBridgeRoles(spec string) (map[roles.Role]bool, error) {
+	out := map[roles.Role]bool{}
+	var sawNone bool
+	for _, field := range strings.Split(spec, ",") {
+		switch name := strings.ToLower(strings.TrimSpace(field)); name {
+		case "":
+			continue
+		case "none":
+			sawNone = true
+		case "architect":
+			out[roles.Architect] = true
+		case "reviewer":
+			out[roles.Reviewer] = true
+		default:
+			return nil, fmt.Errorf("-github-bridge-roles: %q is not a role this bridge carries "+
+				"(architect, reviewer, none)", name)
+		}
+	}
+	if sawNone && len(out) != 0 {
+		return nil, fmt.Errorf("-github-bridge-roles: %q says none and also names roles", spec)
+	}
+	return out, nil
+}
+
+// describeRoles renders the carried set for the operator's one line.
+func describeRoles(set map[roles.Role]bool) string {
+	var named []string
+	if set[roles.Architect] {
+		named = append(named, "architect")
+	}
+	if set[roles.Reviewer] {
+		named = append(named, "reviewer")
+	}
+	if len(named) == 0 {
+		return "no roles"
+	}
+	return strings.Join(named, "+")
 }
 
 // engineResolver is what an engine will consult for its role turns, plus the
@@ -431,6 +491,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	}
 
 	resolver := ghbridge.Resolver{
+		Roles:    gh.Roles,
 		Doorbell: doorbell,
 		Provider: strings.TrimSpace(gh.Provider),
 		Reviewer: &ghbridge.Runner{
@@ -452,8 +513,8 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			gh.App.AppID, gh.App.InstallationID,
 			strings.TrimSpace(gh.App.Owner), strings.TrimSpace(gh.App.Repo))
 	}
-	banner := fmt.Sprintf("github bridge: PR #%s conversation, reviewer %s, carrying provider %q, mailbox via %s",
-		box.Number, box.ExpectedReviewer, strings.TrimSpace(gh.Provider), transport)
+	banner := fmt.Sprintf("github bridge: PR #%s conversation, reviewer %s, carrying provider %q for %s, mailbox via %s",
+		box.Number, box.ExpectedReviewer, strings.TrimSpace(gh.Provider), describeRoles(gh.Roles), transport)
 
 	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box}, nil
 }
