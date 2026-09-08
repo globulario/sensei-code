@@ -2702,7 +2702,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// established none of the technical premises and that the consequence
 	// assessment did not consult who asked.
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
-		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing.Route, d).Render(), nil))
+		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render(), nil))
 
 	return routing, scoped, action, nil
 }

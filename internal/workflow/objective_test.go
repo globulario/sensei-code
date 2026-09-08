@@ -39,7 +39,7 @@ func TestAHumanObjectiveDoesNotEstablishItsTechnicalPremises(t *testing.T) {
 	s := StateAuthority(
 		Objective{Text: "reduce internal surface area without changing observable behavior",
 			Provenance: RequestedByHuman},
-		d.Claims, AssessConsequences(editAction(d.Files...)), RouteCloseGap, d)
+		d.Claims, AssessConsequences(editAction(d.Files...)), Routing{Route: RouteCloseGap}, d)
 
 	if !s.ObjectiveEstablished {
 		t.Fatal("a human typing /run did not establish the objective they typed")
@@ -77,9 +77,9 @@ func TestIdenticalWordingIsNotIdenticalAuthority(t *testing.T) {
 	assessment := AssessConsequences(editAction(d.Files...))
 
 	human := StateAuthority(Objective{Text: text, Provenance: RequestedByHuman},
-		d.Claims, assessment, RouteArchitectural, d)
+		d.Claims, assessment, Routing{Route: RouteArchitectural}, d)
 	robot := StateAuthority(Objective{Text: text, Provenance: SubmittedUnattended},
-		d.Claims, assessment, RouteArchitectural, d)
+		d.Claims, assessment, Routing{Route: RouteArchitectural}, d)
 
 	if human.Objective.Text != robot.Objective.Text {
 		t.Fatal("the specimen is wrong: the two objectives must be word-for-word identical")
@@ -146,7 +146,7 @@ func TestAHumanObjectiveDoesNotClearAnOutwardConsequence(t *testing.T) {
 	d := consolidationPlan()
 	s := StateAuthority(Objective{Text: "reduce internal surface area", Provenance: RequestedByHuman},
 		d.Claims, AssessConsequences(Action{Stage: StagePublish, Files: []string{"internal/publish/publish.go"}}),
-		RouteHuman, d)
+		Routing{Route: RouteHuman}, d)
 	if out := s.Render(); !strings.Contains(out, "not from who asked") {
 		t.Errorf("the consequence lane does not state its independence:\n%s", out)
 	}
@@ -161,7 +161,7 @@ func TestAnArchitectCriterionDoesNotBecomeTheUsersValue(t *testing.T) {
 
 	// The human asked for the outcome, not for the criterion.
 	s := StateAuthority(Objective{Text: "reduce internal surface area without changing observable behavior",
-		Provenance: RequestedByHuman}, d.Claims, AssessConsequences(editAction(d.Files...)), RouteCloseGap, d)
+		Provenance: RequestedByHuman}, d.Claims, AssessConsequences(editAction(d.Files...)), Routing{Route: RouteCloseGap}, d)
 
 	joined := strings.Join(s.ArchitectProposals, " | ")
 	if !strings.Contains(joined, "minimize") {
@@ -174,7 +174,7 @@ func TestAnArchitectCriterionDoesNotBecomeTheUsersValue(t *testing.T) {
 	// And a criterion the human DID ask for is theirs, not reported back at
 	// them as the architect's invention.
 	asked := StateAuthority(Objective{Text: "minimize the package count under internal/",
-		Provenance: RequestedByHuman}, d.Claims, AssessConsequences(editAction(d.Files...)), RouteCloseGap, d)
+		Provenance: RequestedByHuman}, d.Claims, AssessConsequences(editAction(d.Files...)), Routing{Route: RouteCloseGap}, d)
 	for _, p := range asked.ArchitectProposals {
 		if strings.Contains(p, "minimize") {
 			t.Errorf("a criterion the human asked for was attributed to the architect: %q", p)

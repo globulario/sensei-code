@@ -100,6 +100,42 @@ type AuthorityStatement struct {
 	// Route is where the plan was sent, carried so the statement and the
 	// decision cannot describe different moments.
 	Route Route
+	// Basis says what the stop RESTS ON, and Closes names the remedy when it
+	// rests on absent knowledge.
+	//
+	// Carried here because a classification nobody reads is not a
+	// classification. The route already told the reader WHO decides; without
+	// these two it still cannot tell whether a person is being asked to weigh
+	// something or merely to notice that the graph could not see. Those want
+	// opposite responses -- one a decision, one a derivation -- and only one of
+	// them needs a human at all.
+	Basis  RefusalBasis
+	Closes string
+}
+
+// basisLine renders the basis for a reader, and says how an unclassified one is
+// enforced.
+//
+// "unclassified" alone is ambiguous to the only audience this line has. A
+// reader of the text cannot call ProtectsValue(), and the natural reading of
+// "unclassified" is UNKNOWN rather than treat-as-protected -- which is the
+// permissive reading, and the opposite of what the zero value enforces.
+//
+// The word is kept rather than replaced. Rendering it as "protects-value"
+// would erase the fact that no classification was supplied, and that absence is
+// itself part of the record: a stop nobody labelled and a stop deliberately
+// labelled protective are different facts about how carefully the routing was
+// described. So the output states both -- what was supplied, and what is
+// enforced in its absence.
+//
+// The safety itself is untouched. BasisUnclassified remains the zero value and
+// ProtectsValue() still reads it as protective; this repairs only what the
+// reader is told.
+func (s AuthorityStatement) basisLine() string {
+	if s.Basis == BasisUnclassified {
+		return s.Basis.String() + " (treated as protects value)"
+	}
+	return s.Basis.String()
 }
 
 // TechnicalPremise is one claim the plan rests on.
@@ -127,12 +163,14 @@ type TechnicalPremise struct {
 // no path by which an architect's rationale, a plan's steps, or a provider's
 // wording can reach it, so no actor gains authority over one lane by
 // controlling another.
-func StateAuthority(objective Objective, claims []Claim, assessment ConsequenceAssessment, route Route, d architectureDecision) AuthorityStatement {
+func StateAuthority(objective Objective, claims []Claim, assessment ConsequenceAssessment, routing Routing, d architectureDecision) AuthorityStatement {
 	s := AuthorityStatement{
 		Objective:            objective,
 		ObjectiveEstablished: objective.HumanAuthorized(),
 		Consequence:          assessment,
-		Route:                route,
+		Route:                routing.Route,
+		Basis:                routing.Basis,
+		Closes:               routing.Closes,
 	}
 	for _, c := range claims {
 		s.Technical = append(s.Technical, TechnicalPremise{
@@ -255,5 +293,12 @@ func (s AuthorityStatement) Render() string {
 	b.WriteString("  assessed from the action, not from who asked and not from whether the plan " +
 		"satisfies the objective.\n")
 	b.WriteString("\nrouted: " + string(s.Route) + "\n")
+	// Machine-readable and on their own lines, because the next reader of this
+	// block is as likely to be an agent as a person, and an agent acting on a
+	// stop needs to know whether there is anything it may do about it.
+	b.WriteString("basis: " + s.basisLine() + "\n")
+	if s.Closes != "" {
+		b.WriteString("closes: " + s.Closes + "\n")
+	}
 	return b.String()
 }

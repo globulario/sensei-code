@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/globulario/sensei-code/internal/event"
 )
 
 // The exact strings the live graph produced, so the classifier is pinned to the
@@ -497,5 +499,119 @@ func TestTheBasisNeverDecidesARoute(t *testing.T) {
 			t.Errorf("authority.go:%d reads the refusal basis in a control-flow decision: %q\n"+
 				"the classification must describe a stop, never cause one", i+1, trimmed)
 		}
+	}
+}
+
+// A classification nobody reads is not a classification. The basis must reach
+// the block an operator -- or an agent -- actually sees, beside the route that
+// already told them who decides.
+func TestTheRenderedStatementCarriesTheBasisAndItsRemedy(t *testing.T) {
+	obj := Objective{Text: "repair the thing", Provenance: SubmittedUnattended}
+	bounded := ConsequenceAssessment{Result: ConsequenceBounded, Boundary: "the candidate worktree"}
+
+	knowledge := StateAuthority(obj, nil, bounded, Routing{
+		Route:  RouteHuman,
+		Basis:  BasisLacksKnowledge,
+		Closes: "a reading for that blind-spot phrasing",
+	}, architectureDecision{}).Render()
+
+	if !strings.Contains(knowledge, "basis: lacks-knowledge") {
+		t.Errorf("a knowledge-limited stop did not say so where it is read:\n%s", knowledge)
+	}
+	if !strings.Contains(knowledge, "closes: a reading for that blind-spot phrasing") {
+		t.Errorf("a knowledge-limited stop did not carry its remedy:\n%s", knowledge)
+	}
+
+	value := StateAuthority(obj, nil, bounded, Routing{
+		Route: RouteHuman,
+		Basis: BasisProtectsValue,
+	}, architectureDecision{}).Render()
+
+	if !strings.Contains(value, "basis: protects-value") {
+		t.Errorf("a value-protecting stop did not say so:\n%s", value)
+	}
+	// A value-protecting stop has no remedy to offer, and must not invent one.
+	if strings.Contains(value, "closes:") {
+		t.Errorf("a value-protecting stop offered a remedy; nothing closes a decision "+
+			"somebody has to make:\n%s", value)
+	}
+
+	// Both stops route identically. The basis is the only thing that separates
+	// "weigh this" from "I could not see", which is the whole point.
+	if !strings.Contains(knowledge, "routed: human-authority-required") ||
+		!strings.Contains(value, "routed: human-authority-required") {
+		t.Error("the two stops no longer share a route; this test is not comparing what it thinks")
+	}
+}
+
+// The zero value's READER-VISIBLE meaning, through the same path the journal
+// reader consumes: StateAuthority(...).Render() becomes the Summary of a
+// SourceSystem/Status event, which is the "Authority for this plan, by lane."
+// block an operator or an agent actually reads.
+//
+// This is the case that had no test, and it is exactly the case whose rendered
+// form was ambiguous: ProtectsValue() enforces the protective default, but a
+// reader of the text cannot call it, and "unclassified" alone reads as UNKNOWN
+// -- the permissive reading, and the opposite of what is enforced.
+func TestAnUnclassifiedBasisRendersItsEnforcedPosture(t *testing.T) {
+	rendered := StateAuthority(
+		Objective{Text: "repair the thing", Provenance: SubmittedUnattended},
+		nil,
+		ConsequenceAssessment{Result: ConsequenceBounded, Boundary: "the candidate worktree"},
+		Routing{Route: RouteHuman}, // Basis deliberately left at its zero value
+		architectureDecision{},
+	).Render()
+
+	// Carried into the event exactly as the engine does it, so what is asserted
+	// is the string the journal prints rather than an intermediate value.
+	journalLine := event.New("sess", "t1", event.SourceSystem, event.Status, rendered, nil).Summary
+
+	if !strings.Contains(journalLine, "basis: unclassified (treated as protects value)") {
+		t.Fatalf("the zero value does not tell a reader how it is enforced:\n%s", journalLine)
+	}
+	// The absence of a classification must survive into the record. Rendering
+	// it as protects-value would erase the difference between a stop nobody
+	// labelled and one deliberately labelled protective.
+	if !strings.Contains(journalLine, "unclassified") {
+		t.Error("the record no longer shows that no classification was supplied")
+	}
+	// Nothing closes a decision somebody has to make.
+	if strings.Contains(journalLine, "closes:") {
+		t.Errorf("an unclassified stop offered a remedy:\n%s", journalLine)
+	}
+	// The enforced posture in the text must agree with the code that enforces it.
+	if !(Routing{Route: RouteHuman}).ProtectsValue() {
+		t.Error("the rendered posture and ProtectsValue() disagree about the zero value")
+	}
+}
+
+// The last wire: production must put the RENDERED authority statement into the
+// event, not something else.
+//
+// A source check, and it stays one for the same reason the resolver
+// installation is pinned that way — an emission that was replaced cannot be
+// observed by calling the function that is no longer called. The test above
+// proves what Render() produces and that an event carries it; it constructs
+// its own event, so it keeps passing if engine.go stops emitting the statement
+// entirely.
+//
+// That gap is not hypothetical. Replacing the emission with routing.Condition
+// leaves the whole suite green, which means the basis line could vanish from
+// the journal with nothing to notice.
+func TestTheEngineEmitsTheRenderedAuthorityStatement(t *testing.T) {
+	source, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render()") {
+		t.Error("the engine no longer emits the rendered authority statement; the basis " +
+			"line reaches no reader, and every test about its content still passes")
+	}
+	// It must be the whole statement, carried as the event's own summary.
+	// Truncating or reformatting it here would silently change what the journal
+	// shows while every rendering test kept passing.
+	if !strings.Contains(src, "event.SourceSystem, event.Status,\n\t\tStateAuthority(") {
+		t.Error("the authority statement is no longer the summary of a SourceSystem/Status event")
 	}
 }
