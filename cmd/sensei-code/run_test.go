@@ -19,6 +19,13 @@ type fakeControl struct {
 	// settled models a task the ENGINE has already terminalized. The real
 	// engine reports this by finding no live task to claim.
 	settled bool
+	// onTimeOut fires when the deadline claims the task, so a test can make
+	// the engine's terminal arrive AS A CONSEQUENCE of the claim rather than
+	// racing it. Without that ordering a pre-sent terminal makes both select
+	// cases ready at once, and which one wins is Go's random choice -- the
+	// exact ambiguity streamUntilSettled was written to remove, reintroduced
+	// by the test that checks it.
+	onTimeOut func()
 }
 
 // TimeOut records that the stop was a DEADLINE, which is different evidence
@@ -33,6 +40,9 @@ func (f *fakeControl) TimeOut(taskID, budget string) bool {
 		return false
 	}
 	f.timedOut = append(f.timedOut, taskID+" "+budget)
+	if f.onTimeOut != nil {
+		f.onTimeOut()
+	}
 	return f.Stop(taskID)
 }
 
@@ -342,14 +352,19 @@ func TestATimeoutRacingItsOwnTerminalSettlesOnce(t *testing.T) {
 // WINS: it claims the task, records the deadline as the cause, and the engine's
 // WorkflowTimedOut is what the invocation reports.
 func TestADeadlineClaimsAStillLiveTask(t *testing.T) {
-	ctrl := &fakeControl{}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	// Nothing is buffered: the engine has not accounted yet, so the ctx case is
-	// the only ready one and the claim path is the one under test.
+	// The engine has not accounted yet, so the ctx case must be the ONLY ready
+	// one and the claim path is the one under test.
+	//
+	// The terminal therefore arrives as a consequence of the claim, not before
+	// it. Sending it up front left both select cases ready and let Go's random
+	// choice decide which path ran -- the test passed on a workstation and
+	// failed on a runner, and it is the same ambiguity streamUntilSettled
+	// exists to remove.
 	events := make(chan event.Event, 1)
-	go func() { events <- ev("t1", event.WorkflowTimedOut) }()
+	ctrl := &fakeControl{onTimeOut: func() { events <- ev("t1", event.WorkflowTimedOut) }}
 
 	if code := streamUntilSettled(ctx, ctrl, events, "t1", false, true, 25*time.Minute); code != exitTimeout {
 		t.Fatalf("exit = %d, want exitTimeout", code)
