@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/control"
 	"github.com/globulario/sensei-code/internal/ghwebhook"
@@ -688,5 +691,219 @@ func TestAnIncompatibleControlProcessIsRefusedBeforeTheApprovalTokenIsSpent(t *t
 	}
 	if n := countApprovals(t, root); n != 1 {
 		t.Fatalf("the retried approval left %d receipts, want 1", n)
+	}
+}
+
+// The other mixed-version direction, at the same boundary.
+//
+// TestAnIncompatibleControlProcess... covers new client -> old server with the
+// real DialLocalObjective. This covers old client -> new server, which cannot
+// use the real client (that code is a previous revision) and cannot stand up
+// the real server either: control.Server decides the peer from the kernel, and
+// a test binary has no controlling terminal.
+//
+// So the CLIENT shapes are reproduced verbatim and the server implements the
+// ordering that internal/control pins against the real one -- nothing is said
+// here about the server that is not proved there. What is real, and is the
+// point, is everything after the authorizer: approveObjectiveProposal,
+// store.BeginApproval and the durable receipts.
+func TestALegacyClientIsRefusedBeforeTheApprovalTokenIsSpent(t *testing.T) {
+	for _, shape := range []struct {
+		name string
+		dial func(t *testing.T, sock string) error
+	}{{
+		// Pre-readiness: writes its objective first and reads the whole
+		// connection as one value.
+		name: "objective first",
+		dial: func(t *testing.T, sock string) error {
+			conn, err := net.Dial("unix", sock)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+			if _, err := conn.Write([]byte(`{"task":"x"}`)); err != nil {
+				return err
+			}
+			if unix, ok := conn.(*net.UnixConn); ok {
+				_ = unix.CloseWrite()
+			}
+			raw, err := io.ReadAll(io.LimitReader(conn, 64<<10))
+			if err != nil {
+				return err
+			}
+			var refusal struct {
+				Error string `json:"error"`
+			}
+			if json.Unmarshal(bytes.TrimSpace(raw), &refusal) == nil && refusal.Error != "" {
+				return errors.New(refusal.Error)
+			}
+			return errors.New("no readiness and no refusal")
+		},
+	}, {
+		// Readiness-aware but negotiation-unaware: waits to be told it may
+		// proceed. The server will not speak until identified, so this ends at
+		// the client's own bound.
+		name: "waits for readiness",
+		dial: func(t *testing.T, sock string) error {
+			conn, err := net.Dial("unix", sock)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			_ = conn.SetDeadline(time.Now().Add(750 * time.Millisecond))
+			var ready map[string]any
+			if err := json.NewDecoder(conn).Decode(&ready); err != nil {
+				return fmt.Errorf("the control process did not answer the objective handshake: %w", err)
+			}
+			return errors.New("readiness was granted to an unidentified client")
+		},
+	}} {
+		t.Run(shape.name, func(t *testing.T) {
+			root := gitRepo(t)
+			seedProposalIn(t, root)
+
+			sock, submissions := currentProtocolServer(t, root)
+			legacy := func(string) (authorizedSubmitter, error) { return nil, shape.dial(t, sock) }
+
+			err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, legacy, canonicalIsClean)
+			if err == nil {
+				t.Fatal("a legacy client approved the proposal")
+			}
+			// This text belongs to failures AFTER the token is spent.
+			if strings.Contains(err.Error(), "fail-closed approval state") {
+				t.Fatalf("the mismatch was refused after the token was spent: %v", err)
+			}
+			if n := countApprovals(t, root); n != 0 {
+				t.Fatalf("a legacy client left %d approval receipts", n)
+			}
+			select {
+			case task := <-submissions:
+				t.Fatalf("an objective reached the engine: %q", task)
+			default:
+			}
+
+			// Pending and retryable, which is the whole difference.
+			after := okAuthorizer(t, root)
+			if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, after.authorize, canonicalIsClean); err != nil {
+				t.Fatalf("the proposal was spent by a legacy-client refusal: %v", err)
+			}
+			if after.conn.got != wantObjective {
+				t.Errorf("submitted %q", after.conn.got)
+			}
+			if n := countApprovals(t, root); n != 1 {
+				t.Fatalf("the retried approval left %d receipts, want 1", n)
+			}
+		})
+	}
+}
+
+// currentProtocolServer answers with the ordering internal/control pins against
+// the real Server: nothing is said until the peer identifies itself with a
+// compatible protocol.
+func currentProtocolServer(t *testing.T, root string) (string, chan string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(control.LocalSocketPath(root)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A unix socket path is capped near 108 bytes; t.TempDir() plus a test name
+	// overruns it, so bind short and let callers dial the short path.
+	dir, err := os.MkdirTemp("", "sc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	ln, err := net.Listen("unix", filepath.Join(dir, "s.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = ln.Close() })
+	// Symlinked to the path the production client derives from the repo root,
+	// so dialLocalObjective is exercised unchanged rather than through a
+	// test-only entry point added to the package for this.
+	sock := control.LocalSocketPath(root)
+	if err := os.Symlink(filepath.Join(dir, "s.sock"), sock); err != nil {
+		t.Fatal(err)
+	}
+
+	submissions := make(chan string, 4)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
+				dec := json.NewDecoder(conn)
+				dec.DisallowUnknownFields()
+				var hello control.LocalHello
+				if err := dec.Decode(&hello); err != nil {
+					_ = json.NewEncoder(conn).Encode(map[string]any{
+						"error": "this channel expects a protocol hello before an objective; nothing durable was spent"})
+					return
+				}
+				if hello.Protocol < control.LocalProtocolStreamedReplies {
+					_ = json.NewEncoder(conn).Encode(map[string]any{
+						"error": "stale objective protocol; nothing durable was spent"})
+					return
+				}
+				_ = json.NewEncoder(conn).Encode(control.LocalReady{
+					Ready: true, Workspace: "current", Protocol: control.LocalProtocolStreamedReplies})
+				var in control.LocalSubmission
+				if dec.Decode(&in) == nil && in.Task != "" {
+					submissions <- in.Task
+					_ = json.NewEncoder(conn).Encode(control.LocalAccepted{
+						TaskID:     "task-current",
+						Provenance: "local-operator",
+						Workspace:  "current",
+					})
+				}
+			}()
+		}
+	}()
+	return sock, submissions
+}
+
+// The positive control at the proposal boundary, over the real client.
+//
+// A guard that refuses every peer would pass every refusal test above and be
+// useless. This runs the production DialLocalObjective against a compatible
+// control process and requires the whole chain to complete: readiness, one
+// objective on the wire, one task, and one completed receipt.
+func TestTheCurrentPairApprovesOnceThroughTheProposalBoundary(t *testing.T) {
+	root := gitRepo(t)
+	seedProposalIn(t, root)
+
+	sock, submissions := currentProtocolServer(t, root)
+	// The production authorizer, pointed at the compatible process.
+	_ = sock
+	authorize := dialLocalObjective
+
+	var out bytes.Buffer
+	if err := approveObjectiveProposal(root, testProposalComment, &out, authorize, canonicalIsClean); err != nil {
+		t.Fatalf("a compatible pair was refused: %v", err)
+	}
+	// Exactly one objective crossed the wire, and it is the stored bytes.
+	select {
+	case task := <-submissions:
+		if task != wantObjective {
+			t.Errorf("submitted %q, want %q", task, wantObjective)
+		}
+	default:
+		t.Fatal("no objective reached the control process")
+	}
+	select {
+	case extra := <-submissions:
+		t.Fatalf("a second objective was submitted: %q", extra)
+	default:
+	}
+	// Exactly one completed receipt.
+	if n := countApprovals(t, root); n != 1 {
+		t.Fatalf("approval left %d receipts, want 1", n)
+	}
+	if !strings.Contains(out.String(), "task ") {
+		t.Errorf("the approval printed no task: %q", out.String())
 	}
 }
