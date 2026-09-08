@@ -4,6 +4,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/globulario/sensei-code/internal/event"
 )
 
 // The exact strings the live graph produced, so the classifier is pinned to the
@@ -539,5 +541,46 @@ func TestTheRenderedStatementCarriesTheBasisAndItsRemedy(t *testing.T) {
 	if !strings.Contains(knowledge, "routed: human-authority-required") ||
 		!strings.Contains(value, "routed: human-authority-required") {
 		t.Error("the two stops no longer share a route; this test is not comparing what it thinks")
+	}
+}
+
+// The zero value's READER-VISIBLE meaning, through the same path the journal
+// reader consumes: StateAuthority(...).Render() becomes the Summary of a
+// SourceSystem/Status event, which is the "Authority for this plan, by lane."
+// block an operator or an agent actually reads.
+//
+// This is the case that had no test, and it is exactly the case whose rendered
+// form was ambiguous: ProtectsValue() enforces the protective default, but a
+// reader of the text cannot call it, and "unclassified" alone reads as UNKNOWN
+// -- the permissive reading, and the opposite of what is enforced.
+func TestAnUnclassifiedBasisRendersItsEnforcedPosture(t *testing.T) {
+	rendered := StateAuthority(
+		Objective{Text: "repair the thing", Provenance: SubmittedUnattended},
+		nil,
+		ConsequenceAssessment{Result: ConsequenceBounded, Boundary: "the candidate worktree"},
+		Routing{Route: RouteHuman}, // Basis deliberately left at its zero value
+		architectureDecision{},
+	).Render()
+
+	// Carried into the event exactly as the engine does it, so what is asserted
+	// is the string the journal prints rather than an intermediate value.
+	journalLine := event.New("sess", "t1", event.SourceSystem, event.Status, rendered, nil).Summary
+
+	if !strings.Contains(journalLine, "basis: unclassified (treated as protects value)") {
+		t.Fatalf("the zero value does not tell a reader how it is enforced:\n%s", journalLine)
+	}
+	// The absence of a classification must survive into the record. Rendering
+	// it as protects-value would erase the difference between a stop nobody
+	// labelled and one deliberately labelled protective.
+	if !strings.Contains(journalLine, "unclassified") {
+		t.Error("the record no longer shows that no classification was supplied")
+	}
+	// Nothing closes a decision somebody has to make.
+	if strings.Contains(journalLine, "closes:") {
+		t.Errorf("an unclassified stop offered a remedy:\n%s", journalLine)
+	}
+	// The enforced posture in the text must agree with the code that enforces it.
+	if !(Routing{Route: RouteHuman}).ProtectsValue() {
+		t.Error("the rendered posture and ProtectsValue() disagree about the zero value")
 	}
 }

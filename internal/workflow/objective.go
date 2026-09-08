@@ -113,6 +113,31 @@ type AuthorityStatement struct {
 	Closes string
 }
 
+// basisLine renders the basis for a reader, and says how an unclassified one is
+// enforced.
+//
+// "unclassified" alone is ambiguous to the only audience this line has. A
+// reader of the text cannot call ProtectsValue(), and the natural reading of
+// "unclassified" is UNKNOWN rather than treat-as-protected -- which is the
+// permissive reading, and the opposite of what the zero value enforces.
+//
+// The word is kept rather than replaced. Rendering it as "protects-value"
+// would erase the fact that no classification was supplied, and that absence is
+// itself part of the record: a stop nobody labelled and a stop deliberately
+// labelled protective are different facts about how carefully the routing was
+// described. So the output states both -- what was supplied, and what is
+// enforced in its absence.
+//
+// The safety itself is untouched. BasisUnclassified remains the zero value and
+// ProtectsValue() still reads it as protective; this repairs only what the
+// reader is told.
+func (s AuthorityStatement) basisLine() string {
+	if s.Basis == BasisUnclassified {
+		return s.Basis.String() + " (treated as protects value)"
+	}
+	return s.Basis.String()
+}
+
 // TechnicalPremise is one claim the plan rests on.
 type TechnicalPremise struct {
 	Statement string
@@ -271,7 +296,7 @@ func (s AuthorityStatement) Render() string {
 	// Machine-readable and on their own lines, because the next reader of this
 	// block is as likely to be an agent as a person, and an agent acting on a
 	// stop needs to know whether there is anything it may do about it.
-	b.WriteString("basis: " + s.Basis.String() + "\n")
+	b.WriteString("basis: " + s.basisLine() + "\n")
 	if s.Closes != "" {
 		b.WriteString("closes: " + s.Closes + "\n")
 	}
