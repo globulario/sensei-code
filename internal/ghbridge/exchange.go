@@ -224,6 +224,23 @@ func withdraw(ctx context.Context, box Issue, rec ExchangeRecord) error {
 	if !box.Valid() {
 		return errors.New("withdrawing an exchange needs a mailbox pull request number and an expected remote principal")
 	}
+	// The record says WHERE the request was posted, and that is not necessarily
+	// where this process is pointed now. The mailbox has already moved once in
+	// this repository's life (issue #156 to PR #157), and a withdrawal sent to
+	// the wrong conversation is worse than none: it names a request id that
+	// conversation never carried, while the actual orphan stays standing in the
+	// one nobody is looking at any more.
+	//
+	// Refused rather than redirected, and the record is kept, because this
+	// process cannot truthfully retract a request it cannot reach. A record
+	// with no conversation predates this field and is withdrawn here, which is
+	// the only place it could have come from.
+	if rec.Conversation != "" && rec.Conversation != box.Number {
+		return fmt.Errorf(
+			"request %s was published in conversation %s and this process serves %s; "+
+				"it stays open rather than being retracted in the wrong place",
+			rec.RequestID, rec.Conversation, box.Number)
+	}
 	if box.API != nil {
 		if !box.API.Configured() {
 			return errors.New("the github app transport was selected but is not configured; refusing rather than withdrawing as the operator's gh account")

@@ -286,3 +286,48 @@ func TestTheResolverCarriesTheExchangeLogIntoTheArchitectTurn(t *testing.T) {
 			architect.Exchanges.Dir, log.Dir)
 	}
 }
+
+// A withdrawal must reach the conversation the request was published in.
+//
+// The record carries Conversation and the first version of this code ignored
+// it, posting every retraction to whatever mailbox the CURRENT process was
+// configured with. That is not hypothetical: this repository's mailbox moved
+// from issue #156 to PR #157 mid-project. A withdrawal in the wrong place names
+// a request id that conversation never carried, while the real orphan stays
+// standing where nobody is looking.
+func TestAWithdrawalIsNotRedirectedToADifferentConversation(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	m, box := newAppMailbox(t, keyPath) // serves conversation 156
+	log := ExchangeLog{Dir: filepath.Join(t.TempDir(), "exchanges")}
+
+	// One orphan from the mailbox this process serves, one from the old mailbox.
+	for _, rec := range []ExchangeRecord{
+		{TaskID: "task-1", RequestID: "r-here", Conversation: "156", PublishedAt: time.Now().Add(-time.Hour).UTC()},
+		{TaskID: "task-1", RequestID: "r-elsewhere", Conversation: "999", PublishedAt: time.Now().Add(-30 * time.Minute).UTC()},
+	} {
+		if err := log.Open(rec); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var failures []string
+	n, _ := ReconcileAbandonedExchanges(context.Background(), log, box, func(rec ExchangeRecord, err error) {
+		if err != nil {
+			failures = append(failures, rec.RequestID)
+		}
+	})
+	if n != 1 {
+		t.Fatalf("withdrew %d exchanges, want 1", n)
+	}
+	if got := withdrawalsIn(m); len(got) != 1 || got[0] != "r-here" {
+		t.Fatalf("withdrawals = %v, want only [r-here]; a retraction reached the wrong conversation", got)
+	}
+	if len(failures) != 1 || failures[0] != "r-elsewhere" {
+		t.Fatalf("unreachable exchange not reported: %v", failures)
+	}
+	// Kept, not forgotten: a process serving 999 can still retract it.
+	pending, _ := log.Pending()
+	if len(pending) != 1 || pending[0].RequestID != "r-elsewhere" {
+		t.Fatalf("the unreachable record was dropped: %+v", pending)
+	}
+}
