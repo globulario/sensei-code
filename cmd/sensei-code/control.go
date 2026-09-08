@@ -490,10 +490,17 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 		doorbell = ghbridge.GHDoorbell{Dir: repoRoot, Conversation: box.Number}
 	}
 
+	// Every request this process publishes gets a durable lifetime record, and
+	// every record left open by a PREVIOUS process is retracted below. A waiter
+	// is a goroutine inside AwaitArchitecture, so an open record cannot have one
+	// here -- which is what makes withdrawing them at startup honest (#162).
+	exchanges := ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")}
+
 	resolver := ghbridge.Resolver{
-		Roles:    gh.Roles,
-		Doorbell: doorbell,
-		Provider: strings.TrimSpace(gh.Provider),
+		Roles:     gh.Roles,
+		Doorbell:  doorbell,
+		Exchanges: exchanges,
+		Provider:  strings.TrimSpace(gh.Provider),
 		Reviewer: &ghbridge.Runner{
 			Issue:        box,
 			RepoDir:      repoRoot,
@@ -515,6 +522,26 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	}
 	banner := fmt.Sprintf("github bridge: PR #%s conversation, reviewer %s, carrying provider %q for %s, mailbox via %s",
 		box.Number, box.ExpectedReviewer, strings.TrimSpace(gh.Provider), describeRoles(gh.Roles), transport)
+
+	// Retract whatever the last process left standing.
+	//
+	// Reported on the banner rather than swallowed: an operator reading startup
+	// needs to know that requests they may have been watching are now dead, and
+	// a retraction that FAILED is the case where a request is still out there
+	// claiming to be live. Neither outcome fails startup -- refusing to serve
+	// because an old request could not be retracted would trade a stale comment
+	// for an unavailable engine.
+	//
+	// Its own bounded context, not the caller's: this is startup housekeeping
+	// about a PREVIOUS process's requests, and it must not be able to hang the
+	// engine coming up behind it.
+	rctx, cancelReconcile := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelReconcile()
+	if withdrawn, err := ghbridge.ReconcileAbandonedExchanges(rctx, exchanges, box, nil); err != nil {
+		banner += fmt.Sprintf("\n  exchange reconciliation: %v; some earlier request may still stand", err)
+	} else if withdrawn > 0 {
+		banner += fmt.Sprintf("\n  withdrew %d architecture request(s) abandoned by an earlier process", withdrawn)
+	}
 
 	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box}, nil
 }
