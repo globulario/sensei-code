@@ -78,6 +78,26 @@ design_questions:
         - effect: changes 25 of 135 files from a hard stop to a closure attempt; no grant either way
           reversible: true
       notes: Left as CannotEstablish in this slice. DEGRADED is a claim about the ANSWER, not about the repository, and reclassifying it on 25 same-shaped observations from one graph would be generalising from a single cause. What is missing is knowing WHY those 25 degrade — the router never looks past the status.
+    - id: dq.test_edit_authority
+      objective: Let a governed run add or repair the tests that prove an invariant, without letting it weaken the test that proves the invariant it claims to respect
+      question: A plan names files, while a removed assertion is visible only in a diff. If plan-time authority widens to permit test edits, what refuses a plan that touches a covered subject and makes that subject's required test vacuous?
+      declared_by: claude-opus-5
+      declared_at: "2026-09-08T03:38:55Z"
+      alternatives:
+        - id: blanket_refusal
+          statement: 'Today''s behaviour. No plan may name a test file, because tests carry no anchors and count as unexamined. Safe by construction and blunt: it refuses test-strengthening and test-weakening identically, which makes ''add a test for this guard'' ungovernable. The first witness objective attempted on 2026-09-07 was unwinnable for exactly this reason.'
+        - id: inherit_from_subject
+          statement: A test edited BESIDE a covered subject inherits that subject's coverage. Enables the most common self-improvement such a system should be able to make about itself. Requires a guard that discriminates, since coverage says nothing about what an edit does.
+        - id: diff_audit_backstop
+          statement: Widen plan-time authority and rely on awareness.diff_audit to refuse a diff that removes a required test's load-bearing assertion. Attractive because it needs no new mechanism.
+      constraints:
+        - The gate reads a plan (a file list); an assertion removal is visible only in a diff, so no plan-time rule can discriminate strengthening from weakening.
+        - 'M2.2 already half-states the inheritance rule: a test may be edited beside a covered subject. What is missing is what stops that becoming ''any plan containing one covered file may touch any test''.'
+      consequences:
+        - effect: 'Widening this changes what an unattended run may do to the evidence that governs it. A wrong widening does not break a build: it leaves every gate green while the tests that prove the invariants quietly stop proving them, and the loss is invisible precisely because the suite still passes.'
+          reversible: true
+        - effect: A required test weakened by a governed run and then landed is not recovered by reverting the commit. Every later run reads the graph as still proven, and the invariant it names has no witness from that point forward until someone re-reads the test by hand.
+          reversible: false
 hypotheses:
     - id: h.promote_is_form_independent_not_evidence_independent
       question: dq.closure_knowledge_admission
@@ -90,6 +110,16 @@ hypotheses:
       declared_by: claude-opus-5
       declared_at: "2026-08-23T23:59:36Z"
       notes: 'Preregistered before any case was constructed or run. The B case is the dangerous one: a novel false claim can be perfectly coherent, so testing only contradictions would test the wrong thing. Concretely, B asserts the bus.go mutex serializes MAP ACCESS, which is plausible and false — the fact established by reading the code is that it makes close-versus-send mutually exclusive.'
+    - id: hyp.diff_audit_refuses_a_weakened_required_test
+      question: dq.test_edit_authority
+      alternative: diff_audit_backstop
+      prediction: Given a unified diff that removes the load-bearing assertion from a test listed as a required_test of an active invariant, awareness.diff_audit/v1 returns a blocking finding naming that test or that invariant.
+      falsifier: The audit returns decision=pass with an empty findings array for such a diff, while gofmt, go vet, the full suite and sensei gate all still pass on the unmodified tree. Nothing about the merge gates changes; only the audit's answer does.
+      horizon:
+        due_at: "2026-12-31T00:00:00Z"
+        condition: the first time widening plan-time test authority is seriously proposed
+      declared_by: claude-opus-5
+      declared_at: "2026-09-08T03:39:23Z"
 observations:
     - id: o.promote_accepts_a_plausible_false_claim
       hypothesis: h.promote_is_form_independent_not_evidence_independent
@@ -101,3 +131,15 @@ observations:
         - cmd/awg/cmd_promote.go:439-446 — the whole evidential check is a non-empty string test
         - 'separately: sensei promote cannot read the agent write-path at all. Proposals land in docs/awareness/candidates/proposals/ under a ''proposal:'' key; promote reads docs/awareness/candidates/*.yaml under a ''candidates:'' list. A real recorded contract_unknown proposal was not found by promote.'
       observed_by: claude-opus-5
+    - id: obs.diff_audit_passed_three_documented_violations
+      hypothesis: hyp.diff_audit_refuses_a_weakened_required_test
+      observed_at: "2026-09-08T03:39:41Z"
+      what: Three unified diffs, each generated from the real file with git diff -U0 rather than hand-written, each implementing a documented violation in a file the governing entry names, and each described to the tool using that entry's own words, all returned decision=pass with an empty findings array. (1) removing the load-bearing assertion from internal/ghbridge/runner_test.go:TestSnapshotVerificationRefusesAWrongTree, a required_test of sensei_code.ghbridge.a_published_snapshot_is_a_verified_projection; the weakened test still compiles and passes. (2) implementing forbidden_fix.sensei_code.ghbridge.rebuild_the_review_snapshot_from_the_worktree in the file it protects. (3) the same for forbidden_fix.sensei_code.reconstruct_an_upstream_transport_classification, which predates this branch, which rules out graph staleness as the explanation.
+      outcome: refutes
+      evidence:
+        - docs/evidence/diff-audit-produced-no-finding.md at 617f42b
+        - 'reproduction: edit the file as described, git diff -U0 -- <file>, pass with the stated task and domain; hand-written hunks were rejected as malformed_diff twice, which is why each diff was generated'
+      observed_by: claude-opus-5
+      failure_conditions:
+        - awareness.diff_audit/v1 in caller_supplied input_trust mode; expected_head ce44edb61a1a0ba2ef8640fa1ce00ede93de26b1; graph_commit as reported 39a8d2809ef239f203d5365d7f6e170349186cc4; availability reported as available and decision as pass, so the instrument answered rather than declining
+      remaining_applicability: A diff audit read by the tool from git rather than caller-supplied was not tested, and no diff was found that DOES produce a finding, so the instrument's general sensitivity is unmeasured rather than known to be zero. No claim is made about the cause.
