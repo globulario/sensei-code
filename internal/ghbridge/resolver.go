@@ -83,6 +83,10 @@ type Resolver struct {
 	// request can be pointed at. Nil wherever the remote wake path admits the
 	// App and no locator is needed.
 	Doorbell Doorbell
+	// Exchanges, when its Dir is set, is carried into each architect turn so the
+	// request it publishes has a durable lifetime record. Zero keeps the older
+	// arrangement, where a request outlives its waiter with nothing saying so.
+	Exchanges ExchangeLog
 	// Fallback serves every other role and every other provider. Required, and
 	// never bypassed.
 	Fallback workflow.RunnerResolver
@@ -140,6 +144,7 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 				SessionID:    r.Reviewer.SessionID,
 				Wait:         r.Reviewer.Wait,
 				Doorbell:     r.Doorbell,
+				Exchanges:    r.Exchanges,
 			}
 			return workflow.Resolved{Runner: architect, Name: spec.Agent.Name, Label: ResolverLabel}, nil
 		}

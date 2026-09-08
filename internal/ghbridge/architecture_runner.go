@@ -27,6 +27,14 @@ type ArchitectureRunner struct {
 	// request. Nil means the remote actor is expected to see the request
 	// itself, which is the arrangement whenever its wake path admits the App.
 	Doorbell Doorbell
+	// Exchanges, when its Dir is set, records this request for as long as a
+	// waiter exists for it.
+	//
+	// The record is what makes the request's lifetime legible to a process that
+	// did not publish it. A turn that ends here retracts its own request; a
+	// process that DIES here cannot, and the record is the only thing that lets
+	// the next startup do it instead (#162).
+	Exchanges ExchangeLog
 }
 
 var ErrNotArchitect = errors.New("the github architecture runner serves the architect role only")
@@ -50,6 +58,36 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 	requestComment, err := PublishArchitectureRequest(ctx, r.Issue, request)
 	if err != nil {
 		return agent.Result{}, fmt.Errorf("posting the architecture request: %w", err)
+	}
+
+	// The exchange is recorded BEFORE the doorbell and before the wait, because
+	// everything after this point can fail in a way that leaves the request
+	// standing. Recording it after a successful wait would record only the
+	// exchanges that never needed the record.
+	//
+	// A record that cannot be written is reported and the turn continues: the
+	// request is already published, and failing the turn here would discard it
+	// and mint a duplicate on the next attempt.
+	if r.Exchanges.Dir != "" {
+		rec := ExchangeRecord{
+			TaskID:         req.TaskID,
+			RequestID:      request.RequestID,
+			RequestComment: requestComment,
+			Conversation:   r.Issue.Number,
+			PublishedAt:    time.Now().UTC(),
+			Deadline:       time.Now().Add(r.waitFor()).UTC(),
+		}
+		if openErr := r.Exchanges.Open(rec); openErr != nil && emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentStarted,
+				"the exchange record could not be written, so a restart cannot retract request "+
+					request.RequestID,
+				map[string]any{
+					"request_id":      request.RequestID,
+					"request_comment": requestComment,
+					"error":           openErr.Error(),
+					"transport":       "github",
+				}))
+		}
 	}
 
 	// The request is durable from here. A doorbell failure is therefore NOT a
@@ -89,10 +127,7 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 			}))
 	}
 
-	wait := r.Wait
-	if wait <= 0 {
-		wait = DefaultWait
-	}
+	wait := r.waitFor()
 	wctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	answer, err := AwaitArchitecture(wctx, r.Issue, request, r.Poll)
@@ -106,10 +141,40 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 		// like nothing at all. Distinguishing "no answer yet" from "no answer,
 		// I stopped" by reading GitHub by hand cost hours, and every field
 		// below was already known here at the moment it was needed.
+		// The exchange ENDED, so the request must stop claiming otherwise.
+		//
+		// This is the half #162 was opened for. The bound was always enforced;
+		// what was missing is that the enforcement was invisible from outside
+		// the process. A request left standing is indistinguishable from a live
+		// one -- same marker, same complete binding -- so a consumer that
+		// behaves correctly answers a question nobody is listening to, and a
+		// re-ask leaves an equally live-looking predecessor behind.
+		//
+		// Retraction is attempted before the failure is reported so that the
+		// report can say whether it succeeded. A retraction that fails leaves
+		// the record open on purpose: the next startup will try again.
+		retracted, retractErr := "withdrawn", error(nil)
+		if r.Exchanges.Dir != "" {
+			if retractErr = withdraw(ctx, r.Issue, ExchangeRecord{
+				TaskID: req.TaskID, RequestID: request.RequestID, RequestComment: requestComment,
+			}); retractErr == nil {
+				retractErr = r.Exchanges.Close(req.TaskID, request.RequestID)
+			}
+		} else {
+			// Untracked is not a bug, it is the older arrangement: with no
+			// exchange record there is nothing to retract from, and the request
+			// really does still stand. Saying so keeps the guidance a retry
+			// needs -- ring the same request, do not publish a second one.
+			retracted = "stands and was not withdrawn, because this turn kept no exchange record"
+		}
+		if retractErr != nil {
+			retracted = "stands and was not withdrawn: " + retractErr.Error()
+		}
+
 		if emit != nil {
 			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentFinished,
 				"the architect turn ended without an answer after "+wait.String()+
-					"; request "+request.RequestID+" stands and was not withdrawn",
+					"; request "+request.RequestID+" is "+retracted,
 				map[string]any{
 					"request_id":         request.RequestID,
 					"request_comment":    requestComment,
@@ -118,11 +183,19 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 					"graph_build_commit": r.Binding.GraphBuildCommit,
 					"waited":             wait.String(),
 					"outcome":            "unanswered",
+					"request_state":      retracted,
 					"reason":             err.Error(),
 					"transport":          "github",
 				}))
 		}
 		return agent.Result{}, err
+	}
+
+	// Answered: the exchange is over and needs no retraction. Closing the record
+	// is what keeps the next startup from withdrawing a request that was already
+	// satisfied, which would tell a reader the turn failed when it succeeded.
+	if r.Exchanges.Dir != "" {
+		_ = r.Exchanges.Close(req.TaskID, request.RequestID)
 	}
 
 	if emit != nil {
@@ -144,4 +217,13 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 	// verbatim. Session is Unverified because GitHub proves no model/session
 	// property, even though architect standing does not use reviewer independence.
 	return agent.Result{Text: answer.Body, Session: roles.Unverified}, nil
+}
+
+// waitFor is the bound this turn will wait, so the deadline written into the
+// exchange record and the deadline actually enforced cannot drift apart.
+func (r *ArchitectureRunner) waitFor() time.Duration {
+	if r.Wait <= 0 {
+		return DefaultWait
+	}
+	return r.Wait
 }
