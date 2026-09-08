@@ -584,3 +584,34 @@ func TestAnUnclassifiedBasisRendersItsEnforcedPosture(t *testing.T) {
 		t.Error("the rendered posture and ProtectsValue() disagree about the zero value")
 	}
 }
+
+// The last wire: production must put the RENDERED authority statement into the
+// event, not something else.
+//
+// A source check, and it stays one for the same reason the resolver
+// installation is pinned that way — an emission that was replaced cannot be
+// observed by calling the function that is no longer called. The test above
+// proves what Render() produces and that an event carries it; it constructs
+// its own event, so it keeps passing if engine.go stops emitting the statement
+// entirely.
+//
+// That gap is not hypothetical. Replacing the emission with routing.Condition
+// leaves the whole suite green, which means the basis line could vanish from
+// the journal with nothing to notice.
+func TestTheEngineEmitsTheRenderedAuthorityStatement(t *testing.T) {
+	source, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(source)
+	if !strings.Contains(src, "StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render()") {
+		t.Error("the engine no longer emits the rendered authority statement; the basis " +
+			"line reaches no reader, and every test about its content still passes")
+	}
+	// It must be the whole statement, carried as the event's own summary.
+	// Truncating or reformatting it here would silently change what the journal
+	// shows while every rendering test kept passing.
+	if !strings.Contains(src, "event.SourceSystem, event.Status,\n\t\tStateAuthority(") {
+		t.Error("the authority statement is no longer the summary of a SourceSystem/Status event")
+	}
+}
