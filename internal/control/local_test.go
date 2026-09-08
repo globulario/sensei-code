@@ -1,14 +1,17 @@
 package control
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -280,55 +283,206 @@ func TestTheObjectiveChannelCarriesAnObjectiveAndNothingElse(t *testing.T) {
 	// Protocol is admissible because it says what the CALLER can read. It
 	// carries no command, argv, path, provider, provenance or authority, and it
 	// cannot change what runs -- only whether the server proceeds at all.
-	want := map[string]bool{"Task": true, "Protocol": true}
-	got := structFields(t, "local.go", "LocalSubmission")
-	if len(got) != len(want) {
-		t.Fatalf("LocalSubmission has fields %v; the channel carries an objective and nothing else", got)
-	}
-	for _, f := range got {
-		if !want[f] {
-			t.Fatalf("LocalSubmission carries %q; a local command protocol is a shell with extra steps", f)
+	// Pinned by NAME, not by count. A count admits any replacement: swapping one
+	// field for Command keeps the number and loses the property. The closed set
+	// is read by membership, so every future field has to be named here.
+	//
+	// Protocol is deliberately NOT among them. Negotiation describes the
+	// channel, not the objective, and putting a version on this message also
+	// delayed the compatibility verdict until after readiness -- which is after
+	// the proposal path has spent its approval token. It lives on LocalHello.
+	for typeName, want := range map[string]map[string]bool{
+		"LocalSubmission": {"Task": true},
+		"LocalHello":      {"Protocol": true},
+	} {
+		got := structFields(t, "local.go", typeName)
+		if len(got) != len(want) {
+			t.Fatalf("%s has fields %v, want exactly %v", typeName, got, keysOf(want))
+		}
+		for _, f := range got {
+			if !want[f] {
+				t.Fatalf("%s carries %q; a local command protocol is a shell with extra steps", typeName, f)
+			}
 		}
 	}
 }
 
-// The repair for #165, at the boundary that matters: a client that cannot read
-// the reply is refused BEFORE the objective is committed.
+func keysOf(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// #165 and its repair. Compatibility is settled BEFORE readiness, because
+// readiness is the point after which a caller may do something durable: the
+// proposal path spends an at-most-once approval token between readiness and
+// submission. A verdict delivered any later leaves that caller in a fail-closed
+// state its own error says not to retry.
 //
-// The failure being prevented is a false negative, not a crash. The old client
-// read the connection to EOF and unmarshalled it as one JSON value; this
-// channel writes two, so it reported "the control process answered something
-// this client cannot read" AFTER submit() had already created the task. The
-// operator was told nothing had started, and the natural response to a failed
-// submit is to submit again.
-func TestAClientThatCannotReadTheReplyIsRefusedBeforeCommitting(t *testing.T) {
+// Two stale-client shapes exist and both must fail ahead of that point.
+
+// The client that predates readiness entirely: it writes its objective first
+// and reads the whole connection as ONE JSON value.
+func TestAPreNegotiationClientIsRefusedBeforeReadiness(t *testing.T) {
 	h := newLocalHarness(t)
 
-	// Exactly what every client at or before the readiness message sends: no
-	// protocol field at all.
-	err := rawLocal(t, h.root, `{"task":"repair the parser"}`)
+	conn, err := net.Dial("unix", LocalSocketPath(h.root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if _, err := conn.Write([]byte(`{"task":"repair the parser"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if unix, ok := conn.(*net.UnixConn); ok {
+		_ = unix.CloseWrite()
+	}
+	raw, err := io.ReadAll(io.LimitReader(conn, maxLocalSubmissionBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// It gets exactly ONE value, so this client can actually read its own
+	// refusal -- the failure it reports is true and specific rather than a
+	// parse error about a stream it never expected.
+	var refusal struct {
+		Error string `json:"error"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(raw), &refusal); err != nil {
+		t.Fatalf("a pre-negotiation client cannot parse its own refusal: %v (%q)", err, raw)
+	}
+	if refusal.Error == "" {
+		t.Fatalf("no refusal was sent: %q", raw)
+	}
+	if !strings.Contains(refusal.Error, "nothing durable was spent") {
+		t.Errorf("the refusal does not tell the caller nothing was spent: %q", refusal.Error)
+	}
+	if len(h.submitted) != 0 {
+		t.Fatalf("a refused client still reached the engine: %v", h.submitted)
+	}
+}
+
+// The client that knows readiness but not negotiation: it waits to be told it
+// may proceed. The server is waiting for a hello, so readiness never comes and
+// the caller fails at the handshake -- before BeginApproval, with nothing
+// committed. A hang is the cost of refusing to answer an unidentified peer, and
+// it is bounded by localDeadline on both ends.
+func TestAClientAwaitingReadinessFailsBeforeAnythingDurable(t *testing.T) {
+	h := newLocalHarness(t)
+
+	conn, err := net.Dial("unix", LocalSocketPath(h.root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// Shorter than the server's own bound, so the test measures "readiness did
+	// not arrive" rather than waiting out localDeadline.
+	_ = conn.SetDeadline(time.Now().Add(750 * time.Millisecond))
+
+	var ready map[string]any
+	if err := json.NewDecoder(conn).Decode(&ready); err == nil {
+		t.Fatalf("readiness was granted to a client that never identified itself: %v", ready)
+	}
+	if len(h.submitted) != 0 {
+		t.Fatalf("a client that never submitted reached the engine: %v", h.submitted)
+	}
+}
+
+// A client that speaks the handshake but an OLDER version of it.
+//
+// Distinct from the two above, and the mutation that exposed the gap proves it:
+// both of those die at the decode -- one sends an objective where a hello
+// belongs, the other sends nothing -- so neither ever reaches the version
+// comparison. Only a well-formed hello carrying a stale number does, and that
+// is the case a future protocol bump will actually produce.
+func TestAWellFormedHelloWithAStaleVersionIsRefusedBeforeReadiness(t *testing.T) {
+	h := newLocalHarness(t)
+
+	conn, err := net.Dial("unix", LocalSocketPath(h.root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	if err := json.NewEncoder(conn).Encode(LocalHello{Protocol: LocalProtocolStreamedReplies - 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	var reply map[string]any
+	if err := json.NewDecoder(conn).Decode(&reply); err != nil {
+		t.Fatalf("no answer to a stale hello: %v", err)
+	}
+	if ready, _ := reply["ready"].(bool); ready {
+		t.Fatalf("readiness was granted to a stale protocol: %v", reply)
+	}
+	msg, _ := reply["error"].(string)
+	if msg == "" {
+		t.Fatalf("a stale hello was not refused: %v", reply)
+	}
+	if !strings.Contains(msg, "nothing durable was spent") {
+		t.Errorf("the refusal does not tell the caller nothing was spent: %q", msg)
+	}
+	if len(h.submitted) != 0 {
+		t.Fatalf("a refused client still reached the engine: %v", h.submitted)
+	}
+}
+
+// The mirror case, and the reason the client checks too. A control process that
+// predates negotiation sends readiness with no protocol. Believing it would put
+// the proposal path past BeginApproval before the mismatch surfaced.
+func TestTheClientRefusesAServerThatPredatesNegotiation(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Dir(LocalSocketPath(root)), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	ln, err := net.Listen("unix", LocalSocketPath(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	submissions := make(chan string, 1)
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		// Exactly the old server: readiness immediately, with no protocol, and
+		// without reading anything first.
+		_ = json.NewEncoder(conn).Encode(map[string]any{"ready": true, "workspace": "old"})
+		var in map[string]any
+		if json.NewDecoder(conn).Decode(&in) == nil {
+			if task, ok := in["task"].(string); ok {
+				submissions <- task
+			}
+		}
+	}()
+
+	auth, err := DialLocalObjective(root)
 	if err == nil {
-		t.Fatal("a client too old to read the reply was accepted")
+		_ = auth.Close()
+		t.Fatal("a control process that predates negotiation was accepted")
 	}
-	if !strings.Contains(err.Error(), "nothing was submitted") {
-		t.Errorf("the refusal does not tell the operator the objective was not committed: %v", err)
+	if !strings.Contains(err.Error(), "nothing durable was spent") {
+		t.Errorf("the refusal does not tell the caller nothing was spent: %v", err)
 	}
-	// The property. A refusal that still ran the objective would be the very
-	// ambiguity this is repairing, with the message reversed.
-	if len(h.submitted) != 0 {
-		t.Fatalf("a refused client still reached the engine: %v", h.submitted)
+	select {
+	case task := <-submissions:
+		t.Fatalf("an objective was sent to an incompatible server: %q", task)
+	default:
 	}
+}
 
-	// An explicitly stale protocol is refused the same way.
-	if err := rawLocal(t, h.root, `{"task":"x","protocol":0}`); err == nil {
-		t.Error("protocol 0 was accepted")
-	}
-	if len(h.submitted) != 0 {
-		t.Fatalf("a refused client still reached the engine: %v", h.submitted)
-	}
+// The positive control. A guard that refuses everything proves nothing, so the
+// current pair must negotiate, accept, and commit exactly once.
+func TestTheCurrentPairNegotiatesAndCommitsExactlyOnce(t *testing.T) {
+	h := newLocalHarness(t)
 
-	// The current client is accepted, so the guard refuses the old shape rather
-	// than refusing everything -- a check that refuses all inputs proves nothing.
 	accepted, err := SubmitLocalObjective(h.root, "repair the parser")
 	if err != nil {
 		t.Fatalf("the current client was refused: %v", err)
@@ -336,8 +490,8 @@ func TestAClientThatCannotReadTheReplyIsRefusedBeforeCommitting(t *testing.T) {
 	if accepted.TaskID == "" {
 		t.Fatal("the current client got no task id")
 	}
-	if len(h.submitted) != 1 {
-		t.Fatalf("the accepted objective reached the engine %d times", len(h.submitted))
+	if len(h.submitted) != 1 || h.submitted[0] != "repair the parser" {
+		t.Fatalf("the objective reached the engine as %v", h.submitted)
 	}
 }
 
@@ -436,7 +590,14 @@ func rawLocal(t *testing.T, root, body string) error {
 	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 	dec := json.NewDecoder(conn)
 
-	// The authority verdict for this connection, before anything is sent.
+	// A current-protocol client speaks first. The server settles compatibility
+	// from this before it will say anything, so a helper that skipped it would
+	// deadlock rather than exercise the validation these callers are about.
+	if err := json.NewEncoder(conn).Encode(LocalHello{Protocol: LocalProtocolStreamedReplies}); err != nil {
+		return err
+	}
+
+	// The authority verdict for this connection, before the objective is sent.
 	var ready map[string]any
 	if err := dec.Decode(&ready); err != nil {
 		return err

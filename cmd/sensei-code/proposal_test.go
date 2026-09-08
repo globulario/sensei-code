@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -592,5 +593,100 @@ func TestTheLaterEstablishCheckIsRetained(t *testing.T) {
 		if !strings.Contains(string(approve), want) {
 			t.Errorf("the precheck does not reuse %q; it would drift from the gate it is predicting", want)
 		}
+	}
+}
+
+// #165's repair, proved where it actually matters.
+//
+// approveObjectiveProposal spends a durable at-most-once token in
+// store.BeginApproval and only then calls conn.Submit. The first attempt at
+// this repair checked protocol compatibility on the SUBMISSION, which lands
+// after that spend -- so an incompatible pair would have burned the token and
+// then failed, leaving the proposal in the fail-closed state whose own error
+// says not to retry.
+//
+// Compatibility is now settled inside DialLocalObjective, before readiness and
+// therefore before BeginApproval can run. This uses the REAL authorizer against
+// a control process that predates negotiation, so the ordering is exercised
+// rather than asserted.
+func TestAnIncompatibleControlProcessIsRefusedBeforeTheApprovalTokenIsSpent(t *testing.T) {
+	root := gitRepo(t)
+	seedProposalIn(t, root)
+
+	sock := control.LocalSocketPath(root)
+	if err := os.MkdirAll(filepath.Dir(sock), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// A unix socket path is capped near 108 bytes and t.TempDir() plus this
+	// test's name overruns it. Bind somewhere short and symlink, so the name
+	// stays descriptive and the client still dials the path it would in
+	// production.
+	shortDir, err := os.MkdirTemp("", "sc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(shortDir) })
+	ln, err := net.Listen("unix", filepath.Join(shortDir, "s.sock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	if err := os.Symlink(filepath.Join(shortDir, "s.sock"), sock); err != nil {
+		t.Fatal(err)
+	}
+
+	submissions := make(chan string, 4)
+	go func() {
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			go func() {
+				defer conn.Close()
+				// Exactly the old control process: readiness at once, carrying
+				// no protocol, without reading anything first.
+				_ = json.NewEncoder(conn).Encode(map[string]any{"ready": true, "workspace": "old"})
+				var in map[string]any
+				if json.NewDecoder(conn).Decode(&in) == nil {
+					if task, ok := in["task"].(string); ok {
+						submissions <- task
+					}
+				}
+			}()
+		}
+	}()
+
+	err = approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, dialLocalObjective, canonicalIsClean)
+	if err == nil {
+		t.Fatal("an incompatible control process approved the proposal")
+	}
+	// The fail-closed message belongs to failures AFTER the token is spent. If
+	// it appears here, the refusal happened on the wrong side of BeginApproval.
+	if strings.Contains(err.Error(), "fail-closed approval state") {
+		t.Fatalf("the mismatch was refused after the token was spent: %v", err)
+	}
+
+	// Nothing durable spent, nothing submitted.
+	if n := countApprovals(t, root); n != 0 {
+		t.Fatalf("an incompatible control process left %d approval receipts", n)
+	}
+	select {
+	case task := <-submissions:
+		t.Fatalf("an objective was sent to an incompatible control process: %q", task)
+	default:
+	}
+
+	// And the proposal survives: it is still approvable, which is the whole
+	// difference between this and the fail-closed state.
+	after := okAuthorizer(t, root)
+	if err := approveObjectiveProposal(root, testProposalComment, &bytes.Buffer{}, after.authorize, canonicalIsClean); err != nil {
+		t.Fatalf("the proposal was spent by a protocol refusal: %v", err)
+	}
+	if after.conn.got != wantObjective {
+		t.Errorf("submitted %q", after.conn.got)
+	}
+	if n := countApprovals(t, root); n != 1 {
+		t.Fatalf("the retried approval left %d receipts, want 1", n)
 	}
 }

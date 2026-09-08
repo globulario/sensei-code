@@ -56,27 +56,45 @@ func LocalSocketPath(repoRoot string) string {
 // and a local command protocol is a shell with extra steps.
 type LocalSubmission struct {
 	Task string `json:"task"`
-	// Protocol is the reply shape this client can read.
-	//
-	// It exists because the answer to a submission is only useful if the caller
-	// can read it, and an unreadable answer is not a failed submission -- the
-	// objective is committed by then. A client at or before the readiness
-	// message read the whole connection and unmarshalled it as ONE JSON value;
-	// this channel now writes two, so that client fails with a parse error
-	// AFTER the objective exists. It reports a failure that did not happen, and
-	// the natural response to a failed submit is to submit again (#165).
-	//
-	// Absent means zero, which is exactly what every such client sends, so the
-	// old shape is detected without those clients having to cooperate.
-	Protocol int `json:"protocol,omitempty"`
+}
+
+// LocalHello is the client's FIRST message, before it is told anything.
+//
+// It carries the protocol and nothing else, because protocol negotiation
+// describes the CHANNEL and not the objective. Putting a version on
+// LocalSubmission conflated the two and, worse, delayed the compatibility
+// verdict until after readiness -- which is after the caller may already have
+// spent something durable. See LocalProtocolStreamedReplies.
+type LocalHello struct {
+	Protocol int `json:"protocol"`
 }
 
 // LocalProtocolStreamedReplies is the first protocol whose client reads this
 // channel's replies as a STREAM rather than as one buffered value.
 //
-// Bumped only when a client that does not know the new shape would misread the
-// answer. It is not a version of the objective, the authority model, or the
-// record -- only of what the caller must be able to parse.
+// Bumped only when a peer that does not know the new shape would misread the
+// exchange. It is not a version of the objective, the authority model, or the
+// record -- only of what the two ends must be able to parse.
+//
+// NEGOTIATED BEFORE READINESS, and that ordering is the whole point.
+//
+// The first version of this guard checked the protocol on the SUBMISSION, which
+// is read after readiness is sent. On the direct path that was merely late; on
+// the proposal path it was a defect worse than the one being repaired. That
+// caller does durable work between readiness and submission:
+//
+//	DialLocalObjective   -> readiness
+//	store.BeginApproval  -> spends an at-most-once approval token
+//	conn.Submit          -> the old check refused HERE
+//
+// An incompatible client would therefore have passed readiness, burned the
+// token, and only then been refused -- landing the proposal in the fail-closed
+// state whose own error says not to retry it. The ambiguity would have moved
+// from the direct channel to the more valuable boundary.
+//
+// Establishing compatibility before readiness means an incompatible peer is
+// refused while the proposal is still pending and retryable, and no objective
+// has been committed.
 const LocalProtocolStreamedReplies = 1
 
 // LocalAccepted is what the process answers: which task it created, and under
@@ -108,6 +126,10 @@ type LocalAccepted struct {
 type LocalReady struct {
 	Ready     bool   `json:"ready"`
 	Workspace string `json:"workspace"`
+	// Protocol is the version the SERVER speaks, so the client can refuse an
+	// incompatible peer before it acts on readiness. A server that predates
+	// negotiation omits it, which reads as zero and is refused.
+	Protocol int `json:"protocol,omitempty"`
 }
 
 // localReply is every shape this channel can answer with, decoded as one type.
@@ -121,6 +143,7 @@ type localReply struct {
 	TaskID     string `json:"task_id,omitempty"`
 	Provenance string `json:"provenance,omitempty"`
 	Workspace  string `json:"workspace,omitempty"`
+	Protocol   int    `json:"protocol,omitempty"`
 }
 
 // ListenLocal binds the local submission socket.
@@ -214,10 +237,51 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 		return
 	}
 
-	// Authorized, and said so before reading anything. A caller that must take
-	// a durable at-most-once step of its own now knows the verdict, which is the
-	// difference between spending that step on a refusal and not.
-	if err := json.NewEncoder(conn).Encode(LocalReady{Ready: true, Workspace: s.workspace}); err != nil {
+	// ONE decoder for the whole exchange -- hello, then submission.
+	//
+	// Two decoders over one connection can split a buffered read: the first may
+	// pull bytes belonging to the second into its own buffer and drop them when
+	// it goes out of scope. The ordering below makes that impossible in
+	// practice (the client waits for readiness before submitting), but a
+	// protocol whose safety depends on nobody ever adding a write is not one to
+	// leave standing.
+	dec := json.NewDecoder(io.LimitReader(conn, 2*maxLocalSubmissionBytes))
+	// Strict, for the same reason register_role is strict: the fields that must
+	// not be settable here are provenance, principal and authority, and a
+	// lenient decoder ignores exactly those silently.
+	dec.DisallowUnknownFields()
+
+	// The CLIENT speaks first, and says only which protocol it can parse.
+	//
+	// Before readiness, because readiness is the point after which a caller may
+	// do something durable. The proposal path spends an at-most-once approval
+	// token between readiness and submission, so a compatibility verdict
+	// delivered any later would land that caller in a fail-closed state its own
+	// error says not to retry. Refusing here leaves the proposal pending and
+	// retryable, with nothing committed.
+	var hello LocalHello
+	if err := dec.Decode(&hello); err != nil {
+		writeLocalError(conn, "this channel expects a protocol hello before an objective, and did not get one: "+
+			err.Error()+". A client that predates protocol negotiation sends its objective first and will "+
+			"always fail here; nothing was submitted and nothing durable was spent. Reinstall the client from "+
+			"the running revision (go build -o <client path> ./cmd/sensei-code)")
+		return
+	}
+	if hello.Protocol < LocalProtocolStreamedReplies {
+		writeLocalError(conn, fmt.Sprintf(
+			"this sensei-code client speaks objective protocol %d and this control process answers in %d; "+
+				"nothing was submitted and nothing durable was spent. Reinstall the client from the running "+
+				"revision (go build -o <client path> ./cmd/sensei-code) and place the objective again",
+			hello.Protocol, LocalProtocolStreamedReplies))
+		return
+	}
+
+	// Authorized AND compatible, and said so before reading the objective. A
+	// caller that must take a durable at-most-once step of its own now knows
+	// both verdicts, which is the difference between spending that step on a
+	// refusal and not.
+	if err := json.NewEncoder(conn).Encode(LocalReady{
+		Ready: true, Workspace: s.workspace, Protocol: LocalProtocolStreamedReplies}); err != nil {
 		return
 	}
 	// The window is restarted, not extended, because the caller is expected to
@@ -228,11 +292,6 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 	_ = conn.SetDeadline(time.Now().Add(localDeadline))
 
 	var in LocalSubmission
-	dec := json.NewDecoder(io.LimitReader(conn, maxLocalSubmissionBytes))
-	// Strict, for the same reason register_role is strict: the fields that must
-	// not be settable here are provenance, principal and authority, and a
-	// lenient decoder ignores exactly those silently.
-	dec.DisallowUnknownFields()
 	if err := dec.Decode(&in); err != nil {
 		writeLocalError(conn, "the submission is not a bounded objective: "+err.Error())
 		return
@@ -249,28 +308,6 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 	// are the bytes the objective record must contain.
 	if strings.TrimSpace(in.Task) == "" {
 		writeLocalError(conn, "a submission must carry an objective")
-		return
-	}
-	// REFUSED BEFORE COMMITTING, and the ordering is the entire point.
-	//
-	// A client too old to read this channel's replies will fail to parse the
-	// acceptance. If that happens after submit(), the objective exists and the
-	// operator has been told it does not -- and a false failure invites a
-	// retry, which is how one approval becomes two governed runs. On the GitHub
-	// proposal path the approval receipt is an at-most-once token, so the
-	// retry can also spend something it cannot get back.
-	//
-	// Refusing here converts that ambiguous success into a definite refusal:
-	// the failure the caller reports is then TRUE, and retrying after
-	// reinstalling is safe. The old client still cannot parse this refusal --
-	// nothing can fix a binary already on disk -- but nothing was committed, so
-	// what it misreads no longer matters.
-	if in.Protocol < LocalProtocolStreamedReplies {
-		writeLocalError(conn, fmt.Sprintf(
-			"this sensei-code client speaks objective protocol %d and this control process answers in %d; "+
-				"nothing was submitted. Reinstall the client from the running revision "+
-				"(go build -o <client path> ./cmd/sensei-code) and place the objective again",
-			in.Protocol, LocalProtocolStreamedReplies))
 		return
 	}
 
@@ -335,6 +372,15 @@ func DialLocalObjective(repoRoot string) (*AuthorizedLocalSubmission, error) {
 	}
 	_ = conn.SetDeadline(time.Now().Add(localDeadline))
 
+	// Say what this client can parse BEFORE asking for anything. The server
+	// settles compatibility from this and answers readiness only if it holds,
+	// so an incompatible pair is separated before the caller does anything it
+	// cannot undo.
+	if err := json.NewEncoder(conn).Encode(LocalHello{Protocol: LocalProtocolStreamedReplies}); err != nil {
+		_ = conn.Close()
+		return nil, fmt.Errorf("announcing the objective protocol: %w", err)
+	}
+
 	// Bounded across the whole exchange: a readiness line and one answer.
 	dec := json.NewDecoder(io.LimitReader(conn, 2*maxLocalSubmissionBytes))
 	var reply localReply
@@ -351,6 +397,21 @@ func DialLocalObjective(repoRoot string) (*AuthorizedLocalSubmission, error) {
 		// proceeding: an unrecognized answer is not permission.
 		_ = conn.Close()
 		return nil, errors.New("the control process did not authorize this caller to place an objective")
+	}
+	// BOTH ends are checked, not just the server's view of the client.
+	//
+	// A control process that predates negotiation sends readiness without a
+	// protocol, which reads as zero. It would then decode this client's hello
+	// as an objective and refuse it -- but only AFTER readiness, which on the
+	// proposal path is after the approval token is spent. Refusing here keeps
+	// that caller's failure ahead of anything durable.
+	if reply.Protocol < LocalProtocolStreamedReplies {
+		_ = conn.Close()
+		return nil, fmt.Errorf(
+			"this control process answers objective protocol %d and this client speaks %d; "+
+				"nothing was submitted and nothing durable was spent. Restart the control process from "+
+				"the revision this client was built from",
+			reply.Protocol, LocalProtocolStreamedReplies)
 	}
 	return &AuthorizedLocalSubmission{conn: conn, dec: dec, workspace: reply.Workspace}, nil
 }
@@ -395,8 +456,7 @@ func (a *AuthorizedLocalSubmission) Submit(task string) (LocalAccepted, error) {
 		return LocalAccepted{}, errors.New("an objective cannot be empty")
 	}
 	_ = a.conn.SetDeadline(time.Now().Add(localDeadline))
-	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{
-		Task: task, Protocol: LocalProtocolStreamedReplies}); err != nil {
+	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{Task: task}); err != nil {
 		return LocalAccepted{}, err
 	}
 	// The write half is closed so the far side sees the end of the message
