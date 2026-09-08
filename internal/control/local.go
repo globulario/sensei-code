@@ -56,7 +56,28 @@ func LocalSocketPath(repoRoot string) string {
 // and a local command protocol is a shell with extra steps.
 type LocalSubmission struct {
 	Task string `json:"task"`
+	// Protocol is the reply shape this client can read.
+	//
+	// It exists because the answer to a submission is only useful if the caller
+	// can read it, and an unreadable answer is not a failed submission -- the
+	// objective is committed by then. A client at or before the readiness
+	// message read the whole connection and unmarshalled it as ONE JSON value;
+	// this channel now writes two, so that client fails with a parse error
+	// AFTER the objective exists. It reports a failure that did not happen, and
+	// the natural response to a failed submit is to submit again (#165).
+	//
+	// Absent means zero, which is exactly what every such client sends, so the
+	// old shape is detected without those clients having to cooperate.
+	Protocol int `json:"protocol,omitempty"`
 }
+
+// LocalProtocolStreamedReplies is the first protocol whose client reads this
+// channel's replies as a STREAM rather than as one buffered value.
+//
+// Bumped only when a client that does not know the new shape would misread the
+// answer. It is not a version of the objective, the authority model, or the
+// record -- only of what the caller must be able to parse.
+const LocalProtocolStreamedReplies = 1
 
 // LocalAccepted is what the process answers: which task it created, and under
 // whose authority it recorded the objective.
@@ -230,6 +251,28 @@ func (s *Server) serveLocalConn(conn net.Conn, submit func(task string) workflow
 		writeLocalError(conn, "a submission must carry an objective")
 		return
 	}
+	// REFUSED BEFORE COMMITTING, and the ordering is the entire point.
+	//
+	// A client too old to read this channel's replies will fail to parse the
+	// acceptance. If that happens after submit(), the objective exists and the
+	// operator has been told it does not -- and a false failure invites a
+	// retry, which is how one approval becomes two governed runs. On the GitHub
+	// proposal path the approval receipt is an at-most-once token, so the
+	// retry can also spend something it cannot get back.
+	//
+	// Refusing here converts that ambiguous success into a definite refusal:
+	// the failure the caller reports is then TRUE, and retrying after
+	// reinstalling is safe. The old client still cannot parse this refusal --
+	// nothing can fix a binary already on disk -- but nothing was committed, so
+	// what it misreads no longer matters.
+	if in.Protocol < LocalProtocolStreamedReplies {
+		writeLocalError(conn, fmt.Sprintf(
+			"this sensei-code client speaks objective protocol %d and this control process answers in %d; "+
+				"nothing was submitted. Reinstall the client from the running revision "+
+				"(go build -o <client path> ./cmd/sensei-code) and place the objective again",
+			in.Protocol, LocalProtocolStreamedReplies))
+		return
+	}
 
 	// The provenance is stamped by the ENTRYPOINT, in the workflow package, and
 	// there is no argument here that could influence it. An operator with local
@@ -352,7 +395,8 @@ func (a *AuthorizedLocalSubmission) Submit(task string) (LocalAccepted, error) {
 		return LocalAccepted{}, errors.New("an objective cannot be empty")
 	}
 	_ = a.conn.SetDeadline(time.Now().Add(localDeadline))
-	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{Task: task}); err != nil {
+	if err := json.NewEncoder(a.conn).Encode(LocalSubmission{
+		Task: task, Protocol: LocalProtocolStreamedReplies}); err != nil {
 		return LocalAccepted{}, err
 	}
 	// The write half is closed so the far side sees the end of the message

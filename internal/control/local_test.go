@@ -269,10 +269,75 @@ func TestTheObjectiveChannelCarriesAnObjectiveAndNothingElse(t *testing.T) {
 		t.Fatalf("a refused submission still reached the engine: %v", h.submitted)
 	}
 
-	// The type itself has one field, so a second one cannot arrive by being
-	// added to a struct somebody forgot to check.
-	if n := len(structFields(t, "local.go", "LocalSubmission")); n != 1 {
-		t.Fatalf("LocalSubmission has %d fields; the channel carries an objective and nothing else", n)
+	// The type's fields are pinned by NAME, not by count.
+	//
+	// A count was the original guard and it did its job -- it fired the moment
+	// Protocol was added. But a count admits any replacement: swapping Protocol
+	// for Command keeps the number and loses the property. The closed set is
+	// read by membership, so every future field has to be named here and
+	// argued for, which is the review this guard exists to force.
+	//
+	// Protocol is admissible because it says what the CALLER can read. It
+	// carries no command, argv, path, provider, provenance or authority, and it
+	// cannot change what runs -- only whether the server proceeds at all.
+	want := map[string]bool{"Task": true, "Protocol": true}
+	got := structFields(t, "local.go", "LocalSubmission")
+	if len(got) != len(want) {
+		t.Fatalf("LocalSubmission has fields %v; the channel carries an objective and nothing else", got)
+	}
+	for _, f := range got {
+		if !want[f] {
+			t.Fatalf("LocalSubmission carries %q; a local command protocol is a shell with extra steps", f)
+		}
+	}
+}
+
+// The repair for #165, at the boundary that matters: a client that cannot read
+// the reply is refused BEFORE the objective is committed.
+//
+// The failure being prevented is a false negative, not a crash. The old client
+// read the connection to EOF and unmarshalled it as one JSON value; this
+// channel writes two, so it reported "the control process answered something
+// this client cannot read" AFTER submit() had already created the task. The
+// operator was told nothing had started, and the natural response to a failed
+// submit is to submit again.
+func TestAClientThatCannotReadTheReplyIsRefusedBeforeCommitting(t *testing.T) {
+	h := newLocalHarness(t)
+
+	// Exactly what every client at or before the readiness message sends: no
+	// protocol field at all.
+	err := rawLocal(t, h.root, `{"task":"repair the parser"}`)
+	if err == nil {
+		t.Fatal("a client too old to read the reply was accepted")
+	}
+	if !strings.Contains(err.Error(), "nothing was submitted") {
+		t.Errorf("the refusal does not tell the operator the objective was not committed: %v", err)
+	}
+	// The property. A refusal that still ran the objective would be the very
+	// ambiguity this is repairing, with the message reversed.
+	if len(h.submitted) != 0 {
+		t.Fatalf("a refused client still reached the engine: %v", h.submitted)
+	}
+
+	// An explicitly stale protocol is refused the same way.
+	if err := rawLocal(t, h.root, `{"task":"x","protocol":0}`); err == nil {
+		t.Error("protocol 0 was accepted")
+	}
+	if len(h.submitted) != 0 {
+		t.Fatalf("a refused client still reached the engine: %v", h.submitted)
+	}
+
+	// The current client is accepted, so the guard refuses the old shape rather
+	// than refusing everything -- a check that refuses all inputs proves nothing.
+	accepted, err := SubmitLocalObjective(h.root, "repair the parser")
+	if err != nil {
+		t.Fatalf("the current client was refused: %v", err)
+	}
+	if accepted.TaskID == "" {
+		t.Fatal("the current client got no task id")
+	}
+	if len(h.submitted) != 1 {
+		t.Fatalf("the accepted objective reached the engine %d times", len(h.submitted))
 	}
 }
 
