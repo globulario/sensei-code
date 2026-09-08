@@ -23,6 +23,27 @@ import (
 func tempRepo(t *testing.T) (dir, base, tree1, tree2 string) {
 	t.Helper()
 	dir = t.TempDir()
+
+	// The PRODUCTION git helper inherits this process's environment, so the
+	// identity below is not only for the setup commands run here -- it is what
+	// commit-tree uses when PublishSnapshot is exercised.
+	//
+	// Without it the test depends on the machine. git guesses an identity from
+	// the user and host when user.name is unset, and that guess succeeds on a
+	// workstation with a GECOS name and fails on a CI runner without one:
+	// "fatal: empty ident name ... not allowed". A test asserting WHICH git
+	// diagnostic surfaces then passes locally and fails in CI, having tested the
+	// developer's account rather than the code.
+	//
+	// Config is pinned to /dev/null for the same reason: a global gitconfig is a
+	// property of whoever is running the suite.
+	for k, v := range map[string]string{
+		"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@e",
+		"GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@e",
+		"GIT_CONFIG_GLOBAL": os.DevNull, "GIT_CONFIG_SYSTEM": os.DevNull,
+	} {
+		t.Setenv(k, v)
+	}
 	run := func(args ...string) string {
 		t.Helper()
 		cmd := exec.Command("git", args...)
