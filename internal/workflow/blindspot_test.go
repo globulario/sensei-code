@@ -1,6 +1,10 @@
 package workflow
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"os"
 	"strings"
 	"testing"
@@ -603,15 +607,203 @@ func TestTheEngineEmitsTheRenderedAuthorityStatement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	src := string(source)
-	if !strings.Contains(src, "StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render()") {
-		t.Error("the engine no longer emits the rendered authority statement; the basis " +
-			"line reaches no reader, and every test about its content still passes")
+	args, ok := authorityStatementSummaryArgs(t, "engine.go", string(source))
+	if !ok {
+		t.Fatal("the engine no longer emits the rendered authority statement as the " +
+			"summary of a SourceSystem/Status event; the basis line reaches no reader, " +
+			"and every test about its content still passes")
 	}
-	// It must be the whole statement, carried as the event's own summary.
-	// Truncating or reformatting it here would silently change what the journal
-	// shows while every rendering test kept passing.
-	if !strings.Contains(src, "event.SourceSystem, event.Status,\n\t\tStateAuthority(") {
-		t.Error("the authority statement is no longer the summary of a SourceSystem/Status event")
+	// The statement must be built from the same inputs the route was. Compared
+	// as canonically printed expressions, so the pin survives reformatting but
+	// still fails if an argument is dropped, reordered or substituted.
+	want := []string{"e.objective(taskID)", "d.Claims", "AssessConsequences(action)", "routing", "d"}
+	if len(args) != len(want) {
+		t.Fatalf("StateAuthority takes %d arguments, want %d: %v", len(args), len(want), args)
+	}
+	for i := range want {
+		if args[i] != want[i] {
+			t.Errorf("StateAuthority argument %d = %q, want %q", i, args[i], want[i])
+		}
+	}
+}
+
+// authorityStatementSummaryArgs finds, in src, an event.New call whose source
+// and kind are SourceSystem/Status and whose SUMMARY argument is a
+// StateAuthority(...).Render() call, and returns that call's arguments as
+// canonically printed source.
+//
+// STRUCTURE, not layout. The predecessor of this helper asserted
+// `strings.Contains(src, "event.SourceSystem, event.Status,\n\t\tStateAuthority(")`
+// — a literal newline and two tabs embedded in a semantic pin. gofmt happens to
+// produce that shape today, so it passed; extracting the arguments to a
+// variable, or any future change to wrapping, would have failed the test for a
+// reason unrelated to what it protects (#161). Matching the AST pins the same
+// coupling and is indifferent to how the call is wrapped.
+//
+// The summary position is the whole point. Keeping the StateAuthority call but
+// moving it into the payload, or changing the event kind, leaves the basis line
+// out of the journal while every rendering test still passes — so both are
+// checked here and both have negative controls in
+// TestTheAuthorityStatementPinRejects.
+func authorityStatementSummaryArgs(t *testing.T, filename, src string) ([]string, bool) {
+	t.Helper()
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, filename, src, 0)
+	if err != nil {
+		t.Fatalf("parsing %s: %v", filename, err)
+	}
+
+	var args []string
+	var found bool
+	ast.Inspect(file, func(n ast.Node) bool {
+		if found {
+			return false
+		}
+		call, isCall := n.(*ast.CallExpr)
+		if !isCall || !isSelector(call.Fun, "event", "New") || len(call.Args) < 5 {
+			return true
+		}
+		// event.New(session, task, source, kind, summary, payload)
+		if !isSelector(call.Args[2], "event", "SourceSystem") || !isSelector(call.Args[3], "event", "Status") {
+			return true
+		}
+		render, isCall := call.Args[4].(*ast.CallExpr)
+		if !isCall {
+			return true
+		}
+		sel, isSel := render.Fun.(*ast.SelectorExpr)
+		if !isSel || sel.Sel.Name != "Render" {
+			return true
+		}
+		state, isCall := sel.X.(*ast.CallExpr)
+		if !isCall {
+			return true
+		}
+		if ident, isIdent := state.Fun.(*ast.Ident); !isIdent || ident.Name != "StateAuthority" {
+			return true
+		}
+		for _, a := range state.Args {
+			args = append(args, printExpr(t, fset, a))
+		}
+		found = true
+		return false
+	})
+	return args, found
+}
+
+// isSelector reports whether e is exactly pkg.name.
+func isSelector(e ast.Expr, pkg, name string) bool {
+	sel, ok := e.(*ast.SelectorExpr)
+	if !ok || sel.Sel.Name != name {
+		return false
+	}
+	ident, ok := sel.X.(*ast.Ident)
+	return ok && ident.Name == pkg
+}
+
+// printExpr renders one expression in canonical gofmt form, so comparison is
+// against structure rather than the whitespace the file happened to carry.
+func printExpr(t *testing.T, fset *token.FileSet, e ast.Expr) string {
+	t.Helper()
+	var b strings.Builder
+	if err := printer.Fprint(&b, fset, e); err != nil {
+		t.Fatalf("printing expression: %v", err)
+	}
+	return b.String()
+}
+
+// TestTheAuthorityStatementPinRejects is the falsifiability half of the pin
+// above. A source check that cannot fail is decoration, and the failure it
+// guards against is specifically SILENT: every rendering test keeps passing
+// while the basis line stops reaching the journal.
+//
+// The first case is the #161 regression itself — same call, different wrapping.
+// The predecessor assertion failed on it; this one must not.
+func TestTheAuthorityStatementPinRejects(t *testing.T) {
+	const preamble = "package workflow\n\nfunc f() {\n"
+	cases := []struct {
+		name  string
+		body  string
+		match bool
+	}{
+		{
+			name: "the shape engine.go carries today",
+			body: `	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render(), nil))`,
+			match: true,
+		},
+		{
+			// The layout dependency #161 reported. Behaviour identical, wrapping
+			// different. A pin that fails here fails on correct changes.
+			name:  "same call on one line",
+			body:  `	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render(), nil))`,
+			match: true,
+		},
+		{
+			name: "arguments wrapped one per line",
+			body: `	e.emit(event.New(
+		e.SessionID,
+		taskID,
+		event.SourceSystem,
+		event.Status,
+		StateAuthority(
+			e.objective(taskID),
+			d.Claims,
+			AssessConsequences(action),
+			routing,
+			d,
+		).Render(),
+		nil,
+	))`,
+			match: true,
+		},
+		{
+			// Statement still built, still rendered — but buried in the payload,
+			// so the journal summary no longer shows it.
+			name: "statement moved out of the summary into the payload",
+			body: `	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "authority",
+		map[string]any{"statement": StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render()}))`,
+			match: false,
+		},
+		{
+			// Same summary, different kind: it stops being the status event a
+			// reader of the journal is looking at.
+			name: "event kind is no longer Status",
+			body: `	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.AgentStarted,
+		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render(), nil))`,
+			match: false,
+		},
+		{
+			// The regression that motivated the original pin: the emission is
+			// replaced by something cheaper and every other test stays green.
+			name: "summary is a different expression entirely",
+			body: `	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+		routing.Condition, nil))`,
+			match: false,
+		},
+	}
+	// The arguments the real pin compares against, so a matching case proves the
+	// EXTRACTION is layout-independent too and not merely the match. Asserting
+	// only ok would leave the comparison in the test above free to break on a
+	// reformat -- the same defect, moved one line down.
+	want := []string{"e.objective(taskID)", "d.Claims", "AssessConsequences(action)", "routing", "d"}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			args, ok := authorityStatementSummaryArgs(t, "synthetic.go", preamble+c.body+"\n}\n")
+			if ok != c.match {
+				t.Fatalf("matched = %v, want %v", ok, c.match)
+			}
+			if !ok {
+				return
+			}
+			if len(args) != len(want) {
+				t.Fatalf("args = %v, want %v", args, want)
+			}
+			for i := range want {
+				if args[i] != want[i] {
+					t.Errorf("arg %d = %q, want %q (canonical printing is not layout-independent)", i, args[i], want[i])
+				}
+			}
+		})
 	}
 }
