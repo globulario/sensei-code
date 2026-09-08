@@ -1,6 +1,7 @@
 package ghbridge
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -112,11 +113,33 @@ func (i Issue) args(rest ...string) []string {
 	return append(append([]string(nil), rest...), i.Number)
 }
 
+// run invokes gh and returns ONLY what it wrote to stdout.
+//
+// The streams must stay separate because this value is unmarshalled as JSON by
+// the mailbox reads below. gh writes advisories to stderr -- a new-version
+// notice, an auth warning, an API deprecation -- and merging one into the value
+// turns a successful read into a parse failure. The mailbox would then report
+// malformed content when the content was fine and only the reading was
+// polluted, which points an operator at the wrong thing entirely.
+//
+// A failure still says what gh said: stderr is wrapped into the error in the
+// same "<exit error>: <what gh wrote>" shape the callers already build, so
+// their messages are unchanged.
+//
+// Same defect and same repair as the git helper in snapshot.go, which reached
+// this conclusion through the governed loop; this is its sibling, and leaving
+// one fixed while the other merged streams would be the more confusing state.
 func run(ctx context.Context, dir string, args []string) (string, error) {
 	cmd := exec.CommandContext(ctx, "gh", args...)
 	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(stdout.String()), err
 }
 
 // PostRequest publishes a review request for one exact candidate.
@@ -124,12 +147,28 @@ func run(ctx context.Context, dir string, args []string) (string, error) {
 // The marker is emitted by Sensei Code and by nothing else: the remote party
 // answers requests, it does not create them.
 func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
+	_, err := PublishRequest(ctx, box, r, note)
+	return err
+}
+
+// PublishRequest posts the review request and returns the comment id GitHub
+// gave it, so a doorbell can point at this exact object.
+//
+// Symmetric with PublishArchitectureRequest deliberately. The architecture path
+// gained a locator when the wake signal was split from the request; leaving the
+// review path unable to be pointed at would mean a restored bridge could wake a
+// remote party for an architect turn and not for the review of the candidate
+// that turn produced -- half a protocol, discovered at the worst moment.
+//
+// The id is 0 on the legacy gh path, which posts through `gh issue comment` and
+// is not asked for the created identity.
+func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int64, error) {
 	if !box.Valid() {
-		return errors.New("a review request needs a mailbox pull request number and an expected reviewer")
+		return 0, errors.New("a review request needs a mailbox pull request number and an expected reviewer")
 	}
 	marker, err := r.Marker()
 	if err != nil {
-		return err
+		return 0, err
 	}
 	body := marker
 	if strings.TrimSpace(note) != "" {
@@ -137,18 +176,17 @@ func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
 	}
 	if box.API != nil {
 		if !box.API.Configured() {
-			return errors.New("the github app transport was selected but is not configured; " +
+			return 0, errors.New("the github app transport was selected but is not configured; " +
 				"refusing rather than posting as the operator's gh account")
 		}
-		_, err := box.API.PostComment(ctx, box.Number, body)
-		return err
+		return box.API.PostComment(ctx, box.Number, body)
 	}
 	args := box.args("issue", "comment")
 	args = append(args, "--body", body)
 	if out, err := run(ctx, box.Dir, args); err != nil {
-		return fmt.Errorf("gh issue comment: %w: %s", err, out)
+		return 0, fmt.Errorf("gh issue comment: %w: %s", err, out)
 	}
-	return nil
+	return 0, nil
 }
 
 // restComment is the REST shape, used instead of `gh issue view --json

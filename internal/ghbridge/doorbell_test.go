@@ -2,7 +2,10 @@ package ghbridge
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -262,5 +265,51 @@ func TestABridgeCarryingNoRolesAcceptsNothing(t *testing.T) {
 	}
 	if len(fb.saw) != 2 {
 		t.Fatalf("fallback saw %d turns, want both", len(fb.saw))
+	}
+}
+
+// The gh helper must not merge stderr into the value, because the mailbox reads
+// unmarshal that value as JSON. A gh advisory would turn a successful read into
+// a parse failure and report malformed content when the content was fine.
+func TestAGhAdvisoryDoesNotCorruptAMailboxRead(t *testing.T) {
+	dir := t.TempDir()
+	// A stand-in for gh that writes a valid answer to stdout and an advisory to
+	// stderr, which is exactly what a real gh version notice looks like.
+	script := filepath.Join(dir, "gh")
+	if err := os.WriteFile(script, []byte(
+		"#!/bin/sh\necho 'A new release of gh is available' >&2\nprintf '%s' '[{\"body\":\"x\"}]'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	out, err := run(context.Background(), dir, []string{"api", "whatever"})
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if strings.Contains(out, "new release") {
+		t.Fatalf("stderr leaked into the value a mailbox read unmarshals: %q", out)
+	}
+	var parsed []map[string]any
+	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
+		t.Fatalf("the value did not survive as JSON: %v (got %q)", err, out)
+	}
+}
+
+// A failure still reports what gh said, so a real error is not silently blank.
+func TestAGhFailureStillCarriesWhatGhSaid(t *testing.T) {
+	dir := t.TempDir()
+	script := filepath.Join(dir, "gh")
+	if err := os.WriteFile(script, []byte(
+		"#!/bin/sh\necho 'gh: could not resolve repository' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	_, err := run(context.Background(), dir, []string{"api", "whatever"})
+	if err == nil {
+		t.Fatal("a failing gh returned no error")
+	}
+	if !strings.Contains(err.Error(), "could not resolve repository") {
+		t.Errorf("the error dropped what gh said: %v", err)
 	}
 }
