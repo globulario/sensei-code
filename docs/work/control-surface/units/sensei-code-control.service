@@ -1,0 +1,123 @@
+[Unit]
+# The Sensei Code control surface and the GitHub webhook ingress.
+#
+# WHY THIS EXISTS. This process ran for a day as a `nohup` of a binary in a
+# scratchpad directory, built at 4129139 from a checkout that had since moved
+# on. Nothing recorded which revision was serving, nothing restarted it, and
+# the binary's own directory was one `rm -rf /tmp/...` from being gone while
+# the process still held the socket. It had also grown: by the end it guarded
+# an objective-approval channel and an authenticated GitHub ingress, neither of
+# which existed when it was started.
+#
+# Two listeners, two authentication regimes, deliberately never one socket:
+#
+#   127.0.0.1:10123   MCP control surface     Bearer credential
+#   127.0.0.1:10124   GitHub webhook ingress  HMAC-SHA256 over the raw body
+#
+# Both are loopback. Public reachability is Globular/Envoy's job, and it
+# terminates in front of :10124 only.
+#
+# StartLimit* live under [Unit]. Under [Service] systemd ignores them silently,
+# which is how awg-awareness-graph.service's documented retry bound came to
+# have never applied.
+Description=Sensei Code control + GitHub webhook ingress (globulario/sensei-code)
+Documentation=https://github.com/globulario/sensei-code/pull/157
+After=network-online.target
+StartLimitBurst=5
+StartLimitIntervalSec=120
+
+[Service]
+Type=simple
+
+# WorkingDirectory is load-bearing, not tidiness. discoverProposalRepoRoot
+# walks UP from the process's cwd to the nearest .git boundary and uses that
+# worktree for the inert proposal ledger. It deliberately does not infer a
+# repository from the webhook payload, which is remote data. Start this
+# anywhere else and an authenticated objective proposal is a receive failure
+# rather than a durable record.
+WorkingDirectory=/home/dave/Documents/github.com/globulario/sensei-code
+
+# Its own installed binary, never a build tree or a scratchpad path. Rebuild
+# with:
+#   go build -o /home/dave/.local/share/sensei-code/bin/sensei-code ./cmd/sensei-code
+# then `systemctl --user restart sensei-code-control`. The serving revision is
+# recoverable at any time from the artifact itself:
+#   go version -m /home/dave/.local/share/sensei-code/bin/sensei-code | grep vcs
+# The mailbox is PR #157's top-level conversation, not issue #156. The remote
+# actor is woken by pull request activity, so a request on an ordinary issue is
+# posted, readable, and never answered -- indistinguishable from a remote party
+# that declined to reply. Startup establishes PR-ness through authenticated
+# GitHub metadata and refuses if the number is an ordinary issue, so this flag
+# cannot quietly regress to a conversation nothing wakes on.
+#
+# Issue #156 remains the historical mailbox: the earlier experiments and the
+# governed-refusal specimen live there and are not moved.
+# The bridge carries NO role turns. Every architect and reviewer turn is served
+# by the engine's own assignment ladder -- locally, through the Codex app-server,
+# which is the same ChatGPT subscription.
+#
+# This is not a fallback and not a verdict on the remote path. The #158
+# experiment SUCCEEDED on 2026-09-08: three consecutive architect turns over
+# PR #157 were woken by the doorbell, reconciled from the wake locator, and
+# answered exactly once each, with zero orphans. The wake path is commissioned.
+#
+# Roles are back to `none` because the experiment is over, not because it
+# failed. Carrying a role sends a governed architect turn to the REMOTE and
+# blocks for DefaultWait (30m) on a party that answers in minutes when it is
+# attended and not at all when it is not. That is an instrument, chosen per
+# experiment, not a standing default.
+#
+# To carry them again: -github-bridge-roles architect,reviewer. Nothing else
+# needs changing -- the doorbell below is already enabled, and #162's exchange
+# lifetime (landed in bc5773f) now retracts a request whose waiter is gone
+# rather than leaving it standing.
+#
+# The GitHub ingress below is UNAFFECTED and stays on. Objective proposals still
+# arrive through the signed webhook and still require local operator approval, so
+# the authority chain -- proposal, approval, receipt, task -- keeps its durable,
+# third-party-attested record on GitHub. That ledger was always the valuable half.
+#
+# -github-doorbell is REQUIRED for the remote path to work at all, and it is
+# off by default. Without it Resolver.Doorbell is nil, the runner's ring branch
+# never fires, and a published request waits DefaultWait with nothing having
+# asked the remote to look at it -- a silent no-op indistinguishable from a
+# remote that ignored the wake. The wake posts through the operator's gh
+# credentials (GHDoorbell shells out to `gh issue comment`), which is the whole
+# point: the request stays App-authored, the wake is authored by the identity
+# the remote actually listens to. gh resolves at /usr/bin/gh on the service PATH.
+ExecStart=/home/dave/.local/share/sensei-code/bin/sensei-code control \
+  -addr 127.0.0.1:10123 \
+  -github-webhook-addr 127.0.0.1:10124 \
+  -github-webhook-secret-file /home/dave/.config/sensei-code/github-webhook-secret \
+  -github-webhook-installation-id 159521273 \
+  -github-webhook-repository-id 1335129805 \
+  -github-webhook-repository globulario/sensei-code \
+  -github-mailbox-pr 157 \
+  -github-bridge-roles none \
+  -github-doorbell \
+  -github-reviewer-id 1697116 \
+  -github-reviewer-login davecourtois \
+  -github-review-provider chatgpt \
+  -github-remote origin \
+  -github-app-id 4850747 \
+  -github-installation-id 159521273 \
+  -github-app-key /home/dave/.config/sensei-code/github-app-private-key.pem \
+  -github-owner globulario \
+  -github-repo sensei-code
+
+Restart=on-failure
+RestartSec=5
+
+# NOT sandboxed, and that is a statement rather than an omission. This process
+# launches governed workers that need the real repository, the user's provider
+# credentials and a working Git. PrivateTmp or ProtectHome here would break the
+# thing it exists to run. The authority boundary it enforces is peer-credential
+# based and does not depend on systemd confinement: a caller on the objective
+# socket must be same-UID, must NOT be a descendant of this process, and must
+# hold a controlling terminal.
+#
+# That third condition is why this unit cannot approve anything on its own, and
+# why nothing here should ever be given a Type=oneshot sibling that does.
+
+[Install]
+WantedBy=default.target
