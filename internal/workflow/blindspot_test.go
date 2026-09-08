@@ -499,3 +499,45 @@ func TestTheBasisNeverDecidesARoute(t *testing.T) {
 		}
 	}
 }
+
+// A classification nobody reads is not a classification. The basis must reach
+// the block an operator -- or an agent -- actually sees, beside the route that
+// already told them who decides.
+func TestTheRenderedStatementCarriesTheBasisAndItsRemedy(t *testing.T) {
+	obj := Objective{Text: "repair the thing", Provenance: SubmittedUnattended}
+	bounded := ConsequenceAssessment{Result: ConsequenceBounded, Boundary: "the candidate worktree"}
+
+	knowledge := StateAuthority(obj, nil, bounded, Routing{
+		Route:  RouteHuman,
+		Basis:  BasisLacksKnowledge,
+		Closes: "a reading for that blind-spot phrasing",
+	}, architectureDecision{}).Render()
+
+	if !strings.Contains(knowledge, "basis: lacks-knowledge") {
+		t.Errorf("a knowledge-limited stop did not say so where it is read:\n%s", knowledge)
+	}
+	if !strings.Contains(knowledge, "closes: a reading for that blind-spot phrasing") {
+		t.Errorf("a knowledge-limited stop did not carry its remedy:\n%s", knowledge)
+	}
+
+	value := StateAuthority(obj, nil, bounded, Routing{
+		Route: RouteHuman,
+		Basis: BasisProtectsValue,
+	}, architectureDecision{}).Render()
+
+	if !strings.Contains(value, "basis: protects-value") {
+		t.Errorf("a value-protecting stop did not say so:\n%s", value)
+	}
+	// A value-protecting stop has no remedy to offer, and must not invent one.
+	if strings.Contains(value, "closes:") {
+		t.Errorf("a value-protecting stop offered a remedy; nothing closes a decision "+
+			"somebody has to make:\n%s", value)
+	}
+
+	// Both stops route identically. The basis is the only thing that separates
+	// "weigh this" from "I could not see", which is the whole point.
+	if !strings.Contains(knowledge, "routed: human-authority-required") ||
+		!strings.Contains(value, "routed: human-authority-required") {
+		t.Error("the two stops no longer share a route; this test is not comparing what it thinks")
+	}
+}

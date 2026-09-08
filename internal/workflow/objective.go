@@ -100,6 +100,17 @@ type AuthorityStatement struct {
 	// Route is where the plan was sent, carried so the statement and the
 	// decision cannot describe different moments.
 	Route Route
+	// Basis says what the stop RESTS ON, and Closes names the remedy when it
+	// rests on absent knowledge.
+	//
+	// Carried here because a classification nobody reads is not a
+	// classification. The route already told the reader WHO decides; without
+	// these two it still cannot tell whether a person is being asked to weigh
+	// something or merely to notice that the graph could not see. Those want
+	// opposite responses -- one a decision, one a derivation -- and only one of
+	// them needs a human at all.
+	Basis  RefusalBasis
+	Closes string
 }
 
 // TechnicalPremise is one claim the plan rests on.
@@ -127,12 +138,14 @@ type TechnicalPremise struct {
 // no path by which an architect's rationale, a plan's steps, or a provider's
 // wording can reach it, so no actor gains authority over one lane by
 // controlling another.
-func StateAuthority(objective Objective, claims []Claim, assessment ConsequenceAssessment, route Route, d architectureDecision) AuthorityStatement {
+func StateAuthority(objective Objective, claims []Claim, assessment ConsequenceAssessment, routing Routing, d architectureDecision) AuthorityStatement {
 	s := AuthorityStatement{
 		Objective:            objective,
 		ObjectiveEstablished: objective.HumanAuthorized(),
 		Consequence:          assessment,
-		Route:                route,
+		Route:                routing.Route,
+		Basis:                routing.Basis,
+		Closes:               routing.Closes,
 	}
 	for _, c := range claims {
 		s.Technical = append(s.Technical, TechnicalPremise{
@@ -255,5 +268,12 @@ func (s AuthorityStatement) Render() string {
 	b.WriteString("  assessed from the action, not from who asked and not from whether the plan " +
 		"satisfies the objective.\n")
 	b.WriteString("\nrouted: " + string(s.Route) + "\n")
+	// Machine-readable and on their own lines, because the next reader of this
+	// block is as likely to be an agent as a person, and an agent acting on a
+	// stop needs to know whether there is anything it may do about it.
+	b.WriteString("basis: " + s.Basis.String() + "\n")
+	if s.Closes != "" {
+		b.WriteString("closes: " + s.Closes + "\n")
+	}
 	return b.String()
 }
