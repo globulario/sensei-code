@@ -85,6 +85,61 @@ type Claim struct {
 }
 
 // Routing is the router's decision plus the reason a human can act on.
+// RefusalBasis says what a stop RESTS ON. It never decides whether the stop
+// happens.
+//
+// Two refusals arrive in the same shape -- a route, a condition -- and mean
+// opposite things. "A human owns this decision" is a statement about VALUE:
+// somebody must weigh a consequence, and no amount of evidence removes that.
+// "This router has no reading for that signal" is a statement about KNOWLEDGE:
+// nothing was weighed, something could not be seen, and evidence closes it.
+//
+// Both landed on RouteHuman, so both cost a person's attention. On 2026-09-07
+// the second kind fired on a LOW_RISK region Sensei had already classified
+// APPROVAL_GATE_NONE, and separately a coverage rule about unindexed test files
+// was read for hours as a principled refusal because it was worded like one.
+// The route said WHO decides and never WHY, and the difference is the whole
+// question of whether a refusal is protecting something or reporting a limit.
+//
+// This is descriptive. It is deliberately not consulted by any routing
+// decision, and a test pins that: a basis that could change a route would be a
+// classifier that widens the router, which is the thing this must not become.
+type RefusalBasis int
+
+const (
+	// BasisUnclassified is the zero value and is READ AS protecting a value.
+	//
+	// Deliberately first, so an unlabelled stop costs a person's attention
+	// rather than being filed as a closable gap. Mislabelling a value as a
+	// knowledge limit would route a human-owned decision to a derivation, and
+	// silence is not evidence that nothing was being protected.
+	BasisUnclassified RefusalBasis = iota
+
+	// BasisProtectsValue: somebody must weigh a consequence. Evidence does not
+	// dissolve it, and the stop is the system working.
+	BasisProtectsValue
+
+	// BasisLacksKnowledge: nothing was weighed because something could not be
+	// seen. Closable by establishing evidence, and a stop of this kind that
+	// reaches a person is a cost with no protection attached.
+	BasisLacksKnowledge
+)
+
+func (b RefusalBasis) String() string {
+	switch b {
+	case BasisProtectsValue:
+		return "protects-value"
+	case BasisLacksKnowledge:
+		return "lacks-knowledge"
+	default:
+		return "unclassified"
+	}
+}
+
+// ProtectsValue reads the basis, defaulting an unclassified stop to the
+// protective reading.
+func (r Routing) ProtectsValue() bool { return r.Basis != BasisLacksKnowledge }
+
 type Routing struct {
 	Route Route
 	// Condition is the exact certifiability condition that produced the route.
@@ -99,6 +154,11 @@ type Routing struct {
 	Gap GapIdentity
 	// ClaimGap is the receipt the routing claim referenced, if any.
 	ClaimGap string
+	// Basis says what this stop rests on. Descriptive; no route reads it.
+	Basis RefusalBasis
+	// Closes names what would close a BasisLacksKnowledge stop, so a limit
+	// arrives with its remedy instead of only its symptom. Empty otherwise.
+	Closes string
 	// Blast and Gate are Sensei's structured change-risk verdict, carried
 	// forward rather than consumed here.
 	//
@@ -252,7 +312,9 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	}
 
 	if !scoped.Authority.Certifiable() {
-		return Routing{Route: RouteCannotEstablish, Condition: scoped.Authority.Diagnostic()}
+		return Routing{Route: RouteCannotEstablish, Basis: BasisLacksKnowledge,
+			Closes:    "a certifiable graph generation; nothing was weighed because the instrument could not vouch for itself",
+			Condition: scoped.Authority.Diagnostic()}
 	}
 
 	// The status decides whether there is an ANSWER to read. It does not decide
@@ -340,6 +402,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		if gate := scoped.ChangeRisk.Gate(); gate != "none" {
 			return Routing{
 				Route: RouteHuman,
+				Basis: BasisProtectsValue,
 				Condition: "Sensei requires approval for this change class: " + gate +
 					" (blast radius " + scoped.ChangeRisk.Blast() + ")",
 			}
@@ -362,6 +425,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	case ConsequenceUnacceptable:
 		return Routing{
 			Route:     RouteHuman,
+			Basis:     BasisProtectsValue,
 			Condition: "this action's consequences are not bounded: " + consequences.Boundary + consequenceSignalSuffix(spots),
 		}
 	case ConsequenceBounded:
@@ -429,7 +493,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		// The condition states the evidence rather than the status, because the
 		// two came apart: a preflight can answer EMPTY while publishing
 		// sufficient coverage, and it can answer OK while proving none.
-		return Routing{Route: RouteCloseGap,
+		return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
 			Condition: "graph coverage is absent for the planned files: " + scoped.Coverage.Diagnostic(),
 			Gap:       GapIdentity{Kind: "coverage-absent", Scope: action.Files}}
 	}
@@ -443,6 +507,8 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 	if !scoped.ChangeRisk.Classified() {
 		return Routing{
 			Route:     RouteHuman,
+			Basis:     BasisLacksKnowledge,
+			Closes:    "a change-risk classification for this region; the router has no verdict to read, not a verdict it disagrees with",
 			Condition: "Sensei classified no approval gate for the planned region",
 		}
 	}
@@ -457,7 +523,9 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 			// bounded work by default, or every future addition to Sensei's
 			// vocabulary becomes silent autonomy.
 			return Routing{
-				Route: RouteHuman,
+				Route:  RouteHuman,
+				Basis:  BasisLacksKnowledge,
+				Closes: "a reading for that blind-spot phrasing in blindspot.go; until one exists the router cannot tell whether the signal is ignorance or risk, so it costs a person's attention without protecting anything",
 				Condition: "Sensei reported a blind spot this router has no reading for: " +
 					strings.Join(spots.Unrecognised, ", "),
 			}
@@ -566,7 +634,7 @@ func decideRouteForAction(scoped sensei.PreflightDecision, claims []Claim, actio
 		// the same work: an inference needs evidence gathered, while this needs
 		// the premise re-stated with a source that can be checked at all.
 		return Routing{
-			Route: RouteCloseGap,
+			Route: RouteCloseGap, Basis: BasisLacksKnowledge,
 			Condition: "the plan rests on an unverified premise" + about +
 				" (" + declaredSource(c.Source) + "): " + statement,
 			Gap:      GapIdentity{Kind: "unrecognised-premise-source", Subject: gapSubject(c.About, action.Files), Scope: action.Files},
@@ -629,7 +697,7 @@ func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool
 	if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.architecturalFiles()); closed {
 		return Routing{}, false
 	}
-	return Routing{Route: RouteCloseGap,
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
 		Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(unexamined, ", "),
 		Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
 }

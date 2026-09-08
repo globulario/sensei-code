@@ -46,10 +46,20 @@ go.work.sum
 # enough to trip the governed dirty-tree gate. Worse, a branch checkout could
 # resurrect a stale proof and present it as current. The authored corpus is
 # docs/awareness/; .sensei/config.yaml, .sensei/project/ and .sensei/skills/
-# stay tracked. The sibling services repository ignores the same three files.
+# stay tracked. The sibling services repository ignores the same core files.
+#
+# The publication receipt and the briefing delivery log are the same kind of
+# fact and were missed when this list was written. They cost a governed run to
+# find: an authorized approval created task-1788748865978691155 from proposal
+# 5561620357, and candidate.Establish refused it one second later because these
+# two untracked files made the canonical checkout dirty. The approval token was
+# spent on a precondition nobody could see, which is precisely the failure the
+# paragraph above describes -- it just did not name every file that causes it.
 /.sensei/graph-authority.json
 /.sensei/graph-authority.transaction.tsv
 /.sensei/graph-closure-report.json
+/.sensei/graph-publication-receipt.json
+/.sensei/briefing-delivery.jsonl
 
 # Derived project inference, and the one file in .sensei/project/ that cannot be
 # tracked honestly. Its binding names an exact revision, so committing it makes

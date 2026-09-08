@@ -69,14 +69,17 @@ func newLocalHarnessWithPeer(t *testing.T, observe func(net.Conn) (peer, error))
 func TestALocalObjectiveReachesTheEnginesSubmissionEntry(t *testing.T) {
 	h := newLocalHarness(t)
 
-	accepted, err := SubmitLocalObjective(h.root, "  repair the parser  ")
+	// Surrounding whitespace is CARRIED, not trimmed. The channel validates
+	// that an objective says something; it does not decide what it says.
+	const exact = "  repair the parser  "
+	accepted, err := SubmitLocalObjective(h.root, exact)
 	if err != nil {
 		t.Fatalf("submit: %v", err)
 	}
-	if len(h.submitted) != 1 || h.submitted[0] != "repair the parser" {
-		t.Fatalf("the engine was handed %v", h.submitted)
+	if len(h.submitted) != 1 || h.submitted[0] != exact {
+		t.Fatalf("the engine was handed %q, want the exact submitted bytes %q", h.submitted, exact)
 	}
-	if accepted.TaskID != "task-repair the parser" {
+	if accepted.TaskID != "task-"+exact {
 		t.Fatalf("the task id was not returned: %q", accepted.TaskID)
 	}
 	if accepted.Workspace != testWorkspace {
@@ -351,6 +354,13 @@ func TestALocallyPlacedTaskIsTheOneTheRemoteRoleIsAskedAbout(t *testing.T) {
 // helpers ------------------------------------------------------------------
 
 // rawLocal sends exact bytes on the channel and reports the refusal, if any.
+// rawLocal speaks the wire directly, so a malformed message can be sent that
+// the typed client would refuse to construct.
+//
+// It performs the same handshake the real client does: read the verdict for
+// this connection, and only then send. An authority refusal arrives instead of
+// readiness and is returned as-is, so callers testing malformed BODIES and
+// callers testing refused CALLERS both get the error they are asking about.
 func rawLocal(t *testing.T, root, body string) error {
 	t.Helper()
 	conn, err := net.Dial("unix", LocalSocketPath(root))
@@ -358,6 +368,21 @@ func rawLocal(t *testing.T, root, body string) error {
 		return err
 	}
 	defer conn.Close()
+	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
+	dec := json.NewDecoder(conn)
+
+	// The authority verdict for this connection, before anything is sent.
+	var ready map[string]any
+	if err := dec.Decode(&ready); err != nil {
+		return err
+	}
+	if msg, ok := ready["error"].(string); ok && msg != "" {
+		return errors.New(msg)
+	}
+	if r, ok := ready["ready"].(bool); !ok || !r {
+		return errors.New("the channel did not acknowledge readiness")
+	}
+
 	if _, err := conn.Write([]byte(body)); err != nil {
 		return err
 	}
@@ -365,9 +390,8 @@ func rawLocal(t *testing.T, root, body string) error {
 	if unix, ok := conn.(*net.UnixConn); ok {
 		_ = unix.CloseWrite()
 	}
-	_ = conn.SetDeadline(time.Now().Add(5 * time.Second))
 	var reply map[string]any
-	if err := json.NewDecoder(conn).Decode(&reply); err != nil {
+	if err := dec.Decode(&reply); err != nil {
 		return err
 	}
 	if msg, ok := reply["error"].(string); ok && msg != "" {

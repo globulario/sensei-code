@@ -1,6 +1,7 @@
 package workflow
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -332,4 +333,169 @@ func lockAnchors(files ...string) []CoverageAnchor {
 			Describe: "field_access_under_lock(Bus.subs under Bus.mu)"})
 	}
 	return out
+}
+
+// The benign state: the graph HAS facts here and none raised a category.
+//
+// Measured on internal/ghbridge/snapshot.go — PREFLIGHT_STATUS_OK, LOW_RISK,
+// blast=local, APPROVAL_GATE_NONE, 2 direct anchors — where this single blind
+// spot matched no marker, read as unrecognised, and escalated the run to a
+// human over a risk channel that had already said no approval was needed.
+func TestTheBenignStateIsReadAsNoSignalNotAsUnknown(t *testing.T) {
+	const measured = "anchors present, no high-risk category fired"
+
+	if got := classifyBlindSpot(measured); got != blindSpotNoSignal {
+		t.Fatalf("classifyBlindSpot(%q) = %v, want no-signal; the most reassuring "+
+			"string in the vocabulary must not produce the strongest stop", measured, got)
+	}
+	r := readBlindSpots([]string{measured})
+	if len(r.Unrecognised) != 0 {
+		t.Errorf("a recognised benign state was still carried as unrecognised: %v", r.Unrecognised)
+	}
+	if len(r.NoSignal) != 1 {
+		t.Fatalf("NoSignal = %v, want the one measured phrasing", r.NoSignal)
+	}
+	if len(r.Coverage) != 0 || len(r.Consequence) != 0 {
+		t.Errorf("benign state leaked into another kind: coverage=%v consequence=%v",
+			r.Coverage, r.Consequence)
+	}
+}
+
+// The repair must not become a fuzzy match. Exact normalised equality only:
+// a string that merely RESEMBLES the benign phrasing is still unknown, and
+// unknown still fails closed.
+func TestOnlyTheExactBenignPhrasingIsRecognised(t *testing.T) {
+	for _, near := range []string{
+		"anchors present",
+		"no high-risk category fired",
+		"anchors present, no high-risk category fired, but the graph is stale",
+		"NO ANCHORS present, no high-risk category fired",
+		"anchors absent, no high-risk category fired",
+		"anchors present; no high-risk category fired",
+	} {
+		if got := classifyBlindSpot(near); got == blindSpotNoSignal {
+			t.Errorf("classifyBlindSpot(%q) = no-signal; only the exact measured "+
+				"phrasing may be recognised, or an unread string acquires a meaning "+
+				"by resembling one that has been", near)
+		}
+	}
+}
+
+// Whitespace and case are normalisation, not a different string.
+func TestTheBenignPhrasingSurvivesNormalisation(t *testing.T) {
+	for _, same := range []string{
+		"  anchors present, no high-risk category fired  ",
+		"Anchors Present, No High-Risk Category Fired",
+	} {
+		if got := classifyBlindSpot(same); got != blindSpotNoSignal {
+			t.Errorf("classifyBlindSpot(%q) = %v, want no-signal", same, got)
+		}
+	}
+}
+
+// The failing-closed default is untouched: anything still unread escalates,
+// and it beats a benign reading in a mixed set.
+func TestUnknownStillFailsClosedBesideABenignSpot(t *testing.T) {
+	r := readBlindSpots([]string{
+		"anchors present, no high-risk category fired",
+		"some future sensei phrasing nobody has classified",
+	})
+	if len(r.Unrecognised) != 1 {
+		t.Fatalf("Unrecognised = %v, want the unread string to survive", r.Unrecognised)
+	}
+	if len(r.NoSignal) != 1 {
+		t.Fatalf("NoSignal = %v, want the benign spot still read", r.NoSignal)
+	}
+}
+
+// A DEGRADED answer carrying "anchors present" contradicts itself, and a
+// self-contradicting instrument is not one to reason from. The degraded path's
+// behaviour is unchanged by this repair.
+func TestABenignSpotDoesNotMakeADegradedAnswerCoverageShaped(t *testing.T) {
+	r := readBlindSpots([]string{
+		"coverage_insufficient: no direct anchors and no indexed files",
+		"anchors present, no high-risk category fired",
+	})
+	if r.degradedIsCoverageShaped() {
+		t.Error("a degraded answer carrying a benign spot was read as coverage-shaped; " +
+			"the rule is that EVERY spot is a recognised coverage marker")
+	}
+}
+
+// A refusal says what it RESTS ON. Two stops arrive in the same shape and mean
+// opposite things: "somebody must weigh this" and "something could not be
+// seen". Both cost a person's attention; only the first is protecting anything.
+func TestARefusalSaysWhatItRestsOn(t *testing.T) {
+	if got := BasisUnclassified.String(); got != "unclassified" {
+		t.Fatalf("zero value = %q", got)
+	}
+	// The zero value must read as protective. An unlabelled stop filed as a
+	// closable gap would route a human-owned decision to a derivation.
+	if !(Routing{}).ProtectsValue() {
+		t.Error("an unclassified stop was read as a knowledge limit; silence is not " +
+			"evidence that nothing was being protected")
+	}
+	if !(Routing{Basis: BasisProtectsValue}).ProtectsValue() {
+		t.Error("a value-protecting stop was not read as one")
+	}
+	if (Routing{Basis: BasisLacksKnowledge}).ProtectsValue() {
+		t.Error("a knowledge limit was read as protecting a value")
+	}
+}
+
+// A knowledge-limited stop must arrive with its remedy, not only its symptom.
+// The whole cost of the unclassified kind was that it looked principled and
+// nobody could tell what would close it.
+func TestAKnowledgeLimitedStopNamesWhatWouldCloseIt(t *testing.T) {
+	source, err := os.ReadFile("authority.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(source)
+	// Every site that declares BasisLacksKnowledge on a RouteHuman stop should
+	// also say what closes it; a limit reported without a remedy is the shape the
+	// classification exists to remove.
+	for _, marker := range []string{
+		`Closes:    "a change-risk classification for this region`,
+		`Closes: "a reading for that blind-spot phrasing`,
+		`Closes:    "a certifiable graph generation`,
+	} {
+		if !strings.Contains(src, marker) {
+			t.Errorf("a knowledge-limited stop does not name its remedy: %s", marker)
+		}
+	}
+}
+
+// The load-bearing constraint: this classification is DESCRIPTIVE. A basis that
+// could change a route would be a classifier that widens the router, which is
+// exactly what a refusal-classifier must never become.
+func TestTheBasisNeverDecidesARoute(t *testing.T) {
+	source, err := os.ReadFile("authority.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// String() switches on the basis to RENDER it, which decides nothing. Skip
+	// that one function rather than weaken the rule everywhere else.
+	var inRenderer bool
+	for i, line := range strings.Split(string(source), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "func (b RefusalBasis) String()") {
+			inRenderer = true
+		} else if inRenderer && trimmed == "}" {
+			inRenderer = false
+			continue
+		}
+		if inRenderer || strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		// A basis appearing in a condition is a basis that can steer control
+		// flow. Assignment (`Basis:`) and the reader method are the only
+		// legitimate uses inside this file.
+		if (strings.HasPrefix(trimmed, "if ") || strings.HasPrefix(trimmed, "switch ") ||
+			strings.HasPrefix(trimmed, "case ")) &&
+			(strings.Contains(trimmed, "Basis") || strings.Contains(trimmed, "ProtectsValue()")) {
+			t.Errorf("authority.go:%d reads the refusal basis in a control-flow decision: %q\n"+
+				"the classification must describe a stop, never cause one", i+1, trimmed)
+		}
+	}
 }

@@ -42,6 +42,11 @@ type RunnerSpec struct {
 	// TaskID is which task this turn belongs to. It is carried because a
 	// delegated role is held per task, not per process.
 	TaskID string
+	// Architecture is populated by resolveRunner for architect turns from facts
+	// the engine already owns: the recorded objective, pinned candidate base and
+	// graph generation. A transport consumes this binding; it never derives one
+	// from the prompt it is about to carry.
+	Architecture roles.ArchitectureBinding
 	// Env are extra environment entries enforcing capability boundaries the
 	// agent must not be able to talk its way past.
 	Env []string
@@ -90,6 +95,25 @@ func CLIResolved(spec RunnerSpec, sessionID string) Resolved {
 	}
 }
 
+// architectureBinding reads the exact referents the workflow already owns.
+//
+// The prompt also contains the task and graph evidence, but presentation is a
+// weaker source than these records. Deriving identity back out of prompt text
+// would recreate the class this project keeps removing: strong truth exists,
+// yet a weaker projection is consumed.
+func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
+	graphBuild := ""
+	if graph := e.graphFor(taskID); graph != nil {
+		graphBuild = graph.Digest
+	}
+	return roles.BindArchitecture(
+		taskID,
+		e.objective(taskID).Text,
+		e.governedBase(taskID),
+		graphBuild,
+	)
+}
+
 // resolveRunner returns the adapter that serves this turn.
 //
 // With no resolver configured it is the provider command line, which is every
@@ -101,6 +125,13 @@ func CLIResolved(spec RunnerSpec, sessionID string) Resolved {
 func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	if !spec.Role.Valid() {
 		return Resolved{}, fmt.Errorf("cannot resolve an adapter for unknown role %q", spec.Role)
+	}
+	// Architecture is bound at the last common edge before any resolver can
+	// choose a transport. Call sites do not supply it and a resolver cannot
+	// substitute it. For a governed task, candidate.Establish has already pinned
+	// the base and bindGraph has already recorded the start gate's graph.
+	if spec.Role == roles.Architect {
+		spec.Architecture = e.architectureBinding(spec.TaskID)
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil

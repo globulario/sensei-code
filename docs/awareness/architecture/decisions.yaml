@@ -77,3 +77,15 @@ decisions:
       - internal/workflow/prospective.go
       - internal/workflow/prospective_test.go
       - internal/workflow/suppliedplan.go
+  - id: decision.sensei_code.stop_merging_git_s_stderr_into_values_used_as_object_ids_in
+    title: Stop merging git's stderr into values used as object ids in the snapshot projection.
+    status: accepted
+    architectural_plane: intended
+    rationale: 'In internal/ghbridge/snapshot.go, stop merging git''s stderr into values used as object ids: read stdout for the id and keep stderr for the error text, so a git warning cannot make VerifySnapshot claim the candidate tree does not match.'
+    context: 'decision_authority: architectural; certified_by: github.com/globulario/sensei-code @ fd350489a19394be847d770f2e8dd7b8f1b75303; decided_by: supplied plan sha256 79dd3356e4e24de8780308966f2f115e3230f28d6b8cb72cc0eec897d6578920 (not architect-produced); human_authorization: none established: submitted unattended with an externally supplied plan; no human presence was established'
+    consequences: A git warning during snapshot publication or verification now produces either a correct id or an explicit failure carrying git's own text, instead of a false claim that the candidate tree or parent does not match. No change to what is accepted or refused.
+    related_invariants:
+      - sensei_code.ghbridge.a_published_snapshot_is_a_verified_projection
+    source_files:
+      - internal/ghbridge/runner_test.go
+      - internal/ghbridge/snapshot.go

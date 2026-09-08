@@ -12,6 +12,7 @@ package workflow
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/sensei"
@@ -163,18 +164,22 @@ func certifyStartForLane(workspaceResult, preflightResult sensei.ToolResult, rep
 	return certifiedStart{workspace: workspace, preflight: preflight, degraded: degraded}, nil
 }
 
-// sameCommit compares commit identities that may be abbreviated to different
-// lengths. Sensei publishes twelve characters; git reports forty.
-func sameCommit(a, b string) bool {
-	a, b = strings.ToLower(strings.TrimSpace(a)), strings.ToLower(strings.TrimSpace(b))
-	if a == "" || b == "" {
-		return false
-	}
-	if len(a) > len(b) {
-		a, b = b, a
-	}
-	return strings.HasPrefix(b, a)
-}
+// canonicalCommit reports whether a string is a full git object id.
+//
+// This replaces sameCommit, which compared commit identities by PREFIX because
+// "Sensei publishes twelve characters; git reports forty". That is no longer
+// true -- the producer was repaired to stamp `git rev-parse HEAD` -- and it
+// should never have been a governed comparison in the first place. Prefix
+// equality answers "could these be the same commit", and a governed identity
+// needs "are these the same commit". The two differ exactly when it matters.
+//
+// sameCommit had no callers when it was removed, which is the only reason this
+// is a deletion rather than a migration. It is recorded here because a dead
+// helper that encodes an obsolete contract is how the contract comes back: the
+// next person needing a commit comparison finds it, and it looks authoritative.
+func canonicalCommit(s string) bool { return canonicalObjectID.MatchString(strings.TrimSpace(s)) }
+
+var canonicalObjectID = regexp.MustCompile(`^[0-9a-f]{40}$`)
 
 func short(sha string) string {
 	if len(sha) > 12 {

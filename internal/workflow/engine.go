@@ -150,15 +150,47 @@ const closureBudget = 1
 // decoded, so by construction it names the graph the engine reached. Every
 // agent request for the task carries it, and each provider is launched so it
 // can reach this graph and no other.
-func (e *Engine) bindGraph(taskID string, ws sensei.WorkspaceStatus) {
+func (e *Engine) bindGraph(taskID string, start certifiedStart) {
 	b := &agent.GraphBinding{
 		Command: e.Config.Sensei.Command,
 		Args:    append([]string(nil), e.Config.Sensei.Args...),
-		Domain:  ws.Binding.RepositoryDomain,
+		Domain:  start.Domain(),
 	}
-	if ws.GraphAuthority != nil {
-		b.Digest = ws.GraphAuthority.GraphBuildCommit
+	// THE IDENTITY COMES FROM THE EVALUATION THAT CERTIFIED THE START.
+	//
+	// It used to be read from the workspace status, decoded into the generic
+	// Authority type -- which HAS a GraphBuildCommit field, so it compiled and
+	// looked right. But sensei.workspace.identity.v1 deliberately projects a
+	// bounded authority that does not carry that field, so the decode produced
+	// "" every time. Downstream, ArchitectureBinding requires ^[0-9a-f]{40}$
+	// and refused every architect turn, reporting a missing graph identity for
+	// a graph whose identity was sitting in the other surface the gate had
+	// already decoded.
+	//
+	// One evaluation now owns both facts. certifiedStart cannot be constructed
+	// outside certifyStart, so a binding built from it is a binding the gate
+	// vouched for -- and there is no second graph evaluation to disagree with.
+	//
+	// Non-canonical is NOT installed and NOT repaired. A published commit
+	// identity is the full object id; an abbreviation names a commit only
+	// probabilistically and cannot be compared for equality. Expanding one here
+	// would invent the very certainty the binding exists to carry, so the
+	// identity is left empty and the reason is said out loud. Everything that
+	// needs it then refuses, which is the honest outcome.
+	commit := strings.TrimSpace(start.GraphBuildCommit())
+	switch {
+	case commit == "":
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"the certified start carried no graph build commit; this task has no graph identity "+
+				"and any turn that requires one will refuse", nil))
+	case !canonicalCommit(commit):
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			fmt.Sprintf("the certified start carried %q as a graph build commit, which is not a canonical "+
+				"40-character object id; it is refused rather than expanded, so this task has no graph identity", commit), nil))
+	default:
+		b.Digest = commit
 	}
+
 	e.mu.Lock()
 	if e.graphs == nil {
 		e.graphs = map[string]*agent.GraphBinding{}
@@ -168,6 +200,28 @@ func (e *Engine) bindGraph(taskID string, ws sensei.WorkspaceStatus) {
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 		fmt.Sprintf("graph binding for every agent in this task: domain %s, build %s, via %s %s",
 			b.Domain, short12(b.Digest), b.Command, strings.Join(b.Args, " ")), nil))
+}
+
+// bindGraphDomainOnly records the Sensei command and domain for a lane that has
+// no start gate.
+//
+// The assisted lane is conversational: it consults Sensei but certifies no
+// start, so no evaluation has vouched for a graph generation on its behalf. It
+// therefore gets no graph identity, and that is a statement rather than an
+// omission -- the workspace contract does not own graph_build_commit, and
+// taking one from anywhere else would be the substitution this repair removed.
+func (e *Engine) bindGraphDomainOnly(taskID string, ws sensei.WorkspaceStatus) {
+	b := &agent.GraphBinding{
+		Command: e.Config.Sensei.Command,
+		Args:    append([]string(nil), e.Config.Sensei.Args...),
+		Domain:  ws.Binding.RepositoryDomain,
+	}
+	e.mu.Lock()
+	if e.graphs == nil {
+		e.graphs = map[string]*agent.GraphBinding{}
+	}
+	e.graphs[taskID] = b
+	e.mu.Unlock()
 }
 
 // graphFor is the binding an agent request carries. Nil only before the gate
@@ -617,7 +671,10 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
 		e.reportOutcome(ctx, "failure", task, err.Error())
 	}
-	if task == "" {
+	// Validation without normalization: an all-whitespace objective states
+	// nothing and is refused, while an objective with whitespace around it is
+	// carried exactly as submitted.
+	if strings.TrimSpace(task) == "" {
 		fail(errEmptyTask)
 		return
 	}
@@ -647,9 +704,6 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		return
 	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult, firstText(workspaceStatus), workspaceStatus.Structured))
-	if ws, derr := sensei.DecodeWorkspaceStatus(workspaceStatus); derr == nil {
-		e.bindGraph(taskID, ws)
-	}
 
 	preflightArgs := map[string]any{"task": task, "files": []string{}, "mode": "compact"}
 	// Scope preflight to the domain Sensei just stated in the workspace identity
@@ -694,6 +748,10 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		fail(err)
 		return
 	}
+	// Bound only now. A start the gate refuses installs no graph binding at
+	// all: there is no certified generation to name, and a task that never
+	// started must not leave one behind for a later turn to read.
+	e.bindGraph(taskID, start)
 
 	e.noteWorld(taskID, head, start.GraphDigest())
 
@@ -4515,6 +4573,11 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			fail(err)
 			return
 		}
+		// Re-read, re-certified, re-bound. A resumed task takes the graph world
+		// THIS start certified, not the one the previous run recorded: the graph
+		// may have been rebuilt while the task was not running, and resurrecting
+		// the old commit would attribute the new rules to the old generation.
+		e.bindGraph(task.TaskID, start)
 
 		// A resumed task already has a base recorded. Establish loads it rather
 		// than re-deriving one, which is what keeps the base immutable across a

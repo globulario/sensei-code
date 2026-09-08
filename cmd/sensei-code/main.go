@@ -71,6 +71,9 @@ func main() {
 		case "submit":
 			fatalIf(runSubmit(repo, os.Args[2:]))
 			return
+		case "proposal":
+			fatalIf(runProposal(repo, os.Args[2:]))
+			return
 		case "context":
 			fatalIf(runContext(ctx, repo, cfg, os.Args[2:]))
 			return
@@ -154,6 +157,12 @@ Headless governed run:
               decision "proceed"); the architect is not asked for one, and the
               plan is routed, reviewed, and admitted exactly as an architect's
               would be, recorded as supplied rather than architect-produced
+
+GitHub objective proposals:
+  ChatGPT may post [sensei-code:objective-proposal] plus a strict JSON objective.
+  The signed webhook records it as inert data only. proposal approve <comment-id>
+  selects those exact stored bytes and crosses the existing local objective
+  authority boundary; GitHub identity itself never authorizes work.
 
 Read-only lanes:
   sensei-code observe --task "..."       exit 6 observed; the repository is unchanged

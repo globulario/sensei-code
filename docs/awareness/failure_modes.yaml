@@ -255,3 +255,15 @@ failure_modes:
       - internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified
     evidence:
       - removing Request from auditRecord fails TestTheAuditRecordCarriesItsRequest on both the diff and expected_head; an unclassified new governed call site fails TestEveryGovernedCallSiteIsClassified; a scan pattern matching nothing fails its vacuous-pass guard
+  - id: failure.load_bearing_composition_removed_and_restored_with_no_test_a
+    title: Load-bearing composition removed and restored with no test at the boundary
+    description: 'During the ghbridge App-auth repair, two load-bearing pieces of runControlSurface were transiently removed and restored: construction of the ghbridge.Runner, and the mailbox validity refusal that must precede installing the bridge. Every existing test stayed green throughout, because ghbridge and control were each tested in isolation while the composition site in package main had no test at all. A ghbridge.Resolver with a nil Reviewer still satisfies workflow.RunnerResolver and still routes every turn to the fallback, so the absence was invisible from outside.'
+    protects:
+      files:
+        - cmd/sensei-code/control.go
+    required_tests:
+      - cmd/sensei-code/control_test.go:TestConfiguredBridgeInstallsTheResolverExactlyAsConfigured
+    evidence:
+      - commit d34ee69 shipped correct; the regression existed only transiently in the working tree and no test failed while it did
+      - repaired in 8380aba by extracting composeEngineResolver so the composition is provable without binding a socket
+    contract: A composition site that wires two independently-tested components must itself be tested; green unit tests on both halves do not prove the wiring

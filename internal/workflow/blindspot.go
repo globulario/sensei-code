@@ -63,6 +63,23 @@ const (
 	// risky. Severity, path class and namespace are consequence signals, not
 	// ignorance -- and they are the risk channel's to weigh, not this one's.
 	blindSpotConsequence
+
+	// blindSpotNoSignal: the graph has facts here AND none of them raised a
+	// category. It is neither ignorance nor risk, so neither kind above fits.
+	//
+	// Measured on internal/ghbridge/snapshot.go: PREFLIGHT_STATUS_OK, LOW_RISK,
+	// blast=local, APPROVAL_GATE_NONE, coverage sufficient, 2 direct anchors --
+	// and the single blind spot "anchors present, no high-risk category fired"
+	// matched no marker, read as unrecognised, and escalated the run to a human.
+	// The most reassuring string in the vocabulary produced the strongest stop,
+	// over a risk channel that had already said no approval was needed.
+	//
+	// This is NOT a relaxation. An unrecognised string still fails closed, and
+	// nothing here touches risk classification or the approval gate. The repair
+	// is narrower than that: stop reading a recognised benign state as unknown.
+	// A state that says "I looked and there is nothing to report" is the one
+	// thing a blind-spot channel has no business escalating.
+	blindSpotNoSignal
 )
 
 func (k blindSpotKind) String() string {
@@ -71,6 +88,8 @@ func (k blindSpotKind) String() string {
 		return "coverage"
 	case blindSpotConsequence:
 		return "consequence"
+	case blindSpotNoSignal:
+		return "no-signal"
 	default:
 		return "unrecognised"
 	}
@@ -99,6 +118,20 @@ var coverageMarkers = []string{
 	"no awareness anchors apply",
 }
 
+// benignPhrasings assert that the graph has facts here and that none of them
+// raised a category.
+//
+// Matched by EXACT normalised equality, never by substring, and that is the
+// load-bearing difference from the two vocabularies below. A Contains match
+// would let this reading capture any future string that happens to embed one of
+// these words -- including a genuinely alarming one -- and the whole point of
+// failing closed on unrecognised text is that a string nobody has read must not
+// acquire a meaning by resembling one that has been. Growing this list is a
+// deliberate act per phrasing, which is the intended cost.
+var benignPhrasings = []string{
+	"anchors present, no high-risk category fired",
+}
+
 // consequenceMarkers are phrasings that describe knowledge the graph HAS.
 var consequenceMarkers = []string{
 	"high-risk directory",
@@ -112,6 +145,13 @@ func classifyBlindSpot(s string) blindSpotKind {
 	t := strings.ToLower(strings.TrimSpace(s))
 	if t == "" {
 		return blindSpotUnrecognised
+	}
+	// First, and safely so: an exact match cannot swallow a coverage or
+	// consequence phrasing the way a substring test could.
+	for _, m := range benignPhrasings {
+		if t == m {
+			return blindSpotNoSignal
+		}
 	}
 	for _, m := range coverageMarkers {
 		if strings.Contains(t, m) {
@@ -130,6 +170,7 @@ func classifyBlindSpot(s string) blindSpotKind {
 type blindSpotReading struct {
 	Coverage     []string
 	Consequence  []string
+	NoSignal     []string
 	Unrecognised []string
 }
 
@@ -141,7 +182,14 @@ type blindSpotReading struct {
 // is not one to reason from. Shared by the region router and the per-file
 // probe so the two cannot drift.
 func (r blindSpotReading) degradedIsCoverageShaped() bool {
-	return len(r.Coverage) != 0 && len(r.Unrecognised) == 0 && len(r.Consequence) == 0
+	// NoSignal counts against this exactly as the other non-coverage kinds do.
+	// The rule is that EVERY spot is a recognised coverage marker, and a benign
+	// spot is not one -- so a DEGRADED answer carrying "anchors present" is
+	// contradicting itself, and a self-contradicting instrument is not one to
+	// reason from. Excluding it keeps the degraded path's behaviour unchanged
+	// by this repair.
+	return len(r.Coverage) != 0 && len(r.Unrecognised) == 0 &&
+		len(r.Consequence) == 0 && len(r.NoSignal) == 0
 }
 
 func readBlindSpots(spots []string) blindSpotReading {
@@ -152,6 +200,8 @@ func readBlindSpots(spots []string) blindSpotReading {
 			r.Coverage = append(r.Coverage, s)
 		case blindSpotConsequence:
 			r.Consequence = append(r.Consequence, s)
+		case blindSpotNoSignal:
+			r.NoSignal = append(r.NoSignal, s)
 		default:
 			r.Unrecognised = append(r.Unrecognised, s)
 		}
