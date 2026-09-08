@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -152,6 +153,176 @@ func TestPublishRefusesAMalformedSubject(t *testing.T) {
 			}
 		})
 	}
+}
+
+// An object id is compared for identity, so it must be exactly what git wrote
+// to stdout. git puts advisories on stderr, and merging the two made a correct
+// id read as a wrong one — VerifySnapshot would accuse the projection of not
+// being the candidate when only the reading was polluted.
+func TestAnObjectIdNeverCarriesAGitAdvisory(t *testing.T) {
+	dir, base, _, _ := tempRepo(t)
+	ctx := context.Background()
+
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, out)
+		}
+	}
+	// A name that is both a branch and a tag makes git warn while still
+	// resolving. Set the switch locally so the advisory does not depend on
+	// whatever global config the developer happens to have.
+	run("config", "--local", "core.warnAmbiguousRefs", "true")
+	run("branch", "ambig", base)
+	run("tag", "ambig", base)
+
+	// The witness is only a witness if git really does write to stderr here.
+	probe := exec.Command("git", "rev-parse", "ambig")
+	probe.Dir = dir
+	var probeErr strings.Builder
+	probe.Stderr = &probeErr
+	if err := probe.Run(); err != nil {
+		t.Fatalf("probe rev-parse: %v", err)
+	}
+	if !strings.Contains(probeErr.String(), "ambiguous") {
+		t.Fatalf("this git no longer warns on an ambiguous refname, so the test proves nothing: %q", probeErr.String())
+	}
+
+	got, err := git(ctx, dir, "rev-parse", "ambig")
+	if err != nil {
+		t.Fatalf("rev-parse: %v", err)
+	}
+	if got != base {
+		t.Errorf("an advisory reached the id: read %q, want the bare id %q", got, base)
+	}
+}
+
+// A real git failure must still say what git said, or the refusal names no cause.
+func TestAFailedGitCommandReportsWhatGitWroteToStderr(t *testing.T) {
+	dir, _, _, _ := tempRepo(t)
+
+	out, err := git(context.Background(), dir, "rev-parse", "--verify", "no-such-ref")
+	if err == nil {
+		t.Fatal("resolving a ref that does not exist succeeded")
+	}
+	if out != "" {
+		t.Errorf("a failed command returned a value: %q", out)
+	}
+	if !strings.Contains(err.Error(), "Needed a single revision") {
+		t.Errorf("the error dropped git's own diagnostic: %v", err)
+	}
+}
+
+// A refusal that names git's failure must read exactly as it always has:
+// "<what we were doing>: <exit error>: <what git wrote>". Moving stderr from the
+// caller's own %s into the helper's wrapped error must not add a separator, nor
+// leave a trailing one when git said nothing. These go through the exported
+// entry points, because that is where the wording is read.
+func TestAGitFailureKeepsItsMessageShapeOnThePublicPath(t *testing.T) {
+	dir, base, tree1, _ := tempRepo(t)
+	ctx := context.Background()
+	const absent = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+
+	// A commit that is a true projection of tree1 but has no parent: the tree
+	// comparison passes and the parent read is the step that fails.
+	parentless := gitOut(t, dir, "commit-tree", tree1, "-m", "no parent")
+
+	for _, tc := range []struct {
+		name   string
+		prefix string
+		said   string
+		// A rev that git echoes to stdout when it cannot resolve it. git also
+		// quotes it in its own fatal, so it must appear exactly once: twice
+		// means the stdout value was appended to the message as well.
+		echoed string
+		run    func() error
+	}{
+		{
+			name:   "commit-tree",
+			prefix: "commit-tree",
+			said:   "not a valid object",
+			run: func() error {
+				_, err := PublishSnapshot(ctx, dir, "origin",
+					Subject{TaskID: "T", CandidateTree: absent, BaseSHA: base, CandidateDigest: digestC1}, "r-1")
+				return err
+			},
+		},
+		{
+			name:   "push",
+			prefix: "pushing the review snapshot",
+			said:   "does not appear to be a git repository",
+			run: func() error {
+				_, err := PublishSnapshot(ctx, dir, "no-such-remote",
+					Subject{TaskID: "T", CandidateTree: tree1, BaseSHA: base, CandidateDigest: digestC1}, "r-1")
+				return err
+			},
+		},
+		{
+			name:   "snapshot tree",
+			prefix: "reading the snapshot tree",
+			said:   "unknown revision",
+			echoed: absent + "^{tree}",
+			run: func() error {
+				return VerifySnapshot(ctx, dir, absent, Subject{TaskID: "T", CandidateTree: tree1, BaseSHA: base})
+			},
+		},
+		{
+			name:   "snapshot parent",
+			prefix: "reading the snapshot parent",
+			said:   "unknown revision",
+			echoed: parentless + "^",
+			run: func() error {
+				return VerifySnapshot(ctx, dir, parentless, Subject{TaskID: "T", CandidateTree: tree1, BaseSHA: base})
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.run()
+			if err == nil {
+				t.Fatal("the failing git command was reported as success")
+			}
+			msg := err.Error()
+			// One separator between the exit error and git's own words, and
+			// git's words start right there rather than after an empty value.
+			shape := regexp.MustCompile(`^` + regexp.QuoteMeta(tc.prefix) + `: exit status \d+: \S`)
+			if !shape.MatchString(msg) {
+				t.Errorf("message shape changed: %q", msg)
+			}
+			if strings.Contains(msg, ": : ") {
+				t.Errorf("an empty value was appended as a diagnostic: %q", msg)
+			}
+			if strings.HasSuffix(msg, ": ") || strings.HasSuffix(msg, ":") {
+				t.Errorf("message ends in a dangling separator: %q", msg)
+			}
+			if n := strings.Count(msg, tc.said); n != 1 {
+				t.Errorf("git's diagnostic %q appears %d times, want once: %q", tc.said, n, msg)
+			}
+			if tc.echoed != "" {
+				if n := strings.Count(msg, tc.echoed); n != 1 {
+					t.Errorf("the unresolvable rev %q appears %d times, want once — the stdout echo was quoted as a diagnostic: %q", tc.echoed, n, msg)
+				}
+			}
+		})
+	}
+}
+
+// gitOut runs git for test setup and returns its stdout, failing the test on error.
+func gitOut(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(cmd.Environ(),
+		"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@e", "GIT_COMMITTER_NAME=t",
+		"GIT_COMMITTER_EMAIL=t@e", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, stderr.String())
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // ---------- runner ----------

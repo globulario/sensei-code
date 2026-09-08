@@ -1,6 +1,7 @@
 package ghbridge
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os/exec"
@@ -21,11 +22,33 @@ import (
 // It is publication for inspection only: not admission, not acceptance, not
 // merge authority, not candidate minting.
 
+// git runs a git command and returns ONLY what it wrote to stdout.
+//
+// The streams must stay separate because the values read here are object ids
+// that get compared for identity. git writes advisories to stderr — a stale
+// index notice, a config hint, an ambiguous-refname warning — and merging those
+// into the value makes an id that is correct read as an id that is wrong. The
+// mismatch would then be reported against the projection instead of against the
+// reading that polluted it.
+//
+// A failure still says exactly what git said: stderr is wrapped into the error
+// here, in the same "<exit error>: <what git wrote>" shape the callers used to
+// build themselves, so their messages are unchanged. Callers therefore report
+// the error alone — appending the stdout value as well would either duplicate a
+// separator or, on a failed read, quote text that is not an id. Nothing is lost
+// by dropping it: git echoes an unresolvable argument to stdout, and its own
+// fatal on stderr quotes that same argument back.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	return strings.TrimSpace(string(out)), err
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	if err != nil {
+		err = fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(stdout.String()), err
 }
 
 // Snapshot is the published projection.
@@ -55,7 +78,7 @@ func PublishSnapshot(ctx context.Context, dir, remote string, s Subject, request
 
 	commit, err := git(ctx, dir, "commit-tree", s.CandidateTree, "-p", s.BaseSHA, "-m", msg)
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("commit-tree: %w: %s", err, commit)
+		return Snapshot{}, fmt.Errorf("commit-tree: %w", err)
 	}
 	commit = strings.TrimSpace(commit)
 	if !fullSHA.MatchString(commit) {
@@ -67,8 +90,8 @@ func PublishSnapshot(ctx context.Context, dir, remote string, s Subject, request
 	}
 
 	ref := fmt.Sprintf("refs/sensei-code/review/%s/%s", s.TaskID, requestID)
-	if out, perr := git(ctx, dir, "push", remote, commit+":"+ref); perr != nil {
-		return Snapshot{}, fmt.Errorf("pushing the review snapshot: %w: %s", perr, out)
+	if _, perr := git(ctx, dir, "push", remote, commit+":"+ref); perr != nil {
+		return Snapshot{}, fmt.Errorf("pushing the review snapshot: %w", perr)
 	}
 	return Snapshot{Commit: commit, Ref: ref}, nil
 }
@@ -80,7 +103,7 @@ func PublishSnapshot(ctx context.Context, dir, remote string, s Subject, request
 func VerifySnapshot(ctx context.Context, dir, commit string, s Subject) error {
 	tree, err := git(ctx, dir, "rev-parse", commit+"^{tree}")
 	if err != nil {
-		return fmt.Errorf("reading the snapshot tree: %w: %s", err, tree)
+		return fmt.Errorf("reading the snapshot tree: %w", err)
 	}
 	if strings.TrimSpace(tree) != s.CandidateTree {
 		return fmt.Errorf("review snapshot tree %s is not the candidate tree %s — the reviewer would be shown a different artifact",
@@ -88,7 +111,7 @@ func VerifySnapshot(ctx context.Context, dir, commit string, s Subject) error {
 	}
 	parent, err := git(ctx, dir, "rev-parse", commit+"^")
 	if err != nil {
-		return fmt.Errorf("reading the snapshot parent: %w: %s", err, parent)
+		return fmt.Errorf("reading the snapshot parent: %w", err)
 	}
 	if strings.TrimSpace(parent) != s.BaseSHA {
 		return fmt.Errorf("review snapshot parent %s is not the base %s — the diff shown would not be the candidate's",
