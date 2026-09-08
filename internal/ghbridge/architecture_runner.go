@@ -97,6 +97,31 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 	defer cancel()
 	answer, err := AwaitArchitecture(wctx, r.Issue, request, r.Poll)
 	if err != nil {
+		// An exchange that ENDED must say so where an operator can see it.
+		//
+		// The bound was always enforced; the reporting half of
+		// every_remote_exchange_is_bounded lived only in this returned error.
+		// From outside the process an exchange that had given up therefore
+		// looked exactly like one still waiting, and the engine's re-ask looked
+		// like nothing at all. Distinguishing "no answer yet" from "no answer,
+		// I stopped" by reading GitHub by hand cost hours, and every field
+		// below was already known here at the moment it was needed.
+		if emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentFinished,
+				"the architect turn ended without an answer after "+wait.String()+
+					"; request "+request.RequestID+" stands and was not withdrawn",
+				map[string]any{
+					"request_id":         request.RequestID,
+					"request_comment":    requestComment,
+					"objective_digest":   r.Binding.ObjectiveDigest,
+					"base":               r.Binding.BaseSHA,
+					"graph_build_commit": r.Binding.GraphBuildCommit,
+					"waited":             wait.String(),
+					"outcome":            "unanswered",
+					"reason":             err.Error(),
+					"transport":          "github",
+				}))
+		}
 		return agent.Result{}, err
 	}
 

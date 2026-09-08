@@ -113,6 +113,25 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	// is by then.
 	review, err := AwaitReview(wctx, r.Issue, request, r.Poll)
 	if err != nil {
+		// Same reason as the architect runner: an exchange that ended must say
+		// so where an operator can see it, or a review that gave up is
+		// indistinguishable from one still waiting.
+		if emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentFinished,
+				"the review turn ended without an answer after "+wait.String()+
+					"; request "+requestID+" stands and was not withdrawn",
+				map[string]any{
+					"request_id":       requestID,
+					"candidate_digest": subject.CandidateDigest,
+					"candidate_tree":   subject.CandidateTree,
+					"base":             subject.BaseSHA,
+					"review_commit":    snap.Commit,
+					"waited":           wait.String(),
+					"outcome":          "unanswered",
+					"reason":           err.Error(),
+					"transport":        "github",
+				}))
+		}
 		return agent.Result{}, err
 	}
 

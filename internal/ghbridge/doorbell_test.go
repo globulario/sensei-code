@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -312,4 +313,95 @@ func TestAGhFailureStillCarriesWhatGhSaid(t *testing.T) {
 	if !strings.Contains(err.Error(), "could not resolve repository") {
 		t.Errorf("the error dropped what gh said: %v", err)
 	}
+}
+
+// every_remote_exchange_is_bounded has two clauses, and only the first was
+// tested. The bound was enforced and proven; "reports why it ended" lived only
+// in the returned error, so from outside the process an exchange that had given
+// up looked exactly like one still waiting — and the engine's re-ask looked
+// like nothing at all. That ambiguity is what made a silent transport expensive
+// to diagnose: distinguishing "no answer yet" from "no answer, I stopped"
+// required reading GitHub by hand.
+func TestAnUnansweredArchitectTurnReportsThatItEnded(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	_, box := newPRMailbox(t, keyPath, "157", true)
+
+	runner := &ArchitectureRunner{
+		Issue: box, Binding: architectureBinding(), NewRequestID: NewRequestID,
+		Poll: 10 * time.Millisecond, Wait: 120 * time.Millisecond,
+	}
+	var events []event.Event
+	_, err := runner.Run(context.Background(),
+		agent.Request{Role: roles.Architect, TaskID: architectureBinding().TaskID, Prompt: "p"},
+		func(e event.Event) { events = append(events, e) })
+	if err == nil {
+		t.Fatal("an unanswered turn returned success")
+	}
+
+	var ended *event.Event
+	for i := range events {
+		if strings.Contains(string(events[i].Payload), `"outcome":"unanswered"`) {
+			ended = &events[i]
+		}
+	}
+	if ended == nil {
+		t.Fatal("the turn ended and emitted nothing saying so; an operator cannot " +
+			"tell a finished exchange from one still waiting")
+	}
+	// The fields an operator needs to act: which request, how long, and why.
+	for _, want := range []string{`"request_id"`, `"waited"`, `"reason"`, `"objective_digest"`} {
+		if !strings.Contains(string(ended.Payload), want) {
+			t.Errorf("the end report omits %s: %s", want, ended.Payload)
+		}
+	}
+	if !strings.Contains(ended.Summary, "stands") {
+		t.Errorf("the report does not say the request stands, so a retry may publish "+
+			"a second one: %q", ended.Summary)
+	}
+}
+
+func TestAnUnansweredReviewTurnReportsThatItEnded(t *testing.T) {
+	dir, base, tree1, _ := tempRepo(t)
+	keyPath, _ := writeTestKey(t)
+	_, box := newPRMailbox(t, keyPath, "157", true)
+
+	// A real pushable remote, so the turn reaches the WAIT rather than dying at
+	// publication. Without it this test would skip, and a check that skips is
+	// not a check — the path under test is the end of an exchange that waited.
+	bare := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "--bare", "-q", bare},
+		{"-C", dir, "remote", "add", "origin", bare},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v: %s", args, err, out)
+		}
+	}
+
+	runner := &Runner{
+		Issue: box, RepoDir: dir, Remote: "origin", NewRequestID: NewRequestID,
+		Poll: 10 * time.Millisecond, Wait: 120 * time.Millisecond,
+	}
+	var events []event.Event
+	_, err := runner.Run(context.Background(), agent.Request{
+		Role: roles.Reviewer, TaskID: "T",
+		Binding: roles.Binding{TaskID: "T", BaseSHA: base, CandidateTree: tree1, CandidateDigest: digestC1},
+	}, func(e event.Event) { events = append(events, e) })
+	if err == nil {
+		t.Fatal("an unanswered turn returned success")
+	}
+	// Publishing the snapshot needs a pushable remote, which a bare temp repo
+	// has not got. That failure is reported by its own error and is a different
+	// outcome; this test is about the end of an exchange that actually WAITED.
+	if strings.Contains(err.Error(), "publishing the review snapshot") {
+		t.Fatalf("the turn never reached the wait, so the end-report path was not "+
+			"exercised: %v", err)
+	}
+
+	for _, e := range events {
+		if strings.Contains(string(e.Payload), `"outcome":"unanswered"`) {
+			return // reported
+		}
+	}
+	t.Fatal("a review turn ended and emitted nothing saying so")
 }
