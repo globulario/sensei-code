@@ -782,11 +782,27 @@ func TestTheAuthorityStatementPinRejects(t *testing.T) {
 			match: false,
 		},
 	}
+	// The arguments the real pin compares against, so a matching case proves the
+	// EXTRACTION is layout-independent too and not merely the match. Asserting
+	// only ok would leave the comparison in the test above free to break on a
+	// reformat -- the same defect, moved one line down.
+	want := []string{"e.objective(taskID)", "d.Claims", "AssessConsequences(action)", "routing", "d"}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, ok := authorityStatementSummaryArgs(t, "synthetic.go", preamble+c.body+"\n}\n")
+			args, ok := authorityStatementSummaryArgs(t, "synthetic.go", preamble+c.body+"\n}\n")
 			if ok != c.match {
-				t.Errorf("matched = %v, want %v", ok, c.match)
+				t.Fatalf("matched = %v, want %v", ok, c.match)
+			}
+			if !ok {
+				return
+			}
+			if len(args) != len(want) {
+				t.Fatalf("args = %v, want %v", args, want)
+			}
+			for i := range want {
+				if args[i] != want[i] {
+					t.Errorf("arg %d = %q, want %q (canonical printing is not layout-independent)", i, args[i], want[i])
+				}
 			}
 		})
 	}
