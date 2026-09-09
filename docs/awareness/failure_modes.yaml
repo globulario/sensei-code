@@ -267,3 +267,16 @@ failure_modes:
       - commit d34ee69 shipped correct; the regression existed only transiently in the working tree and no test failed while it did
       - repaired in 8380aba by extracting composeEngineResolver so the composition is provable without binding a socket
     contract: A composition site that wires two independently-tested components must itself be tested; green unit tests on both halves do not prove the wiring
+  - id: failure.sensei_code.a_readiness_check_reported_on_the_graph_it_did_not_query
+    title: A readiness check reported on the graph it did not query
+    severity: high
+    description: checkGraphServer and checkGraphFreshness ran 'sensei metadata' with no -addr while Options.GraphAddr was populated from configuration and referenced only in the success message. On a host where the CLI default port serves nothing the check reported the healthy configured server as BROKEN and prescribed starting a second server over a different store. On a host where the default port serves ANOTHER repository's graph the same code reported OK, labelled 'answering on <configured address>', about an answer that address never gave.
+    protects:
+      files:
+        - internal/setup/checks.go
+    required_tests:
+      - internal/setup/graph_address_test.go:TestAnAnswerFromAnotherAddressIsNotReportedAsTheConfiguredOne
+    evidence:
+      - sensei-code setup reported 'graph server BROKEN' while 'sensei metadata -addr localhost:10122' answered authoritative on the same host, 2026-09-09
+      - internal/setup/graph_address_test.go:TestAnAnswerFromAnotherAddressIsNotReportedAsTheConfiguredOne failed before the repair with detail 'answering on localhost:10122'
+    contract: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.

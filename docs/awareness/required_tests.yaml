@@ -27,3 +27,10 @@ required_tests:
         - sensei_code.evidence.a_verdict_is_recorded_with_the_question_that_produced_it
       files:
         - internal/workflow/engine.go
+  - id: internal/setup/graph_address_test.go:TestAnAnswerFromAnotherAddressIsNotReportedAsTheConfiguredOne
+    title: A readiness answer from an unasked address is not reported as the configured one
+    protects:
+      failure_modes:
+        - failure.sensei_code.a_readiness_check_reported_on_the_graph_it_did_not_query
+      files:
+        - internal/setup/checks.go

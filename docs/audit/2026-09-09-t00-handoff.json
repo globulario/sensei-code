@@ -1,0 +1,401 @@
+{
+  "task_id": "T00",
+  "plan_revision": "2026-09-08.1",
+  "outcome": "AUDIT_EVIDENCE_PRODUCED",
+  "repository_identity": [
+    {
+      "logical": "sensei-code",
+      "remote": "https://github.com/globulario/sensei-code.git",
+      "path": "/home/dave/Documents/github.com/globulario/sensei-code",
+      "worktree_clean": true
+    },
+    {
+      "logical": "sensei",
+      "remote": "https://github.com/globulario/sensei.git",
+      "path": "/home/dave/Documents/github.com/globulario/sensei",
+      "worktree_clean": false,
+      "untracked": [
+        ".mcp.json",
+        ".sensei-code/",
+        "docs/architecture/SENSEI_IMPLEMENTATION_BACKLOG.json",
+        "docs/architecture/SENSEI_IMPLEMENTATION_PLAN.md",
+        "docs/architecture/V3_ARCHITECTURE_DIRECTION.md"
+      ]
+    }
+  ],
+  "base_sha": {
+    "sensei-code": {
+      "local_head": "e28a031be4987ef4182aef3a8b1a133d56c88e02",
+      "remote_main": "e28a031be4987ef4182aef3a8b1a133d56c88e02",
+      "relation": "identical"
+    },
+    "sensei": {
+      "local_head": "6046149cebeff2198f847372c4ece739666857db",
+      "remote_main": "739133dcea2b43a8a070318357d701d55d2ce43b",
+      "relation": "local is ancestor of remote; 15 behind, 0 ahead"
+    }
+  },
+  "candidate_head_sha": null,
+  "integrated_sha": null,
+  "graph_identity": [
+    {
+      "endpoint": "localhost:10121",
+      "domain": "github.com/globulario/sensei",
+      "server_version": "reflex-v2-frozen",
+      "graph_build_commit": "58c055fbd9d6",
+      "graph_build_commit_meaning": "sensei repo commit that produced the serving BINARY, not the graph generation",
+      "graph_build_time": "2026-09-03T03:45:39Z",
+      "source_repo_commit": "(unstamped)",
+      "seed_digest": "6f4c73b65ea898fac58ac3dbdf937b230d45ed2b98f399879125d78c88f4f4ab",
+      "live_graph_digest": "6f4c73b65ea898fac58ac3dbdf937b230d45ed2b98f399879125d78c88f4f4ab",
+      "triples": 142097,
+      "provenance_state": "incomplete",
+      "freshness_state": "current",
+      "authority_verdict": "authoritative",
+      "store": "127.0.0.1:7881 -> ~/.local/share/sensei/store-sensei",
+      "bind": "*:10121 (all interfaces, no token flag)"
+    },
+    {
+      "endpoint": "localhost:10122",
+      "domain": "github.com/globulario/sensei-code",
+      "server_version": "0.0.6",
+      "graph_build_commit": "fd350489a19394be847d770f2e8dd7b8f1b75303",
+      "graph_build_time": "2026-09-07T02:13:21Z",
+      "source_repo_commit": "39a8d2809ef239f203d5365d7f6e170349186cc4",
+      "source_repo_commit_resolves": false,
+      "source_repo_commit_note": "exists in neither local repository nor on GitHub (422 for both repos); excluded from the provenance predicate by design at golang/server/metadata.go:213",
+      "seed_digest": "fc45da2905b4f41d982b1d2c20b954b090713bc274be4be426210389004c5121",
+      "live_graph_digest": "fc45da2905b4f41d982b1d2c20b954b090713bc274be4be426210389004c5121",
+      "triples": 35234,
+      "provenance_state": "stamped",
+      "freshness_state": "current",
+      "authority_verdict": "authoritative",
+      "store": "127.0.0.1:7882 -> ~/.local/share/sensei/store-sensei-code",
+      "bind": "*:10122 (all interfaces, no token flag)",
+      "authored_corpus_agreement": "verified by id on invariants(45), failure_modes(15), forbidden_fixes(10), decisions(5) at HEAD e28a031b; code-scanned classes not verified"
+    },
+    {
+      "endpoint": "localhost:10120",
+      "status": "NO LISTENER \u2014 the sensei CLI compiled-in default is served by nothing on this host"
+    }
+  ],
+  "serving_identity": {
+    "sensei_cli": {
+      "path": "/home/dave/Documents/github.com/globulario/sensei/bin/sensei",
+      "version": "0.0.1-dev",
+      "linked": "2026-09-02T23:45:43-04:00",
+      "note": "predates the 15 commits now on sensei origin/main"
+    },
+    "sensei_code": {
+      "path": "/home/dave/.local/share/sensei-code/bin/sensei-code",
+      "version": "0.1.0",
+      "linked": "2026-09-08T11:53:17-04:00",
+      "running_as": "control on 127.0.0.1:10123, webhook 127.0.0.1:10124"
+    },
+    "awareness_graph_sensei": {
+      "path": "/home/dave/.local/share/sensei/bin/awareness-graph",
+      "linked": "2026-09-02T23:46:24-04:00"
+    },
+    "awareness_graph_sensei_code": {
+      "path": "/home/dave/.local/share/sensei/bin-sensei-code/awareness-graph",
+      "linked": "2026-09-06T22:13:35-04:00"
+    },
+    "control_process_flags": {
+      "github_mailbox_pr": 157,
+      "github_mailbox_pr_state": "MERGED",
+      "github_doorbell": true,
+      "github_bridge_roles": "none",
+      "github_app_id": 4850747,
+      "github_installation_id": 159521273,
+      "github_reviewer_login": "davecourtois",
+      "github_review_provider": "chatgpt"
+    }
+  },
+  "authorization_reference": null,
+  "files_changed": [
+    "docs/audit/2026-09-09-t00-baseline.md (new, untracked)",
+    "docs/audit/2026-09-09-t00-handoff.json (new, untracked)"
+  ],
+  "verified_existing_capabilities": [
+    "V1 extraction, contradiction validation, admission, evidence and closure all have named owners in sensei origin/main and answer live (24 MCP tools, all required present)",
+    "sensei-code taskstate: six independent run dimensions with closed vocabularies read by membership and UNOBSERVED as each zero (internal/taskstate/state.go:365-513)",
+    "sensei-code has exactly one terminal emitter, Engine.emitRunTerminal (internal/workflow/receipt.go:515)",
+    "sensei-code cannot merge: no merge call exists anywhere in the repository; publish pushes one exact object by refspec and opens a PR (internal/publish/publish.go)",
+    "worker capability defaults deny push, force_push and production_deploy (internal/config/config.go:140)",
+    "GitHub App installation permission checking exists (internal/ghbridge/installation.go:287,306) with one consumer requiring pull_requests:write at internal/ghbridge/transport.go:355",
+    "T07 acceptance 1-3: protocol negotiation and mixed-version proposal boundaries proven by named tests landed under PR #166"
+  ],
+  "reproduced_gaps": [
+    {
+      "id": "F1",
+      "severity": "blocking-for-T05/T23",
+      "summary": "internal/setup/checks.go:213,239 run `sensei metadata` with no -addr; Options.GraphAddr is used only in the success message. Reports the healthy configured :10122 server as BROKEN and prescribes `sensei serve -no-seed &`, which would start a second server over a different store. In the passing direction it would label an answer from a different address as the configured one.",
+      "reproduced": "sensei-code setup output vs sensei metadata -addr localhost:10122"
+    },
+    {
+      "id": "F2",
+      "severity": "blocking-for-campaign",
+      "summary": "mcp:codex is bound to localhost:10121 while this repository is configured for localhost:10122",
+      "reproduced": "sensei-code doctor FAIL; sensei-code setup warn",
+      "operator_repair": "sensei-code mcp codex"
+    },
+    {
+      "id": "F3",
+      "severity": "environmental",
+      "summary": "nothing listens on :10120, the sensei CLI default; every address-less sensei invocation fails, including the ones AGENTS.md and CLAUDE.md document",
+      "reproduced": "ss -ltnp"
+    },
+    {
+      "id": "F9",
+      "severity": "blocking-for-campaign",
+      "summary": "Every briefing served for sensei-code returns BRIEFING_STATUS_DEGRADED with Reachability UNKNOWN, because the check compares the serving binary's sensei revision (fd350489a193) against this repository's authored corpus revision (5f999ba5354c) -- commits in two different repositories. The server fails closed correctly; the effect is that a briefing cannot distinguish 'no rule governs this file' from 'a rule may exist and is unreachable'.",
+      "reproduced": "sensei briefing --file internal/setup/checks.go -addr localhost:10122 and the same for internal/workflow/engine.go",
+      "repair_status": "sensei origin/main carries 3e79c4fa 'fix(reachability): compare the published corpus revision, not the binary's' (2026-09-08T14:07), which postdates the serving binary's link time (2026-09-07T02:13). Redeploying awareness-graph from origin/main is a PREDICTED remedy, not a measured one; deployment is excluded from T00."
+    },
+    {
+      "id": "F4",
+      "severity": "gap",
+      "summary": "no readiness surface reports role assignment, doorbell state, credential capability, deadline coherence or provider quota; the running control process has -github-bridge-roles none and nothing says so",
+      "reproduced": "grep of internal/doctor, internal/setup, internal/report"
+    },
+    {
+      "id": "F5",
+      "severity": "live-degradation",
+      "summary": "task.defect.b3852005b2c6 bound to e26fd2068d99 while HEAD is e28a031be498; Sensei refuses task briefings and the architect plans without them",
+      "reproduced": "sensei-code doctor FAIL sensei:task_binding"
+    },
+    {
+      "id": "F6",
+      "severity": "governance",
+      "summary": "no branch protection and no rulesets on globulario/sensei-code or globulario/sensei; nothing server-side requires a check, review or PR before main moves",
+      "reproduced": "gh api branches/main/protection -> 404 Branch not protected; gh api rulesets -> empty"
+    },
+    {
+      "id": "F7",
+      "severity": "plan-integrity",
+      "summary": "SENSEI_IMPLEMENTATION_BACKLOG.json source_documents sha256 do not match either named file SENSEI_IMPLEMENTATION_PLAN.md section 2 repeats both wrong digests; the plan document itself has no recorded digest (actual d6f13027f67c4c3a0f45235c6a8b258fc2c7052622e807fb7e659d977c377d59).",
+      "reproduced": "sha256sum"
+    },
+    {
+      "id": "F8 (WITHDRAWN)",
+      "severity": "withdrawn",
+      "summary": "WITHDRAWN 2026-09-09 \u2014 this finding was false. It claimed the :10122 metadata field Source repo commit 39a8d2809ef2... exists in no repository. It is a real commit in globulario/services, the SERVICES repository the field is named for and documented to carry (main.go:89, metadata.go:213, Makefile:154). The stamp was correct.",
+      "reproduced": "git cat-file + GitHub API 422 for both repos",
+      "how_the_error_was_made": "The audit searched two repositories (sensei, sensei-code) locally and via the GitHub API, took two 'No commit found' answers, and concluded absence from a three-member set. All three code sites name 'services' explicitly and the audit did not look there \u2014 a closed set read by exclusion.",
+      "positive_evidence": "git -C /home/dave/Documents/github.com/globulario/services log -1 39a8d280 -> 39a8d2809ef239f203d5365d7f6e170349186cc4 2026-09-05T23:10:26-04:00 'fix(transport): carry node advertise_ip end-to-end and make infra releases settable'",
+      "surfaced_by": "building the toolchain on 2026-09-09; the canonical Makefile recipe resolved git -C ../services and printed the same SHA.",
+      "f9_unaffected": true
+    },
+    {
+      "id": "T02.a3",
+      "severity": "gap",
+      "summary": "no standing owner keeps proof standards and protected evaluator/policy artifacts outside worker mutation authority; dispatch_bindings_template.protected_judge_paths has no consumer",
+      "reproduced": "grep for protected paths; internal/architect/debt.go uses them for debt measurement only"
+    },
+    {
+      "id": "T04.issue",
+      "severity": "gap",
+      "summary": "no issue-closing code and no Closes-trailer handling exists in sensei-code",
+      "reproduced": "grep"
+    },
+    {
+      "id": "T14.ordering",
+      "severity": "gap",
+      "summary": "the investigator's deterministic rule set has 8 rules and none of them detects validation after a durable action",
+      "reproduced": "golang/architecture/investigator/candidate.go deterministicFactRules"
+    },
+    {
+      "id": "T15.three",
+      "severity": "gap",
+      "summary": "no rule for verdicts with no identified consumer, none for request/wait lifetime mismatch, none for contradictory or overlapping rules within the investigator",
+      "reproduced": "same file"
+    },
+    {
+      "id": "T23.vocab",
+      "severity": "gap",
+      "summary": "broker capability vocabulary has no merge and no knowledge-promotion member, which T23 acceptance 2 requires the permission UX to differentiate",
+      "reproduced": "internal/broker/broker.go:44-55"
+    }
+  ],
+  "tests_and_raw_output_references": [
+    {
+      "command": "go build ./...",
+      "repo": "sensei-code@e28a031b",
+      "exit": 0
+    },
+    {
+      "command": "go vet ./...",
+      "repo": "sensei-code@e28a031b",
+      "exit": 0
+    },
+    {
+      "command": "go test ./...",
+      "repo": "sensei-code@e28a031b",
+      "exit": 0,
+      "result": "45 packages ok, 0 FAIL, 3 no test files",
+      "qualification": "internal/acceptance is behind //go:build acceptance and governed_stub_test.go behind //go:build stubsmoke; CI runs bare `go test ./...` with no tags at phase1-pr.yml:83, phase1-codex-task.yml:48,101, release.yml:40, so the integrated governed-run suite has never executed in CI"
+    },
+    {
+      "command": "sensei-code doctor",
+      "result": "2 FAIL (sensei:task_binding, mcp:codex), 3 UNPROVEN providers, 1 WARN, rest PASS"
+    },
+    {
+      "command": "sensei-code setup",
+      "result": "1 BROKEN (graph server), 1 unknown (graph freshness), 2 warn, rest ok"
+    },
+    {
+      "command": "gh run list --branch main",
+      "repo": "sensei-code",
+      "result": "Phase 1 PR success at e28a031b and 7 prior runs"
+    },
+    {
+      "command": "gh run list --branch main",
+      "repo": "sensei",
+      "result": "CI, Seed rebuild, Architecture dashboard, Sensei appliance all success at 739133dc"
+    },
+    {
+      "command": "sensei tests",
+      "repo": "sensei",
+      "result": "NOT RUN \u2014 local worktree is 15 commits behind origin/main and checking out origin/main is outside T00"
+    },
+    {
+      "command": "sensei briefing --file <path> -addr localhost:10122",
+      "files": [
+        "internal/setup/checks.go",
+        "internal/workflow/engine.go"
+      ],
+      "result": "both BRIEFING_STATUS_DEGRADED, Reachability UNKNOWN, authority authoritative/current/stamped/certified"
+    }
+  ],
+  "mutation_results": [],
+  "independent_review_reference": null,
+  "admission_reference": null,
+  "acceptance_evidence": [
+    "Acceptance 1 \u2014 inventory: sections 1.1-1.6 of the artifact name repositories, revisions, serving binaries with link times, graph identities with digests and triple counts, tool identities, four distinct authorities, and section 7 states what remains unknown.",
+    "Acceptance 2 \u2014 authorities distinguished: human token (repo scope, direct push to main), GitHub App installation (grants UNKNOWN, probe named), worker capability envelope (config.Default, mechanically enforced subset named), GitHub server-side enforcement (NONE on both repos). No secret read or reproduced.",
+    "Acceptance 3 \u2014 V1 prerequisites: section 4 finds no missing V1 capability; the prerequisite problems are operational (identity chain, absent external enforcement), stated without overclaiming that passing tests mean a governed result.",
+    "Acceptance 4 \u2014 every task T01-T25 and R01-R02 is classified in section 5 with a named owner file/symbol/test or an explicit MISSING/UNKNOWN. No path or test name in this handoff was written without being observed.",
+    "Plan section 4 deliverable \u2014 'the actual tooling available to submit and observe governed work' \u2014 is established in artifact section 1.7 and in submission_and_observation_surfaces above, including the kernel-observed terminal restriction and why it applies to this session."
+  ],
+  "unmet_criteria": [
+    "GitHub App installation grants not established (requires an authorized live token mint)",
+    "sensei test suite at origin/main not run (requires a checkout)",
+    "code-scanned graph classes not verified against HEAD",
+    "per-criterion acceptance compliance for T13-T18 not established; owners located only",
+    "crash-window behaviour for T06/T07/T08 not exercised (fault injection excluded)",
+    "mailbox wake path unverified since PR #157 merged (wake excluded)"
+  ],
+  "side_effects_and_recovery": [
+    "Two new untracked files under docs/audit/. No code, config, ref or remote object changed. Recovery: delete the two files."
+  ],
+  "cost_and_duration": {
+    "actual_or_estimated": "actual",
+    "amount": null,
+    "unit": "not instrumented"
+  },
+  "interventions": [],
+  "blockers": [
+    "T11 has no eligible objective: zero open issues and zero open PRs in sensei-code, and the backlog forbids inventing one",
+    "T01 cannot bind an implementation slice until F7 is repaired and the sensei target revision (local main vs origin/main) is chosen"
+  ],
+  "next_task_recommendation": {
+    "repository": "sensei-code",
+    "scope": "internal/setup/checks.go and its tests",
+    "statement": "Repair checkGraphServer and checkGraphFreshness to issue `sensei metadata` against the configured Options.GraphAddr, with tests proving both directions: the configured address is used, and an answer from a different address is not reported as the configured one answering.",
+    "why_smallest": "Only finding demonstrated live end to end; a false-green as well as a false-red; blocking for T23 and for any fresh operator; two call sites in one package; needs no owner decision, credential or new authority.",
+    "separate_owner_actions": [
+      "apply sensei-code mcp codex (F2)",
+      "consider redeploying awareness-graph from sensei origin/main to test whether F9's reachability UNKNOWN clears (deployment, owner-authorized)",
+      "repair or complete task.defect.b3852005b2c6 (F5)",
+      "decide branch protection for both repositories (F6) at T01",
+      "re-digest the plan's source_documents (F7) at T01"
+    ]
+  },
+  "outcome_note": "No value in the plan's handoff table (section 11) fits an audit whose evidence has not yet been independently accepted. EVIDENCE_ACCEPTED would claim an acceptance that has not happened (status_note: 'VERIFIED_EXISTING/EVIDENCE_ACCEPTED require independent acceptance before dependency satisfaction'), and BLOCKED is false \u2014 the audit completed. Stated explicitly rather than fabricating a listed value, per plan section 8. The coordinator's next action is acceptance or rejection of this evidence.",
+  "source_documents_audited": [
+    {
+      "file": "V3_ARCHITECTURE_DIRECTION.md",
+      "claimed_sha256": "f165219d8a716451ba7fef42d307cc1ba1080ead9a3e92c6c2809646ed495f5a",
+      "actual_sha256": "9fb008b13c6d4d0e8ccd91f7464bccc5729bc73195d2d989289c50e1770a6098",
+      "tracked": false
+    },
+    {
+      "file": "V2_ARCHITECTURE_DIRECTION.md",
+      "claimed_sha256": "d46ce825fdc3d8fc20121e7895f37240533d5f3b5558e5ec43d73eb8f2428ef6",
+      "actual_sha256": "f3c3f3ebd4a7b119b2c69dfd824e06cc4f43fc906247f6a943edca28315c62ed",
+      "tracked": true
+    },
+    {
+      "file": "SENSEI_IMPLEMENTATION_BACKLOG.json",
+      "claimed_sha256": null,
+      "actual_sha256": null,
+      "tracked": false,
+      "note": "no digest is recorded for the backlog itself"
+    },
+    {
+      "file": "SENSEI_IMPLEMENTATION_PLAN.md",
+      "claimed_sha256": null,
+      "actual_sha256": "d6f13027f67c4c3a0f45235c6a8b258fc2c7052622e807fb7e659d977c377d59",
+      "tracked": false,
+      "note": "repeats the same two wrong digests in its section 2"
+    }
+  ],
+  "submission_and_observation_surfaces": {
+    "submit": [
+      "sensei-code submit --task",
+      "sensei-code run --task (exit 0/1/3/4/5)",
+      "sensei-code observe --task (exit 6)",
+      "sensei-code audit-repair --task",
+      "sensei-code proposal list|show|approve"
+    ],
+    "transport": "loopback 127.0.0.1:10123 + .sensei-code/control.sock, token at .sensei-code/control-token (0600)",
+    "no_json_importer": true,
+    "origination_restriction": "internal/control/local.go:559 mayOriginateObjective refuses on three grounds: caller uid != orchestrator uid; caller is a descendant of the orchestrator; caller has no controlling terminal (peer facts from the kernel at connect time, internal/control/peer_linux.go:20-33)",
+    "consequence_for_this_session": "tty returns 'not a tty' (pid 336141, TT=?), so an assistant in a non-interactive shell cannot originate a governed objective. Correct handling per plan section 7 step 2: hand the owner the exact objective bytes to submit at a terminal. Allocating a pty would defeat the control rather than satisfy it.",
+    "observe": [
+      "sensei-code proposal list|show",
+      "control surface typed task views (internal/control/inspect.go, Absent vs EmptyProven)",
+      "run --json event stream",
+      ".sensei-code/tasks/*.json in taskstate v2 shape"
+    ]
+  },
+  "sequencing_deviation": {
+    "recorded_by": "the implementer, at the owner's direction, 2026-09-09",
+    "what_was_directed": "T01 (freeze release scope, task bindings and policy decisions) was directed next.",
+    "what_happened": "F1 \u2014 the repair recommended by T00 \u2014 was implemented first, in sensei-code, before T01 ran. The implementer read the owner's message as a continuation of the standing goal and selected the audit's own recommended next slice; it did not receive or parse a T01 direction. Either way the ordering the owner directed was not followed.",
+    "why_it_matters": "Plan sections 4 and 8 require a task's scope, allowed paths, base and integration authority to be bound BEFORE mutation. F1 was implemented against no binding envelope. Its correctness is separately evidenced and is not the issue; its authorization ordering is.",
+    "explicitly_not_claimed": "F1 was NOT pre-bound, and must not be described later as though it were. No dispatch binding, owner authorization reference, allowed-paths list or budget existed when it was written.",
+    "why_it_is_recoverable": "Everything is uncommitted. sensei-code HEAD is still e28a031b, the remote is untouched, no PR exists, and no graph mutation succeeded. Discarding the work restores the tree exactly.",
+    "required_of_t01": "DONE for (b): the F1 integration binding was prepared as docs/audit/2026-09-09-t01-f1-binding.json and approved by the owner on 2026-09-09. (a) is satisfied by this record, which T01's packet cites rather than resolving silently. T01 itself remains PARTIAL.",
+    "state_at_the_time_of_recording": {
+      "sensei_code_head": "e28a031be4987ef4182aef3a8b1a133d56c88e02",
+      "committed": false,
+      "pushed": false,
+      "pull_request": null,
+      "graph_mutation": "none; the scoped publication was REFUSED with mutation_started=false"
+    }
+  },
+  "approved_artifact_output_path": "sensei-code/docs/audit/ (named and approved by the owner; corrects this handoff's earlier record that no location had been named)",
+  "finding_count": {
+    "reported_at_audit_time": 9,
+    "standing": 8,
+    "withdrawn": [
+      "F8"
+    ]
+  },
+  "redeploy_2026_09_09": {
+    "action": "restarted only the :10122 sensei-code graph server on a binary built from sensei 739133dcea2b43a8a070318357d701d55d2ce43b",
+    "old_pid": 3016813,
+    "new_pid": 893103,
+    "old_binary_sha256": "5cb25a413da8bb4438964f6be586ae8cd3c4c63a1283ef47f1b4277ee3aae449",
+    "new_binary_sha256": "1846974783fe09e290a247d30fdaba27c7e6097854eff50d1b44a5559f3a7ced",
+    "untouched": [
+      ":10121 pid 2403 (frozen reflex-v2 instrument)",
+      "store 7881 (142097 triples)",
+      "sensei/bin/sensei",
+      "the graph: marker c0b660fc42a5 / 35268 triples unchanged"
+    ],
+    "result": "healthy: domain github.com/globulario/sensei-code, authority authoritative, freshness current, Graph build commit now 739133dc",
+    "prediction_refuted": "The addendum predicted that redeploying from origin/main would clear F9's Reachability UNKNOWN and the uncertified transaction. Measured after the restart: BOTH PERSIST. Reachability still compares the binary revision (now 739133dc) against the corpus revision 5f999ba, and Tx detail still reports a seed-digest mismatch. Server redeploy alone does not clear D7; a fresh publication by the new CLI is the next untested step and is not authorized."
+  }
+}
