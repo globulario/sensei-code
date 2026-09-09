@@ -207,10 +207,30 @@ func userBinDir() (string, error) {
 	return dir, os.MkdirAll(dir, 0o755)
 }
 
+// metadataArgs asks the CLI about THIS repository's graph.
+//
+// The address is passed rather than left to the CLI's compiled-in default,
+// because the two are different questions and the check only ever wanted one of
+// them. Left off, `sensei metadata` answers about whatever serves the default
+// port -- nothing here, or another repository's graph elsewhere -- and the
+// checks below then labelled that answer with the configured address. The red
+// direction is merely wrong; the green direction certifies a graph this
+// repository never selected.
+//
+// An unstated address is left alone. A checkout that names no endpoint has
+// chosen nothing, and sending `-addr ""` would turn that into a malformed
+// request instead of a fall-through to the CLI's own default.
+func metadataArgs(o Options) []string {
+	if strings.TrimSpace(o.GraphAddr) == "" {
+		return []string{"metadata"}
+	}
+	return []string{"metadata", "-addr", o.GraphAddr}
+}
+
 // checkGraphServer reports whether the awareness graph is answering.
 func checkGraphServer(ctx context.Context, o Options) Check {
 	c := Check{Name: "graph server"}
-	out := run(ctx, o.RepoRoot, "sensei", "metadata")
+	out := run(ctx, o.RepoRoot, "sensei", metadataArgs(o)...)
 	switch {
 	case strings.Contains(out, "Live counts") || strings.Contains(out, "Server version"):
 		c.State = OK
@@ -236,7 +256,7 @@ func checkGraphServer(ctx context.Context, o Options) Check {
 // nobody can place. It is the same repository-scoped rebuild that fixes it.
 func checkGraphFreshness(ctx context.Context, o Options) Check {
 	c := Check{Name: "graph freshness"}
-	out := run(ctx, o.RepoRoot, "sensei", "metadata")
+	out := run(ctx, o.RepoRoot, "sensei", metadataArgs(o)...)
 	switch {
 	case strings.Contains(out, "Freshness state:     current"):
 		c.State = OK

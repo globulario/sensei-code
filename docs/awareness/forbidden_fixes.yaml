@@ -98,3 +98,11 @@ forbidden_fixes:
     related_invariants:
       - sensei_code.ghbridge.a_published_snapshot_is_a_verified_projection
     reason: 'Staging the worktree and committing is the familiar way to make a commit, and it appears to produce the same thing. It produces a new observation instead of a projection. If the worktree moved at all since the candidate was captured -- a stray build artifact, a concurrent edit, a partially applied repair -- the reviewer is shown an artifact that exists nowhere in the task''s history, and the verdict returned is about something the workflow never bound to. Build the commit from the captured tree with commit-tree, then read the resulting tree and parent back out and compare them against the binding: commit-tree accepts any tree it is handed, so that read-back is the only thing that makes the commit a projection rather than a coincidence. Skipping the verification because commit-tree was just given the right tree is the same forbidden fix in its smaller form.'
+  - id: forbidden_fix.sensei_code.change_only_the_displayed_address_so_the_label_matches_what
+    title: Change only the displayed address so the label matches what was queried
+    summary: 'Replacing ''answering on <configured address>'' with ''answering on localhost:10120'' makes the message truthful and leaves the defect intact: the check still observes whatever serves the CLI default port, still certifies a graph this repository never selected, and now says so in a way that reads as correct. The label was never the defect. The scope the check accepted must reach the observation it issues -- pass -addr, do not restate the wrong one.'
+    protects:
+      files:
+        - internal/setup/checks.go
+    reason: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.
+    contract: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.
