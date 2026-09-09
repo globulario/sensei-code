@@ -177,10 +177,14 @@
       "reproduced": "sha256sum"
     },
     {
-      "id": "F8",
-      "severity": "low",
-      "summary": ":10122 metadata displays Source repo commit 39a8d2809ef2... which exists in no repository",
-      "reproduced": "git cat-file + GitHub API 422 for both repos"
+      "id": "F8 (WITHDRAWN)",
+      "severity": "withdrawn",
+      "summary": "WITHDRAWN 2026-09-09 \u2014 this finding was false. It claimed the :10122 metadata field Source repo commit 39a8d2809ef2... exists in no repository. It is a real commit in globulario/services, the SERVICES repository the field is named for and documented to carry (main.go:89, metadata.go:213, Makefile:154). The stamp was correct.",
+      "reproduced": "git cat-file + GitHub API 422 for both repos",
+      "how_the_error_was_made": "The audit searched two repositories (sensei, sensei-code) locally and via the GitHub API, took two 'No commit found' answers, and concluded absence from a three-member set. All three code sites name 'services' explicitly and the audit did not look there \u2014 a closed set read by exclusion.",
+      "positive_evidence": "git -C /home/dave/Documents/github.com/globulario/services log -1 39a8d280 -> 39a8d2809ef239f203d5365d7f6e170349186cc4 2026-09-05T23:10:26-04:00 'fix(transport): carry node advertise_ip end-to-end and make infra releases settable'",
+      "surfaced_by": "building the toolchain on 2026-09-09; the canonical Makefile recipe resolved git -C ../services and printed the same SHA.",
+      "f9_unaffected": true
     },
     {
       "id": "T02.a3",
@@ -371,5 +375,27 @@
       "graph_mutation": "none; the scoped publication was REFUSED with mutation_started=false"
     }
   },
-  "approved_artifact_output_path": "sensei-code/docs/audit/ (named and approved by the owner; corrects this handoff's earlier record that no location had been named)"
+  "approved_artifact_output_path": "sensei-code/docs/audit/ (named and approved by the owner; corrects this handoff's earlier record that no location had been named)",
+  "finding_count": {
+    "reported_at_audit_time": 9,
+    "standing": 8,
+    "withdrawn": [
+      "F8"
+    ]
+  },
+  "redeploy_2026_09_09": {
+    "action": "restarted only the :10122 sensei-code graph server on a binary built from sensei 739133dcea2b43a8a070318357d701d55d2ce43b",
+    "old_pid": 3016813,
+    "new_pid": 893103,
+    "old_binary_sha256": "5cb25a413da8bb4438964f6be586ae8cd3c4c63a1283ef47f1b4277ee3aae449",
+    "new_binary_sha256": "1846974783fe09e290a247d30fdaba27c7e6097854eff50d1b44a5559f3a7ced",
+    "untouched": [
+      ":10121 pid 2403 (frozen reflex-v2 instrument)",
+      "store 7881 (142097 triples)",
+      "sensei/bin/sensei",
+      "the graph: marker c0b660fc42a5 / 35268 triples unchanged"
+    ],
+    "result": "healthy: domain github.com/globulario/sensei-code, authority authoritative, freshness current, Graph build commit now 739133dc",
+    "prediction_refuted": "The addendum predicted that redeploying from origin/main would clear F9's Reachability UNKNOWN and the uncertified transaction. Measured after the restart: BOTH PERSIST. Reachability still compares the binary revision (now 739133dc) against the corpus revision 5f999ba, and Tx detail still reports a seed-digest mismatch. Server redeploy alone does not clear D7; a fresh publication by the new CLI is the next untested step and is not authorized."
+  }
 }

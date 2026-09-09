@@ -4,13 +4,18 @@
 > binding** (§4.3) as reported, the **joint code/test/scar commit constraint**
 > (§3), and the **rollback limitation and protected-judge caveat** (§4.3, §4.4).
 >
-> The **T01 release decision is not approved**. D1–D6 (§4.1) and the nine plan
+> The **T01 release decision is not approved**. D1–D5 and D7 (§4.1) and the nine plan
 > §6 freezes (§4.2) remain pending. **T01 is not complete and must not be
 > described as complete.**
 >
 > This architectural approval is **not** a substitute for any owner
 > authorization reference Sensei's control channel requires. That reference is
 > still null.
+>
+> **T00 finding F8 is withdrawn** (2026-09-09) — it was a factual error by the
+> auditor, corrected in the T00 report and handoff and explained in
+> `2026-09-09-t01-addendum-transaction-certification.md`. Eight findings stand,
+> not nine. F9 is unaffected and was re-measured after the redeploy.
 
 Prepared 2026-09-09 from `docs/audit/2026-09-09-t00-baseline.md`.
 Companion binding envelope: `docs/audit/2026-09-09-t01-f1-binding.json`.
@@ -106,6 +111,7 @@ constraint on every future `sensei propose` in this repository, not a one-off.
 | D3 | Whether to require branch protection / rulesets on either repository before G1 | **PENDING OWNER** | F6: neither repo has any; all enforcement is client-side. Plan §6 proposes "per-PR merge admission; no general direct-push authority" — currently nothing enforces it server-side |
 | D4 | Whether to redeploy `awareness-graph` from Sensei `origin/main` to clear F9 | **PENDING OWNER** | F9: every briefing returns `Reachability UNKNOWN`; the fix exists upstream and postdates the serving binary. Redeploy is a *predicted* remedy, unmeasured, and is a deployment |
 | D5 | Operator repairs: `sensei-code mcp codex` (F2) and repair/complete `task.defect.b3852005b2c6` (F5) | **PENDING OWNER** | Both are one-command operator actions, not implementation slices |
+| D7 | Corrected Sensei deployment plus a clean certified publication, required before final V3 acceptance | **PENDING OWNER** | The `:10122` server was redeployed on 2026-09-09 from `739133dc`; `Reachability: UNKNOWN` and `transaction=uncertified` both **persist**, so the addendum's prediction is refuted and D7 is not satisfied by a server redeploy alone |
 | D6 | Where the T00/T01 audit records live | **APPROVED 2026-09-09** — `sensei-code/docs/audit/` | The owner named and approved this path for the T00 and T01 artifacts. This corrects the T00 draft, which recorded the location as never named |
 
 ### 4.2 Plan §6 decisions, none of which T00 settles
@@ -200,7 +206,7 @@ terminus is a reviewed candidate, not an integration.
 
 ## 6. What this packet does not do
 
-* It does not approve the T01 release decision. D1–D5 and the nine plan §6
+* It does not approve the T01 release decision. D1–D5, D7 and the nine plan §6
   freezes are pending; only the F1 integration binding, the joint-commit
   constraint, the rollback limitation, the protected-judge caveat and D6 are
   approved.

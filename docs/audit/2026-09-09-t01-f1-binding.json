@@ -3,7 +3,7 @@
   "plan_revision": "2026-09-08.1",
   "packet": "docs/audit/2026-09-09-t01-decision-packet.md",
   "prepared": "2026-09-09",
-  "approval_state": "PARTIAL \u2014 owner approved 2026-09-09: the F1 integration binding as reported, the joint code/test/scar commit constraint, the rollback limitation and the protected-judge caveat. The T01 RELEASE decision is NOT approved: D1-D6 and the nine plan section 6 freezes remain pending. T01 is not complete.",
+  "approval_state": "PARTIAL \u2014 owner approved 2026-09-09: the F1 integration binding as reported, the joint code/test/scar commit constraint, the rollback limitation and the protected-judge caveat. The T01 RELEASE decision is NOT approved: D1-D5, D7 and the nine plan section 6 freezes remain pending. T01 is not complete.",
   "owner_authorization_reference": null,
   "owner_authorization_reference_reason": "Still null, and deliberately. The owner's architectural approval of this binding is NOT a substitute for any owner authorization reference Sensei's control channel requires. No such reference has been issued.",
   "task_id": "F1",
@@ -142,7 +142,8 @@
     "D3",
     "D4",
     "D5",
-    "D6"
+    "D7"
   ],
-  "open_decisions_note": "See the packet section 4.1. None of D1-D6 blocks F1's integration; they are recorded so approval of this binding is not mistaken for settling them."
+  "open_decisions_note": "See the packet section 4.1. D6 (artifact output path) is approved. None of D1-D5 or D7 blocks F1's integration; they are recorded so approval of this binding is not mistaken for settling them.",
+  "t00_finding_correction": "T00 finding F8 is WITHDRAWN as a factual error by the auditor: the metadata field Source repo commit names a real commit in globulario/services, the repository the field is documented to carry. Eight findings stand, not nine. F9 is unaffected and was re-measured after the 2026-09-09 redeploy, where it persists."
 }
