@@ -1,0 +1,148 @@
+{
+  "schema_note": "dispatch_bindings_template from SENSEI_IMPLEMENTATION_BACKLOG.json, filled for the F1 integration slice. DRAFT \u2014 unapproved. A null field is an explicit reason, never a fabricated value (plan section 8).",
+  "plan_revision": "2026-09-08.1",
+  "packet": "docs/audit/2026-09-09-t01-decision-packet.md",
+  "prepared": "2026-09-09",
+  "approval_state": "PARTIAL \u2014 owner approved 2026-09-09: the F1 integration binding as reported, the joint code/test/scar commit constraint, the rollback limitation and the protected-judge caveat. The T01 RELEASE decision is NOT approved: D1-D6 and the nine plan section 6 freezes remain pending. T01 is not complete.",
+  "owner_authorization_reference": null,
+  "owner_authorization_reference_reason": "Still null, and deliberately. The owner's architectural approval of this binding is NOT a substitute for any owner authorization reference Sensei's control channel requires. No such reference has been issued.",
+  "task_id": "F1",
+  "task_title": "The graph readiness checks must query the address this repository configured",
+  "task_provenance": "Recommended by T00 as the smallest bounded next task; see docs/audit/2026-09-09-t00-baseline.md section 8.",
+  "implementation_state": "IMPLEMENTED_BEFORE_BINDING_UNCOMMITTED_INTEGRATION_PENDING",
+  "implementation_state_note": "F1 was implemented before T01 ran and before any binding envelope existed. It was NOT pre-bound and must never be described as though it were. Its correctness is separately evidenced; its authorization ordering is what this binding repairs. See sequencing_deviation in 2026-09-09-t00-handoff.json.",
+  "repository_path": "/home/dave/Documents/github.com/globulario/sensei-code",
+  "repository_identity": "github.com/globulario/sensei-code",
+  "owning_repository_rationale": "One repository, one slice. The change is internal to sensei-code and crosses no repository boundary.",
+  "base_sha": "e28a031be4987ef4182aef3a8b1a133d56c88e02",
+  "base_sha_state": "equal to origin/main at packet time; worktree clean apart from this slice and the audit records",
+  "graph_digest": "fc45da2905b4f41d982b1d2c20b954b090713bc274be4be426210389004c5121",
+  "graph_producer_identity": {
+    "server": "awareness-graph at :10122, version 0.0.6, started 2026-09-08T15:51:34Z",
+    "binary_built_from": "sensei fd350489a19394be847d770f2e8dd7b8f1b75303, linked 2026-09-07T02:13:21Z",
+    "store": "oxigraph pid 1865, 127.0.0.1:7882, ~/.local/share/sensei/store-sensei-code",
+    "domain": "github.com/globulario/sensei-code (sole domain in this store)",
+    "corpus_revision_at_binding": "5f999ba5354c2c9dcac57fba58dd841f61726cca",
+    "known_limitation": "Reachability UNKNOWN (T00 finding F9): the check compares the binary's sensei revision against this repository's corpus revision. A missing rule is unestablished, not absent."
+  },
+  "serving_revision": {
+    "sensei_code": "0.1.0, control process pid 3019090, linked 2026-09-08T11:53:17-04:00",
+    "note": "The running control binary predates F1 and does not contain it. Nothing in this slice requires redeploying it; a redeploy is a separate operator action."
+  },
+  "allowed_paths": [
+    "internal/setup/checks.go",
+    "internal/setup/graph_address_test.go",
+    "docs/awareness/failure_modes.yaml",
+    "docs/awareness/required_tests.yaml",
+    "docs/awareness/forbidden_fixes.yaml"
+  ],
+  "allowed_paths_note": "These five commit TOGETHER. The awareness entries must not be split from the repair: the graph may never certify the repair without its scar, or the scar without its repair.",
+  "production_boundary": [
+    "internal/setup/checks.go:checkGraphServer",
+    "internal/setup/checks.go:checkGraphFreshness"
+  ],
+  "production_boundary_note": "Both call sites, not one. The defect was present in each independently.",
+  "protected_judge_paths": [
+    ".github/workflows/",
+    ".sensei/",
+    ".sensei-code/config.json"
+  ],
+  "protected_judge_paths_note": "Honoured by binding, not by mechanism: T00 established that protected_judge_paths has no consumer and that no standing owner keeps evaluator artifacts outside worker mutation authority (T02 acceptance 3). This repository has no .sensei/gate-policy.yaml; the slice must not create one, since re-levelling a gate rule is changing the judge.",
+  "approved_artifact_output_path": "sensei-code/docs/audit/",
+  "approved_artifact_output_path_reason": "Named and approved by the owner for the T00 and T01 artifacts. This corrects the T00 draft and the first version of this packet, which recorded the location as never named; the owner corrected that on 2026-09-09.",
+  "dependency_receipts": [
+    {
+      "dependency": "T00",
+      "state": "evidence produced, acceptance PENDING",
+      "reference": "docs/audit/2026-09-09-t00-handoff.json"
+    }
+  ],
+  "permitted_actions": [
+    "commit the five allowed paths as ONE commit, after approval",
+    "publish the sensei-code graph slice from that exact clean commit",
+    "run gofmt, go vet, go test, sensei gate",
+    "request fresh independent review at the exact head"
+  ],
+  "forbidden_actions": [
+    "direct_push_to_main",
+    "self_approval",
+    "unapproved_merge",
+    "unapproved_deploy",
+    "unapproved_knowledge_promotion",
+    "splitting the awareness entries from the code",
+    "retrying publication before the corpus is committed",
+    "publishing to any endpoint other than http://127.0.0.1:7882/store?default",
+    "using --force to defeat the publication refusal or the rebuild shrink guard",
+    "modifying F1's implementation or its tests under this binding"
+  ],
+  "verification": {
+    "commands": [
+      "gofmt -w cmd internal",
+      "go vet ./...",
+      "go test ./...",
+      "sensei gate --enforce --diff <range> --domain github.com/globulario/sensei-code -addr localhost:10122"
+    ],
+    "commands_note": "The owning repository's supported commands, per AGENTS.md. Not invented shell snippets.",
+    "falsifiers": [
+      {
+        "test": "TestGraphChecksQueryTheConfiguredAddress",
+        "kills_on": "the original code \u2014 fails with: a graph check asked \"metadata\""
+      },
+      {
+        "test": "TestAnAnswerFromAnotherAddressIsNotReportedAsTheConfiguredOne",
+        "kills_on": "the original code \u2014 fails with: reports \"ok\": \"answering on localhost:10122\" for an answer that address never gave"
+      },
+      {
+        "test": "TestAnUnconfiguredAddressIsLeftToTheCLI",
+        "kills_on": "always passing -addr \u2014 fails with: an unstated address produced \"metadata -addr\""
+      }
+    ],
+    "falsifiers_note": "Each was executed against its mutation; none is vacuous. The mutation harness restored from a scratchpad copy of the repaired file, never from HEAD."
+  },
+  "publication": {
+    "command": "sensei build --repo github.com/globulario/sensei-code --store-url http://127.0.0.1:7882/store?default",
+    "precondition": "docs/awareness committed; Sensei refuses to certify a revision that does not contain the bytes being shipped",
+    "scope": "deletes only aw:repo-tagged subjects for this domain; DomainPublicationReceipt and SeedBuild nodes are untagged and survive",
+    "rehearsal": "sensei build --output <file> compiles and touches no store; use it before any load",
+    "expected_effect": "the compiled slice is a strict superset in every governed class (MetaPrinciple 0->138, Invariant 45->183, plus the three new entries); SourceFile and CodeSymbol unchanged",
+    "never": "the default --store-url http://localhost:7878/store?default, which is a third unrelated store of 237049 triples"
+  },
+  "migration": {
+    "protocol_change": false,
+    "durable_format_change": false,
+    "schema_change": false,
+    "reason": "metadataArgs is unexported; its only callers are the two checks in the same file. The one durable artifact touched is the awareness corpus, and the change is additive: three appended entries, zero deletions."
+  },
+  "rollback": {
+    "procedure": "revert the eventual F1 commit and rebuild the graph from its parent",
+    "limitation": "a graph already published from the reverted commit outlives the revert until it is republished from the parent; reverting code alone leaves the store asserting the entries"
+  },
+  "rebaseline_rule": "e28a031b is a base binding, not a frozen experiment. If origin/main advances, rebase the slice, re-run gate and tests at the new head, and obtain fresh head-bound review acceptance. A head change invalidates prior acceptance. No frozen prospective campaign is affected.",
+  "budget": {
+    "max_repair_rounds": null,
+    "max_wall_time_minutes": null,
+    "max_provider_cost": null,
+    "max_tool_calls": null,
+    "reason": "Reserved to the owner (plan section 6). Unknown price or usage is not zero, and a worker proposing numbers here would be approving a decision it does not hold."
+  },
+  "independent_reviewer": null,
+  "independent_reviewer_reason": "PENDING OWNER. The repository configures chatgpt as reviewer with graph: none; CI additionally runs a hosted adversarial review bound to the exact PR head. Which of these is the independent reviewer of record for this slice is the owner's choice, and the implementer may not select its own judge.",
+  "evaluation_manifest_reference": null,
+  "evaluation_manifest_reference_reason": "Not applicable: this is an implementation slice, not an evaluation or experiment.",
+  "expected_terminal_scope": "reviewed candidate at an exact head, with the graph published from that commit and retrieval verified. Merge is separately owner-authorized; Sensei Code cannot merge.",
+  "post_approval_order": [
+    "1. commit the accepted T00/T01 records",
+    "2. commit F1 code, tests and all three awareness entries TOGETHER as one commit",
+    "3. publish the graph from that exact clean F1 commit, scoped to :7882",
+    "4. verify retrieval, freshness, tests, gate, review \u2014 and only then approach merge"
+  ],
+  "open_decisions_blocking_nothing_here": [
+    "D1",
+    "D2",
+    "D3",
+    "D4",
+    "D5",
+    "D6"
+  ],
+  "open_decisions_note": "See the packet section 4.1. None of D1-D6 blocks F1's integration; they are recorded so approval of this binding is not mistaken for settling them."
+}
