@@ -9,7 +9,14 @@ on branch `docs/unit1-lifecycle-authority-packet`, off the sensei-code#167 branc
 head, so the measurements it records bind to a revision that contains them. The
 companion assessment (`2026-09-10-t01-abandonment-transition-assessment.md`)
 remains uncommitted, so references to it in §1 and §5 currently dangle.
-**Revision:** round 8, 2026-09-10. **Corrects understated functionality.** Three
+**Revision:** round 9, 2026-09-10. Adds **§13 — the bridge contract and its
+acceptance scenario**, covering settled-direction points 4–6 as one bounded
+engineering target: protocol identity, reader agreement, execution binding,
+four-way recovery, and one candidate followed end to end. Records that the
+execution join **already exists** on `admission_decision_digest_sha256`, and that
+the real gap is narrow — `candidateapply/types.go` carries no task or capability
+identity at all. The G3 repair and the bridge are separable in both directions.
+Round 8, 2026-09-10. **Corrects understated functionality.** Three
 "missing producer" claims are withdrawn: `consume-admission` consumes the ledger
 capability, the typed `verify-admission` path writes `change_observed` and
 `scope_verified`, and `candidateapply.Apply` really observes what it applied.
@@ -2781,13 +2788,23 @@ a completed mapping, four measured gaps, and what each would require.
        healthy-binding fixtures (§5.5.10, unchanged).
 2. [x] Replace the "missing producers" claims with the concrete producers (§0.2).
 3. [x] Record the two admission protocols and their dispatch rules (§0.2.1).
-4. [ ] Treat integrating synthesis with task-ledger admission as a **bridge
+4. [x] Treat integrating synthesis with task-ledger admission as a **bridge
        requirement**, with an explicit compatibility decision for existing
-       file-based workflows.
-5. [ ] Preserve candidate binding, scope checks, application exclusion and
-       immutable verification links when implementing that bridge.
-6. [ ] Require recovery to distinguish unused authorization, application in
-       progress, applied-awaiting-recording, and verified (§4.5.6).
+       file-based workflows — **specified at §13.1/§13.3**.
+5. [x] Preserve candidate binding, scope checks, application exclusion and
+       immutable verification links when implementing that bridge — **§13.3(3),
+       and demonstrations 2, 3 and 5 of §13.5**.
+6. [x] Require recovery to distinguish unused authorization, application in
+       progress, applied-awaiting-recording, and verified — **§13.4**, with the
+       unknown/reconciliation rule and the prohibition on defaulting to "not
+       attempted".
+
+**Awaiting a ruling before any implementation:**
+
+- [ ] §13 as the next scope, and whether the **G3 reader repair** proceeds
+      independently of, and ahead of, the bridge (§13.0 says it may).
+- [ ] The two identity fields §13.3 requires on the application side — the only
+      new durable data the bridge needs.
 
 **No further phase census.** The next specification addresses the demonstrated
 reader disagreement; V3 integration connects the existing protocols without
@@ -2920,3 +2937,152 @@ discarding their working guarantees.
 remains uncommitted; PR #350 stays parked at
 `42475333`; sensei-code#167 unchanged; no Unit 1 code begins; no thread activity,
 no publication, and no F5 mutation accompanies this revision.
+
+## 13. Next scope — the bridge contract and its acceptance scenario
+
+Owner-specified, 2026-09-10 (round 9). **Specification only; nothing implemented.**
+This covers §12's settled-direction points 4–6 together. It is not a phase census
+and does not extend one.
+
+### 13.0 The two pieces of work are separable, in both directions
+
+| | Immediate G3 repair | The execution bridge |
+|---|---|---|
+| Fixes | inconsistent *reporting* of the permitted next action | the absence of a connection between task-ledger admission and the file-protocol application chain |
+| Requires | one predicate authority for what the readers display (§4.4) | protocol identity, execution binding, recovery (§13.1–13.4) |
+| Does **not** require | replacing the application protocol | — |
+| Does **not** count as | — | making the displays agree |
+
+Stated explicitly because both errors are easy: fixing the readers must not drag
+in a protocol replacement, and agreeing displays must not be reported as a
+completed bridge.
+
+**Also explicit, and retained: the round-7 "authorization bypass end to end"
+ruling was wrong and is withdrawn (§0.2.1).** G3 is a reader-consistency finding.
+The task-ledger integration is a separate requirement, not a defect report.
+
+### 13.1 Protocol identity
+
+**Which admission protocol governs this task and operation must be a fact, not a
+consequence of a flag.**
+
+Today it is the latter: `dispatchAdmitChange` / `dispatchVerifyAdmission`
+(`cmd_admission_v2.go:214-226`) select typed task-ledger admission when
+`--task-dir` is present and the bundle/file protocol when it is absent. Nothing
+records which protocol a task belongs to, so an omitted flag silently changes
+protocols.
+
+Required:
+
+1. A task's governing protocol is **durably recorded** and read, never inferred
+   from invocation shape.
+2. **Existing file-protocol workflows keep working under their own contract.**
+   `scripts/synthesis-run-smoke.sh` passes `--task-dir` zero times and must
+   continue to succeed unchanged. The file protocol is accepted
+   (`docs/design/archer-integration-closure.md`), not legacy.
+3. **A task enrolled in typed governance must not silently switch protocols** —
+   not through an omitted flag, and not through a different reader. An omitted
+   flag on such a task is an error, not a protocol selection.
+4. A protocol-identity absence is *unknown*, never a default to either protocol
+   (the §6.5 rule, applied one level up).
+
+### 13.2 Reader agreement
+
+**For the same protocol, task, operation and observed state, the cached status,
+the recomputed status and the briefing must report the same permitted next action
+and the same scope.**
+
+This is the G3 repair stated as an acceptance property. It is satisfied by §4.4's
+rule — one predicate authority, displays derived from it — and it does not
+require the bridge. §5.5.10's F1/F2 are the currently-failing cases: the cache
+branch, the recompute branch and the briefing disagree with each other and with
+the ledger on healthy bindings.
+
+### 13.3 Execution binding
+
+**Connect the existing records through their actual identities. Retain their
+distinct purposes and every existing check.**
+
+Measured: **the join already exists**, on the admission decision digest.
+
+| Record | Identity fields it carries |
+|---|---|
+| `closureprotocol.CapabilityConsumption` | `CapabilityID`, `Task`, `ConsumerActor`, `ConsumedOperationIDs`, **`DecisionDigestSHA256`**, `OneUseStatus` |
+| `candidateapply.Receipt` | `ReceiptID`, `RequestDigestSHA256`, **`AdmissionDecisionDigestSHA256`**, `CandidateArtifactDigestSHA256`, `PatchDigestSHA256`, `AppliedPaths`, optional verification digest+status |
+| `candidateapply.VerificationRecord` | `RecordID`, `ApplicationReceiptDigestSHA256`, `RequestDigestSHA256`, **`AdmissionDecisionDigestSHA256`**, `CandidateArtifactDigestSHA256`, `PatchDigestSHA256`, verification digest+status |
+
+The file-protocol chain is already complete and immutable: verification →
+application receipt → decision → candidate → applied paths and patch digest.
+
+**The measured gap is narrow.** `candidateapply/types.go` contains **zero**
+occurrences of a capability id or task binding. So today:
+
+- application → decision joins by digest ✔
+- application → **task** does not join ✘
+- application → **capability consumption** does not join ✘, except transitively
+  through a decision digest that is not unique to one application
+
+Required, and deliberately minimal:
+
+1. Carry task and capability identity on the application side, so a consumption
+   can be tied to the application that spent it and vice versa.
+2. Compare `ConsumedOperationIDs` against `AppliedPaths` / the patch digest — the
+   operation-level check the decision-digest join cannot make.
+3. **Add no check that duplicates an existing one.** Candidate binding
+   (`ComposeDecisionReceipt`), scope derivation, the atomic application exclusion
+   claim, and the immutable verification link are all working guarantees and are
+   preserved as they stand (§13.5, demonstration 5).
+
+### 13.4 Recovery
+
+**Reconcile the durable records against the target worktree before deciding
+whether execution may proceed.**
+
+| Situation | Required behavior |
+|---|---|
+| Authorization available, no attempt claimed | permit the authorized execution sequence |
+| Application in progress | exclude competing execution |
+| Application occurred, recording incomplete | **reconcile and finish recording — never blindly reapply** |
+| Application verified | preserve the result and prevent unintended replay |
+
+**Two rules govern the undecidable case:**
+
+- If the evidence cannot distinguish these situations, return
+  **unknown / reconciliation required**.
+- **Absence of an observation must never select the first row automatically.**
+  This is the A-1 mechanism (§6.5) at the execution layer: a missing record is
+  either a legitimate "not attempted" or an integrity failure, and defaulting to
+  "not attempted" is defaulting to permit.
+
+`candidateapply` already reaches rows 2 and 3 within its own store — the
+`O_CREATE|O_EXCL` claim marks in-progress, and `cmd_synthesis_apply.go:395`
+names the applied-but-unrecorded state exactly: *"the consumption record is
+MISSING while the worktree is modified."* The bridge must reach the same four-way
+distinction across both protocols, not only inside one store.
+
+### 13.5 The acceptance scenario
+
+**One small candidate, followed through real evaluation, authorization,
+application, observation and verification, in a disposable worktree.** One
+scenario, not a matrix. Along that same path it must demonstrate:
+
+| # | Demonstration | Currently |
+|---|---|---|
+| 1 | every reader agrees **before and after** consumption | fails — §5.5.10 F1/F2 |
+| 2 | a decision for another candidate or operation is **rejected** | holds — `ComposeDecisionReceipt` (`compose.go:107-119`); must survive the bridge |
+| 3 | a competing application **cannot reuse** the authorization | holds within one store — the atomic claim; must extend across protocols |
+| 4 | an interruption after files change but **before receipt publication** recovers without applying twice | partially — the state is *named* at `cmd_synthesis_apply.go:395` but not reconciled |
+| 5 | existing file-protocol behavior **remains valid under its own contract** | `scripts/synthesis-run-smoke.sh` must pass unchanged, with no `--task-dir` |
+
+Demonstration 4 is the one with no current answer and is the reason recovery is
+in scope rather than deferred. Demonstration 5 is the regression bar: the bridge
+adds a protocol, it does not replace one.
+
+### 13.6 Deliberately out of scope
+
+- Any further phase census (§0.2.5).
+- The 10/8 partition and its edge set — withdrawn (§4), and not revived here.
+- G1, G2, G4a, G4b (§4.3.1) — untouched by this scope.
+- PR #350 / abandonment — Unit 5, unchanged.
+- Whether `waiting` is the right eligibility bar for candidate generation
+  (§0.2.1) — a question about `synthesis-run`'s own contract, not the bridge.
