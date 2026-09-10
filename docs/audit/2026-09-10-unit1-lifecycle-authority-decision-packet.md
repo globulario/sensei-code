@@ -9,7 +9,16 @@ on branch `docs/unit1-lifecycle-authority-packet`, off the sensei-code#167 branc
 head, so the measurements it records bind to a revision that contains them. The
 companion assessment (`2026-09-10-t01-abandonment-transition-assessment.md`)
 remains uncommitted, so references to it in §1 and §5 currently dangle.
-**Revision:** round 7, 2026-09-10. Records the demonstrated G3 result and
+**Revision:** round 8, 2026-09-10. **Corrects understated functionality.** Three
+"missing producer" claims are withdrawn: `consume-admission` consumes the ledger
+capability, the typed `verify-admission` path writes `change_observed` and
+`scope_verified`, and `candidateapply.Apply` really observes what it applied.
+Records the **two admission protocols behind one command name** (`--task-dir`
+selects typed vs bundle/file) and withdraws the "authorization bypass end to end"
+framing: the synthesis pipeline follows its own accepted contract. G3's measured
+reader disagreement stands. G3.6 withdrawn as a defect; the operation table's
+third row corrected for the applied-but-unrecorded state. **The phase census
+stops here.** Round 7, 2026-09-10. Records the demonstrated G3 result and
 replaces the ambiguous `permission.modify` predicate with an owner-specified
 **operation-state decision table** derived from the verified ledger (§4.5), with
 `GrantModify` split into four separately-typed, ledger-owned capabilities. Traces
@@ -115,6 +124,105 @@ answer four questions (§4.0):
 
 > What object does it describe? Which event or receipt establishes it? Which
 > reader reconstructs it? Which write boundary enforces its consequences?
+
+## 0.2 Round-8 correction — existing functionality was understated
+
+**The owner's completed trace at `42475333` corrects a class of claim this packet
+made three times: reporting a missing producer where one exists.** Each instance
+is corrected in place below and summarised here. All four were re-verified
+independently at source before recording.
+
+### The corrections
+
+| Round-7 claim | Corrected |
+|---|---|
+| "no command consumes the ledger capability" (§5.5.11 table) | **False globally.** `sensei consume-admission` (`cmd_admission_v2.go:318-366`) calls `admission.ConsumeCapability` and `RecordAdmissionConsumed`, refusing when a prior consumption exists. The true, narrower claim: *the traced synthesis application path does not invoke that protocol.* |
+| "Nothing in the pipeline observes a mutation or verifies scope" | **Scoped correctly to the synthesis pipeline, but understated what exists.** The typed `verify-admission` path writes both: `RecordChangeObserved` at `cmd_admission_v2.go:439` and `RecordScopeVerified` at `:461`. |
+| `synthesis-apply` "does not observe" | **`candidateapply.Apply` observation is real.** `apply.go:138` calls `admission.CaptureChanges(root, req.BaseRevision)`, verifies changed paths and resulting file contents, and records a patch digest at `:159`. It does not emit the ledger's `change_observed` **event** — a different statement. |
+| "P1 authorization bypass end to end" | **Too strong. Withdrawn.** See §0.2.1. |
+
+**This is the same error as §0.1, in a third form.** Round 3 corrected "no
+`task_phase` assignment" read as "no durable fact." Round 8 corrects "no ledger
+event" read as "no operation." *Absence of a particular ledger event is not
+absence of the underlying operation.*
+
+### 0.2.1 Two admission protocols share one command name
+
+The fact that dissolves the bypass conclusion. `cmd/awg/cmd_admission_v2.go:214-226`:
+
+```go
+func dispatchAdmitChange(args []string) int {
+    if hasTaskDirFlag(args) { return runAdmitChangeV2Args(args) }  // typed, task-ledger
+    return runAdmitChange(args)                                    // bundle/file
+}
+func dispatchVerifyAdmission(args []string) int { /* identical shape */ }
+```
+
+- **with `--task-dir`** → typed task-ledger admission (writes `admission_decided`,
+  `change_observed`, `scope_verified`)
+- **without** → the bundle/file admission protocol (`admission.Decision`,
+  `admission.Verification`, candidate application receipts)
+
+Measured: `scripts/synthesis-run-smoke.sh` contains **zero** occurrences of
+`task-dir`. The synthesis sequence runs entirely on the bundle/file protocol, and
+`docs/design/archer-integration-closure.md` — the accepted contract — builds on
+that protocol deliberately.
+
+**Therefore:** G3's measured permission-reporting disagreement stands (§5.5.10).
+But the synthesis path not consulting the task ledger is **not, by itself, proof
+that it bypasses its own accepted admission contract.** It is following a
+different, accepted one. The round-7 conclusion that the mutation path is
+"authorized end to end by the decision file and at no point by the verified
+ledger" describes the file protocol *working as designed*, and calling that a
+bypass was an error of framing, not of measurement.
+
+Likewise `validateCurrentBinding` accepting `waiting` (G3.5) **is not
+automatically unauthorized mutation**: `synthesis-run` deliberately stops before
+admission and application (`cmd_synthesis_run.go:8-11`). Whether `waiting` is the
+right eligibility bar for *candidate generation* is a separate question about
+that command's own contract, and this packet does not settle it.
+
+### 0.2.2 Multiple records are not multiple authorities
+
+G3.6 claimed the single-use guarantee has "two authorities that never meet."
+Corrected: there are four records describing **four different things**.
+
+| Record | What it establishes | Scope |
+|---|---|---|
+| ledger `capability_consumption` | a task capability was spent | the task |
+| candidate-store `.o5b-claim` | no concurrent application within this store | the candidate store |
+| application receipt | what was actually applied | one application |
+| verification record (`candidateapply/record.go`) | binds a later judgment to that application, immutably | one application + one verification |
+
+The last two are deliberately separate immutable facts. A unified protocol may
+need all four. **The defect to establish is an inconsistent authorization or
+replay decision across these scopes — not the existence of multiple records.**
+G3.6 is restated accordingly and is no longer asserted as a defect.
+
+### 0.2.3 The operation table's third row was wrong
+
+§4.5.1 read *"capability consumed, no change observed → apply exactly the bound
+operation."* That inference does not hold: **"consumed, no change observed" does
+not prove the application has not happened.** A process may have applied files and
+crashed before recording the observation.
+
+That state requires **reconciliation before retry**, not unconditional permission
+to apply again. Corrected in §4.5.1.
+
+### 0.2.4 Fixture qualification
+
+`admission.WriteCanonicalDecision` **serializes a supplied decision; it does not
+perform admission evaluation.** F1 (§5.5.10) therefore demonstrates that the two
+*readers* disagree over a well-formed, digest-valid decision record. It does not
+establish that the evaluator would produce those values for that task. The
+over-authorization finding is about reader disagreement, and is sound as such.
+
+### 0.2.5 Direction settled
+
+**The phase census stops here.** There is enough source evidence. The packet's
+remaining job is the six points in §12's "Settled direction", and the next
+specification addresses the demonstrated reader disagreement — not a broader
+redesign.
 
 ## 1. What Unit 1 must settle
 
@@ -883,7 +991,8 @@ Derived **only** from the verified ledger and its content-addressed artifacts:
 |---|---|
 | No binding typed decision | None; resolve admission |
 | Valid decision, capability unconsumed | Consume the capability |
-| Capability consumed, no change observed | Apply exactly the bound operation |
+| Capability consumed, no change observed, **no application in progress or applied-but-unrecorded** | Apply exactly the bound operation |
+| Capability consumed, application state indeterminate | **Reconcile before retry** — see §4.5.6 |
 | Change observed, scope not verified | Verify scope |
 | Scope verified | No further mutation |
 | Invalid, expired, stale or conflicting authority | None |
@@ -922,6 +1031,31 @@ consumption, `foldGovernance` returns `GrantModify=false` (§5.5.10 F3) — corr
 for "may I consume?", wrong as an answer to "may I apply what I consumed?". The
 one predicate cannot express the state in which application is *precisely* what
 is authorized.
+
+#### 4.5.6 Recovery must distinguish four states *(round 8, §0.2.3)*
+
+The third row as first written — *"capability consumed, no change observed ⇒
+apply the bound operation"* — does not follow. **"Consumed, no change observed"
+does not prove the application has not happened.** A process may have applied
+files and crashed before recording the observation, and the ledger looks
+identical either way.
+
+So the disposition must distinguish four states, not two, and recovery must be
+able to tell them apart:
+
+| State | Evidence | Legal next action |
+|---|---|---|
+| authorization unused | consumption recorded, no application artifact | apply |
+| application in progress | an exclusion claim is held | wait or reconcile the holder |
+| applied, awaiting recording | worktree changed, no application receipt | **reconcile — never re-apply** |
+| verified result | application receipt + bound verification record | nothing further |
+
+`candidateapply` already implements the middle two within its own store: the
+atomic `O_CREATE|O_EXCL` claim marks "in progress", and its error path
+distinguishes "the consumption record is MISSING while the worktree is modified"
+(`cmd_synthesis_apply.go:395`) — which is precisely the applied-but-unrecorded
+state. Any ledger-side protocol must reach the same four-way distinction rather
+than inferring emptiness from a missing event.
 
 #### 4.5.4 Fixture reclassification (owner, round 7)
 
@@ -1724,7 +1858,11 @@ the real writer. F1 therefore used `admission.WriteCanonicalDecision`, the same
 call `sensei admit-change --output` makes, which reseals the digest
 (`admission.go:1024-1028`). **Stated explicitly as required:** the decision's
 *content* (`admitted`) was set by the harness; the record was produced and sealed
-by the production writer. This is the on-disk shape the seven live tasks already
+by the production writer. **Round-8 qualification (§0.2.4):**
+`WriteCanonicalDecision` *serializes* a supplied decision — it performs no
+admission evaluation. F1 therefore demonstrates that the two readers disagree
+over a well-formed, digest-valid decision record; it does **not** establish that
+the evaluator would produce those values for that task. This is the on-disk shape the seven live tasks already
 have with valid digests, so the state is reachable without any tampering.
 
 ##### The execution boundary — traced in source, no mutation performed
@@ -1750,10 +1888,17 @@ The downstream apply step does not restore the ledger as authority either:
 `--decision` path and gates on `d.MutationCapability` at `:417-420`. That is the
 same **file** authority, consulted a second time.
 
-**So the mutation path is authorized end to end by the decision file, and at no
-point by the verified ledger.** Per the owner's standard, an execution boundary
-that accepts the ungoverned answer as authority is identified — traced in source;
-no candidate was generated and no mutation was applied.
+**Round-8 correction (§0.2.1): this describes the file protocol working as
+designed, and the "bypass" framing is withdrawn.** The mutation path is
+authorized by `admission.Decision` and `admission.Verification` — which is the
+protocol `docs/design/archer-integration-closure.md` deliberately accepts, and
+which `admit-change`/`verify-admission` select whenever `--task-dir` is absent.
+`scripts/synthesis-run-smoke.sh` never passes it.
+
+What remains true and measured: an execution boundary consumes
+`ResolveControlAndClosure`'s permission answer, and that answer disagrees with
+the task ledger (§5.5.10). That is a **reader disagreement between two task
+permission surfaces**, not proof that synthesis bypasses its own contract.
 
 ##### The additional guard that stands between this and the live tasks
 
@@ -1786,19 +1931,26 @@ mutation applied.
 | `synthesis-admit` | no | **no** — explicitly ("does NOT evaluate admission", `cmd_synthesis_admit.go:18-21`) | no | no | no |
 | `synthesis-apply` | no | **yes, but not the ledger's** — see below | **yes** — applies the candidate to a target worktree | no | no |
 
-**Nothing in the pipeline observes a mutation or verifies scope.** Rows 4 and 5
-of §4.5.1's table have no participant here: `change_observed` and
-`scope_verification` receipts are written by `admission.RecordChangeObserved` /
-`RecordScopeVerified`, whose sole non-test caller is `cmd_admission_v2.go`. A
-mutation applied through `synthesis-apply` therefore terminates the governed
-sequence without ever reaching the two states that close it.
+**Corrected in round 8 (§0.2).** Rows 4 and 5 of §4.5.1 have no participant *in
+this pipeline*, but they have real producers: `RecordChangeObserved`
+(`cmd_admission_v2.go:439`) and `RecordScopeVerified` (`:461`), both on the typed
+`verify-admission` path. And `synthesis-apply`'s observation is real even though
+it emits no ledger event — `candidateapply/apply.go:138` calls
+`admission.CaptureChanges`, verifies the changed paths and resulting file
+contents, and records a patch digest at `:159`.
+
+The accurate statement is narrower: **a mutation applied through the synthesis
+pipeline is observed and receipted by the bundle/file protocol, and does not
+reach the task ledger's `change_observed` / `scope_verified` states** — because
+that pipeline runs the file protocol by design (§0.2.1), not because the
+operation is missing.
 
 ##### Position against the table
 
 | Table row | Legal next action | Command that performs it | Gate it actually applies |
 |---|---|---|---|
 | No binding typed decision | resolve admission | *(none in this pipeline)* | — |
-| Valid decision, capability unconsumed | consume the capability | **no command consumes the ledger capability** | — |
+| Valid decision, capability unconsumed | consume the capability | **`sensei consume-admission`** (`cmd_admission_v2.go:318-366`) — outside this pipeline | refuses when a prior consumption exists |
 | Capability consumed, no change observed | apply the bound operation | `synthesis-apply` | its **own** file claim, not the ledger's consumption |
 | Change observed, scope not verified | verify scope | *(none)* | — |
 | Scope verified | no further mutation | *(none)* | — |
@@ -1854,7 +2006,7 @@ Four missing conjunctions, recorded separately as **G3.1 – G3.4**:
 - **G3.4** — application does not re-verify the ledger head immediately before
   mutating.
 
-##### A third authority for the single-use guarantee
+##### Four records, four scopes — not competing authorities *(corrected, §0.2.2)*
 
 The consumption gate `synthesis-apply` *does* implement is a parallel one:
 `.o5b-claim` and `.o5b-receipt.json` in the candidate store. It is careful — the
@@ -1867,10 +2019,17 @@ places that never meet**:
 | ledger | `capability_consumption` via `admission_consumed` | `foldGovernance` |
 | candidate store | `.o5b-claim` / `.o5b-receipt.json` | `synthesis-apply` |
 
-Neither can see the other. Consuming the ledger capability does not stop a
-re-apply; removing the store receipt does not restore a ledger capability. This
-is the same G3 shape one layer down, and it is why §4.5.2 insists each capability
-have exactly one ledger-derived owner.
+Neither can see the other — but they are **not describing the same predicate**.
+The ledger record says a task capability was spent; the store claim excludes a
+concurrent application within one candidate store; the application receipt says
+what was applied; the verification record binds a later judgment to that
+application, immutably (`candidateapply/record.go:3,59-83`). A unified protocol
+may legitimately need all four.
+
+**The defect to establish is an inconsistent authorization or replay decision
+across these scopes, not the existence of multiple records.** No such
+inconsistency has been demonstrated. G3.6 is withdrawn as an asserted defect and
+retained as an open question.
 
 ##### The two capability gates, compared
 
@@ -2607,7 +2766,34 @@ scratchpad only, so the run can be reproduced without reconstructing it.
 Rewritten 2026-09-10 (round 4). The packet no longer proposes a model. It records
 a completed mapping, four measured gaps, and what each would require.
 
-**Delivered this round (7):**
+**Delivered this round (8):**
+
+- [x] §0.2 the correction record: three producers that exist, the two admission
+      protocols and their dispatch rule, and the withdrawn bypass framing.
+- [x] §4.5.6 recovery must distinguish four states, not two.
+- [x] §5.5.10 fixture qualification: `WriteCanonicalDecision` serializes, it does
+      not evaluate.
+- [x] §5.5.11 corrected in place; G3.6 withdrawn as an asserted defect.
+
+**Settled direction (owner, round 8) — the packet's remaining job:**
+
+1. [x] Preserve G3's measured permission-reporting disagreement and its
+       healthy-binding fixtures (§5.5.10, unchanged).
+2. [x] Replace the "missing producers" claims with the concrete producers (§0.2).
+3. [x] Record the two admission protocols and their dispatch rules (§0.2.1).
+4. [ ] Treat integrating synthesis with task-ledger admission as a **bridge
+       requirement**, with an explicit compatibility decision for existing
+       file-based workflows.
+5. [ ] Preserve candidate binding, scope checks, application exclusion and
+       immutable verification links when implementing that bridge.
+6. [ ] Require recovery to distinguish unused authorization, application in
+       progress, applied-awaiting-recording, and verified (§4.5.6).
+
+**No further phase census.** The next specification addresses the demonstrated
+reader disagreement; V3 integration connects the existing protocols without
+discarding their working guarantees.
+
+**Delivered round 7:**
 
 - [x] §4.5 the operation-state decision table replacing `permission.modify`, with
       `GrantModify` split into `CanConsumeCapability`, `CanApplyBoundOperation`,
@@ -2658,11 +2844,14 @@ a completed mapping, four measured gaps, and what each would require.
       per-candidate-store, not per-operation.
 - [ ] **G3.4** — it does not re-verify the ledger head immediately before mutating.
 - [ ] **G3.5** — `validateCurrentBinding` refuses only the literal `refused`, so
-      `waiting` passes. Its replacement must require the exact positive action
-      capability the command needs (§4.5.5).
-- [ ] **G3.6** — the single-use guarantee has two authorities that never meet: the
-      ledger's `capability_consumption` and the candidate store's `.o5b-claim` /
-      `.o5b-receipt.json` (§5.5.11).
+      `waiting` passes. **Not automatically unauthorized mutation** (§0.2.1):
+      `synthesis-run` stops before admission and application. Whether `waiting` is
+      the right eligibility bar for *candidate generation* is a separate question
+      about that command's own contract.
+- [~] **G3.6 — WITHDRAWN as a defect** (§0.2.2). Four records describe four
+      different things across four scopes. Open question, not a finding: is there
+      an *inconsistent authorization or replay decision* across them? None
+      demonstrated.
 - [ ] **G3 — conflicting authority. DEMONSTRATED** (§5.5.10), not presently
       exploitable (§5.5.9). Both directions proven on healthy bindings; execution
       boundary traced (`synthesis-run` → `validateCurrentBinding`;
