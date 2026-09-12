@@ -127,6 +127,23 @@ func main() {
 	events, unsubscribe := bus.Subscribe(512)
 	defer unsubscribe()
 	engine := workflow.New(repo, cfg, bus, store, sessionID)
+
+	// The bridge belongs here as much as on `control`. A governed run that
+	// reaches a human-owned boundary needs the surface that can ANSWER it in the
+	// same process as the transport that carried the turn -- control had the
+	// transport and no answer, this has the answer and had no transport, and a
+	// task that escalated was therefore unfinishable from either.
+	//
+	// A refusal is fatal rather than a warning. Continuing would silently route
+	// architect and reviewer turns to the local provider command line, which is
+	// the fallback this repository configured a bridge specifically to avoid:
+	// the run would look normal and the independence would be gone.
+	banner, err := installGitHubBridge(engine, repo.Root, cfg.GitHubBridge)
+	fatalIf(err)
+	if banner != "" {
+		fmt.Fprintln(os.Stderr, banner)
+	}
+
 	p := tea.NewProgram(tui.New(ctx, engine, events, history))
 	_, err = p.Run()
 	fatalIf(err)
