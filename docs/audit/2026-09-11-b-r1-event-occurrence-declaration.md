@@ -1,6 +1,8 @@
 # B-R1 — the per-event-type occurrence declaration
 
-**Status:** ratified declaration, revision 1. **FROZEN before any Family B implementation.**
+**Status:** ratified declaration, revision 2. Frozen before implementation; §2.4 and §5 added
+after the mutation pass, which found that the declaration needed an OWNERSHIP axis rather
+than the repair needing more code.
 **Date:** 2026-09-11
 **Derived at:** `globulario/sensei` @ `739133dc` (main), from the canonical declarations —
 `closureprotocol/vocabulary.go` `LedgerEventTypes` (19 members), `ledger/event.go`
@@ -126,6 +128,43 @@ scope_verified                  ACCUMULATING  key: subject / result revision   A
   directional evidence Family A was repaired to preserve.
 ```
 
+### 2.4 `binding_rule` names a PROPERTY, not an implementer `[R2]`
+
+The mutation pass exposed that `binding_rule: REQUIRED` was being read as "every reader must
+implement this predicate". It does not mean that. Property and enforcement owner are separate
+axes, and conflating them manufactures duplicate authorities:
+
+```text
+admission_consumed
+
+  binding_rule        REQUIRED
+  binding_owner       tasksession.consumptionBinds
+  binding_provider    PR #351
+  base_status         UNAVAILABLE on 739133dc
+  closure_dependency  #351 must land before INTEGRATED Family B closure
+
+  the singleton reader OWNS       occurrence count
+                                  structural / payload / artifact readability
+                                  typed integrity classification
+
+  consumptionBinds OWNS           decision digest relation
+                                  capability relation
+                                  task / session relation
+                                  admitted-operation relation
+```
+
+`singletonArtifactFromChain` MUST NOT grow a shadow implementation of those relations. One
+predicate, one authority — the condition #351 spent four review rounds eliminating.
+
+**Measured:** `consumptionBinds` does not exist at `739133dc`. It is introduced by #351
+(`governance.go:485`), which is frozen at `63e25c66`, unreviewed, and blocked from merging by
+B1. So on Family B's base the binding property has no enforcement anywhere — not in the loader
+(correctly) and not in tasksession (not yet present). That is an integration dependency, not a
+Family B defect, and adding binding to the loader to make a matrix green would create exactly
+the duplicate authority this note forbids.
+
+---
+
 ### 2.2 Task lifecycle
 
 ```text
@@ -219,3 +258,33 @@ validator at all.
 This declaration is frozen. Family B proceeds: **B-N1…B-N4 and B-P1/B-P2 contract tests
 first, then implementation, then one mutation per guard.** No implementation may amend this
 table; an amendment is a separate ratified act, as §6.1 of the repair contracts had to be.
+
+---
+
+## 5. Enforcement boundary — `replay_rule: refuse` `[R2, ratified]`
+
+> `replay_rule: refuse` specifies the validity of the EVENT SET when interpreted under the
+> protocol. It requires authority-bearing readers to refuse a conflicting or excess
+> occurrence. It does NOT, by itself, require the generic ledger append primitive to reject
+> construction of that history. Producer-specific APIs may additionally refuse such writes
+> where their owner contract requires it.
+
+```text
+required artifacts / structural payload validity   WRITER + READER   (B-Q2 unchanged)
+singleton occurrence cardinality                   READER is load-bearing
+owner-level producers                              MAY refuse the illegal action
+generic Store.Append                               MUST be able to represent a structurally
+                                                   valid, semantically contradictory history
+```
+
+**Evidence for the boundary.** Enforcing cardinality inside `Store.Append` broke 14 tests. Four
+were fixture convenience; **ten were deliberate proofs that consumers fail closed on duplicate
+singletons** — a standing architectural position that the ledger records evidence and authority
+judges it. Collapsing the two layers would have made illegal histories unconstructible,
+requiring a test-only bypass API and thus two ledger construction semantics, "real" and "test".
+Removing the generic guard fixed 13 of 14 immediately; the fourteenth asserted the obsolete
+latest-wins symptom and now asserts the direct cause.
+
+> **The ledger may contain bad evidence; authority may never mistake bad evidence for a valid
+> fact.**
+
