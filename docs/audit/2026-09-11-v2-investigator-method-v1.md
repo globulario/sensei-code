@@ -1,6 +1,7 @@
 # V2 Investigator Method v1 (V2-M1)
 
-**Status:** method specification, revision 2. UNCOMMITTED, for review and challenge.
+**Status:** method specification, revision 3. §2.1 added: a second candidate law, earned by
+the Family A implementation rather than by an investigator run. UNCOMMITTED, for review and challenge.
 **Date:** 2026-09-11
 **Derived from:** the A0 false-negative autopsy, with B0 as control. Every rule cites the
 evidence that earned it; no rule is included because it sounds prudent.
@@ -191,6 +192,59 @@ in ten minutes.
 
 This is a candidate law for the graph itself, not only for V2. It is recorded here and NOT
 proposed into the graph, because promoting it is a separate authorized act.
+
+---
+
+## 2.1 A second candidate law, earned by Family A `[R3]`
+
+M1-6 was promoted to a candidate law for Sensei itself (§2) from investigator behaviour.
+**M1-4 has now earned the same status from a different direction: production implementation,
+under concurrency, repairing protocol semantics.**
+
+### What happened
+
+The Family A repair introduced a concurrency defect. Three approaches failed to find it, and
+none of them was foolish — each interrogated a STORY ABOUT THE MECHANISM:
+
+```text
+isolation runs      asked: does contention reproduce it?        (isolation REMOVES contention)
+the baseline        asked: did the candidate introduce it?      (measured a build failure)
+the lock hypothesis asked: does serialization scope explain it? (did not fit the facts)
+```
+
+Every one could return reassuring evidence while leaving the actual property unmeasured. The
+instrument that worked asked something different: **under the conditions in which this failed,
+does the system preserve the entry/witness ordering invariant?** It did not care which
+mechanism was believed. It made reality answer, and named the codes in 1.2 seconds.
+
+### The candidate law
+
+> **Falsify the observable contract, not only the hypothesised mechanism.**
+>
+> When a defect is defined by an externally observable invariant, closure evidence must include
+> an experiment capable of falsifying THAT INVARIANT under the relevant conditions.
+> Mechanism-specific tests may explain the defect and narrow the search, but they cannot
+> substitute for testing the property whose violation defines the defect.
+
+And its second half, which Family A demonstrated directly:
+
+> **A repair is subject to the same law as the system it repairs.**
+
+The witness repair was written around the law that directional disagreement carries evidence
+and normalisation destroys it. Its own verifier then read stale entries against fresh witness
+state and constructed a false disagreement. **The contract became a diagnostic instrument for
+its own implementation** — a stronger result than "the tests helped".
+
+### The epistemic brake
+
+One episode does not prove M1-4 is universally applicable, and this section does not claim it.
+What the episode DOES falsify is the weaker reading — that M1-4 is investigator or benchmark
+hygiene. It produced value during production implementation, under concurrency, on protocol
+semantics: a materially different environment from the one it was derived in.
+
+**NOT PROMOTED.** Recorded here as a candidate, exactly as M1-6 is. Promotion into the
+awareness graph is a separate authorized act, and performing it because the law looks good
+would be the same shortcut this method exists to block.
 
 ---
 
