@@ -122,6 +122,25 @@ func runHeadless(ctx context.Context, repo gitx.Repo, cfg config.Config, args []
 	}
 
 	engine := workflow.New(repo, cfg, bus, store, sessionID)
+
+	// Headless runs carry role turns over the configured bridge too.
+	//
+	// Not a convenience. A SUPPLIED plan skips the architect resolution loop --
+	// the one that reaches a human-owned boundary -- so this path can finish a
+	// governed task unattended where the daemon cannot. Without the bridge its
+	// reviewer turn takes the local provider command line, which is how
+	// task-1789182602949409132 got a clean candidate and then died with "no
+	// independent reviewer produced a bounded decision".
+	//
+	// Fatal on failure, as elsewhere: silently falling back to the local
+	// provider would leave the run looking normal with its independence gone.
+	if banner, err := installGitHubBridge(engine, repo.Root, cfg.GitHubBridge); err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code run:", err)
+		return exitFailed
+	} else if banner != "" {
+		fmt.Fprintln(os.Stderr, banner)
+	}
+
 	// Nobody typed this. `RequestedByHuman` used to be stamped here because it
 	// was set from which entrypoint ran, not from anything establishing a
 	// person was present -- and in a dogfooding run an AI submitted a task the
