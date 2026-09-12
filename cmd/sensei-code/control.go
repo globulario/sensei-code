@@ -519,6 +519,13 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			NewRequestID: ghbridge.NewRequestID,
 			SessionID:    sessionID,
 			Wait:         gh.Wait,
+			// The reviewer gets the same wake and the same durable record the
+			// architect has had since #158. Without the doorbell a fully bound
+			// review request was published and then waited for a person to
+			// notice it; without the record, only this process knew it was
+			// waiting at all.
+			Doorbell:  doorbell,
+			Exchanges: exchanges,
 		},
 		Fallback: base,
 	}

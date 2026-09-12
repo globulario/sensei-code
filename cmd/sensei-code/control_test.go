@@ -411,3 +411,52 @@ func TestOnlyARealPendingAuthorityQuestionIsDeferred(t *testing.T) {
 		t.Fatalf("told the operator about a question that did not exist: %q", warn.String())
 	}
 }
+
+// The reviewer must be given a doorbell, or normal progress needs a person.
+//
+// The architect path has rung since #158; the reviewer path published a fully
+// bound request and then waited for somebody to notice it. On 2026-09-12 the
+// review request for task-1789217963311720667 stood unanswered because the only
+// thing that ever woke the remote was Dave asking it to look -- a human
+// scheduler in the middle of a machine workflow.
+//
+// The wake is a NOTIFICATION, never the authority: the durable exchange below
+// decides whether a review is outstanding.
+func TestTheReviewerIsGivenADoorbell(t *testing.T) {
+	server := newControlServer(t)
+	gh := configuredBridge()
+	gh.Doorbell = true
+	bridge, _ := installedBridge(t, server, gh)
+
+	if bridge.Reviewer.Doorbell == nil {
+		t.Fatal("the reviewer has no doorbell: a published review request waits for a human " +
+			"to notice it, which makes a person part of the normal path")
+	}
+}
+
+// The reviewer exchange must be recorded, or only the running process knows a
+// review is outstanding and process death leaves the request standing on GitHub
+// with nothing listening and no local trace.
+func TestTheReviewerRecordsItsExchange(t *testing.T) {
+	server := newControlServer(t)
+	bridge, _ := installedBridge(t, server, configuredBridge())
+
+	if strings.TrimSpace(bridge.Reviewer.Exchanges.Dir) == "" {
+		t.Fatal("the reviewer has no exchange log: a restart cannot discover that a candidate " +
+			"is awaiting review, so the durable record cannot be authoritative")
+	}
+}
+
+// The record's deadline and the waiter's timeout must come from one owner. A
+// record claiming a deadline the waiter does not honour would have a restart
+// retract a request that was still live, or leave one standing that had expired.
+func TestTheReviewerDeadlineHasOneOwner(t *testing.T) {
+	server := newControlServer(t)
+	gh := configuredBridge()
+	bridge, _ := installedBridge(t, server, gh)
+
+	if bridge.Reviewer.Wait != gh.Wait {
+		t.Fatalf("the reviewer waits %s but the bridge configured %s; the exchange record "+
+			"would claim a deadline the waiter does not honour", bridge.Reviewer.Wait, gh.Wait)
+	}
+}
