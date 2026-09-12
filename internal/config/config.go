@@ -247,6 +247,33 @@ func Load(repo string) (Config, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return Config{}, err
 	}
+	// A repository that names ONE reviewer means that reviewer, and unmarshalling
+	// over Default() cannot express it.
+	//
+	// Default populates BOTH Reviewer and Reviewers, and ReviewRoster prefers
+	// Reviewers whenever it is non-empty -- which it always is. So a config
+	// stating `"reviewer": {"name": "chatgpt"}` and no `"reviewers"` set the
+	// field and changed nothing: the roster stayed [codex, claude], the engine
+	// assigned codex, and the []Agent{c.Reviewer} branch was unreachable. No
+	// error, no warning, no diagnostic -- the configuration was simply not the
+	// one in force.
+	//
+	// That is how sensei #355's review ran on codex at 12:47:32Z on 2026-09-12
+	// while the repository had asked for chatgpt, which also meant the GitHub
+	// bridge never saw the turn: it carries by agent NAME and was handed one it
+	// does not carry.
+	//
+	// The file is re-read for the KEYS it stated, because after unmarshalling
+	// there is no way to tell a stated value from an inherited default. Stating
+	// a reviewer and no roster replaces the default roster; stating a roster is
+	// unaffected; stating neither is unaffected.
+	stated, err := statedKeys(b)
+	if err != nil {
+		return Config{}, err
+	}
+	if stated["reviewer"] && !stated["reviewers"] {
+		c.Reviewers = nil
+	}
 	// Migrate only the exact old built-in architect. A deliberately customized
 	// architect remains user-owned configuration and is never rewritten.
 	if isLegacyDefaultArchitect(c.Architect) {
@@ -344,4 +371,23 @@ type GitHubBridge struct {
 // gets answered by the very agent it was meant to be independent of.
 func (g GitHubBridge) Configured() bool {
 	return strings.TrimSpace(g.MailboxPR) != ""
+}
+
+// statedKeys reports which top-level keys the configuration file actually
+// contained.
+//
+// Necessary because Load unmarshals over Default(): afterwards every field holds
+// a value and nothing distinguishes "the repository asked for this" from "this
+// is what it would have been anyway". Any precedence rule that needs to know
+// which the operator wrote has to read the bytes.
+func statedKeys(b []byte) (map[string]bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil, err
+	}
+	keys := make(map[string]bool, len(raw))
+	for k := range raw {
+		keys[k] = true
+	}
+	return keys, nil
 }
