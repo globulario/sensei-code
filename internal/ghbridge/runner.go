@@ -101,7 +101,17 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	}
 	subject.ReviewCommit = snap.Commit
 
-	request := Request{Subject: subject, RequestID: requestID, Kind: KindReview}
+	// Both repositories are STATED on the request. The consumer must never have
+	// to recover one from prose, a repository name, or which repo happens to
+	// contain a commit -- that inference is what left r-3212791306b4607c
+	// unanswered on 2026-09-12.
+	request := Request{
+		Subject:             subject,
+		RequestID:           requestID,
+		Kind:                KindReview,
+		MailboxRepository:   r.Issue.MailboxRepository(),
+		WorkspaceRepository: RemoteRepository(ctx, r.RepoDir, r.Remote),
+	}
 	// Published rather than posted, because the comment id is what a doorbell
 	// points at. PostRequest discards it, and a wake that cannot name the
 	// request it is about is a nudge to read the whole conversation.

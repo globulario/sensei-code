@@ -254,3 +254,90 @@ func TestIssueMailboxNeedsANumberAndAReviewer(t *testing.T) {
 		t.Errorf("issue number not passed through: %v", got)
 	}
 }
+
+// A review spans two repositories and the request must name both.
+//
+// The conversation lives in the mailbox; base, candidate tree and review
+// snapshot are objects in the workspace. They are equal only while the
+// workspace happens to BE the mailbox repository, which is true for every
+// architecture turn and false for the first cross-repository review.
+//
+// On 2026-09-12 request r-3212791306b4607c named base f62e3379 and review_commit
+// 602e49ae, both in globulario/sensei, to a consumer reading pinned evidence
+// from globulario/sensei-code where neither exists. It answered nothing, which
+// from outside is indistinguishable from an absent reviewer.
+func TestARequestNamesBothRepositories(t *testing.T) {
+	r := Request{
+		Subject: Subject{
+			TaskID: "T-1", BaseSHA: baseSHA,
+			CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: baseSHA,
+		},
+		RequestID:           "r-1",
+		Kind:                KindReview,
+		MailboxRepository:   "globulario/sensei-code",
+		WorkspaceRepository: "globulario/sensei",
+	}
+	m, err := r.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"mailbox_repository=globulario/sensei-code",
+		"workspace_repository=globulario/sensei",
+	} {
+		if !strings.Contains(m, want) {
+			t.Fatalf("the request does not state %q; a consumer must infer where the "+
+				"bound evidence lives, and inference is what left r-3212791306b4607c unanswered\n%s", want, m)
+		}
+	}
+
+	back, ok := ParseRequest(m)
+	if !ok {
+		t.Fatal("the request did not survive a round trip")
+	}
+	if back.WorkspaceRepository != "globulario/sensei" || back.MailboxRepository != "globulario/sensei-code" {
+		t.Fatalf("routing did not survive parsing: mailbox=%q workspace=%q",
+			back.MailboxRepository, back.WorkspaceRepository)
+	}
+}
+
+// Routing is NOT part of Subject. Subject is what a response echoes back; a
+// consumer needs to know where to look and does not re-assert where it looked.
+// Widening Subject would fail Same() for every response that does not repeat
+// them, and would make one routing fact two copies that can drift.
+func TestRepositoryRoutingIsNotPartOfTheAnsweredSubject(t *testing.T) {
+	subject := Subject{
+		TaskID: "T-1", BaseSHA: baseSHA,
+		CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: baseSHA,
+	}
+	req := Request{
+		Subject: subject, RequestID: "r-1", Kind: KindReview,
+		MailboxRepository: "globulario/sensei-code", WorkspaceRepository: "globulario/sensei",
+	}
+	// A response that repeats only the subject must still answer the request.
+	rev := Review{Subject: subject, RequestID: "r-1", Body: "{}"}
+	if !rev.Answers(req) {
+		t.Fatal("a response that echoes the subject no longer answers the request; " +
+			"repository routing leaked into the answered identity")
+	}
+}
+
+// A bridge that cannot name a repository emits the previous marker rather than
+// asserting an empty identity. Empty is honest: the consumer then fails closed
+// on a missing binding instead of being sent somewhere by a guess.
+func TestAnUnknownRepositoryIsOmittedNotAsserted(t *testing.T) {
+	r := Request{
+		Subject: Subject{
+			TaskID: "T-1", BaseSHA: baseSHA,
+			CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: baseSHA,
+		},
+		RequestID: "r-1", Kind: KindReview,
+	}
+	m, err := r.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(m, "workspace_repository=") || strings.Contains(m, "mailbox_repository=") {
+		t.Fatalf("an unknown repository was asserted as empty:\n%s", m)
+	}
+}
