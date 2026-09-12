@@ -1,6 +1,9 @@
 # Repair contracts: the two capability-resurrection families
 
-**Status:** repair-contract pass, revision 2 — **FROZEN**. NO IMPLEMENTATION YET.
+**Status:** repair-contract pass, revision 4 — **FROZEN**, amended after the Family A
+implementation. Revision 3 fixed two stale statements; revision 4 adds §6 (A-R1, ratified
+from the implementation), the `Valid` guardrail, the second-owner record, and the bounded
+historical-reach statement. Family A is implementation-complete; Family B is not started.
 All four open rulings have been made by the owner and are recorded in §4. The next change is
 implementation against these contracts, not further architectural invention.
 **Date:** 2026-09-11
@@ -255,3 +258,94 @@ Family B   B-INV  +  reject B-N1..B-N4        +  preserve B-P1, B-P2
 Out of scope here and deliberately not folded in: #355 (path containment) and #356 (verifier
 totality). They belong to substrate hardening; including them would turn two bounded repairs
 into a governance mega-patch.
+
+---
+
+## 6. Amendments ratified from the Family A implementation `[R4]`
+
+Implementation surfaced one protocol question the contract did not answer, and one limit worth
+stating precisely. Both are ruled here rather than left in code.
+
+### 6.1 A-R1 — structural validity and referential completeness are distinct facts
+
+A-N3 requires the system to REFUSE authority-bearing interpretation when a referenced artifact
+is missing. It does not require structural chain verification to own that refusal. Refusing at
+chain level flattened `completion`'s `event_without_valid_receipt` -> `broken_completion` into
+generic chain invalidity — a vaguer refusal, not a safer one.
+
+> **A-R1.** Structural validity and referential completeness are distinct facts.
+>
+> Structural verification establishes the ledger sequence, hashes, witness relation, and other
+> properties intrinsic to the recorded chain.
+>
+> Referential verification establishes that artifacts required by verified entries exist and
+> satisfy the contract needed by the consuming authority.
+>
+> A structurally valid chain MAY therefore be referentially incomplete.
+>
+> No authority-bearing reduction may interpret absence, restore an earlier phase, grant
+> authority, or report completion unless the required referential completeness has also been
+> established.
+>
+> A missing or invalid referenced artifact MUST be refused at or before the authority-bearing
+> consumer, but the refusal SHOULD preserve the most specific available diagnosis rather than
+> being collapsed into generic chain corruption.
+
+This makes the implemented `inspect` (diagnosis) versus `Complete` (authority) distinction
+intentional protocol rather than accidental implementation.
+
+### 6.2 The `Valid` guardrail — mandatory, not advisory
+
+`Valid` now means STRUCTURAL validity. It must never silently come to mean "safe for
+authority-bearing use".
+
+> `CompletenessEstablished` is MANDATORY at every authority-bearing boundary. A consumer that
+> reads `Valid == true` and skips the second predicate reconstructs Family A exactly.
+
+The two predicates are separate fields for that reason; collapsing them back into one is the
+regression to watch for.
+
+### 6.3 Second-owner integration — authorized, and bounded
+
+```text
+completion/{inspect.go, integration.go}
+
+Authorized because these are authority-bearing CONSUMERS of Family A's new completeness
+fact. They consume the new semantics; they do not define or widen them.
+```
+
+A new integrity fact that no authority-bearing reduction may ignore necessarily reaches the
+consumers that make completion decisions — A-N1/A-N2 forbid reconstruction into an earlier
+authority state, and A-N3 requires missing referenced evidence to stay refused. **No broader
+`completion/` sweep is authorized by this ruling.**
+
+### 6.4 Historical reach — bounded by A-Q1, and deliberately so
+
+> **Family A is implementation-complete. New history is protected by the external completeness
+> witness. Existing unwitnessed history is never retroactively certified: it remains
+> `completeness_unwitnessed` until a subsequent append establishes a witnessed forward
+> boundary, recorded as `Bootstrapped: true`. Damage after that boundary is detectable.
+> Pre-bootstrap completeness is not asserted.**
+
+This is a consequence of A-Q1, not a shortcut. The witness is a monotonic fact external to the
+reconstructed history and can never be regenerated from fewer surviving entries — so certifying
+an unknown historical prefix because the new mechanism has arrived would violate the very
+invariant being repaired.
+
+### 6.5 The implementation recreated the defect it repaired `[preserved deliberately]`
+
+`witness.go` documents that disagreement has direction and that normalisation destroys
+evidence. Forty lines away, verification read the entry list and then read HEAD and the witness
+— two observations from different moments, compared as though simultaneous. A concurrent
+append landing between them was reported as `ledger.history_truncated` /
+`ledger.head_leads_entries`: damage where there was only concurrency. Measured at 89 and 70
+spurious reads in ~1.2s.
+
+Three instruments failed before it was found — isolation runs (which remove the contention),
+a baseline that silently measured a build failure, and a lock-contention hypothesis that did
+not fit the facts. Each tested a STORY about the mechanism. The instrument that worked tested
+the observable invariant instead.
+
+The fix is ordering, not more checking: read the lower bounds FIRST, so a concurrent append can
+only add entries afterwards and the comparison errs toward "complete", never toward "lost".
+
