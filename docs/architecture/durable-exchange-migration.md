@@ -108,3 +108,22 @@ a candidate exists, response after deadline.
 
 Concepts deleted, not added. If the design needs more waiter kinds, more wake
 messages, more retry state, or more TUI/headless special cases, it is wrong.
+
+## 9. Open: headless cannot consume a durable human resolution
+
+Observed 2026-09-12 on sensei #353. The architect escalated a real question, the
+headless run deferred correctly, and the question was persisted whole — the W1
+repair (`ea89e31`) working on a live case rather than a test.
+
+But answering it did not resume the task. `ResolveHuman` is reachable only from
+`internal/tui/model.go`, so the adopted decision had to be supplied as INPUT to a
+fresh governed task instead of consumed by the deferred one.
+
+```
+durable human resolution exists      session.Store.AwaitingAuthority, FindInterrupted
+headless consumption of it           MISSING
+```
+
+Half of W1 is therefore still open. Deferring no longer deadlocks; resuming from
+the answer still requires a TUI. Starting a fresh task with the decision as input
+is a commissioning workaround, not the repair.
