@@ -108,3 +108,80 @@ func TestArchitectureRunnerRefusesWrongRoleBeforeTransport(t *testing.T) {
 		t.Fatalf("wrong role was not refused: %v", err)
 	}
 }
+
+// An architecture request states both repositories too.
+//
+// Architecture turns stay in the mailbox repository today, which is exactly why
+// this is worth stating rather than leaving implicit: the base an architecture
+// request names is already a WORKSPACE object. On 2026-09-12 base f62e3379
+// belonged to globulario/sensei while the mailbox was globulario/sensei-code, so
+// the conflation was latent here too and escaped notice only because nothing
+// fetched it. The law must not depend on that accident.
+func TestAnArchitectureRequestNamesBothRepositories(t *testing.T) {
+	r := ArchitectureRequest{
+		Binding:             architectureBinding(),
+		RequestID:           "r-abcdef0123456789",
+		Prompt:              "review the world",
+		MailboxRepository:   "globulario/sensei-code",
+		WorkspaceRepository: "globulario/sensei",
+	}
+	m, err := r.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"mailbox_repository=globulario/sensei-code",
+		"workspace_repository=globulario/sensei",
+	} {
+		if !strings.Contains(m, want) {
+			t.Fatalf("architecture request does not state %q:\n%s", want, m)
+		}
+	}
+	back, ok := ParseArchitectureRequest(m)
+	if !ok {
+		t.Fatal("the architecture request did not survive a round trip")
+	}
+	if back.WorkspaceRepository != "globulario/sensei" || back.MailboxRepository != "globulario/sensei-code" {
+		t.Fatalf("routing lost in parsing: mailbox=%q workspace=%q",
+			back.MailboxRepository, back.WorkspaceRepository)
+	}
+}
+
+// Routing must not enter the answered identity: a response that echoes only the
+// binding still answers the request.
+func TestArchitectureRoutingIsNotPartOfTheAnsweredBinding(t *testing.T) {
+	b := architectureBinding()
+	req := ArchitectureRequest{
+		Binding: b, RequestID: "r-abcdef0123456789", Prompt: "p",
+		MailboxRepository: "globulario/sensei-code", WorkspaceRepository: "globulario/sensei",
+	}
+	resp := ArchitectureResponse{Binding: b, RequestID: "r-abcdef0123456789", Body: "{}"}
+	if !resp.Answers(req) {
+		t.Fatal("a response echoing the binding no longer answers the request; " +
+			"repository routing leaked into the answered identity")
+	}
+}
+
+// A request that predates repository binding must still PARSE.
+//
+// Refusing to read it would break Answers() for requests already standing on
+// GitHub when the schema changed. Absence is a missing binding the consumer
+// refuses on -- a typed refusal at the point of use, never a silent default to
+// whichever repository the mailbox happens to be.
+func TestALegacyArchitectureRequestStillParses(t *testing.T) {
+	legacy := ArchitectureRequest{
+		Binding: architectureBinding(), RequestID: "r-abcdef0123456789", Prompt: "p",
+	}
+	m, err := legacy.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, ok := ParseArchitectureRequest(m)
+	if !ok {
+		t.Fatal("a request without repository binding no longer parses; every exchange " +
+			"already standing on GitHub would stop matching its answer")
+	}
+	if back.WorkspaceRepository != "" {
+		t.Fatalf("absence was filled in with %q instead of left missing", back.WorkspaceRepository)
+	}
+}

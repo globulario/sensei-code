@@ -35,6 +35,12 @@ type ArchitectureRunner struct {
 	// process that DIES here cannot, and the record is the only thing that lets
 	// the next startup do it instead (#162).
 	Exchanges ExchangeLog
+	// RepoDir and Remote locate the governed workspace, so a request can STATE
+	// which repository its evidence lives in rather than leaving a consumer to
+	// infer it. Derived from the remote the workspace actually pushes to, the
+	// same predicate the reviewer uses, so the two cannot disagree.
+	RepoDir string
+	Remote  string
 }
 
 var ErrNotArchitect = errors.New("the github architecture runner serves the architect role only")
@@ -51,9 +57,11 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 		return agent.Result{}, errors.New("the github architecture bridge needs a request id source")
 	}
 	request := ArchitectureRequest{
-		Binding:   r.Binding,
-		RequestID: r.NewRequestID(),
-		Prompt:    req.Prompt,
+		Binding:             r.Binding,
+		RequestID:           r.NewRequestID(),
+		Prompt:              req.Prompt,
+		MailboxRepository:   r.Issue.MailboxRepository(),
+		WorkspaceRepository: RemoteRepository(ctx, r.RepoDir, r.Remote),
 	}
 	requestComment, err := PublishArchitectureRequest(ctx, r.Issue, request)
 	if err != nil {

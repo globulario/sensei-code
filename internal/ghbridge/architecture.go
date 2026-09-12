@@ -23,6 +23,21 @@ type ArchitectureRequest struct {
 	Binding   roles.ArchitectureBinding
 	RequestID string
 	Prompt    string
+	// MailboxRepository is where the conversation lives, "owner/name".
+	// WorkspaceRepository is where the governed evidence lives.
+	//
+	// Deliberately NOT inside Binding: Binding is the identity a response echoes
+	// back, and widening it would fail Answers() for every response that does not
+	// repeat them. Routing tells a consumer where to look; it is not testimony.
+	//
+	// Architecture turns happen to stay in the mailbox repository today, which is
+	// exactly why this is worth stating rather than leaving implicit. The base an
+	// architecture request names is already a WORKSPACE object -- f62e3379 on
+	// 2026-09-12 belonged to globulario/sensei while the mailbox was
+	// globulario/sensei-code -- so the conflation was latent here too and escaped
+	// notice only because nothing fetched it.
+	MailboxRepository   string
+	WorkspaceRepository string
 }
 
 func (r ArchitectureRequest) Validate() error {
@@ -50,6 +65,14 @@ func (r ArchitectureRequest) Marker() (string, error) {
 	fmt.Fprintf(&b, "objective_digest=%s\n", r.Binding.ObjectiveDigest)
 	fmt.Fprintf(&b, "base=%s\n", r.Binding.BaseSHA)
 	fmt.Fprintf(&b, "graph_build_commit=%s\n", r.Binding.GraphBuildCommit)
+	// Omitted when unknown rather than asserted empty, so a consumer fails closed
+	// on a missing binding instead of being sent somewhere by a guess.
+	if strings.TrimSpace(r.MailboxRepository) != "" {
+		fmt.Fprintf(&b, "mailbox_repository=%s\n", r.MailboxRepository)
+	}
+	if strings.TrimSpace(r.WorkspaceRepository) != "" {
+		fmt.Fprintf(&b, "workspace_repository=%s\n", r.WorkspaceRepository)
+	}
 	b.WriteString("\n")
 	b.WriteString(r.Prompt)
 	return b.String(), nil
@@ -102,24 +125,24 @@ func (r ArchitectureResponse) Answers(q ArchitectureRequest) bool {
 // parseArchitectureEnvelope is strict about the identity header. Duplicate or
 // unknown fields are refused rather than ignored: ambiguity in presentation
 // must never decide which objective/world an answer belongs to.
-func parseArchitectureEnvelope(body, marker string, request bool) (roles.ArchitectureBinding, string, string, error) {
+func parseArchitectureEnvelope(body, marker string, request bool) (roles.ArchitectureBinding, string, string, map[string]string, error) {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
 	if !strings.HasPrefix(body, marker+"\n") {
-		return roles.ArchitectureBinding{}, "", "", errors.New("architecture marker missing")
+		return roles.ArchitectureBinding{}, "", "", nil, errors.New("architecture marker missing")
 	}
 	rest := strings.TrimPrefix(body, marker+"\n")
 	header, payload, ok := strings.Cut(rest, "\n\n")
 	if !ok {
-		return roles.ArchitectureBinding{}, "", "", errors.New("architecture envelope has no payload boundary")
+		return roles.ArchitectureBinding{}, "", "", nil, errors.New("architecture envelope has no payload boundary")
 	}
 	fields := map[string]string{}
 	for _, line := range strings.Split(header, "\n") {
 		key, value, ok := strings.Cut(line, "=")
 		if !ok || key == "" || value == "" {
-			return roles.ArchitectureBinding{}, "", "", fmt.Errorf("malformed architecture header line %q", line)
+			return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("malformed architecture header line %q", line)
 		}
 		if _, duplicate := fields[key]; duplicate {
-			return roles.ArchitectureBinding{}, "", "", fmt.Errorf("duplicate architecture header %q", key)
+			return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("duplicate architecture header %q", key)
 		}
 		fields[key] = value
 	}
@@ -127,20 +150,37 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 		"task": true, "request": true, "objective_digest": true,
 		"base": true, "graph_build_commit": true,
 	}
+	// Routing is accepted but NOT required. A request that predates repository
+	// binding must still parse, so an in-flight exchange keeps matching its
+	// answer; refusing to read it here would break Answers() for requests
+	// already standing on GitHub. Absence is then a MISSING BINDING the consumer
+	// refuses on -- a typed refusal at the point of use, never a silent default
+	// to whichever repository the mailbox happens to be.
+	optional := map[string]bool{}
+	if request {
+		optional["mailbox_repository"] = true
+		optional["workspace_repository"] = true
+		for key := range optional {
+			allowed[key] = true
+		}
+	}
 	if request {
 		allowed["kind"] = true
 		if fields["kind"] != "architecture" {
-			return roles.ArchitectureBinding{}, "", "", fmt.Errorf("architecture request kind = %q", fields["kind"])
+			return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("architecture request kind = %q", fields["kind"])
 		}
 	}
 	for key := range fields {
 		if !allowed[key] {
-			return roles.ArchitectureBinding{}, "", "", fmt.Errorf("unknown architecture header %q", key)
+			return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("unknown architecture header %q", key)
 		}
 	}
 	for key := range allowed {
+		if optional[key] {
+			continue
+		}
 		if fields[key] == "" {
-			return roles.ArchitectureBinding{}, "", "", fmt.Errorf("architecture header %q is missing", key)
+			return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("architecture header %q is missing", key)
 		}
 	}
 	binding := roles.ArchitectureBinding{
@@ -150,34 +190,40 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 		GraphBuildCommit: fields["graph_build_commit"],
 	}
 	if !binding.Valid() {
-		return roles.ArchitectureBinding{}, "", "", fmt.Errorf("architecture binding is malformed: %+v", binding)
+		return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("architecture binding is malformed: %+v", binding)
 	}
 	id := fields["request"]
 	if !architectureRequestID.MatchString(id) {
-		return roles.ArchitectureBinding{}, "", "", fmt.Errorf("architecture request id is malformed: %q", id)
+		return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("architecture request id is malformed: %q", id)
 	}
 	if strings.TrimSpace(payload) == "" {
-		return roles.ArchitectureBinding{}, "", "", errors.New("architecture envelope payload is empty")
+		return roles.ArchitectureBinding{}, "", "", nil, errors.New("architecture envelope payload is empty")
 	}
-	return binding, id, payload, nil
+	return binding, id, payload, fields, nil
 }
 
 func ParseArchitectureRequest(body string) (ArchitectureRequest, bool) {
 	if !strings.HasPrefix(strings.ReplaceAll(body, "\r\n", "\n"), architectureRequestMarker+"\n") {
 		return ArchitectureRequest{}, false
 	}
-	binding, id, prompt, err := parseArchitectureEnvelope(body, architectureRequestMarker, true)
+	binding, id, prompt, fields, err := parseArchitectureEnvelope(body, architectureRequestMarker, true)
 	if err != nil {
 		return ArchitectureRequest{}, false
 	}
-	return ArchitectureRequest{Binding: binding, RequestID: id, Prompt: prompt}, true
+	return ArchitectureRequest{
+		Binding:             binding,
+		RequestID:           id,
+		Prompt:              prompt,
+		MailboxRepository:   fields["mailbox_repository"],
+		WorkspaceRepository: fields["workspace_repository"],
+	}, true
 }
 
 func ParseArchitectureResponse(body string) (ArchitectureResponse, bool) {
 	if !strings.HasPrefix(strings.ReplaceAll(body, "\r\n", "\n"), architectureResponseMarker+"\n") {
 		return ArchitectureResponse{}, false
 	}
-	binding, id, answer, err := parseArchitectureEnvelope(body, architectureResponseMarker, false)
+	binding, id, answer, _, err := parseArchitectureEnvelope(body, architectureResponseMarker, false)
 	if err != nil {
 		return ArchitectureResponse{}, false
 	}
