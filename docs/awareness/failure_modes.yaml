@@ -280,3 +280,14 @@ failure_modes:
       - sensei-code setup reported 'graph server BROKEN' while 'sensei metadata -addr localhost:10122' answered authoritative on the same host, 2026-09-09
       - internal/setup/graph_address_test.go:TestAnAnswerFromAnotherAddressIsNotReportedAsTheConfiguredOne failed before the repair with detail 'answering on localhost:10122'
     contract: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.
+  - id: failure.the_doorbell_resolved_its_repository_from_the_workspace_not
+    title: The doorbell resolved its repository from the workspace, not the mailbox
+    protects:
+      files:
+        - internal/ghbridge/doorbell.go
+    related_invariants:
+      - sensei_code.ghbridge.an_unavailable_bridge_refuses_rather_than_substituting
+    required_tests:
+      - internal/ghbridge/doorbell_test.go:TestTheWakeIsAddressedToTheMailboxRepositoryNotTheWorkspace
+    evidence:
+      - 'GHDoorbell{Dir: repoRoot} ran ''gh issue comment 157'', which resolves the repository from the workspace remote, while the request was published by the App to its own owner/repo. Equal only while workspace == mailbox repo; a control surface serving another repository wakes a same-numbered issue elsewhere and the exchange expires looking like a remote that declined to answer.'

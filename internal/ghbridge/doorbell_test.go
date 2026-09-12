@@ -405,3 +405,71 @@ func TestAnUnansweredReviewTurnReportsThatItEnded(t *testing.T) {
 	}
 	t.Fatal("a review turn ended and emitted nothing saying so")
 }
+
+// The wake must land in the repository the REQUEST was published to.
+//
+// The App pins the mailbox to its own owner/repo; gh resolves a repository from
+// the directory it runs in. While a control surface serves the repository its
+// mailbox lives in, the two agree and nothing distinguishes them. Serve a
+// different workspace and they diverge silently: the request sits in one
+// repository's conversation while the wake is posted to another repository's
+// issue of the same number. Nobody is told to look, and the exchange expires
+// looking exactly like a remote that chose not to reply.
+func TestTheWakeIsAddressedToTheMailboxRepositoryNotTheWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	argv := filepath.Join(dir, "argv")
+	script := filepath.Join(dir, "gh")
+	if err := os.WriteFile(script, []byte(
+		"#!/bin/sh\nprintf '%s\\n' \"$@\" > "+argv+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	// Dir is a workspace that is NOT the mailbox repository.
+	d := GHDoorbell{Dir: dir, Conversation: "157", Repo: "globulario/sensei-code"}
+	if err := d.Ring(context.Background(), 12345); err != nil {
+		t.Fatalf("Ring: %v", err)
+	}
+
+	recorded, err := os.ReadFile(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := strings.Split(strings.TrimSpace(string(recorded)), "\n")
+	var target string
+	for i, a := range args {
+		if a == "-R" && i+1 < len(args) {
+			target = args[i+1]
+		}
+	}
+	if target != "globulario/sensei-code" {
+		t.Fatalf("the wake was not addressed to the mailbox repository; gh argv = %v\n"+
+			"without an explicit -R the wake lands wherever %s resolves, which is a "+
+			"different conversation than the request", args, dir)
+	}
+}
+
+// An unset Repo keeps the original behaviour: gh resolves from Dir. Installations
+// whose workspace IS the mailbox repository are unaffected by the field existing.
+func TestAnUnsetDoorbellRepoDoesNotAddressAnyRepository(t *testing.T) {
+	dir := t.TempDir()
+	argv := filepath.Join(dir, "argv")
+	script := filepath.Join(dir, "gh")
+	if err := os.WriteFile(script, []byte(
+		"#!/bin/sh\nprintf '%s\\n' \"$@\" > "+argv+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	d := GHDoorbell{Dir: dir, Conversation: "157"}
+	if err := d.Ring(context.Background(), 12345); err != nil {
+		t.Fatalf("Ring: %v", err)
+	}
+	recorded, err := os.ReadFile(argv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(recorded), "-R") {
+		t.Fatalf("an unset Repo still aimed gh at a repository: %q", recorded)
+	}
+}

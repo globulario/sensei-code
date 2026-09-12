@@ -487,7 +487,15 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	// property reviewer independence actually rests on.
 	var doorbell ghbridge.Doorbell
 	if gh.Doorbell {
-		doorbell = ghbridge.GHDoorbell{Dir: repoRoot, Conversation: box.Number}
+		// Aimed at the App's repository, not at whatever repoRoot's remotes
+		// resolve to. The request is published by the App; a wake that lands in
+		// a different repository wakes nobody and is indistinguishable from a
+		// remote that declined to answer.
+		doorbell = ghbridge.GHDoorbell{
+			Dir:          repoRoot,
+			Conversation: box.Number,
+			Repo:         gh.App.Mailbox(),
+		}
 	}
 
 	// Every request this process publishes gets a durable lifetime record, and
