@@ -227,8 +227,20 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
 		for _, p := range r.SearchPaths {
 			args = append(args, "-search", p)
 		}
-	case "state_mutation_confined_to_owner":
+	case "state_mutation_confined_to_owner", "construction_confined_to_owner":
 		// Dir is the DECLARING package; SearchPaths is a term of the question.
+		//
+		// The construction family shares this argv exactly: same owner, same type, same
+		// scope. It is listed here rather than left to the default branch because that
+		// branch passes -lock and NO -search -- the shape only field_access_under_lock
+		// wants -- so an unlisted family is invoked with a meaningless argument and no
+		// scope, the CLI refuses it for a missing --search, and the recipe silently
+		// establishes nothing. A committed recipe that cannot be invoked is worse than an
+		// absent one: the corpus then claims a question is being asked that never is.
+		//
+		// For construction_confined_to_owner, -field is optional on the CLI (without it
+		// the claim is about the type). An empty Field is passed through as an empty
+		// string, which the CLI reads the same way.
 		args = append(args, "-dir", r.Dir, "-type", r.Type, "-field", r.Field)
 		for _, p := range r.SearchPaths {
 			args = append(args, "-search", p)
