@@ -2283,14 +2283,15 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				continue
 			case routing.ClosesGap():
 				// The budget is spent and the router still reports the same
-				// gap. Report it as unclosed rather than looping: what the
-				// human is being asked now is not the technical question, it is
-				// whether to proceed with the gap still open.
+				// gap. What happens NEXT depends on who could close it, which is
+				// disposeUnclosedGap's decision and not this switch's.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
 				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
-				routing.Route = RouteHuman
-				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
+				var limited error
+				if routing, limited = e.disposeUnclosedGap(taskID, routing, action); limited != nil {
+					return architectureDecision{}, limited
+				}
 				fallthrough
 			case routing.RequiresHuman():
 				// Authorizing does not change the graph, so the router will
@@ -2379,7 +2380,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// architect decides architecturally. A nervous model must not be
 			// able to manufacture Level-3 events, for the same reason a
 			// confident one must not be able to skip them.
-			routing, scoped, _, err := e.routePlan(ctx, sc, start, taskID, task, d)
+			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -2413,7 +2414,10 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
 				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
-				routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
+				var limited error
+				if routing, limited = e.disposeUnclosedGap(taskID, routing, action); limited != nil {
+					return architectureDecision{}, limited
+				}
 			}
 			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
 				if !authorized {

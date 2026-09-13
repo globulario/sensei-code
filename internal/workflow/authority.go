@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -709,4 +710,124 @@ func degradedReason(spots []string) string {
 		return "the preflight reported no blind spots, so nothing says what is degraded"
 	}
 	return strings.Join(spots, "; ")
+}
+
+// gapClosureOwner says who is CAPABLE of closing a bounded gap class.
+//
+// The law: a bounded knowledge gap may only be assigned to a closure actor
+// capable of changing the evidence whose absence caused the gap. Routing a gap
+// to an actor that cannot change that evidence produces exactly what was
+// measured on task-1789272620293170079 -- rounds that cannot succeed, followed
+// by a question the human cannot answer either.
+type gapClosureOwner int
+
+const (
+	// closureOwnerReasoning: the architect can settle it by thinking, reading
+	// what the graph already holds, or narrowing the plan. An unverified premise
+	// is this: the evidence exists and the question is what it implies.
+	closureOwnerReasoning gapClosureOwner = iota
+	// closureOwnerOutOfBand: closing it requires changing the graph's coverage,
+	// which no operation reachable from a governed run can do. Reported with its
+	// remedy; never asked of the architect twice and never asked of a human.
+	closureOwnerOutOfBand
+)
+
+// closureOwnerFor types a gap class by who could close it.
+//
+// Deliberately narrow: only the class actually measured as unclosable is typed
+// out-of-band. An unrecognised kind keeps the pre-existing reasoning owner, so
+// this repair cannot widen the set of gaps that stop a run.
+func closureOwnerFor(kind string) gapClosureOwner {
+	if strings.TrimSpace(kind) == "coverage-unexamined" {
+		return closureOwnerOutOfBand
+	}
+	return closureOwnerReasoning
+}
+
+// knowledgeLimitRemedy is the minimum concrete operator action that would close
+// a coverage limit, in the shape the CLI actually accepts.
+//
+// `sensei import --refresh` takes a CHECKOUT PATH and a --domain; it does not
+// take a file list. It also "never auto-promotes: extractors write
+// candidates/intents for you to review and promote yourself", and "never touches
+// a store unless --store-url is given" -- so the remedy names the reload
+// explicitly rather than implying the served graph updates by itself.
+//
+// The files are named as WHAT IS MISSING, not as arguments. A remedy that passed
+// them to --refresh would not run.
+func knowledgeLimitRemedy(root, domain string, missing []string) string {
+	cmd := "sensei import --refresh " + root
+	if strings.TrimSpace(domain) != "" {
+		cmd += " --domain " + domain
+	}
+	return "graph examination of " + strings.Join(missing, ", ") +
+		"; the supported operator action is `" + cmd +
+		"` (add --store-url and --graph-marker-file to reload the served store). " +
+		"This is reported, not performed: a governed run must not change the graph it is governed by, " +
+		"and extraction writes candidates for review rather than promoting them."
+}
+
+// disposeUnclosedGap decides what a bounded knowledge gap becomes when its one
+// closure round is spent and the router still reports it.
+//
+// Two outcomes, chosen by who could close it:
+//
+//   - reasoning-owned, or coverage that the plan no longer depends on: escalate
+//     as before. What the human is asked is not the technical question, it is
+//     whether to proceed with the gap open -- a decision they can actually make.
+//   - out-of-band with coverage still missing: a knowledge limit. No further
+//     round is spent, no human is asked, and the stop carries the remedy.
+//
+// The second case is the repair. Asking a human to authorise work over absent
+// coverage was answerable but useless: authorising does not examine a file, so
+// the router reached the identical condition on the next plan and the person was
+// asked again -- observed twice on task-1789272620293170079.
+func (e *Engine) disposeUnclosedGap(taskID string, routing Routing, action Action) (Routing, error) {
+	missing := action.unexaminedArchitecturalFiles()
+	// Coverage the plan no longer depends on is not a limit: the architect
+	// narrowed onto examined material, which is the legitimate escape, and the
+	// remaining stop is an ordinary escalation.
+	if closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand && len(missing) > 0 {
+		routing.Basis = BasisLacksKnowledge
+		routing.Closes = knowledgeLimitRemedy(e.Repo.Root, routing.Gap.World, missing)
+		limit := &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"knowledge-limited: no actor reachable from a governed run can examine "+
+				strings.Join(missing, ", ")+"; this is not a decision a human can supply. "+
+				"closes: "+routing.Closes, routing))
+		return routing, limit
+	}
+	routing.Route = RouteHuman
+	routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
+	return routing, nil
+}
+
+// knowledgeLimitError reports a bounded knowledge gap that NO actor reachable
+// from this engine can close.
+//
+// It is not a failure of the work and not a question for a person. The graph has
+// not examined some planned file, and the only operations that change that --
+// `sensei import` / `bootstrap` / `build` / `rebuild` -- are CLI stages outside a
+// governed run. The engine's own awareness surface is read-only with respect to
+// coverage: audit_diff, edit_check and preflight read, and investigate and
+// candidates are documented "read-only and candidate-only; never promotes
+// knowledge".
+//
+// So the honest report is the limit plus its remedy, which is what Closes
+// carries. Asking a human instead was the observed defect: authorizing does not
+// make a file examined, so the router reaches the same condition on the next
+// plan and the person is asked again.
+type knowledgeLimitError struct {
+	// Condition is the router's own wording, kept verbatim.
+	Condition string
+	// Missing are the planned files the graph has not examined.
+	Missing []string
+	// Closes is the remedy, in the shape Routing.Closes carries it.
+	Closes string
+}
+
+func (e *knowledgeLimitError) Error() string {
+	return "this task cannot be governed further without knowledge the graph does not hold: " + e.Condition +
+		"\nunexamined: " + strings.Join(e.Missing, ", ") +
+		"\ncloses: " + e.Closes
 }
