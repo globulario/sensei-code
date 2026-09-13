@@ -55,6 +55,8 @@ var (
 	errQuestionUnusable = errors.New("that task's preserved question could not be read back, so it cannot be answered")
 	errNoOptions        = errors.New("that task's preserved question carried no options, so no answer to it exists")
 	errNotAnOption      = errors.New("that is not one of the options the preserved question offered")
+	errBoundElsewhere   = errors.New("the preserved question is bound to a different task than the one named")
+	errUnprovableScope  = errors.New("that question cannot prove which files it was asked about")
 )
 
 // authorityResume is the exact delivery one invocation is entitled to make: one
@@ -98,6 +100,12 @@ func selectAuthorityResume(tasks []session.Interrupted, taskID, answer string) (
 	}
 	if len(q.Decision.Options) == 0 {
 		return authorityResume{}, fmt.Errorf("%w: %s", errNoOptions, taskID)
+	}
+	// A record that NAMES a task must name this one. A record that names none
+	// predates the field: absence is not disagreement, and reading it as one
+	// would make every question deferred before that field unanswerable.
+	if q.TaskID != "" && q.TaskID != taskID {
+		return authorityResume{}, fmt.Errorf("%w: record says %s, you named %s", errBoundElsewhere, q.TaskID, taskID)
 	}
 	for _, option := range q.Decision.Options {
 		if option.ID == answer {
@@ -260,6 +268,12 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 		return exitUsage
 	}
+	// And an answer this record cannot support is refused here, before a process,
+	// a graph or a bridge exists -- so the question is untouched.
+	if err := admitLegacyAnswer(target); err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+		return exitUsage
+	}
 
 	// The same readiness gate run applies, for the same reason.
 	if report := inspectQuick(ctx, repo, cfg); !report.Ready() {
@@ -391,4 +405,29 @@ func reportOtherSessionsWithQuestions(out io.Writer, root, skip string) {
 	}
 	sort.Strings(others)
 	fmt.Fprintf(out, "\nOther sessions hold standing questions:\n%s\n", strings.Join(others, "\n"))
+}
+
+// admitLegacyAnswer refuses, before anything starts, an answer that would
+// authorize work on a question whose record cannot prove what it was asked about.
+//
+// The engine refuses this too, at the rendezvous, and that is the enforcement
+// that matters -- the TUI and any other surface go through it. This refuses
+// EARLIER, so the refusal costs no process, no Sensei, no graph and no
+// bridge: a person who names an inadmissible answer is told so instead of
+// watching a run start and end.
+//
+// The 2026-09-13 incident is why this is a refusal and not the warning it was:
+// the warning printed, execution continued, and an authorization was recorded in
+// the owner's name. There is deliberately no flag to restore that.
+//
+// A stop is admitted because it authorizes no subsequent work. It ends the task
+// rather than permitting a change, so there is nothing for coverage to govern.
+func admitLegacyAnswer(target authorityResume) error {
+	if target.Question.ScopeRecorded || target.Option.Outcome == authority.Stop {
+		return nil
+	}
+	return fmt.Errorf("%w: answer %s (%s) would authorize work on a question deferred before its authority scope was "+
+		"preserved, and the historical scope must not be reconstructed from the repository as it stands now; "+
+		"the question is left standing and only the stop option is admissible for this record",
+		errUnprovableScope, target.Option.ID, target.Option.Outcome)
 }

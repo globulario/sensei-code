@@ -188,3 +188,66 @@ W1: the human still answers by invoking a command, so the *answer* is supplied
 rather than durable. A person who answers while no process runs still has
 nowhere to put it. That remainder is the `human_authority` exchange kind in §4,
 and it is not built here.
+
+## 11. The legacy boundary — an unprovable record authorizes nothing
+
+Added 2026-09-13, forced by an incident rather than by design. See
+`docs/audit/2026-09-13-incident-unauthorized-authority-consumption.md`.
+
+§10's repair preserved the scope going forward. It did not say what to do with the
+records already on disk, which carry no scope and cannot be made to. The first
+answer was a **warning**: state the boundary and continue. That is what failed.
+
+A warning depends on its reader, and the reader was an agent that had already
+concluded the command was inert. It printed the warning, continued, satisfied a
+human-owned boundary, and wrote a proposal attributing the decision to the owner.
+
+### The rule
+
+> A durable authority record that cannot prove what it was asked about may admit
+> **only** an answer that authorizes nothing. Every other answer is refused
+> before the resolution is appended, and the question is left standing.
+
+`Stop` is the one admissible outcome, and it is named **positively**: a new value
+added to the outcome vocabulary defaults to refused rather than slipping past an
+exclusion list. Stop qualifies because it ends the task instead of permitting a
+change, so coverage has nothing to govern.
+
+### What is deliberately not done
+
+- **The historical scope is not reconstructed** — not from the repository, not
+  from the graph, not from the objective, not from a fresh plan. There is no
+  honest way to recover which files a question nobody can see was asked about,
+  and a reconstructed scope would be an invented authorization wearing a
+  measurement's clothes.
+- **There is no override flag.** No env var, no `--force`, no config key. A
+  record that cannot prove its coverage does not become authoritative because
+  someone asked twice.
+- **`Covers` is untouched.** It was never wrong; it refused correctly, and the
+  defect was upstream of it.
+
+### Where it is enforced, and why in two places
+
+| layer | when | why |
+|---|---|---|
+| `Engine.awaitChoice` | at the rendezvous, after the option is known and before the resolution exists | the enforcement that matters: every surface, including the TUI, goes through it |
+| `sensei-code resume` | at selection, before a process, graph or bridge exists | a refusal should cost nothing, and a person naming an inadmissible answer should be told, not watch a run start and end |
+
+The command layer is a convenience and is not trusted: the engine refuses
+independently. `TestTheCommandRefusesAnInadmissibleAnswerAndLeavesTheLogUntouched`
+covers the wiring between them, because the incident's proximate cause was a
+helper that computed the right answer while the caller ignored it.
+
+### A refusal must not consume what it refuses
+
+`WorkflowFailed` sets `done` in `FindInterrupted`, which drops the task and makes
+its preserved question unreachable. A refusal that terminalized as FAILED would
+therefore **consume the question by refusing it**.
+
+So the refusal re-preserves instead: `preserveQuestion` records the question whole
+and the run ends `WorkflowAwaitingAuthority` / `OutcomeDeferred`. The typed
+refusal unwraps to `errAuthorityDeferred`, so every existing caller already reads
+it as "the question stands". One function writes that record for both ways a
+question survives an answer attempt — deferred without an answer, and answered
+with one that could not be admitted — because two copies would drift on exactly
+the field this section exists to protect.

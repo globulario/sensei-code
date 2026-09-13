@@ -9,12 +9,17 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/authority"
+	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -336,5 +341,155 @@ func TestCountStandingCountsOnlyTasksThatAreAsking(t *testing.T) {
 	})
 	if got != 2 {
 		t.Fatalf("countStanding = %d, want 2", got)
+	}
+}
+
+// A record that names a different task refuses. One that names none predates the
+// field, and absence is not disagreement.
+func TestARecordBoundToAnotherTaskRefusesAndAnUnboundOneDoesNot(t *testing.T) {
+	bound := func(recordTask string) json.RawMessage {
+		raw, err := json.Marshal(workflow.DeferredAuthority{
+			TaskID: recordTask, ScopeRecorded: true,
+			Scope:    []string{"internal/ghbridge/snapshot.go"},
+			Decision: authority.Decision{Level: authority.Human, Subject: "q", Options: []authority.Option{{ID: "1", Label: "yes", Outcome: authority.Authorize}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	tasks := []session.Interrupted{
+		{TaskID: "t-mine", AwaitingAuthority: bound("t-someone-else")},
+		{TaskID: "t-legacy", AwaitingAuthority: bound("")},
+	}
+	if _, err := selectAuthorityResume(tasks, "t-mine", "1"); !errorIs(err, errBoundElsewhere) {
+		t.Fatalf("a record bound to another task was accepted: %v", err)
+	}
+	if _, err := selectAuthorityResume(tasks, "t-legacy", "1"); err != nil {
+		t.Fatalf("a record predating the binding field was refused: %v", err)
+	}
+}
+
+// An answer that would authorize work on an unprovable record is REFUSED before
+// anything starts, and a stop is not.
+func TestAnUnprovableRecordRefusesAuthorisationAndAdmitsStop(t *testing.T) {
+	legacy := func(outcome authority.Outcome) authorityResume {
+		return authorityResume{
+			Question: workflow.DeferredAuthority{ScopeRecorded: false},
+			Option:   authority.Option{ID: "1", Label: "l", Outcome: outcome},
+		}
+	}
+	for _, outcome := range []authority.Outcome{authority.Authorize, authority.Revise, authority.Decline} {
+		err := admitLegacyAnswer(legacy(outcome))
+		if !errorIs(err, errUnprovableScope) {
+			t.Fatalf("%s on an unprovable record was admitted: %v", outcome, err)
+		}
+		if !strings.Contains(err.Error(), "must not be reconstructed") {
+			t.Errorf("%s: the refusal does not say the scope will not be invented: %v", outcome, err)
+		}
+	}
+	// A stop authorises no subsequent work, so it is admitted.
+	if err := admitLegacyAnswer(legacy(authority.Stop)); err != nil {
+		t.Fatalf("a stop on an unprovable record was refused: %v", err)
+	}
+	// And a record that CAN prove its scope is unaffected.
+	proven := authorityResume{
+		Question: workflow.DeferredAuthority{ScopeRecorded: true, Scope: []string{"a.go"}},
+		Option:   authority.Option{ID: "1", Outcome: authority.Authorize},
+	}
+	if err := admitLegacyAnswer(proven); err != nil {
+		t.Fatalf("a provable record was refused: %v", err)
+	}
+}
+
+// A human stop exits as STOPPED, not as a failure. The exit code is what a
+// caller retries on, and retrying a decision is the wrong thing to do.
+func TestAHumanStopExitsAsStoppedNotFailed(t *testing.T) {
+	answered, rec, ctrl, _ := answerer(t, true, "3")
+	code := streamUntilSettled(t.Context(), answered,
+		feed(authorityRequired("t1", "1", "2", "3"), ev("t1", event.WorkflowStopped)),
+		"t1", false, true, 0)
+	if len(rec.calls) != 1 {
+		t.Fatalf("the stop answer was not delivered: %v", rec.calls)
+	}
+	if len(ctrl.deferred) != 0 {
+		t.Fatalf("a stop was recorded as a deferral: %v", ctrl.deferred)
+	}
+	if code == exitFailed {
+		t.Fatal("a human stop exited as a FAILURE; a caller cannot tell a decision from a broken run")
+	}
+	if code != exitStopped {
+		t.Fatalf("exit %d, want %d (stopped)", code, exitStopped)
+	}
+}
+
+// The refusal must actually reach the caller: an inadmissible answer exits as a
+// usage error and the durable log is not touched.
+//
+// End to end through the real command in a real repository, because the unit test
+// above proves only that `admitLegacyAnswer` computes a refusal — not that the
+// command consults it. That gap is how the 2026-09-13 incident happened: the
+// helper said the right thing and execution continued anyway.
+func TestTheCommandRefusesAnInadmissibleAnswerAndLeavesTheLogUntouched(t *testing.T) {
+	root := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q"}, {"config", "user.email", "t@t"}, {"config", "user.name", "t"},
+	} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Skipf("git unavailable: %v %s", err, out)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-qm", "init"}} {
+		cmd := exec.Command("git", args...)
+		cmd.Dir = root
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v %s", args, err, out)
+		}
+	}
+
+	// A LEGACY record: no scope key, no scope_recorded, no task_id in the payload.
+	const sid = "session-20260101T000000.000000000Z"
+	legacy := `{"condition":"a condition nobody can re-derive","domain":"example.com/fixture",` +
+		`"base_sha":"0000000000000000000000000000000000000000","decision":{"level":3,` +
+		`"subject":"Architectural authority reached a human-owned boundary.","options":[` +
+		`{"id":"1","label":"Authorize","outcome":"authorize"},` +
+		`{"id":"3","label":"Stop this task","outcome":"stop"}]}}`
+	dir := filepath.Join(root, ".sensei-code", "sessions", sid)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	log := filepath.Join(dir, "events.jsonl")
+	lines := `{"session_id":"` + sid + `","task_id":"t-legacy","source":"system","kind":"task.created","summary":"do the work","time":"2026-01-01T00:00:00Z"}` + "\n" +
+		`{"session_id":"` + sid + `","task_id":"t-legacy","source":"user","kind":"workflow.awaiting_authority","summary":"deferred","time":"2026-01-01T00:00:00Z","payload":` + legacy + `}` + "\n"
+	if err := os.WriteFile(log, []byte(lines), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	repo, err := gitx.Discover(t.Context(), root)
+	if err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	code := resumeAuthorityAnswered(t.Context(), repo, config.Config{}, []string{"--task", "t-legacy", "--answer", "1", "--quiet"})
+	if code != exitUsage {
+		t.Fatalf("exit %d, want %d: an inadmissible answer must be refused as a usage error", code, exitUsage)
+	}
+	after, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("the durable log changed under a refusal:\nbefore %q\nafter  %q", before, after)
+	}
+	if bytes.Contains(after, []byte("authority.resolved")) {
+		t.Fatal("a refused answer was recorded as a resolution")
 	}
 }
