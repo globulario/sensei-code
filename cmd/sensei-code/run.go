@@ -197,6 +197,22 @@ type runControl interface {
 	TimeOut(taskID, budget string) bool
 }
 
+// authorityAnswerer is the OPTIONAL half of runControl: an invocation that was
+// given a person's answer to a question this repository already preserved.
+//
+// Optional on purpose. `run` and `control` must not be able to answer, and the
+// cheapest way to guarantee that is for them not to implement this at all --
+// rather than implementing it and returning false, which a later edit could
+// quietly make true. Only `resume`, which is handed an option id by a person on
+// its command line, satisfies it.
+//
+// It reports whether the answer was delivered. False means the question stands
+// and the caller preserves it; there is no third outcome, because "could not
+// answer" and "answered" are the two facts the exit code depends on.
+type authorityAnswerer interface {
+	AnswerAuthority(taskID string, ev event.Event) bool
+}
+
 // terminalGrace bounds how long an invocation waits for its own account. It is
 // a variable so a test can shrink it; production never changes it.
 var terminalGrace = 15 * time.Second
@@ -288,6 +304,18 @@ func streamUntilSettled(ctx context.Context, engine runControl, events <-chan ev
 			}
 
 			if ev.Kind == event.AuthorityRequired {
+				// An invocation that CARRIES a person's answer may deliver it
+				// here. `run` is not one: it does not implement the interface,
+				// so this is the deferral path byte for byte, which is the
+				// behaviour proven on sensei#353.
+				//
+				// The ordering is the point. An answer is offered first and
+				// deferral is the fallback, never the reverse: if the answer
+				// cannot be delivered for any reason the question must stand.
+				// Failing to answer may not become an answer.
+				if answerer, ok := engine.(authorityAnswerer); ok && answerer.AnswerAuthority(taskID, ev) {
+					continue
+				}
 				// A human-owned decision with no human present. Deferring
 				// preserves the question exactly as asked; answering it here
 				// would satisfy an authority boundary nobody was asked about.

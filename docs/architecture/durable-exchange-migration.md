@@ -127,3 +127,64 @@ headless consumption of it           MISSING
 Half of W1 is therefore still open. Deferring no longer deadlocks; resuming from
 the answer still requires a TUI. Starting a fresh task with the decision as input
 is a commissioning workaround, not the repair.
+
+## 10. W1's second half — the owner, and the invariant a new path must preserve
+
+### The authority owner, measured
+
+One rendezvous, one channel, two writers:
+
+| role | site |
+|---|---|
+| sole rendezvous | `Engine.awaitChoice` — `internal/workflow/engine.go:3189` |
+| sole channel | `e.pending[taskID]`, in-memory, buffered 1 |
+| writer: answer | `Engine.ResolveHuman` — TUI only |
+| writer: defer | `Engine.DeferAuthority` — headless `run`, control since `ea89e31` |
+| sole emitter of `AuthorityResolved` | `awaitChoice` |
+| sole caller of `authority.Persist` | `awaitChoice` |
+| re-asks a deferred question | `Engine.resumeAuthority`, byte for byte, no re-derivation |
+
+`resumeAuthority` was already correct and already continues the same governed
+task via `e.execute(ctx, task.TaskID, task.Task)`. It was simply unreachable
+without a TUI, because nothing else wrote the channel it blocks on.
+
+### The invariant
+
+> **A human-owned decision is admitted through exactly one rendezvous.** A
+> surface carrying a human's answer delivers it into that rendezvous *by
+> identity* — the exact task, the question as it was recorded, one of the
+> options that question itself offered — and no surface may originate,
+> substitute, re-derive, or replay an answer. An answer is spent once: a second
+> question is a second boundary, and it is preserved, not answered.
+
+Four things follow, and they are what the tests assert:
+
+1. **No second authority path.** A new surface may not emit `AuthorityResolved`,
+   may not call `authority.Persist`, and may not write `e.pending` directly. It
+   calls `ResolveHuman`, which is the owner's own door.
+2. **Delivery is by identity, not by position.** The option must appear in the
+   recorded question *and* in the live `AuthorityRequired` payload. Agreeing
+   with the log is not enough if the run asks something else.
+3. **Spent once.** The answer is bound to the question it was validated
+   against. A later boundary in the same run falls back to deferral — the
+   preserved-question behaviour `ea89e31` established.
+4. **Undeliverable is preserved, never assumed.** If the answer cannot be
+   delivered for any reason, the question stands. Failure to answer must never
+   become an answer.
+
+### What this slice deliberately does not add
+
+No new event kind, no new artifact, no parallel state file, no new waiter kind.
+The question is already durable — `session.Store.AwaitingAuthority`, read back
+by `FindInterrupted` — and `FindInterrupted`'s own contract says why a parallel
+file would be wrong: *"the log is already the account of what happened; a
+parallel state file could disagree with it, and then neither could be trusted."*
+
+What was missing was a **non-TUI surface that finds the standing question and
+carries a person's answer to it**, which is `sensei-code resume`.
+
+This closes the answer→resume edge for the headless path. It does not complete
+W1: the human still answers by invoking a command, so the *answer* is supplied
+rather than durable. A person who answers while no process runs still has
+nowhere to put it. That remainder is the `human_authority` exchange kind in §4,
+and it is not built here.
