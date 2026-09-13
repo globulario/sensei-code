@@ -2827,11 +2827,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// afterHumanAuthorization, which probes then. Nothing about the answer
 	// is read in this function.
 	if probeNeeded(routeAuthorityForAction(scoped, d.Claims, action), false) {
-		unexamined, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+		unexamined, docs, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, sensei.PreflightDecision{}, Action{}, err
 		}
 		action.Unexamined = unexamined
+		action.DocumentEvidence = docs
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
@@ -2915,9 +2916,16 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 // An observation asks nothing: the lane grants no authority, and its contract
 // is that an unusable graph must not prevent the investigation that could
 // diagnose it (TestObservationSurvivesAnUncertifiableGraph).
-func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, error) {
+// unexaminedFiles also records, for DOCUMENT artifacts, the invariants the per-file probe
+// says protect them. That identity is available here and was being discarded: the probe
+// returns a full PreflightDecision and only its coverage verdict was read.
+//
+// Per-file is the point. The region answer's DirectInvariants is one list for a whole
+// region, and attributing it to individual files is the laundering defect a per-file fact
+// already had to fix once for coverage.
+func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, map[string][]string, error) {
 	if stage == StageObserve || len(files) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	// Whether a gated plan is probed is decided by the caller (probeNeeded):
 	// not before the human answers the gate, and always after. Deciding it
@@ -2933,16 +2941,17 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	// it fails closed rather than being probed around.
 	c := scoped.Coverage
 	if c.IndexedFileCount > c.FileCount || (c.FileCount > 0 && c.FileCount != requested) {
-		return nil, fmt.Errorf("region preflight counts do not describe this plan: %d indexed of %d file(s), %d requested", c.IndexedFileCount, c.FileCount, requested)
+		return nil, nil, fmt.Errorf("region preflight counts do not describe this plan: %d indexed of %d file(s), %d requested", c.IndexedFileCount, c.FileCount, requested)
 	}
 	var out []string
+	var docs map[string][]string
 	for _, f := range files {
 		one, err := ask(f)
 		if err != nil {
-			return nil, fmt.Errorf("%s: %w", f, err)
+			return nil, nil, fmt.Errorf("%s: %w", f, err)
 		}
 		if !one.Authority.Certifiable() {
-			return nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
+			return nil, nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
 		}
 		// One graph generation for the region answer and every probe. The
 		// calls are sequential; a rebuild between them could answer the
@@ -2950,7 +2959,7 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		// single graph would have examined what the two answers together
 		// claim. Identity absent on either side is not identity.
 		if !sameGraphGeneration(scoped.Authority, one.Authority) {
-			return nil, fmt.Errorf("%s: preflight answered from a different graph generation (%s/%s) than the region (%s/%s)", f,
+			return nil, nil, fmt.Errorf("%s: preflight answered from a different graph generation (%s/%s) than the region (%s/%s)", f,
 				one.Authority.GraphBuildCommit, one.Authority.SourceRepoCommit, scoped.Authority.GraphBuildCommit, scoped.Authority.SourceRepoCommit)
 		}
 		switch one.Status {
@@ -2961,17 +2970,17 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 			// Otherwise the instrument did not say why, and its coverage
 			// counters are not read.
 			if !readBlindSpots(one.BlindSpots).degradedIsCoverageShaped() {
-				return nil, fmt.Errorf("%s: preflight degraded and the reason is not a coverage gap: %s", f, degradedReason(one.BlindSpots))
+				return nil, nil, fmt.Errorf("%s: preflight degraded and the reason is not a coverage gap: %s", f, degradedReason(one.BlindSpots))
 			}
 		default:
-			return nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
+			return nil, nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
 		}
 		// A probe describes exactly the one file it asked about, or it is
 		// not this file's answer: a mis-scoped or older payload with no
 		// file_count, or more than one, could be Proven() on counts that
 		// belong to some other region (#115 review, sixth pass).
 		if c := one.Coverage; c.FileCount != 1 || c.IndexedFileCount > 1 {
-			return nil, fmt.Errorf("%s: preflight answered about %d file(s) (%d indexed), not this one", f, c.FileCount, c.IndexedFileCount)
+			return nil, nil, fmt.Errorf("%s: preflight answered about %d file(s) (%d indexed), not this one", f, c.FileCount, c.IndexedFileCount)
 		}
 		// The file is examined only when its OWN answer proves coverage:
 		// Sensei's published sufficiency, narrowed to an analysis basis,
@@ -2980,8 +2989,24 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		if !one.Coverage.Proven() {
 			out = append(out, f)
 		}
+		// The document's evidence identity, recorded whether or not it is protected: an
+		// EMPTY list means the graph looked and found none (ordinary documentation), and
+		// no entry at all means it was never asked. Only the second is a knowledge limit,
+		// so the two must not collapse.
+		if classifyArtifact(f) == classDocument {
+			if docs == nil {
+				docs = map[string][]string{}
+			}
+			ids := make([]string, 0, len(one.DirectInvariants))
+			for _, inv := range one.DirectInvariants {
+				if id := strings.TrimSpace(inv.ID); id != "" {
+					ids = append(ids, id)
+				}
+			}
+			docs[cleanPlannedPath(f)] = ids
+		}
 	}
-	return out, nil
+	return out, docs, nil
 }
 
 // probeNeeded reports whether per-file coverage probes can change the route.
@@ -3019,8 +3044,8 @@ func sameGraphGeneration(a, b sensei.Authority) bool {
 
 // unexaminedPlannedFiles asks Sensei about each architectural planned file on
 // its own, in the region answer's graph generation.
-func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart, task string, action Action, scoped sensei.PreflightDecision) ([]string, error) {
-	unexamined, err := unexaminedFiles(action.Stage, len(action.Files), func(f string) (sensei.PreflightDecision, error) {
+func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart, task string, action Action, scoped sensei.PreflightDecision) ([]string, map[string][]string, error) {
+	unexamined, docs, err := unexaminedFiles(action.Stage, len(action.Files), func(f string) (sensei.PreflightDecision, error) {
 		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
 		if domain := start.Domain(); domain != "" {
 			args["domain"] = domain
@@ -3030,11 +3055,11 @@ func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart,
 			return sensei.PreflightDecision{}, err
 		}
 		return sensei.DecodePreflight(result)
-	}, action.architecturalFiles(), scoped)
+	}, action.probeSet(), scoped)
 	if err != nil {
-		return nil, fmt.Errorf("Sensei per-file preflight: %w", err)
+		return nil, nil, fmt.Errorf("Sensei per-file preflight: %w", err)
 	}
-	return unexamined, nil
+	return unexamined, docs, nil
 }
 
 // afterHumanAuthorization is asked by the caller that has just consumed a
@@ -3046,11 +3071,12 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 	if !probeNeeded(routing, true) {
 		return routing, false, nil
 	}
-	unexamined, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+	unexamined, docs, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 	if err != nil {
 		return Routing{}, false, err
 	}
 	action.Unexamined = unexamined
+	action.DocumentEvidence = docs
 	after := afterAuthorization(routing, true, action, readBlindSpots(scoped.BlindSpots))
 	// The same gap identity routePlan would have built: completed with the
 	// pinned world, or the closure budget would treat the question this

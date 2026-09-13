@@ -707,7 +707,13 @@ func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool
 				Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
 		}
 	}
-	return ungrantedTestGovernanceGap(action)
+	if r, open := ungrantedTestGovernanceGap(action); open {
+		return r, true
+	}
+	if r, open := documentGovernanceGap(action); open {
+		return r, true
+	}
+	return unsupportedArtifactGap(action)
 }
 
 // ungrantedTestGovernanceGap is the typed knowledge limit for a test artifact whose
@@ -733,6 +739,41 @@ func ungrantedTestGovernanceGap(action Action) (Routing, bool) {
 		Gap:       GapIdentity{Kind: gapTestGovernanceUnestablished, Scope: tests}}, true
 }
 
+// documentGovernanceGap is the typed knowledge limit for a document whose governance could
+// not be established.
+//
+// The distinction it preserves is the Coverage type's own doctrine: the graph having
+// looked and found no protecting invariant means ORDINARY DOCUMENTATION, and the graph
+// never having looked means nothing at all. Both render as an empty invariant list, and
+// only the first is evidence — so only the second raises this.
+func documentGovernanceGap(action Action) (Routing, bool) {
+	docs := action.ungovernedDocumentArtifacts()
+	if len(docs) == 0 {
+		return Routing{}, false
+	}
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+		Condition: "architecture-document evidence is absent for planned document(s): no governed invariant is known to protect them, and nothing established that they are ordinary documentation: " + strings.Join(docs, ", "),
+		Gap:       GapIdentity{Kind: gapDocumentGovernanceUnestablished, Scope: docs}}, true
+}
+
+// unsupportedArtifactGap is the explicit knowledge limit for an artifact kind no evidence
+// class covers. It exists so "we have no way to prove anything about this" is a stated
+// verdict rather than a silent pass.
+func unsupportedArtifactGap(action Action) (Routing, bool) {
+	files := action.unsupportedArtifacts()
+	if len(files) == 0 {
+		return Routing{}, false
+	}
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+		Condition: "no evidence class governs planned artifact(s) of this kind: " + strings.Join(files, ", "),
+		Gap:       GapIdentity{Kind: gapUnsupportedArtifact, Scope: files}}, true
+}
+
+const (
+	gapDocumentGovernanceUnestablished = "document-governance-unestablished"
+	gapUnsupportedArtifact             = "unsupported-artifact-kind"
+)
+
 // gapTestGovernanceUnestablished is the kind name, shared by the remedy and the closure
 // owner so the three cannot drift.
 const gapTestGovernanceUnestablished = "test-governance-unestablished"
@@ -744,6 +785,22 @@ const gapTestGovernanceUnestablished = "test-governance-unestablished"
 // test-governance gap would be a true-sounding instruction that cannot work -- the same
 // defect as the gap conflation, one layer out.
 func remedyForGap(gap GapIdentity, root, domain string) string {
+	switch gap.Kind {
+	case gapDocumentGovernanceUnestablished:
+		return "no graph refresh can establish this, and no Go source property can stand in " +
+			"for it: a governed architecture document is proven by the INVARIANT that protects " +
+			"it (docs/awareness/invariants.yaml, protects.files).\n" +
+			"  unestablished for: " + strings.Join(gap.Scope, ", ") + "\n" +
+			"  close it by consulting the graph for these paths, or -- if the repository's " +
+			"architecture rules say a document in this role should be governed -- by proposing " +
+			"the invariant that protects it, which is a knowledge-admission act and stays " +
+			"human-authorized."
+	case gapUnsupportedArtifact:
+		return "no evidence class governs this artifact kind, so nothing can prove it here.\n" +
+			"  artifact(s): " + strings.Join(gap.Scope, ", ") + "\n" +
+			"  close it by removing them from the plan, or by defining the evidence class that " +
+			"governs them -- not by asking a Go derivation to read them."
+	}
 	if gap.Kind == gapTestGovernanceUnestablished {
 		return "no graph operation can establish this: a test artifact is governed by an " +
 			"existing-test edit grant, which requires a planned production file in the SAME " +
@@ -791,7 +848,8 @@ const (
 // this repair cannot widen the set of gaps that stop a run.
 func closureOwnerFor(kind string) gapClosureOwner {
 	switch strings.TrimSpace(kind) {
-	case "coverage-unexamined", gapTestGovernanceUnestablished:
+	case "coverage-unexamined", gapTestGovernanceUnestablished,
+		gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
 		// Neither is closable by reasoning: one needs a derivation to run, the other a
 		// production neighbour in the plan. A round spent thinking closes neither.
 		return closureOwnerOutOfBand
@@ -864,7 +922,8 @@ func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, acti
 	// set, so it would have found nothing missing and fallen through to an ordinary
 	// human escalation — asking a person to supply evidence no person can supply.
 	missing := action.unexaminedArchitecturalFiles()
-	if routing.Gap.Kind == gapTestGovernanceUnestablished {
+	switch routing.Gap.Kind {
+	case gapTestGovernanceUnestablished, gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
 		missing = routing.Gap.Scope
 	}
 	// Coverage the plan no longer depends on is not a limit: the architect

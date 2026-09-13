@@ -39,6 +39,7 @@ package workflow
 
 import (
 	"path"
+	"sort"
 	"strings"
 )
 
@@ -103,6 +104,19 @@ type Action struct {
 	// entry is computed by the consumer from the anchor's family and is never
 	// read off the wire.
 	DerivedCoverage []CoverageAnchor
+	// DocumentEvidence is, per planned DOCUMENT, the identities of the governed
+	// invariants that protect it, as observed PER FILE at plan time.
+	//
+	// Engine-owned and per-file on purpose. The region preflight's DirectInvariants is
+	// one answer for a whole region, and reading it per file is the laundering defect a
+	// per-file fact already had to fix once for coverage.
+	//
+	// The three states are distinct and the distinction is the whole point:
+	//
+	//	entry present, non-empty  the graph looked and found protection -> architecture
+	//	entry present, empty      the graph looked and found none -> ordinary documentation
+	//	NO entry                  the graph never looked -> knowledge limit, not "ordinary"
+	DocumentEvidence map[string][]string
 	// Unexamined are planned files the graph has no facts about at plan time:
 	// a per-file preflight found no anchor and no indexed file for each.
 	//
@@ -161,6 +175,15 @@ const (
 	// EXISTING_TEST_EDIT_ADMISSIBLE grant, which binds the test to a covered production
 	// file in its own directory and package.
 	classTestGo artifactClass = "test-go"
+	// classDocument answers to ARCHITECTURE evidence: a governed invariant that names the
+	// file. The repository already decides this — docs/awareness/invariants.yaml protects
+	// a markdown file through protects.files, and high_risk_files.yaml states Sensei
+	// automatically protects "files a governed invariant or failure mode directly names".
+	// So authority comes from governed knowledge, never from the document's own text.
+	classDocument artifactClass = "document"
+	// classUnsupported is everything no evidence class covers. It fails closed: an
+	// artifact nobody can prove anything about is a knowledge limit, not a pass.
+	classUnsupported artifactClass = "unsupported"
 )
 
 // classifyArtifact types one planned path.
@@ -170,10 +193,21 @@ const (
 // test_helpers.go or testdata_helper.go is production source, because the toolchain
 // compiles it into the package and every derivation family reads it.
 func classifyArtifact(file string) artifactClass {
-	if strings.HasSuffix(path.Clean(strings.TrimSpace(file)), "_test.go") {
+	c := path.Clean(strings.TrimSpace(file))
+	switch {
+	case strings.HasSuffix(c, "_test.go"):
 		return classTestGo
+	case strings.HasSuffix(c, ".go"):
+		return classProductionGo
+	case strings.HasSuffix(c, ".md"):
+		return classDocument
+	default:
+		// NOT a silent pass. A Makefile, a shell script or an image is an artifact no
+		// evidence class here can prove anything about, and saying so is the honest
+		// answer; the previous default (production Go) would have asked a derivation to
+		// read a PNG.
+		return classUnsupported
 	}
-	return classProductionGo
 }
 
 // testArtifacts are the planned test files that did NOT earn a grant.
@@ -231,12 +265,13 @@ func (a Action) architecturalFiles() []string {
 		if skip[c] {
 			continue
 		}
-		// A TEST ARTIFACT NEVER JOINS THE PRODUCTION-COVERAGE QUESTION, granted or not.
+		// ONLY PRODUCTION GO ANSWERS TO SOURCE COVERAGE. A test artifact never joins the
+		// production-coverage question, granted or not.
 		// Subtracting only the GRANTED ones left an ungranted test here, where the graph
 		// was then asked for source coverage of a file no derivation family reads — the
 		// false gap W3 hit. Ungranted tests are routed to their own evidence class by
 		// ungrantedTestArtifacts.
-		if classifyArtifact(c) == classTestGo {
+		if classifyArtifact(c) != classProductionGo {
 			continue
 		}
 		out = append(out, c)
@@ -433,3 +468,89 @@ func AssessConsequences(a Action) ConsequenceAssessment {
 
 // Bounded reports whether the technical lane may continue on this action.
 func (c ConsequenceAssessment) Bounded() bool { return c.Result == ConsequenceBounded }
+
+// documentEvidenceFor returns the protecting invariant identities recorded for a
+// document, and whether the graph was asked at all.
+//
+// Sorted, because a record's identity must not depend on map iteration order: two runs
+// over one world would otherwise produce two different evidence identities for the same
+// document.
+func (a Action) documentEvidenceFor(file string) ([]string, bool) {
+	if a.DocumentEvidence == nil {
+		return nil, false
+	}
+	ids, asked := a.DocumentEvidence[path.Clean(strings.TrimSpace(file))]
+	if !asked {
+		return nil, false
+	}
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if t := strings.TrimSpace(id); t != "" {
+			out = append(out, t)
+		}
+	}
+	sort.Strings(out)
+	return out, true
+}
+
+// documentArtifacts are the planned documents whose governance could not be established:
+// the graph was never asked, or it was asked and the identities it returned are blank.
+func (a Action) ungovernedDocumentArtifacts() []string {
+	var out []string
+	for _, f := range a.Files {
+		c := path.Clean(strings.TrimSpace(f))
+		if classifyArtifact(c) != classDocument {
+			continue
+		}
+		ids, asked := a.documentEvidenceFor(c)
+		if !asked {
+			// Never looked. Absence of a Go anchor is not proof of ordinariness.
+			out = append(out, c)
+			continue
+		}
+		if len(ids) == 0 && len(a.DocumentEvidence[c]) != 0 {
+			// Asked, and every identity it returned was blank: an identity that cannot be
+			// named is not an identity.
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// unsupportedArtifacts are planned files no evidence class can prove anything about.
+func (a Action) unsupportedArtifacts() []string {
+	var out []string
+	for _, f := range a.Files {
+		if c := path.Clean(strings.TrimSpace(f)); classifyArtifact(c) == classUnsupported {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// probeSet are the planned files worth asking the graph about ONE AT A TIME.
+//
+// Production Go, for its coverage verdict, plus DOCUMENTS, for the identity of the
+// invariants that protect them. Passing only architecturalFiles() left documents
+// unprobed, so their evidence record stayed absent and every document read as "the graph
+// never looked" -- fail-closed, but permanently, which is a different defect from the one
+// T3 fixes.
+//
+// Tests are not probed: their governance is the edit grant, computed elsewhere, and a
+// per-file coverage answer about a test file is exactly the evidence no derivation family
+// can produce.
+func (a Action) probeSet() []string {
+	var out []string
+	for _, f := range a.Files {
+		c := path.Clean(strings.TrimSpace(f))
+		switch classifyArtifact(c) {
+		case classProductionGo, classDocument:
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// cleanPlannedPath is the one canonicalisation the evidence records use, so a key written
+// by the probe and a key read by the classifier cannot differ by spelling.
+func cleanPlannedPath(f string) string { return path.Clean(strings.TrimSpace(f)) }
