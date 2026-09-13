@@ -383,9 +383,15 @@ type DiffAuditDecision struct {
 	ExpectedHead    string            `json:"expected_head"`
 	Domain          string            `json:"domain"`
 	GraphCommit     string            `json:"graph_commit"`
-	Findings        []AuditFinding    `json:"findings"`
-	ReasonCodes     []string          `json:"reason_codes"`
-	Limitations     []string          `json:"limitations"`
+	// GraphGeneration is the graph generation that ANSWERED the audit -- the bytes,
+	// not the rule snapshot GraphCommit names. Law 5 of the graph-identity front is
+	// checked against the generation the run pinned at certified start; the two
+	// fields stay separate because on this installation the rule snapshot commit
+	// belongs to another repository, so it cannot distinguish two generations.
+	GraphGeneration string         `json:"graph_generation_sha256"`
+	Findings        []AuditFinding `json:"findings"`
+	ReasonCodes     []string       `json:"reason_codes"`
+	Limitations     []string       `json:"limitations"`
 }
 
 // ReviewerMayAccept reports whether a reviewer's acceptance is allowed to

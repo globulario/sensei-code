@@ -1762,6 +1762,20 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				auditEvidence(audit.Structured)))
 			return candidateNotConverged, plan, lastReview, lastAudit, structuralFailure(reason)
 		}
+		// LAW 5 ACROSS CALLS: the verdict must come from the graph this run pinned.
+		//
+		// Checked immediately after decoding and BEFORE the verdict is weighed, so a
+		// verdict from a graph the run never certified is never read as a judgement
+		// about the candidate. The refusal is structural for the same reason a
+		// transport failure is: no reviewer can judge it and no further implementor
+		// can fix it, because the defect is in which graph answered rather than in
+		// the change.
+		if err := verifyPinnedGeneration(start.GraphDigest(), verdict.GraphGeneration,
+			awarenessAddress(e.Config.Sensei.Args)); err != nil {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.CandidateNotAuditable, err.Error(),
+				auditEvidence(audit.Structured)))
+			return candidateNotConverged, plan, lastReview, lastAudit, structuralFailure(err.Error())
+		}
 		// Surface why an audit did not pass at the moment it happens, rather
 		// than only if a reviewer later tries to accept over it. The
 		// limitations are where Sensei explains itself, and four acceptance

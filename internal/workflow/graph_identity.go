@@ -120,3 +120,79 @@ func awarenessAddress(args []string) string {
 	}
 	return fmt.Sprintf("the configured awareness command %v", args)
 }
+
+// --- LAW 5 ACROSS CALLS ------------------------------------------------------
+//
+// The handshake above answers "is this graph about my repository?" once, at the
+// start. Law 5 asks a second question, repeatedly: is the graph answering NOW the
+// one this run pinned?
+//
+// A single audit cannot check that for itself. Sensei's evaluator brackets its own
+// queries and refuses a switch inside one audit, but nothing there knows which
+// generation certified this run's start. Between the certifying preflight and the
+// admitting audit a graph can be rebuilt -- three live stores on this machine answer
+// healthily with different graphs -- and the run would then accept a verdict
+// produced by rules it never certified.
+
+// graphGenerationSwitchedError refuses a verdict produced by a graph other than the
+// one the run pinned.
+//
+// It is deliberately not phrased as an outage. The graph answered, healthily, and
+// that is the problem: a well-formed verdict from rules this run never certified is
+// worse than no verdict, because it carries the authority of one and the content of
+// the other.
+type graphGenerationSwitchedError struct {
+	// Pinned is the generation that certified this run's start.
+	Pinned string
+	// Observed is the generation that answered the call being checked.
+	Observed string
+	// Address is the awareness endpoint that answered.
+	Address string
+	// Operation names the call whose answer is being refused.
+	Operation string
+}
+
+func (e *graphGenerationSwitchedError) Error() string {
+	op := strings.TrimSpace(e.Operation)
+	if op == "" {
+		op = "a graph query"
+	}
+	return "refusing a verdict produced by a graph this run did not certify.\n" +
+		"  this run pinned generation  " + e.Pinned + "\n" +
+		"  " + op + " was answered by    " + e.Observed + "\n" +
+		"  endpoint  " + e.Address + "\n\n" +
+		"The graph was replaced while this run was executing. Nothing failed and nothing is " +
+		"unreachable: a well-formed verdict came back, from rules this run never certified. " +
+		"Accepting it would give the authority of the certified start to the content of a " +
+		"different generation, so the run refuses instead. Re-run the task against the current " +
+		"graph, which will certify its own start."
+}
+
+// verifyPinnedGeneration compares the generation that answered a call against the
+// one the run pinned at certified start.
+//
+// Two absences, treated differently and on purpose:
+//
+//   - NO PIN: nothing to compare. Inventing one would compare a guess, and refusing
+//     a graph for failing a comparison that never happened would be a refusal this
+//     check cannot justify. The start gate is what refuses an unidentified graph.
+//
+//   - NO OBSERVED GENERATION: a deployment fact, not a switch. Upstream, an
+//     available audit result CANNOT omit it -- diffaudit.AuditResult.Validate
+//     refuses exactly that -- so an absent field means the awareness service
+//     predates the check. This is the single fail-open branch in this front; it
+//     rests on a property of the other side rather than an assumption about it, and
+//     TestAnAuditReportingNoGenerationIsNotTreatedAsASwitch is where the reasoning
+//     breaks if that lock is ever relaxed.
+func verifyPinnedGeneration(pinned, observed, address string) error {
+	norm := func(s string) string { return strings.ToLower(strings.TrimSpace(s)) }
+	p, o := norm(pinned), norm(observed)
+	if p == "" || o == "" || p == o {
+		return nil
+	}
+	return &graphGenerationSwitchedError{
+		Pinned:   strings.TrimSpace(pinned),
+		Observed: strings.TrimSpace(observed),
+		Address:  address,
+	}
+}
