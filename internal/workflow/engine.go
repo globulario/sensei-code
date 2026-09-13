@@ -116,6 +116,9 @@ type Engine struct {
 	// testEdits are the existing-test edit grants the router read per task
 	// (M2.2): operational authority, kept apart from coverage by type.
 	testEdits map[string][]testEditGrant
+	// coverageWorlds is the world each task's coverage was computed in, so the authored
+	// pass cannot resolve a second one.
+	coverageWorlds map[string]string
 	// openReviews is, per task, the unanswered part of the last non-accepting
 	// verdict, bound to the candidate digest and evidence it was raised on.
 	// It survives a worker handoff, which is the moment the reviewer changes.
@@ -2827,12 +2830,32 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// afterHumanAuthorization, which probes then. Nothing about the answer
 	// is read in this function.
 	if probeNeeded(routeAuthorityForAction(scoped, d.Claims, action), false) {
-		unexamined, docs, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+		unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, sensei.PreflightDecision{}, Action{}, err
 		}
+		// The world stamp is the world this run's coverage was computed in, applied at the
+		// point of use: the map is graph knowledge about paths, and what must not drift is
+		// which world a grant built from it is bound to.
+		authored := authoredEvidence{World: e.coverageWorld(taskID), ByFile: prod}
 		action.Unexamined = unexamined
 		action.DocumentEvidence = docs
+		// AUTHORED PRODUCTION GOVERNANCE arrives only now, because the per-file probe is
+		// deliberately gated on the router wanting to grant -- probing a plan that will
+		// refuse anyway adds only a way for a transient failure to abort it. So the
+		// derived grants are computed before this point and the authored ones after,
+		// additively: the same predicate, the other legitimate instrument.
+		//
+		// At the world the coverage computation used, never a freshly resolved one: two
+		// worlds would authorize an edit against bytes neither answer describes.
+		if extra := e.authoredTestEditGrants(ctx, taskID, d.Files, authored); len(extra) != 0 {
+			merged := append(e.testEditGrants(taskID), extra...)
+			e.setTestEditGrants(taskID, merged)
+			action.OperationalAuthority = operationalFiles(merged)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
+				"existing-test edit authority recorded from AUTHORED production governance: "+
+					strings.Join(operationalFiles(extra), ", "), testEditRecord{World: extra[0].World, Grants: extra}))
+		}
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
@@ -2923,9 +2946,9 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 // Per-file is the point. The region answer's DirectInvariants is one list for a whole
 // region, and attributing it to individual files is the laundering defect a per-file fact
 // already had to fix once for coverage.
-func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, map[string][]string, error) {
+func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (sensei.PreflightDecision, error), files []string, scoped sensei.PreflightDecision) ([]string, map[string][]string, map[string][]string, error) {
 	if stage == StageObserve || len(files) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 	// Whether a gated plan is probed is decided by the caller (probeNeeded):
 	// not before the human answers the gate, and always after. Deciding it
@@ -2941,17 +2964,17 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 	// it fails closed rather than being probed around.
 	c := scoped.Coverage
 	if c.IndexedFileCount > c.FileCount || (c.FileCount > 0 && c.FileCount != requested) {
-		return nil, nil, fmt.Errorf("region preflight counts do not describe this plan: %d indexed of %d file(s), %d requested", c.IndexedFileCount, c.FileCount, requested)
+		return nil, nil, nil, fmt.Errorf("region preflight counts do not describe this plan: %d indexed of %d file(s), %d requested", c.IndexedFileCount, c.FileCount, requested)
 	}
 	var out []string
-	var docs map[string][]string
+	var docs, prod map[string][]string
 	for _, f := range files {
 		one, err := ask(f)
 		if err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", f, err)
+			return nil, nil, nil, fmt.Errorf("%s: %w", f, err)
 		}
 		if !one.Authority.Certifiable() {
-			return nil, nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
+			return nil, nil, nil, fmt.Errorf("%s: preflight authority is not certifiable: %s", f, one.Authority.Diagnostic())
 		}
 		// One graph generation for the region answer and every probe. The
 		// calls are sequential; a rebuild between them could answer the
@@ -2959,7 +2982,7 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		// single graph would have examined what the two answers together
 		// claim. Identity absent on either side is not identity.
 		if !sameGraphGeneration(scoped.Authority, one.Authority) {
-			return nil, nil, fmt.Errorf("%s: preflight answered from a different graph generation (%s/%s) than the region (%s/%s)", f,
+			return nil, nil, nil, fmt.Errorf("%s: preflight answered from a different graph generation (%s/%s) than the region (%s/%s)", f,
 				one.Authority.GraphBuildCommit, one.Authority.SourceRepoCommit, scoped.Authority.GraphBuildCommit, scoped.Authority.SourceRepoCommit)
 		}
 		switch one.Status {
@@ -2970,17 +2993,17 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 			// Otherwise the instrument did not say why, and its coverage
 			// counters are not read.
 			if !readBlindSpots(one.BlindSpots).degradedIsCoverageShaped() {
-				return nil, nil, fmt.Errorf("%s: preflight degraded and the reason is not a coverage gap: %s", f, degradedReason(one.BlindSpots))
+				return nil, nil, nil, fmt.Errorf("%s: preflight degraded and the reason is not a coverage gap: %s", f, degradedReason(one.BlindSpots))
 			}
 		default:
-			return nil, nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
+			return nil, nil, nil, fmt.Errorf("%s: preflight %s", f, strings.ToLower(strings.TrimPrefix(string(one.Status), "PREFLIGHT_STATUS_")))
 		}
 		// A probe describes exactly the one file it asked about, or it is
 		// not this file's answer: a mis-scoped or older payload with no
 		// file_count, or more than one, could be Proven() on counts that
 		// belong to some other region (#115 review, sixth pass).
 		if c := one.Coverage; c.FileCount != 1 || c.IndexedFileCount > 1 {
-			return nil, nil, fmt.Errorf("%s: preflight answered about %d file(s) (%d indexed), not this one", f, c.FileCount, c.IndexedFileCount)
+			return nil, nil, nil, fmt.Errorf("%s: preflight answered about %d file(s) (%d indexed), not this one", f, c.FileCount, c.IndexedFileCount)
 		}
 		// The file is examined only when its OWN answer proves coverage:
 		// Sensei's published sufficiency, narrowed to an analysis basis,
@@ -2993,6 +3016,23 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 		// EMPTY list means the graph looked and found none (ordinary documentation), and
 		// no entry at all means it was never asked. Only the second is a knowledge limit,
 		// so the two must not collapse.
+		// PRODUCTION GOVERNANCE, authored. The same per-file relation that makes this
+		// answer say a file is governed is what a test-edit grant needs from its
+		// neighbour; it was being discarded here too.
+		if classifyArtifact(f) == classProductionGo {
+			ids := make([]string, 0, len(one.DirectInvariants))
+			for _, inv := range one.DirectInvariants {
+				if id := strings.TrimSpace(inv.ID); id != "" {
+					ids = append(ids, id)
+				}
+			}
+			if len(ids) != 0 {
+				if prod == nil {
+					prod = map[string][]string{}
+				}
+				prod[cleanPlannedPath(f)] = ids
+			}
+		}
 		if classifyArtifact(f) == classDocument {
 			if docs == nil {
 				docs = map[string][]string{}
@@ -3006,7 +3046,7 @@ func unexaminedFiles(stage ActionStage, requested int, ask func(file string) (se
 			docs[cleanPlannedPath(f)] = ids
 		}
 	}
-	return out, docs, nil
+	return out, docs, prod, nil
 }
 
 // probeNeeded reports whether per-file coverage probes can change the route.
@@ -3044,8 +3084,8 @@ func sameGraphGeneration(a, b sensei.Authority) bool {
 
 // unexaminedPlannedFiles asks Sensei about each architectural planned file on
 // its own, in the region answer's graph generation.
-func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart, task string, action Action, scoped sensei.PreflightDecision) ([]string, map[string][]string, error) {
-	unexamined, docs, err := unexaminedFiles(action.Stage, len(action.Files), func(f string) (sensei.PreflightDecision, error) {
+func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart, task string, action Action, scoped sensei.PreflightDecision) ([]string, map[string][]string, map[string][]string, error) {
+	unexamined, docs, prod, err := unexaminedFiles(action.Stage, len(action.Files), func(f string) (sensei.PreflightDecision, error) {
 		args := map[string]any{"task": task, "files": []string{f}, "mode": "compact"}
 		if domain := start.Domain(); domain != "" {
 			args["domain"] = domain
@@ -3057,9 +3097,9 @@ func (e *Engine) unexaminedPlannedFiles(sc *sensei.Client, start certifiedStart,
 		return sensei.DecodePreflight(result)
 	}, action.probeSet(), scoped)
 	if err != nil {
-		return nil, nil, fmt.Errorf("Sensei per-file preflight: %w", err)
+		return nil, nil, nil, fmt.Errorf("Sensei per-file preflight: %w", err)
 	}
-	return unexamined, docs, nil
+	return unexamined, docs, prod, nil
 }
 
 // afterHumanAuthorization is asked by the caller that has just consumed a
@@ -3071,7 +3111,7 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 	if !probeNeeded(routing, true) {
 		return routing, false, nil
 	}
-	unexamined, docs, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+	unexamined, docs, _, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 	if err != nil {
 		return Routing{}, false, err
 	}
@@ -3184,7 +3224,7 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
-	edits, reasons := testEditGrants(ctx, world, planned, out, gitShowAt(e.Repo.Root))
+	edits, reasons := testEditGrants(ctx, world, planned, out, authoredEvidence{}, gitShowAt(e.Repo.Root))
 	return coverageComputation{world: world, coverage: out, prospective: grants, edits: edits, reasons: reasons}, true
 }
 
@@ -3200,6 +3240,7 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	}
 	e.setProspectiveGrants(taskID, c.prospective)
 	e.setTestEditGrants(taskID, c.edits)
+	e.setCoverageWorld(taskID, c.world)
 	if len(c.edits) != 0 {
 		names := make([]string, 0, len(c.edits))
 		for _, g := range c.edits {

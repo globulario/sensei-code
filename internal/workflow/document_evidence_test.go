@@ -228,7 +228,7 @@ func TestThePerFileProbeRecordsDocumentEvidence(t *testing.T) {
 		return answer(nil, true), nil
 	}
 	files := []string{"docs/architecture/governed.md", "docs/notes/ordinary.md"}
-	_, docs, err := unexaminedFiles(StageCandidateEdit, 2, ask, files, region)
+	_, docs, _, err := unexaminedFiles(StageCandidateEdit, 2, ask, files, region)
 	if err != nil {
 		t.Fatalf("unexaminedFiles: %v", err)
 	}
