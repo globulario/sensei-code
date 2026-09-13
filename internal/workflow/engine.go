@@ -2202,19 +2202,31 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		}
 		return nil
 	}
+	// retryNote is what the second attempt says about the first, and it is set
+	// by every path that fails an attempt. A timeout or a blank result is not a
+	// malformed response: telling the architect its JSON was invalid when it
+	// sent nothing sends it to repair output it never produced.
+	var retryNote string
 	for attempt := 1; attempt <= 2; attempt++ {
 		p := prompt
 		if attempt > 1 {
-			p += "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
+			p += retryNote
 		}
 		result, err := architect.Runner.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
 			lastErr = err
+			retryNote = architectRetryNoAnswer
+			continue
+		}
+		if strings.TrimSpace(result.Text) == "" {
+			lastErr = errors.New("architect returned an empty response")
+			retryNote = architectRetryNoAnswer
 			continue
 		}
 		var d architectureDecision
 		if err := decodeModelJSON(result.Text, &d); err != nil {
 			lastErr = err
+			retryNote = architectRetryMalformed
 			continue
 		}
 		d.Decision = strings.ToLower(strings.TrimSpace(d.Decision))
@@ -2225,12 +2237,14 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			// starts: there is nothing to implement, admit, or verify.
 			if strings.TrimSpace(d.Message) == "" {
 				lastErr = errors.New("architect returned REPLY without a message")
+				retryNote = architectRetryMalformed
 				continue
 			}
 			return d, nil
 		case "proceed":
 			if strings.TrimSpace(d.Plan) == "" {
 				lastErr = errors.New("architect returned PROCEED without a plan")
+				retryNote = architectRetryMalformed
 				continue
 			}
 			// Record the bound BEFORE routing, because routing is control flow
@@ -2440,10 +2454,19 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			continue
 		default:
 			lastErr = fmt.Errorf("architect decision must be reply, proceed, or escalate, got %q", d.Decision)
+			retryNote = architectRetryMalformed
 		}
 	}
 	return architectureDecision{}, fmt.Errorf("architect could not produce a bounded decision: %w", lastErr)
 }
+
+// The two things a failed architect attempt can have been. They are kept apart
+// because they ask for different corrections: one asks the architect to answer,
+// the other to fix what it answered.
+const (
+	architectRetryNoAnswer  = "\n\nNo response was received for the previous attempt, so nothing you produced was rejected. Answer the request above, returning ONLY the required JSON object."
+	architectRetryMalformed = "\n\nYour previous response was not valid bounded JSON. Return ONLY the required JSON object."
+)
 
 // resolveReview runs one independent review of an exact candidate revision.
 //
