@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
@@ -44,6 +45,25 @@ type Runner struct {
 	// bridge that blocked forever would let a task sit on a party that is never
 	// going to answer.
 	Wait time.Duration
+	// Doorbell, when set, rings a wake pointing at the published review request.
+	//
+	// Its absence was the last place normal progress required a person. The
+	// architect path has rung since #158; the reviewer path published a fully
+	// bound request and then waited for somebody to notice it. On 2026-09-12 the
+	// review request for task-1789217963311720667 sat unanswered because the
+	// only thing that ever woke the remote was Dave typing "answer the pending
+	// review" -- a human scheduler in the middle of a machine workflow.
+	//
+	// It is a NOTIFICATION and never the authority. The durable exchange below
+	// decides whether a review is outstanding; this only asks someone to look.
+	Doorbell Doorbell
+	// Exchanges records the open review exchange so a restart can find it.
+	//
+	// Without it a published review request exists only on GitHub: this process
+	// held the sole knowledge that it was waiting, so process death left the
+	// request standing with nothing listening and no local trace. The architect
+	// path has had this record; the reviewer path had none.
+	Exchanges ExchangeLog
 }
 
 // ErrNotReviewer reports a turn this bridge does not serve.
@@ -81,9 +101,76 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	}
 	subject.ReviewCommit = snap.Commit
 
-	request := Request{Subject: subject, RequestID: requestID, Kind: KindReview}
-	if err := PostRequest(ctx, r.Issue, request, req.Prompt); err != nil {
+	// Both repositories are STATED on the request. The consumer must never have
+	// to recover one from prose, a repository name, or which repo happens to
+	// contain a commit -- that inference is what left r-3212791306b4607c
+	// unanswered on 2026-09-12.
+	request := Request{
+		Subject:             subject,
+		RequestID:           requestID,
+		Kind:                KindReview,
+		MailboxRepository:   r.Issue.MailboxRepository(),
+		WorkspaceRepository: RemoteRepository(ctx, r.RepoDir, r.Remote),
+	}
+	// Published rather than posted, because the comment id is what a doorbell
+	// points at. PostRequest discards it, and a wake that cannot name the
+	// request it is about is a nudge to read the whole conversation.
+	requestComment, err := PublishRequest(ctx, r.Issue, request, req.Prompt)
+	if err != nil {
 		return agent.Result{}, fmt.Errorf("posting the review request: %w", err)
+	}
+
+	// Recorded BEFORE the doorbell and before the wait, for the same reason the
+	// architect path records first: everything after this point can fail in a
+	// way that leaves the request standing, and a record written after a
+	// successful wait would record only the exchanges that never needed one.
+	//
+	// A record that cannot be written is reported and the turn continues. The
+	// request is already published; failing here would discard it and mint a
+	// duplicate on the next attempt.
+	if r.Exchanges.Dir != "" {
+		rec := ExchangeRecord{
+			TaskID:         req.TaskID,
+			RequestID:      request.RequestID,
+			RequestComment: requestComment,
+			Conversation:   r.Issue.Number,
+			PublishedAt:    time.Now().UTC(),
+			Deadline:       time.Now().Add(r.waitFor()).UTC(),
+		}
+		if openErr := r.Exchanges.Open(rec); openErr != nil && emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
+				"the review exchange record could not be written, so a restart cannot find request "+
+					request.RequestID,
+				map[string]any{
+					"request_id":      request.RequestID,
+					"request_comment": requestComment,
+					"error":           openErr.Error(),
+					"transport":       "github",
+				}))
+		}
+	}
+
+	// The request is durable from here, so a doorbell failure is NOT a turn
+	// failure: the authoritative object exists with its complete binding and
+	// only the nudge is missing. Failing the turn would discard a published
+	// request and mint a second one for the same candidate on the next attempt,
+	// which is how a notification problem becomes a duplicate governed review.
+	if r.Doorbell != nil && emit != nil && requestComment <= 0 {
+		emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
+			"the review request was published but its comment id is unknown, so no doorbell can point at it",
+			map[string]any{"request_id": request.RequestID, "transport": "github"}))
+	} else if r.Doorbell != nil {
+		if ringErr := r.Doorbell.Ring(ctx, requestComment); ringErr != nil && emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
+				"the review doorbell did not ring; the request stands and a retry must ring comment "+
+					strconv.FormatInt(requestComment, 10)+" rather than publish another",
+				map[string]any{
+					"request_id":      request.RequestID,
+					"request_comment": requestComment,
+					"error":           ringErr.Error(),
+					"transport":       "github",
+				}))
+		}
 	}
 
 	if emit != nil {
@@ -100,10 +187,7 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			}))
 	}
 
-	wait := r.Wait
-	if wait <= 0 {
-		wait = DefaultWait
-	}
+	wait := r.waitFor()
 	wctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 
@@ -164,4 +248,16 @@ func subjectBindingComplete(s Subject) error {
 	probe := s
 	probe.ReviewCommit = "0000000000000000000000000000000000000000"
 	return probe.Validate()
+}
+
+// waitFor is the single owner of this runner's deadline.
+//
+// The exchange record and the context timeout must agree: a record claiming a
+// deadline the waiter does not honour would have a restart retract a request
+// that was still live, or leave one standing that had already expired.
+func (r *Runner) waitFor() time.Duration {
+	if r.Wait > 0 {
+		return r.Wait
+	}
+	return DefaultWait
 }

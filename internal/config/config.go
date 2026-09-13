@@ -70,12 +70,25 @@ type Config struct {
 	// with write capability, so reviewing with an implementor's argv would hand
 	// the reviewer a sandbox it can edit in. A read-only reviewer that is asked
 	// to attack a candidate must not be able to fix it and report it clean.
-	Reviewer    Agent             `json:"reviewer"`
-	Reviewers   []Agent           `json:"reviewers,omitempty"`
-	Workflow    Workflow          `json:"workflow"`
-	Behavioral  behavioral.Config `json:"behavioral"`
-	Permissions Permissions       `json:"permissions"`
-	Validation  Validation        `json:"validation"`
+	Reviewer  Agent   `json:"reviewer"`
+	Reviewers []Agent `json:"reviewers,omitempty"`
+	// GitHubBridge carries architect and reviewer turns over a GitHub mailbox
+	// instead of a local provider command line.
+	//
+	// It lives in configuration rather than only on `control`'s flags because
+	// the capability and the surface that can ANSWER a human-owned decision
+	// were in different processes: control could reach the bridge but had no
+	// way to resolve an authority boundary, while the TUI could resolve one and
+	// had no bridge. A governed run that escalates needs both, so both must be
+	// reachable from one process.
+	//
+	// Zero value means no bridge, which is every existing installation: a
+	// config file that does not mention it behaves exactly as before.
+	GitHubBridge GitHubBridge      `json:"github_bridge,omitempty"`
+	Workflow     Workflow          `json:"workflow"`
+	Behavioral   behavioral.Config `json:"behavioral"`
+	Permissions  Permissions       `json:"permissions"`
+	Validation   Validation        `json:"validation"`
 
 	// Source records where this configuration came from. It is not persisted:
 	// it is a fact about THIS load, not about the file.
@@ -234,6 +247,33 @@ func Load(repo string) (Config, error) {
 	if err := json.Unmarshal(b, &c); err != nil {
 		return Config{}, err
 	}
+	// A repository that names ONE reviewer means that reviewer, and unmarshalling
+	// over Default() cannot express it.
+	//
+	// Default populates BOTH Reviewer and Reviewers, and ReviewRoster prefers
+	// Reviewers whenever it is non-empty -- which it always is. So a config
+	// stating `"reviewer": {"name": "chatgpt"}` and no `"reviewers"` set the
+	// field and changed nothing: the roster stayed [codex, claude], the engine
+	// assigned codex, and the []Agent{c.Reviewer} branch was unreachable. No
+	// error, no warning, no diagnostic -- the configuration was simply not the
+	// one in force.
+	//
+	// That is how sensei #355's review ran on codex at 12:47:32Z on 2026-09-12
+	// while the repository had asked for chatgpt, which also meant the GitHub
+	// bridge never saw the turn: it carries by agent NAME and was handed one it
+	// does not carry.
+	//
+	// The file is re-read for the KEYS it stated, because after unmarshalling
+	// there is no way to tell a stated value from an inherited default. Stating
+	// a reviewer and no roster replaces the default roster; stating a roster is
+	// unaffected; stating neither is unaffected.
+	stated, err := statedKeys(b)
+	if err != nil {
+		return Config{}, err
+	}
+	if stated["reviewer"] && !stated["reviewers"] {
+		c.Reviewers = nil
+	}
 	// Migrate only the exact old built-in architect. A deliberately customized
 	// architect remains user-owned configuration and is never rewritten.
 	if isLegacyDefaultArchitect(c.Architect) {
@@ -285,4 +325,69 @@ func DisplayName(name string) string {
 	default:
 		return name
 	}
+}
+
+// GitHubBridge is the mailbox transport for role turns.
+//
+// Field-for-field the same configuration `control` takes as flags, so one
+// repository describes one bridge however it is launched. Nothing here is a
+// credential: AppKey is a PATH, and the key's bytes never enter this struct,
+// an error, or a log line.
+type GitHubBridge struct {
+	// MailboxPR is the pull request whose conversation carries turns. Empty
+	// means the bridge is off, and it is the ONLY field that decides that --
+	// see Configured.
+	MailboxPR string `json:"mailbox_pr,omitempty"`
+	// Roles is the closed set this bridge carries: "none", or a comma list of
+	// "architect" and "reviewer". Read by membership, never by exclusion.
+	Roles string `json:"roles,omitempty"`
+	// Doorbell wakes the remote after publishing. Without it a request waits
+	// its full deadline with nobody having been asked to look, which is
+	// indistinguishable from a remote that declined to answer.
+	Doorbell bool `json:"doorbell,omitempty"`
+	// ReviewerID is the immutable numeric id whose comments are read as
+	// answers. A login can be reassigned; an id cannot.
+	ReviewerID    int64  `json:"reviewer_id,omitempty"`
+	ReviewerLogin string `json:"reviewer_login,omitempty"`
+	Provider      string `json:"provider,omitempty"`
+	// Remote is the git remote the review snapshot is pushed to. It resolves
+	// through the governed WORKSPACE, not the mailbox repository: the snapshot
+	// is a candidate-scoped proof artifact and its objects live where the work
+	// does. The mailbox locator is deliberately the other way round.
+	Remote         string `json:"remote,omitempty"`
+	AppID          int64  `json:"app_id,omitempty"`
+	InstallationID int64  `json:"installation_id,omitempty"`
+	AppKey         string `json:"app_key,omitempty"`
+	Owner          string `json:"owner,omitempty"`
+	Repo           string `json:"repo,omitempty"`
+}
+
+// Configured reports whether a bridge was asked for at all.
+//
+// Keyed on the mailbox alone, deliberately. Completeness is then REQUIRED
+// rather than assumed, the same way AppConfig.Selected treats any App field as
+// intent: a half-filled bridge must refuse loudly instead of silently falling
+// back to a local provider, because a silent fallback is how a governed turn
+// gets answered by the very agent it was meant to be independent of.
+func (g GitHubBridge) Configured() bool {
+	return strings.TrimSpace(g.MailboxPR) != ""
+}
+
+// statedKeys reports which top-level keys the configuration file actually
+// contained.
+//
+// Necessary because Load unmarshals over Default(): afterwards every field holds
+// a value and nothing distinguishes "the repository asked for this" from "this
+// is what it would have been anyway". Any precedence rule that needs to know
+// which the operator wrote has to read the bytes.
+func statedKeys(b []byte) (map[string]bool, error) {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		return nil, err
+	}
+	keys := make(map[string]bool, len(raw))
+	for k := range raw {
+		keys[k] = true
+	}
+	return keys, nil
 }

@@ -70,6 +70,9 @@ type Engine struct {
 	// the post-creation inspection checks the created file against the same
 	// facts about the covering surface that authorized it.
 	prospective map[string][]prospectiveGrant
+	// unprovenScope marks tasks whose durable authority question predates scope
+	// preservation, so the rendezvous refuses to let it authorize work.
+	unprovenScope map[string]bool
 	// graphs records, per task, the awareness graph the start gate verified,
 	// as the MCP binding every agent in that task is launched with.
 	//
@@ -416,6 +419,142 @@ const deferToken = "\x00defer"
 // failed, nothing was decided, and nothing is cleaned up.
 var errAuthorityDeferred = errors.New("the human deferred a Level-3 authority decision")
 
+// errStoppedByHumanAuthority reports that a person chose Stop at an authority
+// boundary.
+//
+// A sentinel rather than an anonymous error, for the reason `execute` already
+// states about withdrawal: "a stopped run is not a failed one, and recording it
+// as failure would teach the behavioural record that this task shape breaks."
+// The stop was created inline with `errors.New`, so no caller could tell it from
+// a broken run, and BOTH the live path and the resumed one classified a person's
+// decision as an execution failure.
+//
+// Nothing failed. The human answered, and their answer was to stop.
+var errStoppedByHumanAuthority = errors.New("task stopped by human authority")
+
+// Behavioural statuses. Named because which one a human stop reports is the
+// difference between the record learning "a person declined this" and learning
+// "this task shape breaks".
+const (
+	behaviourStopped = "stopped"
+	behaviourFailure = "failure"
+)
+
+// humanStopNote is the account a stop leaves. A person answered; nothing broke.
+const humanStopNote = "stopped by human authority at a Level-3 boundary; the question was answered and the answer was to stop"
+
+// preserveQuestion records a Level-3 question whole and ends the run at it.
+//
+// One implementation for the two ways a question survives an answer attempt --
+// deferred without an answer, and answered with one that could not be admitted.
+// Two copies would drift, and the thing that would drift is which fields of the
+// question's identity get written down.
+func (e *Engine) preserveQuestion(taskID, condition, domain, baseSHA string, decision authority.Decision, summary string, scope []string) {
+	e.noteDeferredQuestion(taskID, decision.Subject, condition)
+	e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
+		runreceipt.OutcomeDeferred, e.candidateStateFor(taskID), summary, DeferredAuthority{
+			Condition: condition, Domain: domain, BaseSHA: baseSHA, Decision: decision,
+			TaskID: taskID, SessionID: e.SessionID,
+			// The scope is part of the question. Dropping it is what made a
+			// resumed answer strictly less applicable than the same answer given
+			// live: Covers matches on condition AND scope, so an unscoped answer
+			// cannot settle a scoped re-derivation and the router asks again.
+			Scope: append([]string(nil), scope...), ScopeRecorded: true,
+		})
+}
+
+// UnprovenAuthorityScopeError refuses an answer that would authorize work on a
+// durable question which cannot prove what it was asked about.
+//
+// Typed rather than a warning, because a warning depends on its reader. The
+// 2026-09-13 incident is the case: the first repair printed a note and continued,
+// and the reader was an agent that had already concluded the command was inert.
+// A refusal does not need to be read to hold.
+type UnprovenAuthorityScopeError struct {
+	TaskID   string
+	OptionID string
+	Outcome  authority.Outcome
+}
+
+func (e *UnprovenAuthorityScopeError) Error() string {
+	return "this question was deferred before its authority scope was preserved, so the record cannot prove which files " +
+		"it was asked about; answer " + e.OptionID + " (" + string(e.Outcome) + ") would authorize work whose coverage " +
+		"cannot be established, and the historical scope must not be reconstructed from the repository as it stands now. " +
+		"The question is preserved. Only the stop option is admissible for such a record"
+}
+
+// Unwrap makes the refusal read as a deferral to every caller that already knows
+// what a deferral means: the question stands, the run ends, nothing failed and
+// nothing was decided. A refusal that terminalized as FAILED would set done on
+// the task and make the preserved question unreachable -- consuming it by
+// refusing it.
+func (e *UnprovenAuthorityScopeError) Unwrap() error { return errAuthorityDeferred }
+
+// noteUnprovenAuthorityScope marks a task whose durable question cannot prove its
+// scope, so the rendezvous refuses to let it authorize anything.
+//
+// Per-task engine state rather than a tenth parameter on awaitChoice, matching
+// notePlan/setRouting/noteDeferredQuestion beside it. Only resumeAuthority sets
+// it: a question being asked LIVE has its scope in hand by construction, so the
+// unprovable case cannot arise there.
+func (e *Engine) noteUnprovenAuthorityScope(taskID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.unprovenScope == nil {
+		e.unprovenScope = make(map[string]bool)
+	}
+	e.unprovenScope[taskID] = true
+}
+
+// refuseUnprovenAuthority is the gate. It admits exactly one outcome for an
+// unprovable record, named positively: a new outcome added to the vocabulary
+// defaults to REFUSED rather than slipping past an exclusion list.
+//
+// A stop is admissible because it authorizes no subsequent work -- it ends the
+// task instead of permitting a change -- so coverage has nothing to govern.
+func (e *Engine) refuseUnprovenAuthority(taskID string, option authority.Option) error {
+	e.mu.Lock()
+	unproven := e.unprovenScope[taskID]
+	e.mu.Unlock()
+	if !unproven || option.Outcome == authority.Stop {
+		return nil
+	}
+	return &UnprovenAuthorityScopeError{TaskID: taskID, OptionID: option.ID, Outcome: option.Outcome}
+}
+
+// terminateAuthorityOutcome records the ONE terminal an authority boundary's
+// error deserves, and it is the only place that decides it.
+//
+// Three endings, deliberately in one function rather than three branches at each
+// call site. Two classifications of one human decision is exactly how the
+// resumed path came to report a stop as a FAILURE while `execute` had a correct
+// STOPPED branch a few lines away, reachable only by context cancellation:
+//
+//	deferred -> nothing. awaitChoice already terminalized it with the question
+//	            attached. Nothing failed and nothing was decided.
+//	stopped  -> STOPPED, reported as "stopped". A person answered and the answer
+//	            was no. The behavioural record must not learn from this that the
+//	            task shape breaks.
+//	anything -> FAILED, reported as "failure". A real defect.
+//	else
+//
+// It takes no boolean and returns none: a caller cannot guard it off and fall
+// through to its own idea of the terminal, which is the shape this replaced.
+func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task string, err error) {
+	switch {
+	case errors.Is(err, errAuthorityDeferred):
+		return
+	case errors.Is(err, errStoppedByHumanAuthority):
+		e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceUser,
+			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), humanStopNote, nil)
+		e.reportOutcome(context.WithoutCancel(ctx), behaviourStopped, task, humanStopNote)
+	default:
+		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
+		e.reportOutcome(ctx, behaviourFailure, task, err.Error())
+	}
+}
+
 // DeferAuthority leaves a Level-3 question unanswered without answering it.
 //
 // The human may always stop computation. What they cannot do with a keystroke
@@ -453,6 +592,33 @@ type DeferredAuthority struct {
 	Domain    string             `json:"domain"`
 	BaseSHA   string             `json:"base_sha"`
 	Decision  authority.Decision `json:"decision"`
+	// TaskID and SessionID bind the question to where it was asked. The event
+	// carries both already; carrying them in the payload too means a record
+	// read on its own -- copied, forwarded, or inspected out of the log -- still
+	// says what it is about.
+	TaskID    string `json:"task_id,omitempty"`
+	SessionID string `json:"session_id,omitempty"`
+	// Scope is the plan's file scope the question was asked ABOUT.
+	//
+	// It is part of the question's identity, not decoration. `Resolution.Covers`
+	// matches on condition AND scope, because a certifiability condition is a
+	// property of a region rather than of a plan -- reusing one yes across plans
+	// let a single answer authorize a later change touching entirely different
+	// files. A deferral that drops the scope therefore produces an answer that
+	// is STRICTLY LESS APPLICABLE than the same answer given live: `Covers`
+	// refuses an unscoped answer against a scoped re-derivation, correctly, and
+	// the router asks the human the question they already answered.
+	Scope []string `json:"scope,omitempty"`
+	// ScopeRecorded distinguishes "asked about no files" from "deferred before
+	// the scope was preserved".
+	//
+	// Both are an empty Scope, and they are not the same fact: the first is an
+	// unscoped question whose answer legitimately covers only unscoped
+	// re-derivations, and the second is a record that CANNOT say what it was
+	// about. Reading the second as the first would silently narrow a real
+	// authorization to nothing; reading it as universal would widen it to
+	// everything. Neither is available, so the difference is recorded.
+	ScopeRecorded bool `json:"scope_recorded"`
 }
 
 // conversationSoFar reconstructs the dialogue with the architect from the
@@ -667,9 +833,12 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 			e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
 			return
 		}
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
-		e.reportOutcome(ctx, "failure", task, err.Error())
+		// One classifier for both authority paths. A person choosing Stop is not
+		// a broken run, and this used to arrive as an anonymous error and be
+		// recorded as FAILED -- teaching the behavioural record that this task
+		// shape breaks, when what happened is that the human answered and said
+		// no.
+		e.terminateAuthorityOutcome(ctx, taskID, task, err)
 	}
 	// Validation without normalization: an all-whitespace objective states
 	// nothing and is refused, while an objective with whitespace around it is
@@ -3214,16 +3383,26 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 			// stream, which is the reconstruction the receipt exists to
 			// abolish. The event's shape is unchanged, because FindInterrupted
 			// reads it to resume the task.
-			e.noteDeferredQuestion(taskID, decision.Subject, condition)
-			e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
-				runreceipt.OutcomeDeferred, e.candidateStateFor(taskID),
-				"authority decision deferred; the question stands", DeferredAuthority{
-					Condition: condition, Domain: domain, BaseSHA: baseSHA, Decision: decision,
-				})
+			e.preserveQuestion(taskID, condition, domain, baseSHA, decision,
+				"authority decision deferred; the question stands", scope)
 			return "", errAuthorityDeferred
 		}
 		for _, option := range options {
 			if option.ID == choice {
+				// THE GATE, and it is here rather than earlier on purpose: this
+				// is the last point before the answer becomes durable, and it is
+				// the first point at which which option was chosen is known.
+				//
+				// Nothing has been written yet -- no resolution, no proposal to
+				// Sensei, no continuation -- so a refusal costs the question
+				// nothing. It is preserved exactly as it stands and the run ends
+				// awaiting authority, which is what a refused answer means.
+				if refusal := e.refuseUnprovenAuthority(taskID, option); refusal != nil {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, refusal.Error(), nil))
+					e.preserveQuestion(taskID, condition, domain, baseSHA, decision,
+						"the answer was refused and the question stands: its authority scope cannot be proven", scope)
+					return "", refusal
+				}
 				// The answer is authoritative for this run the moment it is
 				// given. Whether it becomes project knowledge is Sensei's
 				// question, asked separately and answered honestly.
@@ -3256,7 +3435,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 				}
 
 				if option.Outcome == authority.Stop {
-					return "", errors.New("task stopped by human authority")
+					return "", errStoppedByHumanAuthority
 				}
 				return option.ID + ": " + option.Label, nil
 			}
@@ -4476,6 +4655,45 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		return
 	}
 
+	// The record must be about the task being resumed, and this is checked
+	// BEFORE anything is started: a binding mismatch must cost nothing.
+	//
+	// A record that NAMES a different task is a mismatch and is refused; one that
+	// names none predates the field, and absence is not disagreement -- reading
+	// it as one would make every legacy question unresumable.
+	if deferred.TaskID != "" && deferred.TaskID != task.TaskID {
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
+		return
+	}
+	// A question deferred before the scope was preserved cannot say what it was
+	// about, and this must not guess. Reconstructing a scope from the repository
+	// as it stands now would attach today's files to an answer about a plan
+	// nobody can see -- inventing the authority identity instead of restoring it.
+	//
+	// So the answer is recorded with the scope the record actually carries
+	// (none), and Covers will correctly refuse to settle a scoped re-derivation.
+	// The run then re-asks, and THAT question is preserved with its scope. The
+	// legacy record is resumable in two steps; it is not silently authoritative
+	// in one.
+	if !deferred.ScopeRecorded {
+		// A GATE, not a warning. The first repair here printed a note and
+		// continued, and on 2026-09-13 an agent read that note, concluded the
+		// command was inert, and authorized a change in the owner's name. A
+		// warning depends on its reader; this does not.
+		//
+		// The historical scope is NOT reconstructed -- not from the repository,
+		// not from the graph, not from the objective, not from a fresh plan.
+		// There is no honest way to recover which files a question nobody can
+		// see was asked about, so the only admissible answer is one that
+		// authorizes nothing.
+		e.noteUnprovenAuthorityScope(task.TaskID)
+		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+			"this question was deferred before its authority scope was preserved; only the stop option is admissible "+
+				"for it, and any answer that would authorize work will be refused with the question left standing", nil))
+	}
+
 	// Sensei is started only to persist the answer if one is given. It is not
 	// consulted about the question.
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
@@ -4488,15 +4706,12 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	defer sc.Close()
 
 	choice, err := e.awaitChoice(ctx, sc, task.TaskID, deferred.Condition, deferred.Domain, deferred.BaseSHA,
-		deferred.Decision, deferred.Decision.Options)
+		deferred.Decision, deferred.Decision.Options, deferred.Scope...)
 	if err != nil {
-		// Deferred again, or stopped at the boundary. Either way the question
-		// stands and the workflow does not move past it.
-		if !errors.Is(err, errAuthorityDeferred) {
-			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-				err.Error(), nil)
-		}
+		// Deferred again, stopped, or genuinely broken. The workflow does not
+		// move past the boundary in any of the three, and which ending it was
+		// is not decided here -- one classifier owns that for both paths.
+		e.terminateAuthorityOutcome(ctx, task.TaskID, task.Task, err)
 		return
 	}
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,

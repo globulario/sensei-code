@@ -280,3 +280,24 @@ failure_modes:
       - sensei-code setup reported 'graph server BROKEN' while 'sensei metadata -addr localhost:10122' answered authoritative on the same host, 2026-09-09
       - internal/setup/graph_address_test.go:TestAnAnswerFromAnotherAddressIsNotReportedAsTheConfiguredOne failed before the repair with detail 'answering on localhost:10122'
     contract: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.
+  - id: failure.the_doorbell_resolved_its_repository_from_the_workspace_not
+    title: The doorbell resolved its repository from the workspace, not the mailbox
+    protects:
+      files:
+        - internal/ghbridge/doorbell.go
+    related_invariants:
+      - sensei_code.ghbridge.an_unavailable_bridge_refuses_rather_than_substituting
+    required_tests:
+      - internal/ghbridge/doorbell_test.go:TestTheWakeIsAddressedToTheMailboxRepositoryNotTheWorkspace
+    evidence:
+      - 'GHDoorbell{Dir: repoRoot} ran ''gh issue comment 157'', which resolves the repository from the workspace remote, while the request was published by the App to its own owner/repo. Equal only while workspace == mailbox repo; a control surface serving another repository wakes a same-numbered issue elsewhere and the exchange expires looking like a remote that declined to answer.'
+  - id: failure.a_control_hosted_run_blocks_forever_at_a_human_authority_bou
+    title: A control-hosted run blocks forever at a human authority boundary
+    protects:
+      files:
+        - cmd/sensei-code/control.go
+        - internal/workflow/engine.go
+    related_invariants:
+      - sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
+    evidence:
+      - 'awaitChoice registers e.pending[taskID] and blocks on that channel. Only ResolveHuman (internal/tui/model.go:409) and DeferAuthority (cmd/sensei-code/run.go:275) ever write it. cmd/sensei-code/control.go calls SubmitGovernedLocal and never subscribes to event.AuthorityRequired, and assisted.go has no authority handling, so a daemon-hosted objective parks permanently on escalation: the boundary is raised with no surface that can put the question to a person, so no explicit answer is possible and the run is neither stopped nor answerable. Observed 2026-09-12 on sensei #356 task-1789211362520113565: architect answered decision=proceed at 12:01:23Z, engine raised authority.required at 12:01:24Z with an empty HumanQuestion, and no candidate worktree was ever created.'

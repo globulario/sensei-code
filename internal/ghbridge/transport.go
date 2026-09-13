@@ -374,3 +374,20 @@ func VerifyMailboxIsPullRequest(ctx context.Context, box Issue) error {
 	}
 	return nil
 }
+
+// MailboxRepository names the repository this mailbox posts to, "owner/name".
+//
+// Read from the App transport when one is configured, because that is the
+// identity the request comment is actually created under. Empty when the
+// mailbox runs on the operator's gh credentials, where the repository is
+// resolved from a working directory and this type cannot know it.
+func (i Issue) MailboxRepository() string {
+	if i.API == nil {
+		return ""
+	}
+	owner, repo := strings.TrimSpace(i.API.Owner), strings.TrimSpace(i.API.Repo)
+	if owner == "" || repo == "" {
+		return ""
+	}
+	return owner + "/" + repo
+}
