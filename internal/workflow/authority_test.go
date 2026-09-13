@@ -770,12 +770,20 @@ func TestTheBlindSpotCoverageBranchHonoursOperationalAuthority(t *testing.T) {
 	claims := []Claim{{Statement: "s", About: "internal/workflow/premise.go", Source: "repository"}}
 	action := plannedEdit("internal/workflow/premise.go", "internal/workflow/authority_test.go")
 	action.DerivedCoverage = []CoverageAnchor{{File: "internal/workflow/premise.go", Requirement: RequirementLockDiscipline, Describe: "Engine.premises under Engine.mu"}}
+	// The per-file fact a real run establishes, and which this fixture predates: the
+	// graph has no facts about the test file. Without it the plan asserts nothing about
+	// that file, and the typed classifier correctly finds nothing to report.
+	action.Unexamined = []string{"internal/workflow/authority_test.go"}
 	cold := routeAuthorityForAction(scoped, claims, action)
 	if !cold.ClosesGap() {
-		t.Fatalf("precondition: without the grant, the test file is an uncovered planned file: %+v", cold)
+		t.Fatalf("precondition: without the grant, the test file is an ungoverned planned file: %+v", cold)
 	}
-	if !cold.Gap.Identified() || cold.Gap.Kind != "coverage-blind-spot" {
-		t.Fatalf("the blind-spot gap carries no mechanical identity: %+v", cold.Gap)
+	// TYPED, and this is the change T2 makes. The production file IS covered here, so the
+	// only thing missing is the test's own governance. It used to arrive as
+	// `coverage-blind-spot` over an architectural set that still contained the test file
+	// — the conflation that sent W3 to rebuild a graph which can never cover a test.
+	if !cold.Gap.Identified() || cold.Gap.Kind != gapTestGovernanceUnestablished {
+		t.Fatalf("the ungranted test's gap is not typed as test governance: %+v", cold.Gap)
 	}
 	action.OperationalAuthority = []string{"internal/workflow/authority_test.go"}
 	warm := routeAuthorityForAction(scoped, claims, action)

@@ -141,6 +141,78 @@ func (a Action) unexaminedArchitecturalFiles() []string {
 
 // architecturalFiles are the planned files the coverage question is about:
 // every planned file not under an operational grant.
+// --- TYPED EVIDENCE: what KIND of proof an artifact can actually give -------------
+//
+// The planner sees one list of paths. Asking every path for the same kind of proof is
+// what produced W3's false gap: cmd/sensei-code/control_test.go was reported as
+// production source the graph had not examined, and no graph state could ever have
+// changed that, because no derivation family reads test files at all.
+//
+// So classification comes first, and it uses the repository's existing semantics rather
+// than a new taxonomy: a *_test.go IS a test artifact under Go's own rule and under
+// testEditGrants, which already governs exactly those files.
+type artifactClass string
+
+const (
+	// classProductionGo answers to mechanical/source evidence: a derived anchor whose
+	// subjects include the file.
+	classProductionGo artifactClass = "production-go"
+	// classTestGo answers to test-governance evidence: the existing
+	// EXISTING_TEST_EDIT_ADMISSIBLE grant, which binds the test to a covered production
+	// file in its own directory and package.
+	classTestGo artifactClass = "test-go"
+)
+
+// classifyArtifact types one planned path.
+//
+// The suffix rule is Go's own and is what testEditGrants already uses, so this adds no
+// second definition of "test file". Deliberately NOT a guess about intent: a file named
+// test_helpers.go or testdata_helper.go is production source, because the toolchain
+// compiles it into the package and every derivation family reads it.
+func classifyArtifact(file string) artifactClass {
+	if strings.HasSuffix(path.Clean(strings.TrimSpace(file)), "_test.go") {
+		return classTestGo
+	}
+	return classProductionGo
+}
+
+// testArtifacts are the planned test files that did NOT earn a grant.
+//
+// The grant predicate's contract says an unestablished case "leaves F ungranted, silently
+// to routing". This is where that silence ends: an ungranted test is still governed, by
+// its own evidence class, and it never joins the production-coverage question.
+func (a Action) ungrantedTestArtifacts() []string {
+	granted := map[string]bool{}
+	for _, f := range a.OperationalAuthority {
+		granted[path.Clean(strings.TrimSpace(f))] = true
+	}
+	// A TEST ARTIFACT HAS TWO WAYS TO BE GOVERNED, and requiring the grant alone was
+	// wrong. Two existing invariant tests proved it:
+	//
+	//   - a replay of real preflight rows contains cmd/sensei-code/version_test.go with
+	//     coverage sufficient and anchors present: the graph HAS facts about that test,
+	//     because authored knowledge (a required_test entry) names it. That is test
+	//     governance of a different kind, and demanding a grant as well would report a
+	//     governed file as ungoverned;
+	//   - Action.Unexamined is the engine-owned per-file fact for exactly this: "the
+	//     graph has no facts about it at plan time".
+	//
+	// So the gap is for a test that is neither granted NOR examined. Anything the graph
+	// already knows about keeps the governance it has.
+	unexamined := map[string]bool{}
+	for _, f := range a.Unexamined {
+		unexamined[path.Clean(strings.TrimSpace(f))] = true
+	}
+	var out []string
+	for _, f := range a.Files {
+		c := path.Clean(strings.TrimSpace(f))
+		if classifyArtifact(c) == classTestGo && !granted[c] && unexamined[c] {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (a Action) architecturalFiles() []string {
 	// Grants are recorded canonical (path.Clean of the trimmed plan
 	// spelling); the plan's own spelling is whatever the architect wrote,
@@ -155,9 +227,19 @@ func (a Action) architecturalFiles() []string {
 	}
 	var out []string
 	for _, f := range a.Files {
-		if c := path.Clean(strings.TrimSpace(f)); !skip[c] {
-			out = append(out, c)
+		c := path.Clean(strings.TrimSpace(f))
+		if skip[c] {
+			continue
 		}
+		// A TEST ARTIFACT NEVER JOINS THE PRODUCTION-COVERAGE QUESTION, granted or not.
+		// Subtracting only the GRANTED ones left an ungranted test here, where the graph
+		// was then asked for source coverage of a file no derivation family reads — the
+		// false gap W3 hit. Ungranted tests are routed to their own evidence class by
+		// ungrantedTestArtifacts.
+		if classifyArtifact(c) == classTestGo {
+			continue
+		}
+		out = append(out, c)
 	}
 	return out
 }
