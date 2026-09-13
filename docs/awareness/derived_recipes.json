@@ -32,7 +32,7 @@
       "why": "Verify mechanically that the bound objective/base/graph subject carried by ArchitectureRunner.Binding is only set within the owning ghbridge package, where Resolver.Resolve copies it from the workflow-supplied RunnerSpec, rather than being rewritten by transport or prompt handling.",
       "provenance": {
         "origin_task": "task-1788749553905987265",
-        "origin_gap": "graph coverage is absent for the planned files: no anchors fired, no files examined — coverage thin for this area",
+        "origin_gap": "graph coverage is absent for the planned files: no anchors fired, no files examined \u2014 coverage thin for this area",
         "region": [
           "internal/ghbridge/architecture_runner.go",
           "internal/ghbridge/marker_test.go",
@@ -100,6 +100,29 @@
         ],
         "written_at": "2026-09-13T15:24:12Z",
         "written_by": "closure_round"
+      }
+    },
+    {
+      "kind": "construction_confined_to_owner",
+      "dir": "internal/ghbridge",
+      "type": "ExchangeRecord",
+      "field": "Deadline",
+      "search_paths": [
+        "internal/ghbridge",
+        "cmd/sensei-code"
+      ],
+      "why": "ExchangeRecord.Deadline is authority-bearing: a restarted reviewer waiter must honour the deadline the record already persisted. The sibling recipe asks state_mutation_confined_to_owner about the same field and correctly establishes nothing -- the field is never mutated, only set at construction (architecture_runner.go, runner.go). The question that IS answerable is who may MINT a record carrying a deadline, which is a different species of fact and the one that matters: a deadline any package could construct is not an owner's deadline. Asked over the bridge and the control surface together, because the control surface is where a second construction site would plausibly appear.",
+      "provenance": {
+        "origin_task": "task-1789312504879458635",
+        "origin_gap": "graph coverage is absent for planned file(s) the graph has not examined: internal/ghbridge/exchange.go",
+        "region": [
+          "internal/ghbridge/exchange.go",
+          "internal/ghbridge/runner.go",
+          "internal/ghbridge/architecture_runner.go",
+          "cmd/sensei-code/control.go"
+        ],
+        "written_at": "2026-09-13T23:40:00Z",
+        "written_by": "operator_authorized"
       }
     }
   ]
