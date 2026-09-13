@@ -2289,7 +2289,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
 				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
 				var limited error
-				if routing, limited = e.disposeUnclosedGap(taskID, routing, action); limited != nil {
+				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
 					return architectureDecision{}, limited
 				}
 				fallthrough
@@ -2415,7 +2415,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
 				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
 				var limited error
-				if routing, limited = e.disposeUnclosedGap(taskID, routing, action); limited != nil {
+				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
 					return architectureDecision{}, limited
 				}
 			}

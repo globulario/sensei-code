@@ -52,7 +52,7 @@ func coverageAction() Action {
 // terminate as a knowledge limit, NOT as human authority.
 func TestAnUnclosedCoverageGapIsAKnowledgeLimitNotAHumanQuestion(t *testing.T) {
 	e := &Engine{SessionID: "s1"}
-	routed, limited := e.disposeUnclosedGap("task-1", coverageGap(), coverageAction())
+	routed, limited := e.disposeUnclosedGap("task-1", "github.com/globulario/sensei-code", coverageGap(), coverageAction())
 
 	var limit *knowledgeLimitError
 	if !errors.As(limited, &limit) {
@@ -69,7 +69,7 @@ func TestAnUnclosedCoverageGapIsAKnowledgeLimitNotAHumanQuestion(t *testing.T) {
 // B — the stop names the concrete missing files.
 func TestTheKnowledgeLimitNamesTheMissingFiles(t *testing.T) {
 	e := &Engine{SessionID: "s1"}
-	routed, limited := e.disposeUnclosedGap("task-1", coverageGap(), coverageAction())
+	routed, limited := e.disposeUnclosedGap("task-1", "github.com/globulario/sensei-code", coverageGap(), coverageAction())
 	if limited == nil {
 		t.Fatal("an unclosed coverage gap produced no knowledge limit, so it names no missing files")
 	}
@@ -91,11 +91,11 @@ func TestTheKnowledgeLimitNamesTheMissingFiles(t *testing.T) {
 // C — the stop names an actionable remedy, in the CLI's real shape.
 func TestTheKnowledgeLimitNamesAnActionableRemedy(t *testing.T) {
 	e := &Engine{SessionID: "s1", Repo: gitx.Repo{Root: "/src/sensei-code"}}
-	routed, limited := e.disposeUnclosedGap("task-1", coverageGap(), coverageAction())
+	routed, limited := e.disposeUnclosedGap("task-1", "github.com/globulario/sensei-code", coverageGap(), coverageAction())
 	if limited == nil {
 		t.Fatal("an unclosed coverage gap produced no knowledge limit, so it names no remedy")
 	}
-	for _, want := range []string{"sensei import --refresh", "/src/sensei-code", "--domain"} {
+	for _, want := range []string{"sensei import --refresh", "/src/sensei-code", "--domain github.com/globulario/sensei-code"} {
 		if !strings.Contains(routed.Closes, want) {
 			t.Errorf("the remedy omits %q: %q", want, routed.Closes)
 		}
@@ -117,7 +117,7 @@ func TestTheKnowledgeLimitNamesAnActionableRemedy(t *testing.T) {
 // D — no human is asked to authorise implementation over absent coverage.
 func TestNoHumanIsAskedToSupplyMissingCoverage(t *testing.T) {
 	e := &Engine{SessionID: "s1"}
-	routed, limited := e.disposeUnclosedGap("task-1", coverageGap(), coverageAction())
+	routed, limited := e.disposeUnclosedGap("task-1", "github.com/globulario/sensei-code", coverageGap(), coverageAction())
 	if limited == nil {
 		t.Fatal("the run continued to a human question over absent coverage")
 	}
@@ -131,6 +131,30 @@ func TestNoHumanIsAskedToSupplyMissingCoverage(t *testing.T) {
 	}
 }
 
+// A revision must never be emitted as --domain. The first live run of this
+// remedy printed `--domain f304cfec6f43...` -- the caller passed
+// GapIdentity.World, a commit sha -- and the command would not have run. The test
+// that let it through asserted only that "--domain" appeared.
+func TestTheRemedyNeverPassesARevisionAsTheDomain(t *testing.T) {
+	const revision = "f304cfec6f4384c6d286251a465604864f3dcd79"
+	got := knowledgeLimitRemedy("/src/sensei-code", revision, []string{unexaminedA})
+	if strings.Contains(got, "--domain "+revision) {
+		t.Fatalf("a revision was emitted as the domain: %q", got)
+	}
+	if strings.Contains(got, "--domain") {
+		t.Errorf("a --domain flag was emitted with no domain to give it: %q", got)
+	}
+	// A real domain is still passed.
+	got = knowledgeLimitRemedy("/src/sensei-code", "github.com/globulario/sensei-code", []string{unexaminedA})
+	if !strings.Contains(got, "--domain github.com/globulario/sensei-code") {
+		t.Errorf("a real domain was dropped: %q", got)
+	}
+	// And a short hex-looking name is not mistaken for a revision.
+	if !strings.Contains(knowledgeLimitRemedy("/r", "beef", nil), "--domain beef") {
+		t.Error("a short name was misread as a revision")
+	}
+}
+
 // The gap TYPE decides the owner. An unverified premise is reasoning work the
 // architect genuinely owns, and must still become a human question when its
 // round is spent — not a knowledge limit.
@@ -141,7 +165,7 @@ func TestAnUnverifiedPremiseStillReachesTheHuman(t *testing.T) {
 		Condition: "the plan rests on an unverified premise about reviewer W3 migration design",
 		Gap:       GapIdentity{Kind: "unverified-premise", Subject: "a premise", Scope: []string{unexaminedA}},
 	}
-	routed, limited := e.disposeUnclosedGap("task-2", premise, coverageAction())
+	routed, limited := e.disposeUnclosedGap("task-2", "github.com/globulario/sensei-code", premise, coverageAction())
 	if limited != nil {
 		t.Fatalf("an unverified premise was classified as a knowledge limit: %v", limited)
 	}
@@ -158,7 +182,7 @@ func TestAnUnverifiedPremiseStillReachesTheHuman(t *testing.T) {
 func TestANarrowedFullyExaminedPlanIsNotAKnowledgeLimit(t *testing.T) {
 	e := &Engine{SessionID: "s1"}
 	narrowed := Action{Files: []string{"internal/ghbridge/transport.go"}}
-	routed, limited := e.disposeUnclosedGap("task-3", coverageGap(), narrowed)
+	routed, limited := e.disposeUnclosedGap("task-3", "github.com/globulario/sensei-code", coverageGap(), narrowed)
 	if limited != nil {
 		t.Fatalf("a plan with no unexamined files was stopped as lacking knowledge: %v", limited)
 	}

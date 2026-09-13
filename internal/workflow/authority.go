@@ -757,8 +757,13 @@ func closureOwnerFor(kind string) gapClosureOwner {
 // them to --refresh would not run.
 func knowledgeLimitRemedy(root, domain string, missing []string) string {
 	cmd := "sensei import --refresh " + root
-	if strings.TrimSpace(domain) != "" {
-		cmd += " --domain " + domain
+	// A domain, not a revision. The first live run of this remedy printed
+	// `--domain f304cfec6f43...` because the caller passed GapIdentity.World,
+	// which is the world the gap was measured in -- a commit sha. The command
+	// would not have run. A bare hex string is never a domain, so it is refused
+	// here rather than emitted as an argument that looks plausible.
+	if d := strings.TrimSpace(domain); d != "" && !looksLikeRevision(d) {
+		cmd += " --domain " + d
 	}
 	return "graph examination of " + strings.Join(missing, ", ") +
 		"; the supported operator action is `" + cmd +
@@ -782,14 +787,29 @@ func knowledgeLimitRemedy(root, domain string, missing []string) string {
 // coverage was answerable but useless: authorising does not examine a file, so
 // the router reached the identical condition on the next plan and the person was
 // asked again -- observed twice on task-1789272620293170079.
-func (e *Engine) disposeUnclosedGap(taskID string, routing Routing, action Action) (Routing, error) {
+// looksLikeRevision reports whether a string is a git object id rather than a
+// domain. Used to keep a revision out of --domain, where it would be accepted as
+// text and produce a command that cannot work.
+func looksLikeRevision(s string) bool {
+	if len(s) < 7 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, action Action) (Routing, error) {
 	missing := action.unexaminedArchitecturalFiles()
 	// Coverage the plan no longer depends on is not a limit: the architect
 	// narrowed onto examined material, which is the legitimate escape, and the
 	// remaining stop is an ordinary escalation.
 	if closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand && len(missing) > 0 {
 		routing.Basis = BasisLacksKnowledge
-		routing.Closes = knowledgeLimitRemedy(e.Repo.Root, routing.Gap.World, missing)
+		routing.Closes = knowledgeLimitRemedy(e.Repo.Root, domain, missing)
 		limit := &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 			"knowledge-limited: no actor reachable from a governed run can examine "+
