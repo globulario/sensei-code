@@ -125,16 +125,20 @@ func TestAnObservationRunsOnAnUncertifiedWorkspaceAndReportsIt(t *testing.T) {
 		"composition_state":        "partial",
 		"repository_domain":        "github.com/globulario/sensei-code",
 		"repository_domain_source": "configured",
+		// Nested as the real workspace receipt carries it: the decoder reads
+		// binding.repository_domain, and the G1 handshake compares that against
+		// the checkout's own remote.
+		"binding": map[string]any{"repository_domain": "github.com/globulario/sensei-code"},
 	}}
 	ok := sensei.ToolResult{Structured: map[string]any{
 		"status": "PREFLIGHT_STATUS_EMPTY", "risk_class": "UNKNOWN_IMPACT",
 		"authority": map[string]any{"state": "authoritative", "freshness": "current"},
 	}}
 
-	if _, err := certifyStartForLane(partial, ok, "head", false); err == nil {
+	if _, err := certifyStartForLane(partial, ok, "head", "github.com/globulario/sensei-code", "localhost:10122", false); err == nil {
 		t.Fatal("a governed CHANGE was certified on an uncertified workspace")
 	}
-	start, err := certifyStartForLane(partial, ok, "head", true)
+	start, err := certifyStartForLane(partial, ok, "head", "github.com/globulario/sensei-code", "localhost:10122", true)
 	if err != nil {
 		t.Fatalf("an observation was refused on an uncertified workspace: %v", err)
 	}

@@ -910,7 +910,8 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// the receipt name one base while the candidate was rooted at another if
 	// the repository moved in between.
 	head := repositoryHead(ctx, e.Repo)
-	start, err := certifyStartForLane(workspaceStatus, preflight, head, e.observes(taskID))
+	start, err := certifyStartForLane(workspaceStatus, preflight, head,
+		domainFromRemote(e.Repo.OriginURL(ctx)), awarenessAddress(e.Config.Sensei.Args), e.observes(taskID))
 	if err != nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 		e.reportOutcome(ctx, "blocked", task, err.Error())
@@ -4785,7 +4786,8 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.preflightRecord(preflightArgs, preflight.Structured,
 				subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
-		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo))
+		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo),
+			domainFromRemote(e.Repo.OriginURL(ctx)), awarenessAddress(e.Config.Sensei.Args))
 		if err != nil {
 			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
 			e.reportOutcome(ctx, "blocked", task.Task, err.Error())

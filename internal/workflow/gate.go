@@ -97,8 +97,8 @@ func (c certifiedStart) Invariants() []sensei.Invariant { return c.preflight.Dir
 // architect handed a stale graph will produce a confident, specific, entirely
 // plausible plan built on invariants that no longer hold, and the plan will
 // read as excellent work.
-func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repositoryHead string) (certifiedStart, error) {
-	return certifyStartForLane(workspaceResult, preflightResult, repositoryHead, false)
+func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repositoryHead, repositoryDomain, awarenessAddr string) (certifiedStart, error) {
+	return certifyStartForLane(workspaceResult, preflightResult, repositoryHead, repositoryDomain, awarenessAddr, false)
 }
 
 // certifyStartForLane is certifyStart with the observation lane accounted for.
@@ -119,9 +119,21 @@ func certifyStart(workspaceResult, preflightResult sensei.ToolResult, repository
 // ContractError means Sensei was reached and what came back cannot be read at
 // all, and an observation that cannot read the graph's own answer has no basis
 // for reporting anything the graph said.
-func certifyStartForLane(workspaceResult, preflightResult sensei.ToolResult, repositoryHead string, observing bool) (certifiedStart, error) {
+func certifyStartForLane(workspaceResult, preflightResult sensei.ToolResult, repositoryHead, repositoryDomain, awarenessAddr string, observing bool) (certifiedStart, error) {
 	workspace, err := sensei.DecodeWorkspaceStatus(workspaceResult)
 	if err != nil {
+		return certifiedStart{}, err
+	}
+	// THE READ-SIDE IDENTITY HANDSHAKE (G1).
+	//
+	// Checked before anything else is weighed, and in BOTH lanes. The degraded
+	// path below deliberately lets an observation past a graph that is behind,
+	// because the condition that makes investigation valuable must not forbid it.
+	// This is a different thing: a graph for another repository is not behind, it
+	// is about somebody else's code, and it answers confidently. An observation
+	// built on it would report findings about the wrong repository, which is worse
+	// than reporting none.
+	if err := verifyGraphDomain(repositoryDomain, workspace.Binding.RepositoryDomain, awarenessAddr); err != nil {
 		return certifiedStart{}, err
 	}
 	var degraded []string
