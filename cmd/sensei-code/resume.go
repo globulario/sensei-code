@@ -255,6 +255,12 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 		}
 		return exitCompleted
 	}
+	// A task named WITHOUT an answer can only be continued as a waiting review:
+	// there is nothing to authorize, only a review the candidate is already owed.
+	// selectReviewResume refuses a task that is asking a question instead.
+	if strings.TrimSpace(*taskID) != "" && strings.TrimSpace(*answer) == "" {
+		return resumeAwaitingReview(ctx, repo, cfg, store, sessionID, interrupted, *taskID, *timeout, *asJSON, *quiet)
+	}
 	if strings.TrimSpace(*taskID) == "" || strings.TrimSpace(*answer) == "" {
 		fmt.Fprintln(os.Stderr, "sensei-code resume: --task and --answer are both required; "+
 			"run `sensei-code resume --list` to see the questions standing and the options each offers")

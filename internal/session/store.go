@@ -140,6 +140,13 @@ type Interrupted struct {
 	// implementer would ask a worker to change code nobody objected to, purely
 	// because a process restarted.
 	AwaitingReview bool
+	// AwaitingReviewRecord is the WAITING_REVIEW terminal's payload, byte for
+	// byte: which review is owed, under which request, about which exact
+	// candidate. A continuation compares the candidate it resumes against this
+	// rather than against anything re-derived after the restart. Cleared with
+	// AwaitingReview, so a revised task never carries an obligation it no longer
+	// owes.
+	AwaitingReviewRecord json.RawMessage
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -217,6 +224,10 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// find again is not "preserved awaiting review" however carefully
 			// the receipt says so.
 			p.AwaitingReview = true
+			// The terminal's own record of what is owed, carried byte for byte.
+			// A later terminal replaces it: the newest statement of the
+			// obligation is the one a continuation must honour.
+			p.AwaitingReviewRecord = e.Payload
 		case event.ReviewCompleted:
 			// A bounded verdict may END the awaiting-review state, and this is
 			// where the difference between a latch and a reconstruction lives.
@@ -239,6 +250,7 @@ func FindInterrupted(events []event.Event) []Interrupted {
 				switch roles.Decision(strings.ToLower(strings.TrimSpace(string(verdict.Decision)))) {
 				case roles.Revise, roles.Escalate:
 					p.AwaitingReview = false
+					p.AwaitingReviewRecord = nil
 				}
 				// The latest bounded verdict is what the next actor is handed,
 				// rendered by the SAME method that tells a live worker what to

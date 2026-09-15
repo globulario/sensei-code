@@ -716,6 +716,22 @@ type taskContext struct {
 	// would be the loop inventing work -- and it would move the very bytes the
 	// missing review is owed about.
 	AwaitingReview bool
+	// WaitingReview is the recorded WAITING_REVIEW obligation this resume
+	// continues when the review it was owed went unanswered: which request, and
+	// which exact candidate that request was about. The first resumed cycle
+	// compares the candidate it captures against it before asking again, so a
+	// candidate that moved is never reviewed under the old request's identity.
+	WaitingReview *waitingReview
+}
+
+// waitingReview is the identity an unanswered review request carried, as the
+// WAITING_REVIEW terminal recorded it.
+type waitingReview struct {
+	RequestID       string `json:"request_id"`
+	BaseSHA         string `json:"base"`
+	CandidateDigest string `json:"candidate_digest"`
+	CandidateTree   string `json:"candidate_tree"`
+	ReviewKind      string `json:"review_kind"`
 }
 
 // intent renders the architect's stated reasoning for the roles downstream.
@@ -1849,6 +1865,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		e.noteCandidateDigest(taskID, binding.CandidateDigest)
 		e.noteCapturedTree(taskID, capture.Tree)
 		e.noteCandidateWork(taskID, capture.Tree, capture.BaseTree)
+		// A resumed WAITING_REVIEW task states, once and before the review is
+		// asked again, whether this is the candidate its unanswered request was
+		// about. The review below is bound to the binding captured now either way.
+		if w := tc.WaitingReview; w != nil {
+			tc.WaitingReview = nil
+			e.reconcileWaitingReview(taskID, w, binding)
+		}
 		policy := e.policyFor(taskID)
 
 		// The implementer is excluded by construction, not by instruction. An
@@ -5026,11 +5049,24 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			PlanDigest:      task.PlanDigest,
 			AwaitingReview:  task.AwaitingReview,
 		}
+		// Which review is owed decides what the resumed cycle is told. An
+		// unanswered request and an advisory accept are different facts, and
+		// telling a reviewer that a never-judged candidate "was accepted" would
+		// be a claim nobody made.
+		tc.WaitingReview = waitingReviewFrom(task)
 		carried := ""
-		if task.AwaitingReview {
+		switch {
+		case task.AwaitingReview && tc.WaitingReview != nil:
+			carried = "This candidate stands, validated and audited. Its review request " + tc.WaitingReview.RequestID +
+				" got no answer before its deadline. Nothing about it was objected to. What it owes is that review, not a change."
+		case task.AwaitingReview && recordedReviewKind(task) == "advisory":
 			carried = "This candidate stands and was accepted by a reviewer whose independence could not be " +
 				"established. Nothing about it was objected to. What it owes is an independent review, not a change."
-		} else if r := strings.TrimSpace(task.Review); r != "" {
+		case task.AwaitingReview:
+			carried = "This candidate stands and owes a review. Its recorded obligation could not be read in full, " +
+				"so nothing is claimed about any earlier review. What it owes is a review, not a change."
+		}
+		if r := strings.TrimSpace(task.Review); carried == "" && r != "" {
 			carried = "This candidate was interrupted before it converged. Its changes are already present.\n\nThe last review said:\n" + r
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,

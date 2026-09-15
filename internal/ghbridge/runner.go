@@ -76,6 +76,57 @@ var ErrUnboundSubject = errors.New("no exact candidate binding to review")
 // there is no indefinite default here.
 const DefaultWait = 30 * time.Minute
 
+// supersedeOwedReviews retires every review this task still owes under an older
+// request, before a new request is published.
+//
+// A task owes at most one review at a time, and the newest request is the one
+// that owes it. Keeping an older request open beside it would give a relayed or
+// late verdict two requests to satisfy, and the older one may be about a
+// candidate that no longer exists. So each is WITHDRAWN on the conversation and
+// then CLOSED locally.
+//
+// The local close happens even when the withdrawal cannot be posted: from here
+// on this process accepts nothing for that request either way, and a record kept
+// open "until GitHub says so" would leave a superseded request still satisfiable
+// here. Both facts are reported, so a request still visibly standing on GitHub is
+// never silent.
+func (r *Runner) supersedeOwedReviews(ctx context.Context, taskID string, emit func(event.Event)) {
+	owed, listErr := r.Exchanges.PendingReviews()
+	if listErr != nil && emit != nil {
+		emit(event.New(r.SessionID, taskID, event.SourceReviewer, event.Status,
+			"some review records could not be read before superseding: "+listErr.Error(),
+			map[string]any{"error": listErr.Error(), "transport": "github"}))
+	}
+	for _, rec := range owed {
+		if rec.TaskID != taskID {
+			continue
+		}
+		withdrawErr := withdraw(ctx, r.Issue, rec)
+		closeErr := r.Exchanges.Close(rec.TaskID, rec.RequestID)
+		if emit == nil {
+			continue
+		}
+		payload := map[string]any{
+			"superseded_request": rec.RequestID,
+			"candidate_digest":   rec.CandidateDigest,
+			"candidate_tree":     rec.CandidateTree,
+			"withdrawn":          withdrawErr == nil,
+			"closed":             closeErr == nil,
+			"transport":          "github",
+		}
+		summary := "review request " + rec.RequestID + " is superseded by a new request for this task"
+		if withdrawErr != nil {
+			payload["withdraw_error"] = withdrawErr.Error()
+			summary += "; its withdrawal could not be posted, so it may still stand on the conversation, " +
+				"but it is no longer accepted here"
+		}
+		if closeErr != nil {
+			payload["close_error"] = closeErr.Error()
+		}
+		emit(event.New(r.SessionID, taskID, event.SourceReviewer, event.Status, summary, payload))
+	}
+}
+
 // Run publishes the exact candidate, asks for a review of it, and waits.
 func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Event)) (agent.Result, error) {
 	if req.Role != roles.Reviewer {
@@ -92,6 +143,12 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	subject := FromBinding(req.Binding)
 	if err := subjectBindingComplete(subject); err != nil {
 		return agent.Result{}, fmt.Errorf("%w: %v", ErrUnboundSubject, err)
+	}
+
+	// Retired BEFORE the new request exists, so no window has two open requests
+	// for the task and a verdict for the old one is refused from here on.
+	if r.Exchanges.Dir != "" {
+		r.supersedeOwedReviews(ctx, req.TaskID, emit)
 	}
 
 	requestID := r.NewRequestID()
