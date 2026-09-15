@@ -94,7 +94,7 @@ const DefaultWait = 30 * time.Minute
 // open "until GitHub says so" would leave a superseded request still satisfiable
 // here. Both facts are reported, so a request still visibly standing on GitHub is
 // never silent.
-func (r *Runner) supersedeOwedReviews(ctx context.Context, taskID string, emit func(event.Event)) {
+func (r *Runner) supersedeOwedReviews(ctx context.Context, taskID, keep string, emit func(event.Event)) {
 	owed, listErr := r.Exchanges.PendingReviews()
 	if listErr != nil && emit != nil {
 		emit(event.New(r.SessionID, taskID, event.SourceReviewer, event.Status,
@@ -102,7 +102,9 @@ func (r *Runner) supersedeOwedReviews(ctx context.Context, taskID string, emit f
 			map[string]any{"error": listErr.Error(), "transport": "github"}))
 	}
 	for _, rec := range owed {
-		if rec.TaskID != taskID {
+		// keep is the replacement, already published and recorded. Retiring it
+		// here would leave the task owing a review that nothing names.
+		if rec.TaskID != taskID || rec.RequestID == keep {
 			continue
 		}
 		withdrawErr := withdraw(ctx, r.Issue, rec)
@@ -156,16 +158,25 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 		return result, err
 	}
 
-	// Retired BEFORE the new request exists, so no window has two open requests
-	// for the task and a verdict for the old one is refused from here on.
-	if r.Exchanges.Dir != "" {
-		r.supersedeOwedReviews(ctx, req.TaskID, emit)
-	}
+	// What this candidate already owes, read BEFORE anything is published and
+	// retired only after the replacement is durable (below).
+	//
+	// Retiring first left a window with no durable obligation at all: withdraw
+	// the old record, fail to publish the snapshot or the request, and the task
+	// owes a review that nothing names. Worse, that failure was an ordinary
+	// reviewer error, so the ladder was free to ask a different reviewer -- a
+	// transport failure silently became a change of reviewer. Every failure
+	// point from here on leaves at least one durable obligation standing.
+	standing, owedStands := r.owedReviewFor(req.TaskID, subject)
 
 	requestID := r.NewRequestID()
 	snap, err := PublishSnapshot(ctx, r.RepoDir, r.Remote, subject, requestID)
 	if err != nil {
-		return agent.Result{}, fmt.Errorf("publishing the review snapshot: %w", err)
+		err = fmt.Errorf("publishing the review snapshot: %w", err)
+		if owedStands {
+			return agent.Result{}, owedInstead(standing, err)
+		}
+		return agent.Result{}, err
 	}
 	subject.ReviewCommit = snap.Commit
 
@@ -185,7 +196,11 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	// request it is about is a nudge to read the whole conversation.
 	requestComment, err := PublishRequest(ctx, r.Issue, request, req.Prompt)
 	if err != nil {
-		return agent.Result{}, fmt.Errorf("posting the review request: %w", err)
+		err = fmt.Errorf("posting the review request: %w", err)
+		if owedStands {
+			return agent.Result{}, owedInstead(standing, err)
+		}
+		return agent.Result{}, err
 	}
 
 	// Recorded BEFORE the doorbell and before the wait, for the same reason the
@@ -213,16 +228,24 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			CandidateTree:   subject.CandidateTree,
 			ReviewCommit:    snap.Commit,
 		}
-		if openErr := r.Exchanges.Open(rec); openErr != nil && emit != nil {
+		openErr := r.Exchanges.Open(rec)
+		if openErr != nil && emit != nil {
 			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
 				"the review exchange record could not be written, so a restart cannot find request "+
-					request.RequestID,
+					request.RequestID+"; any earlier obligation for this task is kept rather than superseded",
 				map[string]any{
 					"request_id":      request.RequestID,
 					"request_comment": requestComment,
 					"error":           openErr.Error(),
 					"transport":       "github",
 				}))
+		}
+		// Only now, with the replacement published AND durably recorded, is the
+		// obligation it replaces retired. If the record could not be written, the
+		// earlier records are the only durable statement that this candidate owes
+		// a review, and they stand.
+		if openErr == nil {
+			r.supersedeOwedReviews(ctx, req.TaskID, request.RequestID, emit)
 		}
 	}
 
@@ -353,6 +376,41 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 // subjectBindingComplete checks the four identity fields the engine supplies,
 // before a snapshot is built. ReviewCommit is filled by publication and so is
 // deliberately not required here.
+// owedReviewFor is the durable obligation this task already carries for THIS
+// exact candidate, if it carries one.
+func (r *Runner) owedReviewFor(taskID string, subject Subject) (ExchangeRecord, bool) {
+	if r.Exchanges.Dir == "" {
+		return ExchangeRecord{}, false
+	}
+	owed, _ := r.Exchanges.PendingReviews()
+	for _, rec := range owed {
+		if rec.TaskID == taskID && rec.BaseSHA == subject.BaseSHA &&
+			rec.CandidateDigest == subject.CandidateDigest && rec.CandidateTree == subject.CandidateTree {
+			return rec, true
+		}
+	}
+	return ExchangeRecord{}, false
+}
+
+// owedInstead reports a transport failure that happened while an obligation for
+// this candidate still stands.
+//
+// A request that could not be REPLACED is still a review owed, not a reviewer
+// that failed. Reported as the owed review it left behind, the engine preserves
+// the candidate at the review boundary; reported as an ordinary error, the
+// ladder would ask a different reviewer, which is a transport failure quietly
+// changing who judges the work.
+func owedInstead(rec ExchangeRecord, cause error) *roles.ReviewUnanswered {
+	return &roles.ReviewUnanswered{
+		RequestID: rec.RequestID, RequestComment: rec.RequestComment, Conversation: rec.Conversation,
+		Binding: roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
+			CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree},
+		ReviewCommit: rec.ReviewCommit,
+		Cause: fmt.Errorf("the review this candidate is owed under request %s could not be replaced: %w",
+			rec.RequestID, cause),
+	}
+}
+
 func subjectBindingComplete(s Subject) error {
 	probe := s
 	probe.ReviewCommit = "0000000000000000000000000000000000000000"
