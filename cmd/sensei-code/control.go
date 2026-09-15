@@ -228,6 +228,10 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		return err
 	}
 	engine.Runners = runners.Resolver
+	// Read-only: the engine looks overrides up and can never record one.
+	if runners.Attestations.Dir != "" {
+		engine.Attestations = runners.Attestations
+	}
 	if runners.Banner != "" {
 		// Established before the banner prints, so the operator never reads a
 		// healthy-looking mailbox line about a conversation nothing will wake on.
@@ -308,6 +312,19 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 	go func() {
 		if err := relayChannel.Serve(relayHandler(runners)); err != nil {
 			fmt.Fprintln(os.Stderr, "sensei-code control: the review relay channel stopped:", err)
+		}
+	}()
+
+	// The attestation channel: a local operator overriding a review obligation
+	// on one exact relayed review, judged by the same authority decision.
+	attestChannel, err := server.ListenAttest(repo.Root)
+	if err != nil {
+		return err
+	}
+	defer attestChannel.Close()
+	go func() {
+		if err := attestChannel.Serve(attestHandler(runners, cfg)); err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code control: the attestation channel stopped:", err)
 		}
 	}()
 
@@ -452,6 +469,9 @@ type engineResolver struct {
 	// and records into. Zero when the bridge is off, and a relay is then refused.
 	Exchanges ghbridge.ExchangeLog
 	Relays    ghbridge.RelayStore
+	// Attestations is where recorded human overrides live. The engine READS it;
+	// only the attestation socket handler writes one.
+	Attestations ghbridge.AttestationStore
 }
 
 // composeEngineResolver decides what serves this engine's role turns.
@@ -524,6 +544,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	// here -- which is what makes withdrawing them at startup honest (#162).
 	exchanges := ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")}
 	relays := ghbridge.RelayStore{Dir: filepath.Join(repoRoot, ".sensei-code", "relays")}
+	attestations := ghbridge.AttestationStore{Dir: filepath.Join(repoRoot, ".sensei-code", "attestations")}
 
 	resolver := ghbridge.Resolver{
 		Roles:     gh.Roles,
@@ -586,7 +607,8 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 		banner += fmt.Sprintf("\n  kept %d review request(s) still owed on a waiting candidate", len(owed))
 	}
 
-	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box, Exchanges: exchanges, Relays: relays}, nil
+	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box,
+		Exchanges: exchanges, Relays: relays, Attestations: attestations}, nil
 }
 
 // credentialFromEnvOrMint resolves the credential and reports whether the

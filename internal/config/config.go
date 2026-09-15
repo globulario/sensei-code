@@ -50,6 +50,15 @@ func (a Agent) ConsumesGraph() bool {
 
 type Workflow struct {
 	ReviewCycles int `json:"review_cycles"`
+	// OwnerAttestation grants this workspace's local operator the authority to
+	// advance a candidate on a relayed review that established no independence,
+	// as a recorded human override.
+	//
+	// Off unless the owner turns it on, and deliberately configuration rather
+	// than something a run can decide: the question "may a human override this
+	// obligation here" is the owner's answer about this repository, not a
+	// property of the candidate being judged.
+	OwnerAttestation bool `json:"owner_attestation,omitempty"`
 	// PublishBase is the branch a pull request targets. Empty lets the host
 	// choose its own default rather than Sensei Code guessing one.
 	PublishBase string `json:"publish_base,omitempty"`

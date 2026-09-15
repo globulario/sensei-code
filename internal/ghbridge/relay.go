@@ -575,7 +575,10 @@ func (r *Runner) relayedReviewFor(ctx context.Context, req agent.Request, subjec
 					"transport":           "github-relay",
 				}))
 		}
-		return agent.Result{Text: art.Body, Session: roles.Unverified}, true, nil
+		// The digest names WHICH artifact this text came from, so a human
+		// override recorded about that review can be checked against it. It is
+		// identity, not standing: the session stays Unverified.
+		return agent.Result{Text: art.Body, Session: roles.Unverified, ReviewDigest: relay.ReviewDigest}, true, nil
 	}
 	return agent.Result{}, false, nil
 }

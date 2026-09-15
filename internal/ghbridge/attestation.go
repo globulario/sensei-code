@@ -1,0 +1,327 @@
+package ghbridge
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/globulario/sensei-code/internal/roles"
+)
+
+// A human overriding a review obligation, recorded where the relay is recorded
+// and published where the relay is published -- and named, everywhere, as an
+// override rather than a review. See roles.Attestation for why the distinction
+// is the whole point.
+
+const attestationMarker = "[sensei-code:attestation]"
+
+const (
+	// AttestationAccepted is a validated attestation not yet published.
+	AttestationAccepted = "accepted"
+	// AttestationPublished is one the App has published on the mailbox.
+	AttestationPublished = "published"
+)
+
+// ErrAttestationRefused reports an attestation that was not accepted. Nothing
+// durable was written and nothing was published.
+var ErrAttestationRefused = errors.New("the attestation was refused")
+
+// AttestationRecord is the durable receipt of one accepted override.
+type AttestationRecord struct {
+	Version            int               `json:"version"`
+	State              string            `json:"state"`
+	Attestation        roles.Attestation `json:"attestation"`
+	AcceptedAt         time.Time         `json:"accepted_at"`
+	Publication        string            `json:"publication,omitempty"`
+	PublicationComment int64             `json:"publication_comment,omitempty"`
+	PublishedAt        time.Time         `json:"published_at,omitempty"`
+}
+
+// AttestationStore holds one record per attested request.
+type AttestationStore struct {
+	Dir string
+}
+
+func (s AttestationStore) path(requestID string) (string, error) {
+	if s.Dir == "" {
+		return "", errors.New("the attestation store has no directory")
+	}
+	if !exchangeFileSafe.MatchString(requestID) {
+		return "", fmt.Errorf("request id %q is not a safe file name", requestID)
+	}
+	return filepath.Join(s.Dir, requestID+".json"), nil
+}
+
+// Load reads the record for a request, if one exists.
+func (s AttestationStore) Load(requestID string) (AttestationRecord, bool, error) {
+	path, err := s.path(requestID)
+	if err != nil {
+		return AttestationRecord{}, false, err
+	}
+	blob, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return AttestationRecord{}, false, nil
+	}
+	if err != nil {
+		return AttestationRecord{}, false, err
+	}
+	var rec AttestationRecord
+	if err := json.Unmarshal(blob, &rec); err != nil {
+		return AttestationRecord{}, false, fmt.Errorf("the attestation for %s is unreadable: %w", requestID, err)
+	}
+	return rec, true, nil
+}
+
+func (s AttestationStore) create(rec AttestationRecord) error {
+	path, err := s.path(rec.Attestation.RequestID)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+		return err
+	}
+	blob, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(append(blob, '\n')); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
+}
+
+func (s AttestationStore) markPublished(requestID, digest string, comment int64, publication string, at time.Time) (AttestationRecord, error) {
+	rec, found, err := s.Load(requestID)
+	if err != nil {
+		return AttestationRecord{}, err
+	}
+	if !found || rec.Attestation.ReviewDigest != digest {
+		return AttestationRecord{}, fmt.Errorf("the accepted attestation for %s is not the one being published", requestID)
+	}
+	rec.State = AttestationPublished
+	rec.Publication = publication
+	rec.PublicationComment = comment
+	rec.PublishedAt = at.UTC()
+	path, err := s.path(requestID)
+	if err != nil {
+		return AttestationRecord{}, err
+	}
+	blob, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return AttestationRecord{}, err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(blob, '\n'), 0o600); err != nil {
+		return AttestationRecord{}, err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return AttestationRecord{}, err
+	}
+	return rec, nil
+}
+
+// AttestationFor is the published override covering this exact candidate, if
+// this workspace holds one.
+//
+// Published only: an attestation the App never posted is not yet part of the
+// record anyone else can read, and consuming one would let a local file alone
+// advance a candidate. It satisfies workflow.AttestationSource.
+func (s AttestationStore) AttestationFor(b roles.Binding) (roles.Attestation, bool, error) {
+	if s.Dir == "" {
+		return roles.Attestation{}, false, nil
+	}
+	entries, err := os.ReadDir(s.Dir)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return roles.Attestation{}, false, nil
+		}
+		return roles.Attestation{}, false, err
+	}
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+			continue
+		}
+		var rec AttestationRecord
+		blob, err := os.ReadFile(filepath.Join(s.Dir, e.Name()))
+		if err != nil || json.Unmarshal(blob, &rec) != nil {
+			return roles.Attestation{}, false, fmt.Errorf("unreadable attestation record: %s", e.Name())
+		}
+		if rec.State != AttestationPublished {
+			continue
+		}
+		// Covers is the whole identity check, and it is asked with the
+		// attestation's OWN review digest here because this lookup answers "is
+		// there an override for this candidate". Whether it covers the review
+		// actually consumed is checked by the caller, against the digest the
+		// transport reported.
+		if rec.Attestation.Covers(b, rec.Attestation.ReviewDigest) == nil {
+			return rec.Attestation, true, nil
+		}
+	}
+	return roles.Attestation{}, false, nil
+}
+
+// AttestationSubmission is one override, as the control process received it.
+type AttestationSubmission struct {
+	RequestID    string
+	ReviewDigest string
+	Principal    RelayPrincipal
+	// Permitted is the owner's local grant of this authority (config). Refused
+	// here rather than ignored: an override nobody authorized is not an override.
+	Permitted bool
+	Relays    RelayStore
+	Store     AttestationStore
+	Mailbox   Issue
+	Now       func() time.Time
+}
+
+func attestationRefused(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrAttestationRefused, fmt.Sprintf(format, args...))
+}
+
+// AcceptAttestation records a local operator's override of one exact relayed
+// review, and has the App publish it.
+//
+// Called ONLY by the control process's attestation socket handler, with the
+// principal that socket observed. The operator must name both the request and
+// the review digest: an override typed from memory against "whatever review is
+// there" would cover an artifact its author never read.
+func AcceptAttestation(ctx context.Context, in AttestationSubmission) (AttestationRecord, error) {
+	now := time.Now
+	if in.Now != nil {
+		now = in.Now
+	}
+	if !in.Permitted {
+		return AttestationRecord{}, attestationRefused(
+			"this workspace has not granted owner-attestation authority; set workflow.owner_attestation in .sensei-code config")
+	}
+	if in.Store.Dir == "" || in.Relays.Dir == "" {
+		return AttestationRecord{}, attestationRefused("this process keeps no relay store or attestation store")
+	}
+	if err := relayPublisherReady(in.Mailbox); err != nil {
+		return AttestationRecord{}, attestationRefused("%v", err)
+	}
+	if in.Principal.PID <= 0 || in.Principal.Terminal == 0 {
+		return AttestationRecord{}, attestationRefused("an attestation must name the terminal principal who made it")
+	}
+
+	relay, found, err := in.Relays.Load(strings.TrimSpace(in.RequestID))
+	if err != nil {
+		return AttestationRecord{}, attestationRefused("%v", err)
+	}
+	if !found {
+		return AttestationRecord{}, attestationRefused("no relayed review is recorded for request %s", in.RequestID)
+	}
+	if relay.State != RelayPublished {
+		return AttestationRecord{}, attestationRefused(
+			"the relayed review for %s is %s; only a published review can be attested to", in.RequestID, relay.State)
+	}
+	// The operator names the digest, and it must be the one on record. This is
+	// what ties the override to a review its author actually read.
+	if relay.ReviewDigest != strings.TrimSpace(in.ReviewDigest) {
+		return AttestationRecord{}, attestationRefused(
+			"the relayed review for %s is %s and the attestation names %s", in.RequestID, relay.ReviewDigest, in.ReviewDigest)
+	}
+
+	att := roles.Attestation{
+		RequestID:    relay.RequestID,
+		ReviewDigest: relay.ReviewDigest,
+		Reviewer:     relay.Reviewer,
+		Decision:     roles.Decision(strings.ToLower(strings.TrimSpace(relay.Decision))),
+		Binding: roles.Binding{TaskID: relay.TaskID, BaseSHA: relay.BaseSHA,
+			CandidateDigest: relay.CandidateDigest, CandidateTree: relay.CandidateTree},
+		Principal: in.Principal.token(),
+		At:        now().UTC(),
+		Statement: roles.AttestationStatement,
+	}
+	if err := att.Validate(); err != nil {
+		return AttestationRecord{}, attestationRefused("%v", err)
+	}
+
+	record := AttestationRecord{Version: 1, State: AttestationAccepted, Attestation: att, AcceptedAt: att.At}
+	existing, have, err := in.Store.Load(att.RequestID)
+	if err != nil {
+		return AttestationRecord{}, attestationRefused("%v", err)
+	}
+	if !have {
+		if err := in.Store.create(record); err != nil {
+			if !errors.Is(err, os.ErrExist) {
+				return AttestationRecord{}, attestationRefused("the attestation could not be recorded: %v", err)
+			}
+			if existing, have, err = in.Store.Load(att.RequestID); err != nil || !have {
+				return AttestationRecord{}, attestationRefused("the attestation for %s could not be read back", att.RequestID)
+			}
+		}
+	}
+	if have {
+		if existing.Attestation.ReviewDigest != att.ReviewDigest {
+			return AttestationRecord{}, attestationRefused(
+				"request %s is already attested for review %s; an attestation is not replaced",
+				att.RequestID, existing.Attestation.ReviewDigest)
+		}
+		record = existing
+	}
+	if record.State == AttestationPublished {
+		return record, nil
+	}
+	return publishAttestation(ctx, in.Mailbox, in.Store, record, now)
+}
+
+// RenderAttestation renders the App's publication of one override.
+//
+// Its envelope is its own, and it carries no review or request marker: nothing
+// reading the mailbox can take an override for a review, which is the confusion
+// the whole type exists to prevent.
+func RenderAttestation(rec AttestationRecord, box Issue) (string, error) {
+	a := rec.Attestation
+	var b strings.Builder
+	b.WriteString(attestationMarker + "\n")
+	fmt.Fprintf(&b, "task=%s\n", a.Binding.TaskID)
+	fmt.Fprintf(&b, "request=%s\n", a.RequestID)
+	fmt.Fprintf(&b, "base=%s\n", a.Binding.BaseSHA)
+	fmt.Fprintf(&b, "candidate_digest=%s\n", a.Binding.CandidateDigest)
+	fmt.Fprintf(&b, "candidate_tree=%s\n", a.Binding.CandidateTree)
+	fmt.Fprintf(&b, "review_digest=%s\n", a.ReviewDigest)
+	fmt.Fprintf(&b, "reviewer_provider=%s\n", a.Reviewer)
+	fmt.Fprintf(&b, "attested_decision=%s\n", a.Decision)
+	fmt.Fprintf(&b, "attesting_principal=%s\n", a.Principal)
+	fmt.Fprintf(&b, "publication=%s\n", publicationIdentity(box))
+	fmt.Fprintf(&b, "standing=human_override\n")
+	fmt.Fprintf(&b, "\nHuman override for request %s.\n\n%s\n\nThe candidate may proceed on that authority. The "+
+		"adversarial-review obligation this task carries is NOT satisfied and remains on its record.\n",
+		a.RequestID, a.Statement)
+	body := b.String()
+	if strings.Contains(body, reviewMarker) || strings.Contains(body, requestMarker) ||
+		strings.Count(body, "[sensei-code:") != 1 {
+		return "", errors.New("the publication would carry a protocol marker beyond its own envelope, so it is not posted")
+	}
+	return body, nil
+}
+
+func publishAttestation(ctx context.Context, box Issue, store AttestationStore, rec AttestationRecord, now func() time.Time) (AttestationRecord, error) {
+	body, err := RenderAttestation(rec, box)
+	if err != nil {
+		return rec, fmt.Errorf("%w: %v", ErrRelayPublication, err)
+	}
+	comment, err := box.API.PostComment(ctx, box.Number, body)
+	if err != nil {
+		return rec, fmt.Errorf("%w: %v; resubmit the same attestation to retry publication", ErrRelayPublication, err)
+	}
+	published, err := store.markPublished(rec.Attestation.RequestID, rec.Attestation.ReviewDigest, comment,
+		publicationIdentity(box), now())
+	if err != nil {
+		return rec, fmt.Errorf("%w: posted as comment %d, and the receipt could not record it: %v",
+			ErrRelayPublication, comment, err)
+	}
+	return published, nil
+}

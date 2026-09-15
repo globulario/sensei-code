@@ -131,6 +131,12 @@ type Result struct {
 	// has to be checkable after the fact -- deriving it from the fact that the
 	// call succeeded would only prove that the call succeeded.
 	Session roles.Session
+	// ReviewDigest names the exact artifact a transport carried, when it carried
+	// one it can name. It is IDENTITY, never standing: it says which bytes this
+	// text came from, so a later record about that review -- a human attestation,
+	// say -- can be checked against the review it claims to be about instead of
+	// against its own say-so. Empty means the turn asserted nothing.
+	ReviewDigest string
 }
 
 type Runner interface {

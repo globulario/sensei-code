@@ -139,6 +139,12 @@ type Engine struct {
 	// command line, which is every path today; see runners.go for why a
 	// resolver's refusal is never recovered from by building the CLI anyway.
 	Runners RunnerResolver
+
+	// Attestations is where recorded human overrides are read from. Nil means
+	// none can be found, which is the right answer for a workspace that has no
+	// store: an override nobody recorded does not exist. Reading only -- the
+	// engine can never write one, which is what keeps an override a human act.
+	Attestations AttestationSource
 }
 
 // closureBudget is how many rounds one condition gets to close its own gap.
@@ -2650,7 +2656,8 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 				lastErr = err
 				continue
 			}
-			return advisoryReview(advisory), nil
+			// Advisory unless a recorded human override covers this exact review.
+			return e.attestedOrAdvisory(taskID, advisory, result.ReviewDigest), nil
 		}
 		if err := verdict.Validate(binding, implementer); err != nil {
 			if reviewIsInadmissible(verdict, binding, implementer) {
