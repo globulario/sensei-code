@@ -1544,6 +1544,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				result, err := e.resolveReview(ctx, taskID, assignment,
 					inspectionPacket(*tc, binding, start, plan, report), worker.Name)
 				if err != nil {
+					if errors.Is(err, roles.ErrReviewUnanswered) {
+						// Same as the modify loop: findings whose review went
+						// unanswered are owed that review, not a new worker.
+						return candidateReviewUnanswered, plan, lastReview, lastAudit, err
+					}
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
 				review := result.Verdict()
@@ -1869,6 +1874,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		standing, err := e.resolveReview(ctx, taskID, assignment,
 			reviewPacket(*tc, binding, start, plan, diff, lastAudit, evidence.Render()), worker.Name)
 		if err != nil {
+			if errors.Is(err, roles.ErrReviewUnanswered) {
+				// The candidate stands, validated and audited, and the review it
+				// is owed did not arrive. That is neither convergence nor failure:
+				// the error travels with its own outcome so the caller preserves
+				// this exact candidate instead of handing it to the next worker.
+				return candidateReviewUnanswered, plan, lastReview, lastAudit, err
+			}
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
 		review := standing.Verdict()
@@ -2540,6 +2552,14 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			// The verdict was structurally inadmissible -- self-review, or a
 			// review of another revision. Another provider would not fix that,
 			// and retrying would only produce it again.
+			return ReviewResult{}, err
+		}
+		if errors.Is(err, roles.ErrReviewUnanswered) {
+			// A published request that got no answer is not a provider that
+			// failed to produce a review: it is a review still owed on this exact
+			// candidate. Trying the next reviewer would silently change who judges
+			// it (sensei_code.ghbridge.an_unavailable_bridge_refuses_rather_than_substituting),
+			// so the candidate waits for this review instead.
 			return ReviewResult{}, err
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
@@ -4394,6 +4414,49 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				config.DisplayName(worker.Name)+" is continuing the existing candidate, not starting over", nil))
 		}
 		accepted, finalPlan, review, audit, err := e.runCandidate(ctx, sc, start, taskID, tc, plan, worker, workspace, carried)
+		if accepted == candidateReviewUnanswered {
+			// The candidate was validated and audited, a review request for that
+			// exact candidate was published, and no answer arrived before its
+			// deadline. Nobody judged it, so it is neither failed nor accepted,
+			// and reporting either would be a lie with consequences: FAILED sent
+			// the next implementer at code nobody objected to, and the next
+			// reviewer would silently change who judges it.
+			//
+			// So it is WAITING_REVIEW: the candidate is preserved exactly as it
+			// stands (no handoff, no disposal, no mint), the phase stays at review,
+			// and the terminal carries the request and the candidate identity the
+			// next invocation resumes from.
+			var unanswered *roles.ReviewUnanswered
+			errors.As(err, &unanswered)
+			obligation := "the review request for this candidate got no answer before its deadline; the candidate is owed that review"
+			payload := map[string]any{"review_kind": "unanswered", "independent_review": false}
+			if unanswered != nil {
+				obligation = "review request " + unanswered.RequestID + " for candidate " +
+					shortDigest(unanswered.Binding.CandidateDigest) + " got no answer after " +
+					unanswered.Waited.String() + "; the candidate is owed that review"
+				payload["request_id"] = unanswered.RequestID
+				payload["request_comment"] = unanswered.RequestComment
+				payload["conversation"] = unanswered.Conversation
+				payload["base"] = unanswered.Binding.BaseSHA
+				payload["candidate_digest"] = unanswered.Binding.CandidateDigest
+				payload["candidate_tree"] = unanswered.Binding.CandidateTree
+				payload["review_commit"] = unanswered.ReviewCommit
+				payload["waited"] = unanswered.Waited.String()
+			}
+			payload["obligations"] = []string{obligation}
+			plan = finalPlan
+			state.Phase = taskstate.Reviewing
+			state.Evidence = tc.EvidenceSnapshot
+			state.OpenFindings(openFindingsWith(review, audit, nil, []string{obligation}))
+			_ = state.Save(e.Repo.Root)
+			e.reportUndeliveredNotes(taskID)
+			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
+				"the candidate stands, validated and audited; its review request got no answer before its deadline, "+
+					"so it is preserved awaiting review",
+				payload)
+			return
+		}
 		if err != nil && errors.Is(err, errStructural) {
 			// The candidate is kept -- it holds real work -- and the run ends
 			// with the structural reason. Another executor would receive the

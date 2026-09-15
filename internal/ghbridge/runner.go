@@ -216,6 +216,28 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 					"transport":        "github",
 				}))
 		}
+		// The wait's OWN deadline passed while the turn was still wanted: the
+		// request is published, bound to this exact candidate, and unanswered.
+		// That is a review still owed, not a provider that failed, so it gets its
+		// own typed error carrying the identity a later process continues from.
+		// A cancelled or expired PARENT context is a different fact -- a human
+		// stop, an invocation budget -- and keeps its own error.
+		if ctx.Err() == nil && (errors.Is(err, ErrNoAnswer) || errors.Is(err, context.DeadlineExceeded)) {
+			return agent.Result{}, &roles.ReviewUnanswered{
+				RequestID:      requestID,
+				RequestComment: requestComment,
+				Conversation:   r.Issue.Number,
+				Binding: roles.Binding{
+					TaskID:          req.TaskID,
+					BaseSHA:         subject.BaseSHA,
+					CandidateDigest: subject.CandidateDigest,
+					CandidateTree:   subject.CandidateTree,
+				},
+				ReviewCommit: snap.Commit,
+				Waited:       wait,
+				Cause:        err,
+			}
+		}
 		return agent.Result{}, err
 	}
 

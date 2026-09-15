@@ -120,6 +120,12 @@ const (
 	// task's required independent review has not happened. Nothing about the
 	// candidate needs changing, and nothing may proceed on its behalf.
 	candidateAwaitingIndependentReview candidateOutcome = "awaiting_independent_review"
+	// candidateReviewUnanswered means the candidate was validated and audited, a
+	// review request for that exact candidate was published, and no answer
+	// arrived before the request's deadline. Nobody judged the candidate, so no
+	// worker is sent at it and no other reviewer is substituted; it is preserved
+	// awaiting the review it is owed.
+	candidateReviewUnanswered candidateOutcome = "review_unanswered"
 )
 
 // Accepted reads the outcome by membership. Written this way rather than as
