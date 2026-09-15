@@ -298,6 +298,19 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 		}
 	}()
 
+	// The review relay channel: a local operator carries a reviewer's artifact,
+	// judged by the same authority decision as an objective, on its own socket.
+	relayChannel, err := server.ListenRelay(repo.Root)
+	if err != nil {
+		return err
+	}
+	defer relayChannel.Close()
+	go func() {
+		if err := relayChannel.Serve(relayHandler(runners)); err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code control: the review relay channel stopped:", err)
+		}
+	}()
+
 	printControlBanner(server, cred, tokenAt, supplied)
 	printWebhookBanner(webhook, *whSecret, *whRepo)
 
@@ -435,6 +448,10 @@ type engineResolver struct {
 	// establishes THAT rather than re-deriving a box from the configuration
 	// that was meant to build it. Zero value when the bridge is off.
 	Mailbox ghbridge.Issue
+	// Exchanges and Relays are the stores the relay handler validates against
+	// and records into. Zero when the bridge is off, and a relay is then refused.
+	Exchanges ghbridge.ExchangeLog
+	Relays    ghbridge.RelayStore
 }
 
 // composeEngineResolver decides what serves this engine's role turns.
@@ -506,6 +523,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	// is a goroutine inside AwaitArchitecture, so an open record cannot have one
 	// here -- which is what makes withdrawing them at startup honest (#162).
 	exchanges := ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")}
+	relays := ghbridge.RelayStore{Dir: filepath.Join(repoRoot, ".sensei-code", "relays")}
 
 	resolver := ghbridge.Resolver{
 		Roles:     gh.Roles,
@@ -526,6 +544,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			// waiting at all.
 			Doorbell:  doorbell,
 			Exchanges: exchanges,
+			Relays:    relays,
 		},
 		Fallback: base,
 	}
@@ -567,7 +586,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 		banner += fmt.Sprintf("\n  kept %d review request(s) still owed on a waiting candidate", len(owed))
 	}
 
-	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box}, nil
+	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box, Exchanges: exchanges, Relays: relays}, nil
 }
 
 // credentialFromEnvOrMint resolves the credential and reports whether the

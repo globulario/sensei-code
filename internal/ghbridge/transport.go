@@ -193,6 +193,7 @@ func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int
 // comments` because that view exposes only the author's login. An immutable
 // numeric user id is the identity worth authenticating against.
 type restComment struct {
+	ID   int64  `json:"id"`
 	Body string `json:"body"`
 	User struct {
 		Login  string `json:"login"`

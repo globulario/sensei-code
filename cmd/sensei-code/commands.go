@@ -58,6 +58,7 @@ var publicCommands = []command{
 	{Name: "control", Summary: "serve this instance's remote control surface over loopback"},
 	{Name: "submit", Args: "--task \"...\"", Summary: "place one objective into the running control process"},
 	{Name: "proposal", Args: "list|show|approve ...", Summary: "inspect or approve inert objective proposals received through GitHub"},
+	{Name: "review", Args: "submit --file <artifact>", Summary: "relay a reviewer's complete review artifact to the control process, which validates and publishes it"},
 	{Name: "routine-scan", Summary: "classify tracked files by how routine a change to them would be"},
 	{Name: "help", Summary: "show this help"},
 }

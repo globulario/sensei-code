@@ -536,19 +536,30 @@ func SubmitLocalObjective(repoRoot, task string) (LocalAccepted, error) {
 // this authority should be introduced deliberately, as its own authority type,
 // rather than by widening this check until it lets one through.
 func (s *Server) authorizeObjective(conn net.Conn) error {
+	_, err := s.authorizedPeer(conn)
+	return err
+}
+
+// authorizedPeer is authorizeObjective returning what the kernel observed, for
+// a channel that must also RECORD who was authorized (the review relay). The
+// decision is the same function; only the observation is kept.
+func (s *Server) authorizedPeer(conn net.Conn) (peer, error) {
 	observe := s.peerFor
 	if observe == nil {
 		observe = inspectPeer
 	}
 	if !peerInspectionSupported() && s.peerFor == nil {
-		return errors.New("this platform cannot establish who is on the other end of the objective channel, " +
+		return peer{}, errors.New("this platform cannot establish who is on the other end of the objective channel, " +
 			"so it will not accept one; locality alone is not authority to originate governed work")
 	}
 	p, err := observe(conn)
 	if err != nil {
-		return fmt.Errorf("the objective was refused because the caller could not be established: %w", err)
+		return peer{}, fmt.Errorf("the objective was refused because the caller could not be established: %w", err)
 	}
-	return mayOriginateObjective(p, uint32(os.Getuid()))
+	if err := mayOriginateObjective(p, uint32(os.Getuid())); err != nil {
+		return peer{}, err
+	}
+	return p, nil
 }
 
 // mayOriginateObjective is the judgement, separated from the observation.

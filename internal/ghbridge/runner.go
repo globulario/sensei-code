@@ -64,6 +64,10 @@ type Runner struct {
 	// request standing with nothing listening and no local trace. The architect
 	// path has had this record; the reviewer path had none.
 	Exchanges ExchangeLog
+	// Relays holds reviews relayed by a local operator. The runner only READS it:
+	// a published relay bound to the owed request answers the turn, and nothing
+	// here can create or publish one.
+	Relays RelayStore
 }
 
 // ErrNotReviewer reports a turn this bridge does not serve.
@@ -143,6 +147,13 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	subject := FromBinding(req.Binding)
 	if err := subjectBindingComplete(subject); err != nil {
 		return agent.Result{}, fmt.Errorf("%w: %v", ErrUnboundSubject, err)
+	}
+
+	// A review a local operator relayed for the owed request on THIS candidate
+	// answers the turn without a new request. Checked before supersession, which
+	// would retire the very request the relay is bound to.
+	if result, found, err := r.relayedReviewFor(ctx, req, subject, emit); found {
+		return result, err
 	}
 
 	// Retired BEFORE the new request exists, so no window has two open requests
