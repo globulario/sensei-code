@@ -79,6 +79,41 @@ func TestAnAttestationOverridesOneExactPublishedReviewAndSaysSo(t *testing.T) {
 	}
 }
 
+// An override the App never published is not yet part of the record anyone else
+// can read, so the lookup the engine uses does not return it. Publication is
+// what makes an override visible beyond this machine; a local file alone must
+// not advance a candidate. Retrying publication makes it consumable.
+func TestAnUnpublishedOverrideIsNotFoundUntilItIsPublished(t *testing.T) {
+	f := newRelayFixture(t)
+	store := attestStore(t)
+	relayed, err := f.submit(artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	binding := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+
+	f.mailbox.failPosts = true
+	rec, err := f.attest(store, relayRequest, relayed.ReviewDigest, true)
+	if !errors.Is(err, ErrRelayPublication) || rec.State != AttestationAccepted {
+		t.Fatalf("a failed publication reported state %q: %v", rec.State, err)
+	}
+	if stored, found, _ := store.Load(relayRequest); !found || stored.State != AttestationAccepted {
+		t.Fatalf("the accepted override was not preserved: found=%v", found)
+	}
+	if _, found, err := store.AttestationFor(binding); found || err != nil {
+		t.Fatalf("an unpublished override was offered to the engine: found=%v err=%v", found, err)
+	}
+
+	f.mailbox.failPosts = false
+	if rec, err = f.attest(store, relayRequest, relayed.ReviewDigest, true); err != nil || rec.State != AttestationPublished {
+		t.Fatalf("retrying publication: state %q err %v", rec.State, err)
+	}
+	if _, found, err := store.AttestationFor(binding); !found || err != nil {
+		t.Fatalf("the published override is not found: found=%v err=%v", found, err)
+	}
+}
+
 // Everything that is not an owner overriding one exact published ACCEPT is
 // refused, and nothing is recorded or published.
 func TestAnAttestationIsRefusedUnlessItOverridesAPublishedAccept(t *testing.T) {
