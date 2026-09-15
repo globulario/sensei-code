@@ -38,6 +38,10 @@ type prMailbox struct {
 	// let a check pass here and fail in production — which is exactly the shape
 	// of the defect these tests exist to prevent.
 	grants map[string]string
+	// onPost, when set, sees every posted body inside the handler and returns
+	// comments to append after it -- a remote answering the exact request that
+	// was just published, without a test goroutine racing the comment list.
+	onPost func(body string) []map[string]any
 }
 
 func newPRMailbox(t *testing.T, keyPath, number string, isPR bool) (*prMailbox, Issue) {
@@ -83,6 +87,9 @@ func newPRMailboxWithGrants(t *testing.T, keyPath, number string, isPR bool, gra
 				"body": in.Body,
 				"user": map[string]any{"login": "globulario-sensei-code[bot]", "id": 99887766},
 			})
+			if m.onPost != nil {
+				m.comments = append(m.comments, m.onPost(in.Body)...)
+			}
 			w.WriteHeader(http.StatusCreated)
 			fmt.Fprint(w, `{"id":1}`)
 		case http.MethodGet:

@@ -136,6 +136,14 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			Conversation:   r.Issue.Number,
 			PublishedAt:    time.Now().UTC(),
 			Deadline:       time.Now().Add(r.waitFor()).UTC(),
+			// A review request is an owed review on this exact candidate, so it
+			// records the candidate: a restart keeps it, and a relayed verdict or
+			// a continuation is checked against what the request actually carried.
+			Kind:            ExchangeReview,
+			BaseSHA:         subject.BaseSHA,
+			CandidateDigest: subject.CandidateDigest,
+			CandidateTree:   subject.CandidateTree,
+			ReviewCommit:    snap.Commit,
 		}
 		if openErr := r.Exchanges.Open(rec); openErr != nil && emit != nil {
 			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
@@ -239,6 +247,17 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			}
 		}
 		return agent.Result{}, err
+	}
+
+	// An answered request is no longer owed, so its record is closed: a restart
+	// must not keep an obligation that was discharged. A record that cannot be
+	// closed is reported, not fatal -- the answer is real and is still returned.
+	if r.Exchanges.Dir != "" {
+		if closeErr := r.Exchanges.Close(req.TaskID, request.RequestID); closeErr != nil && emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.Status,
+				"the answered review's exchange record could not be closed: "+closeErr.Error(),
+				map[string]any{"request_id": requestID, "error": closeErr.Error(), "transport": "github"}))
+		}
 	}
 
 	if emit != nil {

@@ -558,7 +558,13 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	if withdrawn, err := ghbridge.ReconcileAbandonedExchanges(rctx, exchanges, box, nil); err != nil {
 		banner += fmt.Sprintf("\n  exchange reconciliation: %v; some earlier request may still stand", err)
 	} else if withdrawn > 0 {
-		banner += fmt.Sprintf("\n  withdrew %d architecture request(s) abandoned by an earlier process", withdrawn)
+		banner += fmt.Sprintf("\n  withdrew %d abandoned architecture turn(s) left by an earlier process", withdrawn)
+	}
+	// Review requests are kept, never withdrawn here: each is a review still owed
+	// on an exact candidate. Saying how many keeps them visible rather than
+	// silently open.
+	if owed, err := exchanges.PendingReviews(); err == nil && len(owed) > 0 {
+		banner += fmt.Sprintf("\n  kept %d review request(s) still owed on a waiting candidate", len(owed))
 	}
 
 	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box}, nil
