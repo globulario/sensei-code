@@ -46,7 +46,7 @@ func teRead(files map[string]string) worldReader {
 // The positive: an existing test beside a covered subject, same package,
 // same directory, present at the world -> one grant bound to F's bytes.
 func TestAnExistingTestBesideACoveredSubjectIsGrantedAnEdit(t *testing.T) {
-	grants, reasons := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
+	grants, reasons := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
 	if len(grants) != 1 || len(reasons) != 0 {
 		t.Fatalf("grants=%+v reasons=%v", grants, reasons)
 	}
@@ -69,13 +69,16 @@ func TestAnExistingTestIsNotGrantedWhenThePredicateFails(t *testing.T) {
 	}{
 		"foreign-package test": {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc, teF: strings.Replace(teFSrc, "package modfile", "package modfile_test", 1)}, "foreign-package"},
 		"missing test":         {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc}, "absent at the pinned world"},
-		"uncovered sibling":    {[]string{teS, teF}, nil, map[string]string{teS: teSSrc, teF: teFSrc}, "no planned file in its directory holds architectural coverage"},
-		"different directory":  {[]string{teS, "module/module_test.go"}, teCovered(), map[string]string{teS: teSSrc, "module/module_test.go": teFSrc}, "no planned file in its directory"},
-		"unreadable F":         {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc, teF: "\x00unreadable"}, "presence not established"},
-		"sibling not planned":  {[]string{teF}, teCovered(), map[string]string{teS: teSSrc, teF: teFSrc}, "no planned file in its directory"},
+		// The wording changed with the rule: "architectural coverage" named only the
+		// derived instrument, and the refusal now has to say that NEITHER instrument
+		// governs a neighbour, or it would misreport which evidence is missing.
+		"ungoverned sibling":  {[]string{teS, teF}, nil, map[string]string{teS: teSSrc, teF: teFSrc}, "is governed at the pinned world, by a derived anchor or by an authored invariant"},
+		"different directory": {[]string{teS, "module/module_test.go"}, teCovered(), map[string]string{teS: teSSrc, "module/module_test.go": teFSrc}, "no planned file in its directory"},
+		"unreadable F":        {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc, teF: "\x00unreadable"}, "presence not established"},
+		"sibling not planned": {[]string{teF}, teCovered(), map[string]string{teS: teSSrc, teF: teFSrc}, "no planned file in its directory"},
 	}
 	for name, c := range cases {
-		grants, reasons := testEditGrants(context.Background(), teWorld, c.planned, c.covered, teRead(c.files))
+		grants, reasons := testEditGrants(context.Background(), teWorld, c.planned, c.covered, authoredEvidence{}, teRead(c.files))
 		if len(grants) != 0 {
 			t.Errorf("%s: granted anyway: %+v", name, grants)
 		}
@@ -87,7 +90,7 @@ func TestAnExistingTestIsNotGrantedWhenThePredicateFails(t *testing.T) {
 
 // The frozen falsifiers that refute a candidate, and the one that passes.
 func TestAGrantedTestEditIsInspectedAgainstItsExactGrant(t *testing.T) {
-	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
+	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
 	edited := "diff --git a/" + teF + " b/" + teF + "\nindex 1..2 100644\n--- a/" + teF + "\n+++ b/" + teF + "\n@@ -9 +9 @@\n-func TestX\n+func TestY\n"
 	after := func(src string) func(string) ([]byte, error) {
 		return func(string) ([]byte, error) { return []byte(src), nil }
@@ -163,7 +166,7 @@ func TestOperationalAuthorityIsSubtractedFromTheCoverageQuestionNotAddedToIt(t *
 // The grant reaches the worker as its own kind, and survives resume exactly
 // or refuses.
 func TestATestEditGrantReachesTheWorkerAndSurvivesResume(t *testing.T) {
-	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
+	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
 	rendered := renderTestEditGrants(grants)
 	for _, want := range []string{"EDIT " + teF, "beside covered subject: " + teS, "package: modfile (may not change)", "//go:build go1.20", "ALLOWED IMPORTS", "testing", "do not create, delete, or rename"} {
 		if !strings.Contains(rendered, want) {
@@ -204,7 +207,7 @@ func TestATestEditGrantReachesTheWorkerAndSurvivesResume(t *testing.T) {
 // disagrees with every one, and the resume refuses.
 func TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused(t *testing.T) {
 	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
-	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), world)
+	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, world)
 	if len(fresh) != 1 {
 		t.Fatal("premise: one fresh grant")
 	}
@@ -233,7 +236,7 @@ func TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused(t *testing.T
 		"S no longer planned": {[]string{teF}, teCovered()},
 		"S no longer covered": {[]string{teS, teF}, nil},
 	} {
-		recomputed, _ := testEditGrants(context.Background(), teWorld, c.planned, c.covered, world)
+		recomputed, _ := testEditGrants(context.Background(), teWorld, c.planned, c.covered, authoredEvidence{}, world)
 		e := &Engine{}
 		if err := e.restoreTestEditGrants(record(fresh[0]), recomputed, c.planned, teWorld); err == nil || len(e.testEditGrants("t")) != 0 {
 			t.Errorf("%s: resumed (%v)", name, err)
@@ -252,7 +255,7 @@ func TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused(t *testing.T
 func TestAGrantedTestPathWithWhitespaceIsStillInspected(t *testing.T) {
 	const f = "modfile/a b_test.go"
 	src := strings.Replace(teFSrc, "TestX", "TestSpace", 1)
-	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, f}, teCovered(), teRead(map[string]string{teS: teSSrc, f: src}))
+	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, f}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, f: src}))
 	if len(grants) != 1 || grants[0].Path != f {
 		t.Fatalf("premise: a grant for the whitespace path: %+v", grants)
 	}
@@ -301,7 +304,7 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 	// The two-resume scenario at the level of records. The original run
 	// recorded nothing. The world would grant today.
 	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
-	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), world)
+	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, world)
 	if len(fresh) != 1 {
 		t.Fatal("premise: the world grants today")
 	}

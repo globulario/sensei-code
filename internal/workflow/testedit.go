@@ -37,13 +37,71 @@ type testEditFacts struct {
 }
 
 // testEditGrant is one admissible existing-test edit: which file, beside which
-// covered subject, at which world, with which base bytes and facts.
+// governed subject, at which world, with which base bytes and facts -- and by WHICH
+// instrument that subject was governed.
+//
+// The evidence class and identity are recorded rather than reduced to the bare fact of a
+// grant. A grant is an authority record; one that said only "the neighbour was covered"
+// could not later answer which instrument established it, and the two are not
+// interchangeable -- a derived anchor is recomputed against the world, an authored
+// invariant is admitted knowledge about it.
 type testEditGrant struct {
 	Path     string        `json:"path"`
 	Covering string        `json:"covering"`
 	World    string        `json:"world"`
 	BaseHash string        `json:"base_sha256"`
 	Facts    testEditFacts `json:"facts"`
+	// CoveringEvidence is evidenceDerived or evidenceAuthored: which instrument
+	// established that Covering is governed at World.
+	CoveringEvidence string `json:"covering_evidence"`
+	// CoveringIdentity is what that instrument named -- the derivation requirement(s) or
+	// the invariant id(s). Never empty in a grant: an identity that cannot be named is
+	// not evidence.
+	CoveringIdentity []string `json:"covering_identity"`
+}
+
+// The two legitimate instruments of production governance. Named, not booleaned: the
+// grant must be able to say which one it used.
+const (
+	evidenceDerived  = "derived"
+	evidenceAuthored = "authored"
+)
+
+// authoredEvidence is per-file authored governance observed at ONE world.
+//
+// The world travels with it because a grant is bound to a world, and authored evidence
+// read at another revision describes a different program. ByFile is keyed by the exact
+// planned path, which is the same per-file relation preflight uses when it reports a file
+// governed -- deliberately not directory-level, not package-wide, and not "an invariant
+// somewhere mentions this name".
+type authoredEvidence struct {
+	World  string
+	ByFile map[string][]string
+}
+
+// governs reports the identities by which file is authored-governed at world, or nothing.
+func (a authoredEvidence) governs(world, file string) ([]string, bool) {
+	if strings.TrimSpace(a.World) == "" || a.World != world || a.ByFile == nil {
+		return nil, false
+	}
+	var ids []string
+	for _, id := range a.ByFile[path.Clean(strings.TrimSpace(file))] {
+		if t := strings.TrimSpace(id); t != "" {
+			ids = append(ids, t)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, false
+	}
+	sort.Strings(ids)
+	return ids, true
+}
+
+// governedNeighbour is one candidate S with the instrument that governs it.
+type governedNeighbour struct {
+	file     string
+	evidence string
+	identity []string
 }
 
 // testEditRecord is the TestEditGranted payload.
@@ -63,7 +121,7 @@ const roleGoRegressionTestEdit = "go-regression-test-edit"
 // reader; nothing is read from the working tree. Anything the predicate
 // cannot establish leaves F ungranted, silently to routing and named in the
 // returned reasons for the record.
-func testEditGrants(ctx context.Context, world string, planned []string, covered []CoverageAnchor, read worldReader) ([]testEditGrant, []string) {
+func testEditGrants(ctx context.Context, world string, planned []string, covered []CoverageAnchor, authored authoredEvidence, read worldReader) ([]testEditGrant, []string) {
 	if read == nil {
 		return nil, nil
 	}
@@ -71,18 +129,38 @@ func testEditGrants(ctx context.Context, world string, planned []string, covered
 	for _, f := range planned {
 		isPlanned[path.Clean(strings.TrimSpace(f))] = true
 	}
-	coveredByDir := map[string][]string{}
+	// WHAT COUNTS AS A GOVERNED NEIGHBOUR, and this is the whole repair.
+	//
+	// The rule is unchanged: a planned same-package test beside a planned, governed
+	// production neighbour at this world. What changes is that "governed" no longer means
+	// "covered by a derived anchor" alone. cmd/sensei-code/control.go is governed by an
+	// authored invariant -- preflight reports it sufficient with two anchors -- and the
+	// grant refused it for that reason only, which is the recorded "two coverage
+	// instruments, one word" defect arriving at the grant predicate.
+	//
+	// Derived is preferred where both hold: it is recomputed against the world being
+	// assessed, where an authored anchor is admitted knowledge about it.
+	byDir := map[string][]governedNeighbour{}
 	seen := map[string]bool{}
-	for _, c := range covered {
-		f := path.Clean(c.File)
+	add := func(f, evidence string, identity []string) {
+		f = path.Clean(f)
 		if !isPlanned[f] || seen[f] || strings.HasSuffix(f, "_test.go") {
-			continue
+			return
 		}
 		seen[f] = true
-		coveredByDir[path.Dir(f)] = append(coveredByDir[path.Dir(f)], f)
+		byDir[path.Dir(f)] = append(byDir[path.Dir(f)], governedNeighbour{file: f, evidence: evidence, identity: identity})
 	}
-	for _, list := range coveredByDir {
-		sort.Strings(list)
+	for _, c := range covered {
+		add(c.File, evidenceDerived, []string{string(c.Requirement)})
+	}
+	for _, f := range planned {
+		c := path.Clean(strings.TrimSpace(f))
+		if ids, ok := authored.governs(world, c); ok {
+			add(c, evidenceAuthored, ids)
+		}
+	}
+	for _, list := range byDir {
+		sort.Slice(list, func(i, j int) bool { return list[i].file < list[j].file })
 	}
 
 	var grants []testEditGrant
@@ -106,14 +184,14 @@ func testEditGrants(ctx context.Context, world string, planned []string, covered
 			reasons = append(reasons, f+": cannot be read as Go at the pinned world: "+err.Error())
 			continue
 		}
-		siblings := coveredByDir[path.Dir(f)]
+		siblings := byDir[path.Dir(f)]
 		if len(siblings) == 0 {
-			reasons = append(reasons, f+": no planned file in its directory holds architectural coverage at the pinned world")
+			reasons = append(reasons, f+": no planned file in its directory is governed at the pinned world, by a derived anchor or by an authored invariant"+staleAuthoredNote(authored, world))
 			continue
 		}
 		granted := false
-		for _, s := range siblings {
-			ssrc, err := read(ctx, world, s)
+		for _, n := range siblings {
+			ssrc, err := read(ctx, world, n.file)
 			if err != nil {
 				continue
 			}
@@ -122,11 +200,13 @@ func testEditGrants(ctx context.Context, world string, planned []string, covered
 				continue
 			}
 			if sfacts.Package != facts.Package {
-				reasons = append(reasons, fmt.Sprintf("%s: declares package %q, its covered sibling %s declares %q (a foreign-package test is not the owner's evidence)", f, facts.Package, s, sfacts.Package))
+				reasons = append(reasons, fmt.Sprintf("%s: declares package %q, its governed sibling %s declares %q (a foreign-package test is not the owner's evidence)", f, facts.Package, n.file, sfacts.Package))
 				continue
 			}
 			sum := sha256.Sum256(src)
-			grants = append(grants, testEditGrant{Path: f, Covering: s, World: world, BaseHash: hex.EncodeToString(sum[:]), Facts: facts})
+			grants = append(grants, testEditGrant{Path: f, Covering: n.file, World: world,
+				BaseHash: hex.EncodeToString(sum[:]), Facts: facts,
+				CoveringEvidence: n.evidence, CoveringIdentity: n.identity})
 			granted = true
 			break
 		}
@@ -395,4 +475,59 @@ func joinGrants(prospective, edits string) string {
 		parts = append(parts, "EXISTING-TEST EDIT GRANTS (operational authority to edit regression evidence; not coverage, not proof the test is sufficient):\n"+edits)
 	}
 	return strings.Join(parts, "\n\n")
+}
+
+// staleAuthoredNote names a world mismatch in the refusal, so authored evidence that
+// exists but describes another revision is not silently indistinguishable from none.
+func staleAuthoredNote(a authoredEvidence, world string) string {
+	if w := strings.TrimSpace(a.World); w != "" && w != world {
+		return fmt.Sprintf(" (authored evidence was observed at world %s, not %s, and evidence from another world describes another program)", w, world)
+	}
+	return ""
+}
+
+// setCoverageWorld records the world the coverage computation used, so a later pass
+// cannot resolve a second one. Two worlds in one authorization would authorize an edit
+// against bytes neither answer describes.
+func (e *Engine) setCoverageWorld(taskID, world string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.coverageWorlds == nil {
+		e.coverageWorlds = map[string]string{}
+	}
+	e.coverageWorlds[taskID] = world
+}
+
+func (e *Engine) coverageWorld(taskID string) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.coverageWorlds[taskID]
+}
+
+// authoredTestEditGrants applies the SAME predicate over the authored instrument only.
+//
+// Separate from the derived pass because of when each fact becomes available, not because
+// the rule differs: derived coverage is computed before routing, authored governance after
+// the per-file probe. Runs no derivations, so it costs one read per candidate neighbour.
+//
+// Returns nothing when no world was recorded: a grant must be bound to the world its
+// coverage was computed in, and inventing one here is exactly the substitution the
+// pinned-world discipline exists to refuse.
+func (e *Engine) authoredTestEditGrants(ctx context.Context, taskID string, planned []string, authored authoredEvidence) []testEditGrant {
+	world := e.coverageWorld(taskID)
+	if strings.TrimSpace(world) == "" || len(planned) == 0 {
+		return nil
+	}
+	already := map[string]bool{}
+	for _, g := range e.testEditGrants(taskID) {
+		already[g.Path] = true
+	}
+	grants, _ := testEditGrants(ctx, world, planned, nil, authored, gitShowAt(e.Repo.Root))
+	var out []testEditGrant
+	for _, g := range grants {
+		if !already[g.Path] {
+			out = append(out, g)
+		}
+	}
+	return out
 }
