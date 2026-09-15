@@ -301,3 +301,42 @@ func TestUnverifiableAuditIsNotActionable(t *testing.T) {
 		t.Fatal("a blocking finding was treated as unfixable, which would stop the review loop that is supposed to fix it")
 	}
 }
+
+// TestTheAuditDecodesTheGenerationThatAnsweredIt binds the field to its wire name.
+//
+// Law 5 is checked against this value, so a decode that silently yields "" would make
+// every comparison agree with nothing — the fail-open shape that looks identical to a
+// working check from the caller's side.
+func TestTheAuditDecodesTheGenerationThatAnsweredIt(t *testing.T) {
+	res := ToolResult{Structured: map[string]any{
+		"schema":                  "awareness.diff_audit/v1",
+		"decision":                "pass",
+		"availability":            "available",
+		"graph_commit":            "snapshot-commit",
+		"graph_generation_sha256": "c0b660fc42a5",
+	}}
+	verdict, err := DecodeDiffAudit(res)
+	if err != nil {
+		t.Fatalf("DecodeDiffAudit: %v", err)
+	}
+	if verdict.GraphGeneration != "c0b660fc42a5" {
+		t.Errorf("graph_generation_sha256 did not decode: %q", verdict.GraphGeneration)
+	}
+	// The two identities must not be crossed: the rule snapshot is not the generation.
+	if verdict.GraphCommit != "snapshot-commit" {
+		t.Errorf("graph_commit was disturbed: %q", verdict.GraphCommit)
+	}
+	// An older service that reports no generation decodes as absent, not as the
+	// commit standing in for it.
+	older, err := DecodeDiffAudit(ToolResult{Structured: map[string]any{
+		"decision":     "pass",
+		"availability": "available",
+		"graph_commit": "snapshot-commit",
+	}})
+	if err != nil {
+		t.Fatalf("DecodeDiffAudit (older service): %v", err)
+	}
+	if older.GraphGeneration != "" {
+		t.Errorf("a generation was invented for a service that reported none: %q", older.GraphGeneration)
+	}
+}

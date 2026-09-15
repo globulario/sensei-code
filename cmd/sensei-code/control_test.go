@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -337,5 +338,125 @@ func TestTheBridgeCarriesOnlyItsProvidersReviewTurns(t *testing.T) {
 				t.Errorf("the fallback resolved as %q, not the assigned %q", resolved.Name, tc.spec.Agent.Name)
 			}
 		})
+	}
+}
+
+// fakeDeferrer records what the control loop asked the engine to defer.
+type fakeDeferrer struct {
+	called []string
+	answer bool
+}
+
+func (f *fakeDeferrer) DeferAuthority(taskID string) bool {
+	f.called = append(f.called, taskID)
+	return f.answer
+}
+
+// A human-owned decision that reaches a daemon must be DEFERRED, because a
+// daemon has no human at it and no surface that could ask one.
+//
+// Without this the engine blocks on awaitChoice's channel, whose only writers
+// are the TUI's ResolveHuman and run.go's DeferAuthority -- neither of which
+// exists here. The task is then neither answerable nor stopped: it waits until
+// the process dies and the question dies with it.
+func TestAnUnattendedAuthorityQuestionIsDeferredNotDropped(t *testing.T) {
+	f := &fakeDeferrer{answer: true}
+	var warn bytes.Buffer
+	ev := event.Event{Kind: event.AuthorityRequired, TaskID: "task-1"}
+
+	if !deferUnattendedAuthority(ev, f, &warn) {
+		t.Fatal("an authority question reaching a daemon was not deferred; " +
+			"the engine is left blocked on a channel with no writer")
+	}
+	if len(f.called) != 1 || f.called[0] != "task-1" {
+		t.Fatalf("deferred the wrong task: %v", f.called)
+	}
+	if !strings.Contains(warn.String(), "not answered") {
+		t.Fatalf("the operator was not told the question was preserved rather than answered: %q", warn.String())
+	}
+}
+
+// Answering is the failure this guards against. A daemon that picked an option
+// would manufacture human authority, which the objective socket's
+// controlling-terminal check refuses one layer earlier.
+func TestTheDaemonNeverAnswersAnAuthorityQuestion(t *testing.T) {
+	f := &fakeDeferrer{answer: true}
+	var warn bytes.Buffer
+	deferUnattendedAuthority(event.Event{Kind: event.AuthorityRequired, TaskID: "task-1"}, f, &warn)
+	if strings.Contains(strings.ToLower(warn.String()), "answered the") ||
+		strings.Contains(warn.String(), "option") {
+		t.Fatalf("the daemon reported choosing an option: %q", warn.String())
+	}
+}
+
+// Ordinary events must not be mistaken for a rendezvous, and a question nobody
+// was asking must not be reported as preserved.
+func TestOnlyARealPendingAuthorityQuestionIsDeferred(t *testing.T) {
+	var warn bytes.Buffer
+
+	f := &fakeDeferrer{answer: true}
+	if deferUnattendedAuthority(event.Event{Kind: event.TaskCreated, TaskID: "task-1"}, f, &warn) {
+		t.Fatal("a non-authority event was treated as a human rendezvous")
+	}
+	if len(f.called) != 0 {
+		t.Fatalf("a non-authority event reached the engine: %v", f.called)
+	}
+
+	// The engine says nothing was waiting: report nothing preserved.
+	g := &fakeDeferrer{answer: false}
+	if deferUnattendedAuthority(event.Event{Kind: event.AuthorityRequired, TaskID: "task-1"}, g, &warn) {
+		t.Fatal("claimed to preserve a question the engine was not holding")
+	}
+	if warn.Len() != 0 {
+		t.Fatalf("told the operator about a question that did not exist: %q", warn.String())
+	}
+}
+
+// The reviewer must be given a doorbell, or normal progress needs a person.
+//
+// The architect path has rung since #158; the reviewer path published a fully
+// bound request and then waited for somebody to notice it. On 2026-09-12 the
+// review request for task-1789217963311720667 stood unanswered because the only
+// thing that ever woke the remote was Dave asking it to look -- a human
+// scheduler in the middle of a machine workflow.
+//
+// The wake is a NOTIFICATION, never the authority: the durable exchange below
+// decides whether a review is outstanding.
+func TestTheReviewerIsGivenADoorbell(t *testing.T) {
+	server := newControlServer(t)
+	gh := configuredBridge()
+	gh.Doorbell = true
+	bridge, _ := installedBridge(t, server, gh)
+
+	if bridge.Reviewer.Doorbell == nil {
+		t.Fatal("the reviewer has no doorbell: a published review request waits for a human " +
+			"to notice it, which makes a person part of the normal path")
+	}
+}
+
+// The reviewer exchange must be recorded, or only the running process knows a
+// review is outstanding and process death leaves the request standing on GitHub
+// with nothing listening and no local trace.
+func TestTheReviewerRecordsItsExchange(t *testing.T) {
+	server := newControlServer(t)
+	bridge, _ := installedBridge(t, server, configuredBridge())
+
+	if strings.TrimSpace(bridge.Reviewer.Exchanges.Dir) == "" {
+		t.Fatal("the reviewer has no exchange log: a restart cannot discover that a candidate " +
+			"is awaiting review, so the durable record cannot be authoritative")
+	}
+}
+
+// The record's deadline and the waiter's timeout must come from one owner. A
+// record claiming a deadline the waiter does not honour would have a restart
+// retract a request that was still live, or leave one standing that had expired.
+func TestTheReviewerDeadlineHasOneOwner(t *testing.T) {
+	server := newControlServer(t)
+	gh := configuredBridge()
+	bridge, _ := installedBridge(t, server, gh)
+
+	if bridge.Reviewer.Wait != gh.Wait {
+		t.Fatalf("the reviewer waits %s but the bridge configured %s; the exchange record "+
+			"would claim a deadline the waiter does not honour", bridge.Reviewer.Wait, gh.Wait)
 	}
 }

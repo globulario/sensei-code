@@ -140,7 +140,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		}
 		return probeOf(region), nil
 	}
-	got, err := unexaminedFiles(StageCandidateEdit, 2, ask, files, region)
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, ask, files, region)
 	if err == nil {
 		t.Fatalf("a failed per-file preflight was represented as evidence: unexamined=%v", got)
 	}
@@ -158,7 +158,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 		}
 		return probeOf(region), nil
 	}
-	got, err = unexaminedFiles(StageCandidateEdit, 2, answered, files, region)
+	got, _, err = unexaminedFiles(StageCandidateEdit, 2, answered, files, region)
 	if err != nil || len(got) != 1 || got[0] != files[1] {
 		t.Fatalf("unexamined = %v, %v; want only %s", got, err, files[1])
 	}
@@ -168,7 +168,7 @@ func TestAPerFilePreflightFailureIsNotAClosableGap(t *testing.T) {
 	all := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":2},`+identifiedAuthority+`}`)
 	asked := 0
-	if got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
+	if got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
 		asked++
 		return probeOf(all), nil
 	}, files, all); err != nil || len(got) != 0 || asked != 2 {
@@ -215,7 +215,7 @@ func TestAnUncertifiablePerFilePreflightIsNotEvidence(t *testing.T) {
 		"degraded, no blind spot at all": func() sensei.PreflightDecision { d := probeOf(region); d.Status = sensei.PreflightDegraded; return d }(),
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+			got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 				if f == files[1] {
 					return bad, nil
 				}
@@ -232,7 +232,7 @@ func TestAnUncertifiablePerFilePreflightIsNotEvidence(t *testing.T) {
 // unusable graph must not prevent the investigation that could diagnose it.
 func TestAnObservationAsksNothingPerFile(t *testing.T) {
 	region := scopedPreflight(t, neighbourCovered)
-	got, err := unexaminedFiles(StageObserve, 2, func(string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageObserve, 2, func(string) (sensei.PreflightDecision, error) {
 		t.Fatal("an observation asked the graph per file")
 		return sensei.PreflightDecision{}, nil
 	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, region)
@@ -246,7 +246,7 @@ func TestARegionWithoutGraphIdentityBindsNoProbe(t *testing.T) {
 	region := scopedPreflight(t, neighbourCovered)
 	region.Authority.SourceRepoCommit = ""
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) { return probeOf(region), nil }, files, region)
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) { return probeOf(region), nil }, files, region)
 	if err == nil {
 		t.Fatalf("probes were bound to a region with no graph identity: unexamined=%v", got)
 	}
@@ -258,7 +258,7 @@ func TestARegionWithoutGraphIdentityBindsNoProbe(t *testing.T) {
 func TestACoverageShapedDegradedProbeIsRead(t *testing.T) {
 	region := scopedPreflight(t, neighbourCovered)
 	files := []string{"internal/workflow/engine.go", "internal/workflow/authority_test.go"}
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		if f == files[1] {
 			d := probeOf(region)
 			d.Status = sensei.PreflightDegraded
@@ -285,7 +285,7 @@ func TestAggregateCountsMustDescribeTheRequestedPlan(t *testing.T) {
 		t.Fatalf("the specimen must be a region the router would call proven: %+v", omitted.Coverage)
 	}
 	asked := 0
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		asked++
 		d := probeOf(omitted)
 		if f == files[1] {
@@ -299,7 +299,7 @@ func TestAggregateCountsMustDescribeTheRequestedPlan(t *testing.T) {
 	}
 	fewer := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":1,"indexed_file_count":1},`+identifiedAuthority+`}`)
-	if got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
+	if got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
 		t.Fatal("a region counting a different number of files than requested was probed instead of refused")
 		return sensei.PreflightDecision{}, nil
 	}, files, fewer); err == nil {
@@ -313,7 +313,7 @@ func TestAggregateCountsMustDescribeTheRequestedPlan(t *testing.T) {
 func TestAProbePublishedInsufficientIsUnexamined(t *testing.T) {
 	region := scopedPreflight(t, neighbourCovered)
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		if f == files[1] {
 			d := probeOf(region)
 			d.Status = sensei.PreflightEmpty
@@ -336,7 +336,7 @@ func TestAGatedPlanIsProbedWhenAsked(t *testing.T) {
 		`"change_risk":{"blast_radius":"BLAST_RADIUS_CLUSTER","approval_gate":"APPROVAL_GATE_HUMAN_APPROVAL_REQUIRED"},`+
 		identifiedAuthority+`}`)
 	files := []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		d := probeOf(gated)
 		if f == files[1] {
 			d.Status = sensei.PreflightEmpty
@@ -372,7 +372,7 @@ func TestAProbeMustDescribeExactlyOneFile(t *testing.T) {
 		"more indexed than 1": {Sufficient: true, DirectAnchorCount: 3, FileCount: 1, IndexedFileCount: 2},
 	} {
 		t.Run(name, func(t *testing.T) {
-			got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+			got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 				d := probeOf(region)
 				if f == files[1] {
 					d.Coverage = cov
@@ -475,7 +475,7 @@ func TestAPostAuthorizationGapCarriesThePinnedWorld(t *testing.T) {
 func TestImpossibleAggregateCountsFailClosed(t *testing.T) {
 	region := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_OK",`+
 		`"coverage":{"sufficient":true,"direct_anchor_count":3,"file_count":2,"indexed_file_count":3},`+identifiedAuthority+`}`)
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(string) (sensei.PreflightDecision, error) {
 		t.Fatal("an impossible region answer was probed instead of refused")
 		return sensei.PreflightDecision{}, nil
 	}, []string{"internal/workflow/engine.go", "internal/workflow/zz_not_in_graph.go"}, region)
@@ -511,7 +511,7 @@ func TestFullyIndexedRegionDoesNotHidePerFileInsufficiency(t *testing.T) {
 	}
 	a, b := "internal/workflow/engine.go", "internal/workflow/zz_examined_but_insufficient.go"
 	asked := 0
-	got, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
+	got, _, err := unexaminedFiles(StageCandidateEdit, 2, func(f string) (sensei.PreflightDecision, error) {
 		asked++
 		d := probeOf(region)
 		if f == b {

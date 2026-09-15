@@ -138,6 +138,8 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 			}
 			architect := &ArchitectureRunner{
 				Issue:        r.Reviewer.Issue,
+				RepoDir:      r.Reviewer.RepoDir,
+				Remote:       r.Reviewer.Remote,
 				Binding:      spec.Architecture,
 				NewRequestID: r.Reviewer.NewRequestID,
 				Poll:         r.Reviewer.Poll,

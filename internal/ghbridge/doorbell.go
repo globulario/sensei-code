@@ -122,6 +122,22 @@ type GHDoorbell struct {
 	// aimed per call could point at a comment in one conversation while waking
 	// another, and the mismatch would be invisible.
 	Conversation string
+	// Repo is the "owner/name" the conversation lives in, addressed explicitly
+	// rather than inferred from Dir's git remotes.
+	//
+	// Required for the same reason Conversation is not a Ring parameter. The
+	// REQUEST is posted by the App, which is pinned to its own owner/repo; the
+	// doorbell is posted by gh, which resolves a repository from the directory
+	// it runs in. Those two locators are equal only while the workspace happens
+	// to BE the mailbox repository. Let a workspace differ from it -- a control
+	// surface serving one repository whose mailbox lives in another -- and the
+	// request goes to one conversation while the wake goes to a different
+	// repository's issue of the same number. The remote is never told to look,
+	// so the exchange waits out its full deadline and ends indistinguishably
+	// from a remote that declined to answer.
+	//
+	// Empty preserves the original behaviour: gh resolves from Dir.
+	Repo string
 }
 
 // Ring implements Doorbell.
@@ -133,7 +149,12 @@ func (d GHDoorbell) Ring(ctx context.Context, requestCommentID int64) error {
 	if err != nil {
 		return err
 	}
-	out, err := run(ctx, d.Dir, []string{"issue", "comment", d.Conversation, "--body", body})
+	args := []string{"issue", "comment", d.Conversation}
+	if strings.TrimSpace(d.Repo) != "" {
+		args = append(args, "-R", strings.TrimSpace(d.Repo))
+	}
+	args = append(args, "--body", body)
+	out, err := run(ctx, d.Dir, args)
 	if err != nil {
 		return fmt.Errorf("ringing the doorbell for comment %d: %w: %s", requestCommentID, err, out)
 	}

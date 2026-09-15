@@ -354,3 +354,22 @@ func clean(s string) string {
 	}
 	return s
 }
+
+// OriginURL is the repository's own statement of what it is.
+//
+// Read-only and independent of any service. It exists for the graph identity
+// handshake: the domain a governed run uses came from the awareness service's own
+// answer, so nothing compared that answer to the repository on disk, and a healthy
+// service for another repository was governed by without complaint. Deriving the
+// identity here gives the comparison a second source that no graph can influence.
+//
+// An unset or unreadable remote yields "" rather than an error: the caller's rule
+// is that an underivable identity refuses, and it says so better than a wrapped
+// git error would.
+func (r Repo) OriginURL(ctx context.Context) string {
+	out, err := r.readOnly(ctx, r.Root, "remote", "get-url", "origin")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}

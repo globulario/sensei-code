@@ -1,0 +1,31 @@
+# Agent-proposed awareness entry — AWAITING REVIEW.
+# Written by the awareness feedback write-path (Propose RPC / awg onboard); NOT a
+# live graph node. Promote by moving the entry into the canonical corpus file
+# after verifying the contract.
+proposal:
+    status: awaiting_review
+    proposed_by: agent
+    kind: failure_mode
+    id: failure.sensei_code.a_preserved_human_owned_question_was_unanswerable_outside_th
+    title: A preserved human-owned question was unanswerable outside the TUI, so a deferred task could only be continued by discarding it
+    description: 'Engine.awaitChoice blocks on the in-memory channel e.pending[taskID]. Its only answering writer was Engine.ResolveHuman, reachable only from internal/tui/model.go. A headless or daemon run therefore deferred correctly and persisted the question whole (session.Store.AwaitingAuthority, read back by FindInterrupted), but no surface could deliver a person''s answer to it. Observed live on sensei#353: the architect escalated a real question, the run deferred, the question was preserved — and answering it did not resume the task. The adopted decision had to be supplied as INPUT to a fresh governed task, discarding the task id, the plan, the candidate and the question''s own identity, while presenting a new task as if it were a resume.'
+    severity: critical
+    source_files:
+        - cmd/sensei-code/resume.go
+        - cmd/sensei-code/run.go
+        - internal/workflow/engine.go
+    required_tests:
+        - cmd/sensei-code/resume_test.go:TestAPersistedQuestionIsAnsweredThroughTheEngineOwner
+        - cmd/sensei-code/resume_test.go:TestTheAnswerIsSpentOnceAndASecondQuestionIsPreserved
+        - cmd/sensei-code/resume_test.go:TestAnUndeliverableAnswerPreservesTheQuestion
+        - cmd/sensei-code/resume_test.go:TestOnlyResumeCanAnswerAHumanOwnedQuestion
+    forbidden_fixes:
+        - Have the daemon, the headless run, or any non-human surface pick an option so the task can proceed — that manufactures human authority, which is the boundary the objective socket's controlling-terminal check refuses one layer earlier
+        - Resume by submitting a FRESH governed task carrying the decision as input, and report it as a resume — it discards the task, plan, candidate and question identity while claiming continuity
+    evidence:
+        - 'sensei#353: architect escalated, headless run deferred, question persisted whole, answering it did not resume the task'
+        - 'cmd/sensei-code/control.go:677 states the defect in a comment: ''ResolveHuman is reachable only from the TUI. In a daemon nothing can ever write the channel awaitChoice blocks on.'''
+        - task-1789211362520113565 parked on 2026-09-12 for this reason
+    repo: /home/dave/Documents/github.com/globulario/sensei-code
+    domain: github.com/globulario/sensei-code
+    contract: 'A human-owned decision is admitted through exactly one rendezvous. A surface carrying a human''s answer delivers it by identity — the exact task, the question as recorded, one of the options that question itself offered — and no surface may originate, substitute, re-derive or replay an answer. An answer is spent once: a second question is a second boundary and is preserved, not answered. An undeliverable answer leaves the question standing; failing to answer must never become an answer.'

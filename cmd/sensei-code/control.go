@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -175,6 +176,8 @@ func runControlSurface(ctx context.Context, repo gitx.Repo, cfg config.Config, a
 			if terminal(ev.Kind) || ev.Kind == event.TaskCreated || ev.Kind == event.ModeSelected {
 				fmt.Println(renderEvent(ev))
 			}
+
+			deferUnattendedAuthority(ev, engine, os.Stderr)
 		}
 	}()
 
@@ -487,7 +490,15 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	// property reviewer independence actually rests on.
 	var doorbell ghbridge.Doorbell
 	if gh.Doorbell {
-		doorbell = ghbridge.GHDoorbell{Dir: repoRoot, Conversation: box.Number}
+		// Aimed at the App's repository, not at whatever repoRoot's remotes
+		// resolve to. The request is published by the App; a wake that lands in
+		// a different repository wakes nobody and is indistinguishable from a
+		// remote that declined to answer.
+		doorbell = ghbridge.GHDoorbell{
+			Dir:          repoRoot,
+			Conversation: box.Number,
+			Repo:         gh.App.Mailbox(),
+		}
 	}
 
 	// Every request this process publishes gets a durable lifetime record, and
@@ -508,6 +519,13 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			NewRequestID: ghbridge.NewRequestID,
 			SessionID:    sessionID,
 			Wait:         gh.Wait,
+			// The reviewer gets the same wake and the same durable record the
+			// architect has had since #158. Without the doorbell a fully bound
+			// review request was published and then waited for a person to
+			// notice it; without the record, only this process knew it was
+			// waiting at all.
+			Doorbell:  doorbell,
+			Exchanges: exchanges,
 		},
 		Fallback: base,
 	}
@@ -644,4 +662,39 @@ func printWebhookBanner(webhook *ghwebhook.Server, secretPath, repository string
 	fmt.Println("  reviewer, or that a comment should execute anything. Deliveries are")
 	fmt.Println("  observed and nothing else in this slice.")
 	fmt.Println()
+}
+
+// authorityDeferrer is the slice of the engine this file needs, an interface for
+// the same reason runControl is one in run.go: the authority behaviour must not
+// be wrong, and proving it should not require a repository, a graph or a run.
+type authorityDeferrer interface {
+	DeferAuthority(taskID string) bool
+}
+
+// deferUnattendedAuthority preserves a human-owned question that reached a
+// process with no human at it.
+//
+// ResolveHuman is reachable only from the TUI. In a daemon nothing can ever
+// write the channel awaitChoice blocks on, so without this the task is neither
+// answerable nor stopped: it waits until the process dies and the question dies
+// with it. That is how task-1789211362520113565 parked on 2026-09-12.
+//
+// Deferring rather than answering is the whole point. The engine records the
+// question whole, emits a deferred receipt and ends the run, leaving state
+// FindInterrupted resumes and session.Store holds as AwaitingAuthority. A daemon
+// that instead picked an option would manufacture human authority -- the thing
+// the objective socket's controlling-terminal check refuses one layer earlier.
+//
+// Reports whether a question was actually deferred, so a caller never claims it
+// preserved something that was not being asked.
+func deferUnattendedAuthority(ev event.Event, ctl authorityDeferrer, warn io.Writer) bool {
+	if ev.Kind != event.AuthorityRequired || strings.TrimSpace(ev.TaskID) == "" {
+		return false
+	}
+	if !ctl.DeferAuthority(ev.TaskID) {
+		return false
+	}
+	fmt.Fprintln(warn, "sensei-code control: a human-owned decision was reached and no human is present; "+
+		"the question is preserved for resume, not answered")
+	return true
 }

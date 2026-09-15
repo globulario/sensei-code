@@ -129,7 +129,7 @@ func TestStartRefusedOnStaleGraphBeforeAnyWorkerRuns(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`
-	_, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", stale), "")
+	_, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", stale), "", "github.com/globulario/sensei-code", "localhost:10122")
 	if err == nil {
 		t.Fatal("a stale graph certified a start")
 	}
@@ -142,10 +142,10 @@ func TestStartRefusedOnStaleGraphBeforeAnyWorkerRuns(t *testing.T) {
 // transcript, no structured payload, and previously a zero-valued verdict
 // carried forward as though Sensei had spoken.
 func TestStartRefusedWhenSenseiSaysNothing(t *testing.T) {
-	if _, err := certifyStart(result(t, "workspace looks good", ""), result(t, "preflight ok", okPreflight), ""); err == nil {
+	if _, err := certifyStart(result(t, "workspace looks good", ""), result(t, "preflight ok", okPreflight), "", "github.com/globulario/sensei-code", "localhost:10122"); err == nil {
 		t.Fatal("an empty workspace status certified a start")
 	}
-	if _, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", ""), ""); err == nil {
+	if _, err := certifyStart(result(t, "ok", okWorkspace), result(t, "preflight ok", ""), "", "github.com/globulario/sensei-code", "localhost:10122"); err == nil {
 		t.Fatal("an empty preflight certified a start")
 	}
 }
@@ -156,9 +156,10 @@ func TestStartRefusedWhenSenseiSaysNothing(t *testing.T) {
 func TestStartRefusedOnPartialWorkspaceComposition(t *testing.T) {
 	partial := `{
 		"composition_state": "partial",
-		"limitations": [{"code": "domain_unregistered", "detail": "no domain entry for this repository"}]
+		"limitations": [{"code": "domain_unregistered", "detail": "no domain entry for this repository"}],
+		"binding": {"repository_domain": "github.com/globulario/sensei-code"}
 	}`
-	_, err := certifyStart(result(t, "", partial), result(t, "", okPreflight), "")
+	_, err := certifyStart(result(t, "", partial), result(t, "", okPreflight), "", "github.com/globulario/sensei-code", "localhost:10122")
 	if err == nil {
 		t.Fatal("a partially composed workspace certified a start")
 	}
@@ -171,7 +172,7 @@ func TestStartRefusedOnPartialWorkspaceComposition(t *testing.T) {
 // veto: it is where the typed facts enter the workflow, so downstream code
 // stops re-deriving them from prose.
 func TestCertifiedStartCarriesSenseiFactsForward(t *testing.T) {
-	start, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight), "")
+	start, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight), "", "github.com/globulario/sensei-code", "localhost:10122")
 	if err != nil {
 		t.Fatalf("a fully certifiable pair was refused: %v", err)
 	}
@@ -211,7 +212,7 @@ func TestUnscopedStartPreflightDoesNotBlockEveryTask(t *testing.T) {
 			"build_provenance_state": "BUILD_PROVENANCE_STATE_STAMPED"
 		}
 	}`
-	start, err := certifyStart(result(t, "", okWorkspace), result(t, "preflight empty", live), "")
+	start, err := certifyStart(result(t, "", okWorkspace), result(t, "preflight empty", live), "", "github.com/globulario/sensei-code", "localhost:10122")
 	if err != nil {
 		t.Fatalf("the engine's own start-of-task preflight was refused, which would block every task: %v", err)
 	}
@@ -232,7 +233,7 @@ func TestDegradedPreflightStillRefusesStart(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", degraded), ""); err == nil {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", degraded), "", "github.com/globulario/sensei-code", "localhost:10122"); err == nil {
 		t.Fatal("a degraded preflight certified a start")
 	}
 }
@@ -249,7 +250,7 @@ func TestEmptyPreflightStillRefusesOnAnUncertifiableGraph(t *testing.T) {
 			"seed_state": "SEED_STATE_CURRENT"
 		}
 	}`
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", staleAndEmpty), ""); err == nil {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", staleAndEmpty), "", "github.com/globulario/sensei-code", "localhost:10122"); err == nil {
 		t.Fatal("an empty preflight on a stale graph certified a start")
 	}
 }
@@ -276,7 +277,7 @@ func TestGraphSourceCommitIsNotComparedToTheGovernedRepository(t *testing.T) {
 			"source_repo_commit": "da512eb61c82"
 		}
 	}`
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", otherRepo), "f3e5ef38b09b22450351771d69371ebcc57d0176"); err != nil {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", otherRepo), "f3e5ef38b09b22450351771d69371ebcc57d0176", "github.com/globulario/sensei-code", "localhost:10122"); err != nil {
 		t.Fatalf("a graph whose corpus commit belongs to another repository was refused: %v", err)
 	}
 }
@@ -284,7 +285,7 @@ func TestGraphSourceCommitIsNotComparedToTheGovernedRepository(t *testing.T) {
 // TestAnUnreadableHeadDoesNotBlockTheOtherChecks keeps the new comparison from
 // becoming a hard dependency on git being readable.
 func TestAnUnreadableHeadDoesNotBlockTheOtherChecks(t *testing.T) {
-	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight), ""); err != nil {
+	if _, err := certifyStart(result(t, "", okWorkspace), result(t, "", okPreflight), "", "github.com/globulario/sensei-code", "localhost:10122"); err != nil {
 		t.Fatalf("an unknown repository head refused an otherwise certifiable start: %v", err)
 	}
 }

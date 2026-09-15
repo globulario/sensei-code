@@ -38,6 +38,7 @@ type command struct {
 // governed lanes, then configuration and diagnostics.
 var publicCommands = []command{
 	{Name: "run", Args: "--task \"...\"", Summary: "run one governed task headlessly (same engine as /run)"},
+	{Name: "resume", Args: "--task <id> --answer <option>", Summary: "answer a preserved human-owned question and continue that same task"},
 	{Name: "observe", Args: "--task \"...\"", Summary: "read-only audit: report findings, admit nothing, change no file"},
 	{Name: "audit-repair", Args: "--task \"...\"", Summary: "observe, then open governed repair work for what was established"},
 	{Name: "init", Summary: "create the local capability/provider configuration"},

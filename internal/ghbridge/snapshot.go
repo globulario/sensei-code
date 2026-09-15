@@ -119,3 +119,38 @@ func VerifySnapshot(ctx context.Context, dir, commit string, s Subject) error {
 	}
 	return nil
 }
+
+// RemoteRepository reads "owner/name" from a git remote URL.
+//
+// The workspace repository is a fact about the checkout that produced the
+// candidate, so it is read from the remote the snapshot is pushed to rather
+// than from configuration that could name a different repository than the one
+// the objects actually reach.
+//
+// Returns "" when the remote is missing or its URL is not a recognisable
+// GitHub path. Empty is honest: the marker then omits the field and a consumer
+// fails closed on a missing binding, which is far better than a guess that
+// sends it to the wrong repository.
+func RemoteRepository(ctx context.Context, dir, remote string) string {
+	if strings.TrimSpace(dir) == "" || strings.TrimSpace(remote) == "" {
+		return ""
+	}
+	url, err := git(ctx, dir, "remote", "get-url", strings.TrimSpace(remote))
+	if err != nil {
+		return ""
+	}
+	url = strings.TrimSuffix(strings.TrimSpace(url), ".git")
+	if i := strings.Index(url, "github.com"); i >= 0 {
+		url = url[i+len("github.com"):]
+	}
+	url = strings.TrimLeft(url, ":/")
+	parts := strings.Split(url, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	owner, name := parts[len(parts)-2], parts[len(parts)-1]
+	if owner == "" || name == "" {
+		return ""
+	}
+	return owner + "/" + name
+}

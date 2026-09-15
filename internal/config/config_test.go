@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -151,5 +152,85 @@ func TestFormattingIsProvedOnTheReviewedBytes(t *testing.T) {
 				t.Error("format verification rewrites the candidate; it must not mutate")
 			}
 		}
+	}
+}
+
+// A repository that names one reviewer gets that reviewer.
+//
+// Default() populates Reviewers as well as Reviewer, and ReviewRoster prefers
+// Reviewers whenever it is non-empty. Loading a config that states only
+// "reviewer" therefore used to set the field and change nothing: the roster
+// stayed [codex, claude] and the engine assigned codex. Silently, with no
+// diagnostic -- the configuration in force was not the one written.
+func TestAStatedReviewerReplacesTheDefaultRoster(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `{"reviewer":{"name":"chatgpt","graph":"none"}}`)
+
+	c, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roster := c.ReviewRoster()
+	if len(roster) != 1 || !strings.EqualFold(roster[0].Name, "chatgpt") {
+		names := make([]string, 0, len(roster))
+		for _, a := range roster {
+			names = append(names, a.Name)
+		}
+		t.Fatalf("the stated reviewer was ignored; roster = %v, want [chatgpt]\n"+
+			"a config naming one reviewer must not silently review with another", names)
+	}
+}
+
+// Stating a roster keeps working exactly as before.
+func TestAStatedRosterIsUsedVerbatim(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `{"reviewers":[{"name":"claude"},{"name":"codex"}]}`)
+
+	c, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roster := c.ReviewRoster()
+	if len(roster) != 2 || !strings.EqualFold(roster[0].Name, "claude") {
+		t.Fatalf("a stated roster was not used verbatim: %+v", roster)
+	}
+}
+
+// Stating both is not ambiguous: the roster is the broader statement and wins,
+// which is the precedence ReviewRoster already documents.
+func TestStatingBothKeepsTheRoster(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `{"reviewer":{"name":"chatgpt"},"reviewers":[{"name":"claude"}]}`)
+
+	c, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if roster := c.ReviewRoster(); len(roster) != 1 || !strings.EqualFold(roster[0].Name, "claude") {
+		t.Fatalf("stating both did not keep the roster: %+v", roster)
+	}
+}
+
+// A config that mentions neither keeps the built-in roster.
+func TestStatingNeitherKeepsTheDefaultRoster(t *testing.T) {
+	dir := t.TempDir()
+	writeConfig(t, dir, `{"sensei":{"command":"awareness-mcp"}}`)
+
+	c, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.ReviewRoster()) != len(Default().Reviewers) {
+		t.Fatalf("a config stating no reviewer changed the default roster: %+v", c.ReviewRoster())
+	}
+}
+
+func writeConfig(t *testing.T, repo, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(Path(repo)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(Path(repo), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }

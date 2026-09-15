@@ -223,6 +223,20 @@ func (c AppConfig) Selected() bool {
 		strings.TrimSpace(c.Repo) != ""
 }
 
+// Mailbox is the "owner/name" this App transport posts the request to, or ""
+// when the App was not fully configured.
+//
+// It exists so the doorbell can be aimed at the same repository the request
+// lands in without re-deriving it from a working directory. Two locators for
+// one conversation is the defect; this is the single source.
+func (c AppConfig) Mailbox() string {
+	owner, repo := strings.TrimSpace(c.Owner), strings.TrimSpace(c.Repo)
+	if owner == "" || repo == "" {
+		return ""
+	}
+	return owner + "/" + repo
+}
+
 // Missing names the fields still required for the selected App transport.
 func (c AppConfig) Missing() []string {
 	var missing []string

@@ -135,9 +135,17 @@ func TestOperationalAuthorityIsSubtractedFromTheCoverageQuestionNotAddedToIt(t *
 	claims := []Claim{{Statement: "s", About: teS, Source: "repository"}}
 	action := plannedEdit(teS, teF)
 	action.DerivedCoverage = teCovered()
+	// The per-file fact a real run establishes: the graph has no facts about the test
+	// file. This fixture predates per-file typing and asserted the conflated outcome.
+	action.Unexamined = []string{teF}
 	cold := routeAuthorityForAction(scoped, claims, action)
 	if !cold.ClosesGap() {
-		t.Fatalf("a plan over a covered source and an ungranted test did not read as a coverage gap: %+v", cold)
+		t.Fatalf("a plan over a covered source and an ungranted test did not close a gap: %+v", cold)
+	}
+	// And it is the TEST-GOVERNANCE gap, not a coverage gap: the production file is
+	// covered, so nothing about the graph is missing.
+	if cold.Gap.Kind != gapTestGovernanceUnestablished {
+		t.Fatalf("the ungranted test read as %q rather than a test-governance gap", cold.Gap.Kind)
 	}
 	action.OperationalAuthority = []string{teF}
 	warm := routeAuthorityForAction(scoped, claims, action)

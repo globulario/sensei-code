@@ -125,6 +125,34 @@ type Request struct {
 	Subject
 	RequestID string
 	Kind      Kind
+	// MailboxRepository is where the conversation lives, "owner/name".
+	// WorkspaceRepository is where the governed evidence lives.
+	//
+	// Two identities because a governed exchange spans two repositories: the
+	// request and its wake are published to the mailbox, while base, candidate
+	// tree and review snapshot are objects in the workspace. They are equal only
+	// while the workspace happens to BE the mailbox repository.
+	//
+	// ROUTING, deliberately not part of Subject. Subject is the identity a
+	// response echoes back; a consumer needs to know where to look, it does not
+	// re-assert where it looked. Putting these in Subject would make every
+	// existing response fail Same() and turn one routing fact into two copies
+	// that can drift.
+	//
+	// Stated, never inferred. On 2026-09-12 request r-3212791306b4607c named base
+	// f62e3379 and review_commit 602e49ae -- both objects in globulario/sensei --
+	// to a consumer whose instructions said to read pinned evidence from
+	// globulario/sensei-code, where neither exists. It woke, resolved the wake,
+	// resolved the request, authenticated the author, and then could not fetch
+	// evidence it had been told to seek in the wrong repository. It answered
+	// nothing, which from outside is indistinguishable from an absent reviewer.
+	//
+	// An architecture turn never leaves the mailbox, so a consumer built around
+	// one acquires a fixed repository assumption that stays invisible until the
+	// first cross-repository review. The law must not depend on that accident,
+	// which is why these live on the shared request rather than on review alone.
+	MailboxRepository   string
+	WorkspaceRepository string
 }
 
 // Validate states the request rules on top of the subject's.
@@ -155,6 +183,14 @@ func (r Request) Marker() (string, error) {
 	fmt.Fprintf(&b, "candidate_digest=%s\n", r.CandidateDigest)
 	fmt.Fprintf(&b, "candidate_tree=%s\n", r.CandidateTree)
 	fmt.Fprintf(&b, "review_commit=%s\n", r.ReviewCommit)
+	// Emitted only when known: a bridge that cannot name a repository must
+	// produce the previous marker rather than one asserting an empty identity.
+	if strings.TrimSpace(r.MailboxRepository) != "" {
+		fmt.Fprintf(&b, "mailbox_repository=%s\n", r.MailboxRepository)
+	}
+	if strings.TrimSpace(r.WorkspaceRepository) != "" {
+		fmt.Fprintf(&b, "workspace_repository=%s\n", r.WorkspaceRepository)
+	}
 	return b.String(), nil
 }
 
@@ -261,7 +297,13 @@ func ParseRequest(body string) (Request, bool) {
 	if !ok {
 		return Request{}, false
 	}
-	r := Request{Subject: subjectFrom(f), RequestID: f["request"], Kind: Kind(f["kind"])}
+	r := Request{
+		Subject:             subjectFrom(f),
+		RequestID:           f["request"],
+		Kind:                Kind(f["kind"]),
+		MailboxRepository:   f["mailbox_repository"],
+		WorkspaceRepository: f["workspace_repository"],
+	}
 	if r.Validate() != nil {
 		return Request{}, false
 	}

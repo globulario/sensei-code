@@ -1,0 +1,24 @@
+# Agent-proposed awareness entry — AWAITING REVIEW.
+# Written by the awareness feedback write-path (Propose RPC / awg onboard); NOT a
+# live graph node. Promote by moving the entry into the canonical corpus file
+# after verifying the contract.
+proposal:
+    status: awaiting_review
+    proposed_by: agent
+    kind: forbidden_fix
+    id: forbidden_fix.sensei_code.detect_recurring_review_findings_by_clustering_on_finding_id
+    title: Detect recurring review findings by clustering on finding id, file, or statement similarity
+    description: 'Measured on 54 persisted review.finding events and 40 findings across sensei#350 and #351, every computable key fails, and two fail in opposite directions at the same time. roles.Finding.ID is a per-verdict index, so ''f1'' is shared by 18 distinct findings — an 18-way false merge. Verbatim claim text repeats 0 times in 54, so equality detects nothing. A file key on #351 merges governance.go''s five findings, which assert three different predicates, while splitting the one genuine three-member recurrence across two files and never reporting it. Statement similarity has no safe threshold because the shared vocabulary is the subsystem''s, not the defect''s. A heuristic here fabricates recurrence and hides the real one, and its output would be used to declare a CONTRACT or SUITE suspect — a conclusion far more expensive than the guess behind it. The stable identity is the predicate the finding asserts, which the reviewer already states in prose in 8 of 40 findings and which is discarded; it must be asked for as a field on the review response contract, not inferred.'
+    severity: high
+    source_files:
+        - docs/architecture/reviewer-teaches.md
+        - internal/roles/verdict.go
+        - internal/finding/finding.go
+    evidence:
+        - '54 review.finding events in .sensei-code/sessions: id ''f1'' x18, ''f2'' x13, ''f3'' x10, ''f4'' x8, ''f5'' x5; 0 of 54 claims repeat verbatim'
+        - 'sensei#351: governance.go carries 5 findings asserting 3 distinct predicates (receipt-identity binding, routing-to-owner, expiry)'
+        - 'sensei#351: the one real recurrence is 3 findings in rounds 1, 3 and 6 across control.go and session.go, asserting that two fields of one published projection are computed from different evaluations'
+        - '8 of 40 findings across #350/#351 explicitly declare they extend a prior finding, in prose, never parsed'
+    repo: /home/dave/Documents/github.com/globulario/sensei-code
+    domain: github.com/globulario/sensei-code
+    contract: Recurrence of a defect class is counted from an identity the reviewer states, not inferred from a key we compute over the finding's text or location. A recurrence report that can declare a contract or a test suite suspect must be at least as trustworthy as that conclusion is expensive.

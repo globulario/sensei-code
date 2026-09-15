@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
 
@@ -691,15 +692,124 @@ func consequenceSignalSuffix(spots blindSpotReading) string {
 // coverage, so a file the graph never examined is not admitted by it.
 func unexaminedCoverageGap(action Action, spots blindSpotReading) (Routing, bool) {
 	unexamined := action.unexaminedArchitecturalFiles()
-	if len(unexamined) == 0 {
-		return Routing{}, false
+	// PRODUCTION SOURCE BLOCKS FIRST, because it is the stronger claim: a file a
+	// derivation could cover and does not is a different and heavier absence than a test
+	// whose neighbour is missing from the plan.
+	//
+	// Both no-production-gap exits fall through to the test question. An earlier draft
+	// only handled the empty case, and a plan whose production gap was closed by a
+	// derivation would then have carried an ungranted test out silently -- the same
+	// silence this slice exists to end, one branch over.
+	if len(unexamined) != 0 {
+		if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.architecturalFiles()); !closed {
+			return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+				Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(unexamined, ", "),
+				Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
+		}
 	}
-	if closed, _ := derivationClosesGap(gapRequirement(spots.Coverage), action.DerivedCoverage, action.architecturalFiles()); closed {
+	if r, open := ungrantedTestGovernanceGap(action); open {
+		return r, true
+	}
+	if r, open := documentGovernanceGap(action); open {
+		return r, true
+	}
+	return unsupportedArtifactGap(action)
+}
+
+// ungrantedTestGovernanceGap is the typed knowledge limit for a test artifact whose
+// test-governance relation could not be established.
+//
+// It reuses the existing vocabulary -- GapIdentity + BasisLacksKnowledge -- rather than
+// introducing a parallel terminal model. What is new is only the KIND, because the
+// distinction that matters is which evidence is missing:
+//
+//	missing source evidence           a derivation could cover the file and none does
+//	missing test-governance evidence  no covered production file in this test's own
+//	                                  directory and package, so
+//	                                  EXISTING_TEST_EDIT_ADMISSIBLE cannot hold
+//
+// Collapsing them sent W3 to rebuild a graph that could never supply the second.
+func ungrantedTestGovernanceGap(action Action) (Routing, bool) {
+	tests := action.ungrantedTestArtifacts()
+	if len(tests) == 0 {
 		return Routing{}, false
 	}
 	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
-		Condition: "graph coverage is absent for planned file(s) the graph has not examined: " + strings.Join(unexamined, ", "),
-		Gap:       GapIdentity{Kind: "coverage-unexamined", Scope: unexamined}}, true
+		Condition: "test-governance evidence is absent for planned test file(s): no covered production file in the same directory and package establishes an existing-test edit grant: " + strings.Join(tests, ", "),
+		Gap:       GapIdentity{Kind: gapTestGovernanceUnestablished, Scope: tests}}, true
+}
+
+// documentGovernanceGap is the typed knowledge limit for a document whose governance could
+// not be established.
+//
+// The distinction it preserves is the Coverage type's own doctrine: the graph having
+// looked and found no protecting invariant means ORDINARY DOCUMENTATION, and the graph
+// never having looked means nothing at all. Both render as an empty invariant list, and
+// only the first is evidence — so only the second raises this.
+func documentGovernanceGap(action Action) (Routing, bool) {
+	docs := action.ungovernedDocumentArtifacts()
+	if len(docs) == 0 {
+		return Routing{}, false
+	}
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+		Condition: "architecture-document evidence is absent for planned document(s): no governed invariant is known to protect them, and nothing established that they are ordinary documentation: " + strings.Join(docs, ", "),
+		Gap:       GapIdentity{Kind: gapDocumentGovernanceUnestablished, Scope: docs}}, true
+}
+
+// unsupportedArtifactGap is the explicit knowledge limit for an artifact kind no evidence
+// class covers. It exists so "we have no way to prove anything about this" is a stated
+// verdict rather than a silent pass.
+func unsupportedArtifactGap(action Action) (Routing, bool) {
+	files := action.unsupportedArtifacts()
+	if len(files) == 0 {
+		return Routing{}, false
+	}
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge,
+		Condition: "no evidence class governs planned artifact(s) of this kind: " + strings.Join(files, ", "),
+		Gap:       GapIdentity{Kind: gapUnsupportedArtifact, Scope: files}}, true
+}
+
+const (
+	gapDocumentGovernanceUnestablished = "document-governance-unestablished"
+	gapUnsupportedArtifact             = "unsupported-artifact-kind"
+)
+
+// gapTestGovernanceUnestablished is the kind name, shared by the remedy and the closure
+// owner so the three cannot drift.
+const gapTestGovernanceUnestablished = "test-governance-unestablished"
+
+// remedyForGap names the concrete action that would close a typed gap.
+//
+// Dispatch rather than one remedy, because the remedies are not interchangeable: no graph
+// operation can create a test-edit grant, so offering `sensei import --refresh` for a
+// test-governance gap would be a true-sounding instruction that cannot work -- the same
+// defect as the gap conflation, one layer out.
+func remedyForGap(gap GapIdentity, root, domain string) string {
+	switch gap.Kind {
+	case gapDocumentGovernanceUnestablished:
+		return "no graph refresh can establish this, and no Go source property can stand in " +
+			"for it: a governed architecture document is proven by the INVARIANT that protects " +
+			"it (docs/awareness/invariants.yaml, protects.files).\n" +
+			"  unestablished for: " + strings.Join(gap.Scope, ", ") + "\n" +
+			"  close it by consulting the graph for these paths, or -- if the repository's " +
+			"architecture rules say a document in this role should be governed -- by proposing " +
+			"the invariant that protects it, which is a knowledge-admission act and stays " +
+			"human-authorized."
+	case gapUnsupportedArtifact:
+		return "no evidence class governs this artifact kind, so nothing can prove it here.\n" +
+			"  artifact(s): " + strings.Join(gap.Scope, ", ") + "\n" +
+			"  close it by removing them from the plan, or by defining the evidence class that " +
+			"governs them -- not by asking a Go derivation to read them."
+	}
+	if gap.Kind == gapTestGovernanceUnestablished {
+		return "no graph operation can establish this: a test artifact is governed by an " +
+			"existing-test edit grant, which requires a planned production file in the SAME " +
+			"directory and package that a derived anchor covers at this world.\n" +
+			"  missing for: " + strings.Join(gap.Scope, ", ") + "\n" +
+			"  close it by including that production file in the plan and giving it derived " +
+			"coverage, or by planning the test edit as its own governed change."
+	}
+	return knowledgeLimitRemedy(root, domain, gap.Scope)
 }
 
 // degradedReason renders why a degraded preflight could not be read as a
@@ -709,4 +819,157 @@ func degradedReason(spots []string) string {
 		return "the preflight reported no blind spots, so nothing says what is degraded"
 	}
 	return strings.Join(spots, "; ")
+}
+
+// gapClosureOwner says who is CAPABLE of closing a bounded gap class.
+//
+// The law: a bounded knowledge gap may only be assigned to a closure actor
+// capable of changing the evidence whose absence caused the gap. Routing a gap
+// to an actor that cannot change that evidence produces exactly what was
+// measured on task-1789272620293170079 -- rounds that cannot succeed, followed
+// by a question the human cannot answer either.
+type gapClosureOwner int
+
+const (
+	// closureOwnerReasoning: the architect can settle it by thinking, reading
+	// what the graph already holds, or narrowing the plan. An unverified premise
+	// is this: the evidence exists and the question is what it implies.
+	closureOwnerReasoning gapClosureOwner = iota
+	// closureOwnerOutOfBand: closing it requires changing the graph's coverage,
+	// which no operation reachable from a governed run can do. Reported with its
+	// remedy; never asked of the architect twice and never asked of a human.
+	closureOwnerOutOfBand
+)
+
+// closureOwnerFor types a gap class by who could close it.
+//
+// Deliberately narrow: only the class actually measured as unclosable is typed
+// out-of-band. An unrecognised kind keeps the pre-existing reasoning owner, so
+// this repair cannot widen the set of gaps that stop a run.
+func closureOwnerFor(kind string) gapClosureOwner {
+	switch strings.TrimSpace(kind) {
+	case "coverage-unexamined", gapTestGovernanceUnestablished,
+		gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
+		// Neither is closable by reasoning: one needs a derivation to run, the other a
+		// production neighbour in the plan. A round spent thinking closes neither.
+		return closureOwnerOutOfBand
+	}
+	return closureOwnerReasoning
+}
+
+// knowledgeLimitRemedy is the minimum concrete operator action that would close
+// a coverage limit, in the shape the CLI actually accepts.
+//
+// `sensei import --refresh` takes a CHECKOUT PATH and a --domain; it does not
+// take a file list. It also "never auto-promotes: extractors write
+// candidates/intents for you to review and promote yourself", and "never touches
+// a store unless --store-url is given" -- so the remedy names the reload
+// explicitly rather than implying the served graph updates by itself.
+//
+// The files are named as WHAT IS MISSING, not as arguments. A remedy that passed
+// them to --refresh would not run.
+func knowledgeLimitRemedy(root, domain string, missing []string) string {
+	cmd := "sensei import --refresh " + root
+	// A domain, not a revision. The first live run of this remedy printed
+	// `--domain f304cfec6f43...` because the caller passed GapIdentity.World,
+	// which is the world the gap was measured in -- a commit sha. The command
+	// would not have run. A bare hex string is never a domain, so it is refused
+	// here rather than emitted as an argument that looks plausible.
+	if d := strings.TrimSpace(domain); d != "" && !looksLikeRevision(d) {
+		cmd += " --domain " + d
+	}
+	return "graph examination of " + strings.Join(missing, ", ") +
+		"; the supported operator action is `" + cmd +
+		"` (add --store-url and --graph-marker-file to reload the served store). " +
+		"This is reported, not performed: a governed run must not change the graph it is governed by, " +
+		"and extraction writes candidates for review rather than promoting them."
+}
+
+// disposeUnclosedGap decides what a bounded knowledge gap becomes when its one
+// closure round is spent and the router still reports it.
+//
+// Two outcomes, chosen by who could close it:
+//
+//   - reasoning-owned, or coverage that the plan no longer depends on: escalate
+//     as before. What the human is asked is not the technical question, it is
+//     whether to proceed with the gap open -- a decision they can actually make.
+//   - out-of-band with coverage still missing: a knowledge limit. No further
+//     round is spent, no human is asked, and the stop carries the remedy.
+//
+// The second case is the repair. Asking a human to authorise work over absent
+// coverage was answerable but useless: authorising does not examine a file, so
+// the router reached the identical condition on the next plan and the person was
+// asked again -- observed twice on task-1789272620293170079.
+// looksLikeRevision reports whether a string is a git object id rather than a
+// domain. Used to keep a revision out of --domain, where it would be accepted as
+// text and produce a command that cannot work.
+func looksLikeRevision(s string) bool {
+	if len(s) < 7 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *Engine) disposeUnclosedGap(taskID, domain string, routing Routing, action Action) (Routing, error) {
+	// WHAT IS MISSING DEPENDS ON THE GAP'S TYPE. Reading the unexamined architectural
+	// files for every out-of-band gap was right while there was one such gap; a
+	// test-governance gap is about test artifacts, which are deliberately NOT in that
+	// set, so it would have found nothing missing and fallen through to an ordinary
+	// human escalation — asking a person to supply evidence no person can supply.
+	missing := action.unexaminedArchitecturalFiles()
+	switch routing.Gap.Kind {
+	case gapTestGovernanceUnestablished, gapDocumentGovernanceUnestablished, gapUnsupportedArtifact:
+		missing = routing.Gap.Scope
+	}
+	// Coverage the plan no longer depends on is not a limit: the architect
+	// narrowed onto examined material, which is the legitimate escape, and the
+	// remaining stop is an ordinary escalation.
+	if closureOwnerFor(routing.Gap.Kind) == closureOwnerOutOfBand && len(missing) > 0 {
+		routing.Basis = BasisLacksKnowledge
+		routing.Closes = remedyForGap(routing.Gap, e.Repo.Root, domain)
+		limit := &knowledgeLimitError{Condition: routing.Condition, Missing: missing, Closes: routing.Closes}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+			"knowledge-limited: no actor reachable from a governed run can examine "+
+				strings.Join(missing, ", ")+"; this is not a decision a human can supply. "+
+				"closes: "+routing.Closes, routing))
+		return routing, limit
+	}
+	routing.Route = RouteHuman
+	routing.Condition = "a bounded knowledge gap was not closed by investigation: " + routing.Condition
+	return routing, nil
+}
+
+// knowledgeLimitError reports a bounded knowledge gap that NO actor reachable
+// from this engine can close.
+//
+// It is not a failure of the work and not a question for a person. The graph has
+// not examined some planned file, and the only operations that change that --
+// `sensei import` / `bootstrap` / `build` / `rebuild` -- are CLI stages outside a
+// governed run. The engine's own awareness surface is read-only with respect to
+// coverage: audit_diff, edit_check and preflight read, and investigate and
+// candidates are documented "read-only and candidate-only; never promotes
+// knowledge".
+//
+// So the honest report is the limit plus its remedy, which is what Closes
+// carries. Asking a human instead was the observed defect: authorizing does not
+// make a file examined, so the router reaches the same condition on the next
+// plan and the person is asked again.
+type knowledgeLimitError struct {
+	// Condition is the router's own wording, kept verbatim.
+	Condition string
+	// Missing are the planned files the graph has not examined.
+	Missing []string
+	// Closes is the remedy, in the shape Routing.Closes carries it.
+	Closes string
+}
+
+func (e *knowledgeLimitError) Error() string {
+	return "this task cannot be governed further without knowledge the graph does not hold: " + e.Condition +
+		"\nunexamined: " + strings.Join(e.Missing, ", ") +
+		"\ncloses: " + e.Closes
 }
