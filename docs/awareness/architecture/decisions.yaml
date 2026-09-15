@@ -89,3 +89,15 @@ decisions:
     source_files:
       - internal/ghbridge/runner_test.go
       - internal/ghbridge/snapshot.go
+  - id: decision.sensei_code.make_architect_retry_feedback_distinguish_an_absent_response
+    title: Make architect retry feedback distinguish an absent response from malformed bounded JSON.
+    status: accepted
+    architectural_plane: intended
+    rationale: 'In internal/workflow/engine.go, stop telling the architect that its previous response was not valid bounded JSON when no response was received at all: distinguish an absent answer from a malformed one on the retry path, so a retry after a timeout does not accuse the architect of output it never produced.'
+    context: 'decision_authority: architectural; certified_by: github.com/globulario/sensei-code @ 739133dcea2b43a8a070318357d701d55d2ce43b; decided_by: ChatGPT; human_authorization: none established: submitted unattended; no human presence was established'
+    consequences: Retries after an absent architect turn no longer claim the architect emitted invalid JSON; malformed responses still receive corrective JSON guidance. No absence is treated as an answer, and authority behavior remains fail closed.
+    related_invariants:
+      - sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
+    source_files:
+      - internal/workflow/architect_retry_test.go
+      - internal/workflow/engine.go
