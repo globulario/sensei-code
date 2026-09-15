@@ -355,6 +355,14 @@ func TestTheRunnerDoesNotConsumeAReceiptTheRelayHandlerDidNotPublish(t *testing.
 			r.Artifact = swapped
 			return r
 		},
+		// The handler's receipt, not the mailbox alone, says a publication
+		// completed: a receipt still marked accepted is not consumed even when it
+		// names a genuine publication.
+		"a real publication the receipt never recorded": func(t *testing.T, f relayFixture) RelayRecord {
+			r := publish(t, f)
+			r.State = RelayAccepted
+			return r
+		},
 		"another relay's publication": func(t *testing.T, f relayFixture) RelayRecord {
 			r := publish(t, f)
 			r.Artifact, r.ReviewDigest = swapped, ReviewDigest(swapped)
