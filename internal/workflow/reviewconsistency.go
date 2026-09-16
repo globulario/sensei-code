@@ -207,3 +207,37 @@ func (e *Engine) reviewAttempt(taskID string) int {
 	defer e.mu.Unlock()
 	return e.reviewAttempts[taskID]
 }
+
+// Implementer eligibility after a failed independent-review leg.
+//
+// Recorded per task, keyed by the candidate the review was attempted on. A
+// participant that failed to review a candidate is excluded from implementing
+// THAT candidate, and only that one: the exclusion is about this candidate's
+// independence, not a judgement about the provider.
+func (e *Engine) excludeFromImplementing(taskID string, u *roles.ReviewUnobtainable) {
+	if u == nil {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.reviewLegFailures == nil {
+		e.reviewLegFailures = map[string]*roles.ReviewUnobtainable{}
+	}
+	e.reviewLegFailures[taskID] = u
+}
+
+// implementerExcluded reports whether a participant failed this task's
+// independent-review leg, and why. Read by MEMBERSHIP of the recorded failures:
+// a participant nobody recorded is eligible, and one that was recorded cannot
+// become eligible by an absent entry elsewhere.
+func (e *Engine) implementerExcluded(taskID, participant string) (string, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	u, ok := e.reviewLegFailures[taskID]
+	if !ok || u == nil || !u.Excludes(participant) {
+		return "", false
+	}
+	return "it failed the independent-review leg for candidate " +
+		shortDigest(u.Binding.CandidateDigest) + ", and the participant that could not judge a candidate " +
+		"does not become its implementer", true
+}
