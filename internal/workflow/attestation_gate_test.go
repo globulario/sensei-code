@@ -39,7 +39,7 @@ type recordedOverride struct {
 	found  bool
 }
 
-func (o recordedOverride) AttestationFor(b roles.Binding) (roles.Attestation, bool, error) {
+func (o recordedOverride) AttestationFor(b roles.Binding, _ string) (roles.Attestation, bool, error) {
 	if !o.found {
 		return roles.Attestation{}, false, nil
 	}

@@ -12,8 +12,12 @@ import (
 // and only the control process's attestation socket writes to it.
 type AttestationSource interface {
 	// AttestationFor returns the published override covering this exact
-	// candidate, if one is recorded.
-	AttestationFor(roles.Binding) (roles.Attestation, bool, error)
+	// candidate AND this exact review, if one is recorded.
+	//
+	// Both keys, because one unchanged candidate can carry an override per
+	// review it accumulated. Selecting on the candidate alone would return
+	// whichever the store yielded first and hide the one that applies.
+	AttestationFor(b roles.Binding, reviewDigest string) (roles.Attestation, bool, error)
 }
 
 // attestedOrAdvisory decides what an advisory verdict is worth HERE.
@@ -37,7 +41,7 @@ func (e *Engine) attestedOrAdvisory(taskID string, advisory roles.Advisory, revi
 	if !e.Config.Workflow.OwnerAttestation || e.Attestations == nil || reviewDigest == "" {
 		return advisoryReview(advisory)
 	}
-	att, found, err := e.Attestations.AttestationFor(advisory.Provenance.Binding())
+	att, found, err := e.Attestations.AttestationFor(advisory.Provenance.Binding(), reviewDigest)
 	if err != nil {
 		// Reported rather than swallowed: an unreadable override store is not
 		// "there is no override", and the difference decides a transition.

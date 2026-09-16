@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/globulario/sensei-code/internal/roles"
 )
@@ -68,14 +69,17 @@ func TestAnAttestationOverridesOneExactPublishedReviewAndSaysSo(t *testing.T) {
 	}
 
 	// The lookup the engine uses finds it, and only for this candidate.
-	got, found, err := store.AttestationFor(a.Binding)
+	got, found, err := store.AttestationFor(a.Binding, relayed.ReviewDigest)
 	if err != nil || !found || got.ReviewDigest != relayed.ReviewDigest {
 		t.Fatalf("AttestationFor: %+v %v %v", got, found, err)
 	}
 	moved := a.Binding
 	moved.CandidateDigest = "sha256:" + strings.Repeat("0", 64)
-	if _, found, _ := store.AttestationFor(moved); found {
+	if _, found, _ := store.AttestationFor(moved, relayed.ReviewDigest); found {
 		t.Fatal("the override covers a candidate that moved")
+	}
+	if _, found, _ := store.AttestationFor(a.Binding, "sha256:"+strings.Repeat("0", 64)); found {
+		t.Fatal("the override covers a review it does not name")
 	}
 }
 
@@ -101,7 +105,7 @@ func TestAnUnpublishedOverrideIsNotFoundUntilItIsPublished(t *testing.T) {
 	if stored, found, _ := store.Load(relayRequest); !found || stored.State != AttestationAccepted {
 		t.Fatalf("the accepted override was not preserved: found=%v", found)
 	}
-	if _, found, err := store.AttestationFor(binding); found || err != nil {
+	if _, found, err := store.AttestationFor(binding, relayed.ReviewDigest); found || err != nil {
 		t.Fatalf("an unpublished override was offered to the engine: found=%v err=%v", found, err)
 	}
 
@@ -109,8 +113,67 @@ func TestAnUnpublishedOverrideIsNotFoundUntilItIsPublished(t *testing.T) {
 	if rec, err = f.attest(store, relayRequest, relayed.ReviewDigest, true); err != nil || rec.State != AttestationPublished {
 		t.Fatalf("retrying publication: state %q err %v", rec.State, err)
 	}
-	if _, found, err := store.AttestationFor(binding); !found || err != nil {
+	if _, found, err := store.AttestationFor(binding, relayed.ReviewDigest); !found || err != nil {
 		t.Fatalf("the published override is not found: found=%v err=%v", found, err)
+	}
+}
+
+// One unchanged candidate accumulates an override per review it was given: a
+// request goes unanswered, its review is relayed and attested, the candidate is
+// re-requested, and a second review is relayed and attested. Both overrides
+// cover the candidate, and the one that applies is the one naming the review
+// being consumed.
+//
+// Selecting on the candidate alone returned whichever file the directory gave
+// first, so the applicable override could be hidden behind an older one and the
+// candidate would wait again. The second request id here sorts BEFORE the first,
+// so a first-match-wins lookup answers with the wrong override in at least one
+// direction rather than accidentally passing.
+func TestTheOverrideSelectedIsTheOneNamingTheReviewBeingConsumed(t *testing.T) {
+	f := newRelayFixture(t)
+	store := attestStore(t)
+	const secondRequest = "r-00000000000000aa" // sorts before relayRequest
+	if err := f.exchanges.Open(ExchangeRecord{
+		TaskID: relaySubject.TaskID, RequestID: secondRequest, RequestComment: 5686428019, Conversation: "157",
+		PublishedAt: time.Now().Add(-30 * time.Minute).UTC(), Kind: ExchangeReview,
+		BaseSHA: relaySubject.BaseSHA, CandidateDigest: relaySubject.CandidateDigest,
+		CandidateTree: relaySubject.CandidateTree, ReviewCommit: relaySubject.ReviewCommit,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	first, err := f.submit(artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := f.submit(artifactFor(t, relaySubject, secondRequest, "chatgpt",
+		`{"decision":"accept","summary":"the ledger invariant still holds","instructions":"","findings":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ReviewDigest == second.ReviewDigest {
+		t.Fatal("the two relayed reviews are the same bytes, so the selection proves nothing")
+	}
+	for _, rel := range []RelayRecord{first, second} {
+		if _, err := f.attest(store, rel.RequestID, rel.ReviewDigest, true); err != nil {
+			t.Fatalf("attesting %s: %v", rel.RequestID, err)
+		}
+	}
+
+	binding := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+	for _, want := range []RelayRecord{first, second} {
+		got, found, err := store.AttestationFor(binding, want.ReviewDigest)
+		if err != nil || !found {
+			t.Fatalf("review %s has a published override and was not found: %v %v", want.ReviewDigest, found, err)
+		}
+		if got.ReviewDigest != want.ReviewDigest || got.RequestID != want.RequestID {
+			t.Fatalf("consuming review %s selected the override for %s (request %s)",
+				want.ReviewDigest, got.ReviewDigest, got.RequestID)
+		}
+	}
+	if _, found, _ := store.AttestationFor(binding, "sha256:"+strings.Repeat("0", 64)); found {
+		t.Fatal("a review nobody attested to selected an override")
 	}
 }
 

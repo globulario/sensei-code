@@ -130,13 +130,23 @@ func (s AttestationStore) markPublished(requestID, digest string, comment int64,
 	return rec, nil
 }
 
-// AttestationFor is the published override covering this exact candidate, if
-// this workspace holds one.
+// AttestationFor is the published override covering this exact candidate AND
+// this exact review, if this workspace holds one.
+//
+// The digest is a selection key, not a filter applied afterwards. One unchanged
+// candidate legitimately accumulates overrides over time -- request R1 with
+// review D1, then R2 with D2 after the first review went unanswered -- and every
+// one of them covers that candidate. Selecting on the candidate alone returns
+// whichever file the directory happened to yield first, so a valid override for
+// the review actually being consumed became invisible behind an older one, and
+// the candidate fell back to waiting. Which override applied depended on file
+// ordering, which is the kind of defect that reads as "the review machinery
+// randomly blocks".
 //
 // Published only: an attestation the App never posted is not yet part of the
 // record anyone else can read, and consuming one would let a local file alone
 // advance a candidate. It satisfies workflow.AttestationSource.
-func (s AttestationStore) AttestationFor(b roles.Binding) (roles.Attestation, bool, error) {
+func (s AttestationStore) AttestationFor(b roles.Binding, reviewDigest string) (roles.Attestation, bool, error) {
 	if s.Dir == "" {
 		return roles.Attestation{}, false, nil
 	}
@@ -159,12 +169,11 @@ func (s AttestationStore) AttestationFor(b roles.Binding) (roles.Attestation, bo
 		if rec.State != AttestationPublished {
 			continue
 		}
-		// Covers is the whole identity check, and it is asked with the
-		// attestation's OWN review digest here because this lookup answers "is
-		// there an override for this candidate". Whether it covers the review
-		// actually consumed is checked by the caller, against the digest the
-		// transport reported.
-		if rec.Attestation.Covers(b, rec.Attestation.ReviewDigest) == nil {
+		// Asked with the digest of the review being consumed, so the answer is
+		// "the override for THIS review", never "an override for this candidate".
+		// The caller checks Covers again against the same digest: this selects,
+		// that verifies, and neither stands in for the other.
+		if rec.Attestation.Covers(b, reviewDigest) == nil {
 			return rec.Attestation, true, nil
 		}
 	}
