@@ -210,34 +210,77 @@ func (e *Engine) reviewAttempt(taskID string) int {
 
 // Implementer eligibility after a failed independent-review leg.
 //
-// Recorded per task, keyed by the candidate the review was attempted on. A
-// participant that failed to review a candidate is excluded from implementing
-// THAT candidate, and only that one: the exclusion is about this candidate's
-// independence, not a judgement about the provider.
+// Recorded per task AND PER CANDIDATE. The exclusion is a fact about one
+// candidate's independence -- "this participant could not judge these bytes" --
+// not a standing judgement about the provider. Keying it by task alone would
+// have made a provider that failed one candidate's review leg permanently
+// ineligible to implement every later candidate in that task, which retires a
+// worker for a transport failure it had no part in.
 func (e *Engine) excludeFromImplementing(taskID string, u *roles.ReviewUnobtainable) {
 	if u == nil {
+		return
+	}
+	digest := strings.TrimSpace(u.Binding.CandidateDigest)
+	if digest == "" {
+		// Without a candidate identity the exclusion cannot be attributed, and an
+		// unattributable exclusion is the task-wide one this scoping exists to
+		// prevent. Nothing is recorded.
 		return
 	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.reviewLegFailures == nil {
-		e.reviewLegFailures = map[string]*roles.ReviewUnobtainable{}
+		e.reviewLegFailures = map[string]map[string]*roles.ReviewUnobtainable{}
 	}
-	e.reviewLegFailures[taskID] = u
+	if e.reviewLegFailures[taskID] == nil {
+		e.reviewLegFailures[taskID] = map[string]*roles.ReviewUnobtainable{}
+	}
+	e.reviewLegFailures[taskID][digest] = u
 }
 
-// implementerExcluded reports whether a participant failed this task's
-// independent-review leg, and why. Read by MEMBERSHIP of the recorded failures:
-// a participant nobody recorded is eligible, and one that was recorded cannot
-// become eligible by an absent entry elsewhere.
-func (e *Engine) implementerExcluded(taskID, participant string) (string, bool) {
+// implementerExcluded reports whether a participant failed the independent-review
+// leg for THIS EXACT candidate, and why.
+//
+// Read by MEMBERSHIP of the recorded failures for that one candidate digest. An
+// empty digest excludes nobody: a candidate that cannot be named cannot be the
+// candidate somebody failed to review, and guessing would re-create the
+// task-wide exclusion.
+func (e *Engine) implementerExcluded(taskID, participant, candidateDigest string) (string, bool) {
+	digest := strings.TrimSpace(candidateDigest)
+	if digest == "" {
+		return "", false
+	}
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	u, ok := e.reviewLegFailures[taskID]
+	byCandidate, ok := e.reviewLegFailures[taskID]
+	if !ok {
+		return "", false
+	}
+	u, ok := byCandidate[digest]
 	if !ok || u == nil || !u.Excludes(participant) {
 		return "", false
 	}
 	return "it failed the independent-review leg for candidate " +
 		shortDigest(u.Binding.CandidateDigest) + ", and the participant that could not judge a candidate " +
 		"does not become its implementer", true
+}
+
+// continuingCandidate is the candidate a resumed or handed-on worker would take
+// over, if the engine recorded a failed review leg for one.
+//
+// It exists so the eligibility check can name a candidate at SELECTION time,
+// before this iteration has produced one. Exactly one recorded candidate makes
+// the answer unambiguous; more than one does not, and an ambiguous answer must
+// not be guessed into a task-wide exclusion.
+func (e *Engine) continuingCandidate(taskID string) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	byCandidate := e.reviewLegFailures[taskID]
+	if len(byCandidate) != 1 {
+		return ""
+	}
+	for digest := range byCandidate {
+		return digest
+	}
+	return ""
 }

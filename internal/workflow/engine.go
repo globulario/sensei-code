@@ -45,7 +45,7 @@ type Engine struct {
 	// reviewLegFailures records, per task, the participants that failed the
 	// independent-review leg for a candidate, so none of them is selected to
 	// implement the candidate it could not judge.
-	reviewLegFailures map[string]*roles.ReviewUnobtainable
+	reviewLegFailures map[string]map[string]*roles.ReviewUnobtainable
 	pending           map[string]chan string
 	// notes holds guidance the human typed while a task was running, keyed by
 	// task. It is a queue rather than an interrupt: a worker mid-cycle cannot be
@@ -4477,6 +4477,11 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// in structural_test.go reads the first `failures = append` in this loop as the
 	// candidate-failure path.
 	var ineligible []string
+	// continuing names the candidate the next worker would take over, so an
+	// exclusion recorded against THAT candidate applies and one recorded against
+	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
+	// no candidate yet to be excluded from.
+	continuing := e.continuingCandidate(taskID)
 	for _, worker := range e.Config.Implementors {
 		// A PARTICIPANT THAT COULD NOT JUDGE THIS CANDIDATE MAY NOT WRITE IT.
 		//
@@ -4485,7 +4490,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 		// its independent-review leg -- the reviewer became the implementer of the
 		// work it could not review. Independence is not recoverable afterwards, so
 		// the exclusion is applied at selection.
-		if reason, excluded := e.implementerExcluded(taskID, worker.Name); excluded {
+		if reason, excluded := e.implementerExcluded(taskID, worker.Name, continuing); excluded {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				config.DisplayName(worker.Name)+" is not eligible to implement this candidate: "+reason, nil))
 			ineligible = append(ineligible, worker.Name+": "+reason)

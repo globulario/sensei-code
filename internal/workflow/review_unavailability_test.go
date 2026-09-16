@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,12 @@ import (
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
+)
+
+// candidateA and candidateB are two distinct candidate identities in one task.
+const (
+	candidateA = "3f9cae25747c0aa1bb22cc33dd44ee55ff6600771188229933aa44bb55cc66dd"
+	candidateB = "aa11bb22cc33dd44ee55ff6600771188229933aa44bb55cc66dd77ee88ff9900"
 )
 
 // FAILURE TO OBTAIN AN INDEPENDENT REVIEW IS TRANSPORT STATE, NOT AUTHORITY.
@@ -216,17 +223,16 @@ func TestTheCandidateIsByteIdenticalAcrossTheBlockedInterval(t *testing.T) {
 
 // 8. THE PARTICIPANT THAT FAILED THE REVIEW LEG IS NOT ITS IMPLEMENTER.
 //
-// This is the exact substitution observed live. The engine records the failed
-// review leg; selection must then refuse that participant for that candidate.
+// This is the exact substitution observed live: the provider that had just failed
+// to review a candidate was handed that candidate to implement.
 func TestAFailedReviewerIsNotSelectedAsImplementerForTheSameCandidate(t *testing.T) {
 	e := &Engine{SessionID: "session-1"}
-	binding := roles.Binding{TaskID: "task-1", CandidateDigest: "3f9cae25747c", BaseSHA: "5883f978"}
 	e.excludeFromImplementing("task-1", &roles.ReviewUnobtainable{
-		Binding:   binding,
+		Binding:   roles.Binding{TaskID: "task-1", CandidateDigest: candidateA, BaseSHA: "5883f978"},
 		Attempted: []roles.ReviewAttemptFailure{{Provider: "codex", Cause: quotaExhausted()}},
 	})
 
-	reason, excluded := e.implementerExcluded("task-1", "codex")
+	reason, excluded := e.implementerExcluded("task-1", "codex", candidateA)
 	if !excluded {
 		t.Fatal("the participant that failed the independent-review leg was still eligible to implement " +
 			"the candidate it could not judge")
@@ -238,12 +244,50 @@ func TestAFailedReviewerIsNotSelectedAsImplementerForTheSameCandidate(t *testing
 	// THE NEGATIVE CONTROL. The exclusion is about this candidate's independence,
 	// not a judgement about the provider: anyone who did not fail the leg stays
 	// eligible, or the ladder would empty itself.
-	if _, excluded := e.implementerExcluded("task-1", "claude"); excluded {
+	if _, excluded := e.implementerExcluded("task-1", "claude", candidateA); excluded {
 		t.Error("a participant that never reviewed this candidate was excluded from implementing it")
 	}
 	// And the exclusion does not leak across tasks.
-	if _, excluded := e.implementerExcluded("task-2", "codex"); excluded {
+	if _, excluded := e.implementerExcluded("task-2", "codex", candidateA); excluded {
 		t.Error("the exclusion leaked to a different task")
+	}
+}
+
+// 3 (this round). THE EXCLUSION IS SCOPED TO THE EXACT CANDIDATE BINDING.
+//
+// A provider that could not review candidate A has said nothing about candidate
+// B. Keying the exclusion by task alone -- which the first cut of this repair did
+// -- retires a worker from every later candidate in the task because of one
+// transport failure it had no part in. That is a standing judgement about a
+// provider dressed up as a fact about independence.
+func TestAnExclusionForOneCandidateDoesNotRetireTheProviderForLaterCandidates(t *testing.T) {
+	e := &Engine{SessionID: "session-1"}
+	e.excludeFromImplementing("task-1", &roles.ReviewUnobtainable{
+		Binding:   roles.Binding{TaskID: "task-1", CandidateDigest: candidateA},
+		Attempted: []roles.ReviewAttemptFailure{{Provider: "codex", Cause: quotaExhausted()}},
+	})
+
+	// The candidate it failed to review: excluded.
+	if _, excluded := e.implementerExcluded("task-1", "codex", candidateA); !excluded {
+		t.Fatal("the exclusion does not hold for the candidate it was recorded against")
+	}
+	// An unrelated successor candidate in the SAME task: eligible.
+	if reason, excluded := e.implementerExcluded("task-1", "codex", candidateB); excluded {
+		t.Fatalf("a provider excluded for candidate %s was retired for unrelated candidate %s: %q",
+			shortDigest(candidateA), shortDigest(candidateB), reason)
+	}
+	// An unnameable candidate excludes nobody: guessing here is how the
+	// task-wide exclusion comes back.
+	if _, excluded := e.implementerExcluded("task-1", "codex", ""); excluded {
+		t.Error("an empty candidate identity produced an exclusion, which is the task-wide shape again")
+	}
+	// A record carrying no candidate identity is not stored at all, for the
+	// same reason.
+	e.excludeFromImplementing("task-9", &roles.ReviewUnobtainable{
+		Attempted: []roles.ReviewAttemptFailure{{Provider: "codex", Cause: quotaExhausted()}},
+	})
+	if _, excluded := e.implementerExcluded("task-9", "codex", candidateA); excluded {
+		t.Error("an unattributable exclusion was recorded and then applied to a candidate")
 	}
 }
 
@@ -306,3 +350,167 @@ func TestTheBlockedTerminalNamesTheObligationAndTheProvidersTried(t *testing.T) 
 
 var _ = json.Marshal
 var _ = config.Agent{}
+
+// perProviderResolver dispatches the reviewer turn by the CONFIGURED PROVIDER, so
+// a two-provider chain can fail its first leg and answer on its second. A single
+// stub cannot express that: it would answer identically whoever was asked, and
+// "the chain was walked" would be unobservable.
+type perProviderResolver struct {
+	runners map[string]agent.Runner
+	seen    *[]string
+	session string
+}
+
+func (r perProviderResolver) Resolve(spec RunnerSpec) (Resolved, error) {
+	if spec.Role == roles.Reviewer {
+		name := strings.ToLower(strings.TrimSpace(spec.Agent.Name))
+		*r.seen = append(*r.seen, name)
+		if runner, ok := r.runners[name]; ok {
+			return Resolved{Runner: runner, Name: "remote:" + name, Label: name}, nil
+		}
+		return Resolved{}, fmt.Errorf("no stub reviewer for %q", name)
+	}
+	return CLIResolved(spec, r.session), nil
+}
+
+// twoProviderHarness configures a REAL two-reviewer roster and resolves each leg
+// to its own runner.
+func twoProviderHarness(t *testing.T, first, second agent.Runner) (*gateHarness, *[]string) {
+	t.Helper()
+	h := newGateHarness(t, requiresIndependentReview(), roles.Fresh, "accept")
+	seen := &[]string{}
+	h.engine.Config.Reviewer = config.Agent{}
+	h.engine.Config.Reviewers = []config.Agent{
+		{Name: "codex", Command: "true", Graph: "none"},
+		// chatgpt, not an invented name: roles.Assign builds the chain from
+		// provider.Capability, and a provider the binary does not recognise gets
+		// no roles and can never be an alternate. A stub named "gemini" produced a
+		// one-entry chain that looked like a fallback and was not.
+		{Name: "chatgpt", Command: "true", Graph: "none"},
+	}
+	h.engine.Runners = perProviderResolver{
+		runners: map[string]agent.Runner{"codex": first, "chatgpt": second},
+		seen:    seen, session: "session-1",
+	}
+	return h, seen
+}
+
+// 2a. BOTH PROVIDERS FAIL: the chain is walked in order and the result is still
+// transport state, with the candidate untouched and the cycle not advanced.
+func TestBothReviewersFailingWalksTheChainAndStillBlocksExternally(t *testing.T) {
+	h, seen := twoProviderHarness(t,
+		&unreachableRunner{err: quotaExhausted()},
+		&unreachableRunner{err: reviewerTimedOut()})
+
+	outcome, err := runBlocked(t, h)
+	// Fingerprinted AFTER the run: the blocked interval begins once the candidate
+	// exists. Comparing against the pre-run tree measured the implementer doing
+	// its job and called it drift.
+	blocked := candidateFingerprint(t, h.work)
+
+	if len(*seen) < 2 {
+		t.Fatalf("the chain was not walked: reviewers attempted = %v; a second authorized reviewer must be "+
+			"tried before the chain is called exhausted", *seen)
+	}
+	if (*seen)[0] == (*seen)[1] {
+		t.Errorf("the same provider was tried twice instead of falling back: %v", *seen)
+	}
+	if outcome != candidateReviewUnobtainable {
+		t.Fatalf("outcome %q after BOTH reviewers failed; want blocked on external review", outcome)
+	}
+	var u *roles.ReviewUnobtainable
+	if !errors.As(err, &u) {
+		t.Fatalf("the exhausted chain did not carry its typed identity: %v", err)
+	}
+	if len(u.Providers()) < 2 {
+		t.Errorf("only %v recorded as tried; a fresh request cannot avoid providers nobody recorded", u.Providers())
+	}
+	if starts := implementerStarts(h); starts > 1 {
+		t.Errorf("the implementer started %d times: the cycle advanced because reviewers were unreachable", starts)
+	}
+	// The blocked candidate survives a second attempt untouched: not consumed,
+	// not discarded, not reminted.
+	if second, _ := runBlocked(t, h); second != candidateReviewUnobtainable {
+		t.Fatalf("a second attempt on a blocked candidate concluded %q", second)
+	}
+	again := candidateFingerprint(t, h.work)
+	if len(blocked) != len(again) {
+		t.Fatalf("the candidate gained or lost files across the blocked interval: %d then %d", len(blocked), len(again))
+	}
+	for name, body := range blocked {
+		if again[name] != body {
+			t.Errorf("%s changed across the blocked interval", name)
+		}
+	}
+}
+
+// 2b. THE FIRST PROVIDER FAILS AND THE SECOND ANSWERS.
+//
+// The same immutable candidate continues on the second reviewer's verdict.
+// Nothing is reminted and no implementation cycle is spent merely because the
+// first leg failed: a transport failure is not work.
+func TestASecondReviewerAnsweringContinuesTheSameCandidate(t *testing.T) {
+	verdict, _ := json.Marshal(map[string]any{"decision": "accept", "summary": "the candidate stands"})
+	h, seen := twoProviderHarness(t,
+		&unreachableRunner{err: quotaExhausted()},
+		answeringRunner{text: string(verdict), mode: roles.Fresh})
+
+	outcome, err := runBlocked(t, h)
+
+	if err != nil {
+		t.Fatalf("a chain whose second reviewer answered still failed: %v", err)
+	}
+	if len(*seen) < 2 {
+		t.Fatalf("the second reviewer was never asked: %v", *seen)
+	}
+	if outcome == candidateReviewUnobtainable {
+		t.Fatal("a chain with an answering second reviewer was reported as unobtainable; " +
+			"one failed leg is not an exhausted chain")
+	}
+	if outcome == candidateNotConverged {
+		t.Fatal("the first leg's transport failure was charged to the implementer")
+	}
+	// Both legs judge ONE candidate produced by ONE implementer turn. If the
+	// failed first leg had cost a cycle, the implementer would have run again.
+	if starts := implementerStarts(h); starts > 1 {
+		t.Errorf("the implementer started %d times: a cycle was spent because the first reviewer failed", starts)
+	}
+}
+
+// 1 (this round). THE READ-ONLY PATH CARRIES THE SAME REPAIR.
+//
+// runCandidate has TWO review call sites: the modify loop and the inspection
+// branch. The first cut of this repair changed both and witnessed only the
+// modify one, so reverting the inspection site to candidateNotConverged left
+// every test green -- a surviving mutant reported rather than hidden.
+//
+// A read-only plan produces findings rather than a diff, and those findings are
+// acted on. An unreachable reviewer there is the same condition: nobody judged
+// the report, and the worker did not fail.
+func TestAnUnavailableReviewerOnTheReadOnlyPathAlsoBlocksExternally(t *testing.T) {
+	h := unavailableHarness(t, &unreachableRunner{err: quotaExhausted()})
+	h.tc.Mode = ModeInspect
+	// A read-only plan that changes a file is refused before any reviewer is
+	// consulted, and rightly. The inspect worker drains its prompt and REPORTS,
+	// touching nothing, so the run reaches the review seam this witness is about.
+	reporter := config.Agent{
+		Name: "claude", Graph: "none",
+		Command: "/bin/sh",
+		Args:    []string{"-c", "cat >/dev/null; echo 'FINDING: the ledger verifier indexes the files slice against the entries slice'"},
+	}
+	h.worker = reporter
+	h.engine.Config.Implementors = []config.Agent{reporter}
+
+	outcome, err := runBlocked(t, h)
+
+	if outcome == candidateNotConverged {
+		t.Fatal("on the read-only path a reviewer that could not be reached was reported as the worker " +
+			"failing to converge; the findings stand and nobody judged them")
+	}
+	if outcome != candidateReviewUnobtainable {
+		t.Fatalf("outcome %q on the read-only path; want blocked on external review", outcome)
+	}
+	if !errors.Is(err, roles.ErrReviewUnobtainable) {
+		t.Fatalf("the read-only path lost the blocked condition's identity: %v", err)
+	}
+}
