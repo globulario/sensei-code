@@ -81,6 +81,49 @@ type ExchangeRecord struct {
 	Conversation   string    `json:"conversation"`
 	PublishedAt    time.Time `json:"published_at"`
 	Deadline       time.Time `json:"deadline"`
+
+	// Kind says which lifecycle owns the request. An ARCHITECTURE request is a
+	// turn: its waiter is the only consumer, so a waiter that is gone makes the
+	// request abandoned and it is withdrawn at startup. A REVIEW request is the
+	// durable form of a review OWED on an exact candidate: the waiter timing out
+	// or the process dying ends one wait, not the obligation, so startup must not
+	// withdraw it. It is retired only when a continuation explicitly supersedes it
+	// for the same candidate.
+	//
+	// Empty means the record predates the field. Those came from the architecture
+	// path's lifetime records (#162) and keep that treatment.
+	Kind string `json:"kind,omitempty"`
+
+	// The candidate a REVIEW request is about, exactly as the request carried it.
+	// A relayed verdict or a continuation is checked against these, never against
+	// a candidate re-derived later.
+	BaseSHA         string `json:"base,omitempty"`
+	CandidateDigest string `json:"candidate_digest,omitempty"`
+	CandidateTree   string `json:"candidate_tree,omitempty"`
+	ReviewCommit    string `json:"review_commit,omitempty"`
+}
+
+const (
+	// ExchangeArchitecture marks an architecture turn's request.
+	ExchangeArchitecture = "architecture"
+	// ExchangeReview marks a review request: an owed review on an exact candidate.
+	ExchangeReview = "review"
+)
+
+// IsReview reports whether the record is a review obligation. Read by
+// membership: only the explicit review kind is one, so an unknown or empty kind
+// is never mistaken for an obligation that must be kept.
+func (r ExchangeRecord) IsReview() bool { return r.Kind == ExchangeReview }
+
+// Subject is the candidate identity a review request carried.
+func (r ExchangeRecord) Subject() Subject {
+	return Subject{
+		TaskID:          r.TaskID,
+		BaseSHA:         r.BaseSHA,
+		CandidateDigest: r.CandidateDigest,
+		CandidateTree:   r.CandidateTree,
+		ReviewCommit:    r.ReviewCommit,
+	}
 }
 
 // ExchangeLog persists open exchanges.
@@ -182,13 +225,37 @@ func (l ExchangeLog) Pending() ([]ExchangeRecord, error) {
 	return out, nil
 }
 
-// ReconcileAbandonedExchanges withdraws every exchange still open in the log.
+// PendingReviews lists the review obligations still open, oldest first.
 //
-// Called once at startup, and the timing is the argument: a waiter is a
-// goroutine inside AwaitArchitecture, so it cannot have survived into this
-// process. Every open record is therefore abandoned by construction -- this
-// function never has to guess whether something is still waiting, which is the
-// judgement it would get wrong.
+// A review record is not a waiter's bookkeeping; it is the durable statement
+// that an exact candidate is owed a review under a named request. Whoever
+// continues the task, or relays a verdict for it, reads the obligation here.
+func (l ExchangeLog) PendingReviews() ([]ExchangeRecord, error) {
+	pending, err := l.Pending()
+	var out []ExchangeRecord
+	for _, rec := range pending {
+		if rec.IsReview() {
+			out = append(out, rec)
+		}
+	}
+	return out, err
+}
+
+// ReconcileAbandonedExchanges withdraws every abandoned TURN still open in the
+// log, and keeps every review obligation.
+//
+// Called once at startup, and the timing is the argument for turns: an
+// architecture waiter is a goroutine inside AwaitArchitecture, so it cannot have
+// survived into this process. Every open turn record is therefore abandoned by
+// construction -- this function never has to guess whether something is still
+// waiting, which is the judgement it would get wrong.
+//
+// A REVIEW record is deliberately not a turn. Its waiter ending -- a timeout, a
+// crash, a restart -- ends one wait on a review the candidate is still owed.
+// Withdrawing it here destroyed the only durable statement that a validated
+// candidate was awaiting review, so a restart turned a waiting candidate into
+// abandoned work. Review records are left open; a continuation retires one only
+// when it supersedes it for the same candidate.
 //
 // The withdrawal is posted by the SAME principal that published the request:
 // the App. A retraction of a machine-authored request is protocol content about
@@ -202,6 +269,9 @@ func ReconcileAbandonedExchanges(ctx context.Context, log ExchangeLog, box Issue
 	pending, listErr := log.Pending()
 	withdrawn := 0
 	for _, rec := range pending {
+		if rec.IsReview() {
+			continue
+		}
 		err := withdraw(ctx, box, rec)
 		if err == nil {
 			err = log.Close(rec.TaskID, rec.RequestID)

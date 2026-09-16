@@ -58,6 +58,11 @@ func installGitHubBridge(engine *workflow.Engine, repoRoot string, g config.GitH
 		return "", fmt.Errorf("the configured github bridge could not be installed: %w", err)
 	}
 	engine.Runners = runners.Resolver
+	// A run or a resume reads recorded human overrides too; neither can write
+	// one, which stays the attestation socket handler's alone.
+	if runners.Attestations.Dir != "" {
+		engine.Attestations = runners.Attestations
+	}
 	return runners.Banner, nil
 }
 

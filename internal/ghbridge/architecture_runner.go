@@ -84,6 +84,9 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 			Conversation:   r.Issue.Number,
 			PublishedAt:    time.Now().UTC(),
 			Deadline:       time.Now().Add(r.waitFor()).UTC(),
+			// A turn: its waiter is the only consumer, so a waiter that is gone
+			// makes this request abandoned and startup withdraws it.
+			Kind: ExchangeArchitecture,
 		}
 		if openErr := r.Exchanges.Open(rec); openErr != nil && emit != nil {
 			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentStarted,

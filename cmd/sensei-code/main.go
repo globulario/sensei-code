@@ -74,6 +74,9 @@ func main() {
 		case "proposal":
 			fatalIf(runProposal(repo, os.Args[2:]))
 			return
+		case "review":
+			fatalIf(runReview(repo, os.Args[2:]))
+			return
 		case "context":
 			fatalIf(runContext(ctx, repo, cfg, os.Args[2:]))
 			return

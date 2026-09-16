@@ -27,6 +27,17 @@ import (
 type ReviewResult struct {
 	independent *roles.ReviewVerdict
 	advisory    *roles.Advisory
+	// attested is an ADVISORY verdict a human overrode. It is a third standing
+	// rather than a flag on advisory, for the same reason the first two are not
+	// a boolean: a reader holding the result must not be able to reach the
+	// verdict without also reaching what it is worth. It never implies
+	// independence -- see SatisfiesAdversarialObligation, which still says no.
+	attested *attestedVerdict
+}
+
+type attestedVerdict struct {
+	advisory    roles.Advisory
+	attestation roles.Attestation
 }
 
 // independentReview is a verdict from a session this project opened and
@@ -40,6 +51,28 @@ func advisoryReview(a roles.Advisory) ReviewResult {
 	return ReviewResult{advisory: &a}
 }
 
+// attestedReview is an advisory verdict a local operator overrode, on their own
+// authority, for this exact candidate.
+//
+// The attestation is checked against the verdict here rather than trusted:
+// Covers refuses an attestation about a different candidate or a different
+// review, and an unchecked one would be exactly the manufactured authority this
+// whole design refuses.
+func attestedReview(a roles.Advisory, att roles.Attestation, reviewDigest string) (ReviewResult, error) {
+	if err := att.Covers(a.Provenance.Binding(), reviewDigest); err != nil {
+		return ReviewResult{}, err
+	}
+	return ReviewResult{attested: &attestedVerdict{advisory: a, attestation: att}}, nil
+}
+
+// Attestation is the human override this result carries, if it carries one.
+func (r ReviewResult) Attestation() (roles.Attestation, bool) {
+	if r.attested == nil {
+		return roles.Attestation{}, false
+	}
+	return r.attested.attestation, true
+}
+
 // SatisfiesAdversarialObligation is the only question here that can grant
 // anything, and it can only ever answer yes for a verdict whose isolation was
 // established.
@@ -48,11 +81,17 @@ func advisoryReview(a roles.Advisory) ReviewResult {
 // independent review before this answer matters, and whether the reviewer was
 // the implementer is a separate check roles.Policy makes. Nothing here decides
 // admission.
+// An attested result deliberately answers NO. A human overrode the obligation;
+// nobody established the isolation it asks about, and a receipt that said
+// otherwise would be the substitution this gate exists to prevent.
 func (r ReviewResult) SatisfiesAdversarialObligation() bool { return r.independent != nil }
 
 // Advisory reports the other side of the same fact, spelled out so a reader of
 // a call site does not have to negate the sentence above in their head.
-func (r ReviewResult) Advisory() bool { return r.advisory != nil }
+//
+// An attested verdict is still advisory: the override changed what MAY PROCEED,
+// not what the review established.
+func (r ReviewResult) Advisory() bool { return r.advisory != nil || r.attested != nil }
 
 // Verdict is the review itself, for the record and for the branches that act on
 // what the reviewer said rather than on what it is worth.
@@ -62,6 +101,8 @@ func (r ReviewResult) Verdict() roles.ReviewVerdict {
 		return *r.independent
 	case r.advisory != nil:
 		return r.advisory.ReviewVerdict
+	case r.attested != nil:
+		return r.attested.advisory.ReviewVerdict
 	}
 	return roles.ReviewVerdict{}
 }
@@ -78,6 +119,9 @@ func (r ReviewResult) Provenance() roles.Provenance {
 
 // Describe is the line the record carries. An advisory result says so.
 func (r ReviewResult) Describe() string {
+	if r.attested != nil {
+		return r.attested.advisory.Describe() + " — " + r.attested.attestation.Describe()
+	}
 	if r.advisory != nil {
 		return r.advisory.Describe()
 	}
@@ -92,8 +136,17 @@ func (r ReviewResult) Describe() string {
 // conformance and may drive repair; what it may not do is stand in for the
 // independent look a high-risk task requires. Where the policy requires none,
 // there is nothing for it to stand in for, and it continues.
+// An ATTESTED result unlocks the transition and satisfies nothing. The
+// obligation stays unmet and stays on the record; what the human decided is that
+// the candidate may proceed anyway, which is a decision only a human holds. It
+// is deliberately a separate branch from the one above: read as
+// "SatisfiesAdversarialObligation || attested" it would look like two ways of
+// meeting the same requirement, and they are not.
 func (r ReviewResult) Unlocks(p roles.Policy) bool {
 	if !p.CrossProviderReview {
+		return true
+	}
+	if r.attested != nil {
 		return true
 	}
 	return r.SatisfiesAdversarialObligation()
@@ -120,6 +173,12 @@ const (
 	// task's required independent review has not happened. Nothing about the
 	// candidate needs changing, and nothing may proceed on its behalf.
 	candidateAwaitingIndependentReview candidateOutcome = "awaiting_independent_review"
+	// candidateReviewUnanswered means the candidate was validated and audited, a
+	// review request for that exact candidate was published, and no answer
+	// arrived before the request's deadline. Nobody judged the candidate, so no
+	// worker is sent at it and no other reviewer is substituted; it is preserved
+	// awaiting the review it is owed.
+	candidateReviewUnanswered candidateOutcome = "review_unanswered"
 )
 
 // Accepted reads the outcome by membership. Written this way rather than as
