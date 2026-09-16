@@ -179,6 +179,17 @@ const (
 	// worker is sent at it and no other reviewer is substituted; it is preserved
 	// awaiting the review it is owed.
 	candidateReviewUnanswered candidateOutcome = "review_unanswered"
+	// candidateReviewUnobtainable means the candidate was validated and audited
+	// and EVERY authorized reviewer was tried without one being reached. Nobody
+	// judged the candidate, so -- exactly as with an unanswered request -- no
+	// worker is sent at it and nothing proceeds on its behalf. It is preserved
+	// awaiting a fresh review request against the same immutable candidate.
+	//
+	// Distinct from candidateReviewUnanswered because the two resume
+	// differently: an unanswered request already exists and is waited on, while
+	// an unobtainable review has no live request and needs a NEW one issued,
+	// possibly to a different provider.
+	candidateReviewUnobtainable candidateOutcome = "review_unobtainable"
 )
 
 // Accepted reads the outcome by membership. Written this way rather than as

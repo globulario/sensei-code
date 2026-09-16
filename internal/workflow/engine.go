@@ -41,8 +41,12 @@ type Engine struct {
 	Store     *session.Store
 	SessionID string
 
-	mu      sync.Mutex
-	pending map[string]chan string
+	mu sync.Mutex
+	// reviewLegFailures records, per task, the participants that failed the
+	// independent-review leg for a candidate, so none of them is selected to
+	// implement the candidate it could not judge.
+	reviewLegFailures map[string]map[string]*roles.ReviewUnobtainable
+	pending           map[string]chan string
 	// notes holds guidance the human typed while a task was running, keyed by
 	// task. It is a queue rather than an interrupt: a worker mid-cycle cannot be
 	// spoken to, so the guidance waits for the next boundary where it can
@@ -1571,6 +1575,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						// unanswered are owed that review, not a new worker.
 						return candidateReviewUnanswered, plan, lastReview, lastAudit, err
 					}
+					if errors.Is(err, roles.ErrReviewUnobtainable) {
+						// No reviewer could be reached. Nobody judged the
+						// findings, so no worker is sent at them.
+						return candidateReviewUnobtainable, plan, lastReview, lastAudit, err
+					}
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
 				review := result.Verdict()
@@ -1909,6 +1918,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// the error travels with its own outcome so the caller preserves
 				// this exact candidate instead of handing it to the next worker.
 				return candidateReviewUnanswered, plan, lastReview, lastAudit, err
+			}
+			if errors.Is(err, roles.ErrReviewUnobtainable) {
+				// The candidate stands, validated and audited, and no authorized
+				// reviewer could be reached to judge it. Provider availability is
+				// transport state, not authority: it travels with its own outcome
+				// so the candidate is preserved rather than handed on.
+				return candidateReviewUnobtainable, plan, lastReview, lastAudit, err
 			}
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
@@ -2551,6 +2567,11 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 	binding := packet.Provenance.Binding()
 	attempt := e.nextReviewAttempt(taskID)
 	var lastErr error
+	// Every provider that failed the independent-review leg for THIS candidate,
+	// in the order tried. Collected rather than reduced to a last error, because
+	// the exhausted chain is a different condition from any one failure in it,
+	// and because an implementer selection must be able to exclude these names.
+	var attempted []roles.ReviewAttemptFailure
 	for current, ok := assignment, true; ok; current, ok = current.Fallback(current.Provider) {
 		cfg, found := e.reviewAgent(current.Provider)
 		if !found {
@@ -2577,6 +2598,7 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			return result, nil
 		}
 		lastErr = err
+		attempted = append(attempted, roles.ReviewAttemptFailure{Provider: cfg.Name, Cause: err})
 		if errors.Is(err, errReviewRefused) {
 			// The verdict was structurally inadmissible -- self-review, or a
 			// review of another revision. Another provider would not fix that,
@@ -2594,6 +2616,21 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			config.DisplayName(cfg.Name)+" could not produce a bounded review; trying the next independent reviewer",
 			map[string]string{"error": err.Error()}))
+	}
+	// THE CHAIN IS EXHAUSTED, AND THAT IS TRANSPORT STATE.
+	//
+	// Every authorized reviewer was tried and none could be reached. No review
+	// was published, so nothing is owed an answer; no review was produced, so
+	// nothing judged the candidate. Returning a bare error here reported this as
+	// the IMPLEMENTER failing to converge, which sent the candidate down the
+	// handoff ladder -- and handed it to the very participant that had just
+	// failed to review it.
+	//
+	// Naming the condition is the whole repair: the caller can now preserve the
+	// candidate and wait, instead of inferring implementation failure from a
+	// provider's exit status.
+	if len(attempted) > 0 {
+		return ReviewResult{}, &roles.ReviewUnobtainable{Binding: binding, Attempt: attempt, Attempted: attempted}
 	}
 	return ReviewResult{}, fmt.Errorf("no independent reviewer produced a bounded decision: %w", lastErr)
 }
@@ -4435,7 +4472,30 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// carried arrives non-empty on a resume, so the first worker starts from the
 	// findings the interrupted run had already earned.
 	var failures []string
+	// ineligible is kept separate from failures: a participant excluded from
+	// implementing a candidate did not FAIL at it, and the structural-order guard
+	// in structural_test.go reads the first `failures = append` in this loop as the
+	// candidate-failure path.
+	var ineligible []string
+	// continuing names the candidate the next worker would take over, so an
+	// exclusion recorded against THAT candidate applies and one recorded against
+	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
+	// no candidate yet to be excluded from.
+	continuing := e.continuingCandidate(taskID)
 	for _, worker := range e.Config.Implementors {
+		// A PARTICIPANT THAT COULD NOT JUDGE THIS CANDIDATE MAY NOT WRITE IT.
+		//
+		// The handoff ladder selects the next implementor by position, which on
+		// 2026-09-16 handed a candidate back to the provider that had just failed
+		// its independent-review leg -- the reviewer became the implementer of the
+		// work it could not review. Independence is not recoverable afterwards, so
+		// the exclusion is applied at selection.
+		if reason, excluded := e.implementerExcluded(taskID, worker.Name, continuing); excluded {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				config.DisplayName(worker.Name)+" is not eligible to implement this candidate: "+reason, nil))
+			ineligible = append(ineligible, worker.Name+": "+reason)
+			continue
+		}
 		state.RecordWorker(worker.Name)
 		state.Phase = taskstate.Implementing
 		_ = state.Save(e.Repo.Root)
@@ -4484,6 +4544,46 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
 				"the candidate stands, validated and audited; its review request got no answer before its deadline, "+
 					"so it is preserved awaiting review",
+				payload)
+			return
+		}
+		if accepted == candidateReviewUnobtainable {
+			// BLOCKED_EXTERNAL. Every authorized reviewer was tried for this exact
+			// candidate and none could be reached. No request is outstanding, so
+			// nothing is waiting for an answer; no verdict exists, so nothing has
+			// judged the work.
+			//
+			// The candidate is preserved EXACTLY as it stands -- no handoff, no
+			// disposal, no mint, and the implementation cycle does not advance.
+			// The participants that failed the review leg are recorded so a fresh
+			// request can go to a different provider, and so none of them may be
+			// selected to implement the candidate they could not judge.
+			var unobtainable *roles.ReviewUnobtainable
+			errors.As(err, &unobtainable)
+			obligation := "no authorized reviewer could be reached for this candidate; it is owed an independent review"
+			payload := map[string]any{"review_kind": "unobtainable", "independent_review": false}
+			if unobtainable != nil {
+				obligation = "no authorized reviewer could be reached for candidate " +
+					shortDigest(unobtainable.Binding.CandidateDigest) + " (tried " +
+					strings.Join(unobtainable.Providers(), ", ") + "); it is owed an independent review"
+				payload["candidate_digest"] = unobtainable.Binding.CandidateDigest
+				payload["candidate_tree"] = unobtainable.Binding.CandidateTree
+				payload["base"] = unobtainable.Binding.BaseSHA
+				payload["review_attempt"] = unobtainable.Attempt
+				payload["reviewers_tried"] = unobtainable.Providers()
+				e.excludeFromImplementing(taskID, unobtainable)
+			}
+			payload["obligations"] = []string{obligation}
+			plan = finalPlan
+			state.Phase = taskstate.Reviewing
+			state.Evidence = tc.EvidenceSnapshot
+			state.OpenFindings(openFindingsWith(review, audit, nil, []string{obligation}))
+			_ = state.Save(e.Repo.Root)
+			e.reportUndeliveredNotes(taskID)
+			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID),
+				"the candidate stands, validated and audited; no authorized reviewer could be reached, "+
+					"so it is preserved awaiting a fresh review request",
 				payload)
 			return
 		}
@@ -4668,6 +4768,16 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	e.reportUndeliveredNotes(taskID)
 	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 		"no bounded implementor converged and the candidate holds no work")
+	if len(failures) == 0 && len(ineligible) > 0 {
+		// Every implementor was excluded and none failed. Reporting that as
+		// "no implementor produced an acceptable candidate" would blame workers
+		// that were never asked.
+		fail(fmt.Errorf("no eligible implementor remains for this candidate: %s", strings.Join(ineligible, " | ")))
+		return
+	}
+	if len(ineligible) > 0 {
+		failures = append(failures, ineligible...)
+	}
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
 }
 
