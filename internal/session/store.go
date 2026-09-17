@@ -3,6 +3,8 @@ package session
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,6 +29,19 @@ func New(repo, sessionID string) (*Store, error) {
 	return &Store{path: p}, nil
 }
 
+// maxSessionEvent is the largest single durable session event Load will read.
+//
+// It matches the limit this repository already uses for a governed event carrying a
+// whole candidate diff (runreceipt/legacy.maxLine, provider/codex_appserver.go) so
+// there is ONE size policy rather than three. Finite deliberately: crossing it is an
+// error, never a truncation.
+const maxSessionEvent = 16 << 20
+
+// initialSessionEventBuffer is the starting allocation, not the ceiling; Scanner
+// grows it as needed up to maxSessionEvent. Ordinary events are far smaller, so
+// this is sized for them and not for the rare diff-carrying one.
+const initialSessionEventBuffer = 1 << 20
+
 func (s *Store) Append(e event.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -46,6 +61,25 @@ func (s *Store) Load() ([]event.Event, error) {
 	defer f.Close()
 	var out []event.Event
 	sc := bufio.NewScanner(f)
+	// THE WRITER MUST NOT BE ABLE TO CREATE A RECORD THE READER CANNOT OPEN.
+	//
+	// Append encodes an event with json.NewEncoder and bounds nothing, while this
+	// reader used bufio.Scanner's DEFAULT 64 KiB token ceiling. Any event Sensei-Code
+	// legitimately produces above that -- a candidate.changed carrying a whole diff --
+	// made the durable session record unreadable, and unreadable is not local to one
+	// line: Load fails, so FindInterrupted has nothing to derive from, so `resume` and
+	// `resume --list` both fail and the preserved-candidate lifecycle becomes
+	// unreachable. Observed at 172_623 bytes on a 3_236-line candidate: the larger and
+	// more valuable the work, the more certainly its own history locked it out.
+	//
+	// 16 MiB is not a new policy. It is the limit this repository already treats as
+	// authoritative for one governed event -- see runreceipt/legacy.maxLine, whose
+	// comment names the same case ("one governed event can carry a whole candidate
+	// diff"), and provider/codex_appserver.go. The ceiling stays FINITE on purpose: a
+	// corrupt or hostile record must not be able to exhaust memory, and a bound that
+	// is never reached is still the thing that makes exceeding it an error rather than
+	// a silent truncation.
+	sc.Buffer(make([]byte, 0, initialSessionEventBuffer), maxSessionEvent)
 	for sc.Scan() {
 		var e event.Event
 		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
@@ -53,7 +87,18 @@ func (s *Store) Load() ([]event.Event, error) {
 		}
 		out = append(out, e)
 	}
-	return out, sc.Err()
+	if err := sc.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			// Named rather than passed through. "token too long" said nothing about
+			// which file, which ceiling, or that the record was otherwise intact --
+			// it cost a diagnostic cycle to locate.
+			return nil, fmt.Errorf("session record %s holds an event larger than the %d-byte maximum a single "+
+				"event may occupy; it is refused rather than truncated, because a partially read event is not "+
+				"the event that was written: %w", s.path, maxSessionEvent, err)
+		}
+		return nil, err
+	}
+	return out, nil
 }
 
 // ID mints a session identifier that sorts chronologically as a string, so the
