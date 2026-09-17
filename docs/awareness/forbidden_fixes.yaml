@@ -106,3 +106,8 @@ forbidden_fixes:
         - internal/setup/checks.go
     reason: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.
     contract: A check that accepts a scope must issue its observation within that scope, and must not label an answer with a scope it did not ask.
+  - id: forbidden_fix.raise_only_the_reader_s_ceiling_when_a_writer_produces_a_rec
+    title: Raise only the reader's ceiling when a writer produces a record the reader refuses
+    summary: 'Enlarging the reader''s bound until the observed event fits leaves the writer unbounded, so the next larger event reproduces the failure at the new threshold. It looks like a fix because the one record that prompted it now opens. The asymmetry is the defect, not the number: put the refusal on the writer, before any bytes enter durable history, and give the reader the same finite bound so a record written by an older binary or corrupted externally is refused rather than silently truncated. Pass the bound to Scanner as max+1: the ceiling must leave room beyond the token for the delimiter, so passing it verbatim makes an event of EXACTLY the maximum writable but unreadable -- the original asymmetry surviving at one specific size.'
+    reason: 'A writer and the reader of the same durable record share one size policy: every event the writer accepts, the reader can read back, and an event the writer cannot durably support is refused BEFORE any bytes enter history'
+    contract: 'A writer and the reader of the same durable record share one size policy: every event the writer accepts, the reader can read back, and an event the writer cannot durably support is refused BEFORE any bytes enter history'
