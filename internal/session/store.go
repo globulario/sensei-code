@@ -2,6 +2,7 @@ package session
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,12 +46,39 @@ const initialSessionEventBuffer = 1 << 20
 func (s *Store) Append(e event.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// THE REFUSAL BELONGS HERE, BEFORE ANY BYTES ENTER DURABLE HISTORY.
+	//
+	// Bounding only the reader moved the poison pill from 64 KiB to 16 MiB; it did not
+	// remove it. An Append that succeeds while the matching Load refuses is the same
+	// contradiction at a higher threshold: the writer still manufactures a record
+	// nothing can open, and by then it is durable.
+	//
+	// So the event is encoded into memory and measured first. Over the limit, nothing
+	// is written and the caller is told; the existing session stays exactly as it was,
+	// readable, with no partial line appended. Under it, the write is one call, so a
+	// record that exists is a record Load can read.
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(e); err != nil {
+		return err
+	}
+	// Encode appends the newline delimiter. Scanner's ceiling applies to the TOKEN,
+	// which excludes that byte, so the token is what must fit -- measured rather than
+	// assumed, because an off-by-one here is precisely the boundary that would make
+	// Append and Load disagree again.
+	if token := buf.Len() - 1; token > maxSessionEvent {
+		return fmt.Errorf("session event for task %q is %d bytes, over the %d-byte maximum a single "+
+			"event may occupy; it is refused before it is written, because a durable record that "+
+			"Load cannot read back is worse than a rejected append", e.TaskID, token, maxSessionEvent)
+	}
+
 	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return json.NewEncoder(f).Encode(e)
+	_, err = f.Write(buf.Bytes())
+	return err
 }
 
 func (s *Store) Load() ([]event.Event, error) {
@@ -79,7 +107,13 @@ func (s *Store) Load() ([]event.Event, error) {
 	// corrupt or hostile record must not be able to exhaust memory, and a bound that
 	// is never reached is still the thing that makes exceeding it an error rather than
 	// a silent truncation.
-	sc.Buffer(make([]byte, 0, initialSessionEventBuffer), maxSessionEvent)
+	// maxSessionEvent+1, not maxSessionEvent. Scanner's ceiling must leave room beyond
+	// the token for the delimiter it scans past, so passing the bound verbatim makes a
+	// token of EXACTLY the maximum unreadable -- accepted by Append, refused here, the
+	// original asymmetry surviving at one specific size. Found by a boundary witness
+	// that computes the encoding overhead and lands on the exact byte; an earlier
+	// version stepped in 64-byte increments and sailed straight past it.
+	sc.Buffer(make([]byte, 0, initialSessionEventBuffer), maxSessionEvent+1)
 	for sc.Scan() {
 		var e event.Event
 		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
