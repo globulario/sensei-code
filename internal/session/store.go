@@ -2,7 +2,10 @@ package session
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -27,15 +30,55 @@ func New(repo, sessionID string) (*Store, error) {
 	return &Store{path: p}, nil
 }
 
+// maxSessionEvent is the largest single durable session event Load will read.
+//
+// It matches the limit this repository already uses for a governed event carrying a
+// whole candidate diff (runreceipt/legacy.maxLine, provider/codex_appserver.go) so
+// there is ONE size policy rather than three. Finite deliberately: crossing it is an
+// error, never a truncation.
+const maxSessionEvent = 16 << 20
+
+// initialSessionEventBuffer is the starting allocation, not the ceiling; Scanner
+// grows it as needed up to maxSessionEvent. Ordinary events are far smaller, so
+// this is sized for them and not for the rare diff-carrying one.
+const initialSessionEventBuffer = 1 << 20
+
 func (s *Store) Append(e event.Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	// THE REFUSAL BELONGS HERE, BEFORE ANY BYTES ENTER DURABLE HISTORY.
+	//
+	// Bounding only the reader moved the poison pill from 64 KiB to 16 MiB; it did not
+	// remove it. An Append that succeeds while the matching Load refuses is the same
+	// contradiction at a higher threshold: the writer still manufactures a record
+	// nothing can open, and by then it is durable.
+	//
+	// So the event is encoded into memory and measured first. Over the limit, nothing
+	// is written and the caller is told; the existing session stays exactly as it was,
+	// readable, with no partial line appended. Under it, the write is one call, so a
+	// record that exists is a record Load can read.
+	var buf bytes.Buffer
+	if err := json.NewEncoder(&buf).Encode(e); err != nil {
+		return err
+	}
+	// Encode appends the newline delimiter. Scanner's ceiling applies to the TOKEN,
+	// which excludes that byte, so the token is what must fit -- measured rather than
+	// assumed, because an off-by-one here is precisely the boundary that would make
+	// Append and Load disagree again.
+	if token := buf.Len() - 1; token > maxSessionEvent {
+		return fmt.Errorf("session event for task %q is %d bytes, over the %d-byte maximum a single "+
+			"event may occupy; it is refused before it is written, because a durable record that "+
+			"Load cannot read back is worse than a rejected append", e.TaskID, token, maxSessionEvent)
+	}
+
 	f, err := os.OpenFile(s.path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
-	return json.NewEncoder(f).Encode(e)
+	_, err = f.Write(buf.Bytes())
+	return err
 }
 
 func (s *Store) Load() ([]event.Event, error) {
@@ -46,6 +89,31 @@ func (s *Store) Load() ([]event.Event, error) {
 	defer f.Close()
 	var out []event.Event
 	sc := bufio.NewScanner(f)
+	// THE WRITER MUST NOT BE ABLE TO CREATE A RECORD THE READER CANNOT OPEN.
+	//
+	// Append encodes an event with json.NewEncoder and bounds nothing, while this
+	// reader used bufio.Scanner's DEFAULT 64 KiB token ceiling. Any event Sensei-Code
+	// legitimately produces above that -- a candidate.changed carrying a whole diff --
+	// made the durable session record unreadable, and unreadable is not local to one
+	// line: Load fails, so FindInterrupted has nothing to derive from, so `resume` and
+	// `resume --list` both fail and the preserved-candidate lifecycle becomes
+	// unreachable. Observed at 172_623 bytes on a 3_236-line candidate: the larger and
+	// more valuable the work, the more certainly its own history locked it out.
+	//
+	// 16 MiB is not a new policy. It is the limit this repository already treats as
+	// authoritative for one governed event -- see runreceipt/legacy.maxLine, whose
+	// comment names the same case ("one governed event can carry a whole candidate
+	// diff"), and provider/codex_appserver.go. The ceiling stays FINITE on purpose: a
+	// corrupt or hostile record must not be able to exhaust memory, and a bound that
+	// is never reached is still the thing that makes exceeding it an error rather than
+	// a silent truncation.
+	// maxSessionEvent+1, not maxSessionEvent. Scanner's ceiling must leave room beyond
+	// the token for the delimiter it scans past, so passing the bound verbatim makes a
+	// token of EXACTLY the maximum unreadable -- accepted by Append, refused here, the
+	// original asymmetry surviving at one specific size. Found by a boundary witness
+	// that computes the encoding overhead and lands on the exact byte; an earlier
+	// version stepped in 64-byte increments and sailed straight past it.
+	sc.Buffer(make([]byte, 0, initialSessionEventBuffer), maxSessionEvent+1)
 	for sc.Scan() {
 		var e event.Event
 		if err := json.Unmarshal(sc.Bytes(), &e); err != nil {
@@ -53,7 +121,18 @@ func (s *Store) Load() ([]event.Event, error) {
 		}
 		out = append(out, e)
 	}
-	return out, sc.Err()
+	if err := sc.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			// Named rather than passed through. "token too long" said nothing about
+			// which file, which ceiling, or that the record was otherwise intact --
+			// it cost a diagnostic cycle to locate.
+			return nil, fmt.Errorf("session record %s holds an event larger than the %d-byte maximum a single "+
+				"event may occupy; it is refused rather than truncated, because a partially read event is not "+
+				"the event that was written: %w", s.path, maxSessionEvent, err)
+		}
+		return nil, err
+	}
+	return out, nil
 }
 
 // ID mints a session identifier that sorts chronologically as a string, so the

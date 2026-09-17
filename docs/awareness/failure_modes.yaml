@@ -301,3 +301,14 @@ failure_modes:
       - sensei_code.authority.only_an_explicit_answer_satisfies_a_boundary
     evidence:
       - 'awaitChoice registers e.pending[taskID] and blocks on that channel. Only ResolveHuman (internal/tui/model.go:409) and DeferAuthority (cmd/sensei-code/run.go:275) ever write it. cmd/sensei-code/control.go calls SubmitGovernedLocal and never subscribes to event.AuthorityRequired, and assisted.go has no authority handling, so a daemon-hosted objective parks permanently on escalation: the boundary is raised with no surface that can put the question to a person, so no explicit answer is possible and the run is neither stopped nor answerable. Observed 2026-09-12 on sensei #356 task-1789211362520113565: architect answered decision=proceed at 12:01:23Z, engine raised authority.required at 12:01:24Z with an empty HumanQuestion, and no candidate worktree was ever created.'
+  - id: failure.a_writer_that_bounds_nothing_and_a_reader_that_bounds_at_64
+    title: A writer that bounds nothing and a reader that bounds at 64 KiB made the durable session record unopenable
+    description: 'Store.Append encoded with json.NewEncoder and bounded nothing; Store.Load read with bufio.Scanner''s DEFAULT 64 KiB token ceiling. Any event above that -- a candidate.changed carrying a whole diff, observed at 172623 bytes on a 3236-line candidate -- was written successfully and then made the WHOLE record unreadable, not just that line: Load fails, so FindInterrupted has nothing to derive from, so resume and resume --list both fail and the preserved-candidate lifecycle becomes unreachable. The larger and more valuable the work, the more certainly its own history locked it out. First repair raised only the reader''s ceiling to 16 MiB, which moved the poison pill rather than removing it: Append still accepted what Load would refuse, at a higher threshold.'
+    protects:
+      files:
+        - internal/session/store.go
+    required_tests:
+      - internal/session/large_event_test.go:TestTheLargestAcceptedEventIsReadableBack
+    evidence:
+      - 'session record unreadable at 172623 bytes; bufio.Scanner: token too long'
+    contract: 'A writer and the reader of the same durable record share one size policy: every event the writer accepts, the reader can read back, and an event the writer cannot durably support is refused BEFORE any bytes enter history'
