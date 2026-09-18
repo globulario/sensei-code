@@ -149,7 +149,7 @@ func run(ctx context.Context, dir string, args []string) (string, error) {
 // The marker is emitted by Sensei Code and by nothing else: the remote party
 // answers requests, it does not create them.
 func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
-	_, err := PublishRequest(ctx, box, r, note)
+	_, _, err := PublishRequest(ctx, box, r, note)
 	return err
 }
 
@@ -164,13 +164,13 @@ func PostRequest(ctx context.Context, box Issue, r Request, note string) error {
 //
 // The id is 0 on the legacy gh path, which posts through `gh issue comment` and
 // is not asked for the created identity.
-func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int64, error) {
+func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int64, Principal, error) {
 	if !box.Valid() {
-		return 0, errors.New("a review request needs a mailbox pull request number and an expected reviewer")
+		return 0, Principal{}, errors.New("a review request needs a mailbox pull request number and an expected reviewer")
 	}
 	marker, err := r.Marker()
 	if err != nil {
-		return 0, err
+		return 0, Principal{}, err
 	}
 	body := marker
 	if strings.TrimSpace(note) != "" {
@@ -178,17 +178,24 @@ func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int
 	}
 	if box.API != nil {
 		if !box.API.Configured() {
-			return 0, errors.New("the github app transport was selected but is not configured; " +
+			return 0, Principal{}, errors.New("the github app transport was selected but is not configured; " +
 				"refusing rather than posting as the operator's gh account")
 		}
-		return box.API.PostComment(ctx, box.Number, body)
+		// The publisher is GitHub's own answer about who authored this comment,
+		// captured HERE because it is the one moment this process can learn its
+		// publishing identity as a fact rather than an assumption.
+		return box.API.PostCommentAs(ctx, box.Number, body)
 	}
+	// The gh CLI path names no author and no comment. A relay is already refused
+	// on this transport (it is published by the App or not at all), so an
+	// obligation published here pins no publisher and its recovery path has
+	// nothing to authenticate against -- which it says, rather than guessing.
 	args := box.args("issue", "comment")
 	args = append(args, "--body", body)
 	if out, err := run(ctx, box.Dir, args); err != nil {
-		return 0, fmt.Errorf("gh issue comment: %w: %s", err, out)
+		return 0, Principal{}, fmt.Errorf("gh issue comment: %w: %s", err, out)
 	}
-	return 0, nil
+	return 0, Principal{}, nil
 }
 
 // restComment is the REST shape, used instead of `gh issue view --json

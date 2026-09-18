@@ -205,7 +205,7 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 		MailboxRepository:   r.Issue.MailboxRepository(),
 		WorkspaceRepository: RemoteRepository(ctx, r.RepoDir, r.Remote),
 	}
-	requestComment, err := PublishRequest(ctx, r.Issue, published.Request(), req.Prompt)
+	requestComment, publisher, err := PublishRequest(ctx, r.Issue, published.Request(), req.Prompt)
 	if err != nil {
 		err = fmt.Errorf("posting the review request: %w", err)
 		if have {
@@ -214,6 +214,11 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 		return agent.Result{}, err
 	}
 	published.RequestComment = requestComment
+	// Pinned with the rest of the obligation's identity: who was asked, which
+	// account may answer, and which account spoke for this machine. All three
+	// are facts about THIS request, and none may be recovered later from
+	// configuration.
+	published.Publisher = publisher
 
 	// Recorded BEFORE the doorbell and before the wait: everything after this
 	// point can fail in a way that leaves the request standing, and a record

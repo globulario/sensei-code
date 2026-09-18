@@ -139,6 +139,27 @@ type ExchangeRecord struct {
 	ExpectedReviewerID    int64  `json:"expected_reviewer_id,omitempty"`
 	ExpectedReviewerLogin string `json:"expected_reviewer_login,omitempty"`
 
+	// PublisherID and PublisherLogin pin the account GitHub recorded as the
+	// author when THIS request was published -- that is, this workspace's own
+	// publishing identity, learned from GitHub's create response rather than
+	// assumed from the credential used.
+	//
+	// A THIRD party, distinct from both fields above: the provider is who was
+	// asked to judge, ExpectedReviewer is which account may answer, and this is
+	// which account speaks for this machine. It exists so a later process can
+	// authenticate a comment as OURS. Reading the mailbox as the App
+	// authenticates the reader, not the author, so a crash between publishing a
+	// relay receipt and recording that delivery would otherwise leave the
+	// recovery path trusting any comment carrying the right marker, request and
+	// digest -- and promoting an unpublished review to delivered on a stranger's
+	// say-so (#182 R6).
+	//
+	// Empty means the record predates the field. The gap is never filled from
+	// today's configuration, and a recovery that cannot authenticate is refused
+	// rather than guessed.
+	PublisherID    int64  `json:"publisher_id,omitempty"`
+	PublisherLogin string `json:"publisher_login,omitempty"`
+
 	// The routing the request carried, so a reattaching waiter reads the
 	// conversation the request actually went to rather than the one this process
 	// happens to be pointed at. Empty on records written before they existed;

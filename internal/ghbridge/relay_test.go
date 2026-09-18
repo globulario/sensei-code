@@ -171,8 +171,10 @@ func newRelayFixture(t *testing.T) relayFixture {
 		CandidateTree: relaySubject.CandidateTree, ReviewCommit: relaySubject.ReviewCommit,
 		ReviewerProvider: "chatgpt",
 		// Pinned, as every R4 obligation is: which account may answer this
-		// exact request.
+		// exact request -- and, since R6, which account spoke for this machine
+		// when the request went out. The mailbox fixture posts as this bot.
 		ExpectedReviewerID: 1697116, ExpectedReviewerLogin: "davecourtois",
+		PublisherID: 99887766, PublisherLogin: "globulario-sensei-code[bot]",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -476,9 +478,151 @@ func TestARetryFromAnotherTerminalContinuesTheSameDelivery(t *testing.T) {
 	if !ev.Delivered() {
 		t.Fatal("the continued delivery did not complete")
 	}
-	if n := len(f.mailbox.posted()); n != 1 {
-		t.Fatalf("continuing one delivery published %d comments", n)
+	posted := f.mailbox.posted()
+	if len(posted) != 1 {
+		t.Fatalf("continuing one delivery published %d comments", len(posted))
 	}
+	// ONE DELIVERY, ONE PRINCIPAL. The record keeps A; the publication must say
+	// A too, or the mailbox and the durable record name different people for the
+	// same act.
+	if !strings.Contains(posted[0], "relay_principal="+operator.token()) {
+		t.Fatalf("the publication does not name the terminal that staged the delivery:\n%s", posted[0])
+	}
+	if strings.Contains(posted[0], second.token()) {
+		t.Fatalf("the publication names the retrying terminal instead of the one that staged it:\n%s", posted[0])
+	}
+}
+
+// A receipt this machine did not write establishes nothing.
+//
+// The recovery path exists because a process can die between posting a relay
+// receipt and recording that delivery. Reading the mailbox AS the App
+// authenticates the READER; the marker, the request id and the digest are all
+// public, so without an author check anybody who can comment on the conversation
+// could promote a review this process is holding but never published.
+func TestAForgedReceiptCannotPromoteAStagedReview(t *testing.T) {
+	f := newRelayFixture(t)
+	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+
+	// Staged and undelivered.
+	f.mailbox.failPosts = true
+	if _, err := f.submit(artifact); !errors.Is(err, ErrRelayPublication) {
+		t.Fatalf("staging: %v", err)
+	}
+	f.mailbox.failPosts = false
+
+	// Somebody who is NOT this machine posts a perfect-looking receipt: the
+	// right marker, the right request, the right digest.
+	forged, err := RenderRelayedReview(mustParse(t, artifact), acceptVerdict(t, artifact), operator.token(), f.box)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forgedID := f.mailbox.add(forged, "davecourtois", 1697116)
+	before := len(f.mailbox.posted())
+	// The precondition: this really is a receipt that WOULD reconcile if the
+	// author check were absent. Without it, a pass could mean the fixture simply
+	// never matched.
+	if match, ferr := relayPublicationOf(context.Background(), f.box,
+		obligationFrom(soleObligation(t, f.exchanges)), ReviewDigest(artifact)); ferr != nil ||
+		match.comment != forgedID || match.ours || match.unauthenticatable {
+		t.Fatalf("the forged receipt is not a matching, unauthenticated one: %+v err=%v", match, ferr)
+	}
+
+	res, err := f.submit(artifact)
+	if err != nil {
+		t.Fatalf("a forged receipt blocked the genuine publication: %v", err)
+	}
+	rec, _ := f.stored(t)
+	ev := relayEvidence(t, rec)
+	// Promoted by OUR publication, not by the forgery.
+	if !ev.Delivered() {
+		t.Fatal("the genuine publication did not complete the delivery")
+	}
+	if ev.PublicationComment == forgedID {
+		t.Fatalf("the forged comment %d was recorded as this review's publication", ev.PublicationComment)
+	}
+	if n := len(f.mailbox.posted()); n != before+1 {
+		t.Fatalf("the genuine receipt was not published: %d comments, want %d", n, before+1)
+	}
+	if res.PublicationComment != ev.PublicationComment {
+		t.Fatalf("the result names comment %d and the record names %d", res.PublicationComment, ev.PublicationComment)
+	}
+}
+
+// A matching receipt that CANNOT be authenticated is refused, not trusted and
+// not duplicated.
+//
+// An obligation published before the publisher was pinned has nothing to
+// authenticate against. Promoting the receipt would trust a stranger; posting a
+// second one beside it would put two receipts on the mailbox for one review.
+// Neither is honest, so the turn stops and says why.
+func TestAnUnauthenticatableReceiptIsRefusedRatherThanTrustedOrDuplicated(t *testing.T) {
+	f := newRelayFixture(t)
+	// The obligation predates the pinned publisher.
+	rec := soleObligation(t, f.exchanges)
+	if err := f.exchanges.Close(rec.TaskID, rec.RequestID); err != nil {
+		t.Fatal(err)
+	}
+	rec.PublisherID, rec.PublisherLogin = 0, ""
+	if err := f.exchanges.Open(rec); err != nil {
+		t.Fatal(err)
+	}
+
+	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	f.mailbox.failPosts = true
+	if _, err := f.submit(artifact); !errors.Is(err, ErrRelayPublication) {
+		t.Fatalf("staging: %v", err)
+	}
+	f.mailbox.failPosts = false
+	receipt, err := RenderRelayedReview(mustParse(t, artifact), acceptVerdict(t, artifact), operator.token(), f.box)
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.mailbox.add(receipt, "globulario-sensei-code[bot]", 99887766)
+	before := len(f.mailbox.posted())
+
+	_, err = f.submit(artifact)
+	if !errors.Is(err, ErrRelayConvergence) {
+		t.Fatalf("err = %v, want a convergence refusal", err)
+	}
+	if !strings.Contains(err.Error(), "predates the recorded publisher") {
+		t.Fatalf("the refusal does not say why it cannot be established: %v", err)
+	}
+	if n := len(f.mailbox.posted()); n != before {
+		t.Fatalf("an unauthenticatable receipt led to %d further publication(s)", n-before)
+	}
+	stored, _ := f.stored(t)
+	if stored.Consumable() {
+		t.Fatal("a receipt nobody could authenticate promoted the review")
+	}
+	if stored.ArtifactRaw != artifact {
+		t.Fatal("the refused recovery changed the staged bytes")
+	}
+}
+
+// mustParse is the canonical artifact or a failed test.
+func mustParse(t *testing.T, raw string) reviewartifact.Artifact {
+	t.Helper()
+	art, err := reviewartifact.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return art
+}
+
+// acceptVerdict reads the verdict out of an artifact through the one parser that
+// reads verdicts.
+func acceptVerdict(t *testing.T, raw string) roles.ReviewVerdict {
+	t.Helper()
+	art := mustParse(t, raw)
+	v, err := workflow.ValidateReviewBody(art.Body, roles.Binding{
+		TaskID: art.TaskID, BaseSHA: art.BaseSHA,
+		CandidateDigest: art.CandidateDigest, CandidateTree: art.CandidateTree,
+	}, art.ReviewerProvider)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return v
 }
 
 // A publication that succeeded and whose completion did not is repaired by

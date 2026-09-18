@@ -253,22 +253,42 @@ func AcceptRelayedReview(ctx context.Context, in RelaySubmission) (RelayResult, 
 
 	// A retry whose delivery is incomplete may be a crash between posting the
 	// receipt and recording it. Reconcile from the mailbox BEFORE posting: the
-	// existing publication is found by this exact request and review digest, and
-	// completing from it is what stops one review acquiring two receipts.
+	// existing publication is found by this exact request and review digest AND
+	// by the account that authored it, and completing from it is what stops one
+	// review acquiring two receipts.
 	if retry && !prior.Consumable() {
-		if found, comment, publication, ferr := relayPublicationOf(ctx, in.Mailbox, art.RequestID, art.Digest); ferr == nil && found {
+		receipt, ferr := relayPublicationOf(ctx, in.Mailbox, rec, art.Digest)
+		if ferr != nil {
+			return out, fmt.Errorf("%w: the mailbox could not be read to establish whether this review "+
+				"was already published: %v", ErrRelayConvergence, ferr)
+		}
+		switch {
+		case receipt.ours:
 			completed, cerr := in.Reviews.Complete(reviewstore.Completion{
 				RequestID: art.RequestID, ReviewDigest: art.Digest, Transport: reviewstore.LocalRelay,
-				Publication: publication, PublicationComment: comment, PublishedAt: now().UTC(), Now: in.Now,
+				Publication: receipt.publication, PublicationComment: receipt.comment,
+				PublishedAt: now().UTC(), Now: in.Now,
 			})
 			if cerr != nil {
 				return out, fmt.Errorf("%w: %v", ErrRelayConvergence, cerr)
 			}
 			return deliveredResult(out, completed), nil
+		case receipt.unauthenticatable:
+			// Something claiming to be this review's receipt is on the mailbox
+			// and this obligation predates the pinned publisher, so nothing can
+			// establish whether the App posted it. Neither promoting it nor
+			// posting a second receipt beside it is honest.
+			return out, fmt.Errorf("%w: a relayed-review receipt for %s is on the mailbox as comment %d and "+
+				"request %s predates the recorded publisher, so it cannot be established as this machine's; "+
+				"supersede the request rather than publishing a second receipt",
+				ErrRelayConvergence, art.Digest, receipt.comment, art.RequestID)
 		}
+		// A look-alike from an account that is NOT the publisher establishes
+		// nothing and blocks nothing. The genuine publication goes out below,
+		// which is what makes the difference visible.
 	}
 
-	body, err := RenderRelayedReview(art, verdict, in.Principal, in.Mailbox)
+	body, err := RenderRelayedReview(art, verdict, stagedPrincipal(stored), in.Mailbox)
 	if err != nil {
 		return out, fmt.Errorf("%w: %v", ErrRelayPublication, err)
 	}
@@ -301,17 +321,39 @@ func deliveredResult(out RelayResult, rec reviewstore.Record) RelayResult {
 	return out
 }
 
-// relayPublicationOf finds an App publication of THIS exact review already on
-// the mailbox.
+// relayReceipt is what the mailbox shows about a publication of one exact review.
+type relayReceipt struct {
+	// ours is a receipt this machine demonstrably authored.
+	ours bool
+	// unauthenticatable is a matching receipt whose authorship cannot be
+	// established, because the obligation predates the pinned publisher.
+	unauthenticatable bool
+
+	comment     int64
+	publication string
+	author      Principal
+}
+
+// relayPublicationOf finds a publication of THIS exact review already on the
+// mailbox, and says whether this machine wrote it.
 //
-// Matched on request id AND review digest, both of which the receipt states.
-// Never on "the most recent relayed-review comment": a conversation carries many
-// of them, and last-comment-wins would attach one review's publication to
-// another review's record.
-func relayPublicationOf(ctx context.Context, box Issue, requestID, digest string) (bool, int64, string, error) {
+// THREE facts must agree, not two. The receipt must name this request and this
+// review digest -- never "the most recent relayed-review comment", because a
+// conversation carries many and last-comment-wins would attach one review's
+// publication to another review's record -- AND its author must be the account
+// this obligation recorded as its publisher.
+//
+// That third check is the authority one. Reading the mailbox AS the App
+// authenticates the READER; the body of a comment is written by whoever posted
+// it, and a marker, a request id and a digest are all public. Without the author
+// check, anybody who can comment on the conversation could promote a review this
+// process is holding but has never published -- turning "staged here" into
+// "delivered" on a stranger's say-so, which is the one thing the delivery state
+// exists to prevent.
+func relayPublicationOf(ctx context.Context, box Issue, o ReviewObligation, digest string) (relayReceipt, error) {
 	comments, err := mailboxComments(ctx, box)
 	if err != nil {
-		return false, 0, "", err
+		return relayReceipt{}, err
 	}
 	for _, c := range comments {
 		head := strings.TrimLeft(c.Body, " \t\r\n")
@@ -322,16 +364,38 @@ func relayPublicationOf(ctx context.Context, box Issue, requestID, digest string
 		if !ok {
 			continue
 		}
-		if f["request"] != requestID || f["review_digest"] != digest {
+		if f["request"] != o.RequestID || f["review_digest"] != digest {
 			continue
 		}
-		publication := f["publication"]
-		if strings.TrimSpace(publication) == "" {
-			publication = publicationIdentity(box)
+		out := relayReceipt{
+			comment: c.ID,
+			author:  Principal{UserID: c.User.ID, Login: c.User.Login},
 		}
-		return true, c.ID, publication, nil
+		out.publication = f["publication"]
+		if strings.TrimSpace(out.publication) == "" {
+			out.publication = publicationIdentity(box)
+		}
+		switch {
+		case !o.Publisher.Configured():
+			// Nothing to authenticate against. The gap is NOT filled from
+			// today's configuration or from the body's own claim.
+			out.unauthenticatable = true
+		case o.Publisher.Matches(c.User.ID, c.User.Login):
+			out.ours = true
+		}
+		return out, nil
 	}
-	return false, 0, "", nil
+	return relayReceipt{}, nil
+}
+
+// stagedPrincipal is the terminal that carried the delivery this record holds.
+func stagedPrincipal(rec reviewstore.Record) string {
+	for _, ev := range rec.Evidence {
+		if ev.Transport == reviewstore.LocalRelay {
+			return ev.RelayPrincipal
+		}
+	}
+	return ""
 }
 
 // subjectMismatch names the first identity field on which two subjects differ.
@@ -381,12 +445,18 @@ func publicationIdentity(box Issue) string {
 // so this function could print them; they are recomputed from the exact bytes
 // instead, so what the receipt says cannot drift from what the review says.
 //
+// The relay principal is the STAGED delivery's, taken from the record, never the
+// caller's. One delivery has one principal: when terminal A stages a review and
+// terminal B retries it, the store correctly keeps A -- and a receipt rendered
+// from the retry caller would publish B, so the mailbox and the durable record
+// would name different people for the same delivery (#182 R6).
+//
 // Its envelope is NOT a review envelope, and it carries no review or request
 // marker anywhere: nothing reading the mailbox can take the publication for an
 // answer. The decision lives in the prose, beside who produced it and who
 // relayed it, never in the envelope.
 func RenderRelayedReview(art reviewartifact.Artifact, verdict roles.ReviewVerdict,
-	principal RelayPrincipal, box Issue) (string, error) {
+	relayPrincipal string, box Issue) (string, error) {
 
 	var b strings.Builder
 	b.WriteString(relayedReviewMarker + "\n")
@@ -398,7 +468,7 @@ func RenderRelayedReview(art reviewartifact.Artifact, verdict roles.ReviewVerdic
 	fmt.Fprintf(&b, "review_commit=%s\n", art.ReviewCommit)
 	fmt.Fprintf(&b, "reviewer_provider=%s\n", art.ReviewerProvider)
 	fmt.Fprintf(&b, "review_digest=%s\n", art.Digest)
-	fmt.Fprintf(&b, "relay_principal=%s\n", principal.token())
+	fmt.Fprintf(&b, "relay_principal=%s\n", relayPrincipal)
 	fmt.Fprintf(&b, "publication=%s\n", publicationIdentity(box))
 	fmt.Fprintf(&b, "standing=%s\n", reviewstore.Advisory)
 	fmt.Fprintf(&b, "\nRelayed review for request %s.\n\n", art.RequestID)

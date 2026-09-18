@@ -49,6 +49,10 @@ type ReviewObligation struct {
 	// ExpectedReviewer is which GitHub account may supply the bytes. A different
 	// fact about a different party, pinned at publication.
 	ExpectedReviewer Principal
+	// Publisher is the account GitHub recorded as the author when this request
+	// was published: this machine's own publishing identity, pinned so a later
+	// process can tell a comment it posted from one somebody else did.
+	Publisher Principal
 
 	MailboxRepository   string
 	WorkspaceRepository string
@@ -188,6 +192,7 @@ func obligationFrom(rec ExchangeRecord) ReviewObligation {
 		CandidateTree: rec.CandidateTree, ReviewCommit: rec.ReviewCommit,
 		ReviewerProvider:  rec.ReviewerProvider,
 		ExpectedReviewer:  Principal{UserID: rec.ExpectedReviewerID, Login: rec.ExpectedReviewerLogin},
+		Publisher:         Principal{UserID: rec.PublisherID, Login: rec.PublisherLogin},
 		MailboxRepository: rec.MailboxRepository, WorkspaceRepository: rec.WorkspaceRepository,
 	}
 }
@@ -206,6 +211,8 @@ func (o ReviewObligation) record(deadline time.Time) ExchangeRecord {
 		ReviewerProvider:      o.ReviewerProvider,
 		ExpectedReviewerID:    o.ExpectedReviewer.UserID,
 		ExpectedReviewerLogin: o.ExpectedReviewer.Login,
+		PublisherID:           o.Publisher.UserID,
+		PublisherLogin:        o.Publisher.Login,
 		MailboxRepository:     o.MailboxRepository,
 		WorkspaceRepository:   o.WorkspaceRepository,
 	}
