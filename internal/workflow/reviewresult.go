@@ -190,6 +190,21 @@ const (
 	// an unobtainable review has no live request and needs a NEW one issued,
 	// possibly to a different provider.
 	candidateReviewUnobtainable candidateOutcome = "review_unobtainable"
+	// candidateReviewLifecycleFault means the review could not proceed because
+	// of a REVIEW-LIFECYCLE fault rather than anything about the candidate: a
+	// published request whose obligation could not be recorded, durable records
+	// that disagree or cannot be read, or the caller stopping the run.
+	//
+	// Its own outcome because every existing one would be a lie with
+	// consequences. not_converged records this worker as having failed and hands
+	// the candidate to the next implementer -- but nothing the next worker can
+	// edit records an obligation or repairs a malformed file. review_unobtainable
+	// says every reviewer was tried and none could be reached, which is false:
+	// the reviewer was never the problem. And accepted is obviously not it.
+	//
+	// So the candidate is preserved exactly as it stands and the run ends with
+	// the lifecycle reason, the way a structural refusal already does.
+	candidateReviewLifecycleFault candidateOutcome = "review_lifecycle_fault"
 )
 
 // Accepted reads the outcome by membership. Written this way rather than as

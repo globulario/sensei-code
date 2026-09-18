@@ -64,7 +64,14 @@ var (
 		roles.ErrReviewLifecycleConflict)
 	// ErrObligationUnreadable reports a review record that cannot be read as the
 	// obligation it claims to be.
-	ErrObligationUnreadable = errors.New("a review obligation record could not be read")
+	//
+	// It wraps the transport-neutral lifecycle-fault condition, because a
+	// malformed authority record is neither a reviewer who failed nor an
+	// implementer who failed: no fallback ladder repairs it, and reported as
+	// provider unavailability it would claim reviewers could not be reached when
+	// the real fact is that our own record is unreadable.
+	ErrObligationUnreadable = fmt.Errorf("%w: a review obligation record could not be read",
+		roles.ErrReviewLifecycleFault)
 	// ErrObligationLegacy reports an obligation published before R4 that does not
 	// carry the authority facts a waiter needs to reattach safely.
 	ErrObligationLegacy = errors.New("this review obligation predates the pinned mailbox principal and cannot be reattached")

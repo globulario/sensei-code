@@ -37,14 +37,22 @@ var ErrReviewUnanswered = errors.New("the review request is published and no ans
 // repair rather than a reviewer to replace.
 var ErrReviewUnrecordable = errors.New("the review request was published and could not be recorded as a durable obligation")
 
+// ErrReviewLifecycleFault reports that a task's own durable review-lifecycle
+// records cannot be acted on: they disagree, or one of them cannot be read.
+//
+// THE UMBRELLA, and it exists so no fallback ladder can reinterpret the
+// condition. A lifecycle fault is not a reviewer that failed -- asking another
+// one adds a third record to a task that already has two too many, or reads the
+// same malformed file again -- and it is not an implementer that failed either,
+// because nothing the next worker can edit repairs local authority state.
+//
+// Named in roles rather than in a transport so both routing layers can
+// recognise it without depending on one.
+var ErrReviewLifecycleFault = errors.New("this task's review lifecycle records cannot be acted on")
+
 // ErrReviewLifecycleConflict reports that a task's own durable review records
 // disagree about what it owes -- most often two active obligations at once.
-//
-// Named in roles rather than in the bridge so the workflow can recognise it
-// without depending on a transport. Choosing a reviewer cannot resolve a
-// lifecycle conflict, and asking one would add a third record to a task that
-// already has two too many.
-var ErrReviewLifecycleConflict = errors.New("this task's review lifecycle records disagree")
+var ErrReviewLifecycleConflict = fmt.Errorf("%w: they disagree about what is owed", ErrReviewLifecycleFault)
 
 // ReviewUnanswered is the unanswered review, with the identity a later process
 // needs to continue it: which request, on which conversation, for which exact
