@@ -1109,3 +1109,27 @@ invariants:
       - 'sensei-code#182 R5: the mailbox scan skipped reviewartifact.Parse failures with a bare continue and filtered out valid artifacts for other subjects, so a reviewer who replied badly and a reviewer who did not reply at all both ended as ''no answer arrived'''
       - 'sensei-code#182 R5: the historical bare reviewer JSON that motivated #182 is the regression specimen; it must classify as MALFORMED_OR_UNATTRIBUTABLE with its comment, principal, exact digest and parse diagnostic'
     contract: what the transport saw and what it established are different questions; no consumer may answer the first with the second
+  - id: sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+    title: Proven temporary provider unavailability blocks the role turn, never the task
+    severity: critical
+    status: active
+    description: 'Temporary provider unavailability is external execution state, not task failure and not role output. Architect: no retry, no alternate, BLOCKED_EXTERNAL. Implementer: authorized alternates still tried; if every one asked was unavailable, BLOCKED_EXTERNAL with the candidate kept. Reviewer: #180 WAITING_REVIEW unchanged.'
+    protects:
+      files:
+        - internal/provider/unavailable.go
+        - internal/workflow/external_block.go
+        - internal/workflow/engine.go
+        - internal/session/store.go
+        - cmd/sensei-code/resume_blocked.go
+    related_invariants:
+      - sensei_code.workflow.repeated_resume_cannot_mint_authority
+      - sensei_code.resume.never_skips_a_human_decision
+    required_tests:
+      - internal/provider/unavailable_test.go:TestTheUsageLimitSentenceAloneIsNotUnavailability
+      - internal/workflow/external_block_test.go:TestABlockedTurnIsATerminalThatSurvivesRestartAsTheSameTask
+      - internal/workflow/external_block_test.go:TestAProvenUnavailableArchitectEndsTheTurnTypedAndUnretried
+      - internal/workflow/external_block_test.go:TestAnUnavailableImplementerBlocksTheTaskAndKeepsTheCandidate
+      - internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    evidence:
+      - task-1789770525156538509 (2026-09-18) ended FAILED on ChatGPT usageLimitExceeded; live proof task-1789772230833396306 blocked, resumed as the same task in a second process, exit 8
+    contract: A provider that PROVES through its structured protocol that it cannot serve a role turn (e.g. codexErrorInfo usageLimitExceeded) ends the invocation BLOCKED_EXTERNAL; the task, its identity, its candidate base and the unanswered role turn survive, and resume retries that turn under the same task id. Only the adapter establishes unavailability; the role is attached where the turn is asked; message text never classifies; retry_at is KNOWN only when the provider supplied it.
