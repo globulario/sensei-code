@@ -251,3 +251,7 @@ func sortedKeys(m map[string]int) []string {
 	sort.Strings(keys)
 	return keys
 }
+
+// stub-smoke: appended by the deterministic governed-run tripwire
+
+// stub-smoke: appended by the deterministic governed-run tripwire
