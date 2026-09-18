@@ -913,6 +913,37 @@ invariants:
       - 'sensei-code#182 R4: a byte-identical candidate was asked about twice, under two request ids with two wake targets, because the next run after a waiter timeout minted a replacement; #376 commissioning spent repeated live review windows on an unchanged candidate'
       - 'sensei-code#187: AwaitReview surfaced a waiter timeout as bare context.DeadlineExceeded when a poll was in flight and as ErrNoAnswer otherwise; measured 11/30 and 8/30 flake under -race before the repair, 0/30 after'
     contract: what is owed is a durable fact; a process that listens for it is not
+  - id: sensei_code.workspace.one_posture_for_every_governed_record
+    title: Every governed local record is written one way, and the boundary is the local account
+    severity: high
+    status: active
+    description: 'Every governance-bearing local record -- the review record, the review obligation, the owner attestation and the task state -- is written through ONE mechanism that owns the posture and the durability of the write and no semantic fact: owner-only directory and file modes, and replacement by temp file plus rename so a reader sees the previous content or the new content and never a half-written record. A record whose identity is decided at creation is created with O_EXCL, and losing that race is reported rather than overwritten. No governed store may invent its own mode or keep its own temp-file replace: four stores with four answers is how the obligation owner -- the single authority on what review is owed -- came to write non-atomically while the review record it points at did not, and how task state came to be the only governed record readable by every local user. The integrity boundary is the local account: every governed record is owner-write-only, and an attacker who already controls that account is explicitly outside the model, which is why no signature, MAC, hash-chained ledger or hardware key is used -- each would need a key writable by the same account, so none raises the boundary and every one raises its appearance. Consumption re-derives everything reconstructible (digests, bindings, git object identity, request relationships, schema invariants, body parsing, provider equality against the durable obligation) and trusts only the small OBSERVED residue that cannot be reconstructed after the event; the original transport is never made a perpetual oracle.'
+    protects:
+      files:
+        - internal/governedfile/governedfile.go
+        - internal/reviewstore/store.go
+        - internal/ghbridge/exchange.go
+        - internal/ghbridge/attestation.go
+        - internal/taskstate/state.go
+    related_invariants:
+      - sensei_code.reviewstore.transport_establishes_acceptance_once
+      - sensei_code.reviewspine.one_record_one_obligation_whatever_the_transport
+    forbidden_fixes:
+      - give a governed store its own file mode or its own temp-file replace
+      - sign or MAC a governed record with a key the same account can write, and call the boundary raised
+      - re-contact the original transport at consumption to prove an event it already recorded
+    required_tests:
+      - internal/governedfile/governedfile_test.go:TestReplaceIsAtomicAndLeavesNoDebris
+      - internal/governedfile/governedfile_test.go:TestTheWholeGovernedChainSharesOnePosture
+      - internal/governedfile/governedfile_test.go:TestCreateReportsTheRaceRatherThanOverwriting
+      - internal/ghbridge/workspace_integrity_test.go:TestNoGovernedStoreInventsItsOwnWritePosture
+      - internal/ghbridge/workspace_integrity_test.go:TestAnObligationIsReplacedAtomically
+    evidence:
+      - 'sensei-code#184: inventory found four governance-bearing stores with four write postures -- reviews and attestations replaced atomically at 0700/0600, while the review OBLIGATION and the task state wrote straight onto the target, task state at 0755/0644. A crash between truncate and write left a truncated obligation, which R4 reads as unreadable and fails closed on: safe, and avoidable'
+      - 'sensei-code#184: the integrity boundary was already uniform (owner-write-only everywhere); what differed was durability and confidentiality, so the modes misdescribed the boundary rather than weakening it'
+      - 'sensei-code#182 R2: live publicationStands re-validation was removed from canonical review consumption, because re-proving a transport event at consumption lets an outage or a deleted comment retract a review that was already authenticated, bound, validated and recorded'
+    contract: a local record is protected by the account that owns it, and nothing may claim more than that
+
   - id: sensei_code.reviewartifact.the_request_carries_the_response_contract
     title: A review request carries the exact response contract, and that grammar has one owner
     severity: critical

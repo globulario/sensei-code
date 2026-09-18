@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/governedfile"
 	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
@@ -91,22 +92,20 @@ func (s AttestationStore) create(rec AttestationRecord) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
-		return err
-	}
 	blob, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	// One override per request, ever: losing the creation race must not
+	// overwrite the record that won it.
+	won, err := governedfile.Create(path, append(blob, '\n'))
 	if err != nil {
 		return err
 	}
-	if _, err := f.Write(append(blob, '\n')); err != nil {
-		_ = f.Close()
-		return err
+	if !won {
+		return os.ErrExist
 	}
-	return f.Close()
+	return nil
 }
 
 func (s AttestationStore) markPublished(requestID, digest string, comment int64, publication string, at time.Time) (AttestationRecord, error) {
@@ -129,11 +128,7 @@ func (s AttestationStore) markPublished(requestID, digest string, comment int64,
 	if err != nil {
 		return AttestationRecord{}, err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(blob, '\n'), 0o600); err != nil {
-		return AttestationRecord{}, err
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := governedfile.Replace(path, append(blob, '\n')); err != nil {
 		return AttestationRecord{}, err
 	}
 	return rec, nil
