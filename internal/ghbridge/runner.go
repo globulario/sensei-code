@@ -451,15 +451,39 @@ func (r *Runner) dischargeWith(o ReviewObligation, req agent.Request, review Mai
 // EXACT, old -> new, and only for a reason that justifies one. It does not
 // sweep every record for the task, because a waiter starting is not a reason to
 // retire anything.
+//
+// AUTHORITY LEADS TRANSPORT. The local obligation is retired FIRST, and the
+// remote withdrawal is posted only after that succeeds. Withdrawing first put
+// transport ahead of authority: when retirement then failed, the old request was
+// already retracted on the conversation while the durable owner still said it
+// was active -- two local obligations, one of them pointing at a request that no
+// longer stands remotely, and no way to tell from the records which fact was
+// stale. Nothing is retracted for an obligation this process still owes.
+//
+// If the WITHDRAWAL fails afterwards, the old request may remain visible on the
+// conversation. That is reported and is not a failure of the transition: locally
+// it is retired and accepted by nothing, which is the state that decides
+// behaviour.
 func (r *Runner) supersede(ctx context.Context, old, replacement ReviewObligation, reason string,
 	emit func(event.Event)) error {
 
-	withdrawErr := withdraw(ctx, r.Issue, old.record(time.Time{}))
-	closeErr := r.obligations().Retire(old)
-	if emit == nil {
-		if closeErr != nil {
-			return supersessionIncomplete(old, replacement, closeErr)
+	if closeErr := r.obligations().Retire(old); closeErr != nil {
+		if emit != nil {
+			emit(event.New(r.SessionID, old.TaskID, event.SourceReviewer, event.Status,
+				"review request "+replacement.RequestID+" was published and "+old.RequestID+
+					" could not be retired, so nothing was withdrawn and this task now has two active "+
+					"review obligations: "+closeErr.Error(),
+				map[string]any{
+					"superseded_request": old.RequestID, "request_id": replacement.RequestID,
+					"reason": reason, "withdrawn": false, "closed": false,
+					"close_error": closeErr.Error(), "transport": "github",
+				}))
 		}
+		return supersessionIncomplete(old, replacement, closeErr)
+	}
+
+	withdrawErr := withdraw(ctx, r.Issue, old.record(time.Time{}))
+	if emit == nil {
 		return nil
 	}
 	payload := map[string]any{
@@ -473,24 +497,16 @@ func (r *Runner) supersede(ctx context.Context, old, replacement ReviewObligatio
 		"superseded_provider":       old.ReviewerProvider,
 		"reviewer_provider":         replacement.ReviewerProvider,
 		"withdrawn":                 withdrawErr == nil,
-		"closed":                    closeErr == nil,
+		"closed":                    true,
 		"transport":                 "github",
 	}
 	summary := "review request " + old.RequestID + " is superseded by " + replacement.RequestID + ": " + reason
 	if withdrawErr != nil {
 		payload["withdraw_error"] = withdrawErr.Error()
-		summary += "; its withdrawal could not be posted, so it may still stand on the conversation, " +
-			"but it is no longer accepted here"
-	}
-	if closeErr != nil {
-		payload["close_error"] = closeErr.Error()
-		summary += "; its local record could not be retired, so this task now has two active obligations and " +
-			"the next turn will refuse rather than choose between them"
+		summary += "; it is retired here and its withdrawal could not be posted, so it may still stand on the " +
+			"conversation while being accepted by nothing"
 	}
 	emit(event.New(r.SessionID, old.TaskID, event.SourceReviewer, event.Status, summary, payload))
-	if closeErr != nil {
-		return supersessionIncomplete(old, replacement, closeErr)
-	}
 	return nil
 }
 

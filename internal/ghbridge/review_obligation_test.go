@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 )
@@ -756,33 +757,63 @@ func TestNoWaiterAttachesToARequestNothingRecorded(t *testing.T) {
 	})
 }
 
-// A transition that cannot retire its predecessor stops the turn.
+// A transition that cannot retire its predecessor stops the turn, and withdraws
+// nothing.
 //
 // Creating the successor and failing to retire the old record leaves two active
 // obligations -- the state the owner refuses to choose within. Waiting on the
 // successor anyway would BE choosing.
-func TestAFailedRetirementStopsTheTurnRatherThanChoosing(t *testing.T) {
+//
+// It also proves the ORDERING: authority leads transport. No withdrawal is
+// posted for an obligation this process still owes, because retracting the old
+// request remotely while the durable owner still calls it active would leave two
+// local obligations, one pointing at a request that no longer stands, with
+// nothing in the records to say which fact was stale.
+//
+// The fault is injected through a stored record whose own request_id is not a
+// safe file name: the file is found and read, and only the removal that retires
+// it can fail. Deliberately NOT injected through the withdrawal callback -- that
+// mechanism only fires if withdrawal happens first, so it would bake the very
+// ordering defect under test into the harness and quietly stop testing anything.
+func TestAFailedRetirementStopsTheTurnAndWithdrawsNothing(t *testing.T) {
 	m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
 	first := standingRequest(t, runner, binding)
 
-	// The log goes read-only only once the successor's record exists: Open
-	// succeeds, and the removal that retires the predecessor is the single thing
-	// that fails. Injected through the withdrawal the transition posts first.
-	m.onPost = func(body string) []map[string]any {
-		if id, err := ParseWithdrawal(body); err == nil && id == first.RequestID {
-			_ = os.Chmod(log.Dir, 0o500)
-		}
-		return nil
+	// Rewrite the predecessor's record so the id INSIDE it cannot name a file,
+	// while the file itself stays exactly where the log expects it.
+	path := filepath.Join(log.Dir, first.Binding.TaskID+"."+first.RequestID+".json")
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.Chmod(log.Dir, 0o700) })
+	var rec map[string]any
+	if err := json.Unmarshal(blob, &rec); err != nil {
+		t.Fatal(err)
+	}
+	unaddressable := first.RequestID + " r"
+	rec["request_id"] = unaddressable
+	out, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The record is still READ as an obligation -- otherwise this would be
+	// testing unreadability, not retirement.
+	owner := ReviewObligationStore{Exchanges: log}
+	if _, found, cerr := owner.Current(first.Binding.TaskID); !found || cerr != nil {
+		t.Fatalf("the predecessor is no longer readable as an obligation: found=%v err=%v", found, cerr)
+	}
+	withdrawalsBefore := len(prWithdrawalsIn(m))
 
 	moved := binding
 	moved.CandidateDigest = "sha256:candidate-two"
-	_, err := runner.Run(context.Background(), reviewTurnFor(moved), nil)
+	_, err = runner.Run(context.Background(), reviewTurnFor(moved), nil)
 	if !errors.Is(err, ErrObligationConflict) {
 		t.Fatalf("err = %v, want an explicit lifecycle conflict", err)
 	}
-	if !errors.Is(err, roles.ErrReviewLifecycleConflict) {
+	if !errors.Is(err, roles.ErrReviewLifecycleFault) {
 		t.Fatalf("the conflict is not recognisable to the workflow: %v", err)
 	}
 	// No verdict, and nothing was consumed or waited through the successor.
@@ -790,10 +821,12 @@ func TestAFailedRetirementStopsTheTurnRatherThanChoosing(t *testing.T) {
 	if errors.As(err, &owed) {
 		t.Fatalf("a two-obligation task was reported as a single owed review: %+v", owed)
 	}
-
-	if err := os.Chmod(log.Dir, 0o700); err != nil {
-		t.Fatal(err)
+	// AUTHORITY LEADS TRANSPORT: nothing was retracted for an obligation that
+	// is still owed here.
+	if n := len(prWithdrawalsIn(m)); n != withdrawalsBefore {
+		t.Fatalf("a withdrawal was posted for an obligation that could not be retired: %v", prWithdrawalsIn(m))
 	}
+
 	standing, lerr := log.PendingReviews()
 	if lerr != nil {
 		t.Fatal(lerr)
@@ -804,6 +837,55 @@ func TestAFailedRetirementStopsTheTurnRatherThanChoosing(t *testing.T) {
 	// And the next turn refuses rather than choosing between them.
 	if _, err := runner.Run(context.Background(), reviewTurnFor(moved), nil); !errors.Is(err, ErrObligationConflict) {
 		t.Fatalf("the next turn chose between two obligations: %v", err)
+	}
+	_ = unaddressable
+}
+
+// A successful transition retires locally and only then withdraws remotely.
+func TestASupersessionRetiresBeforeItWithdraws(t *testing.T) {
+	m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
+	first := standingRequest(t, runner, binding)
+
+	// Observed at the moment EVERY withdrawal reaches the conversation: by then
+	// the predecessor must already be gone from the durable owner.
+	//
+	// Every one, and latched. Recording only the last observation let an extra
+	// withdrawal posted BEFORE the retirement be overwritten by the correct one
+	// that followed, so the assertion passed while the ordering it names was
+	// violated.
+	var withdrawals int
+	stillOwedAt := []int{}
+	m.onPost = func(body string) []map[string]any {
+		if id, err := ParseWithdrawal(body); err == nil && id == first.RequestID {
+			withdrawals++
+			owed, _ := log.PendingReviews()
+			for _, rec := range owed {
+				if rec.RequestID == first.RequestID {
+					stillOwedAt = append(stillOwedAt, withdrawals)
+				}
+			}
+		}
+		return nil
+	}
+
+	moved := binding
+	moved.CandidateDigest = "sha256:candidate-two"
+	second := standingRequest(t, runner, moved)
+	if second.RequestID == first.RequestID {
+		t.Fatal("the moved candidate reused the old request")
+	}
+	if withdrawals == 0 {
+		t.Fatal("no withdrawal was posted, so the ordering proves nothing")
+	}
+	if len(stillOwedAt) != 0 {
+		t.Fatalf("withdrawal(s) %v were posted while the durable owner still called request %s active; "+
+			"authority must lead transport", stillOwedAt, first.RequestID)
+	}
+	if withdrawals != 1 {
+		t.Fatalf("the old request was withdrawn %d times, want once", withdrawals)
+	}
+	if got := soleObligation(t, log); got.RequestID != second.RequestID {
+		t.Fatalf("the surviving obligation is %+v, want the successor", got)
 	}
 }
 
@@ -922,5 +1004,92 @@ func TestAMalformedObligationIsUnreadableRatherThanSuperseded(t *testing.T) {
 			}
 			_ = first
 		})
+	}
+}
+
+// A withdrawal that cannot be posted does not fail the transition.
+//
+// Locally the predecessor is retired and accepted by nothing, which is the state
+// that decides behaviour. The old request may remain visible on the conversation
+// -- reported, so an operator is never surprised by it -- but treating that as a
+// failed transition would leave the successor unusable because a remote post did
+// not land.
+//
+// The withdrawal is made to fail by pointing the predecessor at a conversation
+// this mailbox does not serve, which is also how it looks in life after a
+// mailbox move.
+func TestAFailedWithdrawalDoesNotFailTheTransition(t *testing.T) {
+	m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
+	first := standingRequest(t, runner, binding)
+
+	path := filepath.Join(log.Dir, first.Binding.TaskID+"."+first.RequestID+".json")
+	blob, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec map[string]any
+	if err := json.Unmarshal(blob, &rec); err != nil {
+		t.Fatal(err)
+	}
+	rec["conversation"] = "999"
+	out, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, out, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	moved := binding
+	moved.CandidateDigest = "sha256:candidate-two"
+	var events []event.Event
+	_, runErr := runner.Run(context.Background(), reviewTurnFor(moved),
+		func(e event.Event) { events = append(events, e) })
+
+	var second *roles.ReviewUnanswered
+	if !errors.As(runErr, &second) {
+		t.Fatalf("the transition did not complete: %v", runErr)
+	}
+	if second.RequestID == first.RequestID {
+		t.Fatal("the transition did not happen, so the withdrawal failure proves nothing")
+	}
+
+	// THE PRECONDITION, asserted rather than assumed: the withdrawal really did
+	// fail. Without this the test could not tell "the withdrawal failed and the
+	// transition continued" from "the withdrawal quietly succeeded somewhere",
+	// and a mutation making a failed withdrawal fail the transition would
+	// survive it.
+	var reported bool
+	for _, e := range events {
+		var p struct {
+			Superseded    string `json:"superseded_request"`
+			Withdrawn     bool   `json:"withdrawn"`
+			Closed        bool   `json:"closed"`
+			WithdrawError string `json:"withdraw_error"`
+		}
+		if len(e.Payload) == 0 || json.Unmarshal(e.Payload, &p) != nil || p.Superseded != first.RequestID {
+			continue
+		}
+		reported = true
+		if p.Withdrawn {
+			t.Fatalf("the withdrawal is reported as having succeeded: %s", e.Summary)
+		}
+		if strings.TrimSpace(p.WithdrawError) == "" {
+			t.Errorf("a failed withdrawal was not reported with its reason: %s", e.Payload)
+		}
+		if !p.Closed {
+			t.Errorf("the predecessor was not retired locally: %s", e.Payload)
+		}
+	}
+	if !reported {
+		t.Fatal("the supersession was never reported, so the withdrawal outcome proves nothing")
+	}
+	if w := prWithdrawalsIn(m); len(w) != 0 {
+		t.Fatalf("a withdrawal reached this conversation: %v", w)
+	}
+	// Retired locally, and exactly one obligation stands.
+	got := soleObligation(t, log)
+	if got.RequestID != second.RequestID {
+		t.Fatalf("the surviving obligation is %+v, want the successor %s", got, second.RequestID)
 	}
 }
