@@ -113,26 +113,73 @@ the transport evidence differs. A staged relay is **not** attestable
 
 ---
 
+## F. The whole loop, through the actual engine — `internal/acceptance/review_spine_loop_test.go`
+
+The drives above start at *"a candidate exists and a review is owed"*. This one
+starts at the objective and runs the engine itself:
+
+```text
+objective -> architect -> implementer C1 -> reviewer REVISE
+          -> automatic repair C2 -> re-entry -> reviewer ACCEPT
+```
+
+`workflow.Engine` is the product's. Only the architect and implementer are
+stubs, for the reason the neighbouring tripwire gives: a deterministic provider
+makes a failure the state machine's rather than a model's. **The reviewer is not
+stubbed** — `ghbridge.Resolver` serves the reviewer role over a mailbox the test
+stands up, which answers REVISE for the first candidate and ACCEPT for the next,
+inside its own handler.
+
+Re-entry is real rather than simulated: the mailbox withholds the first answer,
+so the waiter times out, the run ends `WAITING_REVIEW`, and the task is picked
+up again through `session.FindInterrupted` + `Engine.Resume` — the same path
+`sensei-code resume --task` takes.
+
+### It does not run in this environment, and here is exactly why
+
+```text
+the governed lane cannot start: workspace composition partial
+  limitation (blocking): graph_authority is present but not authoritative
+                         (freshness, seed, or build-provenance state is not current)
+  build_provenance_state:            BUILD_PROVENANCE_STATE_DEV
+  embedded_transaction_matches_seed: false
+  certified_awareness_graph_commit:  6046149cebeff2198f847372c4ece739666857db
+  local awareness-graph checkout:    087041f
+```
+
+`workflow/gate.go` refuses a governed run on a workspace Sensei will not
+certify. That refusal is the product working. Certifying it means rebuilding the
+graph with a resolved awareness-graph checkout and re-stamping this machine's
+certified commit — **graph authority and publication identity, which the R6
+brief lists as a non-goal (§25) and which is the next milestone**.
+
+The test therefore asks that question through the *same surface the gate uses*
+and skips naming the exact limitation, rather than asking a different instrument
+and guessing, or quietly passing. It is apparatus that runs the day the
+precondition is met; today it measures the precondition.
+
+**This is the one frozen R6 gate that is not met.** It is not met for a reason
+outside the slice, and closing it requires a decision that belongs to the
+architect: either authorize the graph-authority precondition, or accept the
+review-boundary commissioning for R6 and carry the whole-loop proof into the
+milestone that fixes graph authority anyway.
+
+---
+
 ## What was NOT commissioned
 
 Stated so nobody reads more into a green run than it earned.
 
-**The turns above the review boundary.** Objective establishment, the architect
-turn and implementer candidate production run through `workflow.Engine`, which
-R1–R6 did not change. These commissioning drives start at *"a candidate exists
-and a review of it is owed"* and end at *"that exact review discharged that exact
-obligation"*. The engine's own package drives the turns above that line with its
-own harness; wiring the whole engine into this drive would require reproducing
-that harness across a package boundary, and it would exercise code this slice
-did not touch.
+**The whole loop, end to end, in this environment** — see F above for the exact
+blocker and who owns the decision.
+
+**Admission and publication.** The arc ends at a discharged obligation and an
+accepted candidate; landing and Sensei admission are not driven here, and the
+loop test above stops at the engine's own terminal.
 
 **Live GitHub.** The mailbox is an in-process HTTP server. Nothing here proves
 behaviour against api.github.com's real rate limits, eventual consistency or
 comment ordering.
-
-**The final publication/admission step.** The arc ends at a discharged
-obligation and an accepted candidate; landing and Sensei admission are not
-driven here.
 
 ---
 
@@ -153,8 +200,11 @@ independent-review obligation.
 
 ## Mutation results
 
-22 semantic mutations against the surviving rules; **22 killed**, each by a named
-assertion. See the R6 report on PR for the table.
+25 semantic mutations against the surviving rules; **25 killed**, each by a named
+assertion. See the R6 report on PR for the table. Three of them cover the
+repairs from the first review round: a recovery path that trusts any author, one
+that trusts an unauthenticatable receipt, and a publication that names the
+retrying caller rather than the principal that staged the delivery.
 
 One **harness fault** was found and fixed mid-campaign: two edits to the same
 file recorded the second backup from already-mutated content, so restoring put
@@ -170,7 +220,8 @@ re-run in full after the fix, against a verified-clean tree.
 | review obligation owners | 1 | **1** |
 | relay semantic stores | 1 | **0** |
 
-Reviewer-spine production code lines (comments and blanks excluded):
-`2569 -> 2779` (+210), of which the one-way historical migration is +219.
-Excluding that transitional file the spine is **-9 lines** — with one store
-instead of two and one grammar instead of two.
+Reviewer-spine production code lines (comments and blanks excluded), across the
+twelve files this slice touched: `3423 -> 3685` (+262), of which the one-way
+historical migration is +219. Excluding that transitional file the spine is
+**+43 lines** — one store instead of two, one grammar instead of two, and a
+third pinned principal (the publisher) that the authority repair added.

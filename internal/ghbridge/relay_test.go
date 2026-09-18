@@ -519,13 +519,22 @@ func TestAForgedReceiptCannotPromoteAStagedReview(t *testing.T) {
 	}
 	forgedID := f.mailbox.add(forged, "davecourtois", 1697116)
 	before := len(f.mailbox.posted())
-	// The precondition: this really is a receipt that WOULD reconcile if the
-	// author check were absent. Without it, a pass could mean the fixture simply
-	// never matched.
-	if match, ferr := relayPublicationOf(context.Background(), f.box,
-		obligationFrom(soleObligation(t, f.exchanges)), ReviewDigest(artifact)); ferr != nil ||
-		match.comment != forgedID || match.ours || match.unauthenticatable {
-		t.Fatalf("the forged receipt is not a matching, unauthenticated one: %+v err=%v", match, ferr)
+	// Two separate claims, so a failure says which one broke.
+	match, ferr := relayPublicationOf(context.Background(), f.box,
+		obligationFrom(soleObligation(t, f.exchanges)), ReviewDigest(artifact))
+	if ferr != nil || match.comment != forgedID {
+		// The fixture: without a matching receipt there is nothing to reject,
+		// and a pass would mean only that nothing was ever found.
+		t.Fatalf("the forged receipt does not match this request and digest: %+v err=%v", match, ferr)
+	}
+	if match.ours {
+		// THE PROPERTY. An account that is not this machine's publisher
+		// authenticated as it, so any comment carrying the right marker,
+		// request and digest could complete a delivery.
+		t.Fatalf("a receipt written by %s authenticated as this machine's publication", match.author)
+	}
+	if match.unauthenticatable {
+		t.Fatalf("the obligation pins no publisher, so this case is not testing the author check: %+v", match)
 	}
 
 	res, err := f.submit(artifact)
