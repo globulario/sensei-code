@@ -27,6 +27,12 @@ const (
 	AttestationAccepted = "accepted"
 	// AttestationPublished is one the App has published on the mailbox.
 	AttestationPublished = "published"
+
+	// AttestationSchemaVersion is the record shape this code writes and can
+	// read back. A record on another version is refused rather than
+	// interpreted: reading an authority object under the wrong schema is how a
+	// field means something its writer never said.
+	AttestationSchemaVersion = 1
 )
 
 // ErrAttestationRefused reports an attestation that was not accepted. Nothing
@@ -311,6 +317,22 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 				"request %s is already attested for review %s; an attestation is not replaced",
 				att.RequestID, existing.Attestation.ReviewDigest)
 		}
+		// Preserving an existing override's owner facts is only defensible when
+		// those facts form a VALID historical override. Load unmarshals JSON and
+		// proves nothing, so a record could agree with the canonical review on
+		// every review-derived field while carrying no principal, a statement
+		// outside the closed set, or a zero attested time -- and the retry would
+		// publish it, announcing a human override whose stored act does not
+		// satisfy roles.Attestation.Validate.
+		//
+		// Preservation is not permission to publish malformed authority. Checked
+		// BEFORE the meaning comparison, so an unreadable record is reported as
+		// unreadable rather than as a disagreement about a review.
+		if err := existing.usableAsHistory(); err != nil {
+			return AttestationRecord{}, attestationRefused(
+				"request %s already has an attestation that is not a valid record: %v; "+
+					"it is preserved unchanged and nothing was published", att.RequestID, err)
+		}
 		// A matching digest is not agreement. The stored override states what
 		// review it is about, and if that disagrees with what the canonical
 		// bytes actually say, reusing it would let the older record supply the
@@ -333,6 +355,47 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 		return record, nil
 	}
 	return publishAttestation(ctx, in.Mailbox, in.Store, record, now)
+}
+
+// usableAsHistory states what a stored override must prove about itself before
+// this process will stand behind it -- reuse it, publish it, or return it as
+// the authority covering a candidate.
+//
+// Structural and lifecycle only. It asks nothing about authenticity, which is
+// #184's question about every governed local store; it asks whether this record
+// is the kind of object its own schema describes.
+func (r AttestationRecord) usableAsHistory() error {
+	if r.Version != AttestationSchemaVersion {
+		return fmt.Errorf("it declares schema version %d and this package writes %d", r.Version, AttestationSchemaVersion)
+	}
+	switch r.State {
+	case AttestationAccepted, AttestationPublished:
+	default:
+		return fmt.Errorf("it is in unknown state %q", r.State)
+	}
+	if r.AcceptedAt.IsZero() {
+		return errors.New("it does not say when it was accepted")
+	}
+	if err := r.Attestation.Validate(); err != nil {
+		return err
+	}
+	if r.Attestation.At.IsZero() {
+		return errors.New("it does not say when it was attested")
+	}
+	if r.State == AttestationPublished {
+		if strings.TrimSpace(r.Publication) == "" || r.PublicationComment <= 0 || r.PublishedAt.IsZero() {
+			return errors.New("it claims publication and does not say by whom, as which comment, or when")
+		}
+		return nil
+	}
+	// ACCEPTED. Stray publication fields are not proof that anything was
+	// published: a record that is half-published is a record whose lifecycle
+	// nobody can read, and treating those fields as evidence would let one be
+	// consumed as though the App had posted it.
+	if strings.TrimSpace(r.Publication) != "" || r.PublicationComment != 0 || !r.PublishedAt.IsZero() {
+		return errors.New("it is accepted and carries publication details, so its lifecycle cannot be read")
+	}
+	return nil
 }
 
 // reviewMeaningMismatch names the first review-derived field on which a stored

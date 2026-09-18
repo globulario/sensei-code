@@ -718,3 +718,115 @@ func TestARetryReusesAnAgreeingOverrideAndKeepsItsOwnerFacts(t *testing.T) {
 		})
 	}
 }
+
+// A stored override that agrees about the review but is not a valid record is
+// refused, and preserved byte-for-byte.
+//
+// Preserving an owner's historical facts is only defensible when those facts
+// form a valid historical override. Without this check the retry path would
+// publish a record carrying no principal, a statement outside the closed set,
+// or an unreadable lifecycle -- announcing a human override whose stored act
+// does not satisfy roles.Attestation.Validate. Preservation is not permission
+// to publish malformed authority.
+func TestAMalformedStoredOverrideIsRefusedEvenWhenItAgreesAboutTheReview(t *testing.T) {
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	digest := ReviewDigest(raw)
+	canonical := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+	attestedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	// agreeing is a record whose REVIEW meaning matches the canonical artifact
+	// exactly, so every refusal below is about the record and never about a
+	// disagreement over which review it covers.
+	agreeing := func() AttestationRecord {
+		return AttestationRecord{
+			Version: AttestationSchemaVersion, State: AttestationAccepted,
+			Attestation: roles.Attestation{
+				RequestID: relayRequest, ReviewDigest: digest, Reviewer: "chatgpt",
+				Decision: roles.Accept, Binding: canonical, Principal: operator.token(),
+				At: attestedAt, Statement: roles.AttestationStatement,
+			},
+			AcceptedAt: attestedAt,
+		}
+	}
+
+	for name, c := range map[string]struct {
+		break_         func(*AttestationRecord)
+		attestationBad bool // the stored roles.Attestation itself is invalid
+	}{
+		"no principal": {func(r *AttestationRecord) { r.Attestation.Principal = "" }, true},
+		"a statement outside the closed set": {func(r *AttestationRecord) {
+			r.Attestation.Statement = "I looked at it and it seemed fine"
+		}, true},
+		"zero attested time":          {func(r *AttestationRecord) { r.Attestation.At = time.Time{} }, false},
+		"zero accepted time":          {func(r *AttestationRecord) { r.AcceptedAt = time.Time{} }, false},
+		"an unwritten schema version": {func(r *AttestationRecord) { r.Version = 0 }, false},
+		"a schema version from a later package": {func(r *AttestationRecord) {
+			r.Version = AttestationSchemaVersion + 1
+		}, false},
+		"an unknown lifecycle state": {func(r *AttestationRecord) { r.State = "withdrawn" }, false},
+		"published with no publication comment": {func(r *AttestationRecord) {
+			r.State = AttestationPublished
+			r.Publication, r.PublishedAt = "github-app", attestedAt
+		}, false},
+		"published with no publisher": {func(r *AttestationRecord) {
+			r.State = AttestationPublished
+			r.PublicationComment, r.PublishedAt = 4242, attestedAt
+		}, false},
+		"published with no publication time": {func(r *AttestationRecord) {
+			r.State = AttestationPublished
+			r.Publication, r.PublicationComment = "github-app", 4242
+		}, false},
+		"accepted while carrying publication details": {func(r *AttestationRecord) {
+			r.Publication, r.PublicationComment, r.PublishedAt = "github-app", 4242, attestedAt
+		}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			store := attestStore(t)
+			acceptMailboxReview(t, f, raw)
+
+			rec := agreeing()
+			c.break_(&rec)
+			// The record must still AGREE about the review, or the refusal under
+			// test could be the semantic conflict check firing instead.
+			if m := reviewMeaningMismatch(rec.Attestation, roles.Attestation{
+				RequestID: relayRequest, ReviewDigest: digest, Reviewer: "chatgpt",
+				Decision: roles.Accept, Binding: canonical,
+			}); m != "" {
+				t.Fatalf("this fixture disagrees about the review (%s), so it proves nothing about record validity", m)
+			}
+			// And the intended defect must be where the case says it is.
+			if got := rec.Attestation.Validate() != nil; got != c.attestationBad {
+				t.Fatalf("stored attestation invalid=%v, want %v for %q", got, c.attestationBad, name)
+			}
+			if err := rec.usableAsHistory(); err == nil {
+				t.Fatalf("the fixture is a usable record, so this case proves nothing")
+			}
+
+			if err := store.create(rec); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(store.Dir, relayRequest+".json")
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			posted := len(f.mailbox.posted())
+
+			if _, err := f.attest(store, relayRequest, digest, true); !errors.Is(err, ErrAttestationRefused) {
+				t.Fatalf("err = %v, want a refusal", err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(before) {
+				t.Fatal("a malformed override was repaired in place; it is evidence, not something to fix")
+			}
+			if n := len(f.mailbox.posted()) - posted; n != 0 {
+				t.Fatalf("a refused override published %d comment(s)", n)
+			}
+		})
+	}
+}
