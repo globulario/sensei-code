@@ -51,14 +51,14 @@ func store(t *testing.T) Store {
 
 func mailboxEvidence() Evidence {
 	return Evidence{
-		Transport: GitHubMailbox, ObservedAt: time.Unix(1700000000, 0).UTC(),
+		Transport: GitHubMailbox, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC(),
 		GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116, GitHubComment: 5001,
 	}
 }
 
 func relayEvidence() Evidence {
 	return Evidence{
-		Transport: LocalRelay, ObservedAt: time.Unix(1700000100, 0).UTC(),
+		Transport: LocalRelay, State: Ready, ObservedAt: time.Unix(1700000100, 0).UTC(),
 		RelayPrincipal: "uid:1000,user:dave,pid:4242,terminal:34816",
 		Publication:    "globulario-sensei-code[bot]", PublicationComment: 5002,
 		PublishedAt: time.Unix(1700000090, 0).UTC(),
@@ -458,7 +458,7 @@ func TestTheStoreRefusesUnsafeOrMismatchedIdentity(t *testing.T) {
 	}
 	// An unknown transport is not recordable evidence.
 	if _, err := s.Accept(Acceptance{RequestID: request, Artifact: artifact(t, request, "chatgpt", accept),
-		Evidence: Evidence{Transport: "carrier-pigeon"}, Validate: passes}); err == nil {
+		Evidence: Evidence{Transport: "carrier-pigeon", State: Ready}, Validate: passes}); err == nil {
 		t.Fatal("an unknown transport was recorded")
 	}
 	if _, err := s.Accept(Acceptance{RequestID: request, Artifact: artifact(t, request, "chatgpt", accept),
@@ -529,11 +529,11 @@ func TestThisPackageDependsOnNoTransport(t *testing.T) {
 func TestRedeliveryWithNoSuppliedClockIsStillIdempotent(t *testing.T) {
 	for name, ev := range map[string]Evidence{
 		"a mailbox comment re-read on a later poll": {
-			Transport: GitHubMailbox, GitHubAuthor: "davecourtois",
+			Transport: GitHubMailbox, State: Ready, GitHubAuthor: "davecourtois",
 			GitHubAuthorID: 1697116, GitHubComment: 5150,
 		},
 		"a relay convergence retried after a store failure": {
-			Transport: LocalRelay, RelayPrincipal: "uid:1000,user:dave,pid:4242,terminal:34816",
+			Transport: LocalRelay, State: Ready, RelayPrincipal: "uid:1000,user:dave,pid:4242,terminal:34816",
 			Publication: "globulario-sensei-code[bot]", PublicationComment: 5002,
 			PublishedAt: time.Unix(1700000090, 0).UTC(),
 		},
@@ -591,31 +591,31 @@ func TestARecordMissingItsAcceptanceResidueIsRefused(t *testing.T) {
 		"no transport observation at all":       func(r *Record) { r.Evidence = nil },
 		"an empty observation":                  func(r *Record) { r.Evidence = []Evidence{{}} },
 		"a transport nobody defines": func(r *Record) {
-			r.Evidence = []Evidence{{Transport: "carrier-pigeon", ObservedAt: time.Unix(1700000000, 0).UTC()}}
+			r.Evidence = []Evidence{{Transport: "carrier-pigeon", State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC()}}
 		},
 		"an observation with no time": func(r *Record) { r.Evidence[0].ObservedAt = time.Time{} },
 		"mailbox evidence naming no comment": func(r *Record) {
-			r.Evidence = []Evidence{{Transport: GitHubMailbox, ObservedAt: time.Unix(1700000000, 0).UTC(),
+			r.Evidence = []Evidence{{Transport: GitHubMailbox, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC(),
 				GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116}}
 		},
 		"mailbox evidence naming no principal": func(r *Record) {
-			r.Evidence = []Evidence{{Transport: GitHubMailbox, ObservedAt: time.Unix(1700000000, 0).UTC(),
+			r.Evidence = []Evidence{{Transport: GitHubMailbox, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC(),
 				GitHubComment: 5150}}
 		},
 		"relay evidence naming no principal": func(r *Record) {
-			r.Evidence = []Evidence{{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC(),
+			r.Evidence = []Evidence{{Transport: LocalRelay, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC(),
 				Publication: "app", PublicationComment: 5002, PublishedAt: time.Unix(1700000090, 0).UTC()}}
 		},
 		"relay evidence naming no publication": func(r *Record) {
-			r.Evidence = []Evidence{{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC(),
+			r.Evidence = []Evidence{{Transport: LocalRelay, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC(),
 				RelayPrincipal: "uid:1000", PublishedAt: time.Unix(1700000090, 0).UTC()}}
 		},
 		"relay evidence with no publication time": func(r *Record) {
-			r.Evidence = []Evidence{{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC(),
+			r.Evidence = []Evidence{{Transport: LocalRelay, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC(),
 				RelayPrincipal: "uid:1000", Publication: "app", PublicationComment: 5002}}
 		},
 		"one good row and one incomplete one": func(r *Record) {
-			r.Evidence = append(r.Evidence, Evidence{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC()})
+			r.Evidence = append(r.Evidence, Evidence{Transport: LocalRelay, State: Ready, ObservedAt: time.Unix(1700000000, 0).UTC()})
 		},
 	} {
 		t.Run(name, func(t *testing.T) {

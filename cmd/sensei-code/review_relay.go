@@ -146,20 +146,20 @@ func attestHandler(runners engineResolver, cfg config.Config) control.AttestHand
 // observed.
 func relayHandler(runners engineResolver) control.RelayHandler {
 	return func(ctx context.Context, artifact string, p control.LocalRelayPrincipal) (control.LocalRelayResult, error) {
-		if runners.Relays.Dir == "" || runners.Exchanges.Dir == "" {
+		if runners.Reviews.Dir == "" || runners.Exchanges.Dir == "" {
 			return control.LocalRelayResult{}, errors.New("this control process has no GitHub review bridge, so it cannot accept a relayed review")
 		}
 		principal := ghbridge.RelayPrincipal{UID: p.UID, PID: p.PID, Terminal: p.Terminal}
 		if u, err := user.LookupId(strconv.FormatUint(uint64(p.UID), 10)); err == nil {
 			principal.User = u.Username
 		}
-		rec, err := ghbridge.AcceptRelayedReview(ctx, ghbridge.RelaySubmission{
+		res, err := ghbridge.AcceptRelayedReview(ctx, ghbridge.RelaySubmission{
 			Artifact: artifact, Principal: principal,
-			Exchanges: runners.Exchanges, Store: runners.Relays, Reviews: runners.Reviews, Mailbox: runners.Mailbox,
+			Exchanges: runners.Exchanges, Reviews: runners.Reviews, Mailbox: runners.Mailbox,
 		})
 		return control.LocalRelayResult{
-			State: rec.State, TaskID: rec.TaskID, RequestID: rec.RequestID, Reviewer: rec.Reviewer,
-			ReviewDigest: rec.ReviewDigest, Publication: rec.Publication, PublicationComment: rec.PublicationComment,
+			State: res.State, TaskID: res.TaskID, RequestID: res.RequestID, Reviewer: res.Reviewer,
+			ReviewDigest: res.ReviewDigest, Publication: res.Publication, PublicationComment: res.PublicationComment,
 		}, err
 	}
 }

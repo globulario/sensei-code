@@ -172,11 +172,7 @@ func TestTheMailboxRefusesAnAnswerThatIsNotTheOneAsked(t *testing.T) {
 		// The historical grammar scar: an envelope with no reviewer= line. It
 		// was acceptable before R2 and is deliberately not acceptable now.
 		"no reviewer line": func(t *testing.T, req Request) string {
-			raw, err := Review{Subject: req.Subject, RequestID: req.RequestID}.Marker()
-			if err != nil {
-				t.Fatal(err)
-			}
-			return raw + acceptJSON
+			return legacyEnvelope(req) + acceptJSON
 		},
 		"a provider that was not assigned": func(t *testing.T, req Request) string {
 			return canonicalAnswer(t, req.Subject, req.RequestID, "claude", acceptJSON)
@@ -318,17 +314,8 @@ func TestAMalformedVerdictNeverBecomesAStoredReview(t *testing.T) {
 // Two byte identities, deliberately. Nothing edits the old artifact into
 // compliance and calls it the same review.
 func TestTheOldGrammarIsRefusedAndTheCanonicalOneIsAccepted(t *testing.T) {
-	legacy := func(t *testing.T, req Request) string {
-		t.Helper()
-		raw, err := Review{Subject: req.Subject, RequestID: req.RequestID}.Marker()
-		if err != nil {
-			t.Fatal(err)
-		}
-		return raw + acceptJSON
-	}
-
 	m, runner, binding, _ := reviewRunnerWithLog(t, 150*time.Millisecond)
-	answerWith(m, func(req Request) string { return legacy(t, req) }, "davecourtois", 1697116)
+	answerWith(m, func(req Request) string { return legacyEnvelope(req) + acceptJSON }, "davecourtois", 1697116)
 	if res, err := runner.Run(context.Background(), reviewTurn(binding), nil); err == nil {
 		t.Fatalf("the pre-R2 grammar still answers a live review: %q", res.Text)
 	}
@@ -337,7 +324,7 @@ func TestTheOldGrammarIsRefusedAndTheCanonicalOneIsAccepted(t *testing.T) {
 	var canonical string
 	answerWith(m2, func(req Request) string {
 		canonical = canonicalAnswer(t, req.Subject, req.RequestID, req.ReviewerProvider, acceptJSON)
-		if strings.Contains(legacy(t, req), "reviewer=") {
+		if strings.Contains(legacyEnvelope(req), "reviewer=") {
 			t.Fatal("the legacy fixture already names a reviewer; the two grammars are not distinguished")
 		}
 		return canonical
@@ -397,9 +384,15 @@ func TestAPublishedRelayConvergesOnTheCommonRecord(t *testing.T) {
 	}
 }
 
-// Accepted is not published, and unpublished is not an answer. The common store
-// stays empty until the App has actually posted the relay.
-func TestAnAcceptedButUnpublishedRelayIsNotInTheCommonStore(t *testing.T) {
+// Staged is not delivered, and undelivered is not an answer.
+//
+// THE R6 INVERSION, stated plainly. Before R6 an unpublished relay was kept out
+// of the common store entirely and lived in the relay's own record; the store
+// said "no review" while a validated review demonstrably existed. It is IN the
+// store now -- one record, exact bytes -- and what it is not is CONSUMABLE.
+// Presence and permission became two different questions, which is what let the
+// second store go.
+func TestAStagedRelayIsInTheOneStoreAndIsStillNotAnAnswer(t *testing.T) {
 	f := newRelayFixture(t)
 	f.mailbox.failPosts = true
 	art := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
@@ -407,61 +400,74 @@ func TestAnAcceptedButUnpublishedRelayIsNotInTheCommonStore(t *testing.T) {
 	if _, err := f.submit(art); !errors.Is(err, ErrRelayPublication) {
 		t.Fatalf("err = %v, want ErrRelayPublication", err)
 	}
-	if _, found, _ := f.reviews.Load(relayRequest); found {
-		t.Fatal("an unpublished relay became a consumable common review")
+	rec, found, err := f.reviews.Load(relayRequest)
+	if err != nil || !found {
+		t.Fatalf("a staged relay is not durable: found=%v err=%v", found, err)
 	}
-	// The relay receipt is preserved for retry, which is RelayStore's remaining job.
-	if rec, found, _ := f.store.Load(relayRequest); !found || rec.State != RelayAccepted {
-		t.Fatalf("the accepted relay was not preserved for retry: found=%v %+v", found, rec)
+	if rec.ArtifactRaw != art {
+		t.Fatal("the staged record does not hold the reviewer's exact bytes")
+	}
+	if rec.Consumable() {
+		t.Fatal("an undelivered relay became a consumable review")
+	}
+	if n := len(rec.Staged()); n != 1 {
+		t.Fatalf("the record reports %d staged deliveries, want 1", n)
 	}
 	// And the turn is not answered.
 	if res, err := f.runner().Run(context.Background(), f.turn(), nil); err == nil {
-		t.Fatalf("an unpublished relay answered the turn: %q", res.Text)
+		t.Fatalf("an undelivered relay answered the turn: %q", res.Text)
 	}
 }
 
-// Publication succeeded and the common-store write did not. The published relay
-// is preserved, the failure is explicit, and resubmitting the SAME artifact
-// retries only the store write -- it must not publish a second receipt.
-func TestAFailedConvergenceRetriesTheStoreWriteWithoutPublishingTwice(t *testing.T) {
+// Publication succeeded and recording the delivery did not. The publication is
+// preserved, the failure is explicit, and resubmitting the SAME artifact
+// completes the delivery from the receipt already on the mailbox -- it must not
+// publish a second one.
+func TestAFailedCompletionIsRetriedWithoutPublishingTwice(t *testing.T) {
 	f := newRelayFixture(t)
 	art := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
 
-	// A file where the store's directory must go: the publication succeeds and
-	// the record cannot be written.
-	blocked := filepath.Join(t.TempDir(), "reviews")
-	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
+	// Staged first, so the store directory exists and holds the exact bytes.
+	f.mailbox.failPosts = true
+	if _, err := f.submit(art); !errors.Is(err, ErrRelayPublication) {
+		t.Fatalf("staging: %v", err)
+	}
+	f.mailbox.failPosts = false
+
+	// Now the record cannot be rewritten: publication will succeed and
+	// completing the delivery will not. Exactly the crash edge, without a crash.
+	if err := os.Chmod(f.reviews.Dir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	broken := f
-	broken.reviews = reviewstore.Store{Dir: blocked}
-
-	published, err := broken.submit(art)
-	if !errors.Is(err, ErrRelayConvergence) {
+	t.Cleanup(func() { _ = os.Chmod(f.reviews.Dir, 0o700) })
+	if _, err := f.submit(art); !errors.Is(err, ErrRelayConvergence) {
 		t.Fatalf("err = %v, want ErrRelayConvergence", err)
-	}
-	if published.State != RelayPublished || published.PublicationComment <= 0 {
-		t.Fatalf("the published relay was not preserved: %+v", published)
 	}
 	postsAfterFirst := len(f.mailbox.posted())
 	if postsAfterFirst != 1 {
 		t.Fatalf("the relay published %d comments, want 1", postsAfterFirst)
 	}
+	if err := os.Chmod(f.reviews.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if rec, _, _ := f.reviews.Load(relayRequest); rec.Consumable() {
+		t.Fatal("the failed completion recorded a delivery anyway")
+	}
 
-	// Resubmit the identical artifact against a working store.
+	// Resubmit the identical artifact.
 	again, err := f.submit(art)
 	if err != nil {
-		t.Fatalf("retrying convergence: %v", err)
+		t.Fatalf("retrying the completion: %v", err)
 	}
-	if again.PublicationComment != published.PublicationComment {
-		t.Fatalf("the retry republished: comment %d then %d", published.PublicationComment, again.PublicationComment)
+	if again.State != RelayPublished {
+		t.Fatalf("the retry reported state %q", again.State)
 	}
 	if n := len(f.mailbox.posted()); n != postsAfterFirst {
 		t.Fatalf("the retry posted again: %d comments, want %d", n, postsAfterFirst)
 	}
 	rec, found, err := f.reviews.Load(relayRequest)
-	if err != nil || !found {
-		t.Fatalf("the retry did not record the review: found=%v err=%v", found, err)
+	if err != nil || !found || !rec.Consumable() {
+		t.Fatalf("the retry did not complete the delivery: found=%v err=%v", found, err)
 	}
 	if rec.ArtifactRaw != art {
 		t.Fatal("the retry recorded bytes other than the reviewer's artifact")
@@ -485,7 +491,7 @@ func TestTheSameArtifactOnBothTransportsIsOneRecord(t *testing.T) {
 	comment := f.mailbox.add(art, "davecourtois", 1697116)
 	second, err := f.reviews.Accept(reviewstore.Acceptance{
 		RequestID: relayRequest, Artifact: art,
-		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox,
+		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox, State: reviewstore.Ready,
 			GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116, GitHubComment: comment},
 		Validate: func(reviewartifact.Artifact) error { return nil },
 	})
@@ -516,7 +522,7 @@ func TestADifferentArtifactForAnAnsweredRequestConflicts(t *testing.T) {
 
 	_, err := f.reviews.Accept(reviewstore.Acceptance{
 		RequestID: relayRequest, Artifact: rival,
-		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox,
+		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox, State: reviewstore.Ready,
 			GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116, GitHubComment: 9001},
 		Validate: func(reviewartifact.Artifact) error { return nil },
 	})
@@ -662,10 +668,15 @@ func TestTheBridgeNeverInterpretsAVerdictItself(t *testing.T) {
 			t.Errorf("%s accepts a review without asking workflow's parser what the body says", path)
 		}
 	}
-	// One: RelayRecord's durable receipt of a verdict workflow already read.
-	if decisionFields != 1 {
-		t.Errorf("the bridge holds %d json:\"decision\" fields, want exactly 1 (the relay receipt); "+
-			"a second is a second representation of the verdict", decisionFields)
+	// ZERO since #182 R6. The relay's own receipt held a persisted decision,
+	// summary and findings so its publication could print them; the publication
+	// is rendered from the canonical bytes and the parser's verdict now, and no
+	// durable record in this package carries a second copy of what a review
+	// said. A field here would be a representation that agrees with the artifact
+	// only until somebody edits one.
+	if decisionFields != 0 {
+		t.Errorf("the bridge persists %d json:\"decision\" field(s); a review's verdict is re-read from "+
+			"its exact bytes and stored nowhere", decisionFields)
 	}
 }
 
@@ -746,120 +757,128 @@ func TestAStoredReviewCannotAnswerAnObligationThatNeverNamedItsReviewer(t *testi
 	}
 }
 
-// A relay the App published and the common store never recorded is NOT an
-// answer, and the obligation stays open until convergence completes.
+// NOTHING IS PUBLISHED BEFORE THE BYTES ARE DURABLE.
 //
-// This is the one semantic source made real. Before it, a relay whose
-// publication succeeded and whose convergence failed could still be consumed
-// straight out of RelayStore, which meant two places could say what answered a
-// request and the explicit convergence failure changed nothing in practice.
-func TestAPublishedRelayThatNeverConvergedDoesNotAnswerUntilItDoes(t *testing.T) {
+// The R6 ordering, and the reason the relay's own store could go. Before it the
+// adapter published first and converged second, so a publication could succeed
+// against a review store that could not be written -- a receipt on the mailbox
+// naming a review no local record held. Staging now comes first, so a store that
+// cannot be written produces no publication at all, and there is no window in
+// which GitHub knows about a review this workspace does not.
+func TestAStagingFailurePublishesNothing(t *testing.T) {
 	f := newRelayFixture(t)
 	art := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
 
-	// Publication succeeds; the common-store write cannot.
+	// A file where the store's directory must go: staging cannot succeed.
 	blocked := filepath.Join(t.TempDir(), "reviews")
 	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	broken := f
 	broken.reviews = reviewstore.Store{Dir: blocked}
-	published, err := broken.submit(art)
-	if !errors.Is(err, ErrRelayConvergence) {
-		t.Fatalf("err = %v, want ErrRelayConvergence", err)
-	}
-	if published.State != RelayPublished || published.PublicationComment <= 0 {
-		t.Fatalf("the relay was not published: %+v", published)
-	}
-	if _, found, _ := f.reviews.Load(relayRequest); found {
-		t.Fatal("the common store has a record; this test needs convergence to have failed")
-	}
 
-	// The runner must not answer from RelayStore.
-	res, err := f.runner().Run(context.Background(), f.turn(), nil)
-	var owed *roles.ReviewUnanswered
-	if !errors.As(err, &owed) {
-		t.Fatalf("a published-but-unconverged relay answered the turn: text=%q err=%v", res.Text, err)
+	res, err := broken.submit(art)
+	if !errors.Is(err, ErrRelayRefused) {
+		t.Fatalf("err = %v, want the relay refused before anything was published", err)
 	}
-	if owed.RequestID != relayRequest {
-		t.Fatalf("the turn reports request %s, want the same owed %s", owed.RequestID, relayRequest)
+	if errors.Is(err, ErrRelayPublication) || errors.Is(err, ErrRelayConvergence) {
+		t.Fatalf("a staging failure was reported as a publication or delivery failure: %v", err)
 	}
-	if res.Text != "" || res.ReviewDigest != "" {
-		t.Fatalf("a verdict leaked from RelayStore: text=%q digest=%q", res.Text, res.ReviewDigest)
+	if res.State != "" {
+		t.Fatalf("a refused relay reported state %q", res.State)
 	}
-	// The reason must name what is actually pending, or an operator is told a
-	// review is simply late when the repair is one command.
-	if owed.Cause == nil || !strings.Contains(owed.Cause.Error(), "review store") {
-		t.Fatalf("the refusal does not say convergence is what is pending: %v", owed.Cause)
+	if n := len(f.mailbox.posted()); n != 0 {
+		t.Fatalf("a relay that could not be staged published %d comment(s)", n)
 	}
-	if !strings.Contains(owed.Cause.Error(), "review submit") {
-		t.Fatalf("the refusal does not say how to repair it: %v", owed.Cause)
-	}
-	pending, _ := f.exchanges.PendingReviews()
-	if len(pending) != 1 || pending[0].RequestID != relayRequest {
-		t.Fatalf("the obligation did not stay open under the same request: %+v", pending)
-	}
-	postsBefore := len(f.mailbox.posted())
-
-	// Retry convergence: the same artifact, no second publication.
-	again, err := f.submit(art)
-	if err != nil {
-		t.Fatalf("retrying convergence: %v", err)
-	}
-	if again.PublicationComment != published.PublicationComment {
-		t.Fatalf("the retry republished: comment %d then %d", published.PublicationComment, again.PublicationComment)
-	}
-	if n := len(f.mailbox.posted()); n != postsBefore {
-		t.Fatalf("the retry posted %d new comments, want none", n-postsBefore)
-	}
-
-	// Now, and only now, it answers -- out of the common store.
-	res, err = f.runner().Run(context.Background(), f.turn(), nil)
-	if err != nil {
-		t.Fatalf("the converged review was not consumed: %v", err)
-	}
-	if res.ReviewDigest != ReviewDigest(art) {
-		t.Fatalf("consumed digest %s, want %s", res.ReviewDigest, ReviewDigest(art))
-	}
-	if pending, _ := f.exchanges.PendingReviews(); len(pending) != 0 {
-		t.Fatalf("the answered obligation is still owed: %+v", pending)
+	// And the obligation is untouched: the review is still owed, from nobody.
+	if pending, _ := f.exchanges.PendingReviews(); len(pending) != 1 || pending[0].RequestID != relayRequest {
+		t.Fatalf("the owed request did not survive: %+v", pending)
 	}
 }
 
 // Structural: only the common store returns a verdict to a review turn.
 //
-// The runner's relay path reports what is pending; it hands back no review
-// body and no digest. A second function that returned one would be a second
-// semantic source, which is the thing R2 removes.
+// The runner's DELIVERY_PENDING path reports what is held; it hands back no
+// review body and no digest. A second function that returned one would be a
+// second semantic source, which is the thing #182 removes -- and after R6 the
+// relay adapter has no path back into a turn at all.
 func TestOnlyTheCommonStoreReturnsAVerdict(t *testing.T) {
 	fset := token.NewFileSet()
-	for _, file := range []string{"relay.go", "runner.go"} {
+	resultsOf := func(fn *ast.FuncDecl) []string {
+		var out []string
+		if fn.Type.Results != nil {
+			for _, f := range fn.Type.Results.List {
+				n := len(f.Names)
+				if n == 0 {
+					n = 1
+				}
+				for i := 0; i < n; i++ {
+					out = append(out, types.ExprString(f.Type))
+				}
+			}
+		}
+		return out
+	}
+
+	// 1. The pending path carries no verdict.
+	var checkedPending bool
+	// 2. Nothing in the relay adapter returns an agent result at all.
+	var relayResultCarriers []string
+
+	for _, file := range []string{"relay.go", "runner.go", "review_observation.go"} {
 		parsed, err := parser.ParseFile(fset, file, nil, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
 		for _, decl := range parsed.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || fn.Name.Name != "pendingRelayFor" {
+			if !ok {
 				continue
 			}
-			// It returns (bool, error): no agent.Result to carry a verdict in.
-			var results []string
-			if fn.Type.Results != nil {
-				for _, f := range fn.Type.Results.List {
-					results = append(results, types.ExprString(f.Type))
+			results := resultsOf(fn)
+			if file == "relay.go" {
+				for _, r := range results {
+					if strings.Contains(r, "agent.Result") {
+						relayResultCarriers = append(relayResultCarriers, fn.Name.Name)
+					}
 				}
 			}
+			if fn.Name.Name != "deliveryPending" {
+				continue
+			}
+			checkedPending = true
 			for _, r := range results {
 				if strings.Contains(r, "Result") {
-					t.Errorf("pendingRelayFor returns %s; the relay path must not carry a verdict", r)
+					t.Errorf("deliveryPending returns %s; the pending path must not carry a verdict", r)
 				}
 			}
-			if len(results) != 2 || results[0] != "bool" || results[1] != "error" {
-				t.Errorf("pendingRelayFor returns %v, want (bool, error)", results)
+			if len(results) != 1 || results[0] != "*roles.ReviewObservationFault" {
+				t.Errorf("deliveryPending returns %v, want exactly (*roles.ReviewObservationFault)", results)
 			}
-			return
 		}
 	}
-	t.Fatal("pendingRelayFor was not found; this check proves nothing")
+	if !checkedPending {
+		t.Fatal("deliveryPending was not found; this check proves nothing")
+	}
+	if len(relayResultCarriers) != 0 {
+		t.Errorf("the relay adapter returns an agent result from %v; it stages and publishes, "+
+			"it does not answer a turn", relayResultCarriers)
+	}
+}
+
+// legacyEnvelope builds the PRE-R2 review envelope: the canonical marker with
+// every identity field and no reviewer= line.
+//
+// Written out by hand, deliberately. Until R6 this package had a type that
+// rendered exactly these bytes, which made "the grammar we refuse" and "the
+// grammar we ship" two halves of one package; the shape a test needs to refuse
+// is a fixture, not a production renderer kept alive for tests to call.
+func legacyEnvelope(req Request) string {
+	return reviewartifact.Marker + "\n" +
+		"task=" + req.TaskID + "\n" +
+		"request=" + req.RequestID + "\n" +
+		"base=" + req.BaseSHA + "\n" +
+		"candidate_digest=" + req.CandidateDigest + "\n" +
+		"candidate_tree=" + req.CandidateTree + "\n" +
+		"review_commit=" + req.ReviewCommit + "\n"
 }

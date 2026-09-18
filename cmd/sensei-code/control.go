@@ -466,12 +466,13 @@ type engineResolver struct {
 	// establishes THAT rather than re-deriving a box from the configuration
 	// that was meant to build it. Zero value when the bridge is off.
 	Mailbox ghbridge.Issue
-	// Exchanges and Relays are the stores the relay handler validates against
-	// and records into. Zero when the bridge is off, and a relay is then refused.
+	// Exchanges is the review-obligation log the relay handler validates
+	// against. Zero when the bridge is off, and a relay is then refused.
 	Exchanges ghbridge.ExchangeLog
-	Relays    ghbridge.RelayStore
-	// Reviews is the common semantic record the relay handler converges into and
-	// the engine consumes from.
+	// Reviews is the ONE durable review record. The relay handler stages into it
+	// and completes deliveries on it; the engine consumes from it. Before #182
+	// R6 a separate relay store sat beside this one holding a second copy of
+	// every relayed review, and this composition wired both.
 	Reviews reviewstore.Store
 	// Attestations is where recorded human overrides live. The engine READS it;
 	// only the attestation socket handler writes one.
@@ -547,7 +548,6 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	// is a goroutine inside AwaitArchitecture, so an open record cannot have one
 	// here -- which is what makes withdrawing them at startup honest (#162).
 	exchanges := ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")}
-	relays := ghbridge.RelayStore{Dir: filepath.Join(repoRoot, ".sensei-code", "relays")}
 	// One durable record of what a reviewer produced, whatever carried it. The
 	// mailbox and the relay both converge here, so "which review answered this
 	// request" has one answer rather than one per transport.
@@ -573,7 +573,6 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			// waiting at all.
 			Doorbell:  doorbell,
 			Exchanges: exchanges,
-			Relays:    relays,
 			Reviews:   reviews,
 		},
 		Fallback: base,
@@ -615,9 +614,23 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	if owed, err := exchanges.PendingReviews(); err == nil && len(owed) > 0 {
 		banner += fmt.Sprintf("\n  kept %d review request(s) still owed on a waiting candidate", len(owed))
 	}
+	// Historical relay receipts, converged into the one review record they
+	// should always have been. Local and bounded: it reads files this workspace
+	// already holds, publishes nothing and retains whatever it cannot establish.
+	if report, err := ghbridge.MigrateHistoricalRelays(
+		filepath.Join(repoRoot, ".sensei-code", "relays"), reviews, nil); err != nil {
+		banner += fmt.Sprintf("\n  historical relay receipts: %v; they are retained where they are", err)
+	} else if len(report.Records) > 0 {
+		banner += fmt.Sprintf("\n  converged %d historical relay receipt(s) into the review store", report.Migrated())
+		for _, rec := range report.Records {
+			if rec.Outcome == ghbridge.RetainedConflict || rec.Outcome == ghbridge.RetainedUnreadable {
+				banner += fmt.Sprintf("\n    retained %s (%s): %s", rec.File, rec.Outcome, rec.Detail)
+			}
+		}
+	}
 
 	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box,
-		Exchanges: exchanges, Relays: relays, Reviews: reviews, Attestations: attestations}, nil
+		Exchanges: exchanges, Reviews: reviews, Attestations: attestations}, nil
 }
 
 // credentialFromEnvOrMint resolves the credential and reports whether the

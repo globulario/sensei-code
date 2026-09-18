@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,6 +28,11 @@ import (
 // whether the metadata carries a pull_request object, which is exactly the
 // difference between a PR conversation and an ordinary issue.
 type prMailbox struct {
+	// mu guards comments. The fixture is a real HTTP server, so its handler runs
+	// on server goroutines; a test that appends from its own goroutine while any
+	// request is still in flight races it. That window is narrow and real: a
+	// killed child process leaves its last GET being served.
+	mu           sync.Mutex
 	srv          *httptest.Server
 	number       string
 	isPR         bool
@@ -45,6 +51,20 @@ type prMailbox struct {
 	// failPosts makes every post fail, for the failure points between retiring
 	// an owed review and establishing its replacement.
 	failPosts bool
+}
+
+// append adds comments under the lock, wherever the caller is running.
+func (m *prMailbox) append(c ...map[string]any) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.comments = append(m.comments, c...)
+}
+
+// snapshot copies the comment list for a reader that may be a server goroutine.
+func (m *prMailbox) snapshot() []map[string]any {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return append([]map[string]any{}, m.comments...)
 }
 
 func newPRMailbox(t *testing.T, keyPath, number string, isPR bool) (*prMailbox, Issue) {
@@ -91,18 +111,18 @@ func newPRMailboxWithGrants(t *testing.T, keyPath, number string, isPR bool, gra
 			}
 			var in struct{ Body string }
 			_ = json.NewDecoder(r.Body).Decode(&in)
-			m.comments = append(m.comments, map[string]any{
+			m.append(map[string]any{
 				"body": in.Body,
 				"user": map[string]any{"login": "globulario-sensei-code[bot]", "id": 99887766},
 			})
 			if m.onPost != nil {
-				m.comments = append(m.comments, m.onPost(in.Body)...)
+				m.append(m.onPost(in.Body)...)
 			}
 			w.WriteHeader(http.StatusCreated)
 			fmt.Fprint(w, `{"id":1}`)
 		case http.MethodGet:
 			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(m.comments)
+			_ = json.NewEncoder(w).Encode(m.snapshot())
 		}
 	})
 
@@ -232,7 +252,7 @@ func TestRepliesAreReadFromTheSamePRConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.comments = append(m.comments, map[string]any{
+	m.append(map[string]any{
 		"body": body,
 		"user": map[string]any{"login": "davecourtois", "id": 1697116},
 	})

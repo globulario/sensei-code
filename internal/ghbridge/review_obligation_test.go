@@ -37,7 +37,7 @@ func standingRequest(t *testing.T, runner *Runner, binding roles.Binding) *roles
 // publishedRequests lists every review request id on the mailbox.
 func publishedRequests(m *prMailbox) []string {
 	var out []string
-	for _, c := range m.comments {
+	for _, c := range m.snapshot() {
 		body, _ := c["body"].(string)
 		if r, ok := ParseRequest(body); ok {
 			out = append(out, r.RequestID)
@@ -910,11 +910,8 @@ func TestARelayCannotSelectOneOfTwoActiveObligationsByRequestID(t *testing.T) {
 	if !errors.Is(err, ErrObligationConflict) {
 		t.Fatalf("err = %v, want the relay refused for a lifecycle conflict", err)
 	}
-	if _, found, _ := f.store.Load(relayRequest); found {
-		t.Fatal("a refused relay left a receipt")
-	}
 	if _, found, _ := f.reviews.Load(relayRequest); found {
-		t.Fatal("a refused relay reached the common review store")
+		t.Fatal("a refused relay staged a review")
 	}
 	if n := len(f.mailbox.posted()); n != posted {
 		t.Fatalf("a refused relay published %d comment(s)", n-posted)

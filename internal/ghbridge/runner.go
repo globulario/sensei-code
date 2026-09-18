@@ -68,14 +68,15 @@ type Runner struct {
 	// request standing with nothing listening and no local trace. The architect
 	// path has had this record; the reviewer path had none.
 	Exchanges ExchangeLog
-	// Relays holds reviews relayed by a local operator. The runner only READS it:
-	// it reports a relay that exists and cannot be consumed yet, and nothing
-	// here can create or publish one.
-	Relays RelayStore
-	// Reviews is the common durable record of what a reviewer produced, whatever
-	// carried it. It is the SEMANTIC source of "which review answered this
-	// request": a mailbox answer and a published relay converge here, so the
-	// same reviewer bytes mean the same thing either way.
+	// Reviews is the ONE durable record of what a reviewer produced, whatever
+	// carried it. It is the semantic source of "which review answered this
+	// request": a mailbox answer and a relayed one converge here, so the same
+	// reviewer bytes mean the same thing either way.
+	//
+	// Read only, and read ONCE per turn. Before #182 R6 this runner also asked a
+	// separate relay store whether a review existed, which made "what answers
+	// this request" a question with two sources that had to be consulted in the
+	// right order to agree.
 	Reviews reviewstore.Store
 	// ReviewerProvider is the provider the workflow assigned for this turn.
 	//
@@ -141,13 +142,11 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 
 	replacing := ""
 	if have && current.IsAbout(subject) {
-		// A1. An exact canonical review already answers this request.
+		// A1. ONE store read decides everything a stored review can decide: a
+		// delivered review answers the turn, a staged one keeps the same request
+		// standing, and absence falls through to reattach or replace.
 		if result, found, cerr := r.storedReviewFor(current, req, emit); found {
 			return result, cerr
-		}
-		// A2. A relay exists and has not become the answer. Same request stands.
-		if found, perr := r.pendingRelayFor(current); found {
-			return agent.Result{}, perr
 		}
 		switch {
 		case !current.AssignedTo(provider):
@@ -591,7 +590,11 @@ func (r *Runner) acceptReview(o ReviewObligation, rev MailboxReview) (reviewstor
 		RequestID: o.RequestID,
 		Artifact:  rev.Artifact.Raw,
 		Evidence: reviewstore.Evidence{
+			// READY on arrival. A mailbox read is one-phase: these bytes were
+			// taken FROM a published comment, so there is no delivery still to
+			// complete and nothing here may be staged.
 			Transport:      reviewstore.GitHubMailbox,
+			State:          reviewstore.Ready,
 			GitHubAuthor:   rev.Author,
 			GitHubAuthorID: rev.AuthorID,
 			GitHubComment:  rev.Comment,
@@ -643,6 +646,20 @@ func (r *Runner) storedReviewFor(o ReviewObligation, req agent.Request, emit fun
 	if err != nil {
 		return agent.Result{}, true, obligationStands(o, err)
 	}
+	// RECORD PRESENCE IS NOT CONSUMABILITY.
+	//
+	// A relay stages the reviewer's exact bytes before the App has published
+	// them, so a record can exist while no governed ingestion of it has
+	// completed. The question is the store's to answer, and it is asked BEFORE
+	// anything is validated or discharged: a review nobody delivered must not
+	// discharge the obligation that is still waiting for it.
+	//
+	// Not silence, either. The bytes are demonstrably here, and saying "no
+	// answer arrived" would send an operator to wait for a review this process
+	// is holding (#182 R5/R6).
+	if !stored.Consumable() {
+		return agent.Result{}, true, deliveryPending(o, stored, art)
+	}
 	if m := subjectMismatch(o.Subject(), subjectOf(art)); m != "" {
 		return agent.Result{}, true, obligationStands(o, errors.New(m))
 	}
@@ -673,21 +690,40 @@ func (r *Runner) storedReviewFor(o ReviewObligation, req agent.Request, emit fun
 				"reviewer_provider": art.ReviewerProvider,
 				"review_digest":     stored.ReviewDigest,
 				"standing":          stored.Standing,
-				"transport_evidence": func() []string {
-					var out []string
-					for _, ev := range stored.Evidence {
-						out = append(out, string(ev.Transport))
-					}
-					return out
-				}(),
-				"base":             o.BaseSHA,
-				"candidate_digest": o.CandidateDigest,
-				"candidate_tree":   o.CandidateTree,
-				"review_commit":    o.ReviewCommit,
-				"transport":        "github",
+				// ONLY DELIVERED EVIDENCE ESTABLISHED THIS ACCEPTANCE. A staged
+				// row is reported beside it, never within it: an incomplete
+				// delivery listed as acceptance evidence would read, later, as a
+				// transport that established something it did not.
+				"transport_evidence": deliveredTransports(stored),
+				"staged_evidence":    stagedTransports(stored),
+				"base":               o.BaseSHA,
+				"candidate_digest":   o.CandidateDigest,
+				"candidate_tree":     o.CandidateTree,
+				"review_commit":      o.ReviewCommit,
+				"transport":          "github",
 			}))
 	}
 	return agent.Result{Text: art.Body, Session: roles.Unverified, ReviewDigest: stored.ReviewDigest}, true, nil
+}
+
+// deliveredTransports names the transports whose governed ingestion completed.
+func deliveredTransports(rec reviewstore.Record) []string {
+	var out []string
+	for _, ev := range rec.Evidence {
+		if ev.Delivered() {
+			out = append(out, string(ev.Transport))
+		}
+	}
+	return out
+}
+
+// stagedTransports names the transports still mid-delivery, for diagnostics.
+func stagedTransports(rec reviewstore.Record) []string {
+	var out []string
+	for _, ev := range rec.Staged() {
+		out = append(out, string(ev.Transport))
+	}
+	return out
 }
 
 // subjectOf lifts the candidate identity a canonical artifact carries.

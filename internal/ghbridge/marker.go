@@ -50,10 +50,11 @@ const KindReview Kind = "review"
 // Valid reads the closed set by membership.
 func (k Kind) Valid() bool { return k == KindReview }
 
-const (
-	requestMarker = "[sensei-code:review-request]"
-	reviewMarker  = "[sensei-code:review]"
-)
+// requestMarker is the ONE envelope this package still emits for the review
+// protocol. The review RESPONSE envelope belongs to reviewartifact, which owns
+// the grammar, the validation, the bound and the digest for it; a second
+// spelling of it here was the legacy half of the split #182 R6 removes.
+const requestMarker = "[sensei-code:review-request]"
 
 var (
 	fullSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
@@ -227,61 +228,6 @@ func (r Request) Marker() (string, error) {
 	return b.String(), nil
 }
 
-// Review is a reply to one request.
-//
-// It carries identity and a body, and deliberately no verdict: what the answer
-// SAYS is the workflow parser's to read from Body, in the reviewer JSON
-// contract. A transport that also stated the decision would be a second
-// representation of it.
-type Review struct {
-	Subject
-	RequestID string
-	// Body is the reviewer payload, passed through verbatim. This package never
-	// interprets it: prose that does not satisfy the reviewer JSON contract
-	// fails at the parser, which is why "LGTM, ship it" cannot become ACCEPT.
-	Body string
-	// Author and AuthorID record the GitHub account the answer came from.
-	//
-	// They are set by the transport AFTER it has authenticated the comment
-	// against the mailbox's configured reviewer — they are the result of that
-	// check, never the basis for it, and a parser cannot populate them from the
-	// comment body. They establish WHO sent an advisory result and nothing
-	// more: no GitHub property raises SessionMode above roles.Unverified.
-	Author   string
-	AuthorID int64
-}
-
-// Validate states the rules for a reply to be routable at all.
-func (r Review) Validate() error {
-	if err := r.Subject.Validate(); err != nil {
-		return err
-	}
-	if strings.TrimSpace(r.RequestID) == "" {
-		return errors.New("a review must name the request it answers")
-	}
-	if strings.TrimSpace(r.Body) == "" {
-		return errors.New("a review must carry a reviewer payload")
-	}
-	return nil
-}
-
-// Marker renders a review envelope, for tests and for tooling that produces one
-// locally. The remote party writes its own.
-func (r Review) Marker() (string, error) {
-	if err := r.Subject.Validate(); err != nil {
-		return "", err
-	}
-	var b strings.Builder
-	b.WriteString(reviewMarker + "\n")
-	fmt.Fprintf(&b, "task=%s\n", r.TaskID)
-	fmt.Fprintf(&b, "request=%s\n", r.RequestID)
-	fmt.Fprintf(&b, "base=%s\n", r.BaseSHA)
-	fmt.Fprintf(&b, "candidate_digest=%s\n", r.CandidateDigest)
-	fmt.Fprintf(&b, "candidate_tree=%s\n", r.CandidateTree)
-	fmt.Fprintf(&b, "review_commit=%s\n", r.ReviewCommit)
-	return b.String(), nil
-}
-
 var fieldLine = regexp.MustCompile(`^\s*([a-z_]+)\s*=\s*(\S+)\s*$`)
 
 // fields reads key=value lines following a marker, stopping at the first line
@@ -342,38 +288,6 @@ func ParseRequest(body string) (Request, bool) {
 		return Request{}, false
 	}
 	return r, true
-}
-
-// ParseReview reads a review from a comment body.
-//
-// LEGACY as of R2 (#182). It does not require reviewer=<provider>, so it cannot
-// tell whether an answer came from the provider the workflow assigned. No
-// production acceptance path may use it: the mailbox reads answers through
-// reviewartifact.Parse, which is the same grammar the relay uses. It remains
-// only so existing fixtures and tooling that predate the canonical artifact
-// keep working, and R6 removes it.
-//
-// An incomplete envelope yields false rather than a partly-populated review: a
-// reply that does not state exactly what it reviewed is not a review of
-// anything, and guessing the missing half is how the wrong artifact gets
-// qualified.
-func ParseReview(body, author string) (Review, bool) {
-	f, rest, ok := fields(body, reviewMarker)
-	if !ok {
-		return Review{}, false
-	}
-	r := Review{Subject: subjectFrom(f), RequestID: f["request"], Body: rest, Author: author}
-	if r.Validate() != nil {
-		return Review{}, false
-	}
-	return r, true
-}
-
-// Answers reports whether a review replies to this exact request.
-//
-// Request id AND the whole subject must match.
-func (r Review) Answers(req Request) bool {
-	return r.RequestID == req.RequestID && r.Subject.Same(req.Subject)
 }
 
 // NewRequestID mints a unique id for one review request.

@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -468,5 +471,66 @@ func TestTheReviewerDeadlineHasOneOwner(t *testing.T) {
 	if bridge.Reviewer.Wait != gh.Wait {
 		t.Fatalf("the reviewer waits %s but the bridge configured %s; the exchange record "+
 			"would claim a deadline the waiter does not honour", bridge.Reviewer.Wait, gh.Wait)
+	}
+}
+
+// The composition root installs ONE durable review store and no relay store.
+//
+// #182 R6 removed the second one. Read as the resolver's own fields and as this
+// package's syntax, because "we deleted it" is a claim about production wiring
+// and a comment saying so would otherwise satisfy a text search.
+func TestTheCompositionRootInstallsNoRelayStore(t *testing.T) {
+	server := newControlServer(t)
+	got, err := composeEngineResolver(server, testRepoRoot, "sess-compose", configuredBridge())
+	if err != nil {
+		t.Fatalf("a fully configured bridge was refused: %v", err)
+	}
+	if got.Reviews.Dir == "" || got.Exchanges.Dir == "" {
+		t.Fatalf("the bridge installed no review store or exchange log: %+v", got)
+	}
+	// The one durable review record, and the obligation owner beside it.
+	if filepath.Base(got.Reviews.Dir) != "reviews" {
+		t.Fatalf("the review store is at %s", got.Reviews.Dir)
+	}
+
+	// No field of the resolver holds a relay store, by TYPE and by NAME.
+	ty := reflect.TypeOf(got)
+	for i := 0; i < ty.NumField(); i++ {
+		f := ty.Field(i)
+		if f.Name == "Relays" {
+			t.Errorf("engineResolver still has a Relays field (%s)", f.Type)
+		}
+		if strings.Contains(f.Type.String(), "RelayStore") || strings.Contains(f.Type.String(), "RelayRecord") {
+			t.Errorf("engineResolver.%s is a %s", f.Name, f.Type)
+		}
+	}
+
+	// And nothing in this package creates the old directory. The migration is
+	// handed the path and only ever moves files OUT of it.
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := 0
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		checked++
+		blob, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(blob)
+		if !strings.Contains(src, `"relays"`) {
+			continue
+		}
+		if !strings.Contains(src, "MigrateHistoricalRelays") {
+			t.Errorf("%s names the relays directory outside the historical migration", name)
+		}
+	}
+	if checked < 5 {
+		t.Fatalf("inspected %d production files; this check proves nothing", checked)
 	}
 }

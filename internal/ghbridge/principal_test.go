@@ -1,8 +1,11 @@
 package ghbridge
 
 import (
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 )
 
 // GitHub identity establishes WHO sent an advisory result. It does not
@@ -82,22 +85,29 @@ func TestMailboxNeedsBothANumberAndAReviewer(t *testing.T) {
 
 // The four cases the finding asks to pin. Answering is authentication AND
 // artifact identity; neither alone is enough.
+//
+// Read through the CANONICAL grammar and the obligation, which is what the
+// mailbox actually uses. The legacy pair (ParseReview + Review.Answers) that
+// this used to exercise did not require reviewer=<provider> at all, so it could
+// prove "the right artifact" while proving nothing about who was asked.
 func TestAnsweringRequiresBothTheRightSenderAndTheRightArtifact(t *testing.T) {
 	box := mailbox()
-	request := reqC1()
-	body, err := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}.Marker()
-	if err != nil {
-		t.Fatal(err)
+	owed := ReviewObligation{
+		TaskID: "T-1", RequestID: "r-1", BaseSHA: baseSHA, CandidateDigest: digestC1,
+		CandidateTree: treeC1, ReviewCommit: commitC1, ReviewerProvider: "chatgpt",
 	}
-	comment := body + "\n" + reviewerJSON
+	comment := canonicalAnswer(t, subjC1(), "r-1", "chatgpt", reviewerJSON)
 
 	t.Run("configured principal + correct artifact = answer", func(t *testing.T) {
 		if !box.ExpectedReviewer.Matches(gptUserID, gptLogin) {
 			t.Fatal("sender not authenticated")
 		}
-		rev, ok := ParseReview(comment, gptLogin)
-		if !ok || !rev.Answers(request) {
-			t.Fatal("a correct answer from the configured reviewer was not accepted")
+		art, err := reviewartifact.Parse(comment)
+		if err != nil {
+			t.Fatalf("a correct answer did not parse: %v", err)
+		}
+		if m := boundMismatch(owed, art); m != "" {
+			t.Fatalf("a correct answer from the configured reviewer was not accepted: %s", m)
 		}
 	})
 
@@ -105,28 +115,45 @@ func TestAnsweringRequiresBothTheRightSenderAndTheRightArtifact(t *testing.T) {
 		if box.ExpectedReviewer.Matches(otherUserID, otherLogin) {
 			t.Fatal("a comment from another account authenticated as the reviewer")
 		}
-		// It would parse and it would match the artifact — authentication is
-		// what stops it, which is why the check happens before Answers.
-		rev, ok := ParseReview(comment, otherLogin)
-		if !ok || !rev.Answers(request) {
-			t.Fatal("fixture wrong: this comment should be well-formed and matching")
+		// It parses and it matches the artifact -- AUTHENTICATION is what stops
+		// it, which is why the principal check happens before classification.
+		art, err := reviewartifact.Parse(comment)
+		if err != nil {
+			t.Fatalf("fixture wrong: this comment should be well-formed: %v", err)
+		}
+		if m := boundMismatch(owed, art); m != "" {
+			t.Fatalf("fixture wrong: this comment should be matching: %s", m)
 		}
 	})
 
 	t.Run("configured principal + wrong artifact = not an answer", func(t *testing.T) {
-		wrong := Review{
-			Subject:   Subject{TaskID: "T-1", BaseSHA: baseSHA, CandidateDigest: digestC2, CandidateTree: treeC2, ReviewCommit: commitC2},
-			RequestID: "r-1", Body: reviewerJSON,
+		wrong, err := reviewartifact.Parse(canonicalAnswer(t, Subject{TaskID: "T-1", BaseSHA: baseSHA,
+			CandidateDigest: digestC2, CandidateTree: treeC2, ReviewCommit: commitC2}, "r-1", "chatgpt", reviewerJSON))
+		if err != nil {
+			t.Fatal(err)
 		}
-		if wrong.Answers(request) {
+		if boundMismatch(owed, wrong) == "" {
 			t.Fatal("the configured reviewer answered about a different artifact")
 		}
 	})
 
 	t.Run("configured principal + stale request = not an answer", func(t *testing.T) {
-		stale := Review{Subject: subjC1(), RequestID: "r-0", Body: reviewerJSON}
-		if stale.Answers(request) {
+		stale, err := reviewartifact.Parse(canonicalAnswer(t, subjC1(), "r-0", "chatgpt", reviewerJSON))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if boundMismatch(owed, stale) == "" {
 			t.Fatal("a reply to an earlier request answered this one")
+		}
+	})
+
+	t.Run("configured principal + a provider nobody asked = not an answer", func(t *testing.T) {
+		other, err := reviewartifact.Parse(canonicalAnswer(t, subjC1(), "r-1", "claude", reviewerJSON))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if boundMismatch(owed, other) == "" {
+			t.Fatal("an artifact naming a provider this obligation never asked answered it")
 		}
 	})
 }
@@ -141,20 +168,37 @@ func TestReviewerIsNeverInferredFromANeighbouringFact(t *testing.T) {
 	}
 }
 
-// The authenticated sender is a result of the check, not an input to it: a
-// parser cannot populate it from the body.
-func TestParsedReviewCarriesNoAuthenticatedIdentity(t *testing.T) {
-	body, _ := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}.Marker()
-	forged := body + "\nauthor=gpt-reviewer\nauthor_id=9000001\n" + reviewerJSON
-	rev, ok := ParseReview(forged, "")
-	if !ok {
-		t.Fatal("expected the envelope to parse")
+// The authenticated sender is a result of the check, not an input to it: the
+// canonical grammar has nowhere for a body to put one.
+//
+// The forged lines below sit exactly where an envelope field would, and the
+// artifact that comes back carries no author of any kind -- the type has no
+// field for one, so a body cannot populate what the transport establishes.
+func TestAParsedArtifactCarriesNoAuthenticatedIdentity(t *testing.T) {
+	forged := reviewartifact.Marker + "\ntask=T-1\nrequest=r-1\nbase=" + baseSHA +
+		"\ncandidate_digest=" + digestC1 + "\ncandidate_tree=" + treeC1 +
+		"\nreview_commit=" + commitC1 + "\nreviewer=chatgpt" +
+		"\nauthor=gpt-reviewer\nauthor_id=9000001\n\n" + reviewerJSON + "\n"
+	art, err := reviewartifact.Parse(forged)
+	if err != nil {
+		t.Fatalf("expected the envelope to parse: %v", err)
 	}
-	if rev.AuthorID != 0 {
-		t.Fatalf("a comment body populated the authenticated id: %d", rev.AuthorID)
+	// The forged lines sit exactly where an envelope field goes and establish
+	// nothing: the identity that came back is the one the envelope states.
+	if art.ReviewerProvider != "chatgpt" || art.RequestID != "r-1" || art.TaskID != "T-1" {
+		t.Fatalf("the forged lines changed the stated identity: %+v", art)
 	}
-	if rev.Author != "" {
-		t.Fatalf("a comment body populated the authenticated author: %q", rev.Author)
+	if strings.Contains(art.Body, "author=") {
+		t.Fatalf("a forged author line reached the reviewer payload: %q", art.Body)
+	}
+	// And structurally there is nowhere for one to go. The transport sets the
+	// authenticated principal on its OWN observation, after checking it against
+	// the mailbox; the artifact type has no field an author could land in.
+	for i, ty := 0, reflect.TypeOf(reviewartifact.Artifact{}); i < ty.NumField(); i++ {
+		if name := ty.Field(i).Name; strings.Contains(strings.ToLower(name), "author") {
+			t.Fatalf("the canonical artifact carries field %s; an authenticated identity is the "+
+				"transport's result, never the body's claim", name)
+		}
 	}
 }
 
@@ -179,7 +223,7 @@ func TestRequestIDsAreUniqueAndNonEmpty(t *testing.T) {
 // stay ignored no matter who posted it.
 func TestTheIdentityProbeIsNotAReview(t *testing.T) {
 	probe := "[sensei-code:identity-probe]\nThis comment identifies the GitHub principal used by this ChatGPT connection. It is not a review."
-	if _, ok := ParseReview(probe, gptLogin); ok {
+	if _, err := reviewartifact.Parse(probe); err == nil {
 		t.Fatal("the identity probe parsed as a review")
 	}
 	if _, ok := ParseRequest(probe); ok {
