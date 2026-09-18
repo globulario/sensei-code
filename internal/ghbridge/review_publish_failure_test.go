@@ -56,8 +56,14 @@ func TestAFailedRereqestKeepsTheObligationItCouldNotReplace(t *testing.T) {
 			req := agent.Request{Role: roles.Reviewer, TaskID: "T", Binding: binding}
 			first := owedAfterFirstRequest(t, m, runner, req, log)
 
+			// The candidate MOVES, which is what makes a replacement due at all.
+			// A byte-identical candidate is reattached to rather than
+			// re-requested (#182 R4), so it would exercise nothing here.
 			brk(t, m, runner, log)
-			_, err := runner.Run(context.Background(), req, nil)
+			moved := binding
+			moved.CandidateDigest = "sha256:candidate-two"
+			_, err := runner.Run(context.Background(), agent.Request{
+				Role: roles.Reviewer, TaskID: "T", Binding: moved}, nil)
 
 			// An owed review, not a reviewer failure: the engine preserves the
 			// candidate instead of the ladder asking a different reviewer.
@@ -68,6 +74,8 @@ func TestAFailedRereqestKeepsTheObligationItCouldNotReplace(t *testing.T) {
 			if owed.RequestID != first.RequestID {
 				t.Fatalf("the owed review names %q; the obligation that still stands is %q", owed.RequestID, first.RequestID)
 			}
+			// The obligation that still stands is the OLD one, about the old
+			// candidate: the successor never became durable.
 			if owed.Binding != first.Binding {
 				t.Fatalf("the owed review changed candidate: %+v -> %+v", first.Binding, owed.Binding)
 			}

@@ -110,9 +110,12 @@ func TestAResumedWaitingReviewNamesWhetherItsCandidateIsTheOneItsRequestWasAbout
 			var statement *event.Event
 			for _, e := range drainEvents(h.events) {
 				var p struct {
-					Superseded string `json:"superseded_request"`
+					// The projection names the request it COMPARED against.
+					// It is not called "superseded" any more: a byte-identical
+					// candidate is reattached to, not superseded (#182 R4).
+					Recorded string `json:"recorded_request"`
 				}
-				if e.Kind == event.Status && len(e.Payload) != 0 && json.Unmarshal(e.Payload, &p) == nil && p.Superseded == "r-old" {
+				if e.Kind == event.Status && len(e.Payload) != 0 && json.Unmarshal(e.Payload, &p) == nil && p.Recorded == "r-old" {
 					e := e
 					statement = &e
 				}
@@ -128,6 +131,15 @@ func TestAResumedWaitingReviewNamesWhetherItsCandidateIsTheOneItsRequestWasAbout
 			}
 			if !c.same && !strings.Contains(statement.Summary, "fresh review") {
 				t.Fatalf("a changed candidate was not named as needing a fresh review: %s", statement.Summary)
+			}
+			// A byte-identical candidate must NOT be described as producing a
+			// new request; that wording was the pre-R4 behaviour.
+			if c.same {
+				for _, banned := range []string{"new request id", "superseded"} {
+					if strings.Contains(statement.Summary, banned) {
+						t.Fatalf("an unchanged candidate is still described with %q: %s", banned, statement.Summary)
+					}
+				}
 			}
 		})
 	}

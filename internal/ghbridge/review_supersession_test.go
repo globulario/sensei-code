@@ -22,44 +22,69 @@ func prWithdrawalsIn(m *prMailbox) []string {
 	return out
 }
 
-// Re-requesting the review of the SAME candidate mints a new request id, keeps
-// the candidate identity, and supersedes the old request: it is withdrawn on the
-// conversation and closed in the log, so exactly one obligation stands.
-func TestARerequestedReviewSupersedesTheOldRequestForTheSameCandidate(t *testing.T) {
+// The SAME candidate is not requested again. A waiter ending is not a reason to
+// mint anything.
+//
+// BEHAVIOUR CHANGED IN #182 R4, and this is the change. The old law was "a
+// re-request mints a new request id and supersedes the old one", so a candidate
+// nobody had touched was asked about twice, under two identities, with two wake
+// targets, and the reviewer saw a second question about bytes they were already
+// looking at. The obligation is durable now: a second waiter reattaches to the
+// request that is already standing.
+func TestASecondWaiterReattachesToTheStandingRequest(t *testing.T) {
 	m, runner, binding, log := reviewRunnerWithLog(t, 120*time.Millisecond)
 	req := agent.Request{Role: roles.Reviewer, TaskID: "T", Binding: binding}
 
 	_, err := runner.Run(context.Background(), req, nil)
 	var first *roles.ReviewUnanswered
 	if !errors.As(err, &first) {
-		t.Fatalf("the first request did not end as an owed review: %v", err)
+		t.Fatalf("the first waiter did not end as an owed review: %v", err)
 	}
-	_, err = runner.Run(context.Background(), req, nil)
-	var second *roles.ReviewUnanswered
-	if !errors.As(err, &second) {
-		t.Fatalf("the second request did not end as an owed review: %v", err)
+	requests := func() []string {
+		var out []string
+		for _, c := range m.comments {
+			body, _ := c["body"].(string)
+			if r, ok := ParseRequest(body); ok {
+				out = append(out, r.RequestID)
+			}
+		}
+		return out
+	}
+	published := len(requests())
+
+	// Two more waiters on the same candidate.
+	for i := 0; i < 2; i++ {
+		_, err = runner.Run(context.Background(), req, nil)
+		var again *roles.ReviewUnanswered
+		if !errors.As(err, &again) {
+			t.Fatalf("waiter %d did not end as an owed review: %v", i+2, err)
+		}
+		if again.RequestID != first.RequestID {
+			t.Fatalf("waiter %d minted request %q; the obligation is %q", i+2, again.RequestID, first.RequestID)
+		}
+		if again.Binding != first.Binding {
+			t.Fatalf("waiter %d changed the candidate: %+v -> %+v", i+2, first.Binding, again.Binding)
+		}
+		if again.ReviewCommit != first.ReviewCommit {
+			t.Fatalf("waiter %d changed the review projection: %s -> %s", i+2, first.ReviewCommit, again.ReviewCommit)
+		}
+		if again.RequestComment != first.RequestComment {
+			t.Fatalf("waiter %d changed the wake target: %d -> %d", i+2, first.RequestComment, again.RequestComment)
+		}
 	}
 
-	if second.RequestID == first.RequestID {
-		t.Fatalf("the re-request reused request id %q", first.RequestID)
+	if n := len(requests()); n != published {
+		t.Fatalf("%d review requests were published across three waiters, want %d", n, published)
 	}
-	if second.Binding != first.Binding {
-		t.Fatalf("the re-request changed the candidate identity: %+v -> %+v", first.Binding, second.Binding)
-	}
-	withdrawn := map[string]bool{}
-	for _, id := range prWithdrawalsIn(m) {
-		withdrawn[id] = true
-	}
-	if !withdrawn[first.RequestID] || withdrawn[second.RequestID] {
-		t.Fatalf("withdrawals %v: want the old request %q withdrawn and the new %q standing",
-			prWithdrawalsIn(m), first.RequestID, second.RequestID)
+	if w := prWithdrawalsIn(m); len(w) != 0 {
+		t.Fatalf("a waiter ending withdrew something: %v", w)
 	}
 	owed, err := log.PendingReviews()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(owed) != 1 || owed[0].RequestID != second.RequestID {
-		t.Fatalf("want exactly the new obligation %q, got %+v", second.RequestID, owed)
+	if len(owed) != 1 || owed[0].RequestID != first.RequestID {
+		t.Fatalf("after three waiters the task owes %+v, want exactly request %s", owed, first.RequestID)
 	}
 }
 
@@ -92,7 +117,10 @@ func TestAnAnswerToTheOldRequestCannotSatisfyTheNewOne(t *testing.T) {
 		}}
 	}
 
-	_, err = runner.Run(context.Background(), req, nil)
+	moved := req.Binding
+	moved.CandidateDigest = "sha256:candidate-two"
+	_, err = runner.Run(context.Background(), agent.Request{
+		Role: roles.Reviewer, TaskID: req.TaskID, Binding: moved}, nil)
 	if answered != 1 {
 		t.Fatalf("the stale answer was posted %d times, so the refusal proves nothing", answered)
 	}

@@ -22,7 +22,7 @@ func TestMailboxReadFailureIsImmediateAndExplicit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	_, err := AwaitReview(ctx, box, reqC1(), time.Second)
+	_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Second)
 	if err == nil {
 		t.Fatal("a broken mailbox returned success")
 	}
@@ -41,7 +41,7 @@ func TestMailboxReadFailureIsImmediateAndExplicit(t *testing.T) {
 func TestUnconfiguredMailboxIsRefusedNotPolled(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := Reviews(ctx, Issue{Dir: ".", Number: "156"}); err == nil {
+	if _, err := Reviews(ctx, Issue{Dir: ".", Number: "156"}, Principal{}); err == nil {
 		t.Fatal("reading a mailbox with no expected reviewer succeeded")
 	}
 	if err := PostRequest(ctx, Issue{Dir: "."}, reqC1(), ""); err == nil {
@@ -55,7 +55,7 @@ func TestCancellationIsReportedAsCancellation(t *testing.T) {
 		ExpectedReviewer: Principal{UserID: gptUserID}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := AwaitReview(ctx, box, reqC1(), time.Second)
+	_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Second)
 	if err == nil {
 		t.Fatal("expected an error")
 	}

@@ -80,7 +80,13 @@ type ExchangeRecord struct {
 	RequestComment int64     `json:"request_comment"`
 	Conversation   string    `json:"conversation"`
 	PublishedAt    time.Time `json:"published_at"`
-	Deadline       time.Time `json:"deadline"`
+	// Deadline is when the waiter that published this record intended to stop.
+	//
+	// For a REVIEW record it is TELEMETRY and never authority (#182 R4). A
+	// review obligation does not expire: no lifecycle branch may compare the
+	// clock to this field to close, withdraw, replace or remint one. An
+	// architecture turn keeps its own meaning for it.
+	Deadline time.Time `json:"deadline"`
 
 	// Kind says which lifecycle owns the request. An ARCHITECTURE request is a
 	// turn: its waiter is the only consumer, so a waiter that is gone makes the
@@ -116,6 +122,29 @@ type ExchangeRecord struct {
 	// inferring it from today's configuration would be inventing the fact the
 	// check exists to verify.
 	ReviewerProvider string `json:"reviewer_provider,omitempty"`
+
+	// ExpectedReviewerID and ExpectedReviewerLogin pin the GitHub account that
+	// was authorized to answer THIS request when it was published.
+	//
+	// Separate from ReviewerProvider and never a substitute for it: the provider
+	// is who the workflow asked to judge, this is which account may supply the
+	// bytes. Pinned because configuration is mutable and a request is not. A
+	// waiter reattaching hours later must authenticate against the principal the
+	// request was published to trust, or changing one config line would make a
+	// different account able to answer a question it was never asked.
+	//
+	// Empty means the record predates the field (#182 R4). Such an obligation
+	// cannot be safely reattached, and the gap is never filled from today's
+	// configuration.
+	ExpectedReviewerID    int64  `json:"expected_reviewer_id,omitempty"`
+	ExpectedReviewerLogin string `json:"expected_reviewer_login,omitempty"`
+
+	// The routing the request carried, so a reattaching waiter reads the
+	// conversation the request actually went to rather than the one this process
+	// happens to be pointed at. Empty on records written before they existed;
+	// their historical value is never invented.
+	MailboxRepository   string `json:"mailbox_repository,omitempty"`
+	WorkspaceRepository string `json:"workspace_repository,omitempty"`
 }
 
 const (

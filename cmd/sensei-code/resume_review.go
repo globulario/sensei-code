@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/ghbridge"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/workflow"
@@ -21,13 +24,15 @@ import (
 // the validated candidate unreachable. It now ends WAITING_REVIEW, and this is
 // the headless way back: `sensei-code resume --task <id>` with no --answer. It
 // resumes THE SAME task through Engine.Resume, which reviews the preserved
-// candidate before any worker is called and requests that review again under a
-// new request id. It carries no answer and so can authorize nothing: the only
-// thing it may do is ask for the review the candidate is already owed.
+// candidate before any worker is called and REATTACHES a waiter to the review
+// request that is already standing. It carries no answer and so can authorize
+// nothing: the only thing it may do is listen for the review the candidate is
+// already owed.
 
 var (
 	errNoReviewOwed         = errors.New("that task is interrupted but is not awaiting a review, so there is no review to resume")
 	errReviewBehindQuestion = errors.New("that task is waiting on a human-owned decision; answer it with --answer before its review can continue")
+	errReviewIdentitySplit  = errors.New("the session transcript and the durable review obligation name different requests for that task")
 )
 
 // selectReviewResume decides, from the durable record alone, whether a task may
@@ -37,7 +42,7 @@ var (
 // process, no graph and no bridge. A task with a standing human-owned question is
 // refused even if it also owes a review, because continuing it would walk past a
 // decision nobody made (sensei_code.resume.never_skips_a_human_decision).
-func selectReviewResume(tasks []session.Interrupted, taskID string) (session.Interrupted, error) {
+func selectReviewResume(tasks []session.Interrupted, taskID string, owed *ghbridge.ReviewObligation) (session.Interrupted, error) {
 	taskID = strings.TrimSpace(taskID)
 	for _, task := range tasks {
 		if task.TaskID != taskID {
@@ -46,19 +51,64 @@ func selectReviewResume(tasks []session.Interrupted, taskID string) (session.Int
 		if len(task.AwaitingAuthority) != 0 {
 			return session.Interrupted{}, fmt.Errorf("%w: %s", errReviewBehindQuestion, taskID)
 		}
-		if !task.AwaitingReview {
+		// The DURABLE obligation is the authority on whether a review is owed.
+		// A process can die after publishing the request and recording the
+		// obligation but before the workflow ever emits its WAITING_REVIEW
+		// terminal, and that task is resumable: the request exists, the review
+		// is owed, and only the transcript is missing (#182 R4).
+		if !task.AwaitingReview && owed == nil {
 			return session.Interrupted{}, fmt.Errorf("%w: %s", errNoReviewOwed, taskID)
+		}
+		// When BOTH name a request and they disagree, neither is chosen and
+		// nothing is minted to paper over it: one of the two records is wrong
+		// about which review this candidate is owed, and guessing would either
+		// consume a review through the wrong request or ask for a second one.
+		if owed != nil {
+			if recorded := recordedReviewRequest(task); recorded != "" && recorded != owed.RequestID {
+				return session.Interrupted{}, fmt.Errorf("%w: transcript says %s, obligation says %s",
+					errReviewIdentitySplit, recorded, owed.RequestID)
+			}
 		}
 		return task, nil
 	}
 	return session.Interrupted{}, fmt.Errorf("%w: %s", errTaskUnknown, taskID)
 }
 
+// recordedReviewRequest is the request id the session transcript names, or ""
+// when it names none. A PROJECTION: it is compared against the obligation, and
+// never substituted for it.
+func recordedReviewRequest(task session.Interrupted) string {
+	if len(task.AwaitingReviewRecord) == 0 {
+		return ""
+	}
+	var w struct {
+		RequestID string `json:"request_id"`
+	}
+	if json.Unmarshal(task.AwaitingReviewRecord, &w) != nil {
+		return ""
+	}
+	return strings.TrimSpace(w.RequestID)
+}
+
+// owedReviewObligation is the durable review obligation this workspace records
+// for a task, read from the one component that owns review lifetime.
+func owedReviewObligation(repoRoot, taskID string) *ghbridge.ReviewObligation {
+	store := ghbridge.ReviewObligationStore{
+		Exchanges: ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")},
+	}
+	o, found, err := store.Current(strings.TrimSpace(taskID))
+	if err != nil || !found {
+		return nil
+	}
+	return &o
+}
+
 // resumeAwaitingReview is `sensei-code resume --task <id>` for a waiting review.
 func resumeAwaitingReview(ctx context.Context, repo gitx.Repo, cfg config.Config, store *session.Store,
 	sessionID string, interrupted []session.Interrupted, taskID string,
 	timeout time.Duration, asJSON, quiet bool) int {
-	target, err := selectReviewResume(interrupted, taskID)
+	owed := owedReviewObligation(repo.Root, taskID)
+	target, err := selectReviewResume(interrupted, taskID, owed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 		return exitUsage
@@ -92,7 +142,12 @@ func resumeAwaitingReview(ctx context.Context, repo gitx.Repo, cfg config.Config
 
 	if !quiet {
 		fmt.Printf("resuming task %s  session %s\n", target.TaskID, sessionID)
-		fmt.Println("review    owed; the preserved candidate is reviewed again, not rebuilt")
+		if owed != nil {
+			fmt.Printf("review    owed under standing request %s; a new waiter attaches to it, and the "+
+				"preserved candidate is not rebuilt\n", owed.RequestID)
+		} else {
+			fmt.Println("review    owed; the preserved candidate is reviewed again, not rebuilt")
+		}
 	}
 
 	// No answer is carried, so the engine itself is the run control: it can be

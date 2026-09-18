@@ -855,3 +855,45 @@ invariants:
       - 'sensei-code#182 R3: AcceptAttestation read RelayStore, so two semantically identical advisory ACCEPTs had different owner authority -- a relayed review was attestable and the same bytes on the authenticated mailbox were not'
       - 'sensei-code#182 R3: the fixed attestation statement said ''accepted this relayed review'', which becomes false once a mailbox review is attestable; the new statement is transport-neutral and the old one is frozen rather than rewritten'
     contract: the owner overrides a specific canonical review; how it arrived is evidence and never decides whether it can be overridden
+  - id: sensei_code.reviewobligation.a_waiter_is_disposable_the_obligation_is_not
+    title: A review obligation is durable; a waiter is a disposable observer of it
+    severity: critical
+    status: active
+    description: 'internal/ghbridge ReviewObligationStore is the ONE owner of review-obligation lifetime, backed by the existing review-kind ExchangeRecord files so there is no second durable copy to drift. One obligation names one task, one published request, one exact candidate (base + candidate digest + candidate tree), one review projection commit, one assigned reviewer provider, one conversation, and one authenticated GitHub principal permitted to answer it. Request id, request comment and review commit are properties of the OBLIGATION, not of a waiter. A waiter timing out, being cancelled, having its process die, or failing to ring its doorbell ends one observation and changes nothing about what is owed: the next turn reattaches to the same request, publishing no snapshot and no request and minting no id. ExchangeRecord.Deadline is waiter telemetry for a review and no lifecycle branch may compare the clock to it, because a request does not expire. The reviewer provider and the GitHub principal are pinned at publication and are two facts about two parties: a waiter reattaching authenticates against the principal the request was published to trust, and mutable configuration can never retroactively authorize a different account to answer a standing request nor invalidate a review already accepted for the question that was actually asked. Replacement is explicit and narrow -- the candidate changed, the reviewer assignment changed, or a pre-R4 obligation lacks the pinned principal -- and the successor is published and durable before its predecessor is retired. Two active obligations for one task are an explicit conflict, never a choice. A review is answered only when the exact bytes are durably in ReviewStore AND the obligation is durably discharged; if the discharge fails the verdict is withheld and the next attempt reads the stored review back rather than asking anyone again. Session WAITING_REVIEW is a projection: it may resume a task the obligation proves is owed even when the transcript never recorded the wait, and when the two name different requests neither is chosen. One waiter timeout has one outcome, ErrNoAnswer, whether expiry is observed while sleeping or with a mailbox read in flight (#187); a live transport failure stays a transport error.'
+    protects:
+      files:
+        - internal/ghbridge/review_obligation.go
+        - internal/ghbridge/exchange.go
+        - internal/ghbridge/runner.go
+        - internal/ghbridge/transport.go
+        - cmd/sensei-code/resume_review.go
+        - internal/workflow/waiting_review.go
+        - internal/roles/unanswered.go
+    related_invariants:
+      - sensei_code.reviewstore.transport_establishes_acceptance_once
+    forbidden_fixes:
+      - mint, publish or supersede a review request because a waiter timed out, a process restarted, a doorbell failed or a recorded deadline passed
+      - authenticate a standing review request against the currently configured GitHub principal instead of the one pinned on the obligation
+    required_tests:
+      - internal/ghbridge/review_obligation_test.go:TestAnObligationSurvivesItsWaiterAndItsProcess
+      - internal/ghbridge/review_obligation_test.go:TestAReviewPostedWithNoWaiterIsConsumedOnTheNextAttempt
+      - internal/ghbridge/review_obligation_test.go:TestAnObligationPinsTheAccountAllowedToAnswerIt
+      - internal/ghbridge/review_obligation_test.go:TestOnlyARealChangeReplacesAnObligation
+      - internal/ghbridge/review_obligation_test.go:TestTwoActiveObligationsAreAConflictAndNeverAChoice
+      - internal/ghbridge/review_obligation_test.go:TestAVerdictDoesNotEscapeUntilTheObligationIsDischarged
+      - internal/ghbridge/review_obligation_test.go:TestAnInvalidReviewNeverDischargesTheObligation
+      - internal/ghbridge/review_obligation_test.go:TestAWaiterTimeoutHasOneOutcomeHoweverItIsObserved
+      - internal/ghbridge/review_obligation_test.go:TestALegacyObligationIsReplacedRatherThanReattached
+      - internal/ghbridge/review_obligation_test.go:TestConversationDriftPreservesTheObligationAndMintsNothing
+      - internal/ghbridge/review_obligation_test.go:TestReviewLifetimeIsDecidedByOneOwner
+      - internal/ghbridge/review_obligation_test.go:TestTheReattachBranchCannotMintOrPublish
+      - internal/ghbridge/review_obligation_test.go:TestNoReviewLifecycleBranchReadsTheDeadlineAsExpiry
+      - internal/ghbridge/review_obligation_test.go:TestARelayConvergingWithNoWaiterIsConsumedUnderTheSameObligation
+      - internal/ghbridge/review_obligation_test.go:TestAnAcceptedReviewSurvivesALaterAssignmentChange
+      - internal/ghbridge/review_supersession_test.go:TestASecondWaiterReattachesToTheStandingRequest
+      - internal/ghbridge/review_exchange_durability_test.go:TestStartupKeepsAReviewObligationAndWithdrawsAbandonedTurns
+      - cmd/sensei-code/resume_review_test.go:TestReviewResumeTreatsTheObligationAsAuthorityAndTheTranscriptAsProjection
+    evidence:
+      - 'sensei-code#182 R4: a byte-identical candidate was asked about twice, under two request ids with two wake targets, because the next run after a waiter timeout minted a replacement; #376 commissioning spent repeated live review windows on an unchanged candidate'
+      - 'sensei-code#187: AwaitReview surfaced a waiter timeout as bare context.DeadlineExceeded when a poll was in flight and as ErrNoAnswer otherwise; measured 11/30 and 8/30 flake under -race before the repair, 0/30 after'
+    contract: what is owed is a durable fact; a process that listens for it is not

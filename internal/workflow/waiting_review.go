@@ -57,23 +57,25 @@ func recordedReviewKind(task session.Interrupted) string {
 	return k.ReviewKind
 }
 
-// reconcileWaitingReview states, before the review is asked again, whether the
-// candidate this resume captured is the candidate the unanswered request was
-// about.
+// reconcileWaitingReview states whether the candidate this resume captured is
+// the candidate the standing request was published about.
 //
 // The comparison is the whole identity the request carried -- base, digest and
-// tree -- and it only ever REPORTS. It never decides that an old verdict or an
-// old request still applies: the new review is bound to the binding captured
-// now in both branches, and the transport supersedes the old request when it
-// publishes the new one. What the statement prevents is silence: a candidate
-// that moved while it was waiting is named as a different candidate that needs
-// a fresh review, rather than looking like the same review asked twice.
+// tree -- and it only ever REPORTS. This is a PROJECTION of the durable
+// obligation, not a competing authority over it: the bridge decides whether to
+// reattach or to supersede, from the obligation store, and this says what a
+// reader should expect to see. What the statement prevents is silence: a
+// candidate that moved while it was waiting is named as a different candidate
+// that needs a fresh review, rather than looking like the same review asked
+// twice.
 func (e *Engine) reconcileWaitingReview(taskID string, w *waitingReview, binding roles.Binding) bool {
 	same := w.BaseSHA == binding.BaseSHA &&
 		w.CandidateDigest == binding.CandidateDigest &&
 		w.CandidateTree == binding.CandidateTree
 	payload := map[string]any{
-		"superseded_request":        w.RequestID,
+		// The request is REATTACHED to when the candidate matches, and only
+		// named as superseded when it actually is (#182 R4).
+		"recorded_request":          w.RequestID,
 		"recorded_base":             w.BaseSHA,
 		"recorded_candidate_digest": w.CandidateDigest,
 		"recorded_candidate_tree":   w.CandidateTree,
@@ -83,7 +85,7 @@ func (e *Engine) reconcileWaitingReview(taskID string, w *waitingReview, binding
 		"same_candidate":            same,
 	}
 	summary := "the candidate is byte-identical to the one review request " + w.RequestID +
-		" was about; its review is requested again under a new request id, and " + w.RequestID + " is superseded"
+		" was about; reattaching to that standing request -- the waiter is new, the obligation is not"
 	if !same {
 		summary = "the candidate changed since review request " + w.RequestID + " was published (candidate " +
 			shortDigest(w.CandidateDigest) + " -> " + shortDigest(binding.CandidateDigest) +

@@ -234,9 +234,19 @@ type MailboxReview struct {
 // did not require reviewer=<provider>: the same review therefore meant one
 // thing here and another on the relay, and neither path could say whether the
 // answer came from the provider the workflow actually asked.
-func Reviews(ctx context.Context, box Issue) ([]MailboxReview, error) {
-	if !box.Valid() {
-		return nil, errors.New("reading the mailbox needs a pull request number and an expected reviewer")
+func Reviews(ctx context.Context, box Issue, expected Principal) ([]MailboxReview, error) {
+	if strings.TrimSpace(box.Number) == "" {
+		return nil, errors.New("reading the mailbox needs a pull request number")
+	}
+	// The principal is supplied by the caller rather than read off the mailbox
+	// configuration, because WHICH account may answer belongs to the request
+	// that was published (#182 R4). A waiter reattaching to a standing request
+	// authenticates against the principal pinned on that obligation; changing a
+	// config line must not make a different account able to answer a question it
+	// was never asked.
+	if !expected.Configured() {
+		return nil, errors.New("reading the mailbox needs the principal permitted to answer; " +
+			"an unconfigured principal authenticates nobody")
 	}
 	var comments []restComment
 	if box.API != nil {
@@ -266,7 +276,7 @@ func Reviews(ctx context.Context, box Issue) ([]MailboxReview, error) {
 	}
 	var found []MailboxReview
 	for _, c := range comments {
-		if !box.ExpectedReviewer.Matches(c.User.ID, c.User.Login) {
+		if !expected.Matches(c.User.ID, c.User.Login) {
 			continue
 		}
 		// The EXACT comment bytes. Nothing is trimmed or re-rendered on the way
@@ -299,7 +309,7 @@ var ErrNoAnswer = errors.New("no review answering that request was posted")
 //
 // A timeout leaves the task durable and pending. Nothing here completes or
 // discards work.
-func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration) (MailboxReview, error) {
+func AwaitReview(ctx context.Context, box Issue, expected Principal, r Request, every time.Duration) (MailboxReview, error) {
 	if err := r.Validate(); err != nil {
 		return MailboxReview{}, err
 	}
@@ -307,11 +317,20 @@ func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration)
 		every = 15 * time.Second
 	}
 	for {
-		revs, err := Reviews(ctx, box)
+		revs, err := Reviews(ctx, box, expected)
 		if err != nil {
-			// Distinguish "the mailbox is unreadable" from "nobody answered".
-			if ctx.Err() != nil {
-				return MailboxReview{}, ctx.Err()
+			// ONE outcome for one fact (#187). The wait can end while this
+			// goroutine is asleep in the select below, or while a mailbox read
+			// is in flight; both mean the same thing -- the waiter stopped and
+			// nobody had answered -- and they used to surface as two different
+			// errors depending on which branch happened to observe expiry.
+			// Callers then had to match both, and a caller that matched one got
+			// a race-dependent bug.
+			//
+			// A transport failure while the context is still LIVE is a different
+			// fact and keeps its own error: an unreadable mailbox is not silence.
+			if cerr := ctx.Err(); cerr != nil {
+				return MailboxReview{}, fmt.Errorf("%w: %v", ErrNoAnswer, cerr)
 			}
 			return MailboxReview{}, fmt.Errorf("reading the review mailbox: %w", err)
 		}

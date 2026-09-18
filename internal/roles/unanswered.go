@@ -6,8 +6,12 @@ import (
 	"time"
 )
 
-// ErrReviewUnanswered reports that a review request for an exact candidate was
-// published and nothing answering it arrived before the request's own deadline.
+// ErrReviewUnanswered reports that a review request for an exact candidate is
+// published and nothing answering it has arrived.
+//
+// A REQUEST HAS NO DEADLINE (#182 R4). What ended was one waiter: a process
+// that listened for a while and stopped. The obligation it was listening for is
+// durable, and the next process attaches a new waiter to the SAME request.
 //
 // It is deliberately NOT a provider failure. A provider that crashed, ran out of
 // quota or returned unparseable output has produced no review, and another
@@ -17,7 +21,7 @@ import (
 // failure sent the next implementer at code nobody objected to; trying the next
 // reviewer would silently change who judges it. Both are refused here by giving
 // the condition its own name.
-var ErrReviewUnanswered = errors.New("the review request was published and no answer arrived before its deadline")
+var ErrReviewUnanswered = errors.New("the review request is published and no answer has arrived; it remains the review owed")
 
 // ReviewUnanswered is the unanswered review, with the identity a later process
 // needs to continue it: which request, on which conversation, for which exact
@@ -32,12 +36,15 @@ type ReviewUnanswered struct {
 	Conversation   string
 	Binding        Binding
 	ReviewCommit   string
-	Waited         time.Duration
-	Cause          error
+	// Waited is how long THIS waiter listened. Telemetry about a process, never
+	// a property of the request: a request does not expire, so nothing may read
+	// this to decide that one has.
+	Waited time.Duration
+	Cause  error
 }
 
 func (u *ReviewUnanswered) Error() string {
-	return fmt.Sprintf("%v: request %s for candidate %s waited %s",
+	return fmt.Sprintf("%v: request %s for candidate %s; this waiter listened %s",
 		ErrReviewUnanswered, u.RequestID, u.Binding.CandidateDigest, u.Waited)
 }
 
