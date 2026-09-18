@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/governedfile"
 )
 
 // An architecture request is DURABLE the moment it is published. The waiter for
@@ -224,14 +226,15 @@ func (l ExchangeLog) Open(rec ExchangeRecord) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(l.Dir, 0o700); err != nil {
-		return err
-	}
+
 	blob, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(blob, '\n'), 0o600)
+	// Atomic, like every other governed record. A crash between truncate and
+	// write left a truncated obligation -- which the owner reads as unreadable
+	// and fails closed on, correctly and avoidably (#184).
+	return governedfile.Replace(path, append(blob, '\n'))
 }
 
 // Close forgets an exchange whose waiter finished with it, answered or not.

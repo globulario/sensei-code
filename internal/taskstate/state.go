@@ -28,6 +28,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/governedfile"
 )
 
 // Phase is where a task had got to.
@@ -139,14 +141,15 @@ func (s State) Save(repoRoot string) error {
 	s.Version = Version
 	s.UpdatedAt = time.Now().UTC()
 	target := path(repoRoot, s.TaskID)
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
-		return err
-	}
 	body, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(target, append(body, '\n'), 0o644)
+	// The same posture and the same durability as every other governed record.
+	// Task state decides what resume can discover and which obligations a task
+	// carries, so a store that read as less carefully kept than the records it
+	// points at would misdescribe the boundary (#184).
+	return governedfile.Replace(target, append(body, '\n'))
 }
 
 // Load reads the state for a task.

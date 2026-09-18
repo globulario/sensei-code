@@ -45,6 +45,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/governedfile"
 	"github.com/globulario/sensei-code/internal/reviewartifact"
 )
 
@@ -728,25 +729,11 @@ func (r Record) hasEvidence(ev Evidence) bool {
 // create writes a record that must not already exist. It reports whether it
 // won the creation, so the caller can converge rather than overwrite.
 func (s Store) create(path string, rec Record) (bool, error) {
-	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
-		return false, err
-	}
 	blob, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return false, err
 	}
-	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if errors.Is(err, os.ErrExist) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	if _, err := f.Write(append(blob, '\n')); err != nil {
-		_ = f.Close()
-		return false, err
-	}
-	return true, f.Close()
+	return governedfile.Create(path, append(blob, '\n'))
 }
 
 // replace rewrites a record whose ARTIFACT BYTES are unchanged.
@@ -762,9 +749,5 @@ func (s Store) replace(path string, rec Record) error {
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, append(blob, '\n'), 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return governedfile.Replace(path, append(blob, '\n'))
 }
