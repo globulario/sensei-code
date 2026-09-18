@@ -2,19 +2,17 @@ package ghbridge
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -36,8 +34,6 @@ import (
 
 const (
 	relayedReviewMarker = "[sensei-code:relayed-review]"
-	// maxRelayArtifactBytes bounds one artifact. It is a review, not a file.
-	maxRelayArtifactBytes = 64 << 10
 
 	// RelayAccepted is a relay validated and durably recorded, not yet published.
 	RelayAccepted = "accepted"
@@ -46,8 +42,6 @@ const (
 )
 
 var (
-	providerShape = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
-
 	// ErrRelayRefused reports a relay that was not accepted. Nothing durable was
 	// written and nothing was published.
 	ErrRelayRefused = errors.New("the relayed review was refused")
@@ -74,6 +68,9 @@ func (p RelayPrincipal) token() string {
 }
 
 // RelayArtifact is a review artifact exactly as the reviewer produced it.
+//
+// It is the canonical reviewartifact.Artifact seen through this transport's
+// existing types: the relay carries a review, it does not define one.
 type RelayArtifact struct {
 	Review
 	// Provider is the reviewer the artifact names. Claimed, not verified.
@@ -84,40 +81,39 @@ type RelayArtifact struct {
 }
 
 // ReviewDigest names the exact bytes of a relayed artifact.
-func ReviewDigest(raw string) string {
-	sum := sha256.Sum256([]byte(raw))
-	return "sha256:" + hex.EncodeToString(sum[:])
-}
+//
+// It delegates so that one digest function names review bytes for every
+// transport: a second implementation would let the same artifact carry two
+// names, and an attestation covering one of them would miss the other.
+func ReviewDigest(raw string) string { return reviewartifact.Digest(raw) }
 
 // ParseRelayArtifact reads a complete review artifact, or refuses it whole.
 //
-// The artifact is the reviewer's own [sensei-code:review] envelope, with every
-// identity field, a reviewer=<provider> line, and the reviewer payload after it.
-// Nothing is filled in, trimmed or repaired: a relay that needed editing to
-// parse is not the review the reviewer produced.
+// The grammar, the validation, the size bound and the digest are the canonical
+// artifact package's. This function only lifts the result into the transport's
+// own types; it adds no rule of its own, so a relayed review and a review
+// arriving by any other adapter mean the same thing.
 func ParseRelayArtifact(raw string) (RelayArtifact, error) {
-	if len(raw) > maxRelayArtifactBytes {
-		return RelayArtifact{}, fmt.Errorf("the artifact is %d bytes; a review artifact is bounded at %d", len(raw), maxRelayArtifactBytes)
+	a, err := reviewartifact.Parse(raw)
+	if err != nil {
+		return RelayArtifact{}, err
 	}
-	if !strings.HasPrefix(strings.TrimLeft(raw, " \t\r\n"), reviewMarker) {
-		return RelayArtifact{}, errors.New("the artifact must begin with the " + reviewMarker + " envelope the reviewer produced")
-	}
-	// Exactly one envelope and no other protocol marker anywhere: a second
-	// envelope, a request or a relay record inside the payload would make one
-	// artifact say two things about which question it answers.
-	if strings.Count(raw, "[sensei-code:") != 1 {
-		return RelayArtifact{}, errors.New("the artifact must carry exactly one sensei-code envelope and no other protocol marker")
-	}
-	f, _, _ := fields(raw, reviewMarker)
-	provider := f["reviewer"]
-	if !providerShape.MatchString(provider) {
-		return RelayArtifact{}, fmt.Errorf("the artifact must name its reviewer on a reviewer=<provider> line, got %q", provider)
-	}
-	rev, ok := ParseReview(raw, "")
-	if !ok {
-		return RelayArtifact{}, errors.New("the review envelope is incomplete: it must state task, request, base, candidate_digest, candidate_tree and review_commit, and carry a reviewer payload")
-	}
-	return RelayArtifact{Review: rev, Provider: provider, Raw: raw, Digest: ReviewDigest(raw)}, nil
+	return RelayArtifact{
+		Review: Review{
+			Subject: Subject{
+				TaskID:          a.TaskID,
+				BaseSHA:         a.BaseSHA,
+				CandidateDigest: a.CandidateDigest,
+				CandidateTree:   a.CandidateTree,
+				ReviewCommit:    a.ReviewCommit,
+			},
+			RequestID: a.RequestID,
+			Body:      a.Body,
+		},
+		Provider: a.ReviewerProvider,
+		Raw:      a.Raw,
+		Digest:   a.Digest,
+	}, nil
 }
 
 // RelayRecord is the durable receipt of one accepted relay.

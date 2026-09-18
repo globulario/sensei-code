@@ -742,3 +742,28 @@ invariants:
       - internal/ghbridge/await_test.go:TestMailboxReadFailureIsImmediateAndExplicit
       - internal/ghbridge/await_test.go:TestCancellationIsReportedAsCancellation
     contract: a task must never sit forever on a party that is never going to answer
+  - id: sensei_code.reviewartifact.one_grammar_owns_what_a_review_means
+    title: One transport-neutral grammar owns what a review means
+    severity: critical
+    status: active
+    description: 'internal/reviewartifact owns the single [sensei-code:review] envelope: one parser, one validator, one renderer, one exact-byte SHA-256 digest and one 64 KiB artifact bound that the reader and the writer both enforce -- Render refuses on its exact rendered bytes, so this package cannot emit an artifact it would itself refuse to read. Every semantic field participates in validation -- reviewer provider, task, request, base, candidate digest, candidate tree, review commit and a non-empty payload -- and a partial envelope is refused whole rather than returned partly populated, because a reply that does not state exactly what it reviewed is not a review of anything. Parsing never repairs, fills, normalizes or infers a field: Raw is the reviewer''s own byte sequence and Digest names those exact bytes, so an adapter that digested a tidied copy would put a name on an artifact nobody authored and an edit made in transit would leave no trace. The envelope carries no verdict; what a review SAYS lives only in the reviewer payload, in the JSON contract the workflow parser owns. Delivery adapters lift the canonical result into their own types and add no rule of their own, and the package imports no transport: a dependency on ghbridge would put transport beneath artifact semantics, which is the inversion that let a mailbox grammar and a relay grammar drift apart.'
+    protects:
+      files:
+        - internal/reviewartifact/artifact.go
+        - internal/ghbridge/relay.go
+    required_tests:
+      - internal/reviewartifact/artifact_test.go:TestThisPackageDependsOnNoTransport
+      - internal/reviewartifact/artifact_test.go:TestDigestIsSHA256OfTheExactRawBytes
+      - internal/reviewartifact/artifact_test.go:TestOneByteChangeChangesTheDigest
+      - internal/reviewartifact/artifact_test.go:TestAnIncompleteOrMalformedArtifactIsRefusedWhole
+      - internal/reviewartifact/artifact_test.go:TestPayloadProseCannotOverrideEnvelopeIdentity
+      - internal/reviewartifact/artifact_test.go:TestASecondProtocolMarkerIsRefused
+      - internal/reviewartifact/artifact_test.go:TestRenderStatesTheVerdictOnlyInThePayload
+      - internal/reviewartifact/artifact_test.go:TestRenderIsBoundedExactlyAsParseIs
+      - internal/ghbridge/relay_artifact_test.go:TestTheRelayDigestsTheExactBytesItWasGiven
+      - internal/ghbridge/relay_artifact_test.go:TestTheRelayLiftsTheCanonicalArtifactWithoutReinterpretingIt
+    evidence:
+      - 'sensei-code#182 R1: a valid GitHub mailbox ACCEPT was unrelayable because ParseRelayArtifact alone required reviewer=<provider>; one semantic artifact had two grammars'
+      - 'mutation M8 (2026-09-17): the relay adapter re-digested strings.TrimSpace(Raw) and every existing relay test still passed; the gap was closed by relay_artifact_test.go:TestTheRelayDigestsTheExactBytesItWasGiven'
+      - 'sensei-code#183 R1 review (2026-09-17): Render enforced no size bound while Parse did, so the canonical writer could manufacture an artifact the canonical reader refused -- the same writer/reader asymmetry recorded for session records in #181. Repaired by bounding Render on its exact rendered bytes; mutations removing and widening that bound are both killed by artifact_test.go:TestRenderIsBoundedExactlyAsParseIs'
+    contract: the artifact says what the reviewer produced; transport says only how it arrived
