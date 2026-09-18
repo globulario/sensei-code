@@ -423,7 +423,7 @@ func TestTheScannerDropsNoReviewerOriginContent(t *testing.T) {
 	if n := strings.Count(body, "return observation{}, false"); n != 1 {
 		t.Errorf("classify has %d discard paths, want exactly the protocol-marker one", n)
 	}
-	if !strings.Contains(body, "otherProtocolMarkers") {
+	if !strings.Contains(body, "otherProtocolObject(") {
 		t.Error("classify's only discard path is not the known-other-object path")
 	}
 	// A parse failure becomes an observation rather than a skip.
@@ -573,4 +573,129 @@ func TestTheWaiterDecidesOnDistinctAnswersNotOnOrder(t *testing.T) {
 			t.Fatalf("silence was reported as an observation fault: %+v", observed)
 		}
 	})
+}
+
+// A protocol object is recognised by BEING one, not by mentioning one.
+//
+// Substring matching excluded far more than it meant to. Reviewer prose that
+// merely quoted a marker vanished entirely, and -- worse -- a review-shaped
+// comment carrying a second protocol marker was discarded before
+// reviewartifact.Parse could say why it was unreadable. Both then decayed into
+// NO_RESPONSE, which is the exact conflation this slice exists to remove.
+func TestOnlyATopLevelProtocolObjectIsExcluded(t *testing.T) {
+	o := observedObligation()
+
+	t.Run("a top-level wake is still excluded", func(t *testing.T) {
+		c := comment(6700, 1697116, "davecourtois", WakeMarker+"\nrequest=r-x\n")
+		if _, ok := classify(o, c); ok {
+			t.Fatal("a wake was classified as a review observation")
+		}
+	})
+
+	// Each of these is in-window content from the pinned reviewer principal that
+	// is NOT itself another protocol object. None may disappear.
+	for name, body := range map[string]string{
+		"prose quoting a marker": "LGTM; I saw " + WakeMarker + " in the transcript",
+		"prose quoting a relay receipt": "this looks like the " + relayedReviewMarker +
+			" you posted earlier, which is fine",
+		"a review carrying a second protocol marker": reviewartifact.Marker + "\ntask=" + relaySubject.TaskID +
+			"\nrequest=" + relayRequest + "\nbase=" + relaySubject.BaseSHA +
+			"\ncandidate_digest=" + relaySubject.CandidateDigest +
+			"\ncandidate_tree=" + relaySubject.CandidateTree +
+			"\nreview_commit=" + relaySubject.ReviewCommit + "\nreviewer=chatgpt\n" +
+			acceptPayload + "\n" + WakeMarker + "\n",
+		"an indented wake inside a reply": "here is what I got back:\n\n    " + WakeMarker + "\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := comment(6701, 1697116, "davecourtois", body)
+			// The precondition: it really does mention a marker, so this case
+			// exercises the boundary rather than ordinary prose.
+			var mentions bool
+			for _, marker := range otherProtocolMarkers {
+				if strings.Contains(body, marker) {
+					mentions = true
+				}
+			}
+			if !mentions {
+				t.Fatal("this fixture mentions no protocol marker, so it proves nothing about the boundary")
+			}
+			// And it is NOT one of those objects.
+			if otherProtocolObject(body) {
+				t.Fatal("this fixture IS a top-level protocol object, so it proves nothing")
+			}
+
+			obs, ok := classify(o, c)
+			if !ok {
+				t.Fatal("reviewer content that merely mentions a marker was discarded")
+			}
+			if obs.kind != roles.ObservedMalformed {
+				t.Fatalf("classified as %s, want MALFORMED_OR_UNATTRIBUTABLE", obs.kind)
+			}
+			// And it reaches the waiter as evidence, never as silence.
+			var seen observationSet
+			seen.add(obs)
+			err := waitEnded(o, &seen, context.DeadlineExceeded)
+			if errors.Is(err, ErrNoAnswer) {
+				t.Fatalf("it decayed into no-answer: %v", err)
+			}
+			var observed *roles.ReviewObservationFault
+			if !errors.As(err, &observed) || !observed.Has(roles.ObservedMalformed) {
+				t.Fatalf("err = %v, want a MALFORMED observation", err)
+			}
+		})
+	}
+}
+
+// After an observation fault the SAME obligation stands, and a corrected review
+// is consumed under it.
+//
+// This is what makes the fault resumable rather than terminal: nothing was
+// minted, nothing was superseded, and the reviewer's second attempt answers the
+// first request.
+func TestACorrectedReviewIsConsumedUnderTheSameObligationAfterAFault(t *testing.T) {
+	f := newRelayFixture(t)
+	// The request locator has to sit below the comments this fixture posts, or
+	// the response window excludes them and the test would be measuring the
+	// window rather than the correction.
+	rec := soleObligation(t, f.exchanges)
+	if err := f.exchanges.Close(rec.TaskID, rec.RequestID); err != nil {
+		t.Fatal(err)
+	}
+	rec.RequestComment = 1
+	if err := f.exchanges.Open(rec); err != nil {
+		t.Fatal(err)
+	}
+	o := obligationFrom(rec)
+
+	f.mailbox.add("LGTM, ship it", "davecourtois", 1697116)
+	if _, err := waitOn(t, f, o); !errors.Is(err, ErrNoAnswer) {
+		var observed *roles.ReviewObservationFault
+		if !errors.As(err, &observed) || !observed.Has(roles.ObservedMalformed) {
+			t.Fatalf("the first attempt is %v, want a MALFORMED observation", err)
+		}
+	}
+	// Nothing was minted or retired by observing badly.
+	if owed, _ := f.exchanges.PendingReviews(); len(owed) != 1 || owed[0].RequestID != o.RequestID {
+		t.Fatalf("the obligation changed after an observation fault: %+v", owed)
+	}
+
+	// The reviewer corrects themselves against the SAME request.
+	corrected := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	f.mailbox.add(corrected, "davecourtois", 1697116)
+
+	runner := f.runner()
+	runner.NewRequestID = func() string {
+		t.Fatal("consuming a corrected review minted a request")
+		return ""
+	}
+	res, err := runner.Run(context.Background(), f.turn(), nil)
+	if err != nil {
+		t.Fatalf("the corrected review was not consumed: %v", err)
+	}
+	if res.ReviewDigest != ReviewDigest(corrected) {
+		t.Fatalf("consumed %s, want the correction %s", res.ReviewDigest, ReviewDigest(corrected))
+	}
+	if owed, _ := f.exchanges.PendingReviews(); len(owed) != 0 {
+		t.Fatalf("the obligation was not discharged: %+v", owed)
+	}
 }

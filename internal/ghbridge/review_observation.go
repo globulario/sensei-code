@@ -86,6 +86,29 @@ var otherProtocolMarkers = []string{
 	WithdrawnMarker, WakeMarker, architectureRequestMarker, architectureResponseMarker,
 }
 
+// otherProtocolObject reports whether a comment IS one of those objects.
+//
+// By its own top-level envelope, never by a marker appearing somewhere inside
+// it. Substring matching excluded far more than it meant to: reviewer prose
+// that merely mentions a marker vanished entirely, and -- worse -- a review-
+// shaped comment carrying a second protocol marker was discarded BEFORE
+// reviewartifact.Parse could say why it was unreadable. Both then decayed into
+// NO_RESPONSE, which is the exact conflation this slice removes.
+//
+// A protocol object announces itself in its first line, the way every emitter
+// in this package writes one. Anything else from the pinned reviewer principal
+// is reviewer content, and if it cannot be read as a review that is a malformed
+// observation rather than an absence.
+func otherProtocolObject(body string) bool {
+	head := strings.TrimLeft(body, " \t\r\n")
+	for _, marker := range otherProtocolMarkers {
+		if strings.HasPrefix(head, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 // inResponseWindow reports whether a comment can be a response to THIS request.
 //
 // The boundary is the durable request locator, and nothing else. Deriving it
@@ -118,10 +141,8 @@ func classify(o ReviewObligation, c restComment) (observation, bool) {
 		comment: c.ID, author: c.User.Login, authorID: c.User.ID, at: c.CreatedAt,
 		bodyDigest: bodyDigestOf(c.Body), bytes: len(c.Body),
 	}
-	for _, marker := range otherProtocolMarkers {
-		if strings.Contains(c.Body, marker) {
-			return observation{}, false
-		}
+	if otherProtocolObject(c.Body) {
+		return observation{}, false
 	}
 	art, err := reviewartifact.Parse(c.Body)
 	if err != nil {

@@ -15,6 +15,7 @@ import (
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/session"
 )
 
 // A REVIEW-LIFECYCLE FAULT IS NOT A REVIEWER FAILURE AND NOT AN IMPLEMENTER
@@ -351,35 +352,60 @@ func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T
 			h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
 				"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
 
-			if failed == nil {
-				t.Fatal("unusable reviewer evidence did not end the run")
-			}
-			// THE MEANING SURVIVES to the outermost boundary.
-			var observed *roles.ReviewObservationFault
-			if !errors.As(failed, &observed) {
-				t.Fatalf("the observation fault lost its identity: %v", failed)
-			}
-			if !observed.Has(kind) {
-				t.Fatalf("the terminal reports %v, want %s", observed.Kinds(), kind)
-			}
-			// NOT laundered into any neighbouring story.
-			for _, forbidden := range []error{
-				roles.ErrReviewUnanswered, roles.ErrReviewUnobtainable, roles.ErrReviewLifecycleFault,
-			} {
-				if errors.Is(failed, forbidden) {
-					t.Fatalf("observed evidence was reported as %v: %v", forbidden, failed)
-				}
+			// NOT A FINISHED WORKFLOW. An observation fault leaves the review
+			// owed, so the invocation may not end through the failure path: at
+			// the execute boundary that becomes WorkflowFailed, which
+			// session.FindInterrupted treats as done -- the obligation would
+			// survive on disk while the task vanished from `resume --task`.
+			if failed != nil {
+				t.Fatalf("an observation fault ended the run as a failure: %v", failed)
 			}
 			// Drained ONCE: the channel is consumed by reading it, and draining
 			// twice left the second reader with nothing -- which looked like the
 			// terminal never being emitted.
 			events := drainEvents(h.events)
+			if contains(events, event.WorkflowFailed) {
+				t.Fatalf("an observation fault emitted WorkflowFailed: %v", kinds(events))
+			}
+			if !contains(events, event.WorkflowAwaitingReview) {
+				t.Fatalf("no resumable review terminal was emitted: %v", kinds(events))
+			}
+			// THE REAL CONSUMER CHAIN: the task must still be discoverable.
+			// Driving implement() with a callback proves the inner consumer and
+			// nothing about this, which is how the terminal defect survived.
+			//
+			// The task was created and planned before this invocation, as it is
+			// in any real run; implement() alone emits neither, and
+			// FindInterrupted needs both to consider a task at all.
+			history := append([]event.Event{
+				event.New("session-1", "task-1", event.SourceUser, event.TaskCreated, "the task", nil),
+				event.New("session-1", "task-1", event.SourceSystem, event.PlanProposed, "the plan", nil),
+			}, events...)
+			// The precondition: without the observation terminal this task would
+			// be interrupted and resumable, so a disappearance below is caused by
+			// the terminal and not by the fixture.
+			if len(session.FindInterrupted(history[:2])) != 1 {
+				t.Fatal("the fixture's task is not resumable to begin with, so this proves nothing")
+			}
+			var found bool
+			for _, task := range session.FindInterrupted(history) {
+				if task.TaskID == "task-1" {
+					found = true
+					if !task.AwaitingReview {
+						t.Error("the interrupted task is not marked as awaiting review")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("the task disappeared from FindInterrupted, so resume --task cannot reach its obligation")
+			}
 			assertNoFallbackLadderRan(t, h, &runner.calls, events)
 			if got := runner.calls.Load(); got != 1 {
 				t.Errorf("the reviewer was asked %d times, want exactly once", got)
 			}
 
-			// The terminal names WHAT WAS SEEN, and never calls it silence.
+			// The terminal names WHAT WAS SEEN, and never calls it silence or
+			// borrows the unanswered projection.
 			var stated bool
 			for _, ev := range events {
 				var p struct {
@@ -388,6 +414,9 @@ func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T
 				}
 				if len(ev.Payload) == 0 || json.Unmarshal(ev.Payload, &p) != nil {
 					continue
+				}
+				if p.Kind == "unanswered" {
+					t.Errorf("observed evidence borrowed the unanswered projection: %s", ev.Payload)
 				}
 				if p.Kind == "observation_fault" {
 					stated = true

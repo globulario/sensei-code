@@ -4717,10 +4717,36 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 					"usable review (" + strings.Join(observed.Kinds(), ", ") + "); the candidate and the request " +
 					"are preserved and no other participant is asked"
 			}
-			state.OpenFindings(openFindings(review, audit, err))
+			// NOT A FINISHED WORKFLOW. The review this candidate is owed is still
+			// owed, and the reviewer may yet post a corrected artifact against
+			// the SAME request -- so the invocation must end as an unfinished
+			// review condition that resume can find.
+			//
+			// fail() reaches WorkflowFailed at the execute boundary, and
+			// session.FindInterrupted treats WorkflowFailed as done: the files
+			// and the obligation would survive while the task vanished from
+			// `resume --task`. That is the scar WorkflowAwaitingReview was
+			// introduced for, reappearing through a different terminal.
+			//
+			// The payload keeps review_kind=observation_fault rather than
+			// borrowing "unanswered": waitingReviewFrom treats only the
+			// unanswered projection as an identity to reconcile against, and the
+			// durable ReviewObligation remains the lifetime authority either way.
+			obligation := "reviewer evidence was observed for this candidate and none of it establishes a usable " +
+				"review; the candidate is owed that review"
+			if observed != nil {
+				obligation = "review request " + observed.RequestID + " saw reviewer evidence that establishes no " +
+					"usable review (" + strings.Join(observed.Kinds(), ", ") + "); the candidate is owed that review"
+			}
+			payload["obligations"] = []string{obligation}
+			plan = finalPlan
+			state.Phase = taskstate.Reviewing
+			state.Evidence = tc.EvidenceSnapshot
+			state.OpenFindings(openFindingsWith(review, audit, nil, []string{obligation}))
 			_ = state.Save(e.Repo.Root)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary, payload))
-			fail(err)
+			e.reportUndeliveredNotes(taskID)
+			e.emitRunTerminal(taskID, event.WorkflowAwaitingReview, event.SourceReviewer,
+				runreceipt.OutcomeUnreviewed, e.candidateStateFor(taskID), summary, payload)
 			return
 		}
 		if accepted == candidateReviewLifecycleFault {
