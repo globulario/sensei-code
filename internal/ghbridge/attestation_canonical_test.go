@@ -830,3 +830,141 @@ func TestAMalformedStoredOverrideIsRefusedEvenWhenItAgreesAboutTheReview(t *test
 		})
 	}
 }
+
+// A malformed PUBLISHED override is not consumable either.
+//
+// One persisted authority object, one validity contract. Refusing a record when
+// republishing it and honouring the same record when consuming it would mean
+// the override that actually advances a candidate was held to the weaker of the
+// two standards -- and consumption is the side where it matters, because that is
+// where a candidate moves.
+//
+// Every record here matches the candidate and digest exactly and carries a
+// statement from the accepted set, so Covers() would pass. The record-level
+// validator is the only thing that can be refusing them.
+func TestAMalformedPublishedOverrideIsNotConsumable(t *testing.T) {
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	digest := ReviewDigest(raw)
+	canonical := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+	at := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	published := func() AttestationRecord {
+		return AttestationRecord{
+			Version: AttestationSchemaVersion, State: AttestationPublished,
+			Attestation: roles.Attestation{
+				RequestID: relayRequest, ReviewDigest: digest, Reviewer: "chatgpt",
+				Decision: roles.Accept, Binding: canonical, Principal: operator.token(),
+				At: at, Statement: roles.AttestationStatement,
+			},
+			AcceptedAt: at, Publication: "github-app", PublicationComment: 4242, PublishedAt: at,
+		}
+	}
+
+	// The unbroken record IS consumable, or every case below proves nothing.
+	t.Run("a complete published override is consumable", func(t *testing.T) {
+		store := attestStore(t)
+		if err := store.create(published()); err != nil {
+			t.Fatal(err)
+		}
+		got, found, err := store.AttestationFor(canonical, digest)
+		if err != nil || !found {
+			t.Fatalf("a complete published override was not consumable: found=%v err=%v", found, err)
+		}
+		if got.Reviewer != "chatgpt" {
+			t.Fatalf("reviewer %q", got.Reviewer)
+		}
+	})
+
+	for name, break_ := range map[string]func(*AttestationRecord){
+		"an unwritten schema version":           func(r *AttestationRecord) { r.Version = 0 },
+		"a schema version from a later package": func(r *AttestationRecord) { r.Version = AttestationSchemaVersion + 1 },
+		"zero accepted time":                    func(r *AttestationRecord) { r.AcceptedAt = time.Time{} },
+		"zero attested time":                    func(r *AttestationRecord) { r.Attestation.At = time.Time{} },
+		"no publication identity":               func(r *AttestationRecord) { r.Publication = "" },
+		"no publication comment":                func(r *AttestationRecord) { r.PublicationComment = 0 },
+		"no publication time":                   func(r *AttestationRecord) { r.PublishedAt = time.Time{} },
+	} {
+		t.Run(name, func(t *testing.T) {
+			store := attestStore(t)
+			rec := published()
+			break_(&rec)
+			// Covers() would accept it: the refusal under test is the record
+			// validator's and nothing else's.
+			if err := rec.Attestation.Covers(canonical, digest); err != nil {
+				t.Fatalf("this fixture fails Covers (%v), so it proves nothing about record validity", err)
+			}
+			if err := store.create(rec); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(store.Dir, relayRequest+".json")
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			got, found, err := store.AttestationFor(canonical, digest)
+			if err == nil {
+				t.Fatalf("a malformed published override was consumable as %+v", got)
+			}
+			if found {
+				t.Fatal("a malformed published override was reported as found")
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(before) {
+				t.Fatal("consuming rewrote a malformed override; it is evidence, not something to repair")
+			}
+		})
+	}
+}
+
+// The consumption path and the retry path hold a record to the SAME contract.
+//
+// Asserted directly, so the two cannot drift: any record either accepts, the
+// other must accept, for every case the malformed-record fixtures cover.
+func TestConsumptionAndRetryShareOneValidityContract(t *testing.T) {
+	digest := ReviewDigest(artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload))
+	canonical := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+	at := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+	good := AttestationRecord{
+		Version: AttestationSchemaVersion, State: AttestationPublished,
+		Attestation: roles.Attestation{
+			RequestID: relayRequest, ReviewDigest: digest, Reviewer: "chatgpt",
+			Decision: roles.Accept, Binding: canonical, Principal: operator.token(),
+			At: at, Statement: roles.AttestationStatement,
+		},
+		AcceptedAt: at, Publication: "github-app", PublicationComment: 4242, PublishedAt: at,
+	}
+
+	for name, break_ := range map[string]func(*AttestationRecord){
+		"unchanged":              func(*AttestationRecord) {},
+		"legacy statement":       func(r *AttestationRecord) { r.Attestation.Statement = roles.LegacyRelayAttestationStatement },
+		"bad version":            func(r *AttestationRecord) { r.Version = 7 },
+		"zero accepted time":     func(r *AttestationRecord) { r.AcceptedAt = time.Time{} },
+		"zero attested time":     func(r *AttestationRecord) { r.Attestation.At = time.Time{} },
+		"no principal":           func(r *AttestationRecord) { r.Attestation.Principal = "" },
+		"no publication comment": func(r *AttestationRecord) { r.PublicationComment = 0 },
+		"unknown state":          func(r *AttestationRecord) { r.State = "withdrawn" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := good
+			break_(&rec)
+			usable := rec.usableAsHistory() == nil
+
+			store := attestStore(t)
+			if err := store.create(rec); err != nil {
+				t.Fatal(err)
+			}
+			_, found, err := store.AttestationFor(canonical, digest)
+			consumable := found && err == nil
+
+			if usable != consumable {
+				t.Fatalf("the contracts disagree: usableAsHistory=%v but consumable=%v (err=%v)", usable, consumable, err)
+			}
+		})
+	}
+}

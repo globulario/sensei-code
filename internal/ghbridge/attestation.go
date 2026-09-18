@@ -154,6 +154,11 @@ func (s AttestationStore) markPublished(requestID, digest string, comment int64,
 // Published only: an attestation the App never posted is not yet part of the
 // record anyone else can read, and consuming one would let a local file alone
 // advance a candidate. It satisfies workflow.AttestationSource.
+//
+// Every record it reads must satisfy usableAsHistory first -- the same contract
+// AcceptAttestation applies before reusing one. Structural and lifecycle only:
+// no transport is re-contacted, no file is rewritten, and the frozen legacy
+// statement stays valid.
 func (s AttestationStore) AttestationFor(b roles.Binding, reviewDigest string) (roles.Attestation, bool, error) {
 	if s.Dir == "" {
 		return roles.Attestation{}, false, nil
@@ -173,6 +178,21 @@ func (s AttestationStore) AttestationFor(b roles.Binding, reviewDigest string) (
 		blob, err := os.ReadFile(filepath.Join(s.Dir, e.Name()))
 		if err != nil || json.Unmarshal(blob, &rec) != nil {
 			return roles.Attestation{}, false, fmt.Errorf("unreadable attestation record: %s", e.Name())
+		}
+		// The SAME validity contract the retry path applies. One persisted
+		// authority object cannot have two standards: refusing a malformed
+		// record when republishing it and honouring the same record when
+		// consuming it would mean the override that advances a candidate was
+		// held to the weaker of the two.
+		//
+		// Reported rather than skipped, like the unreadable case above and for
+		// the same reason: local authority state that cannot be read is not
+		// "there is no override", and the engine turns that error into a
+		// candidate that stays advisory. Nothing is rewritten, and no legacy
+		// statement is weakened -- the pre-R3 writer already recorded a version,
+		// an acceptance time and complete publication details.
+		if err := rec.usableAsHistory(); err != nil {
+			return roles.Attestation{}, false, fmt.Errorf("unusable attestation record %s: %w", e.Name(), err)
 		}
 		if rec.State != AttestationPublished {
 			continue
