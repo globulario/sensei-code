@@ -259,6 +259,22 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	// there is nothing to authorize, only a review the candidate is already owed.
 	// selectReviewResume refuses a task that is asking a question instead.
 	if strings.TrimSpace(*taskID) != "" && strings.TrimSpace(*answer) == "" {
+		// A blocked role turn is the other thing a task can owe without a
+		// question. The durable review obligation is read first, so a task
+		// that owes a review is never continued as anything else.
+		owed, err := owedReviewObligation(repo.Root, *taskID)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+			return exitFailed
+		}
+		target, blocked, err := selectBlockedResume(interrupted, *taskID, owed != nil)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+			return exitUsage
+		}
+		if blocked {
+			return resumeBlockedExternal(ctx, repo, cfg, store, sessionID, target, *timeout, *asJSON, *quiet)
+		}
 		return resumeAwaitingReview(ctx, repo, cfg, store, sessionID, interrupted, *taskID, *timeout, *asJSON, *quiet)
 	}
 	if strings.TrimSpace(*taskID) == "" || strings.TrimSpace(*answer) == "" {
@@ -358,6 +374,20 @@ func printStandingQuestions(out io.Writer, sessionID string, tasks []session.Int
 			fmt.Fprintf(out, "  --answer %-4s %s\n", option.ID, option.Label)
 		}
 		fmt.Fprintln(out)
+	}
+	// Blocked turns are not questions and are not counted as standing, but a
+	// listing that hid them would leave a waiting task invisible. The retry
+	// time printed is the one the provider supplied, or UNKNOWN.
+	for _, task := range tasks {
+		if len(task.BlockedExternal) == 0 {
+			continue
+		}
+		block, err := workflow.ParseExternalBlock(task.BlockedExternal)
+		if err != nil {
+			fmt.Fprintf(out, "task %s\n  blocked external, but the record could not be read back: %v\n\n", task.TaskID, err)
+			continue
+		}
+		fmt.Fprintf(out, "task %s\n  blocked    %s\n  resume     --task %s\n\n", task.TaskID, block.Describe(), task.TaskID)
 	}
 	if standing == 0 {
 		fmt.Fprintf(out, "session %s: no human-owned question is standing\n", sessionID)

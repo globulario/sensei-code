@@ -351,6 +351,7 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 	}
 
 	var finalText, lastText, streamText, eventError string
+	var eventErrorInfo json.RawMessage
 	for {
 		msg, err := s.server.nextNotification()
 		if err != nil {
@@ -386,11 +387,13 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 		case "error":
 			var p struct {
 				Error struct {
-					Message string `json:"message"`
+					Message   string          `json:"message"`
+					ErrorInfo json.RawMessage `json:"codexErrorInfo"`
 				} `json:"error"`
 			}
 			if json.Unmarshal(msg.Params, &p) == nil {
 				eventError = p.Error.Message
+				eventErrorInfo = p.Error.ErrorInfo
 			}
 		case "turn/completed":
 			var p struct {
@@ -398,7 +401,8 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 					ID     string `json:"id"`
 					Status string `json:"status"`
 					Error  *struct {
-						Message string `json:"message"`
+						Message   string          `json:"message"`
+						ErrorInfo json.RawMessage `json:"codexErrorInfo"`
 					} `json:"error"`
 				} `json:"turn"`
 			}
@@ -406,9 +410,19 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 				continue
 			}
 			if p.Turn.Status != "completed" {
-				message := eventError
+				// Each field is taken from the turn's own error when it carries
+				// it, independently: a turn error with a structured code and no
+				// message still carries the proof.
+				message, info := eventError, eventErrorInfo
 				if p.Turn.Error != nil && p.Turn.Error.Message != "" {
 					message = p.Turn.Error.Message
+				}
+				if p.Turn.Error != nil && len(p.Turn.Error.ErrorInfo) != 0 {
+					info = p.Turn.Error.ErrorInfo
+				}
+				// The provider's structured code decides; the message never does.
+				if u := codexTurnUnavailable(string(ChatGPT), info, message); u != nil {
+					return "", u
 				}
 				if message == "" {
 					message = "turn finished with status " + p.Turn.Status

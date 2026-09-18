@@ -98,7 +98,8 @@ func Summarize(events []event.Event, candidates []candidate.Identity, b Bounds) 
 			delete(unanswered, e.TaskID)
 		case event.DecisionRecorded:
 			s.Decisions = append(s.Decisions, e.Summary)
-		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority:
+		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority,
+			event.WorkflowBlockedExternal:
 			s.Recent = append(s.Recent, Outcome{
 				TaskID: e.TaskID, Task: tasks[e.TaskID],
 				Result: strings.TrimPrefix(string(e.Kind), "workflow."), At: e.Time,

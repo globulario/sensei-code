@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/runreceipt"
 )
 
@@ -51,8 +52,11 @@ type receiptFacts struct {
 	digestRelation runreceipt.DigestRelation
 	// deferredQuestion is the authority question a run left standing, and
 	// executionBudget the deadline a timed-out invocation exhausted.
-	deferredQuestion                      runreceipt.Value
-	executionBudget                       runreceipt.Value
+	deferredQuestion runreceipt.Value
+	executionBudget  runreceipt.Value
+	// externalBlock is the role turn a BLOCKED_EXTERNAL run is owed and the
+	// provider condition that blocked it.
+	externalBlock                         runreceipt.Value
 	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
@@ -104,6 +108,7 @@ func freshFacts() *receiptFacts {
 		candRendering:    notYet("no candidate identity was minted"),
 		deferredQuestion: notYet("no authority question was deferred"),
 		executionBudget:  notYet("no execution budget expired"),
+		externalBlock:    notYet("no role turn was blocked externally"),
 		// Stated, not defaulted: a candidate that never reached validation has
 		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
 		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
@@ -309,6 +314,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		ReviewedTree:              facts.reviewedTree,
 		DeferredQuestion:          facts.deferredQuestion,
 		ExecutionBudget:           facts.executionBudget,
+		ExternalBlock:             facts.externalBlock,
 		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
@@ -570,6 +576,21 @@ func (e *Engine) noteDeferredQuestion(taskID, subject, condition string) {
 			return
 		}
 		f.deferredQuestion = runreceipt.MeasuredValue(text, "the authority decision the human declined to answer")
+	})
+}
+
+// noteExternalBlock records the role turn a run was blocked on and why.
+func (e *Engine) noteExternalBlock(taskID string, b ExternalBlock) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.externalBlock = runreceipt.MeasuredValue(b.Describe(),
+			"the provider's structured refusal of the role turn this run was owed")
+		// An architect turn that was never answered produced no plan, and that
+		// is a fact, not an unknown. Only an unset state is claimed: a plan
+		// already recorded -- an architect re-planning inside a cycle -- stands.
+		if b.Role == string(roles.Architect) && f.planState == runreceipt.PlanUnknown {
+			f.planState = runreceipt.PlanNone
+			f.plan = runreceipt.UnknownValue("the architect turn was blocked before any plan was produced")
+		}
 	})
 }
 

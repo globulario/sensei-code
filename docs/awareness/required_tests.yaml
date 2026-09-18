@@ -34,3 +34,38 @@ required_tests:
         - failure.sensei_code.a_readiness_check_reported_on_the_graph_it_did_not_query
       files:
         - internal/setup/checks.go
+  - id: internal/provider/unavailable_test.go:TestTheUsageLimitSentenceAloneIsNotUnavailability
+    title: 'Provider unavailability witness: TestTheUsageLimitSentenceAloneIsNotUnavailability'
+    protects:
+      invariants:
+        - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      failure_modes:
+        - failure.sensei_code.provider_quota_ended_the_task_failed
+  - id: internal/workflow/external_block_test.go:TestABlockedTurnIsATerminalThatSurvivesRestartAsTheSameTask
+    title: 'Provider unavailability witness: TestABlockedTurnIsATerminalThatSurvivesRestartAsTheSameTask'
+    protects:
+      invariants:
+        - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      failure_modes:
+        - failure.sensei_code.provider_quota_ended_the_task_failed
+  - id: internal/workflow/external_block_test.go:TestAProvenUnavailableArchitectEndsTheTurnTypedAndUnretried
+    title: 'Provider unavailability witness: TestAProvenUnavailableArchitectEndsTheTurnTypedAndUnretried'
+    protects:
+      invariants:
+        - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      failure_modes:
+        - failure.sensei_code.provider_quota_ended_the_task_failed
+  - id: internal/workflow/external_block_test.go:TestAnUnavailableImplementerBlocksTheTaskAndKeepsTheCandidate
+    title: 'Provider unavailability witness: TestAnUnavailableImplementerBlocksTheTaskAndKeepsTheCandidate'
+    protects:
+      invariants:
+        - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      failure_modes:
+        - failure.sensei_code.provider_quota_ended_the_task_failed
+  - id: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    title: 'Provider unavailability witness: TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock'
+    protects:
+      invariants:
+        - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      failure_modes:
+        - failure.sensei_code.provider_quota_ended_the_task_failed

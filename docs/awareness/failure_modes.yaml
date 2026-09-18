@@ -312,3 +312,17 @@ failure_modes:
     evidence:
       - 'session record unreadable at 172623 bytes; bufio.Scanner: token too long'
     contract: 'A writer and the reader of the same durable record share one size policy: every event the writer accepts, the reader can read back, and an event the writer cannot durably support is refused BEFORE any bytes enter history'
+  - id: failure.sensei_code.provider_quota_ended_the_task_failed
+    title: A provider out of quota ended the governed task FAILED and forced a new task identity
+    severity: high
+    description: The ChatGPT adapter flattened the app-server's structured turn error into errors.New(message). The architect loop retried with 'No response was received', then returned a generic error that execute recorded as WorkflowFailed; FindInterrupted reads that as done, so the objective could only continue as a new task.
+    protects:
+      files:
+        - internal/workflow/engine.go
+        - internal/provider/chatgpt_session.go
+    related_invariants:
+      - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+    required_tests:
+      - internal/workflow/external_block_test.go:TestAProvenUnavailableArchitectEndsTheTurnTypedAndUnretried
+    evidence:
+      - 'dogfood run 1, task-1789770525156538509, 2026-09-18: exit 1, receipt INCOMPLETE/FAILED, architect started twice'

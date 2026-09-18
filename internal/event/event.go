@@ -161,6 +161,17 @@ const (
 	// preserved and the next invocation resumes at the review boundary rather
 	// than sending a worker back to fix code nobody objected to.
 	WorkflowAwaitingReview Kind = "workflow.awaiting_review"
+	// WorkflowBlockedExternal is a role turn the task is owed and a provider
+	// PROVED it could not serve -- out of quota, for example -- with no
+	// authorized alternate able to serve it instead.
+	//
+	// Terminal for the INVOCATION and not for the TASK, like
+	// WorkflowAwaitingReview. The first dogfood run (2026-09-18) ended FAILED
+	// when its architect ran out of quota, which FindInterrupted reads as done:
+	// the only way on was a new task. Nothing about the objective had failed.
+	// The payload is the block itself (workflow.ExternalBlock), so a resume
+	// retries the same turn of the same task.
+	WorkflowBlockedExternal Kind = "workflow.blocked_external"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record
