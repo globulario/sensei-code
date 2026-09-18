@@ -913,3 +913,40 @@ invariants:
       - 'sensei-code#182 R4: a byte-identical candidate was asked about twice, under two request ids with two wake targets, because the next run after a waiter timeout minted a replacement; #376 commissioning spent repeated live review windows on an unchanged candidate'
       - 'sensei-code#187: AwaitReview surfaced a waiter timeout as bare context.DeadlineExceeded when a poll was in flight and as ErrNoAnswer otherwise; measured 11/30 and 8/30 flake under -race before the repair, 0/30 after'
     contract: what is owed is a durable fact; a process that listens for it is not
+  - id: sensei_code.reviewobservation.evidence_is_never_silence
+    title: Reviewer observation is evidence, not authority — and unusable evidence is never silence
+    severity: critical
+    status: active
+    description: 'For one durable review obligation, NO_RESPONSE means no relevant post-request content was observed from the pinned reviewer principal, and it is the only state that may become ErrNoAnswer/roles.ReviewUnanswered. Authenticated reviewer-origin content that cannot be read as a canonical artifact bound to an exact request is MALFORMED_OR_UNATTRIBUTABLE; a valid canonical artifact for another request, candidate or provider is WRONG_TARGET and names the mismatching field; two distinct canonical artifacts answering one standing request are a CONFLICT with no first, newest or comment-order winner. Only one exact-bound canonical artifact -- matching request, task, base, candidate digest, candidate tree, review commit and assigned provider -- may proceed to the reviewer-body check, ReviewStore acceptance and durable obligation discharge, in that order. The observation window is the durable request locator (comment id above the recorded request comment, or the recorded publication time only for records predating it) and never current session, waiter or conversation timing; content from any other account is ordinary mailbox content, and a known Sensei-Code object of another kind is not a malformed review. Observations accumulate across polls and de-duplicate by comment and exact byte digest, so one review read ten times is one answer and an earlier malformed reply never blocks a later corrected one. Malformed bytes are never repaired into an artifact and never acquire semantic fields they did not prove. A ReviewStore digest conflict at ingestion is a CONFLICT observation, leaving the stored review byte-identical and the obligation undischarged. Observation is DIAGNOSTIC: it discharges nothing, mints nothing, supersedes nothing, stores nothing and raises no standing. Every consumer -- the waiter, the runner, reviewer selection, both runCandidate review sites, the implementer loop and the terminal record -- preserves the observation''s meaning even though malformed, wrong-target and conflict share one control action: preserve the candidate, preserve the obligation, ask no replacement reviewer, create no handoff. An observation fault is never reported as an unanswered review, reviewer unavailability, a lifecycle fault or a candidate failure.'
+    protects:
+      files:
+        - internal/ghbridge/review_observation.go
+        - internal/ghbridge/transport.go
+        - internal/ghbridge/runner.go
+        - internal/roles/observation.go
+        - internal/workflow/engine.go
+        - internal/workflow/reviewresult.go
+    related_invariants:
+      - sensei_code.reviewobligation.a_waiter_is_disposable_the_obligation_is_not
+    forbidden_fixes:
+      - report observed reviewer evidence as an unanswered review, as reviewer unavailability, as a lifecycle fault or as a candidate failure
+      - choose between two distinct canonical artifacts answering one request by order, recency or comment position
+    required_tests:
+      - internal/ghbridge/review_observation_test.go:TestIrrelevantContentNeverEntersTheObservationSet
+      - internal/ghbridge/review_observation_test.go:TestReviewerContentIsClassifiedByWhatItIs
+      - internal/ghbridge/review_observation_test.go:TestOnlySilenceBecomesNoAnswer
+      - internal/ghbridge/review_observation_test.go:TestAccumulationDedupesAndConflictsOnlyOnDistinctAnswers
+      - internal/ghbridge/review_observation_test.go:TestTheWaiterDecidesOnDistinctAnswersNotOnOrder
+      - internal/ghbridge/review_observation_test.go:TestAReviewStoreConflictIsObservedAsAConflict
+      - internal/ghbridge/review_observation_test.go:TestTheSameReviewRedeliveredIsNotAConflict
+      - internal/ghbridge/review_observation_test.go:TestTheScannerDropsNoReviewerOriginContent
+      - internal/ghbridge/review_observation_test.go:TestNoAnswerIsConstructedOnlyFromSilence
+      - internal/ghbridge/review_convergence_test.go:TestTheMailboxRefusesAnAnswerThatIsNotTheOneAsked
+      - internal/ghbridge/review_supersession_test.go:TestAnAnswerToTheOldRequestCannotSatisfyTheNewOne
+      - internal/workflow/review_lifecycle_fault_test.go:TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence
+      - internal/workflow/review_lifecycle_fault_test.go:TestEveryReviewCallSiteRoutesObservationFaults
+      - internal/workflow/review_lifecycle_fault_test.go:TestAnObservationFaultIsCheckedBeforeReviewerFallback
+    evidence:
+      - 'sensei-code#182 R5: the mailbox scan skipped reviewartifact.Parse failures with a bare continue and filtered out valid artifacts for other subjects, so a reviewer who replied badly and a reviewer who did not reply at all both ended as ''no answer arrived'''
+      - 'sensei-code#182 R5: the historical bare reviewer JSON that motivated #182 is the regression specimen; it must classify as MALFORMED_OR_UNATTRIBUTABLE with its comment, principal, exact digest and parse diagnostic'
+    contract: what the transport saw and what it established are different questions; no consumer may answer the first with the second

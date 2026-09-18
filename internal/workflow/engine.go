@@ -1580,6 +1580,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						// findings, so no worker is sent at them.
 						return candidateReviewUnobtainable, plan, lastReview, lastAudit, err
 					}
+					if errors.Is(err, roles.ErrReviewObservationFault) {
+						// Reviewer evidence was observed and grants nothing. Not
+						// this worker failing to converge.
+						return candidateReviewObservationFault, plan, lastReview, lastAudit, err
+					}
 					if isReviewLifecycleFault(ctx, err) {
 						// Review-lifecycle state, not a candidate. The handoff
 						// ladder must not reinterpret it as this worker failing.
@@ -1930,6 +1935,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// transport state, not authority: it travels with its own outcome
 				// so the candidate is preserved rather than handed on.
 				return candidateReviewUnobtainable, plan, lastReview, lastAudit, err
+			}
+			if errors.Is(err, roles.ErrReviewObservationFault) {
+				// The reviewer replied and the reply is unusable. Nothing about
+				// the candidate is known to be wrong, and no other implementer
+				// can make a malformed reply parse.
+				return candidateReviewObservationFault, plan, lastReview, lastAudit, err
 			}
 			if isReviewLifecycleFault(ctx, err) {
 				// Review-lifecycle state, not a candidate. Recorded as this
@@ -2630,6 +2641,15 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			// names it. Another provider would publish a SECOND request beside
 			// the orphaned one, and nothing local would name either. The storage
 			// fault is what needs repairing, not the reviewer.
+			return ReviewResult{}, err
+		}
+		if errors.Is(err, roles.ErrReviewObservationFault) {
+			// The assigned reviewer transport PRODUCED reviewer-origin evidence.
+			// It is unusable, which is a different fact from being unreachable:
+			// counting this provider toward ReviewUnobtainable would end the run
+			// saying no reviewer could be reached while their reply sits in the
+			// conversation, and asking reviewer B because A replied badly would
+			// silently change who judges the work.
 			return ReviewResult{}, err
 		}
 		if errors.Is(err, roles.ErrReviewLifecycleFault) {
@@ -4664,6 +4684,43 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				"the run was stopped by its caller, so the candidate is preserved and no other participant is asked",
 				map[string]any{"handoff": false, "stopped_by_caller": true}))
 			fail(fmt.Errorf("the run was stopped by its caller: %w", ctx.Err()))
+			return
+		}
+		if accepted == candidateReviewObservationFault {
+			// REVIEWER EVIDENCE WAS OBSERVED AND ESTABLISHES NOTHING.
+			//
+			// The candidate holds real work and nobody has judged it; the
+			// reviewer replied and the reply cannot be used. So the candidate
+			// and its obligation are preserved exactly, this worker is NOT
+			// recorded as having failed, no handoff is created, and the terminal
+			// says WHAT WAS SEEN -- never "no answer" and never "reviewer
+			// unavailable", because an operator's next action differs for each.
+			var observed *roles.ReviewObservationFault
+			errors.As(err, &observed)
+			payload := map[string]any{
+				"review_kind": "observation_fault", "independent_review": false,
+				"handoff": false, "error": err.Error(),
+			}
+			summary := "reviewer evidence was observed for this candidate and none of it establishes a usable " +
+				"review, so the candidate and its review request are preserved: " + err.Error()
+			if observed != nil {
+				payload["observed"] = observed.Kinds()
+				payload["request_id"] = observed.RequestID
+				payload["request_comment"] = observed.RequestComment
+				payload["conversation"] = observed.Conversation
+				payload["base"] = observed.Binding.BaseSHA
+				payload["candidate_digest"] = observed.Binding.CandidateDigest
+				payload["candidate_tree"] = observed.Binding.CandidateTree
+				payload["review_commit"] = observed.ReviewCommit
+				payload["observations"] = observed.Observations
+				summary = "review request " + observed.RequestID + " saw reviewer evidence that establishes no " +
+					"usable review (" + strings.Join(observed.Kinds(), ", ") + "); the candidate and the request " +
+					"are preserved and no other participant is asked"
+			}
+			state.OpenFindings(openFindings(review, audit, err))
+			_ = state.Save(e.Repo.Root)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, summary, payload))
+			fail(err)
 			return
 		}
 		if accepted == candidateReviewLifecycleFault {

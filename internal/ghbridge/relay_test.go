@@ -47,7 +47,10 @@ func (m *relayMailbox) add(body, login string, id int64) int64 {
 	defer m.mu.Unlock()
 	m.nextID++
 	m.comments = append(m.comments, map[string]any{
-		"id": m.nextID, "body": body, "user": map[string]any{"login": login, "id": id},
+		// Real GitHub stamps every comment, and the observation window falls back
+		// to this for obligations recorded before request locators were kept.
+		"id": m.nextID, "created_at": time.Now().UTC().Format(time.RFC3339),
+		"body": body, "user": map[string]any{"login": login, "id": id},
 	})
 	return m.nextID
 }
@@ -144,6 +147,9 @@ func newRelayFixture(t *testing.T) relayFixture {
 		BaseSHA: relaySubject.BaseSHA, CandidateDigest: relaySubject.CandidateDigest,
 		CandidateTree: relaySubject.CandidateTree, ReviewCommit: relaySubject.ReviewCommit,
 		ReviewerProvider: "chatgpt",
+		// Pinned, as every R4 obligation is: which account may answer this
+		// exact request.
+		ExpectedReviewerID: 1697116, ExpectedReviewerLogin: "davecourtois",
 	}); err != nil {
 		t.Fatal(err)
 	}

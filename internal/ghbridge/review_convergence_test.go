@@ -155,6 +155,19 @@ func TestTheMailboxRefusesAnAnswerThatIsNotTheOneAsked(t *testing.T) {
 		CandidateDigest: "sha256:" + strings.Repeat("0", 64), CandidateTree: strings.Repeat("a", 40),
 		ReviewCommit: strings.Repeat("c", 40)}
 
+	// Each case names the observation it must produce. Before #182 R5 they all
+	// ended as "no answer arrived", which was false: the reviewer HAD replied,
+	// and the reply was sitting in the conversation unmentioned.
+	wantKind := map[string]string{
+		"no reviewer line":                 roles.ObservedMalformed,
+		"a provider that was not assigned": roles.ObservedWrongTarget,
+		"another request id":               roles.ObservedWrongTarget,
+		"another candidate":                roles.ObservedWrongTarget,
+		"another candidate tree":           roles.ObservedWrongTarget,
+		"another candidate digest":         roles.ObservedWrongTarget,
+		"another base":                     roles.ObservedWrongTarget,
+		"another review commit":            roles.ObservedWrongTarget,
+	}
 	for name, answer := range map[string]func(t *testing.T, req Request) string{
 		// The historical grammar scar: an envelope with no reviewer= line. It
 		// was acceptable before R2 and is deliberately not acceptable now.
@@ -203,9 +216,37 @@ func TestTheMailboxRefusesAnAnswerThatIsNotTheOneAsked(t *testing.T) {
 			if err == nil {
 				t.Fatalf("an answer that was not the one asked for was accepted: %q", res.Text)
 			}
-			var owed *roles.ReviewUnanswered
-			if !errors.As(err, &owed) {
-				t.Fatalf("err = %v, want the review still owed", err)
+			// SOMETHING WAS OBSERVED. Reporting this as silence would send an
+			// operator to wait for a reviewer who has already replied.
+			var observed *roles.ReviewObservationFault
+			if !errors.As(err, &observed) {
+				t.Fatalf("err = %v, want an observation fault naming what was seen", err)
+			}
+			if errors.Is(err, roles.ErrReviewUnanswered) {
+				t.Fatalf("observed reviewer evidence was reported as nobody answering: %v", err)
+			}
+			want := wantKind[name]
+			if want == "" {
+				t.Fatalf("this case declares no expected observation kind")
+			}
+			if !observed.Has(want) {
+				t.Fatalf("observed %v, want %s", observed.Kinds(), want)
+			}
+			// The obligation identity travels with it, so a later process
+			// continues the SAME review.
+			if observed.RequestID == "" || observed.Binding.CandidateDigest != binding.CandidateDigest {
+				t.Fatalf("the fault does not carry the standing obligation: %+v", observed)
+			}
+			if want == roles.ObservedWrongTarget {
+				var named bool
+				for _, o := range observed.Observations {
+					if o.Kind == roles.ObservedWrongTarget && strings.TrimSpace(o.Mismatch) != "" {
+						named = true
+					}
+				}
+				if !named {
+					t.Fatalf("a wrong-target observation did not name the mismatching field: %+v", observed.Observations)
+				}
 			}
 			if _, found, _ := runner.Reviews.Load(requestFor(t, log, m)); found {
 				t.Fatal("a refused answer was recorded in the review store")
