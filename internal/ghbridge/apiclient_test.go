@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 )
 
 // appMailbox stands up a fake GitHub that mints a token and serves one issue's
@@ -243,7 +245,7 @@ func TestRepositoryIsConfigurationNotAmbientState(t *testing.T) {
 // The app probe is not a review and must never parse as one, whoever posted it.
 func TestTheAppProbeIsNotAReview(t *testing.T) {
 	probe := "[sensei-code:app-probe]\napp_id=4850747\ninstallation_id=159521273\n"
-	if _, ok := ParseReview(probe, "globulario-sensei-code[bot]"); ok {
+	if _, err := reviewartifact.Parse(probe); err == nil {
 		t.Fatal("the app probe parsed as a review")
 	}
 	if _, ok := ParseRequest(probe); ok {

@@ -111,75 +111,33 @@ func TestOnlyReviewKindExists(t *testing.T) {
 	}
 }
 
-func TestReviewRoundTripsAndCarriesTheReviewerPayload(t *testing.T) {
-	in := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}
-	m, err := in.Marker()
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, ok := ParseReview(m+"\n"+reviewerJSON, "gpt-5.6-sol")
-	if !ok {
-		t.Fatal("review did not parse")
-	}
-	if got.Body != reviewerJSON {
-		t.Errorf("payload changed in transit:\n got %q\nwant %q", got.Body, reviewerJSON)
-	}
-	if !got.Subject.Same(in.Subject) {
-		t.Errorf("subject changed: %+v", got.Subject)
-	}
-	if got.Author != "gpt-5.6-sol" {
-		t.Errorf("author = %q", got.Author)
-	}
-}
-
 // The transport envelope must carry no decision. Two representations of a
 // verdict agree only until they don't.
+//
+// Only the REQUEST envelope is this package's now. The review response envelope
+// belongs to reviewartifact, which proves the same rule about itself in
+// TestRenderStatesTheVerdictOnlyInThePayload.
 func TestTransportMarkerCarriesNoVerdict(t *testing.T) {
-	m, err := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}.Marker()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, word := range []string{"verdict", "decision", "accept", "revise", "approve"} {
-		if strings.Contains(strings.ToLower(m), word) {
-			t.Errorf("transport marker mentions %q — the decision belongs to the payload", word)
-		}
-	}
 	rm, err := reqC1().Marker()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(strings.ToLower(rm), "verdict") {
-		t.Error("request marker mentions a verdict")
+	for _, word := range []string{"verdict", "decision", "accept", "revise", "approve"} {
+		if strings.Contains(strings.ToLower(rm), word) {
+			t.Errorf("request marker mentions %q — the decision belongs to the payload", word)
+		}
 	}
 }
 
-// Prose reaches the workflow parser and fails there. ghbridge never interprets
-// it, so "LGTM" cannot become ACCEPT — but it is not this package's job to say
-// so, only to pass it through unchanged.
-func TestProseIsCarriedVerbatimAndNotInterpreted(t *testing.T) {
-	m, _ := Review{Subject: subjC1(), RequestID: "r-1", Body: "x"}.Marker()
-	got, ok := ParseReview(m+"\nLGTM, ship it", "someone")
-	if !ok {
-		t.Fatal("a well-addressed reply should be routable even when its payload is prose")
-	}
-	if got.Body != "LGTM, ship it" {
-		t.Errorf("body altered: %q", got.Body)
-	}
-	// The package offers no way to read a decision out of it.
-}
-
-// A reply with an empty payload is not a review: there is nothing for the
-// parser to read.
-func TestReplyWithNoPayloadIsNotAReview(t *testing.T) {
-	m, _ := Review{Subject: subjC1(), RequestID: "r-1", Body: "x"}.Marker()
-	if _, ok := ParseReview(m, "someone"); ok {
-		t.Fatal("an envelope with no payload parsed as a review")
-	}
-}
-
+// An ordinary comment is neither a request nor a review, in EITHER grammar.
+//
+// Checked through reviewartifact.Parse because that is now the only thing that
+// reads a review. Until R6 this package had a second parser that accepted an
+// envelope with no reviewer= line, which meant "is this a review" had two
+// answers depending on which one you asked.
 func TestNonMarkerCommentIsNeitherRequestNorReview(t *testing.T) {
 	for _, body := range []string{"", "ordinary comment", "candidate_tree=" + treeC1 + " looks fine"} {
-		if _, ok := ParseReview(body, "x"); ok {
+		if _, err := reviewartifact.Parse(body); err == nil {
 			t.Errorf("ordinary comment parsed as a review: %q", body)
 		}
 		if _, ok := ParseRequest(body); ok {
@@ -188,65 +146,67 @@ func TestNonMarkerCommentIsNeitherRequestNorReview(t *testing.T) {
 	}
 }
 
-func TestProseCannotInjectIdentityFields(t *testing.T) {
-	m, _ := Review{Subject: subjC1(), RequestID: "r-1", Body: "x"}.Marker()
-	body := m + "\n" + reviewerJSON + "\ncandidate_tree=" + treeC2 + "\nrequest=r-9\n"
-	got, ok := ParseReview(body, "x")
-	if !ok {
-		t.Fatal("expected the leading block to parse")
+// THE central rule, field by field: an answer must match every identity field of
+// the obligation it claims to answer.
+//
+// Asserted where the rule now lives. Before R6 it was Review.Answers comparing a
+// legacy-parsed reply to a Request; the review a candidate is owed is the
+// OBLIGATION's, and boundMismatch is what decides whether a canonical artifact
+// is the one it asked for.
+func TestABoundAnswerRequiresEveryIdentityField(t *testing.T) {
+	owed := ReviewObligation{
+		TaskID: "T-1", RequestID: "r-1", BaseSHA: baseSHA, CandidateDigest: digestC1,
+		CandidateTree: treeC1, ReviewCommit: commitC1, ReviewerProvider: "chatgpt",
 	}
-	if got.CandidateTree != treeC1 {
-		t.Errorf("prose overrode the tree: %s", got.CandidateTree)
+	answer := func(mut func(*reviewartifact.Artifact)) reviewartifact.Artifact {
+		a := reviewartifact.Artifact{
+			ReviewerProvider: "chatgpt", TaskID: "T-1", RequestID: "r-1", BaseSHA: baseSHA,
+			CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: commitC1, Body: reviewerJSON,
+		}
+		mut(&a)
+		return a
 	}
-	if got.RequestID != "r-1" {
-		t.Errorf("prose overrode the request id: %s", got.RequestID)
+	if m := boundMismatch(owed, answer(func(*reviewartifact.Artifact) {})); m != "" {
+		t.Fatalf("a matching answer did not answer its obligation: %s", m)
 	}
-}
-
-// THE central rule, field by field.
-func TestAnswersRequiresEveryIdentityField(t *testing.T) {
-	req := reqC1()
-	good := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}
-	if !good.Answers(req) {
-		t.Fatal("a matching review did not answer its request")
-	}
-
 	for _, tc := range []struct {
 		name string
-		mut  func(*Review)
+		mut  func(*reviewartifact.Artifact)
 	}{
-		{"wrong candidate_digest", func(r *Review) { r.CandidateDigest = digestC2 }},
-		{"wrong candidate_tree", func(r *Review) { r.CandidateTree = treeC2 }},
-		{"wrong review_commit", func(r *Review) { r.ReviewCommit = commitC2 }},
-		{"wrong base", func(r *Review) { r.BaseSHA = commitC2 }},
-		{"wrong task", func(r *Review) { r.TaskID = "T-2" }},
-		{"different request", func(r *Review) { r.RequestID = "r-2" }},
+		{"wrong candidate_digest", func(a *reviewartifact.Artifact) { a.CandidateDigest = digestC2 }},
+		{"wrong candidate_tree", func(a *reviewartifact.Artifact) { a.CandidateTree = treeC2 }},
+		{"wrong review_commit", func(a *reviewartifact.Artifact) { a.ReviewCommit = commitC2 }},
+		{"wrong base", func(a *reviewartifact.Artifact) { a.BaseSHA = commitC2 }},
+		{"wrong task", func(a *reviewartifact.Artifact) { a.TaskID = "T-2" }},
+		{"different request", func(a *reviewartifact.Artifact) { a.RequestID = "r-2" }},
+		{"a provider nobody asked", func(a *reviewartifact.Artifact) { a.ReviewerProvider = "claude" }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			bad := good
-			tc.mut(&bad)
-			if bad.Answers(req) {
-				t.Fatalf("%s still answered the request — a stale review could qualify a repair", tc.name)
+			if m := boundMismatch(owed, answer(tc.mut)); m == "" {
+				t.Fatalf("%s still answered the obligation — a stale review could qualify a repair", tc.name)
 			}
 		})
 	}
 }
 
-// The C1 → C2 case, concretely: a review of C1 sits on the mailbox when the
+// The C1 -> C2 case, concretely: a review of C1 sits on the mailbox when the
 // request for C2 goes out.
-func TestAReviewOfC1DoesNotAnswerTheRequestForC2(t *testing.T) {
-	c2 := Request{
-		Subject: Subject{TaskID: "T-1", BaseSHA: baseSHA, CandidateDigest: digestC2,
-			CandidateTree: treeC2, ReviewCommit: commitC2},
-		RequestID: "r-2", Kind: KindReview,
+func TestAReviewOfC1DoesNotAnswerTheObligationForC2(t *testing.T) {
+	c2 := ReviewObligation{
+		TaskID: "T-1", RequestID: "r-2", BaseSHA: baseSHA, CandidateDigest: digestC2,
+		CandidateTree: treeC2, ReviewCommit: commitC2, ReviewerProvider: "chatgpt",
 	}
-	staleOnMailbox := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}
-	if staleOnMailbox.Answers(c2) {
-		t.Fatal("the review of C1 answered the request for C2")
+	stale := reviewartifact.Artifact{ReviewerProvider: "chatgpt", TaskID: "T-1", RequestID: "r-1",
+		BaseSHA: baseSHA, CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: commitC1,
+		Body: reviewerJSON}
+	if boundMismatch(c2, stale) == "" {
+		t.Fatal("the review of C1 answered the obligation for C2")
 	}
-	answer := Review{Subject: c2.Subject, RequestID: "r-2", Body: reviewerJSON}
-	if !answer.Answers(c2) {
-		t.Fatal("the genuine answer was not recognised")
+	answer := stale
+	answer.RequestID, answer.CandidateDigest = "r-2", digestC2
+	answer.CandidateTree, answer.ReviewCommit = treeC2, commitC2
+	if m := boundMismatch(c2, answer); m != "" {
+		t.Fatalf("the genuine answer was not recognised: %s", m)
 	}
 }
 
@@ -340,11 +300,25 @@ func TestRepositoryRoutingIsNotPartOfTheAnsweredSubject(t *testing.T) {
 		Subject: subject, RequestID: "r-1", Kind: KindReview, ReviewerProvider: "chatgpt",
 		MailboxRepository: "globulario/sensei-code", WorkspaceRepository: "globulario/sensei",
 	}
-	// A response that repeats only the subject must still answer the request.
-	rev := Review{Subject: subject, RequestID: "r-1", Body: "{}"}
-	if !rev.Answers(req) {
-		t.Fatal("a response that echoes the subject no longer answers the request; " +
-			"repository routing leaked into the answered identity")
+	if err := req.Validate(); err != nil {
+		t.Fatalf("the routed request is not valid: %v", err)
+	}
+	// An obligation carrying the same routing, answered by a response that
+	// repeats only the SUBJECT, must still be answered.
+	owed := ReviewObligation{
+		TaskID: subject.TaskID, RequestID: "r-1", BaseSHA: subject.BaseSHA,
+		CandidateDigest: subject.CandidateDigest, CandidateTree: subject.CandidateTree,
+		ReviewCommit: subject.ReviewCommit, ReviewerProvider: "chatgpt",
+		MailboxRepository: "globulario/sensei-code", WorkspaceRepository: "globulario/sensei",
+	}
+	answer := reviewartifact.Artifact{
+		ReviewerProvider: "chatgpt", TaskID: subject.TaskID, RequestID: "r-1",
+		BaseSHA: subject.BaseSHA, CandidateDigest: subject.CandidateDigest,
+		CandidateTree: subject.CandidateTree, ReviewCommit: subject.ReviewCommit, Body: "{}",
+	}
+	if m := boundMismatch(owed, answer); m != "" {
+		t.Fatalf("a response that echoes the subject no longer answers the obligation (%s); "+
+			"repository routing leaked into the answered identity", m)
 	}
 }
 

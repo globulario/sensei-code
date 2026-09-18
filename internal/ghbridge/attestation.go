@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/workflow"
@@ -280,6 +281,17 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 	if !found {
 		return AttestationRecord{}, attestationRefused("no canonical review is recorded for request %s", requestID)
 	}
+	// AN OVERRIDE COVERS A REVIEW THIS WORKSPACE ACCEPTED, not one it is holding.
+	//
+	// A relay stages exact reviewer bytes before the App has published them, so
+	// a record can exist whose delivery never completed. Overriding that would
+	// let the owner authorize on evidence nobody outside this machine can read
+	// -- and the same question, "may this review be used", is asked here and in
+	// the runner through the one predicate that answers it (#182 R6).
+	if !stored.Consumable() {
+		return AttestationRecord{}, attestationRefused(
+			"the review recorded for %s has no completed delivery, so there is nothing yet to override", requestID)
+	}
 	// The operator names the digest, and it must be the one on record. This is
 	// what ties the override to a review its author actually read, and it is
 	// checked before anything durable exists.
@@ -468,7 +480,7 @@ func RenderAttestation(rec AttestationRecord, box Issue) (string, error) {
 		"adversarial-review obligation this task carries is NOT satisfied and remains on its record.\n",
 		a.RequestID, a.Statement)
 	body := b.String()
-	if strings.Contains(body, reviewMarker) || strings.Contains(body, requestMarker) ||
+	if strings.Contains(body, reviewartifact.Marker) || strings.Contains(body, requestMarker) ||
 		strings.Count(body, "[sensei-code:") != 1 {
 		return "", errors.New("the publication would carry a protocol marker beyond its own envelope, so it is not posted")
 	}

@@ -20,6 +20,14 @@
 //   - Identity is DERIVED by reparsing the stored bytes, not kept as a second
 //     copy that can drift from them.
 //
+// A third rule arrived with #182 R6, when the relay's own durable receipt was
+// deleted and the one thing it legitimately owned had to live somewhere:
+//
+//   - Transport evidence carries a DELIVERY STATE. A relay may stage the exact
+//     canonical bytes before the App has published them, and those bytes are a
+//     real review that grants no authority yet. Presence of a record is
+//     therefore not permission to consume it; only READY evidence is.
+//
 // This package interprets no verdict. What a review SAYS is the workflow
 // parser's to read, and Accept refuses to record anything that parser has not
 // already passed -- which is why the validator is a required argument rather
@@ -57,12 +65,45 @@ const (
 // Valid reads the closed set by membership.
 func (t Transport) Valid() bool { return t == GitHubMailbox || t == LocalRelay }
 
-// SchemaVersion is the shape of a record this package writes and understands.
+// SchemaVersion is the shape of a record this package WRITES.
 //
-// A record on another version is refused rather than read: a record parsed
+// A record on an unknown version is refused rather than read: a record parsed
 // under the wrong schema is a fabricated specimen, and "version 0" is what an
 // object nobody wrote through this package looks like.
-const SchemaVersion = 1
+//
+// Version 2 added the evidence delivery state. Version 1 records remain
+// readable because they are historical stored state and deleting the relay
+// store must not make already-accepted reviews unreadable -- see legacyState.
+const SchemaVersion = 2
+
+// readableVersion reads the set of schemas this package can still interpret.
+func readableVersion(v int) bool { return v == 1 || v == SchemaVersion }
+
+// DeliveryState says whether the governed ingestion an evidence row describes
+// has actually completed.
+//
+// The distinction exists because one transport is two-phase. A relayed review
+// is validated and durably staged by this process, and only then published by
+// the App; between those two moments the exact reviewer bytes are real and the
+// delivery that would make them consumable has not happened. Before R6 that gap
+// lived in a second durable store with its own record, its own verdict copy and
+// its own lifecycle. It is one field here instead.
+type DeliveryState string
+
+const (
+	// Pending is evidence whose governed ingestion has not completed. It grants
+	// no authority, and it is not silence either: something reviewer-origin is
+	// demonstrably here.
+	Pending DeliveryState = "pending"
+	// Ready is evidence whose governed ingestion completed. Only ready evidence
+	// may permit consumption.
+	Ready DeliveryState = "ready"
+)
+
+// Valid reads the closed set by membership. An unknown state is refused rather
+// than treated as either end of it: a state nobody can interpret must not
+// default to the permissive one.
+func (d DeliveryState) Valid() bool { return d == Pending || d == Ready }
 
 // Advisory is the only standing this store records.
 //
@@ -78,8 +119,11 @@ const Advisory = "advisory"
 // transports share a name for two different parties, the party becomes whatever
 // the last writer meant.
 type Evidence struct {
-	Transport  Transport `json:"transport"`
-	ObservedAt time.Time `json:"observed_at"`
+	Transport Transport `json:"transport"`
+	// State says whether this transport's governed ingestion completed. Empty
+	// only in a stored v1 record, where it is read as Ready -- see legacyState.
+	State      DeliveryState `json:"state,omitempty"`
+	ObservedAt time.Time     `json:"observed_at"`
 
 	// Mailbox transport facts: who GitHub says posted, and where.
 	GitHubAuthor   string `json:"github_author,omitempty"`
@@ -106,19 +150,28 @@ type observation struct {
 	githubAuthor   string
 	githubAuthorID int64
 	githubComment  int64
-	// Relay: who carried it and which App publication carries it on the mailbox.
-	relayPrincipal     string
-	publication        string
-	publicationComment int64
+	// Relay: who carried these bytes from a controlling terminal.
+	relayPrincipal string
 }
 
+// observation deliberately excludes the delivery state and the App publication.
+//
+// Completing a staged relay does not make it a SECOND observation of the same
+// bytes: the same terminal principal carried them once, and the publication is
+// that one observation finishing. Folding either into identity would make a
+// promoted row unrecognisable as the row it was promoted from, so a later retry
+// would append a duplicate delivery beside the one it just completed.
 func (e Evidence) observation() observation {
 	return observation{
 		transport:    e.Transport,
 		githubAuthor: e.GitHubAuthor, githubAuthorID: e.GitHubAuthorID, githubComment: e.GitHubComment,
-		relayPrincipal: e.RelayPrincipal, publication: e.Publication, publicationComment: e.PublicationComment,
+		relayPrincipal: e.RelayPrincipal,
 	}
 }
+
+// Delivered reports whether this row establishes a completed governed
+// ingestion.
+func (e Evidence) Delivered() bool { return e.State == Ready }
 
 // Validate states the OBSERVED residue each transport must carry.
 //
@@ -134,11 +187,20 @@ func (e Evidence) Validate() error {
 	if !e.Transport.Valid() {
 		return fmt.Errorf("transport %q is not one this store records", e.Transport)
 	}
+	if !e.State.Valid() {
+		return fmt.Errorf("%s evidence does not say whether its delivery completed (state %q)", e.Transport, e.State)
+	}
 	if e.ObservedAt.IsZero() {
 		return fmt.Errorf("%s evidence does not say when it was observed", e.Transport)
 	}
 	switch e.Transport {
 	case GitHubMailbox:
+		// One-phase by construction: the bytes were READ from a comment that
+		// already existed. There is no moment at which a mailbox observation is
+		// staged and undelivered, so a pending one describes nothing real.
+		if e.State != Ready {
+			return errors.New("mailbox evidence reads bytes that are already published, so it is never pending")
+		}
 		if e.GitHubComment <= 0 {
 			return errors.New("mailbox evidence must name the comment the bytes were read from")
 		}
@@ -146,8 +208,16 @@ func (e Evidence) Validate() error {
 			return errors.New("mailbox evidence must name the principal GitHub authenticated")
 		}
 	case LocalRelay:
+		// Two-phase. Who carried the bytes is known at staging time; the App
+		// publication is not, and a pending row must not claim one.
 		if strings.TrimSpace(e.RelayPrincipal) == "" {
 			return errors.New("relay evidence must name the terminal principal that carried it")
+		}
+		if e.State == Pending {
+			if strings.TrimSpace(e.Publication) != "" || e.PublicationComment > 0 || !e.PublishedAt.IsZero() {
+				return errors.New("pending relay evidence names a publication it has not completed")
+			}
+			return nil
 		}
 		if e.PublicationComment <= 0 || strings.TrimSpace(e.Publication) == "" {
 			return errors.New("relay evidence must name the App publication that carries it on the mailbox")
@@ -189,6 +259,58 @@ type Record struct {
 // and never a field somebody set beside it.
 func (r Record) Artifact() (reviewartifact.Artifact, error) {
 	return reviewartifact.Parse(r.ArtifactRaw)
+}
+
+// Consumable reports whether any governed ingestion of these bytes actually
+// COMPLETED.
+//
+// THE ONE PLACE THIS QUESTION IS ANSWERED. A record exists from the moment a
+// relay stages exact reviewer bytes, which is before the App has published
+// them; reading "the record is here" as "the review may be used" is the whole
+// defect this predicate exists to prevent, and a caller reimplementing it would
+// be free to read it the permissive way.
+func (r Record) Consumable() bool {
+	for _, ev := range r.Evidence {
+		if ev.Delivered() {
+			return true
+		}
+	}
+	return false
+}
+
+// Staged lists evidence whose delivery has not completed.
+//
+// Diagnostic only. It is what makes a non-consumable record explainable --
+// which transport is mid-flight and who carried it -- instead of merely absent.
+func (r Record) Staged() []Evidence {
+	var out []Evidence
+	for _, ev := range r.Evidence {
+		if !ev.Delivered() {
+			out = append(out, ev)
+		}
+	}
+	return out
+}
+
+// legacyState fills the delivery state of a stored v1 record.
+//
+// A v1 row is READ as ready, and that inference is safe because v1 had no
+// representable pending row: its own validation required a completed App
+// publication for relay evidence and a comment locator for mailbox evidence,
+// so every row that was legal to store had already been delivered. The
+// inference is confined to the schema field -- nothing here invents review
+// identity, a provider or a binding from anything.
+//
+// In memory only. Reading a record never rewrites it.
+func (r *Record) legacyState() {
+	if r.Version != 1 {
+		return
+	}
+	for i := range r.Evidence {
+		if r.Evidence[i].State == "" {
+			r.Evidence[i].State = Ready
+		}
+	}
 }
 
 var (
@@ -269,6 +391,7 @@ func (s Store) Load(requestID string) (Record, bool, error) {
 	if err := json.Unmarshal(blob, &rec); err != nil {
 		return Record{}, false, fmt.Errorf("%w: %s is not valid json: %v", ErrUnreadable, requestID, err)
 	}
+	rec.legacyState()
 	if err := rec.verify(requestID); err != nil {
 		return Record{}, false, err
 	}
@@ -294,8 +417,8 @@ func (r Record) verify(requestID string) error {
 		return fmt.Errorf("%w: %s records standing %q and this store records %q only",
 			ErrUnreadable, requestID, r.Standing, Advisory)
 	}
-	if r.Version != SchemaVersion {
-		return fmt.Errorf("%w: %s declares schema version %d and this package writes %d",
+	if !readableVersion(r.Version) {
+		return fmt.Errorf("%w: %s declares schema version %d and this package reads 1 and %d",
 			ErrUnreadable, requestID, r.Version, SchemaVersion)
 	}
 	if r.AcceptedAt.IsZero() {
@@ -420,11 +543,169 @@ func (s Store) Accept(in Acceptance) (Record, error) {
 	if existing.hasEvidence(ev) {
 		return existing, nil
 	}
-	existing.Evidence = append(existing.Evidence, ev)
-	if err := s.replace(path, existing); err != nil {
+	// A relay delivery that is already here is CONTINUED, not staged again.
+	// The digest already matched, so these are the same bytes: a second
+	// terminal submitting them is retrying one delivery, and appending would
+	// both duplicate it and leave completion two rows to choose between. The
+	// principal that first staged it stays the principal that carried it.
+	if ev.Transport == LocalRelay && ev.State == Pending && existing.carries(LocalRelay) {
+		return existing, nil
+	}
+	next := existing
+	next.Evidence = append(append([]Evidence{}, existing.Evidence...), ev)
+	return s.rewrite(path, existing, next)
+}
+
+// Completion is a two-phase transport reporting that its staged delivery
+// finished.
+type Completion struct {
+	// RequestID is the record being completed.
+	RequestID string
+	// ReviewDigest names the EXACT bytes whose delivery completed. Required and
+	// never inferred: a completion that took the store's word for which review
+	// it was publishing could promote bytes its caller never published.
+	ReviewDigest string
+	// Transport is the staged transport being completed.
+	Transport Transport
+	// The App publication that now carries those bytes on the mailbox.
+	Publication        string
+	PublicationComment int64
+	PublishedAt        time.Time
+	// Now supplies the observation stamp when PublishedAt is zero.
+	Now func() time.Time
+}
+
+// Complete promotes ONE staged evidence row to ready, in place.
+//
+// This is the only way evidence becomes consumable after the fact, and it
+// changes nothing else: the artifact bytes, the digest, the acceptance time and
+// every other observation are carried through unchanged (see preserves).
+//
+// The digest is checked against the stored record before anything is promoted.
+// A completion naming other bytes is a conflict rather than a rename: the
+// publication it is reporting is then a publication of something this record
+// does not hold, and promoting on request id alone would let it make a review
+// consumable that nobody delivered.
+func (s Store) Complete(in Completion) (Record, error) {
+	path, err := s.path(in.RequestID)
+	if err != nil {
 		return Record{}, err
 	}
-	return existing, nil
+	if !in.Transport.Valid() {
+		return Record{}, fmt.Errorf("transport %q is not one this store records", in.Transport)
+	}
+	if strings.TrimSpace(in.ReviewDigest) == "" {
+		return Record{}, errors.New("a completion must name the exact review whose delivery completed")
+	}
+
+	mu := lockFor(path)
+	mu.Lock()
+	defer mu.Unlock()
+
+	existing, found, err := s.Load(in.RequestID)
+	if err != nil {
+		return Record{}, err
+	}
+	if !found {
+		return Record{}, fmt.Errorf("%w: %s has no staged review to complete", ErrUnreadable, in.RequestID)
+	}
+	if existing.ReviewDigest != in.ReviewDigest {
+		return Record{}, fmt.Errorf("%w: %s holds %s and this completion names %s",
+			ErrConflict, in.RequestID, existing.ReviewDigest, in.ReviewDigest)
+	}
+
+	at := in.PublishedAt
+	if at.IsZero() {
+		now := time.Now
+		if in.Now != nil {
+			now = in.Now
+		}
+		at = now()
+	}
+	next := existing
+	next.Evidence = append([]Evidence{}, existing.Evidence...)
+	// The FIRST row of that transport: the delivery that was staged. Scanning
+	// for "a row that happens to fit" would let a later duplicate be completed
+	// while the original stayed pending forever.
+	for i, ev := range next.Evidence {
+		if ev.Transport != in.Transport {
+			continue
+		}
+		if ev.Delivered() {
+			if ev.Publication == in.Publication && ev.PublicationComment == in.PublicationComment {
+				return existing, nil
+			}
+			return Record{}, fmt.Errorf("%w: %s already carries %s publication %s comment %d",
+				ErrConflict, in.RequestID, in.Transport, ev.Publication, ev.PublicationComment)
+		}
+		ev.State = Ready
+		ev.Publication = in.Publication
+		ev.PublicationComment = in.PublicationComment
+		ev.PublishedAt = at.UTC()
+		if verr := ev.Validate(); verr != nil {
+			return Record{}, verr
+		}
+		next.Evidence[i] = ev
+		return s.rewrite(path, existing, next)
+	}
+	return Record{}, fmt.Errorf("%w: %s records no staged %s delivery to complete",
+		ErrUnreadable, in.RequestID, in.Transport)
+}
+
+// carries reports whether any evidence row came down this transport, whatever
+// its delivery state.
+func (r Record) carries(t Transport) bool {
+	for _, ev := range r.Evidence {
+		if ev.Transport == t {
+			return true
+		}
+	}
+	return false
+}
+
+// rewrite persists a record whose SEMANTIC identity is unchanged, writing it at
+// the current schema.
+//
+// This is also the v1 -> v2 upgrade path, and the only one: a v1 record is
+// rewritten because it received additive evidence, never because it was read.
+func (s Store) rewrite(path string, from, to Record) (Record, error) {
+	to.Version = SchemaVersion
+	if err := to.preserves(from); err != nil {
+		return Record{}, err
+	}
+	if err := s.replace(path, to); err != nil {
+		return Record{}, err
+	}
+	return to, nil
+}
+
+// preserves states what a rewrite may NOT change.
+//
+// Everything that makes the record the review it is: the exact bytes, the
+// digest naming them, which request they answer, when they were accepted, and
+// every observation already recorded. Only the evidence list may grow, and a
+// row already there may only be completed in place.
+func (r Record) preserves(prev Record) error {
+	if r.ArtifactRaw != prev.ArtifactRaw {
+		return fmt.Errorf("%w: %s would rewrite the accepted artifact bytes", ErrUnreadable, prev.RequestID)
+	}
+	if r.ReviewDigest != prev.ReviewDigest {
+		return fmt.Errorf("%w: %s holds %s and the rewrite names %s",
+			ErrConflict, prev.RequestID, prev.ReviewDigest, r.ReviewDigest)
+	}
+	if r.RequestID != prev.RequestID {
+		return fmt.Errorf("%w: %s would be rewritten as a record of %s", ErrUnreadable, prev.RequestID, r.RequestID)
+	}
+	if !r.AcceptedAt.Equal(prev.AcceptedAt) {
+		return fmt.Errorf("%w: %s would move its acceptance time", ErrUnreadable, prev.RequestID)
+	}
+	for _, have := range prev.Evidence {
+		if !r.hasEvidence(have) {
+			return fmt.Errorf("%w: %s would drop a recorded %s observation",
+				ErrUnreadable, prev.RequestID, have.Transport)
+		}
+	}
+	return nil
 }
 
 // hasEvidence reports whether this observation is already recorded, so a

@@ -32,6 +32,7 @@ import (
 //
 //	UNANSWERED          nobody produced relevant reviewer-origin content
 //	OBSERVATION_FAULT   reviewer-origin evidence exists and grants nothing
+//	                    (including a review staged here and not yet delivered)
 //	LIFECYCLE_FAULT     our own durable authority records cannot be acted on
 //	REVIEW_UNOBTAINABLE no authorized reviewer transport could be reached
 //
@@ -52,6 +53,16 @@ const (
 	// ObservedConflict is two different canonical artifacts claiming the same
 	// standing review, where one semantic answer is allowed.
 	ObservedConflict = "CONFLICT"
+	// ObservedDeliveryPending is a canonical artifact for THIS exact obligation
+	// that is durably held here with its governed delivery incomplete.
+	//
+	// It is the only observation kind that is not about the mailbox. A relayed
+	// review is validated and staged by this process before the App publishes
+	// it, and between those two moments the reviewer's exact bytes are
+	// demonstrably present and grant nothing. Reporting that as silence would
+	// tell an operator to wait for a review they are already holding; reporting
+	// it as an answer would let an unpublished verdict qualify a candidate.
+	ObservedDeliveryPending = "DELIVERY_PENDING"
 )
 
 // ReviewObservation is one thing seen in a standing request's response window.
@@ -79,6 +90,13 @@ type ReviewObservation struct {
 	RequestID      string `json:"request_id,omitempty"`
 	Provider       string `json:"reviewer_provider,omitempty"`
 
+	// Transport and RelayPrincipal are the residue of an observation that did
+	// not come off the mailbox. Empty for everything read from a comment: an
+	// observation states the identity it actually has, and a locator invented
+	// for a staged relay would name a comment nobody posted.
+	Transport      string `json:"transport,omitempty"`
+	RelayPrincipal string `json:"relay_principal,omitempty"`
+
 	// Mismatch names the first identity field on which a valid artifact differs
 	// from the standing obligation. Empty unless Kind is WRONG_TARGET.
 	Mismatch string `json:"mismatch,omitempty"`
@@ -89,6 +107,12 @@ type ReviewObservation struct {
 // Identity is the stable identity of one observation, for de-duplication across
 // repeated polls: where it was seen, and the exact bytes seen there.
 func (o ReviewObservation) Identity() string {
+	if o.Comment == 0 && o.BodyDigest == "" {
+		// Not read from a comment. A staged relay is identified by which
+		// delivery it is: the transport, the principal that carried it, and the
+		// exact artifact.
+		return fmt.Sprintf("%s|%s|%s", o.Transport, o.RelayPrincipal, o.ArtifactDigest)
+	}
 	return fmt.Sprintf("%d|%s", o.Comment, o.BodyDigest)
 }
 

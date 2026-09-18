@@ -27,7 +27,7 @@ func acceptMailboxReview(t *testing.T, f relayFixture, raw string) reviewstore.R
 	comment := f.mailbox.add(raw, "davecourtois", 1697116)
 	rec, err := f.reviews.Accept(reviewstore.Acceptance{
 		RequestID: relayRequest, Artifact: raw,
-		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox,
+		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox, State: reviewstore.Ready,
 			GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116, GitHubComment: comment},
 		Validate: func(a reviewartifact.Artifact) error {
 			_, err := workflow.ValidateReviewBody(a.Body, roles.Binding{
@@ -43,10 +43,19 @@ func acceptMailboxReview(t *testing.T, f relayFixture, raw string) reviewstore.R
 	return rec
 }
 
-func relaysEmpty(t *testing.T, f relayFixture) {
+// noRelayEvidence proves the record carries no relay delivery at all, so a case
+// that claims to attest a mailbox-origin review is not quietly attesting one a
+// terminal carried.
+func noRelayEvidence(t *testing.T, f relayFixture) {
 	t.Helper()
-	if _, found, _ := f.store.Load(relayRequest); found {
-		t.Fatal("a relay receipt exists; this case must prove attestation without one")
+	rec, found, err := f.reviews.Load(relayRequest)
+	if err != nil || !found {
+		t.Fatalf("reading the review record: found=%v err=%v", found, err)
+	}
+	for _, ev := range rec.Evidence {
+		if ev.Transport == reviewstore.LocalRelay {
+			t.Fatal("the record carries relay evidence; this case must prove attestation without any")
+		}
 	}
 }
 
@@ -62,7 +71,7 @@ func TestADirectMailboxReviewCanBeAttestedWithNoRelayReceipt(t *testing.T) {
 	store := attestStore(t)
 	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
 	stored := acceptMailboxReview(t, f, raw)
-	relaysEmpty(t, f)
+	noRelayEvidence(t, f)
 
 	rec, err := f.attest(store, relayRequest, stored.ReviewDigest, true)
 	if err != nil {
@@ -84,7 +93,7 @@ func TestADirectMailboxReviewCanBeAttestedWithNoRelayReceipt(t *testing.T) {
 	if a.Principal != operator.token() {
 		t.Fatalf("principal is %q, want the terminal owner", a.Principal)
 	}
-	relaysEmpty(t, f)
+	noRelayEvidence(t, f)
 }
 
 // The graduation property: the same canonical bytes, arriving by either pipe,
@@ -145,50 +154,77 @@ func TestMailboxAndRelayReviewsAttestIdentically(t *testing.T) {
 	}
 }
 
-// Once the canonical review is accepted, the relay receipt is history. Deleting
-// or rewriting it cannot change what an override is about.
-func TestRelayStoreCannotChangeWhatIsAttestedAfterConvergence(t *testing.T) {
+// An owner override binds identically whatever transport delivered the review.
+//
+// R3 moved attestation onto the canonical record; R6 removed the relay's own
+// store entirely, and this proves the removal changed nothing about owner
+// authority. The SAME canonical bytes are delivered two ways, and the override
+// covers the same digest, the same binding and the same reviewer either way. If
+// it did not, the delivery pipe would still be deciding what the owner has
+// authority over.
+func TestAnOverrideBindsIdenticallyWhateverTransportDelivered(t *testing.T) {
 	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
-	swapped := artifactFor(t, relaySubject, relayRequest, "chatgpt",
-		`{"decision":"accept","summary":"swapped","instructions":"","findings":[]}`)
+	type bound struct {
+		digest, reviewer, request string
+		binding                   roles.Binding
+	}
+	got := map[string]bound{}
 
-	for name, wreck := range map[string]func(t *testing.T, f relayFixture){
-		"the receipt is deleted": func(t *testing.T, f relayFixture) {
-			if err := os.Remove(filepath.Join(f.store.Dir, relayRequest+".json")); err != nil {
-				t.Fatal(err)
-			}
-		},
-		"the receipt names another review": func(t *testing.T, f relayFixture) {
-			rec, found, err := f.store.Load(relayRequest)
-			if err != nil || !found {
-				t.Fatalf("load: found=%v err=%v", found, err)
-			}
-			rec.Artifact, rec.ReviewDigest = swapped, ReviewDigest(swapped)
-			rec.Reviewer, rec.Decision = "somebody-else", "accept"
-			if err := overwriteReceipt(f.store, rec); err != nil {
-				t.Fatal(err)
+	for name, deliver := range map[string]func(t *testing.T, f relayFixture){
+		"mailbox": func(t *testing.T, f relayFixture) { acceptMailboxReview(t, f, raw) },
+		"relay": func(t *testing.T, f relayFixture) {
+			if _, err := f.submit(raw); err != nil {
+				t.Fatalf("the genuine relay did not publish: %v", err)
 			}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newRelayFixture(t)
 			store := attestStore(t)
-			if _, err := f.submit(raw); err != nil {
-				t.Fatal(err)
-			}
-			wreck(t, f)
+			deliver(t, f)
 
 			rec, err := f.attest(store, relayRequest, ReviewDigest(raw), true)
 			if err != nil {
-				t.Fatalf("attesting the converged review: %v", err)
+				t.Fatalf("attesting a %s-delivered review: %v", name, err)
 			}
-			if rec.Attestation.ReviewDigest != ReviewDigest(raw) {
-				t.Fatalf("the override names %s, want the canonical %s", rec.Attestation.ReviewDigest, ReviewDigest(raw))
-			}
-			if rec.Attestation.Reviewer != "chatgpt" {
-				t.Fatalf("a rewritten receipt supplied the reviewer: %q", rec.Attestation.Reviewer)
-			}
+			got[name] = bound{digest: rec.Attestation.ReviewDigest, reviewer: rec.Attestation.Reviewer,
+				request: rec.Attestation.RequestID, binding: rec.Attestation.Binding}
 		})
+	}
+	if len(got) != 2 {
+		t.Fatalf("only %d transport(s) produced an override; the parity claim is untested", len(got))
+	}
+	if got["mailbox"] != got["relay"] {
+		t.Fatalf("the override differs by transport:\n  mailbox %+v\n  relay   %+v", got["mailbox"], got["relay"])
+	}
+	if got["mailbox"].digest != ReviewDigest(raw) || got["mailbox"].reviewer != "chatgpt" {
+		t.Fatalf("the override does not bind the canonical review: %+v", got["mailbox"])
+	}
+}
+
+// A STAGED relay is not attestable. An override covers a review this workspace
+// has accepted through a completed governed ingestion; bytes a terminal carried
+// and nobody published are not that, and attesting them would let the owner
+// authorize on evidence whose delivery never happened.
+func TestAStagedRelayIsNotAttestable(t *testing.T) {
+	f := newRelayFixture(t)
+	store := attestStore(t)
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+
+	f.mailbox.failPosts = true
+	if _, err := f.submit(raw); !errors.Is(err, ErrRelayPublication) {
+		t.Fatalf("staging: %v", err)
+	}
+	f.mailbox.failPosts = false
+	if rec, found, _ := f.reviews.Load(relayRequest); !found || rec.Consumable() {
+		t.Fatal("the fixture did not produce a staged, unconsumable review")
+	}
+
+	if _, err := f.attest(store, relayRequest, ReviewDigest(raw), true); !errors.Is(err, ErrAttestationRefused) {
+		t.Fatalf("a staged review was attested: %v", err)
+	}
+	if _, found, _ := store.Load(relayRequest); found {
+		t.Fatal("a refused override left a record")
 	}
 }
 
@@ -206,7 +242,7 @@ func TestTheOverrideDerivesEverythingFromTheCanonicalArtifact(t *testing.T) {
 	comment := f.mailbox.add(raw, "davecourtois", 1697116)
 	if _, err := f.reviews.Accept(reviewstore.Acceptance{
 		RequestID: relayRequest, Artifact: raw,
-		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox,
+		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox, State: reviewstore.Ready,
 			// Every transport field says "claude". The artifact says chatgpt.
 			GitHubAuthor: "claude", GitHubAuthorID: 424242, GitHubComment: comment},
 		Validate: func(reviewartifact.Artifact) error { return nil },
@@ -267,26 +303,32 @@ func TestAnOverrideNeedsTheExactRequestAndDigest(t *testing.T) {
 	}
 }
 
-// A relay receipt is not a review. Without the canonical record there is
-// nothing to override, however complete the receipt looks.
-func TestARelayReceiptAloneCannotBeAttested(t *testing.T) {
+// A publication is not a review. Without the canonical record there is nothing
+// to override, however complete the mailbox receipt looks.
+func TestAPublishedReceiptAloneCannotBeAttested(t *testing.T) {
 	f := newRelayFixture(t)
 	store := attestStore(t)
 	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
 	if _, err := f.submit(raw); err != nil {
 		t.Fatal(err)
 	}
-	// The relay is published and its receipt is intact; the canonical record is
-	// removed, as it would be if convergence had never completed.
+	// The App publication is intact on the mailbox; the canonical record is
+	// removed, as it would be if the delivery had never been recorded.
 	if err := os.Remove(filepath.Join(f.reviews.Dir, relayRequest+".json")); err != nil {
 		t.Fatal(err)
 	}
-	if _, found, _ := f.store.Load(relayRequest); !found {
-		t.Fatal("the relay receipt is gone; this case proves nothing")
+	var receipt bool
+	for _, body := range f.mailbox.posted() {
+		if strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), relayedReviewMarker) {
+			receipt = true
+		}
+	}
+	if !receipt {
+		t.Fatal("the publication is gone; this case proves nothing")
 	}
 
 	if _, err := f.attest(store, relayRequest, ReviewDigest(raw), true); !errors.Is(err, ErrAttestationRefused) {
-		t.Fatalf("a relay receipt alone was attested: %v", err)
+		t.Fatalf("a publication alone was attested: %v", err)
 	}
 	if _, found, _ := store.Load(relayRequest); found {
 		t.Fatal("a refused override left a record")
@@ -356,7 +398,7 @@ func TestOnlyAnAcceptingCanonicalReviewCanBeAttested(t *testing.T) {
 			// Written straight into the store so the refusal under test is the
 			// attestation's own, not the store's acceptance check.
 			if err := writeStoredReview(f.reviews, relayRequest, raw, reviewstore.Evidence{
-				Transport: reviewstore.GitHubMailbox, GitHubAuthor: "davecourtois",
+				Transport: reviewstore.GitHubMailbox, State: reviewstore.Ready, GitHubAuthor: "davecourtois",
 				GitHubAuthorID: 1697116, GitHubComment: 5150,
 			}); err != nil {
 				t.Fatal(err)

@@ -667,10 +667,10 @@ invariants:
       - internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRoundTripsExactSubject
       - internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRefusesAmbiguousIdentityHeaders
       - internal/ghbridge/architecture_test.go:TestArchitectureRunnerRefusesWrongRoleBeforeTransport
-      - internal/ghbridge/marker_test.go:TestProseCannotInjectIdentityFields
+      - internal/reviewartifact/artifact_test.go:TestPayloadProseCannotOverrideEnvelopeIdentity
       - internal/ghbridge/marker_test.go:TestFromBindingLiftsTheWorkflowIdentity
-      - internal/ghbridge/marker_test.go:TestAnswersRequiresEveryIdentityField
-      - internal/ghbridge/marker_test.go:TestAReviewOfC1DoesNotAnswerTheRequestForC2
+      - internal/ghbridge/marker_test.go:TestABoundAnswerRequiresEveryIdentityField
+      - internal/ghbridge/marker_test.go:TestAReviewOfC1DoesNotAnswerTheObligationForC2
       - internal/ghbridge/marker_test.go:TestTransportMarkerCarriesNoVerdict
       - cmd/sensei-code/architecture_bridge_test.go:TestConfiguredBridgeCarriesABoundArchitectTurn
     contract: the envelope says which question an answer belongs to; it never decides what the question is
@@ -687,7 +687,7 @@ invariants:
     required_tests:
       - internal/ghbridge/runner_test.go:TestTheBridgePreservesTheAssignedProviderIdentity
       - internal/ghbridge/runner_test.go:TestTransportAnswersAreUnverifiedAndNeverIndependent
-      - internal/ghbridge/principal_test.go:TestParsedReviewCarriesNoAuthenticatedIdentity
+      - internal/ghbridge/principal_test.go:TestAParsedArtifactCarriesNoAuthenticatedIdentity
       - internal/ghbridge/principal_test.go:TestReviewerIsNeverInferredFromANeighbouringFact
       - internal/ghbridge/apiclient_test.go:TestTheAppBotCannotAnswerAsTheReviewer
     contract: no GitHub property may raise a turn above Unverified
@@ -760,11 +760,11 @@ invariants:
       - internal/reviewartifact/artifact_test.go:TestASecondProtocolMarkerIsRefused
       - internal/reviewartifact/artifact_test.go:TestRenderStatesTheVerdictOnlyInThePayload
       - internal/reviewartifact/artifact_test.go:TestRenderIsBoundedExactlyAsParseIs
-      - internal/ghbridge/relay_artifact_test.go:TestTheRelayDigestsTheExactBytesItWasGiven
-      - internal/ghbridge/relay_artifact_test.go:TestTheRelayLiftsTheCanonicalArtifactWithoutReinterpretingIt
+      - internal/ghbridge/relay_artifact_test.go:TestTheRelayStoresTheExactBytesItWasGiven
+      - internal/ghbridge/review_spine_subtraction_test.go:TestTheLegacyRelayAndReviewGrammarAreGone
     evidence:
       - 'sensei-code#182 R1: a valid GitHub mailbox ACCEPT was unrelayable because ParseRelayArtifact alone required reviewer=<provider>; one semantic artifact had two grammars'
-      - 'mutation M8 (2026-09-17): the relay adapter re-digested strings.TrimSpace(Raw) and every existing relay test still passed; the gap was closed by relay_artifact_test.go:TestTheRelayDigestsTheExactBytesItWasGiven'
+      - 'mutation M8 (2026-09-17): the relay adapter re-digested strings.TrimSpace(Raw) and every existing relay test still passed; the gap was closed by relay_artifact_test.go:TestTheRelayStoresTheExactBytesItWasGiven (renamed in #182 R6 when the relay stopped having its own parser and the property moved onto the stored record)'
       - 'sensei-code#183 R1 review (2026-09-17): Render enforced no size bound while Parse did, so the canonical writer could manufacture an artifact the canonical reader refused -- the same writer/reader asymmetry recorded for session records in #181. Repaired by bounding Render on its exact rendered bytes; mutations removing and widening that bound are both killed by artifact_test.go:TestRenderIsBoundedExactlyAsParseIs'
     contract: the artifact says what the reviewer produced; transport says only how it arrived
   - id: sensei_code.reviewstore.transport_establishes_acceptance_once
@@ -795,16 +795,16 @@ invariants:
       - internal/ghbridge/review_convergence_test.go:TestTheMailboxRefusesAnAnswerThatIsNotTheOneAsked
       - internal/ghbridge/review_convergence_test.go:TestTheProviderIsNeverInferredFromTheGitHubLogin
       - internal/ghbridge/review_convergence_test.go:TestAPublishedRelayConvergesOnTheCommonRecord
-      - internal/ghbridge/review_convergence_test.go:TestAFailedConvergenceRetriesTheStoreWriteWithoutPublishingTwice
+      - internal/ghbridge/review_convergence_test.go:TestAFailedCompletionIsRetriedWithoutPublishingTwice
       - internal/ghbridge/review_convergence_test.go:TestAStoredReviewCannotAnswerAnObligationThatNeverNamedItsReviewer
       - internal/ghbridge/review_convergence_test.go:TestTheProductionMailboxPathUsesTheCanonicalParser
-      - internal/ghbridge/relay_test.go:TestAnAcceptedMailboxReviewSurvivesItsCommentAndTheMailbox
-      - internal/ghbridge/relay_test.go:TestAnAcceptedRelayedReviewSurvivesItsReceiptAndTheMailbox
+      - internal/ghbridge/relay_test.go:TestAnAcceptedReviewSurvivesTheTransportThatCarriedIt
+      - internal/ghbridge/relay_test.go:TestAStoredReviewIsNeverReplacedByADifferentOne
       - internal/ghbridge/relay_test.go:TestAStoredReviewThatCannotProveItsBindingIsNotConsumed
-      - internal/ghbridge/relay_test.go:TestTamperingWithARelayReceiptAfterPublicationCannotChangeTheVerdict
+      - internal/ghbridge/review_spine_subtraction_test.go:TestNoProductionRecordHoldsASecondCopyOfAVerdict
       - internal/reviewstore/store_test.go:TestRedeliveryWithNoSuppliedClockIsStillIdempotent
       - internal/reviewstore/store_test.go:TestARecordMissingItsAcceptanceResidueIsRefused
-      - internal/ghbridge/review_convergence_test.go:TestAPublishedRelayThatNeverConvergedDoesNotAnswerUntilItDoes
+      - internal/ghbridge/review_convergence_test.go:TestAStagingFailurePublishesNothing
       - internal/ghbridge/review_convergence_test.go:TestOnlyTheCommonStoreReturnsAVerdict
     evidence:
       - 'sensei-code#182 R2: a relayed verdict had a durable receipt and the same bytes on the authenticated mailbox had none, so delivery decided which review could answer a turn'
@@ -830,10 +830,10 @@ invariants:
     required_tests:
       - internal/ghbridge/attestation_canonical_test.go:TestADirectMailboxReviewCanBeAttestedWithNoRelayReceipt
       - internal/ghbridge/attestation_canonical_test.go:TestMailboxAndRelayReviewsAttestIdentically
-      - internal/ghbridge/attestation_canonical_test.go:TestRelayStoreCannotChangeWhatIsAttestedAfterConvergence
+      - internal/ghbridge/attestation_canonical_test.go:TestAnOverrideBindsIdenticallyWhateverTransportDelivered
       - internal/ghbridge/attestation_canonical_test.go:TestTheOverrideDerivesEverythingFromTheCanonicalArtifact
       - internal/ghbridge/attestation_canonical_test.go:TestAnOverrideNeedsTheExactRequestAndDigest
-      - internal/ghbridge/attestation_canonical_test.go:TestARelayReceiptAloneCannotBeAttested
+      - internal/ghbridge/attestation_canonical_test.go:TestAPublishedReceiptAloneCannotBeAttested
       - internal/ghbridge/attestation_canonical_test.go:TestAnUnreadableCanonicalRecordCannotBeAttested
       - internal/ghbridge/attestation_canonical_test.go:TestOnlyAnAcceptingCanonicalReviewCanBeAttested
       - internal/ghbridge/attestation_canonical_test.go:TestANewOverrideCarriesTheTransportNeutralStatement
@@ -913,6 +913,93 @@ invariants:
       - 'sensei-code#182 R4: a byte-identical candidate was asked about twice, under two request ids with two wake targets, because the next run after a waiter timeout minted a replacement; #376 commissioning spent repeated live review windows on an unchanged candidate'
       - 'sensei-code#187: AwaitReview surfaced a waiter timeout as bare context.DeadlineExceeded when a poll was in flight and as ErrNoAnswer otherwise; measured 11/30 and 8/30 flake under -race before the repair, 0/30 after'
     contract: what is owed is a durable fact; a process that listens for it is not
+  - id: sensei_code.reviewspine.one_record_one_obligation_whatever_the_transport
+    title: One review has one durable record, one obligation owner, and no transport-owned copy
+    severity: critical
+    status: active
+    description: 'One review has ONE durable semantic record. reviewartifact defines its exact bytes and their digest; reviewstore is the only persisted record of those bytes and of the transport evidence beside them; ReviewObligationStore alone defines which review is owed; AttestationStore records an owner override bound to one exact canonical review. There is no fifth review authority, no second review response grammar and no transport-owned copy of a review, its verdict, its binding, its standing or its lifecycle. A relay is an ingestion adapter: it authenticates the terminal principal, parses the canonical artifact directly, resolves the exact owed obligation, proves request/candidate/provider/conversation binding, validates the reviewer body through the workflow parser, STAGES the exact submitted bytes with PENDING local-relay evidence, publishes the App receipt, and only then COMPLETES that one evidence row as READY -- in that order, so nothing is published before the bytes are durable and nothing is consumable before the publication is recorded. RECORD PRESENCE IS NOT CONSUMABILITY: a record may exist while no evidence on it is ready, and one owner-level predicate (Record.Consumable) answers whether any governed ingestion completed. Only ready evidence may permit consumption, exact obligation discharge or an owner attestation; a mailbox observation is ready on arrival because it reads bytes already published, and pending relay evidence may not name a publication it has not completed. Pending transport evidence grants NO authority and is NEVER silence: it is reported as the DELIVERY_PENDING observation kind, which shares the observation-fault control action -- same candidate, same obligation, same request, no reviewer fallback, no implementer handoff, no supersession, resumable terminal -- and fabricates no comment locator for bytes nobody posted. Retrying the identical artifact continues the delivery that is already staged rather than staging a second one or rewriting which principal carried it; a different artifact for an answered request is a conflict that publishes nothing and leaves the stored bytes byte-identical; the same artifact already delivered publishes nothing further; and a publication whose completion did not record is repaired only by reconciling a receipt whose request, review digest AND AUTHOR all agree -- never by posting a second one, and never on the body alone. Reading the mailbox as the App authenticates the reader, not the author, so the account GitHub recorded when the request was published is pinned on the obligation beside the assigned provider and the permitted reviewer, and only a receipt that principal wrote may complete a delivery. EVERY matching receipt is examined and the publisher''s wins wherever it sits, because selecting the first match would let a look-alike posted ahead of a genuine receipt hide it and cause a second genuine publication. A matching receipt from any other account establishes nothing and blocks nothing; a matching receipt on an obligation that predates the pinned publisher is refused rather than trusted or duplicated. An obligation published through the App with no readable author is NOT recorded: an unpinned publisher is a legacy shape, and manufacturing one today would disable the authority check for that obligation''s whole life. The publication names the STAGED delivery''s relay principal, read from the record, never the caller''s, so one delivery has one principal wherever it is read. Stored schema v1 records stay readable and their evidence reads as ready, because v1 had no representable pending row; reading one never rewrites it, and a v1 record is upgraded to v2 only when it receives additive evidence and only with artifact bytes, digest, request and acceptance time unchanged and every recorded observation preserved. The pre-R6 relay receipt format is understood in exactly one historical migration boundary that current ingestion cannot reach: a published legacy relay converges as READY evidence, an accepted one as PENDING and is not published merely because startup saw it, and anything unestablishable -- or conflicting with a review already stored -- is retained untouched and reported. Process death, waiter death and transport retry must not change candidate, request or review identity.'
+    protects:
+      files:
+        - internal/reviewartifact/artifact.go
+        - internal/reviewstore/store.go
+        - internal/ghbridge/relay.go
+        - internal/ghbridge/relay_history.go
+        - internal/ghbridge/runner.go
+        - internal/ghbridge/review_obligation.go
+        - internal/ghbridge/review_observation.go
+        - internal/ghbridge/attestation.go
+        - internal/roles/observation.go
+        - cmd/sensei-code/control.go
+        - cmd/sensei-code/review_relay.go
+    related_invariants:
+      - sensei_code.reviewobservation.evidence_is_never_silence
+      - sensei_code.reviewobligation.a_waiter_is_disposable_the_obligation_is_not
+      - sensei_code.reviewstore.transport_establishes_acceptance_once
+      - sensei_code.reviewartifact.one_grammar_owns_what_a_review_means
+      - sensei_code.attestation.an_override_binds_to_a_canonical_review_not_a_receipt
+    forbidden_fixes:
+      - give a transport its own durable record of a review, its verdict, its binding, its standing or its lifecycle
+      - read the presence of a review record as permission to consume it
+      - report a review staged here and not yet delivered as an unanswered review
+      - publish a relay receipt before its exact bytes are durable, or a second receipt for a review already published
+      - reach the historical relay parser from current relay ingestion
+      - complete a staged delivery from a mailbox comment whose author was not authenticated as this machine's publisher
+      - publish a relay receipt naming the retrying caller rather than the principal that staged the delivery
+      - select the first matching relay receipt rather than preferring the one the pinned publisher wrote
+      - record a new App-published obligation whose publisher github did not name
+      - infer review identity, provider or binding from configuration while migrating a schema or a historical record
+    required_tests:
+      - internal/ghbridge/relay_test.go:TestATerminalRelayStagesTheExactReviewAndTheAppPublishesItSeparately
+      - internal/ghbridge/relay_test.go:TestAPublicationFailureLeavesTheReviewStagedAndUnconsumable
+      - internal/ghbridge/relay_test.go:TestARetryFromAnotherTerminalContinuesTheSameDelivery
+      - internal/ghbridge/relay_test.go:TestACompletionFailureIsRepairedFromTheExistingPublication
+      - internal/ghbridge/relay_test.go:TestAStoredReviewIsNeverReplacedByADifferentOne
+      - internal/ghbridge/relay_test.go:TestAHandWrittenStagedRecordIsNotAnAnswer
+      - internal/ghbridge/relay_test.go:TestAForgedReceiptCannotPromoteAStagedReview
+      - internal/ghbridge/relay_test.go:TestAGenuineReceiptIsPreferredOverAnEarlierLookAlike
+      - internal/ghbridge/relay_test.go:TestAnAppRequestWithNoReadableAuthorIsNotRecorded
+      - internal/ghbridge/relay_test.go:TestAnUnauthenticatableReceiptIsRefusedRatherThanTrustedOrDuplicated
+      - internal/ghbridge/relay_test.go:TestAStoredReviewIsConsumedAgainstTheObligationsProviderNotTodaysConfig
+      - internal/reviewstore/schema_v1_test.go:TestConsumableReadsOnlyDeliveredEvidence
+      - internal/reviewstore/schema_v1_test.go:TestACompletionMustNameTheReviewItPublished
+      - internal/reviewstore/schema_v1_test.go:TestMailboxEvidenceIsNeverStaged
+      - internal/ghbridge/relay_test.go:TestAnAcceptedReviewSurvivesTheTransportThatCarriedIt
+      - internal/ghbridge/relay_artifact_test.go:TestTheRelayStoresTheExactBytesItWasGiven
+      - internal/ghbridge/review_convergence_test.go:TestAStagedRelayIsInTheOneStoreAndIsStillNotAnAnswer
+      - internal/ghbridge/review_convergence_test.go:TestAStagingFailurePublishesNothing
+      - internal/ghbridge/review_convergence_test.go:TestAFailedCompletionIsRetriedWithoutPublishingTwice
+      - internal/ghbridge/review_convergence_test.go:TestOnlyTheCommonStoreReturnsAVerdict
+      - internal/ghbridge/review_spine_subtraction_test.go:TestTheLegacyRelayAndReviewGrammarAreGone
+      - internal/ghbridge/review_spine_subtraction_test.go:TestNoProductionTypeCarriesARelayStore
+      - internal/ghbridge/review_spine_subtraction_test.go:TestCurrentRelayIngestionCannotReachTheHistoricalParser
+      - internal/ghbridge/review_spine_subtraction_test.go:TestTheRelayAdapterPersistsOnlyThroughTheReviewStore
+      - internal/ghbridge/review_spine_subtraction_test.go:TestNoProductionRecordHoldsASecondCopyOfAVerdict
+      - internal/ghbridge/relay_history_test.go:TestAPublishedHistoricalRelayMigratesAsDelivered
+      - internal/ghbridge/relay_history_test.go:TestAnAcceptedHistoricalRelayMigratesStaged
+      - internal/ghbridge/relay_history_test.go:TestAConflictingHistoricalRelayIsRefusedAndRetained
+      - internal/ghbridge/relay_history_test.go:TestAnUnestablishableHistoricalRelayIsRetainedAndReported
+      - internal/ghbridge/relay_history_test.go:TestMigrationIsIdempotent
+      - internal/ghbridge/relay_history_test.go:TestAHistoricalRelayForAKnownReviewAddsOnlyItsEvidence
+      - internal/ghbridge/attestation_canonical_test.go:TestAnOverrideBindsIdenticallyWhateverTransportDelivered
+      - internal/ghbridge/attestation_canonical_test.go:TestAStagedRelayIsNotAttestable
+      - internal/reviewstore/schema_v1_test.go:TestAV1RecordLoadsWithItsDeliveryComplete
+      - internal/reviewstore/schema_v1_test.go:TestReadingAV1RecordLeavesItOnDiskUnchanged
+      - internal/reviewstore/schema_v1_test.go:TestAV1RecordUpgradesOnlyWhenItReceivesEvidence
+      - internal/reviewstore/schema_v1_test.go:TestAnUnknownSchemaVersionIsStillRefused
+      - internal/workflow/review_lifecycle_fault_test.go:TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence
+      - cmd/sensei-code/control_test.go:TestTheCompositionRootInstallsNoRelayStore
+      - internal/ghbridge/review_spine_commissioning_test.go:TestCommissionTheRevisionArc
+      - internal/ghbridge/review_spine_commissioning_test.go:TestCommissionASupersessionWhileTheReviewIsStillOwed
+      - internal/ghbridge/review_spine_commissioning_test.go:TestCommissionARestartAcrossARealProcessBoundary
+      - internal/ghbridge/review_spine_commissioning_test.go:TestCommissionEveryPreservedStateSurvivesAndIsRediscovered
+    evidence:
+      - 'sensei-code#182 R6: RelayStore persisted the artifact, digest, decision, summary, findings, standing, binding and a two-state lifecycle beside reviewstore, so the runner had to consult two stores in the right order to agree on what answered a request'
+      - 'sensei-code#182 R6: the pre-R6 adapter published the App receipt BEFORE recording the review, so a publication could succeed against a store that could not be written -- a receipt on the mailbox naming a review no local record held'
+      - 'sensei-code#182 R6: a relay accepted and not yet published was kept out of the review store entirely, so the store said no review existed while a validated review demonstrably did, and the waiter reported silence'
+      - 'sensei-code#182 R6 review: the crash-recovery path promoted a staged relay to delivered from any comment carrying the right marker, request and digest -- reading the mailbox AS the App authenticates the reader, not the author, so anybody who could comment on the conversation could turn "staged here" into "delivered"'
+      - 'sensei-code#182 R6 review: RenderRelayedReview took the caller''s relay principal, so when terminal A staged a delivery and terminal B retried it the record kept A and the publication named B -- one delivery with two principals depending on where it was read'
+    contract: presence of a review record and permission to use it are different questions, and only the record''s own delivery evidence answers the second
+
   - id: sensei_code.reviewobservation.evidence_is_never_silence
     title: Reviewer observation is evidence, not authority — and unusable evidence is never silence
     severity: critical

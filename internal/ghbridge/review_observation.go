@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
@@ -304,6 +305,42 @@ func observationFault(o ReviewObligation, seen []observation) *roles.ReviewObser
 	}
 	for _, obs := range seen {
 		fault.Observations = append(fault.Observations, obs.report())
+	}
+	return fault
+}
+
+// deliveryPending reports a canonical review that is DURABLY HELD for this exact
+// obligation and whose governed delivery has not completed.
+//
+// It is an observation fault and shares that control action exactly: the same
+// candidate, the same obligation, the same request, no reviewer fallback, no
+// implementer handoff, no supersession, and a resumable terminal. What it must
+// never share is the vocabulary of silence -- roles.ReviewUnanswered means
+// nobody produced relevant reviewer-origin content, and here somebody did.
+//
+// No comment locator is invented. A staged relay has never been posted, so the
+// observation states what it actually has: the transport, the principal that
+// carried the bytes, and the artifact's exact digest.
+func deliveryPending(o ReviewObligation, rec reviewstore.Record, art reviewartifact.Artifact) *roles.ReviewObservationFault {
+	fault := &roles.ReviewObservationFault{
+		RequestID: o.RequestID, RequestComment: o.RequestComment, Conversation: o.Conversation,
+		Binding: roles.Binding{TaskID: o.TaskID, BaseSHA: o.BaseSHA,
+			CandidateDigest: o.CandidateDigest, CandidateTree: o.CandidateTree},
+		ReviewCommit: o.ReviewCommit,
+	}
+	for _, ev := range rec.Staged() {
+		fault.Observations = append(fault.Observations, roles.ReviewObservation{
+			Kind:           roles.ObservedDeliveryPending,
+			ArtifactDigest: rec.ReviewDigest,
+			RequestID:      o.RequestID,
+			Provider:       art.ReviewerProvider,
+			Transport:      string(ev.Transport),
+			RelayPrincipal: ev.RelayPrincipal,
+			At:             ev.ObservedAt,
+			Diagnostic: fmt.Sprintf("reviewer %s produced this review and its %s delivery has not completed; "+
+				"resubmit the same artifact with `sensei-code review submit` to finish it, which changes no bytes",
+				art.ReviewerProvider, ev.Transport),
+		})
 	}
 	return fault
 }

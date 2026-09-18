@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
@@ -64,7 +65,7 @@ func TestAnAttestationOverridesOneExactPublishedReviewAndSaysSo(t *testing.T) {
 			t.Errorf("the published override does not carry %q:\n%s", want, body)
 		}
 	}
-	if _, ok := ParseReview(body, "davecourtois"); ok || strings.Contains(body, reviewMarker) {
+	if _, err := reviewartifact.Parse(body); err == nil || strings.Contains(body, reviewartifact.Marker) {
 		t.Fatalf("the published override can be read as a review:\n%s", body)
 	}
 
@@ -173,7 +174,7 @@ func TestTheOverrideSelectedIsTheOneNamingTheReviewBeingConsumed(t *testing.T) {
 	if first.ReviewDigest == second.ReviewDigest {
 		t.Fatal("the two relayed reviews are the same bytes, so the selection proves nothing")
 	}
-	for _, rel := range []RelayRecord{first, second} {
+	for _, rel := range []RelayResult{first, second} {
 		if _, err := f.attest(store, rel.RequestID, rel.ReviewDigest, true); err != nil {
 			t.Fatalf("attesting %s: %v", rel.RequestID, err)
 		}
@@ -181,7 +182,7 @@ func TestTheOverrideSelectedIsTheOneNamingTheReviewBeingConsumed(t *testing.T) {
 
 	binding := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
 		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
-	for _, want := range []RelayRecord{first, second} {
+	for _, want := range []RelayResult{first, second} {
 		got, found, err := store.AttestationFor(binding, want.ReviewDigest)
 		if err != nil || !found {
 			t.Fatalf("review %s has a published override and was not found: %v %v", want.ReviewDigest, found, err)

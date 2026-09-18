@@ -100,21 +100,42 @@ func (c *AppClient) do(ctx context.Context, method, path string, body any) ([]by
 // Discarding the id would force a second identity to be invented for something
 // GitHub already named.
 func (c *AppClient) PostComment(ctx context.Context, issueNumber, body string) (int64, error) {
+	id, _, err := c.PostCommentAs(ctx, issueNumber, body)
+	return id, err
+}
+
+// PostCommentAs posts and also reports WHO GitHub recorded as the author.
+//
+// The author is GitHub's own answer, taken from the create response rather than
+// assumed from the credential that was used. It is the only moment this process
+// can learn its own publishing identity without asking a second endpoint, and it
+// is what lets a later process authenticate a comment as ours: a crash between
+// posting a relay receipt and recording that delivery leaves the receipt on the
+// mailbox, and reading the mailbox AS the App authenticates the reader, not the
+// author (#182 R6).
+//
+// An unreadable author is not fatal here -- the caller decides whether it needs
+// one -- but an unreadable id still is, for the reason below.
+func (c *AppClient) PostCommentAs(ctx context.Context, issueNumber, body string) (int64, Principal, error) {
 	path := fmt.Sprintf("/repos/%s/%s/issues/%s/comments", c.Owner, c.Repo, strings.TrimSpace(issueNumber))
 	raw, _, err := c.do(ctx, http.MethodPost, path, map[string]string{"body": body})
 	if err != nil {
-		return 0, err
+		return 0, Principal{}, err
 	}
 	var created struct {
-		ID int64 `json:"id"`
+		ID   int64 `json:"id"`
+		User struct {
+			Login string `json:"login"`
+			ID    int64  `json:"id"`
+		} `json:"user"`
 	}
 	if err := json.Unmarshal(raw, &created); err != nil {
 		// The comment IS published; only its name was unreadable. Say exactly
 		// that, because a caller must not read this as "nothing was posted" and
 		// publish a second request.
-		return 0, fmt.Errorf("the comment was posted but its id could not be read: %w", err)
+		return 0, Principal{}, fmt.Errorf("the comment was posted but its id could not be read: %w", err)
 	}
-	return created.ID, nil
+	return created.ID, Principal{UserID: created.User.ID, Login: created.User.Login}, nil
 }
 
 // maxCommentPages bounds a mailbox read so a pathological pagination loop

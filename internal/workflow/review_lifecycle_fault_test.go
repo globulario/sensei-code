@@ -329,6 +329,11 @@ func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T
 		"malformed reviewer content":  roles.ObservedMalformed,
 		"a review of another subject": roles.ObservedWrongTarget,
 		"two answers to one question": roles.ObservedConflict,
+		// #182 R6. A relay stages the reviewer's exact bytes before the App has
+		// published them. That is reviewer-origin evidence this process is
+		// physically holding, so it takes the observation control action and
+		// must never take the silence one.
+		"a review held here and not yet delivered": roles.ObservedDeliveryPending,
 	} {
 		t.Run(name, func(t *testing.T) {
 			fault := observationFaultOf(kind)
