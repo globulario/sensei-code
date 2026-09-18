@@ -182,12 +182,13 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	if result, found, err := r.storedReviewFor(req, subject, emit); found {
 		return result, err
 	}
-	// A relay that exists and is NOT yet consumable keeps its request owed and
-	// says why. It no longer decides what a review means -- the common store
-	// above does -- but an accepted-and-unpublished relay must not be silently
-	// invisible while the candidate waits.
-	if result, found, err := r.relayedReviewFor(ctx, req, subject, emit); found {
-		return result, err
+	// A relay that exists and has not become the answer keeps its request owed
+	// and says why. It returns no verdict: the common store above is the only
+	// place an answer comes from, so a published relay whose convergence failed
+	// leaves the candidate waiting rather than being answered from a second
+	// source.
+	if found, err := r.pendingRelayFor(req, subject); found {
+		return agent.Result{}, err
 	}
 
 	// What this candidate already owes, read BEFORE anything is published and

@@ -57,6 +57,13 @@ const (
 // Valid reads the closed set by membership.
 func (t Transport) Valid() bool { return t == GitHubMailbox || t == LocalRelay }
 
+// SchemaVersion is the shape of a record this package writes and understands.
+//
+// A record on another version is refused rather than read: a record parsed
+// under the wrong schema is a fabricated specimen, and "version 0" is what an
+// object nobody wrote through this package looks like.
+const SchemaVersion = 1
+
 // Advisory is the only standing this store records.
 //
 // No transport establishes reviewer independence: authenticating a GitHub
@@ -84,6 +91,72 @@ type Evidence struct {
 	Publication        string    `json:"publication,omitempty"`
 	PublicationComment int64     `json:"publication_comment,omitempty"`
 	PublishedAt        time.Time `json:"published_at,omitempty"`
+}
+
+// observation names WHICH observation this is, independently of when this
+// process happened to see it again.
+//
+// The identity of "the reviewer's comment 5150 from account 1697116" does not
+// change because a later poll read it a second time. Folding the re-observation
+// TIME into that identity made every poll a new observation, which is how an
+// idempotent redelivery quietly became an append.
+type observation struct {
+	transport Transport
+	// Mailbox: the durable comment locator and the principal GitHub authenticated.
+	githubAuthor   string
+	githubAuthorID int64
+	githubComment  int64
+	// Relay: who carried it and which App publication carries it on the mailbox.
+	relayPrincipal     string
+	publication        string
+	publicationComment int64
+}
+
+func (e Evidence) observation() observation {
+	return observation{
+		transport:    e.Transport,
+		githubAuthor: e.GitHubAuthor, githubAuthorID: e.GitHubAuthorID, githubComment: e.GitHubComment,
+		relayPrincipal: e.RelayPrincipal, publication: e.Publication, publicationComment: e.PublicationComment,
+	}
+}
+
+// Validate states the OBSERVED residue each transport must carry.
+//
+// This is the whole trusted surface of the record: the part that cannot be
+// re-derived later, saying which governed ingestion established acceptance. A
+// row that names no locator claims an acceptance nobody can point at, and a
+// record whose only evidence is that kind of row states that transport
+// established acceptance while declining to say how.
+//
+// Structural only. Nothing here re-contacts GitHub, and none of it is proof
+// against a writer who already holds the workspace (see #184).
+func (e Evidence) Validate() error {
+	if !e.Transport.Valid() {
+		return fmt.Errorf("transport %q is not one this store records", e.Transport)
+	}
+	if e.ObservedAt.IsZero() {
+		return fmt.Errorf("%s evidence does not say when it was observed", e.Transport)
+	}
+	switch e.Transport {
+	case GitHubMailbox:
+		if e.GitHubComment <= 0 {
+			return errors.New("mailbox evidence must name the comment the bytes were read from")
+		}
+		if e.GitHubAuthorID == 0 && strings.TrimSpace(e.GitHubAuthor) == "" {
+			return errors.New("mailbox evidence must name the principal GitHub authenticated")
+		}
+	case LocalRelay:
+		if strings.TrimSpace(e.RelayPrincipal) == "" {
+			return errors.New("relay evidence must name the terminal principal that carried it")
+		}
+		if e.PublicationComment <= 0 || strings.TrimSpace(e.Publication) == "" {
+			return errors.New("relay evidence must name the App publication that carries it on the mailbox")
+		}
+		if e.PublishedAt.IsZero() {
+			return errors.New("relay evidence must say when that publication completed")
+		}
+	}
+	return nil
 }
 
 // Record is one review obligation's durable semantic record.
@@ -221,6 +294,26 @@ func (r Record) verify(requestID string) error {
 		return fmt.Errorf("%w: %s records standing %q and this store records %q only",
 			ErrUnreadable, requestID, r.Standing, Advisory)
 	}
+	if r.Version != SchemaVersion {
+		return fmt.Errorf("%w: %s declares schema version %d and this package writes %d",
+			ErrUnreadable, requestID, r.Version, SchemaVersion)
+	}
+	if r.AcceptedAt.IsZero() {
+		return fmt.Errorf("%w: %s does not say when it was accepted", ErrUnreadable, requestID)
+	}
+	// The OBSERVED residue. Accepting the workspace trust boundary means a
+	// structurally complete local record is read as written; it does not mean a
+	// record may claim that transport established acceptance and then decline to
+	// say which ingestion did it.
+	if len(r.Evidence) == 0 {
+		return fmt.Errorf("%w: %s records no transport observation, so nothing says how it was accepted",
+			ErrUnreadable, requestID)
+	}
+	for i, ev := range r.Evidence {
+		if err := ev.Validate(); err != nil {
+			return fmt.Errorf("%w: %s transport evidence %d is incomplete: %v", ErrUnreadable, requestID, i, err)
+		}
+	}
 	return nil
 }
 
@@ -258,9 +351,6 @@ func (s Store) Accept(in Acceptance) (Record, error) {
 	if in.Validate == nil {
 		return Record{}, errors.New("a review is recorded only after the reviewer-body parser has passed it")
 	}
-	if !in.Evidence.Transport.Valid() {
-		return Record{}, fmt.Errorf("transport %q is not one this store records", in.Evidence.Transport)
-	}
 	path, err := s.path(in.RequestID)
 	if err != nil {
 		return Record{}, err
@@ -280,18 +370,25 @@ func (s Store) Accept(in Acceptance) (Record, error) {
 	if in.Now != nil {
 		now = in.Now
 	}
+	// The adapters do not carry a clock, so a zero time means "now". The stamp
+	// is applied BEFORE validation and never participates in observation
+	// identity: it records when this process saw the bytes, which is not part of
+	// which observation this is.
 	ev := in.Evidence
 	if ev.ObservedAt.IsZero() {
 		ev.ObservedAt = now().UTC()
 	}
 	ev.ObservedAt = ev.ObservedAt.UTC()
+	if err := ev.Validate(); err != nil {
+		return Record{}, err
+	}
 
 	mu := lockFor(path)
 	mu.Lock()
 	defer mu.Unlock()
 
 	rec := Record{
-		Version:      1,
+		Version:      SchemaVersion,
 		RequestID:    in.RequestID,
 		ArtifactRaw:  in.Artifact,
 		ReviewDigest: art.Digest,
@@ -330,11 +427,17 @@ func (s Store) Accept(in Acceptance) (Record, error) {
 	return existing, nil
 }
 
-// hasEvidence reports whether this exact observation is already recorded, so a
-// repeated poll of the same comment adds nothing.
+// hasEvidence reports whether this observation is already recorded, so a
+// repeated poll of the same comment, or a retried relay convergence, adds
+// nothing.
+//
+// Compared by OBSERVATION IDENTITY, never by the whole struct: the stamp saying
+// when this process last looked is not part of which observation it looked at,
+// and comparing it made every redelivery a new row.
 func (r Record) hasEvidence(ev Evidence) bool {
+	want := ev.observation()
 	for _, have := range r.Evidence {
-		if have == ev {
+		if have.observation() == want {
 			return true
 		}
 	}

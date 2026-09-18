@@ -86,6 +86,7 @@ func TestAnAnswerToTheOldRequestCannotSatisfyTheNewOne(t *testing.T) {
 			`{"decision":"accept","summary":"the candidate stands","instructions":"","findings":[]}`)
 		answered++
 		return []map[string]any{{
+			"id":   float64(7100 + answered),
 			"body": stale,
 			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
 		}}

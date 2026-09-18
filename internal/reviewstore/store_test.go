@@ -61,6 +61,7 @@ func relayEvidence() Evidence {
 		Transport: LocalRelay, ObservedAt: time.Unix(1700000100, 0).UTC(),
 		RelayPrincipal: "uid:1000,user:dave,pid:4242,terminal:34816",
 		Publication:    "globulario-sensei-code[bot]", PublicationComment: 5002,
+		PublishedAt: time.Unix(1700000090, 0).UTC(),
 	}
 }
 
@@ -516,5 +517,144 @@ func TestThisPackageDependsOnNoTransport(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// The production shape: adapters carry no clock and submit a zero ObservedAt.
+//
+// TestSameDigestAndSameEvidenceIsANoOp supplies a fixed timestamp, which is not
+// what the mailbox or the relay does. With whole-struct equality, Accept stamped
+// each redelivery with a different time and every repeat poll appended a row --
+// idempotent in the fixture and an append in production.
+func TestRedeliveryWithNoSuppliedClockIsStillIdempotent(t *testing.T) {
+	for name, ev := range map[string]Evidence{
+		"a mailbox comment re-read on a later poll": {
+			Transport: GitHubMailbox, GitHubAuthor: "davecourtois",
+			GitHubAuthorID: 1697116, GitHubComment: 5150,
+		},
+		"a relay convergence retried after a store failure": {
+			Transport: LocalRelay, RelayPrincipal: "uid:1000,user:dave,pid:4242,terminal:34816",
+			Publication: "globulario-sensei-code[bot]", PublicationComment: 5002,
+			PublishedAt: time.Unix(1700000090, 0).UTC(),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !ev.ObservedAt.IsZero() {
+				t.Fatal("this fixture must carry no clock; that is the production shape under test")
+			}
+			s := store(t)
+			raw := artifact(t, request, "chatgpt", accept)
+
+			first, err := s.Accept(Acceptance{RequestID: request, Artifact: raw, Evidence: ev, Validate: passes})
+			if err != nil {
+				t.Fatalf("first acceptance: %v", err)
+			}
+			for i := 0; i < 4; i++ {
+				again, err := s.Accept(Acceptance{RequestID: request, Artifact: raw, Evidence: ev, Validate: passes})
+				if err != nil {
+					t.Fatalf("redelivery %d: %v", i, err)
+				}
+				if len(again.Evidence) != 1 {
+					t.Fatalf("redelivery %d recorded %d evidence rows, want 1", i, len(again.Evidence))
+				}
+				if !again.AcceptedAt.Equal(first.AcceptedAt) {
+					t.Fatalf("redelivery %d moved the acceptance time", i)
+				}
+				if !again.Evidence[0].ObservedAt.Equal(first.Evidence[0].ObservedAt) {
+					t.Fatalf("redelivery %d overwrote the first observation's time: %s then %s",
+						i, first.Evidence[0].ObservedAt, again.Evidence[0].ObservedAt)
+				}
+			}
+			reloaded, _, err := s.Load(request)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(reloaded.Evidence) != 1 {
+				t.Fatalf("the stored record holds %d evidence rows, want 1", len(reloaded.Evidence))
+			}
+		})
+	}
+}
+
+// A record must state the OBSERVED residue its own schema requires.
+//
+// Accepting the workspace trust boundary means a structurally complete local
+// record is read as written. It does not license a record that claims transport
+// established acceptance and then declines to say which ingestion did it, nor
+// one on a schema this package never wrote.
+func TestARecordMissingItsAcceptanceResidueIsRefused(t *testing.T) {
+	raw := artifact(t, request, "chatgpt", accept)
+	for name, corrupt := range map[string]func(*Record){
+		"an unwritten schema version":           func(r *Record) { r.Version = 0 },
+		"a schema version from a later package": func(r *Record) { r.Version = SchemaVersion + 1 },
+		"no acceptance time":                    func(r *Record) { r.AcceptedAt = time.Time{} },
+		"no transport observation at all":       func(r *Record) { r.Evidence = nil },
+		"an empty observation":                  func(r *Record) { r.Evidence = []Evidence{{}} },
+		"a transport nobody defines": func(r *Record) {
+			r.Evidence = []Evidence{{Transport: "carrier-pigeon", ObservedAt: time.Unix(1700000000, 0).UTC()}}
+		},
+		"an observation with no time": func(r *Record) { r.Evidence[0].ObservedAt = time.Time{} },
+		"mailbox evidence naming no comment": func(r *Record) {
+			r.Evidence = []Evidence{{Transport: GitHubMailbox, ObservedAt: time.Unix(1700000000, 0).UTC(),
+				GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116}}
+		},
+		"mailbox evidence naming no principal": func(r *Record) {
+			r.Evidence = []Evidence{{Transport: GitHubMailbox, ObservedAt: time.Unix(1700000000, 0).UTC(),
+				GitHubComment: 5150}}
+		},
+		"relay evidence naming no principal": func(r *Record) {
+			r.Evidence = []Evidence{{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC(),
+				Publication: "app", PublicationComment: 5002, PublishedAt: time.Unix(1700000090, 0).UTC()}}
+		},
+		"relay evidence naming no publication": func(r *Record) {
+			r.Evidence = []Evidence{{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC(),
+				RelayPrincipal: "uid:1000", PublishedAt: time.Unix(1700000090, 0).UTC()}}
+		},
+		"relay evidence with no publication time": func(r *Record) {
+			r.Evidence = []Evidence{{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC(),
+				RelayPrincipal: "uid:1000", Publication: "app", PublicationComment: 5002}}
+		},
+		"one good row and one incomplete one": func(r *Record) {
+			r.Evidence = append(r.Evidence, Evidence{Transport: LocalRelay, ObservedAt: time.Unix(1700000000, 0).UTC()})
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			s := store(t)
+			accepted(t, s, raw, mailboxEvidence())
+			path := filepath.Join(s.Dir, request+".json")
+
+			var rec Record
+			blob, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(blob, &rec); err != nil {
+				t.Fatal(err)
+			}
+			before := rec
+			corrupt(&rec)
+			out, err := json.MarshalIndent(rec, "", "  ")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(out) == string(blob) {
+				t.Fatal("the corruption changed nothing; this case proves nothing")
+			}
+			if err := os.WriteFile(path, out, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			got, found, err := s.Load(request)
+			if err == nil {
+				t.Fatalf("a record missing its acceptance residue loaded as %+v", got)
+			}
+			if !errors.Is(err, ErrUnreadable) {
+				t.Fatalf("err = %v, want ErrUnreadable", err)
+			}
+			if found {
+				t.Fatal("an unreadable record was reported as found")
+			}
+			_ = before
+		})
 	}
 }

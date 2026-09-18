@@ -607,6 +607,9 @@ func writeStoredReview(s reviewstore.Store, requestID, raw string, ev reviewstor
 		AcceptedAt: time.Now().UTC(),
 	}
 	if ev.Transport != "" {
+		if ev.ObservedAt.IsZero() {
+			ev.ObservedAt = time.Now().UTC()
+		}
 		rec.Evidence = []reviewstore.Evidence{ev}
 	}
 	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
@@ -651,7 +654,8 @@ func TestTheReviewRunnerCannotAuthorOrPublishARelay(t *testing.T) {
 		}
 		for _, decl := range parsed.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || (fn.Name.Name != "relayedReviewFor" && fn.Name.Name != "publicationStands" && fn.Name.Name != "verifyRelayRecord") {
+			if !ok || (fn.Name.Name != "pendingRelayFor" && fn.Name.Name != "verifyRelayRecord" &&
+				fn.Name.Name != "storedReviewFor") {
 				continue
 			}
 			checked++
@@ -675,6 +679,6 @@ func TestTheReviewRunnerCannotAuthorOrPublishARelay(t *testing.T) {
 		}
 	}
 	if checked != 3 {
-		t.Fatalf("inspected %d of the 3 relay read functions; the check proves nothing", checked)
+		t.Fatalf("inspected %d of the 3 relay/review read functions; the check proves nothing", checked)
 	}
 }

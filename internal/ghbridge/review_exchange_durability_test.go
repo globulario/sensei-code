@@ -134,6 +134,7 @@ func TestAnAnsweredReviewClosesItsRecordWithoutWithdrawing(t *testing.T) {
 		answer := canonicalAnswer(t, req.Subject, req.RequestID, req.ReviewerProvider,
 			`{"decision":"accept","summary":"the candidate stands","instructions":"","findings":[]}`)
 		return []map[string]any{{
+			"id":   float64(7001),
 			"body": answer,
 			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
 		}}

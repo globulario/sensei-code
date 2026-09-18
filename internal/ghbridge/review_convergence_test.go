@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path/filepath"
 	"strings"
@@ -474,7 +475,8 @@ func TestADifferentArtifactForAnAnsweredRequestConflicts(t *testing.T) {
 
 	_, err := f.reviews.Accept(reviewstore.Acceptance{
 		RequestID: relayRequest, Artifact: rival,
-		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox, GitHubComment: 9001},
+		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox,
+			GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116, GitHubComment: 9001},
 		Validate: func(reviewartifact.Artifact) error { return nil },
 	})
 	if !errors.Is(err, reviewstore.ErrConflict) {
@@ -701,4 +703,122 @@ func TestAStoredReviewCannotAnswerAnObligationThatNeverNamedItsReviewer(t *testi
 	if pending, _ := f.exchanges.PendingReviews(); len(pending) != 1 {
 		t.Fatalf("the owed request did not survive: %+v", pending)
 	}
+}
+
+// A relay the App published and the common store never recorded is NOT an
+// answer, and the obligation stays open until convergence completes.
+//
+// This is the one semantic source made real. Before it, a relay whose
+// publication succeeded and whose convergence failed could still be consumed
+// straight out of RelayStore, which meant two places could say what answered a
+// request and the explicit convergence failure changed nothing in practice.
+func TestAPublishedRelayThatNeverConvergedDoesNotAnswerUntilItDoes(t *testing.T) {
+	f := newRelayFixture(t)
+	art := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+
+	// Publication succeeds; the common-store write cannot.
+	blocked := filepath.Join(t.TempDir(), "reviews")
+	if err := os.WriteFile(blocked, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	broken := f
+	broken.reviews = reviewstore.Store{Dir: blocked}
+	published, err := broken.submit(art)
+	if !errors.Is(err, ErrRelayConvergence) {
+		t.Fatalf("err = %v, want ErrRelayConvergence", err)
+	}
+	if published.State != RelayPublished || published.PublicationComment <= 0 {
+		t.Fatalf("the relay was not published: %+v", published)
+	}
+	if _, found, _ := f.reviews.Load(relayRequest); found {
+		t.Fatal("the common store has a record; this test needs convergence to have failed")
+	}
+
+	// The runner must not answer from RelayStore.
+	res, err := f.runner().Run(context.Background(), f.turn(), nil)
+	var owed *roles.ReviewUnanswered
+	if !errors.As(err, &owed) {
+		t.Fatalf("a published-but-unconverged relay answered the turn: text=%q err=%v", res.Text, err)
+	}
+	if owed.RequestID != relayRequest {
+		t.Fatalf("the turn reports request %s, want the same owed %s", owed.RequestID, relayRequest)
+	}
+	if res.Text != "" || res.ReviewDigest != "" {
+		t.Fatalf("a verdict leaked from RelayStore: text=%q digest=%q", res.Text, res.ReviewDigest)
+	}
+	// The reason must name what is actually pending, or an operator is told a
+	// review is simply late when the repair is one command.
+	if owed.Cause == nil || !strings.Contains(owed.Cause.Error(), "review store") {
+		t.Fatalf("the refusal does not say convergence is what is pending: %v", owed.Cause)
+	}
+	if !strings.Contains(owed.Cause.Error(), "review submit") {
+		t.Fatalf("the refusal does not say how to repair it: %v", owed.Cause)
+	}
+	pending, _ := f.exchanges.PendingReviews()
+	if len(pending) != 1 || pending[0].RequestID != relayRequest {
+		t.Fatalf("the obligation did not stay open under the same request: %+v", pending)
+	}
+	postsBefore := len(f.mailbox.posted())
+
+	// Retry convergence: the same artifact, no second publication.
+	again, err := f.submit(art)
+	if err != nil {
+		t.Fatalf("retrying convergence: %v", err)
+	}
+	if again.PublicationComment != published.PublicationComment {
+		t.Fatalf("the retry republished: comment %d then %d", published.PublicationComment, again.PublicationComment)
+	}
+	if n := len(f.mailbox.posted()); n != postsBefore {
+		t.Fatalf("the retry posted %d new comments, want none", n-postsBefore)
+	}
+
+	// Now, and only now, it answers -- out of the common store.
+	res, err = f.runner().Run(context.Background(), f.turn(), nil)
+	if err != nil {
+		t.Fatalf("the converged review was not consumed: %v", err)
+	}
+	if res.ReviewDigest != ReviewDigest(art) {
+		t.Fatalf("consumed digest %s, want %s", res.ReviewDigest, ReviewDigest(art))
+	}
+	if pending, _ := f.exchanges.PendingReviews(); len(pending) != 0 {
+		t.Fatalf("the answered obligation is still owed: %+v", pending)
+	}
+}
+
+// Structural: only the common store returns a verdict to a review turn.
+//
+// The runner's relay path reports what is pending; it hands back no review
+// body and no digest. A second function that returned one would be a second
+// semantic source, which is the thing R2 removes.
+func TestOnlyTheCommonStoreReturnsAVerdict(t *testing.T) {
+	fset := token.NewFileSet()
+	for _, file := range []string{"relay.go", "runner.go"} {
+		parsed, err := parser.ParseFile(fset, file, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range parsed.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Name.Name != "pendingRelayFor" {
+				continue
+			}
+			// It returns (bool, error): no agent.Result to carry a verdict in.
+			var results []string
+			if fn.Type.Results != nil {
+				for _, f := range fn.Type.Results.List {
+					results = append(results, types.ExprString(f.Type))
+				}
+			}
+			for _, r := range results {
+				if strings.Contains(r, "Result") {
+					t.Errorf("pendingRelayFor returns %s; the relay path must not carry a verdict", r)
+				}
+			}
+			if len(results) != 2 || results[0] != "bool" || results[1] != "error" {
+				t.Errorf("pendingRelayFor returns %v, want (bool, error)", results)
+			}
+			return
+		}
+	}
+	t.Fatal("pendingRelayFor was not found; this check proves nothing")
 }
