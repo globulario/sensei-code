@@ -913,6 +913,45 @@ invariants:
       - 'sensei-code#182 R4: a byte-identical candidate was asked about twice, under two request ids with two wake targets, because the next run after a waiter timeout minted a replacement; #376 commissioning spent repeated live review windows on an unchanged candidate'
       - 'sensei-code#187: AwaitReview surfaced a waiter timeout as bare context.DeadlineExceeded when a poll was in flight and as ErrNoAnswer otherwise; measured 11/30 and 8/30 flake under -race before the repair, 0/30 after'
     contract: what is owed is a durable fact; a process that listens for it is not
+  - id: sensei_code.reviewartifact.the_request_carries_the_response_contract
+    title: A review request carries the exact response contract, and that grammar has one owner
+    severity: critical
+    status: active
+    description: 'A review request must be sufficient to produce one canonical review artifact without out-of-band grammar knowledge. The response grammar has ONE owner: internal/reviewartifact spells the marker, the identity field names, their order, the validation, the bound and the digest, and both Artifact.Render and the request-carried reply contract are rendered by the same envelope code -- so a change to a key, an order or the identity set cannot leave the grammar this workspace accepts disagreeing with the grammar it asks for. A published review request therefore carries the exact reply contract: the canonical envelope with this request''s own identity values already filled in, a marked payload slot, and the rules the parser enforces (copy every identity exactly, derive none of them from a github login, current configuration, repository or pull-request head, another comment or a standing instruction; no prose before the envelope; exactly one Sensei-Code envelope; the verdict only inside the payload). The payload and the artifact are different contracts with different owners: the workflow owns the reviewer JSON verdict schema and introduces it through one exported heading, reviewartifact owns the artifact that carries it, and the GitHub adapter composes them -- qualifying that heading for this transport, because "return only JSON" is true for an in-process adapter whose whole result is the JSON and false for a mailbox comment whose whole text must be the artifact. No transport may hold a second spelling of the response vocabulary, and a standing connector instruction may tell a reviewer to obey the request-carried contract but may not restate it. Replies produced under a superseded grammar are NOT repaired, reinterpreted or accepted through compatibility: they remain observations that establish nothing.'
+    protects:
+      files:
+        - internal/reviewartifact/artifact.go
+        - internal/ghbridge/transport.go
+        - internal/workflow/engine.go
+    related_invariants:
+      - sensei_code.reviewartifact.one_grammar_owns_what_a_review_means
+      - sensei_code.reviewspine.one_record_one_obligation_whatever_the_transport
+      - sensei_code.reviewobservation.evidence_is_never_silence
+    forbidden_fixes:
+      - teach a reviewer the response grammar from a standing instruction instead of from the request it is answering
+      - keep a second hand-maintained list of canonical response fields in a transport
+      - publish a review request whose text says the entire reply is only JSON
+      - accept a reply produced under the pre-R2 grammar through a compatibility path
+    required_tests:
+      - internal/reviewartifact/contract_test.go:TestACopiedContractParsesAndBindsExactly
+      - internal/reviewartifact/contract_test.go:TestTheTaughtEnvelopeIsTheRenderedEnvelope
+      - internal/reviewartifact/contract_test.go:TestTheContractRefusesAnIdentityItCannotState
+      - internal/reviewartifact/contract_test.go:TestTheContractStatesTheRulesTheParserEnforces
+      - internal/ghbridge/review_contract_test.go:TestThePublishedRequestTeachesAParseableReply
+      - internal/ghbridge/review_contract_test.go:TestTheTaughtReviewerComesFromTheAssignmentNotTheMailbox
+      - internal/ghbridge/review_contract_test.go:TestTheResponseGrammarHasOneOwner
+      - internal/ghbridge/review_contract_test.go:TestThePublishedRequestDoesNotClaimTheWholeReplyIsJSON
+      - internal/ghbridge/review_contract_test.go:TestBothReviewModesTeachTheSameOuterArtifact
+      - internal/ghbridge/review_contract_test.go:TestAReviewerWithNoStandingGrammarClosesTheLoop
+      - internal/ghbridge/review_contract_test.go:TestAPreR2AnswerIsStillMalformed
+      - internal/ghbridge/review_contract_test.go:TestACanonicalReplyFromAnotherProviderDoesNotSatisfy
+      - internal/workflow/review_lifecycle_fault_test.go:TestEveryReviewerPromptUsesTheOnePayloadHeading
+    evidence:
+      - 'sensei-code#182 live closure: measured on the real mailbox (PR #157, 163 comments) -- 32 review requests published, 16 real replies, and 0 of those 16 carrying reviewer=. R2 made that field mandatory on the answer and nothing told the party that had to produce it, so every real reply arrived in the pre-R2 grammar and was correctly classified as evidence establishing nothing'
+      - 'sensei-code#182 live closure: the fixtures could not see it, because they built the reviewer''s answer by calling reviewartifact.Render -- the producer was the parser''s own package standing in for a remote that knew no grammar at all'
+      - 'sensei-code#182 live closure: the published request simultaneously stated reviewer=<provider> in its machine envelope and "Return ONLY JSON" in its prose; two instructions in one comment, and the remote obeyed the older one'
+    contract: a parser may not require a field its producer-facing contract never mentions
+
   - id: sensei_code.reviewspine.one_record_one_obligation_whatever_the_transport
     title: One review has one durable record, one obligation owner, and no transport-owned copy
     severity: critical

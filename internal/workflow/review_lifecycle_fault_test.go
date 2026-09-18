@@ -498,3 +498,54 @@ func TestAnObservationFaultIsCheckedBeforeReviewerFallback(t *testing.T) {
 		t.Error("the observation guard runs after the provider is counted unavailable")
 	}
 }
+
+// Both reviewer prompts describe the PAYLOAD through the one heading a
+// transport can qualify.
+//
+// The heading is true for an in-process adapter whose whole result is the JSON
+// and false over a mailbox, where the whole comment must be a canonical review
+// artifact. A transport can only remove that contradiction if it can find the
+// sentence exactly -- so neither prompt may spell it for itself.
+func TestEveryReviewerPromptUsesTheOnePayloadHeading(t *testing.T) {
+	blob, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(blob)
+	checked := 0
+	for _, fn := range []string{"reviewPrompt", "inspectionReviewPrompt"} {
+		start := strings.Index(src, "func "+fn+"(")
+		if start < 0 {
+			t.Fatalf("%s was not found; this check proves nothing", fn)
+		}
+		end := strings.Index(src[start:], "\n}\n")
+		if end < 0 {
+			t.Fatalf("%s has no readable body", fn)
+		}
+		body := src[start : start+end]
+		checked++
+		if !strings.Contains(body, "ReviewPayloadHeading") {
+			t.Errorf("%s does not introduce its payload through ReviewPayloadHeading, so a transport "+
+				"cannot qualify it", fn)
+		}
+		if strings.Contains(body, `"Return ONLY JSON`) {
+			t.Errorf("%s spells the payload heading for itself; it would drift from the constant "+
+				"a transport matches on", fn)
+		}
+	}
+	if checked != 2 {
+		t.Fatalf("inspected %d reviewer prompts, want 2", checked)
+	}
+	// The constant is what the mailbox adapter matches, so it must be exactly
+	// the sentence the prompts render.
+	if !strings.Contains(reviewPrompt(reviewPacketForHeading()), ReviewPayloadHeading) {
+		t.Fatal("the rendered candidate-review prompt does not contain ReviewPayloadHeading")
+	}
+	if !strings.Contains(inspectionReviewPrompt(reviewPacketForHeading()), ReviewPayloadHeading) {
+		t.Fatal("the rendered inspection prompt does not contain ReviewPayloadHeading")
+	}
+}
+
+func reviewPacketForHeading() roles.IndependentReviewPacket {
+	return roles.IndependentReviewPacket{Task: "prove the ledger invariant"}
+}

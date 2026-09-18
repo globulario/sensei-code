@@ -110,26 +110,8 @@ func Digest(raw string) string {
 
 // Validate states every rule an artifact must satisfy to bind anything.
 func (a Artifact) Validate() error {
-	if !providerShape.MatchString(a.ReviewerProvider) {
-		return fmt.Errorf("the artifact must name its reviewer on a reviewer=<provider> line, got %q", a.ReviewerProvider)
-	}
-	if strings.TrimSpace(a.TaskID) == "" {
-		return errors.New("a review artifact must name its task")
-	}
-	if strings.TrimSpace(a.RequestID) == "" {
-		return errors.New("a review artifact must name the request it answers")
-	}
-	if !fullSHA.MatchString(a.BaseSHA) {
-		return fmt.Errorf("base must be a full 40-character commit, got %q", a.BaseSHA)
-	}
-	if !digestShape.MatchString(strings.TrimSpace(a.CandidateDigest)) {
-		return fmt.Errorf("candidate_digest is missing or malformed: %q", a.CandidateDigest)
-	}
-	if !fullSHA.MatchString(a.CandidateTree) {
-		return fmt.Errorf("candidate_tree must be a full 40-character tree id, got %q", a.CandidateTree)
-	}
-	if !fullSHA.MatchString(a.ReviewCommit) {
-		return fmt.Errorf("review_commit must be a full 40-character commit, got %q", a.ReviewCommit)
+	if err := a.validateIdentity(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(a.Body) == "" {
 		return errors.New("a review artifact must carry a reviewer payload")
@@ -196,6 +178,21 @@ func (a Artifact) Render() (string, error) {
 	if err := a.Validate(); err != nil {
 		return "", err
 	}
+	out := a.envelope() + a.Body
+	if len(out) > MaxBytes {
+		return "", fmt.Errorf("the artifact renders to %d bytes; a review artifact is bounded at %d", len(out), MaxBytes)
+	}
+	return out, nil
+}
+
+// envelope renders the canonical identity header: the marker and the seven
+// identity lines, in the one order this package defines.
+//
+// THE ONLY PLACE A CANONICAL REVIEW ENVELOPE IS SPELLED. Render writes one and
+// ResponseContract teaches one, and both come from here, so a change to a key,
+// an order or the identity set cannot leave the grammar we accept disagreeing
+// with the grammar we ask for (#182 live protocol closure).
+func (a Artifact) envelope() string {
 	var b strings.Builder
 	b.WriteString(Marker + "\n")
 	fmt.Fprintf(&b, "task=%s\n", a.TaskID)
@@ -205,12 +202,77 @@ func (a Artifact) Render() (string, error) {
 	fmt.Fprintf(&b, "candidate_tree=%s\n", a.CandidateTree)
 	fmt.Fprintf(&b, "review_commit=%s\n", a.ReviewCommit)
 	fmt.Fprintf(&b, "reviewer=%s\n", a.ReviewerProvider)
-	b.WriteString(a.Body)
-	out := b.String()
-	if len(out) > MaxBytes {
-		return "", fmt.Errorf("the artifact renders to %d bytes; a review artifact is bounded at %d", len(out), MaxBytes)
+	return b.String()
+}
+
+// PayloadPlaceholder marks where the reviewer's JSON goes in a taught contract.
+//
+// Exported so a consumer can find the slot without re-spelling it, and so a
+// test can substitute a real payload and prove the result parses.
+const PayloadPlaceholder = "<your review verdict, as the JSON object described above>"
+
+// ResponseContract states the exact reply this package will accept, in terms
+// the party that must produce it can follow.
+//
+// THE REQUEST CARRIES THE GRAMMAR. A protocol is incomplete if its parser
+// requires fields its producer-facing contract never mentions: R2 made
+// reviewer=<provider> mandatory on the answer, and for six weeks nothing told
+// the answering party, so every real reply arrived in the pre-R2 grammar and
+// was correctly classified as evidence that establishes nothing.
+//
+// The envelope below is rendered by the same code Render uses, with the
+// request's own identity values already filled in. A reviewer copying it
+// verbatim produces bytes Parse accepts; a reviewer reconstructing it from
+// memory, configuration or repository state does not, and is told so.
+//
+// Identity only: the reply's payload is the reviewer's to write, so the body is
+// not validated here.
+func ResponseContract(want Artifact) (string, error) {
+	if err := want.validateIdentity(); err != nil {
+		return "", err
 	}
-	return out, nil
+	var b strings.Builder
+	b.WriteString("Your GitHub reply must be exactly one canonical review artifact: this envelope, " +
+		"then your JSON payload. Post it as a single comment with no prose before the envelope, " +
+		"no second [sensei-code: envelope anywhere in it, and the verdict stated only inside the JSON.\n\n")
+	b.WriteString("Copy every identity value below exactly as written. Do not derive any of them from " +
+		"your GitHub login, this repository's current state, a pull request head, another comment, or " +
+		"a standing instruction: they are this request's, and an answer that names different values " +
+		"is a review of something else.\n\n")
+	b.WriteString(want.envelope())
+	b.WriteString(PayloadPlaceholder + "\n")
+	return b.String(), nil
+}
+
+// validateIdentity states the rules an artifact's IDENTITY must satisfy,
+// independently of whether a payload exists yet.
+//
+// Split out because a response contract is an identity with the payload still
+// to be written: validating a body that by definition is not there would have
+// forced the contract to invent one.
+func (a Artifact) validateIdentity() error {
+	if !providerShape.MatchString(a.ReviewerProvider) {
+		return fmt.Errorf("the artifact must name its reviewer on a reviewer=<provider> line, got %q", a.ReviewerProvider)
+	}
+	if strings.TrimSpace(a.TaskID) == "" {
+		return errors.New("a review artifact must name its task")
+	}
+	if strings.TrimSpace(a.RequestID) == "" {
+		return errors.New("a review artifact must name the request it answers")
+	}
+	if !fullSHA.MatchString(a.BaseSHA) {
+		return fmt.Errorf("base must be a full 40-character commit, got %q", a.BaseSHA)
+	}
+	if !digestShape.MatchString(strings.TrimSpace(a.CandidateDigest)) {
+		return fmt.Errorf("candidate_digest is missing or malformed: %q", a.CandidateDigest)
+	}
+	if !fullSHA.MatchString(a.CandidateTree) {
+		return fmt.Errorf("candidate_tree must be a full 40-character tree id, got %q", a.CandidateTree)
+	}
+	if !fullSHA.MatchString(a.ReviewCommit) {
+		return fmt.Errorf("review_commit must be a full 40-character commit, got %q", a.ReviewCommit)
+	}
+	return nil
 }
 
 // fields reads key=value lines following the marker, stopping at the first line

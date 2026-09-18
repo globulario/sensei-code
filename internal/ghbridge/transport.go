@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // The transport half: posting a request and reading answers from one dedicated
@@ -144,6 +145,45 @@ func run(ctx context.Context, dir string, args []string) (string, error) {
 	return strings.TrimSpace(stdout.String()), err
 }
 
+// reviewResponseContract is the exact reply this request must receive, obtained
+// from the package that OWNS the canonical grammar.
+//
+// Deliberately a delegation and not a template. A second hand-maintained field
+// list here would agree with reviewartifact until one of them was edited, and
+// the one that drifts is always the copy nobody parses with.
+func reviewResponseContract(r Request) (string, error) {
+	return reviewartifact.ResponseContract(reviewartifact.Artifact{
+		ReviewerProvider: r.ReviewerProvider,
+		TaskID:           r.TaskID,
+		RequestID:        r.RequestID,
+		BaseSHA:          r.BaseSHA,
+		CandidateDigest:  r.CandidateDigest,
+		CandidateTree:    r.CandidateTree,
+		ReviewCommit:     r.ReviewCommit,
+	})
+}
+
+// mailboxPayloadNote qualifies the workflow's payload heading for this
+// transport.
+//
+// "Return ONLY JSON" is TRUE for an in-process adapter whose whole result is
+// the JSON, and FALSE here, where the whole comment must be a canonical review
+// artifact. Leaving both instructions in one comment and hoping the remote
+// picks the newer one is how a protocol acquires two meanings; the contradiction
+// is removed at the one place that knows which transport this is.
+//
+// The heading is matched by the constant the workflow exports, not by a
+// sentence spelled twice.
+func mailboxPayloadNote(note string) string {
+	trimmed := strings.TrimSpace(note)
+	if trimmed == "" {
+		return ""
+	}
+	return strings.ReplaceAll(trimmed, workflow.ReviewPayloadHeading,
+		"Your reviewer payload is exactly this JSON object. Your GitHub reply must place that JSON "+
+			"after the canonical response envelope shown below, not on its own:")
+}
+
 // PostRequest publishes a review request for one exact candidate.
 //
 // The marker is emitted by Sensei Code and by nothing else: the remote party
@@ -172,10 +212,23 @@ func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int
 	if err != nil {
 		return 0, Principal{}, err
 	}
-	body := marker
-	if strings.TrimSpace(note) != "" {
-		body += "\n" + strings.TrimSpace(note) + "\n"
+	// THE REQUEST CARRIES THE RESPONSE CONTRACT.
+	//
+	// A remote reviewer must be able to answer from this comment alone. Until
+	// now it could not: the envelope stated reviewer=<provider> and the prose
+	// taught only the JSON, so the reply grammar lived in a standing connector
+	// instruction that no slice updated when R2 made that field mandatory. All
+	// 16 real answers on the mailbox arrived in the pre-R2 grammar and are
+	// correctly unusable. The grammar travels with the question now.
+	contract, err := reviewResponseContract(r)
+	if err != nil {
+		return 0, Principal{}, err
 	}
+	body := marker
+	if qualified := mailboxPayloadNote(note); qualified != "" {
+		body += "\n" + qualified + "\n"
+	}
+	body += "\n" + contract
 	if box.API != nil {
 		if !box.API.Configured() {
 			return 0, Principal{}, errors.New("the github app transport was selected but is not configured; " +
