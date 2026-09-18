@@ -229,6 +229,50 @@ func TestAnArtifactLargerThanTheBoundIsRefused(t *testing.T) {
 	}
 }
 
+// The writer is bound exactly as the reader is.
+//
+// The largest artifact Render will produce is the largest artifact Parse will
+// accept, and one byte more is refused by Render ITSELF rather than by whoever
+// reads it next. A writer that could emit what its own reader rejects would let
+// an over-sized artifact be produced, digested, stored and carried, and fail
+// only at the far end -- the writer/reader asymmetry #181 recorded.
+func TestRenderIsBoundedExactlyAsParseIs(t *testing.T) {
+	a := complete()
+	head := len(Marker+"\n") +
+		len("task="+a.TaskID+"\n") +
+		len("request="+a.RequestID+"\n") +
+		len("base="+a.BaseSHA+"\n") +
+		len("candidate_digest="+a.CandidateDigest+"\n") +
+		len("candidate_tree="+a.CandidateTree+"\n") +
+		len("review_commit="+a.ReviewCommit+"\n") +
+		len("reviewer="+a.ReviewerProvider+"\n")
+
+	a.Body = payload + strings.Repeat("x", MaxBytes-head-len(payload))
+	atLimit, err := a.Render()
+	if err != nil {
+		t.Fatalf("Render refused an artifact of exactly %d bytes: %v", MaxBytes, err)
+	}
+	if len(atLimit) != MaxBytes {
+		t.Fatalf("the at-limit render is %d bytes, want exactly %d", len(atLimit), MaxBytes)
+	}
+	// The reader agrees: the writer's largest output is not the reader's refusal.
+	if _, err := Parse(atLimit); err != nil {
+		t.Fatalf("Parse refused the largest artifact Render produced: %v", err)
+	}
+
+	a.Body += "x"
+	over, err := a.Render()
+	if err == nil {
+		t.Fatalf("Render produced %d bytes, past the %d bound", len(over), MaxBytes)
+	}
+	if over != "" {
+		t.Fatalf("a refused render returned %d bytes", len(over))
+	}
+	if !strings.Contains(err.Error(), "bounded at") {
+		t.Fatalf("Render refused for some other reason than the bound: %v", err)
+	}
+}
+
 // The verdict lives in the payload and nowhere else. A rendered artifact that
 // also stated the decision in its envelope would carry two representations of
 // it, agreeing only until one is edited.

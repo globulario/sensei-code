@@ -82,9 +82,15 @@ type Artifact struct {
 	// could read. It is exact, and it does not substitute for candidate identity.
 	ReviewCommit string
 
-	// Body is the reviewer payload, verbatim. This package never interprets it:
+	// Body is the reviewer payload, uninterpreted. This package never reads it:
 	// prose that does not satisfy the reviewer JSON contract fails later, at the
 	// workflow parser, which is why "LGTM, ship it" cannot become ACCEPT here.
+	//
+	// It is the NORMALIZED semantic payload, not the exact bytes: the surrounding
+	// whitespace between the envelope and the payload is not part of what the
+	// reviewer said. The exact bytes are Raw, and Digest names those -- so a
+	// change anywhere in the artifact, including in whitespace Body drops, still
+	// changes the artifact's identity.
 	Body string
 
 	// Raw is the artifact byte for byte, and Digest names those bytes.
@@ -178,6 +184,14 @@ func Parse(raw string) (Artifact, error) {
 //
 // The verdict appears exactly once, inside the payload. Render emits no
 // decision, verdict or standing field of its own.
+//
+// The bound is checked against the EXACT bytes this produces, not against the
+// payload alone, and it is the same bound Parse enforces. A writer that could
+// emit an artifact its own reader refuses would put the size policy in one
+// place and the size behavior in two: the artifact would exist, be digested,
+// be stored and be carried, and fail only at whoever read it next. That
+// writer/reader asymmetry is the defect #181 recorded, and one canonical
+// package holding both halves is the only thing that makes it unrepeatable.
 func (a Artifact) Render() (string, error) {
 	if err := a.Validate(); err != nil {
 		return "", err
@@ -192,7 +206,11 @@ func (a Artifact) Render() (string, error) {
 	fmt.Fprintf(&b, "review_commit=%s\n", a.ReviewCommit)
 	fmt.Fprintf(&b, "reviewer=%s\n", a.ReviewerProvider)
 	b.WriteString(a.Body)
-	return b.String(), nil
+	out := b.String()
+	if len(out) > MaxBytes {
+		return "", fmt.Errorf("the artifact renders to %d bytes; a review artifact is bounded at %d", len(out), MaxBytes)
+	}
+	return out, nil
 }
 
 // fields reads key=value lines following the marker, stopping at the first line
