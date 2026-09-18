@@ -175,3 +175,108 @@ func TestABlockedArchitectResumesTheSameTaskAfterRestart(t *testing.T) {
 		t.Errorf("the run modified the canonical checkout:\n%s", strings.TrimSpace(string(status)))
 	}
 }
+
+// implementerDown proves, every time, that the implementer's provider cannot
+// serve. Every other role takes the product's own command line.
+type implementerDown struct{ calls *atomic.Int32 }
+
+func (d implementerDown) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
+	if spec.Role == roles.Implementer {
+		return workflow.Resolved{Runner: runnerFunc(func() (agent.Result, error) {
+			d.calls.Add(1)
+			return agent.Result{}, &provider.Unavailable{Provider: spec.Agent.Name, Reason: "usageLimitExceeded"}
+		}), Name: spec.Agent.Name, Label: spec.Agent.Name}, nil
+	}
+	return workflow.CLIResolved(spec, "stub"), nil
+}
+
+type runnerFunc func() (agent.Result, error)
+
+func (f runnerFunc) Run(context.Context, agent.Request, func(event.Event)) (agent.Result, error) {
+	return f()
+}
+
+// The same primitive for the implementer, through the real execute AND the real
+// planned-task Resume: blocked in the first process, still blocked after a
+// restart, and both times the SAME task -- never FAILED, never a new task.
+func TestABlockedImplementerStaysTheSameTaskAcrossRestart(t *testing.T) {
+	root := repoRoot(t)
+	repo := gitx.Repo{Root: root}
+	if clean, err := repo.IsClean(context.Background()); err != nil || !clean {
+		t.Skip("canonical checkout is dirty; the governed path refuses one by design")
+	}
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	stub := buildStubAgent(t, root)
+	target := anchoredTarget
+	cfg.Architect = config.Agent{Name: "stub-architect", Command: stub,
+		Args: []string{"--role", "architect", "--target", target}, Graph: "none"}
+	cfg.Implementors = []config.Agent{{Name: "claude", Command: stub,
+		Args: []string{"--role", "implementor", "--target", target}, Graph: "none"}}
+	cfg.Reviewer = config.Agent{Name: "codex", Command: stub, Args: []string{"--role", "reviewer"}, Graph: "none"}
+	cfg.Reviewers = []config.Agent{cfg.Reviewer}
+	sessionID := session.ID(time.Now())
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
+	defer cancel()
+	var calls atomic.Int32
+
+	store1, err := session.New(root, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus1 := event.NewBus()
+	events1, unsub1 := bus1.Subscribe(512)
+	defer unsub1()
+	engine1 := workflow.New(repo, cfg, bus1, store1, sessionID)
+	engine1.Runners = implementerDown{calls: &calls}
+	taskID := engine1.SubmitGoverned(ctx, "Append one trailing comment line to "+target+" and change nothing else.")
+	first := settle(t, events1, taskID)
+	if has(first, event.WorkflowAwaitingAuthority) {
+		t.Skip("the router escalated before implementation; the implementer turn was not reached")
+	}
+	if !has(first, event.PlanProposed) || !has(first, event.WorkflowBlockedExternal) || has(first, event.WorkflowFailed) {
+		t.Fatalf("an unavailable implementer did not block the planned task: %v", first)
+	}
+	if has(first, event.HandoffCreated) {
+		t.Fatal("an unavailable implementer was handed off as a failed worker")
+	}
+
+	store2, err := session.New(root, sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := store2.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var target2 *session.Interrupted
+	for _, task := range session.FindInterrupted(history) {
+		if task.TaskID == taskID {
+			task := task
+			target2 = &task
+		}
+	}
+	if target2 == nil || !target2.Planned || len(target2.BlockedExternal) == 0 {
+		t.Fatalf("the blocked planned task was not rediscovered as itself: %+v", target2)
+	}
+	bus2 := event.NewBus()
+	events2, unsub2 := bus2.Subscribe(512)
+	defer unsub2()
+	engine2 := workflow.New(repo, cfg, bus2, store2, sessionID)
+	engine2.Runners = implementerDown{calls: &calls}
+	if resumed := engine2.Resume(ctx, *target2); resumed != taskID {
+		t.Fatalf("resume answered for %q, want %q", resumed, taskID)
+	}
+	second := settle(t, events2, taskID)
+	if has(second, event.TaskCreated) {
+		t.Fatal("resume minted a new task")
+	}
+	if !has(second, event.WorkflowBlockedExternal) || has(second, event.WorkflowFailed) {
+		t.Fatalf("a task still blocked after restart was not reported as blocked: %v", second)
+	}
+	if got := calls.Load(); got != 2 {
+		t.Fatalf("the implementer turn was asked %d times across the two processes, want 2", got)
+	}
+}
