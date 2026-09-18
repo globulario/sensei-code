@@ -84,7 +84,7 @@ func printRelayResult(w io.Writer, res control.LocalRelayResult) {
 }
 
 // `sensei-code review attest` overrides the review obligation on one exact
-// relayed review, on the operator's own authority.
+// advisory review, on the operator's own authority.
 //
 // Both the request AND the digest are required, and neither is inferred: an
 // override that let this command pick the review would cover an artifact its
@@ -93,7 +93,7 @@ func printRelayResult(w io.Writer, res control.LocalRelayResult) {
 func runReviewAttest(repo gitx.Repo, args []string) error {
 	fs := flag.NewFlagSet("review attest", flag.ContinueOnError)
 	request := fs.String("request", "", "the review request this override covers")
-	digest := fs.String("review-digest", "", "the sha256 of the relayed review being overridden")
+	digest := fs.String("review-digest", "", "the sha256 of the advisory review being overridden")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}

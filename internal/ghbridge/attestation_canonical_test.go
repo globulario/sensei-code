@@ -584,3 +584,137 @@ func TestAttestationAuthorityDoesNotReadRelayStore(t *testing.T) {
 		t.Error("AttestationSubmission still takes a relay store")
 	}
 }
+
+// A stored override that disagrees with the canonical review is refused, and
+// preserved exactly as it was.
+//
+// A matching digest is not agreement. Before this check, an existing record
+// naming reviewer "claude" for bytes that say reviewer=chatgpt was reused
+// wholesale on the retry path: it stayed a valid roles.Attestation, Covers()
+// checks candidate and digest rather than who reviewed, and the candidate could
+// advance under an authority record that named the wrong reviewer. The
+// attestation store would have been a second semantic source -- the exact thing
+// resolving the review from ReviewStore exists to prevent.
+//
+// The conflicting record is EVIDENCE. It is not repaired, republished or
+// modernised, so an operator can see the disagreement that was refused.
+func TestAStoredOverrideDisagreeingWithTheCanonicalReviewIsRefused(t *testing.T) {
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	digest := ReviewDigest(raw)
+	canonical := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+
+	for name, disagree := range map[string]func(*roles.Attestation){
+		"it names another reviewer": func(a *roles.Attestation) { a.Reviewer = "claude" },
+		"it names another candidate tree": func(a *roles.Attestation) {
+			a.Binding.CandidateTree = strings.Repeat("a", 40)
+		},
+		"it names another candidate digest": func(a *roles.Attestation) {
+			a.Binding.CandidateDigest = "sha256:" + strings.Repeat("0", 64)
+		},
+		"it names another base": func(a *roles.Attestation) { a.Binding.BaseSHA = strings.Repeat("b", 40) },
+		"it names another task": func(a *roles.Attestation) { a.Binding.TaskID = "task-somebody-elses" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			store := attestStore(t)
+			acceptMailboxReview(t, f, raw)
+
+			stale := roles.Attestation{
+				RequestID: relayRequest, ReviewDigest: digest, Reviewer: "chatgpt",
+				Decision: roles.Accept, Binding: canonical, Principal: operator.token(),
+				At: time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC), Statement: roles.AttestationStatement,
+			}
+			disagree(&stale)
+			if err := stale.Validate(); err != nil {
+				t.Fatalf("the conflicting record must itself be a valid attestation, or the "+
+					"refusal under test could come from ordinary validation: %v", err)
+			}
+			if err := store.create(AttestationRecord{Version: 1, State: AttestationAccepted,
+				Attestation: stale, AcceptedAt: stale.At}); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(store.Dir, relayRequest+".json")
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			posted := len(f.mailbox.posted())
+
+			_, err = f.attest(store, relayRequest, digest, true)
+			if !errors.Is(err, ErrAttestationRefused) {
+				t.Fatalf("err = %v, want a refusal", err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(after) != string(before) {
+				t.Fatal("the conflicting override was rewritten; it is evidence, not something to repair")
+			}
+			if n := len(f.mailbox.posted()) - posted; n != 0 {
+				t.Fatalf("a refused override published %d comment(s)", n)
+			}
+			// And it never became consumable.
+			if _, found, _ := store.AttestationFor(canonical, digest); found {
+				t.Fatal("a refused, unpublished override is visible to the engine")
+			}
+		})
+	}
+}
+
+// The positive retry case: when the stored override agrees about the review, it
+// is reused and its OWNER facts are kept -- including a frozen legacy statement
+// and the original attesting time.
+func TestARetryReusesAnAgreeingOverrideAndKeepsItsOwnerFacts(t *testing.T) {
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	digest := ReviewDigest(raw)
+	canonical := roles.Binding{TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+		CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree}
+	attestedAt := time.Date(2026, 9, 1, 12, 0, 0, 0, time.UTC)
+
+	for name, statement := range map[string]string{
+		"under the current statement":       roles.AttestationStatement,
+		"under the frozen legacy statement": roles.LegacyRelayAttestationStatement,
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			store := attestStore(t)
+			acceptMailboxReview(t, f, raw)
+
+			// An override that agrees about the review, accepted by a DIFFERENT
+			// operator at a different time: owner facts this call must not invent.
+			owner := RelayPrincipal{UID: 1001, User: "someone-else", PID: 7, Terminal: 99}
+			agreeing := roles.Attestation{
+				RequestID: relayRequest, ReviewDigest: digest, Reviewer: "chatgpt",
+				Decision: roles.Accept, Binding: canonical, Principal: owner.token(),
+				At: attestedAt, Statement: statement,
+			}
+			if err := store.create(AttestationRecord{Version: 1, State: AttestationAccepted,
+				Attestation: agreeing, AcceptedAt: attestedAt}); err != nil {
+				t.Fatal(err)
+			}
+
+			rec, err := f.attest(store, relayRequest, digest, true)
+			if err != nil {
+				t.Fatalf("an agreeing override was not reusable on retry: %v", err)
+			}
+			if rec.State != AttestationPublished || rec.PublicationComment <= 0 {
+				t.Fatalf("the retry did not publish: %+v", rec)
+			}
+			a := rec.Attestation
+			if a.Principal != owner.token() {
+				t.Fatalf("principal became %q; the retry rewrote who attested", a.Principal)
+			}
+			if !a.At.Equal(attestedAt) {
+				t.Fatalf("attested time moved to %s; the retry rewrote when", a.At)
+			}
+			if a.Statement != statement {
+				t.Fatalf("statement became %q; the retry modernised what they attested under", a.Statement)
+			}
+			if a.Reviewer != "chatgpt" || a.Decision != roles.Accept || a.Binding != canonical {
+				t.Fatalf("the reused override lost its review meaning: %+v", a)
+			}
+		})
+	}
+}

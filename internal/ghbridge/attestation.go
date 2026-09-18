@@ -311,12 +311,54 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 				"request %s is already attested for review %s; an attestation is not replaced",
 				att.RequestID, existing.Attestation.ReviewDigest)
 		}
+		// A matching digest is not agreement. The stored override states what
+		// review it is about, and if that disagrees with what the canonical
+		// bytes actually say, reusing it would let the older record supply the
+		// meaning this function just re-derived -- an attestation store acting
+		// as a second semantic source. A reviewer mismatch is the sharp case:
+		// Covers() checks candidate and digest, not who reviewed, so such a
+		// record can advance a candidate while naming the wrong reviewer.
+		if m := reviewMeaningMismatch(existing.Attestation, att); m != "" {
+			return AttestationRecord{}, attestationRefused(
+				"request %s already has an attestation that disagrees with the canonical review: %s; "+
+					"it is preserved unchanged and nothing was published", att.RequestID, m)
+		}
+		// The review agrees, so the OWNER's facts stay the existing record's:
+		// who attested, when, the statement they attested under (current or the
+		// frozen legacy one) and how far publication got. Those are history, not
+		// something this call re-derives.
 		record = existing
 	}
 	if record.State == AttestationPublished {
 		return record, nil
 	}
 	return publishAttestation(ctx, in.Mailbox, in.Store, record, now)
+}
+
+// reviewMeaningMismatch names the first review-derived field on which a stored
+// override disagrees with the canonical review, or "" when they agree.
+//
+// Only the fields that describe the REVIEW participate. Principal, At and
+// Statement are the owner's own record of what they did and when, and are
+// deliberately absent: a historical override carrying the frozen pre-R3
+// statement still describes the same review, and retrying its publication must
+// not require the operator to re-attest under today's wording.
+func reviewMeaningMismatch(stored, canonical roles.Attestation) string {
+	for _, f := range []struct{ name, stored, canonical string }{
+		{"request", stored.RequestID, canonical.RequestID},
+		{"review_digest", stored.ReviewDigest, canonical.ReviewDigest},
+		{"reviewer", stored.Reviewer, canonical.Reviewer},
+		{"decision", string(stored.Decision), string(canonical.Decision)},
+		{"task", stored.Binding.TaskID, canonical.Binding.TaskID},
+		{"base", stored.Binding.BaseSHA, canonical.Binding.BaseSHA},
+		{"candidate_digest", stored.Binding.CandidateDigest, canonical.Binding.CandidateDigest},
+		{"candidate_tree", stored.Binding.CandidateTree, canonical.Binding.CandidateTree},
+	} {
+		if f.stored != f.canonical {
+			return fmt.Sprintf("it records %s %q and the canonical review says %q", f.name, f.stored, f.canonical)
+		}
+	}
+	return ""
 }
 
 // RenderAttestation renders the App's publication of one override.
