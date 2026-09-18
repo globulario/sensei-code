@@ -220,6 +220,37 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	// configuration.
 	published.Publisher = publisher
 
+	// A NEW APP-PUBLISHED REQUEST WITHOUT ITS PUBLISHER FAILS CLOSED.
+	//
+	// An obligation with no pinned publisher is a LEGACY shape: it predates the
+	// field, it can authenticate no receipt, and its relay recovery path refuses
+	// rather than guesses. That treatment is right for records written before
+	// the field existed and wrong for one written now -- GitHub answered, this
+	// process simply could not read an author out of the answer, and recording
+	// the obligation anyway would manufacture a legacy-shaped record today and
+	// quietly disable the authority check for its whole lifetime.
+	//
+	// The gh CLI path is exempt because it names no author at all and publishes
+	// no relay: a relay there is refused before it reaches this question.
+	if r.Issue.API != nil && r.Issue.API.Configured() && !published.Publisher.Configured() {
+		unpinned := fmt.Errorf("request %s was published as comment %d and github named no author for it, "+
+			"so this obligation would be unable to authenticate its own publications",
+			published.RequestID, requestComment)
+		if emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
+				"review request "+published.RequestID+" was published and its publisher could not be established, "+
+					"so it is not recorded: "+unpinned.Error(),
+				map[string]any{
+					"request_id": published.RequestID, "request_comment": requestComment,
+					"error": unpinned.Error(), "transport": "github",
+				}))
+		}
+		if have {
+			return agent.Result{}, obligationUnreplaced(current, unpinned)
+		}
+		return agent.Result{}, fmt.Errorf("%w: %v", roles.ErrReviewUnrecordable, unpinned)
+	}
+
 	// Recorded BEFORE the doorbell and before the wait: everything after this
 	// point can fail in a way that leaves the request standing, and a record
 	// written after a successful wait would record only the exchanges that never

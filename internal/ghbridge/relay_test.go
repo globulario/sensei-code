@@ -79,7 +79,8 @@ func newRelayMailbox(t *testing.T) (*relayMailbox, Issue) {
 			_ = json.NewDecoder(r.Body).Decode(&in)
 			id := m.add(in.Body, "globulario-sensei-code[bot]", 99887766)
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprintf(w, `{"id":%d}`, id)
+			// The whole comment, author included, as GitHub answers a create.
+			fmt.Fprintf(w, `{"id":%d,"user":{"login":"globulario-sensei-code[bot]","id":99887766}}`, id)
 		case http.MethodGet:
 			m.mu.Lock()
 			defer m.mu.Unlock()
@@ -954,4 +955,126 @@ func TestAStoredReviewIsConsumedAgainstTheObligationsProviderNotTodaysConfig(t *
 			t.Fatalf("a configuration change republished the review request:\n%s", body)
 		}
 	}
+}
+
+// A genuine receipt is found wherever it sits in the conversation.
+//
+// Returning the FIRST request+digest match made recovery depend on comment
+// order: a look-alike posted before a genuine receipt hid it, the retry
+// concluded nothing had been published, and this machine posted a second
+// genuine receipt for one review. Anybody who can comment could arrange that,
+// so "prefer ours" is an authority rule, not a tidy-up.
+func TestAGenuineReceiptIsPreferredOverAnEarlierLookAlike(t *testing.T) {
+	f := newRelayFixture(t)
+	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+
+	// A look-alike lands FIRST, before anything genuine exists.
+	forged, err := RenderRelayedReview(mustParse(t, artifact), acceptVerdict(t, artifact), operator.token(), f.box)
+	if err != nil {
+		t.Fatal(err)
+	}
+	forgedID := f.mailbox.add(forged, "davecourtois", 1697116)
+
+	// Then the genuine publication happens.
+	if _, err := f.submit(artifact); err != nil {
+		t.Fatalf("the genuine publication was refused: %v", err)
+	}
+	rec, _ := f.stored(t)
+	genuineID := relayEvidence(t, rec).PublicationComment
+	if genuineID <= forgedID {
+		t.Fatalf("the genuine receipt (%d) does not sit AFTER the look-alike (%d); "+
+			"this case cannot distinguish first-match from prefer-ours", genuineID, forgedID)
+	}
+	postsBefore := len(f.mailbox.posted())
+
+	// The delivery record is lost -- a process that died between publishing and
+	// recording. The look-alike is still the first match on the mailbox.
+	if err := stageBackTo(f.reviews, relayRequest); err != nil {
+		t.Fatal(err)
+	}
+	match, ferr := relayPublicationOf(context.Background(), f.box,
+		obligationFrom(soleObligation(t, f.exchanges)), ReviewDigest(artifact))
+	if ferr != nil {
+		t.Fatal(ferr)
+	}
+	if !match.ours || match.comment != genuineID {
+		t.Fatalf("recovery selected comment %d (ours=%v); the genuine receipt is %d",
+			match.comment, match.ours, genuineID)
+	}
+
+	if _, err := f.submit(artifact); err != nil {
+		t.Fatalf("the repair failed: %v", err)
+	}
+	if n := len(f.mailbox.posted()); n != postsBefore {
+		t.Fatalf("an earlier look-alike caused a second genuine receipt: %d comments, want %d", n, postsBefore)
+	}
+	after, _ := f.stored(t)
+	ev := relayEvidence(t, after)
+	if !ev.Delivered() || ev.PublicationComment != genuineID {
+		t.Fatalf("the delivery completed from comment %d, want the genuine %d", ev.PublicationComment, genuineID)
+	}
+}
+
+// A NEW App-published request with no readable author is not recorded.
+//
+// An obligation with no pinned publisher is a LEGACY shape: it authenticates no
+// receipt and its recovery path refuses rather than guesses. That is right for a
+// record written before the field existed. Manufacturing one TODAY would disable
+// the authority check for that obligation's whole life, silently, because GitHub
+// answered in a way this process could not read.
+func TestAnAppRequestWithNoReadableAuthorIsNotRecorded(t *testing.T) {
+	_, runner, binding, log := reviewRunnerWithLog(t, 100*time.Millisecond)
+	// The precondition: this transport IS the App, so the exemption for the gh
+	// CLI path cannot be what makes this pass.
+	if runner.Issue.API == nil || !runner.Issue.API.Configured() {
+		t.Fatal("the fixture is not publishing as the App; the guard under test would not apply")
+	}
+	runner.Issue = authorlessMailbox(runner.Issue)
+
+	_, err := runner.Run(context.Background(), reviewTurn(binding), nil)
+	if !errors.Is(err, roles.ErrReviewUnrecordable) {
+		t.Fatalf("err = %v, want the request refused as unrecordable", err)
+	}
+	if !strings.Contains(err.Error(), "named no author") {
+		t.Fatalf("the refusal does not say what could not be established: %v", err)
+	}
+	owed, lerr := log.PendingReviews()
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if len(owed) != 0 {
+		t.Fatalf("an obligation with no pinned publisher was recorded: %+v", owed)
+	}
+}
+
+// authorlessMailbox is the configured App against a GitHub that creates comments
+// and names nobody as their author.
+func authorlessMailbox(box Issue) Issue {
+	out := box
+	mux := http.NewServeMux()
+	mux.HandleFunc("/app/installations/159521273/access_tokens", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusCreated)
+		fmt.Fprintf(w, `{"token":"ghs_installation","expires_at":%q,`+
+			`"permissions":{"issues":"write","pull_requests":"write","contents":"write","metadata":"read"}}`,
+			time.Now().Add(time.Hour).UTC().Format(time.RFC3339))
+	})
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusCreated)
+			// A comment id and nothing else: the create succeeded and the
+			// author is unreadable.
+			fmt.Fprint(w, `{"id":4242}`)
+			return
+		}
+		fmt.Fprint(w, `[]`)
+	})
+	srv := httptest.NewServer(mux)
+	out.API = &AppClient{
+		Auth: &InstallationAuth{
+			AppID: box.API.Auth.AppID, InstallationID: box.API.Auth.InstallationID,
+			PrivateKeyPath: box.API.Auth.PrivateKeyPath, APIBase: srv.URL,
+		},
+		Owner: box.API.Owner, Repo: box.API.Repo,
+	}
+	return out
 }

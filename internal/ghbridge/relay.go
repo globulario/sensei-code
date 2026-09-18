@@ -350,11 +350,20 @@ type relayReceipt struct {
 // process is holding but has never published -- turning "staged here" into
 // "delivered" on a stranger's say-so, which is the one thing the delivery state
 // exists to prevent.
+//
+// EVERY match is examined, and OURS WINS wherever it sits. Returning the first
+// match made the answer depend on comment order: a look-alike posted before a
+// genuine receipt that already existed would hide it, the retry would conclude
+// nothing had been published, and this machine would post a second genuine
+// receipt for one review -- the exact duplication the reconciliation exists to
+// prevent, reachable by anybody who could comment first.
 func relayPublicationOf(ctx context.Context, box Issue, o ReviewObligation, digest string) (relayReceipt, error) {
 	comments, err := mailboxComments(ctx, box)
 	if err != nil {
 		return relayReceipt{}, err
 	}
+	var other relayReceipt
+	var found bool
 	for _, c := range comments {
 		head := strings.TrimLeft(c.Body, " \t\r\n")
 		if !strings.HasPrefix(head, relayedReviewMarker) {
@@ -375,17 +384,23 @@ func relayPublicationOf(ctx context.Context, box Issue, o ReviewObligation, dige
 		if strings.TrimSpace(out.publication) == "" {
 			out.publication = publicationIdentity(box)
 		}
-		switch {
-		case !o.Publisher.Configured():
+		if o.Publisher.Configured() && o.Publisher.Matches(c.User.ID, c.User.Login) {
+			// The genuine one. Nothing later can improve on it.
+			out.ours = true
+			return out, nil
+		}
+		if !o.Publisher.Configured() {
 			// Nothing to authenticate against. The gap is NOT filled from
 			// today's configuration or from the body's own claim.
 			out.unauthenticatable = true
-		case o.Publisher.Matches(c.User.ID, c.User.Login):
-			out.ours = true
 		}
-		return out, nil
+		if !found {
+			// Keep the FIRST non-ours match for the diagnostic, and keep
+			// looking: a genuine receipt may sit behind it.
+			other, found = out, true
+		}
 	}
-	return relayReceipt{}, nil
+	return other, nil
 }
 
 // stagedPrincipal is the terminal that carried the delivery this record holds.

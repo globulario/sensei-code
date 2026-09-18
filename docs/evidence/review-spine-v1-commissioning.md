@@ -158,11 +158,19 @@ and skips naming the exact limitation, rather than asking a different instrument
 and guessing, or quietly passing. It is apparatus that runs the day the
 precondition is met; today it measures the precondition.
 
-**This is the one frozen R6 gate that is not met.** It is not met for a reason
-outside the slice, and closing it requires a decision that belongs to the
-architect: either authorize the graph-authority precondition, or accept the
-review-boundary commissioning for R6 and carry the whole-loop proof into the
-milestone that fixes graph authority anyway.
+**This is the one frozen R6 gate that is not met**, and the architect has ruled
+on it (PR #190 comment `5734086214`): graph authority is not to be re-stamped to
+make R6 green, because that would contaminate the milestone that fixes it. R6
+lands with the whole-loop commissioning **provisional**, and Review Spine v1 is
+not claimed to be fully commissioned until this test actually runs:
+
+```text
+repair the R6 edges -> accept + merge R6
+                    -> fix graph authority / freshness / publication identity
+                    -> run this whole-engine commissioning
+                    -> extend it through admission/publication
+                    -> close Review Spine v1 commissioning
+```
 
 ---
 
@@ -200,11 +208,13 @@ independent-review obligation.
 
 ## Mutation results
 
-25 semantic mutations against the surviving rules; **25 killed**, each by a named
-assertion. See the R6 report on PR for the table. Three of them cover the
-repairs from the first review round: a recovery path that trusts any author, one
-that trusts an unauthenticatable receipt, and a publication that names the
-retrying caller rather than the principal that staged the delivery.
+27 semantic mutations against the surviving rules; **27 killed**, each by a named
+assertion. See the R6 report on PR for the table. Five of them cover the repairs
+from the two review rounds: a recovery path that trusts any author, one that
+trusts an unauthenticatable receipt, one that takes the first matching receipt
+rather than the publisher's, a publication that names the retrying caller rather
+than the principal that staged the delivery, and a new App-published obligation
+recorded with no publisher.
 
 One **harness fault** was found and fixed mid-campaign: two edits to the same
 file recorded the second backup from already-mutated content, so restoring put

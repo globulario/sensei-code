@@ -119,7 +119,12 @@ func newPRMailboxWithGrants(t *testing.T, keyPath, number string, isPR bool, gra
 				m.append(m.onPost(in.Body)...)
 			}
 			w.WriteHeader(http.StatusCreated)
-			fmt.Fprint(w, `{"id":1}`)
+			// Real GitHub answers a create with the whole comment, including
+			// its AUTHOR. A fixture that returned only the id let a request be
+			// published with no publisher this workspace could pin, which is
+			// the shape #182 R6 now refuses -- so the fixture would have been
+			// proving the refusal rather than the protocol.
+			fmt.Fprint(w, `{"id":1,"user":{"login":"globulario-sensei-code[bot]","id":99887766}}`)
 		case http.MethodGet:
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(m.snapshot())
