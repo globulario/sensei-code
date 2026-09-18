@@ -2613,6 +2613,19 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			// so the candidate waits for this review instead.
 			return ReviewResult{}, err
 		}
+		if errors.Is(err, roles.ErrReviewUnrecordable) {
+			// A request reached the conversation and no durable obligation
+			// names it. Another provider would publish a SECOND request beside
+			// the orphaned one, and nothing local would name either. The storage
+			// fault is what needs repairing, not the reviewer.
+			return ReviewResult{}, err
+		}
+		if errors.Is(err, roles.ErrReviewLifecycleConflict) {
+			// The task's own lifecycle records disagree about what it owes.
+			// Choosing a reviewer cannot resolve that, and asking one would add
+			// a third record to a task that already has two too many.
+			return ReviewResult{}, err
+		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			config.DisplayName(cfg.Name)+" could not produce a bounded review; trying the next independent reviewer",
 			map[string]string{"error": err.Error()}))

@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/roles"
 )
 
 // ReviewObligation is one review still owed, exactly as it was published.
@@ -55,7 +57,11 @@ type ReviewObligation struct {
 var (
 	// ErrObligationConflict reports more than one active review obligation for
 	// one task. Choosing between them is not this component's to do.
-	ErrObligationConflict = errors.New("this task has more than one active review obligation")
+	//
+	// It wraps the transport-neutral condition so the workflow can recognise a
+	// lifecycle conflict without depending on this package.
+	ErrObligationConflict = fmt.Errorf("%w: this task has more than one active review obligation",
+		roles.ErrReviewLifecycleConflict)
 	// ErrObligationUnreadable reports a review record that cannot be read as the
 	// obligation it claims to be.
 	ErrObligationUnreadable = errors.New("a review obligation record could not be read")
@@ -95,17 +101,14 @@ func (o ReviewObligation) AssignedTo(provider string) bool {
 // invent the very fact the check exists to verify, and would let a config edit
 // authorize an account to answer a question it was never asked.
 func (o ReviewObligation) Reattachable() error {
-	if strings.TrimSpace(o.RequestID) == "" {
-		return fmt.Errorf("%w: it names no request", ErrObligationUnreadable)
+	if err := o.identityReadable(); err != nil {
+		return err
 	}
 	if !o.ExpectedReviewer.Configured() {
 		return fmt.Errorf("%w: request %s", ErrObligationLegacy, o.RequestID)
 	}
 	if strings.TrimSpace(o.ReviewerProvider) == "" {
 		return fmt.Errorf("%w: request %s names no assigned reviewer", ErrObligationLegacy, o.RequestID)
-	}
-	if err := o.Subject().Validate(); err != nil {
-		return fmt.Errorf("%w: request %s: %v", ErrObligationUnreadable, o.RequestID, err)
 	}
 	return nil
 }
@@ -144,6 +147,27 @@ func (o ReviewObligation) ReachableFrom(box Issue) error {
 			return fmt.Errorf("request %s was published to %s and this process is pointed at %s",
 				o.RequestID, want, got)
 		}
+	}
+	return nil
+}
+
+// identityReadable states what an obligation must prove about itself on EVERY
+// read, before anything treats it as authority.
+//
+// The immutable identity only. A malformed task, base, candidate digest, tree
+// or review commit means the record cannot say what it is owed on -- and the
+// runner would otherwise read it as "the candidate changed" and repair it by
+// superseding, which silently replaces authority nobody could read.
+//
+// Deliberately NOT here: the pinned principal and the assigned provider. Their
+// absence is a known pre-R4 migration state with an explicit path
+// (Reattachable), not corruption.
+func (o ReviewObligation) identityReadable() error {
+	if strings.TrimSpace(o.RequestID) == "" {
+		return fmt.Errorf("%w: a record for task %s names no request", ErrObligationUnreadable, o.TaskID)
+	}
+	if err := o.Subject().Validate(); err != nil {
+		return fmt.Errorf("%w: request %s: %v", ErrObligationUnreadable, o.RequestID, err)
 	}
 	return nil
 }
@@ -212,10 +236,11 @@ func (s ReviewObligationStore) Current(taskID string) (ReviewObligation, bool, e
 		if rec.TaskID != taskID {
 			continue
 		}
-		if strings.TrimSpace(rec.RequestID) == "" {
-			return ReviewObligation{}, false, fmt.Errorf("%w: a record for task %s names no request", ErrObligationUnreadable, taskID)
+		o := obligationFrom(rec)
+		if err := o.identityReadable(); err != nil {
+			return ReviewObligation{}, false, err
 		}
-		found = append(found, obligationFrom(rec))
+		found = append(found, o)
 	}
 	switch len(found) {
 	case 0:
@@ -246,9 +271,22 @@ func (s ReviewObligationStore) ByRequest(requestID string) (ReviewObligation, er
 		return ReviewObligation{}, fmt.Errorf("%w: %v", ErrObligationUnreadable, err)
 	}
 	for _, rec := range pending {
-		if rec.RequestID == requestID {
-			return obligationFrom(rec), nil
+		if rec.RequestID != requestID {
+			continue
 		}
+		o := obligationFrom(rec)
+		if err := o.identityReadable(); err != nil {
+			return ReviewObligation{}, err
+		}
+		// THE SAME UNIQUENESS LAW Current applies. Naming a request by id is not
+		// a way around it: a task with two active obligations is a conflict
+		// whichever one the caller happens to hold, and consuming a review
+		// through this one while the other stayed owed and invisible is exactly
+		// what refusing the conflict exists to prevent.
+		if _, _, err := s.Current(o.TaskID); err != nil {
+			return ReviewObligation{}, err
+		}
+		return o, nil
 	}
 	return ReviewObligation{}, fmt.Errorf("request %s is not a review owed in this workspace: it was answered, "+
 		"superseded, withdrawn, or never published here", requestID)

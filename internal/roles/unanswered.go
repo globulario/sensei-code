@@ -23,6 +23,29 @@ import (
 // the condition its own name.
 var ErrReviewUnanswered = errors.New("the review request is published and no answer has arrived; it remains the review owed")
 
+// ErrReviewUnrecordable reports a review request that was PUBLISHED remotely
+// and could not be recorded as a durable obligation here.
+//
+// Its own condition because neither existing answer fits. It is not an
+// unanswered review: nothing durable says this candidate owes one, so no later
+// process can reattach to it. It is not a provider that failed either, and
+// trying the next reviewer would publish a second request while the first is
+// already standing on the conversation, with nothing local naming either.
+//
+// So the turn stops here. The remote request exists and is visible to an
+// operator; what is missing is the local record, and that is a storage fault to
+// repair rather than a reviewer to replace.
+var ErrReviewUnrecordable = errors.New("the review request was published and could not be recorded as a durable obligation")
+
+// ErrReviewLifecycleConflict reports that a task's own durable review records
+// disagree about what it owes -- most often two active obligations at once.
+//
+// Named in roles rather than in the bridge so the workflow can recognise it
+// without depending on a transport. Choosing a reviewer cannot resolve a
+// lifecycle conflict, and asking one would add a third record to a task that
+// already has two too many.
+var ErrReviewLifecycleConflict = errors.New("this task's review lifecycle records disagree")
+
 // ReviewUnanswered is the unanswered review, with the identity a later process
 // needs to continue it: which request, on which conversation, for which exact
 // candidate.

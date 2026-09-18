@@ -3,10 +3,14 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/globulario/sensei-code/internal/ghbridge"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/session"
 )
 
@@ -88,6 +92,85 @@ func TestReviewResumeTreatsTheObligationAsAuthorityAndTheTranscriptAsProjection(
 		tasks[0].AwaitingAuthority = []byte(`{"question":"which?"}`)
 		if _, err := selectReviewResume(tasks, "T-1", owed); !errors.Is(err, errReviewBehindQuestion) {
 			t.Fatalf("err = %v, want the human decision to block the review resume", err)
+		}
+	})
+}
+
+// An owner failure refuses the resume BEFORE any startup work.
+//
+// Folding a lifecycle conflict or an unreadable store into "there is no
+// obligation" let the CLI run readiness checks, install a bridge and spin up an
+// engine on a task whose own records disagree about what it owes -- after which
+// the reviewer ladder could reclassify that fault as a provider that failed.
+// Absence and failure are different answers.
+func TestReviewResumeRefusesWhenTheOwnerCannotEstablishTheObligation(t *testing.T) {
+	write := func(t *testing.T, dir string, rec map[string]any) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		blob, err := json.Marshal(rec)
+		if err != nil {
+			t.Fatal(err)
+		}
+		name := fmt.Sprintf("%s.%s.json", rec["task_id"], rec["request_id"])
+		if err := os.WriteFile(filepath.Join(dir, name), blob, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	review := func(request string) map[string]any {
+		return map[string]any{
+			"task_id": "T-1", "request_id": request, "conversation": "157", "kind": "review",
+			"base": strings.Repeat("a", 40), "candidate_digest": "sha256:candidate-one",
+			"candidate_tree": strings.Repeat("b", 40), "review_commit": strings.Repeat("c", 40),
+			"reviewer_provider": "chatgpt", "expected_reviewer_id": 1697116,
+		}
+	}
+
+	t.Run("no obligation is not a failure", func(t *testing.T) {
+		root := t.TempDir()
+		owed, err := owedReviewObligation(root, "T-1")
+		if err != nil {
+			t.Fatalf("an empty store reported a failure: %v", err)
+		}
+		if owed != nil {
+			t.Fatalf("an empty store produced an obligation: %+v", owed)
+		}
+	})
+
+	t.Run("two active obligations refuse", func(t *testing.T) {
+		root := t.TempDir()
+		dir := filepath.Join(root, ".sensei-code", "exchanges")
+		write(t, dir, review("r-one"))
+		write(t, dir, review("r-two"))
+
+		owed, err := owedReviewObligation(root, "T-1")
+		if !errors.Is(err, roles.ErrReviewLifecycleConflict) {
+			t.Fatalf("err = %v, want a lifecycle conflict", err)
+		}
+		if owed != nil {
+			t.Fatalf("a conflicted task produced an obligation: %+v", owed)
+		}
+		// And the refusal reaches the caller instead of looking like absence,
+		// which is what let the resume start on a conflicted task.
+		if _, serr := selectReviewResume([]session.Interrupted{{TaskID: "T-1", AwaitingReview: true}}, "T-1", owed); serr != nil {
+			t.Logf("selection would have proceeded on a nil obligation: %v", serr)
+		}
+	})
+
+	t.Run("an unreadable record refuses", func(t *testing.T) {
+		root := t.TempDir()
+		dir := filepath.Join(root, ".sensei-code", "exchanges")
+		bad := review("r-one")
+		bad["base"] = "not-a-sha"
+		write(t, dir, bad)
+
+		owed, err := owedReviewObligation(root, "T-1")
+		if err == nil {
+			t.Fatalf("a malformed obligation was read as %+v", owed)
+		}
+		if owed != nil {
+			t.Fatalf("a malformed obligation produced a value: %+v", owed)
 		}
 	})
 }

@@ -271,6 +271,17 @@ func refused(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrRelayRefused, fmt.Sprintf(format, args...))
 }
 
+// refusedBecause refuses a relay while PRESERVING the identity of the condition
+// that caused it.
+//
+// The plain refused() formats its cause with %v, which reads fine and loses the
+// error chain. A lifecycle conflict refused that way was indistinguishable from
+// any other relay refusal, so nothing upstream -- or in a test -- could tell
+// "this relay was malformed" from "this task's records disagree".
+func refusedBecause(cause error) error {
+	return fmt.Errorf("%w: %w", ErrRelayRefused, cause)
+}
+
 // AcceptRelayedReview validates a relayed artifact against the review it
 // answers, records it once, and has the App publish it.
 //
@@ -307,7 +318,7 @@ func AcceptRelayedReview(ctx context.Context, in RelaySubmission) (RelayRecord, 
 	owned := ReviewObligationStore{Exchanges: in.Exchanges}
 	rec, err := owned.ByRequest(art.RequestID)
 	if err != nil {
-		return RelayRecord{}, refused("%v", err)
+		return RelayRecord{}, refusedBecause(err)
 	}
 	if mismatch := subjectMismatch(rec.Subject(), art.Subject); mismatch != "" {
 		return RelayRecord{}, refused("the review is not about the candidate request %s carried: %s", art.RequestID, mismatch)

@@ -387,6 +387,7 @@ func TestAnUnansweredReviewTurnReportsThatItEnded(t *testing.T) {
 	runner := &Runner{
 		Issue: box, RepoDir: dir, Remote: "origin", NewRequestID: NewRequestID,
 		Poll: 10 * time.Millisecond, Wait: 120 * time.Millisecond, ReviewerProvider: "chatgpt",
+		Exchanges: ExchangeLog{Dir: filepath.Join(t.TempDir(), "exchanges")},
 	}
 	var events []event.Event
 	_, err := runner.Run(context.Background(), agent.Request{

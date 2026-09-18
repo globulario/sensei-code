@@ -662,3 +662,265 @@ func TestAnAcceptedReviewSurvivesALaterAssignmentChange(t *testing.T) {
 	_ = reviewstore.Advisory
 	_ = filepath.Join
 }
+
+// A request nothing recorded never acquires a waiter.
+//
+// The published value lives in memory until Open succeeds. Waiting on it would
+// listen to a request no later process can find: on timeout it would report an
+// owed review naming an id nothing recorded, and after a restart the next run
+// would mint again -- the pre-R4 defect, reintroduced by a storage fault.
+//
+// The old test for this path checked only that the OLD record survived. It never
+// asked which request the returned owed-review named, so the runner happily went
+// on listening to the unrecorded successor and the test passed.
+func TestNoWaiterAttachesToARequestNothingRecorded(t *testing.T) {
+	t.Run("a replacement that cannot be recorded reports the predecessor", func(t *testing.T) {
+		m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
+		first := standingRequest(t, runner, binding)
+
+		// The log becomes read-only AFTER the predecessor exists: listing and
+		// opening still work, and only writing a new record fails. So the
+		// candidate moves, the successor is genuinely published remotely, and
+		// only its record cannot be written.
+		if err := os.Chmod(log.Dir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(log.Dir, 0o700) })
+
+		moved := binding
+		moved.CandidateDigest = "sha256:candidate-two"
+		_, err := runner.Run(context.Background(), reviewTurnFor(moved), nil)
+
+		var owed *roles.ReviewUnanswered
+		if !errors.As(err, &owed) {
+			t.Fatalf("err = %v, want the standing predecessor reported", err)
+		}
+		// THE POINT: the identity returned is the durable predecessor, never the
+		// successor nothing recorded.
+		if owed.RequestID != first.RequestID {
+			t.Fatalf("the turn reported request %s; the only durable obligation is %s", owed.RequestID, first.RequestID)
+		}
+		if owed.Binding != first.Binding {
+			t.Fatalf("the turn reported candidate %+v; the durable obligation is about %+v", owed.Binding, first.Binding)
+		}
+		// A successor WAS published remotely -- that is what makes this the hard
+		// case -- and it is not what anything waits on or reports.
+		ids := publishedRequests(m)
+		if len(ids) < 2 {
+			t.Fatalf("this test needs the successor to have been published: %v", ids)
+		}
+		for _, id := range ids {
+			if id != first.RequestID && id == owed.RequestID {
+				t.Fatalf("the turn reported the unrecorded successor %s", id)
+			}
+		}
+		if err := os.Chmod(log.Dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if got := soleObligation(t, log); got.RequestID != first.RequestID {
+			t.Fatalf("the durable obligation changed: %+v", got)
+		}
+	})
+
+	t.Run("a first request that cannot be recorded fails closed", func(t *testing.T) {
+		m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
+		// No predecessor at all, and the log cannot be written. The directory is
+		// created first, because Open creates it lazily and a missing directory
+		// would fail for a different reason than the one under test.
+		if err := os.MkdirAll(log.Dir, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(log.Dir, 0o500); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Chmod(log.Dir, 0o700) })
+
+		_, err := runner.Run(context.Background(), reviewTurnFor(binding), nil)
+		if !errors.Is(err, roles.ErrReviewUnrecordable) {
+			t.Fatalf("err = %v, want ErrReviewUnrecordable", err)
+		}
+		// NOT an owed review: nothing durable says this candidate owes one, so
+		// no later process could reattach to it.
+		var owed *roles.ReviewUnanswered
+		if errors.As(err, &owed) {
+			t.Fatalf("an unrecorded request was reported as a durable owed review: %+v", owed)
+		}
+		// The published request is named, so an operator can find the orphan.
+		ids := publishedRequests(m)
+		if len(ids) != 1 {
+			t.Fatalf("published requests = %v, want the one that could not be recorded", ids)
+		}
+		if !strings.Contains(err.Error(), ids[0]) {
+			t.Fatalf("the refusal does not name the orphaned request %s: %v", ids[0], err)
+		}
+	})
+}
+
+// A transition that cannot retire its predecessor stops the turn.
+//
+// Creating the successor and failing to retire the old record leaves two active
+// obligations -- the state the owner refuses to choose within. Waiting on the
+// successor anyway would BE choosing.
+func TestAFailedRetirementStopsTheTurnRatherThanChoosing(t *testing.T) {
+	m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
+	first := standingRequest(t, runner, binding)
+
+	// The log goes read-only only once the successor's record exists: Open
+	// succeeds, and the removal that retires the predecessor is the single thing
+	// that fails. Injected through the withdrawal the transition posts first.
+	m.onPost = func(body string) []map[string]any {
+		if id, err := ParseWithdrawal(body); err == nil && id == first.RequestID {
+			_ = os.Chmod(log.Dir, 0o500)
+		}
+		return nil
+	}
+	t.Cleanup(func() { _ = os.Chmod(log.Dir, 0o700) })
+
+	moved := binding
+	moved.CandidateDigest = "sha256:candidate-two"
+	_, err := runner.Run(context.Background(), reviewTurnFor(moved), nil)
+	if !errors.Is(err, ErrObligationConflict) {
+		t.Fatalf("err = %v, want an explicit lifecycle conflict", err)
+	}
+	if !errors.Is(err, roles.ErrReviewLifecycleConflict) {
+		t.Fatalf("the conflict is not recognisable to the workflow: %v", err)
+	}
+	// No verdict, and nothing was consumed or waited through the successor.
+	var owed *roles.ReviewUnanswered
+	if errors.As(err, &owed) {
+		t.Fatalf("a two-obligation task was reported as a single owed review: %+v", owed)
+	}
+
+	if err := os.Chmod(log.Dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	standing, lerr := log.PendingReviews()
+	if lerr != nil {
+		t.Fatal(lerr)
+	}
+	if len(standing) != 2 {
+		t.Fatalf("want both obligations still active after a failed retirement, got %+v", standing)
+	}
+	// And the next turn refuses rather than choosing between them.
+	if _, err := runner.Run(context.Background(), reviewTurnFor(moved), nil); !errors.Is(err, ErrObligationConflict) {
+		t.Fatalf("the next turn chose between two obligations: %v", err)
+	}
+}
+
+// Naming a request by id is not a way around the uniqueness law.
+//
+// The runner refuses a task with two active obligations. A relay that resolved
+// its request directly could still be accepted, published and converged through
+// one of them while the other stayed owed and invisible -- consuming a review
+// through one obligation while ignoring the other, which is the forbidden state.
+func TestARelayCannotSelectOneOfTwoActiveObligationsByRequestID(t *testing.T) {
+	f := newRelayFixture(t)
+	rec := soleObligation(t, f.exchanges)
+	rival := rec
+	rival.RequestID = "r-ffffffffffffffff"
+	if err := f.exchanges.Open(rival); err != nil {
+		t.Fatal(err)
+	}
+	posted := len(f.mailbox.posted())
+
+	art := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	_, err := f.submit(art)
+	if !errors.Is(err, ErrObligationConflict) {
+		t.Fatalf("err = %v, want the relay refused for a lifecycle conflict", err)
+	}
+	if _, found, _ := f.store.Load(relayRequest); found {
+		t.Fatal("a refused relay left a receipt")
+	}
+	if _, found, _ := f.reviews.Load(relayRequest); found {
+		t.Fatal("a refused relay reached the common review store")
+	}
+	if n := len(f.mailbox.posted()); n != posted {
+		t.Fatalf("a refused relay published %d comment(s)", n-posted)
+	}
+	if owed, _ := f.exchanges.PendingReviews(); len(owed) != 2 {
+		t.Fatalf("the conflict consumed or retired something: %+v", owed)
+	}
+}
+
+// A caller cancelling the run is not a reviewer failing to answer.
+//
+// Normalising every context end to ErrNoAnswer sent cancellation to the reviewer
+// ladder as this provider's failure, and the next reviewer would be asked for a
+// review the caller had just stopped.
+func TestParentCancellationKeepsItsOwnIdentity(t *testing.T) {
+	_, runner, binding, log := reviewRunnerWithLog(t, 10*time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(120 * time.Millisecond)
+		cancel()
+	}()
+	_, err := runner.Run(ctx, reviewTurnFor(binding), nil)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want it to still satisfy errors.Is(context.Canceled)", err)
+	}
+	if errors.Is(err, roles.ErrReviewUnanswered) {
+		t.Fatalf("a caller cancellation was reported as an unanswered review: %v", err)
+	}
+	if errors.Is(err, ErrNoAnswer) {
+		t.Fatalf("a caller cancellation was reported as nobody answering: %v", err)
+	}
+	// The obligation is untouched: cancelling a run ends no review.
+	got := soleObligation(t, log)
+	if !strings.Contains(err.Error(), got.RequestID) {
+		t.Fatalf("the cancellation does not name the standing request %s: %v", got.RequestID, err)
+	}
+}
+
+// A malformed obligation is unreadable, never "the candidate changed".
+//
+// Read as a candidate change, the runner would supersede it -- silently
+// replacing authority nobody could read, and destroying the only record of what
+// went wrong.
+func TestAMalformedObligationIsUnreadableRatherThanSuperseded(t *testing.T) {
+	for name, corrupt := range map[string]func(*ExchangeRecord){
+		"a malformed base":           func(r *ExchangeRecord) { r.BaseSHA = "not-a-sha" },
+		"a malformed candidate tree": func(r *ExchangeRecord) { r.CandidateTree = "short" },
+		"a missing candidate digest": func(r *ExchangeRecord) { r.CandidateDigest = "" },
+		"a malformed review commit":  func(r *ExchangeRecord) { r.ReviewCommit = "nope" },
+		"no task":                    func(r *ExchangeRecord) { r.TaskID = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			m, runner, binding, log := reviewRunnerWithLog(t, 80*time.Millisecond)
+			first := standingRequest(t, runner, binding)
+			rec := soleObligation(t, log)
+			if err := log.Close(rec.TaskID, rec.RequestID); err != nil {
+				t.Fatal(err)
+			}
+			broken := rec
+			corrupt(&broken)
+			if broken.TaskID == "" {
+				broken.TaskID = rec.TaskID // the file name needs one; the field is what is read
+				broken.BaseSHA = ""
+			}
+			if err := log.Open(broken); err != nil {
+				t.Fatal(err)
+			}
+			published := len(publishedRequests(m))
+
+			runner.NewRequestID = func() string {
+				t.Fatal("a malformed obligation was repaired by superseding it")
+				return ""
+			}
+			_, err := runner.Run(context.Background(), reviewTurnFor(binding), nil)
+			if !errors.Is(err, ErrObligationUnreadable) {
+				t.Fatalf("err = %v, want ErrObligationUnreadable", err)
+			}
+			if n := len(publishedRequests(m)); n != published {
+				t.Fatalf("a malformed obligation caused %d new requests", n-published)
+			}
+			if w := prWithdrawalsIn(m); len(w) != 0 {
+				t.Fatalf("a malformed obligation was withdrawn: %v", w)
+			}
+			if owed, _ := log.PendingReviews(); len(owed) != 1 {
+				t.Fatalf("the malformed record was removed: %+v", owed)
+			}
+			_ = first
+		})
+	}
+}

@@ -220,20 +220,43 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 	// point can fail in a way that leaves the request standing, and a record
 	// written after a successful wait would record only the exchanges that never
 	// needed one.
-	openErr := obligations.Open(published, time.Now().Add(r.waitFor()).UTC())
-	if openErr != nil && emit != nil {
-		emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
-			"the review obligation could not be recorded, so a restart cannot find request "+
-				published.RequestID+"; any earlier obligation for this task is kept rather than superseded",
-			map[string]any{
-				"request_id": published.RequestID, "request_comment": requestComment,
-				"error": openErr.Error(), "transport": "github",
-			}))
+	// NO WAITER MAY ATTACH TO A REQUEST THAT IS NOT DURABLE.
+	//
+	// The published value above lives only in memory until this succeeds. A
+	// waiter on it would listen to a request no later process can find: on
+	// timeout it would report an owed review naming an id nothing recorded, and
+	// after a restart the next run would mint again -- the pre-R4 defect,
+	// reintroduced by a storage fault.
+	if openErr := obligations.Open(published, time.Now().Add(r.waitFor()).UTC()); openErr != nil {
+		if emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentStarted,
+				"review request "+published.RequestID+" was published and its obligation could not be recorded, "+
+					"so nothing waits on it: "+openErr.Error(),
+				map[string]any{
+					"request_id": published.RequestID, "request_comment": requestComment,
+					"error": openErr.Error(), "transport": "github",
+				}))
+		}
+		if have {
+			// The predecessor is still the durable truth. Report IT, not the
+			// successor nothing recorded.
+			return agent.Result{}, obligationUnreplaced(current, openErr)
+		}
+		// Nothing durable names this candidate's review. Stopping here is the
+		// point: the request exists remotely for an operator to see, and another
+		// reviewer would only publish a second one beside it.
+		return agent.Result{}, fmt.Errorf("%w: %s was published as comment %d and the record could not be written: %v",
+			roles.ErrReviewUnrecordable, published.RequestID, requestComment, openErr)
 	}
 	// Only now, with the replacement published AND durable, is its predecessor
 	// retired -- and only for the reasons that actually justify one.
-	if openErr == nil && have {
-		r.supersede(ctx, current, published, replacing, emit)
+	if have {
+		if err := r.supersede(ctx, current, published, replacing, emit); err != nil {
+			// FAIL CLOSED. Two obligations are now active and the owner's own
+			// rule is that neither may be chosen, so this turn does not get to
+			// consume or wait through the one it happens to be holding.
+			return agent.Result{}, err
+		}
 	}
 	return r.attachWaiter(ctx, published, req, emit, true)
 }
@@ -333,11 +356,22 @@ func (r *Runner) attachWaiter(ctx context.Context, o ReviewObligation, req agent
 					"outcome": "unanswered", "reason": err.Error(), "transport": "github",
 				}))
 		}
+		// A cancelled or expired PARENT context is checked FIRST, and keeps its
+		// own identity. The caller stopped this run -- a human, an invocation
+		// budget -- and that is not a reviewer who failed to answer. Reported as
+		// ErrNoAnswer it would reach the reviewer ladder as this provider's
+		// failure, and the next reviewer would be asked for a review the caller
+		// had just cancelled. errors.Is must still match context.Canceled, so
+		// the cause is WRAPPED rather than formatted.
+		if cerr := ctx.Err(); cerr != nil {
+			return agent.Result{}, fmt.Errorf(
+				"the review wait was ended by its caller; request %s remains the review this candidate is owed: %w",
+				o.RequestID, cerr)
+		}
 		// THIS waiter's deadline passed while the turn was still wanted. The
 		// request is published, bound to this exact candidate, and unanswered:
-		// a review still owed, not a provider that failed. A cancelled or
-		// expired PARENT context is a different fact and keeps its own error.
-		if ctx.Err() == nil && (errors.Is(err, ErrNoAnswer) || errors.Is(err, context.DeadlineExceeded)) {
+		// a review still owed, not a provider that failed.
+		if errors.Is(err, ErrNoAnswer) || errors.Is(err, context.DeadlineExceeded) {
 			return agent.Result{}, obligationWaited(o, wait, err)
 		}
 		return agent.Result{}, err
@@ -417,11 +451,16 @@ func (r *Runner) dischargeWith(o ReviewObligation, req agent.Request, review Mai
 // EXACT, old -> new, and only for a reason that justifies one. It does not
 // sweep every record for the task, because a waiter starting is not a reason to
 // retire anything.
-func (r *Runner) supersede(ctx context.Context, old, replacement ReviewObligation, reason string, emit func(event.Event)) {
+func (r *Runner) supersede(ctx context.Context, old, replacement ReviewObligation, reason string,
+	emit func(event.Event)) error {
+
 	withdrawErr := withdraw(ctx, r.Issue, old.record(time.Time{}))
 	closeErr := r.obligations().Retire(old)
 	if emit == nil {
-		return
+		if closeErr != nil {
+			return supersessionIncomplete(old, replacement, closeErr)
+		}
+		return nil
 	}
 	payload := map[string]any{
 		"superseded_request":        old.RequestID,
@@ -449,6 +488,22 @@ func (r *Runner) supersede(ctx context.Context, old, replacement ReviewObligatio
 			"the next turn will refuse rather than choose between them"
 	}
 	emit(event.New(r.SessionID, old.TaskID, event.SourceReviewer, event.Status, summary, payload))
+	if closeErr != nil {
+		return supersessionIncomplete(old, replacement, closeErr)
+	}
+	return nil
+}
+
+// supersessionIncomplete reports a transition that created its successor and
+// could not retire its predecessor.
+//
+// The task now has two active obligations, which is the state the owner refuses
+// to choose within. Continuing to wait on the successor would be choosing, so
+// the turn stops at the transition instead.
+func supersessionIncomplete(old, replacement ReviewObligation, cause error) error {
+	return fmt.Errorf("%w: %s was published and %s could not be retired (%v), so this task now has two active "+
+		"review obligations and neither may be acted through until that is repaired",
+		ErrObligationConflict, replacement.RequestID, old.RequestID, cause)
 }
 
 func shortCandidate(d string) string {

@@ -92,22 +92,38 @@ func recordedReviewRequest(task session.Interrupted) string {
 
 // owedReviewObligation is the durable review obligation this workspace records
 // for a task, read from the one component that owns review lifetime.
-func owedReviewObligation(repoRoot, taskID string) *ghbridge.ReviewObligation {
+//
+// The error is RETURNED, not folded into "there is no obligation". A lifecycle
+// conflict and an unreadable store are authority failures, and swallowing them
+// let the CLI start readiness checks, install a bridge and spin up an engine on
+// a task whose own records disagree about what it owes -- after which the
+// reviewer ladder could reclassify the fault as a provider that failed. Absence
+// and failure are different answers and the caller needs both.
+func owedReviewObligation(repoRoot, taskID string) (*ghbridge.ReviewObligation, error) {
 	store := ghbridge.ReviewObligationStore{
 		Exchanges: ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")},
 	}
 	o, found, err := store.Current(strings.TrimSpace(taskID))
-	if err != nil || !found {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	return &o
+	if !found {
+		return nil, nil
+	}
+	return &o, nil
 }
 
 // resumeAwaitingReview is `sensei-code resume --task <id>` for a waiting review.
 func resumeAwaitingReview(ctx context.Context, repo gitx.Repo, cfg config.Config, store *session.Store,
 	sessionID string, interrupted []session.Interrupted, taskID string,
 	timeout time.Duration, asJSON, quiet bool) int {
-	owed := owedReviewObligation(repo.Root, taskID)
+	// Asked BEFORE any readiness check, bridge install or engine: if the owner
+	// cannot establish what this task owes, nothing further should happen.
+	owed, err := owedReviewObligation(repo.Root, taskID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+		return exitFailed
+	}
 	target, err := selectReviewResume(interrupted, taskID, owed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
