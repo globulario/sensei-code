@@ -365,7 +365,7 @@ func TestAWaiterTimeoutHasOneOutcomeHoweverItIsObserved(t *testing.T) {
 		_, box := newPRMailbox(t, keyPath, "157", true)
 		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Millisecond)
 		defer cancel()
-		_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Second)
+		_, err := AwaitReview(ctx, box, obligationC1(box), time.Second)
 		if !errors.Is(err, ErrNoAnswer) {
 			t.Fatalf("err = %v, want ErrNoAnswer", err)
 		}
@@ -377,7 +377,7 @@ func TestAWaiterTimeoutHasOneOutcomeHoweverItIsObserved(t *testing.T) {
 		box := slowMailbox(t, keyPath, 300*time.Millisecond)
 		for i := 0; i < 20; i++ {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
-			_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Millisecond)
+			_, err := AwaitReview(ctx, box, obligationC1(box), time.Millisecond)
 			cancel()
 			if !errors.Is(err, ErrNoAnswer) {
 				t.Fatalf("run %d: err = %v, want ErrNoAnswer from an in-flight read", i, err)
@@ -389,7 +389,7 @@ func TestAWaiterTimeoutHasOneOutcomeHoweverItIsObserved(t *testing.T) {
 		box := brokenMailbox(t, keyPath)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Millisecond)
+		_, err := AwaitReview(ctx, box, obligationC1(box), time.Millisecond)
 		if err == nil {
 			t.Fatal("an unreadable mailbox reported success")
 		}

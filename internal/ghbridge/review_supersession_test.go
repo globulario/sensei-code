@@ -124,8 +124,17 @@ func TestAnAnswerToTheOldRequestCannotSatisfyTheNewOne(t *testing.T) {
 	if answered != 1 {
 		t.Fatalf("the stale answer was posted %d times, so the refusal proves nothing", answered)
 	}
-	var second *roles.ReviewUnanswered
-	if !errors.As(err, &second) {
+	// It is not an answer to THIS request -- and it is not silence either. The
+	// reviewer replied about the candidate that was superseded, which is real
+	// evidence about that candidate and no authority for this one.
+	var observed *roles.ReviewObservationFault
+	if !errors.As(err, &observed) {
 		t.Fatalf("an answer to request %q satisfied a different request: err=%v", first.RequestID, err)
+	}
+	if !observed.Has(roles.ObservedWrongTarget) {
+		t.Fatalf("a stale answer was observed as %v, want WRONG_TARGET", observed.Kinds())
+	}
+	if errors.Is(err, roles.ErrReviewUnanswered) {
+		t.Fatalf("a stale answer was reported as nobody answering: %v", err)
 	}
 }

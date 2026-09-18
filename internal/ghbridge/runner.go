@@ -343,7 +343,7 @@ func (r *Runner) attachWaiter(ctx context.Context, o ReviewObligation, req agent
 
 	// Authenticated against the principal PINNED ON THE OBLIGATION, never
 	// against this process's current configuration.
-	review, err := AwaitReview(wctx, r.Issue, o.ExpectedReviewer, o.Request(), r.Poll)
+	review, err := AwaitReview(wctx, r.Issue, o, r.Poll)
 	if err != nil {
 		if emit != nil {
 			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentFinished,
@@ -368,9 +368,18 @@ func (r *Runner) attachWaiter(ctx context.Context, o ReviewObligation, req agent
 				"the review wait was ended by its caller; request %s remains the review this candidate is owed: %w",
 				o.RequestID, cerr)
 		}
-		// THIS waiter's deadline passed while the turn was still wanted. The
-		// request is published, bound to this exact candidate, and unanswered:
-		// a review still owed, not a provider that failed.
+		// THIS waiter's deadline passed while the turn was still wanted, and
+		// nothing relevant was observed. The request is published, bound to this
+		// exact candidate, and unanswered: a review still owed, not a provider
+		// that failed.
+		//
+		// An OBSERVATION FAULT deliberately does not match here. It wraps only
+		// its own condition, so it falls through unchanged and reaches the
+		// caller as itself -- reported as unanswered it would tell an operator to
+		// wait for a reviewer who has already replied, with the unusable reply
+		// sitting in the conversation unmentioned. There is no separate branch
+		// for it because a branch that cannot change the outcome is a guard
+		// nothing can test.
 		if errors.Is(err, ErrNoAnswer) || errors.Is(err, context.DeadlineExceeded) {
 			return agent.Result{}, obligationWaited(o, wait, err)
 		}
@@ -401,8 +410,27 @@ func (r *Runner) dischargeWith(o ReviewObligation, req agent.Request, review Mai
 					map[string]any{"request_id": o.RequestID, "review_digest": review.Artifact.Digest,
 						"error": acceptErr.Error(), "transport": "github"}))
 			}
-			// A payload the reviewer parser refuses, or a conflicting artifact,
-			// is not an answer and discharges nothing.
+			// A DIFFERENT canonical review already answers this request. That is
+			// an observation about the mailbox, not a review that failed to
+			// arrive: the stored artifact stays byte-identical, the offered one
+			// is not stored, and nothing is discharged.
+			if errors.Is(acceptErr, reviewstore.ErrConflict) {
+				existing := ""
+				if stored, found, lerr := r.Reviews.Load(o.RequestID); lerr == nil && found {
+					existing = stored.ReviewDigest
+				}
+				return agent.Result{}, observationFault(o, []observation{{
+					kind: roles.ObservedConflict, comment: review.Comment,
+					author: review.Author, authorID: review.AuthorID,
+					bodyDigest: bodyDigestOf(review.Artifact.Raw),
+					bytes:      len(review.Artifact.Raw),
+					artifact:   &review.Artifact,
+					mismatch:   "review_digest is " + review.Artifact.Digest + " and this request is answered by " + existing,
+					diagnostic: acceptErr.Error(),
+				}})
+			}
+			// A payload the reviewer parser refuses is not an answer and
+			// discharges nothing.
 			return agent.Result{}, obligationStands(o, acceptErr)
 		}
 	}

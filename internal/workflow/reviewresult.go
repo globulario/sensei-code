@@ -205,6 +205,18 @@ const (
 	// So the candidate is preserved exactly as it stands and the run ends with
 	// the lifecycle reason, the way a structural refusal already does.
 	candidateReviewLifecycleFault candidateOutcome = "review_lifecycle_fault"
+	// candidateReviewObservationFault means reviewer-origin evidence WAS
+	// observed for the standing request and none of it established a usable
+	// review: malformed or unattributable content, a canonical review of
+	// another subject, or two different verdicts for one question.
+	//
+	// It shares a control action with the lifecycle fault -- preserve the
+	// candidate, preserve the obligation, ask nobody else -- and deliberately
+	// not an outcome, because the two mean different things. A lifecycle fault
+	// says our own records cannot be acted on; this says the reviewer replied
+	// and the reply is unusable. An operator does something different about
+	// each, and collapsing them loses the only fact that tells them which.
+	candidateReviewObservationFault candidateOutcome = "review_observation_fault"
 )
 
 // Accepted reads the outcome by membership. Written this way rather than as

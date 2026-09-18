@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/session"
 )
 
 // A REVIEW-LIFECYCLE FAULT IS NOT A REVIEWER FAILURE AND NOT AN IMPLEMENTER
@@ -298,5 +300,196 @@ func TestEveryReviewCallSiteCarriesTheLifecycleGuard(t *testing.T) {
 	if guards != sites {
 		t.Errorf("runCandidate has %d review call sites and %d lifecycle guards; every site must carry one, "+
 			"or a review-lifecycle fault becomes a handoff on whichever path is unguarded", sites, guards)
+	}
+}
+
+// OBSERVATION FAULTS ARE NOT SILENCE, AND NOT PARTICIPANT FAILURES.
+//
+// The reviewer replied and the reply is unusable: malformed, about another
+// subject, or two answers to one question. Every consumer must preserve which
+// of those it was, even though all three share one control action.
+
+func observationFaultOf(kinds ...string) *roles.ReviewObservationFault {
+	f := &roles.ReviewObservationFault{
+		RequestID: "r-0123456789abcdef", RequestComment: 42, Conversation: "157",
+		Binding:      roles.Binding{TaskID: "task-1", BaseSHA: "b", CandidateDigest: "d", CandidateTree: "t"},
+		ReviewCommit: "c",
+	}
+	for i, k := range kinds {
+		f.Observations = append(f.Observations, roles.ReviewObservation{
+			Kind: k, Comment: int64(100 + i), Author: "davecourtois", AuthorID: 1697116,
+			BodyDigest: fmt.Sprintf("sha256:observed-%d", i), Diagnostic: "observed " + k,
+		})
+	}
+	return f
+}
+
+func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T) {
+	for name, kind := range map[string]string{
+		"malformed reviewer content":  roles.ObservedMalformed,
+		"a review of another subject": roles.ObservedWrongTarget,
+		"two answers to one question": roles.ObservedConflict,
+	} {
+		t.Run(name, func(t *testing.T) {
+			fault := observationFaultOf(kind)
+			// The precondition: this really is an observation fault of that
+			// kind, and not one of its neighbours wearing the name.
+			if !errors.Is(fault, roles.ErrReviewObservationFault) || !fault.Has(kind) {
+				t.Fatalf("the fixture is not a %s observation fault: %v", kind, fault)
+			}
+			for _, neighbour := range []error{
+				roles.ErrReviewUnanswered, roles.ErrReviewUnobtainable, roles.ErrReviewLifecycleFault,
+			} {
+				if errors.Is(fault, neighbour) {
+					t.Fatalf("an observation fault is indistinguishable from %v", neighbour)
+				}
+			}
+
+			runner := &faultingRunner{err: fault}
+			h := lifecycleHarness(t, runner)
+
+			var failed error
+			h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+				"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
+
+			// NOT A FINISHED WORKFLOW. An observation fault leaves the review
+			// owed, so the invocation may not end through the failure path: at
+			// the execute boundary that becomes WorkflowFailed, which
+			// session.FindInterrupted treats as done -- the obligation would
+			// survive on disk while the task vanished from `resume --task`.
+			if failed != nil {
+				t.Fatalf("an observation fault ended the run as a failure: %v", failed)
+			}
+			// Drained ONCE: the channel is consumed by reading it, and draining
+			// twice left the second reader with nothing -- which looked like the
+			// terminal never being emitted.
+			events := drainEvents(h.events)
+			if contains(events, event.WorkflowFailed) {
+				t.Fatalf("an observation fault emitted WorkflowFailed: %v", kinds(events))
+			}
+			if !contains(events, event.WorkflowAwaitingReview) {
+				t.Fatalf("no resumable review terminal was emitted: %v", kinds(events))
+			}
+			// THE REAL CONSUMER CHAIN: the task must still be discoverable.
+			// Driving implement() with a callback proves the inner consumer and
+			// nothing about this, which is how the terminal defect survived.
+			//
+			// The task was created and planned before this invocation, as it is
+			// in any real run; implement() alone emits neither, and
+			// FindInterrupted needs both to consider a task at all.
+			history := append([]event.Event{
+				event.New("session-1", "task-1", event.SourceUser, event.TaskCreated, "the task", nil),
+				event.New("session-1", "task-1", event.SourceSystem, event.PlanProposed, "the plan", nil),
+			}, events...)
+			// The precondition: without the observation terminal this task would
+			// be interrupted and resumable, so a disappearance below is caused by
+			// the terminal and not by the fixture.
+			if len(session.FindInterrupted(history[:2])) != 1 {
+				t.Fatal("the fixture's task is not resumable to begin with, so this proves nothing")
+			}
+			var found bool
+			for _, task := range session.FindInterrupted(history) {
+				if task.TaskID == "task-1" {
+					found = true
+					if !task.AwaitingReview {
+						t.Error("the interrupted task is not marked as awaiting review")
+					}
+				}
+			}
+			if !found {
+				t.Fatal("the task disappeared from FindInterrupted, so resume --task cannot reach its obligation")
+			}
+			assertNoFallbackLadderRan(t, h, &runner.calls, events)
+			if got := runner.calls.Load(); got != 1 {
+				t.Errorf("the reviewer was asked %d times, want exactly once", got)
+			}
+
+			// The terminal names WHAT WAS SEEN, and never calls it silence or
+			// borrows the unanswered projection.
+			var stated bool
+			for _, ev := range events {
+				var p struct {
+					Kind     string   `json:"review_kind"`
+					Observed []string `json:"observed"`
+				}
+				if len(ev.Payload) == 0 || json.Unmarshal(ev.Payload, &p) != nil {
+					continue
+				}
+				if p.Kind == "unanswered" {
+					t.Errorf("observed evidence borrowed the unanswered projection: %s", ev.Payload)
+				}
+				if p.Kind == "observation_fault" {
+					stated = true
+					if len(p.Observed) == 0 || p.Observed[0] != kind {
+						t.Errorf("the terminal records observed=%v, want %s", p.Observed, kind)
+					}
+				}
+			}
+			if !stated {
+				t.Error("no terminal stated what was observed")
+			}
+		})
+	}
+}
+
+// Structural: every review call site routes the observation fault explicitly.
+//
+// runCandidate has two -- the candidate review and the findings review -- and a
+// witness driving one proves nothing about the other.
+func TestEveryReviewCallSiteRoutesObservationFaults(t *testing.T) {
+	blob, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(blob)
+	start := strings.Index(src, "func (e *Engine) runCandidate(")
+	if start < 0 {
+		t.Fatal("runCandidate was not found; this check proves nothing")
+	}
+	body := src[start:]
+	if end := strings.Index(body, "\n}\n"); end > 0 {
+		body = body[:end]
+	}
+	sites := strings.Count(body, "e.resolveReview(")
+	guards := strings.Count(body, "roles.ErrReviewObservationFault")
+	if sites < 2 {
+		t.Fatalf("found %d review call sites; this check expects both", sites)
+	}
+	if guards != sites {
+		t.Errorf("runCandidate has %d review call sites and %d observation guards; an unguarded site turns "+
+			"observed reviewer evidence into a handoff", sites, guards)
+	}
+}
+
+// An observation fault is checked BEFORE the provider is recorded unavailable.
+//
+// The assigned reviewer transport produced evidence. Counting it toward
+// ReviewUnobtainable would end the run saying no reviewer could be reached while
+// their reply sits in the conversation.
+func TestAnObservationFaultIsCheckedBeforeReviewerFallback(t *testing.T) {
+	blob, err := os.ReadFile("engine.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(blob)
+	start := strings.Index(src, "func (e *Engine) resolveReview(")
+	if start < 0 {
+		t.Fatal("resolveReview was not found; this check proves nothing")
+	}
+	body := src[start:]
+	if end := strings.Index(body, "\n}\n"); end > 0 {
+		body = body[:end]
+	}
+	guard := strings.Index(body, "roles.ErrReviewObservationFault")
+	fallback := strings.Index(body, "trying the next independent reviewer")
+	unobtainable := strings.Index(body, "ReviewUnobtainable")
+	if guard < 0 {
+		t.Fatal("resolveReview does not recognise an observation fault")
+	}
+	if fallback >= 0 && guard > fallback {
+		t.Error("the observation guard runs after the fallback emit")
+	}
+	if unobtainable >= 0 && guard > unobtainable {
+		t.Error("the observation guard runs after the provider is counted unavailable")
 	}
 }

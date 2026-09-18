@@ -197,7 +197,11 @@ func PublishRequest(ctx context.Context, box Issue, r Request, note string) (int
 type restComment struct {
 	ID   int64  `json:"id"`
 	Body string `json:"body"`
-	User struct {
+	// CreatedAt bounds the response window for an obligation recorded before
+	// request comment ids were kept. Weaker than the locator and used only when
+	// there is no locator to use.
+	CreatedAt time.Time `json:"created_at"`
+	User      struct {
 		Login  string `json:"login"`
 		ID     int64  `json:"id"`
 		NodeID string `json:"node_id"`
@@ -238,51 +242,21 @@ func Reviews(ctx context.Context, box Issue, expected Principal) ([]MailboxRevie
 	if strings.TrimSpace(box.Number) == "" {
 		return nil, errors.New("reading the mailbox needs a pull request number")
 	}
-	// The principal is supplied by the caller rather than read off the mailbox
-	// configuration, because WHICH account may answer belongs to the request
-	// that was published (#182 R4). A waiter reattaching to a standing request
-	// authenticates against the principal pinned on that obligation; changing a
-	// config line must not make a different account able to answer a question it
-	// was never asked.
 	if !expected.Configured() {
 		return nil, errors.New("reading the mailbox needs the principal permitted to answer; " +
 			"an unconfigured principal authenticates nobody")
 	}
-	var comments []restComment
-	if box.API != nil {
-		if !box.API.Configured() {
-			return nil, errors.New("the github app transport was selected but is not configured; " +
-				"refusing rather than reading as the operator's gh account")
-		}
-		var err error
-		if comments, err = box.API.ListComments(ctx, box.Number); err != nil {
-			return nil, err
-		}
-	} else {
-		// DEFERRED (post-PR6): `gh api --paginate` emits one JSON value PER
-		// PAGE, not one array, so this decode fails the moment the mailbox
-		// crosses a pagination boundary. The App path above follows pages
-		// explicitly and does not have this defect; this branch keeps the
-		// existing behaviour unchanged for installations with no App
-		// configured.
-		path := "repos/{owner}/{repo}/issues/" + box.Number + "/comments"
-		out, err := run(ctx, box.Dir, []string{"api", "--paginate", path})
-		if err != nil {
-			return nil, fmt.Errorf("gh api %s: %w: %s", path, err, out)
-		}
-		if jerr := json.Unmarshal([]byte(out), &comments); jerr != nil {
-			return nil, fmt.Errorf("gh returned a body this bridge could not read: %w", jerr)
-		}
+	comments, err := mailboxComments(ctx, box)
+	if err != nil {
+		return nil, err
 	}
 	var found []MailboxReview
 	for _, c := range comments {
 		if !expected.Matches(c.User.ID, c.User.Login) {
 			continue
 		}
-		// The EXACT comment bytes. Nothing is trimmed or re-rendered on the way
-		// in, so the digest recorded later names what the reviewer posted.
-		art, err := reviewartifact.Parse(c.Body)
-		if err != nil {
+		art, perr := reviewartifact.Parse(c.Body)
+		if perr != nil {
 			continue
 		}
 		found = append(found, MailboxReview{
@@ -290,6 +264,34 @@ func Reviews(ctx context.Context, box Issue, expected Principal) ([]MailboxRevie
 		})
 	}
 	return found, nil
+}
+
+// mailboxComments is the one place this package reads a conversation.
+//
+// Shared by the legacy reader above and by the observation scan, so both see
+// exactly the same content and a comment cannot be visible to one and not the
+// other.
+func mailboxComments(ctx context.Context, box Issue) ([]restComment, error) {
+	var comments []restComment
+	if box.API != nil {
+		if !box.API.Configured() {
+			return nil, errors.New("the github app transport was selected but is not configured; " +
+				"refusing rather than reading as the operator's gh account")
+		}
+		return box.API.ListComments(ctx, box.Number)
+	}
+	// DEFERRED (post-PR6): `gh api --paginate` emits one JSON value PER PAGE,
+	// not one array, so this decode fails the moment the mailbox crosses a
+	// pagination boundary. The App path above follows pages explicitly.
+	path := "repos/{owner}/{repo}/issues/" + box.Number + "/comments"
+	out, err := run(ctx, box.Dir, []string{"api", "--paginate", path})
+	if err != nil {
+		return nil, fmt.Errorf("gh api %s: %w: %s", path, err, out)
+	}
+	if jerr := json.Unmarshal([]byte(out), &comments); jerr != nil {
+		return nil, fmt.Errorf("gh returned a body this bridge could not read: %w", jerr)
+	}
+	return comments, nil
 }
 
 // ErrNoAnswer reports that no review answering this request appeared in time.
@@ -309,42 +311,66 @@ var ErrNoAnswer = errors.New("no review answering that request was posted")
 //
 // A timeout leaves the task durable and pending. Nothing here completes or
 // discards work.
-func AwaitReview(ctx context.Context, box Issue, expected Principal, r Request, every time.Duration) (MailboxReview, error) {
-	if err := r.Validate(); err != nil {
+func AwaitReview(ctx context.Context, box Issue, o ReviewObligation, every time.Duration) (MailboxReview, error) {
+	if err := o.Request().Validate(); err != nil {
 		return MailboxReview{}, err
 	}
 	if every <= 0 {
 		every = 15 * time.Second
 	}
+	// ACCUMULATED ACROSS POLLS, never replaced. A waiter that remembered only
+	// its last poll would forget a malformed reply as soon as the next poll
+	// returned nothing new -- and would end as silence again, which is the
+	// defect this exists to remove.
+	var seen observationSet
 	for {
-		revs, err := Reviews(ctx, box, expected)
+		found, err := Observe(ctx, box, o)
 		if err != nil {
-			// ONE outcome for one fact (#187). The wait can end while this
-			// goroutine is asleep in the select below, or while a mailbox read
-			// is in flight; both mean the same thing -- the waiter stopped and
-			// nobody had answered -- and they used to surface as two different
-			// errors depending on which branch happened to observe expiry.
-			// Callers then had to match both, and a caller that matched one got
-			// a race-dependent bug.
-			//
-			// A transport failure while the context is still LIVE is a different
-			// fact and keeps its own error: an unreadable mailbox is not silence.
+			// ONE outcome for one fact (#187): the wait can end while this
+			// goroutine sleeps below, or while a mailbox read is in flight, and
+			// both mean the waiter stopped. A transport failure while the
+			// context is still LIVE is a different fact and keeps its own error:
+			// an unreadable mailbox is not silence either.
 			if cerr := ctx.Err(); cerr != nil {
-				return MailboxReview{}, fmt.Errorf("%w: %v", ErrNoAnswer, cerr)
+				return MailboxReview{}, waitEnded(o, &seen, cerr)
 			}
 			return MailboxReview{}, fmt.Errorf("reading the review mailbox: %w", err)
 		}
-		for _, rev := range revs {
-			if rev.Answers(r) {
-				return rev, nil
-			}
+		seen.addAll(found)
+
+		switch bound := seen.bound(); len(bound) {
+		case 0:
+		case 1:
+			// The one exact-bound canonical artifact. Earlier malformed or
+			// wrong-target observations are diagnostic and must not block a
+			// reviewer who corrected themselves.
+			b := bound[0]
+			return MailboxReview{Artifact: *b.artifact, Author: b.author,
+				AuthorID: b.authorID, Comment: b.comment}, nil
+		default:
+			// Two different verdicts for one question. Not something to choose
+			// between, and not something to keep waiting through.
+			return MailboxReview{}, observationFault(o, conflictFrom(bound))
 		}
+
 		select {
 		case <-ctx.Done():
-			return MailboxReview{}, fmt.Errorf("%w: %v", ErrNoAnswer, ctx.Err())
+			return MailboxReview{}, waitEnded(o, &seen, ctx.Err())
 		case <-time.After(every):
 		}
 	}
+}
+
+// waitEnded says what a finished waiter actually saw.
+//
+// NO_RESPONSE is the only outcome that may become "no answer", and it is
+// constructed from an EMPTY relevant-observation set -- never from "we failed to
+// find a usable review", which is the conflation R5 removes.
+func waitEnded(o ReviewObligation, seen *observationSet, cause error) error {
+	if faults := seen.faults(); len(faults) > 0 {
+		return observationFault(o, faults)
+	}
+	return fmt.Errorf("%w: %v", ErrNoAnswer, cause)
 }
 
 // Answers reports whether this observed review replies to this exact request.

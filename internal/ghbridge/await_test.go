@@ -22,7 +22,7 @@ func TestMailboxReadFailureIsImmediateAndExplicit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Second)
+	_, err := AwaitReview(ctx, box, obligationC1(box), time.Second)
 	if err == nil {
 		t.Fatal("a broken mailbox returned success")
 	}
@@ -55,7 +55,7 @@ func TestCancellationIsReportedAsCancellation(t *testing.T) {
 		ExpectedReviewer: Principal{UserID: gptUserID}}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := AwaitReview(ctx, box, box.ExpectedReviewer, reqC1(), time.Second)
+	_, err := AwaitReview(ctx, box, obligationC1(box), time.Second)
 	if err == nil {
 		t.Fatal("expected an error")
 	}
