@@ -472,7 +472,7 @@ func TestAnAcceptedMailboxReviewSurvivesItsCommentAndTheMailbox(t *testing.T) {
 	// The comment is gone and GitHub is unreachable.
 	runner := f.runner()
 	runner.Issue = unreachableMailbox(f.box)
-	if _, err := Reviews(context.Background(), runner.Issue); err == nil {
+	if _, err := Reviews(context.Background(), runner.Issue, runner.Issue.ExpectedReviewer); err == nil {
 		t.Fatal("the fixture mailbox is still readable; this test proves nothing about an outage")
 	}
 
@@ -654,7 +654,7 @@ func TestTheReviewRunnerCannotAuthorOrPublishARelay(t *testing.T) {
 		}
 		for _, decl := range parsed.Decls {
 			fn, ok := decl.(*ast.FuncDecl)
-			if !ok || (fn.Name.Name != "pendingRelayFor" && fn.Name.Name != "verifyRelayRecord" &&
+			if !ok || (fn.Name.Name != "pendingRelayFor" && fn.Name.Name != "verifyRelayObligation" &&
 				fn.Name.Name != "storedReviewFor") {
 				continue
 			}

@@ -1580,6 +1580,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						// findings, so no worker is sent at them.
 						return candidateReviewUnobtainable, plan, lastReview, lastAudit, err
 					}
+					if isReviewLifecycleFault(ctx, err) {
+						// Review-lifecycle state, not a candidate. The handoff
+						// ladder must not reinterpret it as this worker failing.
+						return candidateReviewLifecycleFault, plan, lastReview, lastAudit, err
+					}
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
 				review := result.Verdict()
@@ -1925,6 +1930,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// transport state, not authority: it travels with its own outcome
 				// so the candidate is preserved rather than handed on.
 				return candidateReviewUnobtainable, plan, lastReview, lastAudit, err
+			}
+			if isReviewLifecycleFault(ctx, err) {
+				// Review-lifecycle state, not a candidate. Recorded as this
+				// worker failing, the handoff ladder would send the unchanged
+				// candidate to the next implementer -- who can no more record an
+				// obligation or repair a malformed authority file than this one.
+				return candidateReviewLifecycleFault, plan, lastReview, lastAudit, err
 			}
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
@@ -2613,6 +2625,32 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 			// so the candidate waits for this review instead.
 			return ReviewResult{}, err
 		}
+		if errors.Is(err, roles.ErrReviewUnrecordable) {
+			// A request reached the conversation and no durable obligation
+			// names it. Another provider would publish a SECOND request beside
+			// the orphaned one, and nothing local would name either. The storage
+			// fault is what needs repairing, not the reviewer.
+			return ReviewResult{}, err
+		}
+		if errors.Is(err, roles.ErrReviewLifecycleFault) {
+			// The task's own lifecycle records cannot be acted on -- they
+			// disagree, or one is unreadable. Asking another reviewer would add
+			// a third record to a task that already has two too many, or read
+			// the same malformed file again, and reporting it as provider
+			// unavailability would claim reviewers could not be reached when our
+			// own record is what is broken.
+			return ReviewResult{}, err
+		}
+		// A CALLER STOP IS NOT PERMISSION TO ASK SOMEBODY ELSE.
+		//
+		// Read off the PARENT context, not off the error: a provider that timed
+		// out on its own reports the same context value, and that is real
+		// reviewer unavailability. Ending observation of a review is what the
+		// caller asked for; the review remains owed and the obligation stands.
+		if cerr := ctx.Err(); cerr != nil {
+			return ReviewResult{}, fmt.Errorf("the review was stopped by its caller: %w", cerr)
+		}
+
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 			config.DisplayName(cfg.Name)+" could not produce a bounded review; trying the next independent reviewer",
 			map[string]string{"error": err.Error()}))
@@ -2633,6 +2671,29 @@ func (e *Engine) resolveReview(ctx context.Context, taskID string, assignment ro
 		return ReviewResult{}, &roles.ReviewUnobtainable{Binding: binding, Attempt: attempt, Attempted: attempted}
 	}
 	return ReviewResult{}, fmt.Errorf("no independent reviewer produced a bounded decision: %w", lastErr)
+}
+
+// isReviewLifecycleFault reports a condition that no fallback ladder may
+// reinterpret: not a reviewer who failed, not an implementer who failed.
+//
+// Defence in depth, deliberately duplicated with resolveReview's own guards. A
+// future review transport can return a lifecycle error without passing the
+// exact reviewer-selection path, and the outer loop is where the damage would
+// be worst -- a handoff sends the unchanged candidate to somebody who cannot
+// repair local authority state either.
+//
+// The context is checked as well as the error, because a provider may wrap a
+// cancellation in a way that loses its identity.
+func isReviewLifecycleFault(ctx context.Context, err error) bool {
+	// The PARENT context only. A provider's own deadline expiring is genuine
+	// reviewer unavailability -- #180's BLOCKED_EXTERNAL -- and matching
+	// context.DeadlineExceeded on the error would swallow that whole condition
+	// because a timed-out provider reports exactly the same value.
+	if ctx != nil && ctx.Err() != nil {
+		return true
+	}
+	return errors.Is(err, roles.ErrReviewUnrecordable) ||
+		errors.Is(err, roles.ErrReviewLifecycleFault)
 }
 
 // errReviewRefused marks a verdict the workflow will not accept from any
@@ -4585,6 +4646,47 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				"the candidate stands, validated and audited; no authorized reviewer could be reached, "+
 					"so it is preserved awaiting a fresh review request",
 				payload)
+			return
+		}
+		// A CALLER STOP IS NOT A PARTICIPANT FAILING, AT ANY STAGE.
+		//
+		// Checked here because the stop can land anywhere in the cycle, not only
+		// inside the review: under load it lands while the implementor is still
+		// running, and the loop then recorded that worker as failed and walked on
+		// to the next one -- which was killed by the same dead context and
+		// recorded too, until the aggregate error said "no bounded implementor
+		// produced an acceptable candidate". A caller who pressed stop is told
+		// their participants failed.
+		if ctx.Err() != nil {
+			state.OpenFindings(openFindings(review, audit, err))
+			_ = state.Save(e.Repo.Root)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				"the run was stopped by its caller, so the candidate is preserved and no other participant is asked",
+				map[string]any{"handoff": false, "stopped_by_caller": true}))
+			fail(fmt.Errorf("the run was stopped by its caller: %w", ctx.Err()))
+			return
+		}
+		if accepted == candidateReviewLifecycleFault {
+			// REVIEW-LIFECYCLE FAULT. The candidate holds real work and nothing
+			// about it is known to be wrong; what failed is our own review
+			// lifecycle -- an orphaned request, records that disagree or cannot
+			// be read, or the caller stopping the run.
+			//
+			// So it ends here, the way a structural refusal does: the candidate
+			// is preserved, this worker is NOT recorded as having failed, and no
+			// handoff is created. The next implementer could not record an
+			// obligation or repair a malformed file, and sending them at
+			// unobjected code is the category error #180 fixed one layer down.
+			state.OpenFindings(openFindings(review, audit, err))
+			_ = state.Save(e.Repo.Root)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				"the review lifecycle for this candidate could not proceed, so the candidate is preserved and "+
+					"no other participant is asked: "+err.Error(),
+				map[string]any{
+					"review_kind": "lifecycle_fault", "independent_review": false,
+					"handoff": false, "error": err.Error(),
+				}))
+			fail(err)
 			return
 		}
 		if err != nil && errors.Is(err, errStructural) {

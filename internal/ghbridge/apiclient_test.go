@@ -93,7 +93,7 @@ func TestReviewsUsesInstallationAuthentication(t *testing.T) {
 	keyPath, _ := writeTestKey(t)
 	m, box := newAppMailbox(t, keyPath)
 
-	if _, err := Reviews(context.Background(), box); err != nil {
+	if _, err := Reviews(context.Background(), box, box.ExpectedReviewer); err != nil {
 		t.Fatalf("Reviews: %v", err)
 	}
 	if len(m.authSeen) == 0 {
@@ -119,7 +119,7 @@ func TestReviewerAuthenticationIsUnchangedUnderTheAppTransport(t *testing.T) {
 		"body": body,
 		"user": map[string]any{"login": "someone-else", "id": 424242},
 	})
-	got, err := Reviews(context.Background(), box)
+	got, err := Reviews(context.Background(), box, box.ExpectedReviewer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestReviewerAuthenticationIsUnchangedUnderTheAppTransport(t *testing.T) {
 		"body": body,
 		"user": map[string]any{"login": "davecourtois", "id": 1697116},
 	})
-	got, err = Reviews(context.Background(), box)
+	got, err = Reviews(context.Background(), box, box.ExpectedReviewer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,7 +162,7 @@ func TestSelectedAppTransportRefusesRatherThanFallingBackToPersonalGH(t *testing
 	if !strings.Contains(err.Error(), "refusing") {
 		t.Errorf("the refusal should say it refused rather than fell back: %v", err)
 	}
-	if _, err = Reviews(context.Background(), box); err == nil {
+	if _, err = Reviews(context.Background(), box, box.ExpectedReviewer); err == nil {
 		t.Fatal("an unconfigured app transport read anyway")
 	}
 }
@@ -176,7 +176,7 @@ func TestWithoutAppConfigurationTheGHPathIsUnchanged(t *testing.T) {
 	}
 	// Reaches the gh path and fails there because the temp dir is not a repo —
 	// which is the pre-existing behaviour, not an App refusal.
-	_, err := Reviews(context.Background(), box)
+	_, err := Reviews(context.Background(), box, box.ExpectedReviewer)
 	if err == nil {
 		t.Fatal("expected the gh path to fail in a non-repository")
 	}
@@ -216,7 +216,7 @@ func TestInstallationTokenNeverAppearsInTransportErrors(t *testing.T) {
 	if strings.Contains(err.Error(), "ghs_SUPER_SECRET_VALUE") {
 		t.Fatalf("the installation token appeared in an error: %v", err)
 	}
-	if _, rerr := Reviews(context.Background(), box); rerr == nil {
+	if _, rerr := Reviews(context.Background(), box, box.ExpectedReviewer); rerr == nil {
 		t.Fatal("expected a read failure")
 	} else if strings.Contains(rerr.Error(), "ghs_SUPER_SECRET_VALUE") {
 		t.Fatalf("the installation token appeared in a read error: %v", rerr)

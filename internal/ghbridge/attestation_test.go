@@ -142,8 +142,27 @@ func TestTheOverrideSelectedIsTheOneNamingTheReviewBeingConsumed(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Sequentially, because one task owes at most one review at a time (#182
+	// R4): the first obligation is discharged before the second is relayed.
+	// Two simultaneously active obligations are a refused conflict, not a
+	// scenario an override has to choose within.
+	if err := f.exchanges.Close(relaySubject.TaskID, secondRequest); err != nil {
+		t.Fatal(err)
+	}
 	first, err := f.submit(artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload))
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.exchanges.Close(relaySubject.TaskID, relayRequest); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.exchanges.Open(ExchangeRecord{
+		TaskID: relaySubject.TaskID, RequestID: secondRequest, RequestComment: 5686428019, Conversation: "157",
+		PublishedAt: time.Now().Add(-30 * time.Minute).UTC(), Kind: ExchangeReview, ReviewerProvider: "chatgpt",
+		BaseSHA: relaySubject.BaseSHA, CandidateDigest: relaySubject.CandidateDigest,
+		CandidateTree: relaySubject.CandidateTree, ReviewCommit: relaySubject.ReviewCommit,
+		ExpectedReviewerID: 1697116, ExpectedReviewerLogin: "davecourtois",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	second, err := f.submit(artifactFor(t, relaySubject, secondRequest, "chatgpt",

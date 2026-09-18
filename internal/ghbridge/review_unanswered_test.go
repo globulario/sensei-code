@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -27,9 +28,12 @@ func unansweredReviewFixture(t *testing.T, wait time.Duration) (*Runner, roles.B
 			t.Fatalf("git %v: %v: %s", args, err, out)
 		}
 	}
+	// A durable obligation store, because R4 forbids attaching a waiter to a
+	// request nothing recorded -- and every production bridge configures one.
 	runner := &Runner{
 		Issue: box, RepoDir: dir, Remote: "origin", NewRequestID: NewRequestID,
 		Poll: 10 * time.Millisecond, Wait: wait, ReviewerProvider: "chatgpt",
+		Exchanges: ExchangeLog{Dir: filepath.Join(t.TempDir(), "exchanges")},
 	}
 	return runner, roles.Binding{TaskID: "T", BaseSHA: base, CandidateTree: tree1, CandidateDigest: digestC1}
 }
