@@ -61,6 +61,13 @@ const (
 	// exitCompleted would be told a change was accepted that no independent
 	// reviewer ever looked at.
 	exitAwaitingReview = 7
+	// exitBlockedExternal means a role turn the task is owed could not be
+	// served because its provider proved it is temporarily unavailable -- out
+	// of quota, for example. Nothing failed and nothing was decided; the task
+	// is preserved and `sensei-code resume --task <id>` retries that turn.
+	// Read as exitFailed, it taught the first dogfood run that its objective
+	// broke; read as success, it would claim work nobody did.
+	exitBlockedExternal = 8
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
@@ -360,6 +367,8 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitAwaitingAuthority, true
 	case event.WorkflowAwaitingReview:
 		return exitAwaitingReview, true
+	case event.WorkflowBlockedExternal:
+		return exitBlockedExternal, true
 	}
 	return 0, false
 }
@@ -370,7 +379,8 @@ func terminal(k event.Kind) bool {
 	switch k {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
-		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.AuthorityRequired:
+		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
+		event.AuthorityRequired:
 		return true
 	}
 	return false

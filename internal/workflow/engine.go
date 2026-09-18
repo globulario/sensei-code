@@ -862,6 +862,11 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 			e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
 			return
 		}
+		// A provider that proved it cannot serve a role turn ends the
+		// invocation, not the task.
+		if e.blockExternally(taskID, err) {
+			return
+		}
 		// One classifier for both authority paths. A person choosing Stop is not
 		// a broken run, and this used to arrive as an anonymous error and be
 		// recorded as FAILED -- teaching the behavioural record that this task
@@ -1515,6 +1520,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// transcript nobody had judged.
 			result, err := impl.Runner.Run(ctx, agent.Request{Role: roles.Implementer, TaskID: taskID, Workspace: workspace, Prompt: prompt, Graph: e.graphFor(taskID)}, e.emit)
 			if err != nil {
+				// Attributed HERE, where the implementer turn was asked, so
+				// nothing downstream has to guess which role a provider
+				// refusal belongs to.
+				if blocked := roleUnavailable(roles.Implementer, impl.Name, err); blocked != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, blocked
+				}
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 			}
 			report = strings.TrimSpace(result.Text)
@@ -2312,6 +2323,14 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		}
 		result, err := architect.Runner.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
+			// A provider that PROVED it cannot serve now produced no answer, so
+			// there is nothing to retry against: a second turn would meet the
+			// same refusal, and telling it "no response was received" would
+			// spend the retry budget on transport state. The architect has no
+			// authorized alternate, so the task waits on this provider.
+			if blocked := roleUnavailable(roles.Architect, architect.Name, err); blocked != nil {
+				return architectureDecision{}, blocked
+			}
 			lastErr = err
 			retryNote = architectRetryNoAnswer
 			continue
@@ -4572,6 +4591,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// in structural_test.go reads the first `failures = append` in this loop as the
 	// candidate-failure path.
 	var ineligible []string
+	// unavailable is kept separate from failures for the same reason: a
+	// provider that proved it cannot serve now did not fail at the work.
+	var unavailable []*RoleUnavailable
 	// continuing names the candidate the next worker would take over, so an
 	// exclusion recorded against THAT candidate applies and one recorded against
 	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
@@ -4786,6 +4808,29 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			fail(err)
 			return
 		}
+		var blocked *RoleUnavailable
+		if errors.As(err, &blocked) {
+			state.Evidence = tc.EvidenceSnapshot
+			state.OpenFindings(openFindings(review, audit, nil))
+			_ = state.Save(e.Repo.Root)
+			if blocked.Role != roles.Implementer {
+				// Another role's turn -- the architect re-planning inside the
+				// cycle -- has no authorized alternate here. The candidate is
+				// preserved as it stands and the task waits on that provider.
+				fail(blocked)
+				return
+			}
+			// The next configured implementor is the authorized alternate, so
+			// it is tried exactly as before -- but this worker is NOT recorded
+			// as having failed and no handoff is written: it produced nothing
+			// to hand on and nothing about the candidate is in question.
+			unavailable = append(unavailable, blocked)
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				config.DisplayName(worker.Name)+" could not serve the implementer turn ("+blocked.Cause.Reason+
+					"); the candidate is kept as it stands and the next configured implementor is tried",
+				map[string]any{"handoff": false, "provider_unavailable": true}))
+			continue
+		}
 		if err != nil && errors.Is(err, errStructural) {
 			// The candidate is kept -- it holds real work -- and the run ends
 			// with the structural reason. Another executor would receive the
@@ -4957,6 +5002,21 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			}
 			return
 		}
+	}
+
+	// Nothing failed at the work: every implementor that was asked proved its
+	// provider could not serve. The implementer turn is still owed, so the task
+	// waits -- and the candidate is NOT disposed of, however empty, because the
+	// resumed task continues from it.
+	if len(unavailable) > 0 && len(failures) == 0 {
+		e.reportUndeliveredNotes(taskID)
+		fail(unavailable[len(unavailable)-1])
+		return
+	}
+	// A real failure beside an unavailable provider is still a failure; the
+	// unavailable ones are named so the account is complete.
+	for _, u := range unavailable {
+		ineligible = append(ineligible, u.Provider+": "+u.Error())
 	}
 
 	// Nothing converged. Whether the candidate survives that is decided by what
@@ -5230,6 +5290,35 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	e.execute(ctx, task.TaskID, task.Task)
 }
 
+// resumeBlockedArchitecture continues a task that was blocked before it had a
+// plan: the turn it is owed is its architect's.
+//
+// It re-enters execute under the SAME task id, which is exactly what an
+// answered authority question does. Nothing is minted: candidate.Establish
+// reloads the base recorded for this task (and refuses if HEAD moved), the
+// start gate re-certifies against the graph as it is now, and any human answer
+// this task already gave is honoured from the session record by
+// applyAnsweredCondition. What is retried is the architect turn.
+func (e *Engine) resumeBlockedArchitecture(ctx context.Context, task session.Interrupted) {
+	block, err := ParseExternalBlock(task.BlockedExternal)
+	if err == nil && block.TaskID != task.TaskID {
+		err = fmt.Errorf("the external block record is bound to task %s, not to this one", block.TaskID)
+	}
+	if err != nil {
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the task cannot be resumed at its blocked turn: "+err.Error(), nil)
+		return
+	}
+	// The objective is the recorded one, and the provenance says this is a
+	// resumption: nobody submitted it again.
+	e.recordObjective(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+		"resuming the same task at the turn it is owed ("+block.Describe()+"); the objective, task identity and "+
+			"candidate base are the recorded ones", block))
+	e.execute(ctx, task.TaskID, task.Task)
+}
+
 // Resume continues a task that was interrupted after its plan was approved. The
 // candidate worktree still holds the work, so this re-enters the implementation
 // stage with the reviewer's last findings rather than re-deciding the plan.
@@ -5242,7 +5331,15 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.resumeAuthority(ctx, task)
 			return
 		}
+		if !task.Planned && len(task.BlockedExternal) != 0 {
+			e.resumeBlockedArchitecture(ctx, task)
+			return
+		}
 		fail := func(err error) {
+			// Blocked again is blocked, not failed, and the task stays itself.
+			if e.blockExternally(task.TaskID, err) {
+				return
+			}
 			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 				err.Error(), nil)

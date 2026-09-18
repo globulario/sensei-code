@@ -59,7 +59,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v8"
+const SchemaVersion = "sensei-code.governed-run-receipt/v9"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -123,6 +123,17 @@ const (
 	// accepted it established no independence, and the obligation is open. It
 	// is a terminal outcome and it is not a success.
 	OutcomeReviewObligationUnmet Outcome = "REVIEW_OBLIGATION_UNMET"
+	// OutcomeBlockedExternal: a role's provider PROVED it could not serve the
+	// turn this run needed, and no authorized alternate could.
+	//
+	// It exists because every existing word is false here. FAILED said the
+	// first dogfood run (2026-09-18) broke when its architect ran out of quota,
+	// and FindInterrupted reads FAILED as final, so the same objective could
+	// only continue as a new task. UNREVIEWED speaks about a verdict and no role
+	// output was produced at all. STOPPED and TIMED_OUT name who ended it, and
+	// neither did. So the fact gets its own name: the task stands, the role turn
+	// it is owed is unanswered, and the reason is outside this system.
+	OutcomeBlockedExternal Outcome = "BLOCKED_EXTERNAL"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -135,7 +146,7 @@ func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
-		OutcomeUnknown:
+		OutcomeBlockedExternal, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -184,6 +195,14 @@ var vocabularies = map[string][]Outcome{
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
 		OutcomeReviewObligationUnmet, OutcomeUnknown,
 	},
+	// v9 adds BLOCKED_EXTERNAL, and the external_block field it requires: a
+	// role turn a provider proved it could not serve. A v8 receipt carrying it
+	// would be speaking a language its own version does not define.
+	"sensei-code.governed-run-receipt/v9": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -204,6 +223,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	// Listed anyway, because an unlisted version is unreadable rather than
 	// permissive.
 	"sensei-code.governed-run-receipt/v8": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v9 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v9": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
@@ -590,6 +613,15 @@ type Receipt struct {
 	// cannot name its own commit.
 	DeferredQuestion Value `json:"deferred_question"`
 
+	// ExternalBlock is the role turn a BLOCKED_EXTERNAL run is owed and the
+	// provider condition that blocked it: role, provider, the provider's own
+	// code, and the retry time only when the provider supplied one.
+	//
+	// Required when the outcome is BLOCKED_EXTERNAL, for the reason
+	// DeferredQuestion is: "something outside blocked this" without saying WHAT
+	// cannot be resumed against or waited on.
+	ExternalBlock Value `json:"external_block"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -651,6 +683,7 @@ func (r Receipt) Fields() []Field {
 	reviewed := r.Outcome == OutcomeAccepted || r.Outcome == OutcomeRefused
 	deferred := r.Outcome == OutcomeDeferred
 	timedOut := r.Outcome == OutcomeTimedOut
+	blocked := r.Outcome == OutcomeBlockedExternal
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -670,6 +703,7 @@ func (r Receipt) Fields() []Field {
 		{"candidate_commit_diff_digest", r.CandidateCommitDiffDigest, Rederivable, candidate},
 		{"deferred_question", r.DeferredQuestion, Observed, deferred},
 		{"execution_budget", r.ExecutionBudget, Observed, timedOut},
+		{"external_block", r.ExternalBlock, Observed, blocked},
 		{"formatter_mutation", r.FormatterMutationState, Observed, worked},
 		{"terminal", r.Terminal, Observed, true},
 	}

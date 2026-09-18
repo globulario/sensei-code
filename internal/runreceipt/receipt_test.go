@@ -174,6 +174,7 @@ func completeReceipt() Receipt {
 		FormatterMutationState:    MeasuredValue(string(FormatterUnchanged), "no formatter is configured"),
 		ExecutionBudget:           UnknownValue("no execution budget expired"),
 		DeferredQuestion:          UnknownValue("no authority question was deferred"),
+		ExternalBlock:             UnknownValue("no role turn was blocked externally"),
 		PlanState:                 PlanPresent,
 		CandidateState:            CandidatePresent,
 		CandidateCommit:           MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
@@ -590,13 +591,13 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v8"
+	const version = "sensei-code.governed-run-receipt/v9"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
 	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
-		OutcomeReviewObligationUnmet, OutcomeUnknown}
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeUnknown}
 	for _, o := range outcomes {
 		if !o.Valid() {
 			t.Errorf("%q is enumerated here but not Valid()", o)
@@ -609,7 +610,7 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 			t.Errorf("%q is valid but not pinned by this test", candidate)
 		}
 	}
-	if len(outcomes) != 9 {
+	if len(outcomes) != 10 {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
 	}
 }
@@ -674,6 +675,36 @@ func TestATimedOutRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	// v4 does not define TIMED_OUT.
 	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v4", OutcomeTimedOut); err == nil {
 		t.Fatal("v4 + TIMED_OUT must be invalid: TIMED_OUT was added in v5")
+	}
+}
+
+// BLOCKED_EXTERNAL is a real terminal outcome: a role turn a provider proved it
+// could not serve. It is complete only when it says WHICH turn and why, and it
+// may follow a bounded verdict -- an implementer blocked in its second cycle has
+// a REVISE behind it.
+func TestABlockedExternalRunIsACompleteRecordOfARealOutcome(t *testing.T) {
+	if !OutcomeBlockedExternal.SufficientForComplete() {
+		t.Fatal("BLOCKED_EXTERNAL must be a valid outcome sufficient for a complete record")
+	}
+	for _, other := range []Outcome{OutcomeFailed, OutcomeStopped, OutcomeTimedOut, OutcomeUnreviewed, OutcomeDeferred} {
+		if OutcomeBlockedExternal == other {
+			t.Fatalf("an external block is not %s", other)
+		}
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeBlockedExternal
+	rec.ExternalBlock = MeasuredValue("architect chatgpt usageLimitExceeded; retry_at UNKNOWN",
+		"the provider's structured refusal of the role turn this run was owed")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / BLOCKED_EXTERNAL must be representable: %v", missing)
+	}
+	rec.ExternalBlock = UnknownValue("not recorded")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "external_block") {
+		t.Fatalf("a block that does not say what blocked it must be incomplete: state=%s missing=%v", state, missing)
+	}
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v8", OutcomeBlockedExternal); err == nil {
+		t.Fatal("v8 + BLOCKED_EXTERNAL must be invalid: BLOCKED_EXTERNAL was added in v9")
 	}
 }
 

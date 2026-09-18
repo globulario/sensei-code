@@ -226,6 +226,15 @@ type Interrupted struct {
 	// AwaitingReview, so a revised task never carries an obligation it no longer
 	// owes.
 	AwaitingReviewRecord json.RawMessage
+	// Planned reports whether the task ever received a bounded plan. A resume
+	// routes on it: a task with no plan is owed its architect turn, one with a
+	// plan is owed implementation.
+	Planned bool
+	// BlockedExternal is the WorkflowBlockedExternal payload, byte for byte:
+	// which role turn the task is owed and which provider proved it could not
+	// serve it. The newest block wins; it is never cleared by a later event,
+	// because what a resume retries is decided by Planned, not by this record.
+	BlockedExternal json.RawMessage
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -237,6 +246,7 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		Interrupted
 		planned  bool
 		deferred bool
+		blocked  bool
 		done     bool
 		// reviewFromVerdict records that Review holds a bounded verdict's
 		// instruction, so a later status line cannot replace an obligation
@@ -354,6 +364,13 @@ func FindInterrupted(events []event.Event) []Interrupted {
 					p.reviewFromVerdict = true
 				}
 			}
+		case event.WorkflowBlockedExternal:
+			// Not terminal, and resumable even with no plan: a provider that
+			// proved it cannot serve now blocked a turn the task is still owed.
+			// Emitting this as WorkflowFailed is exactly what made the first
+			// dogfood run (2026-09-18) unrecoverable except as a new task.
+			p.blocked = true
+			p.BlockedExternal = e.Payload
 		case event.WorkflowAwaitingAuthority:
 			// Also not terminal, and resumable even with no plan: a question
 			// deferred during architecture is the ordinary case, and it is
@@ -382,7 +399,8 @@ func FindInterrupted(events []event.Event) []Interrupted {
 	var out []Interrupted
 	for _, id := range order {
 		p := byTask[id]
-		if (p.planned || p.deferred) && !p.done && strings.TrimSpace(p.Task) != "" {
+		if (p.planned || p.deferred || p.blocked) && !p.done && strings.TrimSpace(p.Task) != "" {
+			p.Interrupted.Planned = p.planned
 			out = append(out, p.Interrupted)
 		}
 	}
