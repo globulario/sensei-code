@@ -241,8 +241,14 @@ func TestARoleTheBridgeDoesNotCarryReachesTheFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if carried, ok := got.Runner.(*Runner); !ok || carried != reviewer {
+	carried, ok := got.Runner.(*Runner)
+	if !ok || carried.Issue.Number != reviewer.Issue.Number {
 		t.Errorf("a carried role stopped being carried: %T", got.Runner)
+	}
+	// The resolver hands back a per-turn copy carrying the WORKFLOW's
+	// assignment, so the request it publishes can state who was asked.
+	if ok && carried.ReviewerProvider != "chatgpt" {
+		t.Errorf("the carried runner was assigned %q, want the workflow's chatgpt", carried.ReviewerProvider)
 	}
 }
 
@@ -380,7 +386,7 @@ func TestAnUnansweredReviewTurnReportsThatItEnded(t *testing.T) {
 
 	runner := &Runner{
 		Issue: box, RepoDir: dir, Remote: "origin", NewRequestID: NewRequestID,
-		Poll: 10 * time.Millisecond, Wait: 120 * time.Millisecond,
+		Poll: 10 * time.Millisecond, Wait: 120 * time.Millisecond, ReviewerProvider: "chatgpt",
 	}
 	var events []event.Event
 	_, err := runner.Run(context.Background(), agent.Request{

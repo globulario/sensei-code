@@ -1,6 +1,7 @@
 package ghbridge
 
 import (
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"strings"
 	"testing"
 
@@ -24,7 +25,31 @@ func subjC1() Subject {
 }
 
 func reqC1() Request {
-	return Request{Subject: subjC1(), RequestID: "r-1", Kind: KindReview}
+	return Request{Subject: subjC1(), RequestID: "r-1", Kind: KindReview, ReviewerProvider: "chatgpt"}
+}
+
+// canonicalAnswer renders a reviewer's answer in the CANONICAL grammar: the
+// same one the relay uses, naming the provider that was asked.
+//
+// Test fixtures build answers the way a reviewer does. Before R2 this package
+// accepted an envelope with no reviewer= line, so a fixture could prove the
+// mailbox worked while proving nothing about who answered.
+func canonicalAnswer(t *testing.T, s Subject, requestID, provider, body string) string {
+	t.Helper()
+	raw, err := reviewartifact.Artifact{
+		ReviewerProvider: provider,
+		TaskID:           s.TaskID,
+		RequestID:        requestID,
+		BaseSHA:          s.BaseSHA,
+		CandidateDigest:  s.CandidateDigest,
+		CandidateTree:    s.CandidateTree,
+		ReviewCommit:     s.ReviewCommit,
+		Body:             body,
+	}.Render()
+	if err != nil {
+		t.Fatalf("rendering a canonical answer: %v", err)
+	}
+	return raw
 }
 
 func TestRequestMarkerRoundTrips(t *testing.T) {
@@ -274,6 +299,7 @@ func TestARequestNamesBothRepositories(t *testing.T) {
 		},
 		RequestID:           "r-1",
 		Kind:                KindReview,
+		ReviewerProvider:    "chatgpt",
 		MailboxRepository:   "globulario/sensei-code",
 		WorkspaceRepository: "globulario/sensei",
 	}
@@ -311,7 +337,7 @@ func TestRepositoryRoutingIsNotPartOfTheAnsweredSubject(t *testing.T) {
 		CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: baseSHA,
 	}
 	req := Request{
-		Subject: subject, RequestID: "r-1", Kind: KindReview,
+		Subject: subject, RequestID: "r-1", Kind: KindReview, ReviewerProvider: "chatgpt",
 		MailboxRepository: "globulario/sensei-code", WorkspaceRepository: "globulario/sensei",
 	}
 	// A response that repeats only the subject must still answer the request.
@@ -331,7 +357,7 @@ func TestAnUnknownRepositoryIsOmittedNotAsserted(t *testing.T) {
 			TaskID: "T-1", BaseSHA: baseSHA,
 			CandidateDigest: digestC1, CandidateTree: treeC1, ReviewCommit: baseSHA,
 		},
-		RequestID: "r-1", Kind: KindReview,
+		RequestID: "r-1", Kind: KindReview, ReviewerProvider: "chatgpt",
 	}
 	m, err := r.Marker()
 	if err != nil {

@@ -135,7 +135,7 @@ func TestTheOverrideSelectedIsTheOneNamingTheReviewBeingConsumed(t *testing.T) {
 	const secondRequest = "r-00000000000000aa" // sorts before relayRequest
 	if err := f.exchanges.Open(ExchangeRecord{
 		TaskID: relaySubject.TaskID, RequestID: secondRequest, RequestComment: 5686428019, Conversation: "157",
-		PublishedAt: time.Now().Add(-30 * time.Minute).UTC(), Kind: ExchangeReview,
+		PublishedAt: time.Now().Add(-30 * time.Minute).UTC(), Kind: ExchangeReview, ReviewerProvider: "chatgpt",
 		BaseSHA: relaySubject.BaseSHA, CandidateDigest: relaySubject.CandidateDigest,
 		CandidateTree: relaySubject.CandidateTree, ReviewCommit: relaySubject.ReviewCommit,
 	}); err != nil {

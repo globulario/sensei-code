@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
-	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -48,6 +48,13 @@ var (
 	// ErrRelayPublication reports a relay that WAS accepted and whose publication
 	// did not complete. The accepted review is preserved.
 	ErrRelayPublication = errors.New("the relayed review is accepted and preserved, and its publication did not complete")
+	// ErrRelayConvergence reports a relay that was accepted AND published, and
+	// whose record in the common review store did not complete.
+	//
+	// Its own error because the recovery is different: the GitHub receipt
+	// already exists, so the repair is to retry the store write, never to
+	// publish again. Resubmitting the identical artifact does exactly that.
+	ErrRelayConvergence = errors.New("the relayed review is published and preserved, and recording it in the review store did not complete")
 )
 
 // RelayPrincipal is who relayed a review, as the control process observed the
@@ -253,8 +260,12 @@ type RelaySubmission struct {
 	Principal RelayPrincipal
 	Exchanges ExchangeLog
 	Store     RelayStore
-	Mailbox   Issue
-	Now       func() time.Time
+	// Reviews is the common semantic record every transport converges on. A
+	// published relay writes the ORIGINAL reviewer artifact here, so the same
+	// bytes mean the same thing whether they came down this pipe or the mailbox.
+	Reviews reviewstore.Store
+	Mailbox Issue
+	Now     func() time.Time
 }
 
 func refused(format string, args ...any) error {
@@ -309,12 +320,25 @@ func AcceptRelayedReview(ctx context.Context, in RelaySubmission) (RelayRecord, 
 	if mismatch := subjectMismatch(rec.Subject(), art.Subject); mismatch != "" {
 		return RelayRecord{}, refused("the review is not about the candidate request %s carried: %s", art.RequestID, mismatch)
 	}
+	// The artifact must name the provider the WORKFLOW assigned when the request
+	// was published. A record that never captured the assignment cannot
+	// authenticate anybody: inferring it from today's configuration would invent
+	// the very fact this check exists to verify, so an unknown assignment is a
+	// refusal and the request may be superseded instead.
+	if strings.TrimSpace(rec.ReviewerProvider) == "" {
+		return RelayRecord{}, refused("request %s predates the recorded reviewer assignment, so this artifact cannot be "+
+			"authenticated against who was asked; supersede it with a new request rather than relaying against it", art.RequestID)
+	}
+	if !sameProvider(art.Provider, rec.ReviewerProvider) {
+		return RelayRecord{}, refused("the artifact names reviewer %q and request %s was assigned to %q",
+			art.Provider, art.RequestID, rec.ReviewerProvider)
+	}
 	if rec.Conversation != "" && rec.Conversation != in.Mailbox.Number {
 		return RelayRecord{}, refused("request %s was published in conversation %s and this process publishes to %s",
 			art.RequestID, rec.Conversation, in.Mailbox.Number)
 	}
 	binding := roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA, CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree}
-	verdict, err := workflow.ValidateRelayedReview(art.Body, binding, art.Provider)
+	verdict, err := workflow.ValidateReviewBody(art.Body, binding, art.Provider)
 	if err != nil {
 		return RelayRecord{}, refused("the reviewer payload does not satisfy the reviewer contract: %v", err)
 	}
@@ -352,9 +376,55 @@ func AcceptRelayedReview(ctx context.Context, in RelaySubmission) (RelayRecord, 
 		record = existing
 	}
 	if record.State == RelayPublished {
-		return record, nil
+		// Already on the mailbox. The only thing that can still be owed is the
+		// common-store record, so resubmitting the identical artifact retries
+		// exactly that and publishes nothing a second time.
+		return record, convergeRelay(in, record)
 	}
-	return publishRelayRecord(ctx, in.Mailbox, in.Store, record, now)
+	published, err := publishRelayRecord(ctx, in.Mailbox, in.Store, record, now)
+	if err != nil {
+		return published, err
+	}
+	return published, convergeRelay(in, published)
+}
+
+// convergeRelay records a PUBLISHED relay's original reviewer artifact in the
+// common review store, with relay and publication evidence.
+//
+// Only after publication, deliberately. An accepted-but-unpublished relay is
+// not yet an answer anybody may consume, and writing it here early would make
+// the common store say a request was answered while the mailbox still showed
+// nothing -- the relay's own two-step lifecycle leaking into review meaning.
+//
+// The bytes written are the reviewer's own, exactly as submitted. The terminal
+// principal and the App publication go in as EVIDENCE beside them: the operator
+// carried this verdict and the App posted it, and neither of them produced it.
+func convergeRelay(in RelaySubmission, rec RelayRecord) error {
+	if in.Reviews.Dir == "" {
+		return nil
+	}
+	binding := roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
+		CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree}
+	_, err := in.Reviews.Accept(reviewstore.Acceptance{
+		RequestID: rec.RequestID,
+		Artifact:  rec.Artifact,
+		Evidence: reviewstore.Evidence{
+			Transport:          reviewstore.LocalRelay,
+			RelayPrincipal:     rec.RelayPrincipal.token(),
+			Publication:        rec.Publication,
+			PublicationComment: rec.PublicationComment,
+			PublishedAt:        rec.PublishedAt,
+		},
+		Validate: func(a reviewartifact.Artifact) error {
+			_, verr := workflow.ValidateReviewBody(a.Body, binding, a.ReviewerProvider)
+			return verr
+		},
+		Now: in.Now,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrRelayConvergence, err)
+	}
+	return nil
 }
 
 // subjectMismatch names the first identity field on which two subjects differ.
@@ -479,39 +549,24 @@ func verifyRelayRecord(relay RelayRecord, owed ExchangeRecord) (RelayArtifact, e
 	return art, nil
 }
 
-// publicationStands finds the App's publication of this receipt on the mailbox.
-func (r *Runner) publicationStands(ctx context.Context, relay RelayRecord) error {
-	if err := relayPublisherReady(r.Issue); err != nil {
-		return err
-	}
-	comments, err := r.Issue.API.ListComments(ctx, r.Issue.Number)
-	if err != nil {
-		return fmt.Errorf("reading the mailbox for publication comment %d: %w", relay.PublicationComment, err)
-	}
-	for _, c := range comments {
-		if c.ID != relay.PublicationComment || relay.PublicationComment <= 0 {
-			continue
-		}
-		f, _, ok := fields(c.Body, relayedReviewMarker)
-		if ok && f["request"] == relay.RequestID && f["review_digest"] == relay.ReviewDigest {
-			return nil
-		}
-		return fmt.Errorf("comment %d is not the publication of the relay of %s", c.ID, relay.RequestID)
-	}
-	return fmt.Errorf("publication comment %d is not on conversation %s", relay.PublicationComment, r.Issue.Number)
-}
-
-// relayedReviewFor answers a review turn from a relayed review, when the owed
-// request for this exact candidate has one.
+// pendingRelayFor reports a relay that exists for the owed request and has NOT
+// become the answer, so the candidate waits under the SAME request instead of
+// being asked about again.
 //
-// It consumes only a relay that is published AND whose publication is on the
-// mailbox, and it never publishes: publication is the terminal-authorized
-// relay handler's, so a receipt that did not come through it is not made real
-// here. A relay that exists and cannot be consumed yet keeps its request owed --
-// the candidate waits under the SAME request rather than having it superseded.
-func (r *Runner) relayedReviewFor(ctx context.Context, req agent.Request, subject Subject, emit func(event.Event)) (agent.Result, bool, error) {
+// It returns no verdict, and that is the point. Before R2 this path consumed a
+// published relay directly, which left two semantic sources: a relay whose App
+// publication succeeded and whose ReviewStore convergence FAILED could still
+// answer the turn, and the explicit convergence failure meant nothing in
+// practice. ReviewStore is now the only place an answer comes from. RelayStore
+// owns retry and publication state, and says what is still owed.
+//
+// Nothing here reads the mailbox. Whether a relay was published is recorded in
+// its receipt at the moment the App posted it; re-asking GitHub would put a
+// live availability check back into a path that decides whether a candidate
+// waits.
+func (r *Runner) pendingRelayFor(req agent.Request, subject Subject) (bool, error) {
 	if r.Relays.Dir == "" || r.Exchanges.Dir == "" {
-		return agent.Result{}, false, nil
+		return false, nil
 	}
 	owed, _ := r.Exchanges.PendingReviews()
 	for _, rec := range owed {
@@ -523,58 +578,24 @@ func (r *Runner) relayedReviewFor(ctx context.Context, req agent.Request, subjec
 		if !found && err == nil {
 			continue
 		}
-		unconsumable := func(cause error) (agent.Result, bool, error) {
-			return agent.Result{}, true, &roles.ReviewUnanswered{
-				RequestID: rec.RequestID, RequestComment: rec.RequestComment, Conversation: rec.Conversation,
-				Binding: roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
-					CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree},
-				ReviewCommit: rec.ReviewCommit,
-				Cause:        fmt.Errorf("a relayed review for request %s exists and was not consumed: %w", rec.RequestID, cause),
-			}
-		}
 		if err != nil {
-			return unconsumable(err)
+			return true, unconsumableReview(rec, err)
 		}
-		art, err := verifyRelayRecord(relay, rec)
-		if err != nil {
-			return unconsumable(err)
+		if _, err := verifyRelayRecord(relay, rec); err != nil {
+			return true, unconsumableReview(rec, err)
 		}
 		if relay.State != RelayPublished {
-			return unconsumable(errors.New("it is accepted and not yet published; resubmit the same artifact with " +
-				"`sensei-code review submit` to publish it"))
+			return true, unconsumableReview(rec, errors.New("it is accepted and not yet published; resubmit the same "+
+				"artifact with `sensei-code review submit` to publish it"))
 		}
-		if err := r.publicationStands(ctx, relay); err != nil {
-			return unconsumable(err)
-		}
-		if err := r.Exchanges.Close(rec.TaskID, rec.RequestID); err != nil && emit != nil {
-			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.Status,
-				"the relayed review's exchange record could not be closed: "+err.Error(),
-				map[string]any{"request_id": rec.RequestID, "error": err.Error(), "transport": "github-relay"}))
-		}
-		if emit != nil {
-			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentFinished,
-				fmt.Sprintf("the verdict reviewer %s produced for request %s was relayed by a local operator and published "+
-					"by the App as comment %d; it is consumed with advisory standing", relay.Reviewer, rec.RequestID,
-					relay.PublicationComment),
-				map[string]any{
-					"request_id":          rec.RequestID,
-					"reviewer_provider":   relay.Reviewer,
-					"review_digest":       relay.ReviewDigest,
-					"relay_principal":     relay.RelayPrincipal,
-					"publication":         relay.Publication,
-					"publication_comment": relay.PublicationComment,
-					"base":                rec.BaseSHA,
-					"candidate_digest":    rec.CandidateDigest,
-					"candidate_tree":      rec.CandidateTree,
-					"review_commit":       rec.ReviewCommit,
-					"standing":            relay.Standing,
-					"transport":           "github-relay",
-				}))
-		}
-		// The digest names WHICH artifact this text came from, so a human
-		// override recorded about that review can be checked against it. It is
-		// identity, not standing: the session stays Unverified.
-		return agent.Result{Text: art.Body, Session: roles.Unverified, ReviewDigest: relay.ReviewDigest}, true, nil
+		// Published, and the common store has no record of it -- storedReviewFor
+		// runs first and would already have answered. So convergence did not
+		// complete. The repair is to retry the store write, never to publish
+		// again and never to answer from here.
+		return true, unconsumableReview(rec, fmt.Errorf(
+			"reviewer %s produced it and the App published it as comment %d, and it is not recorded in the review "+
+				"store; resubmit the same artifact with `sensei-code review submit` to record it, which publishes nothing further",
+			relay.Reviewer, relay.PublicationComment))
 	}
-	return agent.Result{}, false, nil
+	return false, nil
 }

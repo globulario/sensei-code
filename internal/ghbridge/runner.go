@@ -5,11 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // Runner answers a REVIEWER turn by asking a party that can read and write
@@ -65,9 +69,20 @@ type Runner struct {
 	// path has had this record; the reviewer path had none.
 	Exchanges ExchangeLog
 	// Relays holds reviews relayed by a local operator. The runner only READS it:
-	// a published relay bound to the owed request answers the turn, and nothing
+	// it reports a relay that exists and cannot be consumed yet, and nothing
 	// here can create or publish one.
 	Relays RelayStore
+	// Reviews is the common durable record of what a reviewer produced, whatever
+	// carried it. It is the SEMANTIC source of "which review answered this
+	// request": a mailbox answer and a published relay converge here, so the
+	// same reviewer bytes mean the same thing either way.
+	Reviews reviewstore.Store
+	// ReviewerProvider is the provider the workflow assigned for this turn.
+	//
+	// Set by the resolver from the engine's assignment, never from the mailbox,
+	// the GitHub login or this process's configuration. It is stated on every
+	// request and every answer must echo it.
+	ReviewerProvider string
 }
 
 // ErrNotReviewer reports a turn this bridge does not serve.
@@ -151,11 +166,29 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 		return agent.Result{}, fmt.Errorf("%w: %v", ErrUnboundSubject, err)
 	}
 
-	// A review a local operator relayed for the owed request on THIS candidate
-	// answers the turn without a new request. Checked before supersession, which
-	// would retire the very request the relay is bound to.
-	if result, found, err := r.relayedReviewFor(ctx, req, subject, emit); found {
+	// The assignment must be known BEFORE anything is published. A request that
+	// could not name who was asked would accept an answer from anyone, and the
+	// assignment cannot be recovered later from a login or from configuration.
+	provider := wireProvider(r.ReviewerProvider)
+	if !ProviderShape.MatchString(provider) {
+		return agent.Result{}, fmt.Errorf("%w: the workflow assigned no usable reviewer provider (%q)",
+			ErrUnassignedReviewer, r.ReviewerProvider)
+	}
+
+	// A review already accepted against the owed request for THIS candidate
+	// answers the turn without a new request, whatever transport carried it.
+	// Checked before supersession, which would retire the very request the
+	// stored review is bound to.
+	if result, found, err := r.storedReviewFor(req, subject, emit); found {
 		return result, err
+	}
+	// A relay that exists and has not become the answer keeps its request owed
+	// and says why. It returns no verdict: the common store above is the only
+	// place an answer comes from, so a published relay whose convergence failed
+	// leaves the candidate waiting rather than being answered from a second
+	// source.
+	if found, err := r.pendingRelayFor(req, subject); found {
+		return agent.Result{}, err
 	}
 
 	// What this candidate already owes, read BEFORE anything is published and
@@ -190,6 +223,7 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 		Kind:                KindReview,
 		MailboxRepository:   r.Issue.MailboxRepository(),
 		WorkspaceRepository: RemoteRepository(ctx, r.RepoDir, r.Remote),
+		ReviewerProvider:    provider,
 	}
 	// Published rather than posted, because the comment id is what a doorbell
 	// points at. PostRequest discards it, and a wake that cannot name the
@@ -227,6 +261,10 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			CandidateDigest: subject.CandidateDigest,
 			CandidateTree:   subject.CandidateTree,
 			ReviewCommit:    snap.Commit,
+			// Who was asked, recorded with the obligation. A restart, or a relay
+			// arriving after the configuration changed, checks the answer against
+			// THIS rather than against whatever is assigned by then.
+			ReviewerProvider: provider,
 		}
 		openErr := r.Exchanges.Open(rec)
 		if openErr != nil && emit != nil {
@@ -340,6 +378,42 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 		return agent.Result{}, err
 	}
 
+	// The exact reviewer bytes become the one durable semantic record BEFORE the
+	// obligation is closed and before the answer is returned. A review consumed
+	// but never recorded would be invisible to a restart, to an attestation, and
+	// to the relay -- the asymmetry R2 exists to remove.
+	//
+	// A store this process does not keep is not a failure: the answer is real
+	// and is still returned. What must never happen is recording something the
+	// reviewer did not write, which is why the exact Raw bytes are handed over.
+	if r.Reviews.Dir != "" {
+		owedRec, _ := r.owedReviewFor(req.TaskID, subject)
+		if owedRec.RequestID == "" {
+			owedRec = ExchangeRecord{
+				TaskID: req.TaskID, RequestID: request.RequestID, RequestComment: requestComment,
+				Conversation: r.Issue.Number, BaseSHA: subject.BaseSHA,
+				CandidateDigest: subject.CandidateDigest, CandidateTree: subject.CandidateTree,
+				ReviewCommit: subject.ReviewCommit, ReviewerProvider: provider,
+			}
+		}
+		if _, acceptErr := r.acceptReview(owedRec, review); acceptErr != nil {
+			if emit != nil {
+				emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.Status,
+					"the answered review could not be recorded in the review store: "+acceptErr.Error(),
+					map[string]any{"request_id": requestID, "review_digest": review.Artifact.Digest,
+						"error": acceptErr.Error(), "transport": "github"}))
+			}
+			// A payload the reviewer parser refuses, or a conflicting artifact,
+			// is not an answer. The obligation stands under the same request.
+			return agent.Result{}, unconsumableReview(ExchangeRecord{
+				TaskID: req.TaskID, RequestID: request.RequestID, RequestComment: requestComment,
+				Conversation: r.Issue.Number, BaseSHA: subject.BaseSHA,
+				CandidateDigest: subject.CandidateDigest, CandidateTree: subject.CandidateTree,
+				ReviewCommit: subject.ReviewCommit,
+			}, acceptErr)
+		}
+	}
+
 	// An answered request is no longer owed, so its record is closed: a restart
 	// must not keep an obligation that was discharged. A record that cannot be
 	// closed is reported, not fatal -- the answer is real and is still returned.
@@ -367,10 +441,189 @@ func (r *Runner) Run(ctx context.Context, req agent.Request, emit func(event.Eve
 			}))
 	}
 
-	// Body is passed through verbatim. This package does not interpret it: the
-	// workflow's reviewer parser is the sole interpreter, which is why prose
-	// cannot become a decision.
-	return agent.Result{Text: review.Body, Session: roles.Unverified}, nil
+	// Body is passed through as the reviewer wrote it. This package does not
+	// interpret it: the workflow's reviewer parser is the sole interpreter,
+	// which is why prose cannot become a decision.
+	//
+	// The digest names the EXACT comment bytes, so a later record about this
+	// review -- a human attestation, say -- can be checked against the review it
+	// claims to be about rather than against its own say-so.
+	return agent.Result{Text: review.Artifact.Body, Session: roles.Unverified,
+		ReviewDigest: review.Artifact.Digest}, nil
+}
+
+// ErrUnassignedReviewer reports a review turn with no known assigned provider.
+//
+// A refusal rather than a default: publishing a request that cannot say who was
+// asked would accept an answer from anyone who writes a well-formed envelope,
+// and no later step can recover the assignment from a login.
+var ErrUnassignedReviewer = errors.New("this review turn has no assigned reviewer provider")
+
+// wireProvider is the one encoding of a provider name on the wire.
+//
+// The workflow assigns a display-shaped name ("ChatGPT"); the protocol
+// vocabulary is lowercase. That is one fact in two spellings, not two facts, so
+// it is normalized HERE, at the single point where an assignment becomes a
+// published request.
+func wireProvider(assigned string) string {
+	return strings.ToLower(strings.TrimSpace(assigned))
+}
+
+// acceptReview records the exact reviewer bytes against the obligation they
+// answer, in the one store every transport converges on.
+//
+// The reviewer payload is checked through the workflow's own parser FIRST, so a
+// comment that is a well-formed envelope around prose never becomes a durable
+// review. This package still does not interpret the verdict: it asks the one
+// component that does.
+func (r *Runner) acceptReview(rec ExchangeRecord, rev MailboxReview) (reviewstore.Record, error) {
+	if r.Reviews.Dir == "" {
+		return reviewstore.Record{}, errors.New("this process keeps no common review store")
+	}
+	binding := roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
+		CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree}
+	return r.Reviews.Accept(reviewstore.Acceptance{
+		RequestID: rec.RequestID,
+		Artifact:  rev.Artifact.Raw,
+		Evidence: reviewstore.Evidence{
+			Transport:      reviewstore.GitHubMailbox,
+			GitHubAuthor:   rev.Author,
+			GitHubAuthorID: rev.AuthorID,
+			GitHubComment:  rev.Comment,
+		},
+		Validate: func(a reviewartifact.Artifact) error {
+			_, err := workflow.ValidateReviewBody(a.Body, binding, a.ReviewerProvider)
+			return err
+		},
+	})
+}
+
+// storedReviewFor answers a review turn from the common store, when the owed
+// request for this exact candidate already has an accepted review.
+//
+// Transport-blind on purpose: the record may carry mailbox evidence, relay
+// evidence or both, and the verdict and digest are the same either way. That
+// equivalence is the whole point of the common store -- before it, a relayed
+// review could answer a turn and the same bytes on the mailbox could not.
+//
+// TRANSPORT ESTABLISHES ACCEPTANCE ONCE. After a governed adapter has durably
+// accepted a review, transport availability does not own that review's
+// lifetime. So nothing here reads the mailbox: a deleted comment, an edited
+// one, a moved conversation or an unreachable GitHub cannot retract a review
+// that was authenticated, bound, validated and recorded. Re-proving delivery at
+// consumption would make this store a cache of an external system rather than
+// the durable record it exists to be.
+//
+// What IS re-derived, locally and every time: the artifact reparses, its digest
+// recomputes over the exact stored bytes, the request id matches, every
+// candidate identity field matches the durable obligation, the reviewer
+// provider matches the one that obligation recorded, and the body still
+// satisfies the workflow reviewer contract. The residue that cannot be
+// reconstructed -- that these bytes were observed from the authenticated GitHub
+// principal, or reached a published relay through the governed terminal path --
+// was recorded at ingestion and is read as the historical fact it is.
+//
+// This does NOT make a hand-written .sensei-code/reviews/*.json impossible. The
+// repository already trusts workspace-local governed state: the same writer
+// could edit an attestation that OVERRIDES a review, the obligation records
+// this checks against, the authority configuration, or the binary. Hardening
+// that boundary is one question about all of those stores, tracked as #184, and
+// signing this one drawer would only hide where the boundary actually is.
+//
+// It never CREATES an obligation. A record is consulted only against a request
+// this workspace already owes.
+func (r *Runner) storedReviewFor(req agent.Request, subject Subject, emit func(event.Event)) (agent.Result, bool, error) {
+	if r.Reviews.Dir == "" || r.Exchanges.Dir == "" {
+		return agent.Result{}, false, nil
+	}
+	owed, _ := r.Exchanges.PendingReviews()
+	for _, rec := range owed {
+		if rec.TaskID != req.TaskID || rec.BaseSHA != subject.BaseSHA ||
+			rec.CandidateDigest != subject.CandidateDigest || rec.CandidateTree != subject.CandidateTree {
+			continue
+		}
+		stored, found, err := r.Reviews.Load(rec.RequestID)
+		if err != nil {
+			return agent.Result{}, true, unconsumableReview(rec,
+				fmt.Errorf("the stored review could not be read: %w", err))
+		}
+		if !found {
+			continue
+		}
+		art, err := stored.Artifact()
+		if err != nil {
+			return agent.Result{}, true, unconsumableReview(rec, err)
+		}
+		// Every identity field, again, at the moment of consumption. The store
+		// proved the record is internally consistent; this proves it is about
+		// the candidate THIS turn is asking about.
+		if m := subjectMismatch(rec.Subject(), subjectOf(art)); m != "" {
+			return agent.Result{}, true, unconsumableReview(rec, errors.New(m))
+		}
+		if !sameProvider(art.ReviewerProvider, rec.ReviewerProvider) {
+			return agent.Result{}, true, unconsumableReview(rec, fmt.Errorf(
+				"it names reviewer %q and request %s was assigned to %q",
+				art.ReviewerProvider, rec.RequestID, rec.ReviewerProvider))
+		}
+		// The reviewer's own contract, re-read every time from the stored
+		// bytes. The parser that decides what a review SAYS is the same one
+		// that let it in, so a record cannot become consumable because the
+		// contract moved after it was accepted.
+		binding := roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
+			CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree}
+		if _, err := workflow.ValidateReviewBody(art.Body, binding, art.ReviewerProvider); err != nil {
+			return agent.Result{}, true, unconsumableReview(rec, err)
+		}
+		if err := r.Exchanges.Close(rec.TaskID, rec.RequestID); err != nil && emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.Status,
+				"the consumed review's exchange record could not be closed: "+err.Error(),
+				map[string]any{"request_id": rec.RequestID, "error": err.Error(), "transport": "github"}))
+		}
+		if emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceReviewer, event.AgentFinished,
+				fmt.Sprintf("the verdict reviewer %s produced for request %s is consumed from the review store "+
+					"with advisory standing", art.ReviewerProvider, rec.RequestID),
+				map[string]any{
+					"request_id":        rec.RequestID,
+					"reviewer_provider": art.ReviewerProvider,
+					"review_digest":     stored.ReviewDigest,
+					"standing":          stored.Standing,
+					"transport_evidence": func() []string {
+						var out []string
+						for _, ev := range stored.Evidence {
+							out = append(out, string(ev.Transport))
+						}
+						return out
+					}(),
+					"base":             rec.BaseSHA,
+					"candidate_digest": rec.CandidateDigest,
+					"candidate_tree":   rec.CandidateTree,
+					"review_commit":    rec.ReviewCommit,
+					"transport":        "github",
+				}))
+		}
+		return agent.Result{Text: art.Body, Session: roles.Unverified, ReviewDigest: stored.ReviewDigest}, true, nil
+	}
+	return agent.Result{}, false, nil
+}
+
+// subjectOf lifts the candidate identity a canonical artifact carries.
+func subjectOf(a reviewartifact.Artifact) Subject {
+	return Subject{TaskID: a.TaskID, BaseSHA: a.BaseSHA, CandidateDigest: a.CandidateDigest,
+		CandidateTree: a.CandidateTree, ReviewCommit: a.ReviewCommit}
+}
+
+// unconsumableReview reports a review that exists for an owed request and could
+// not be consumed. The obligation stands under the SAME request rather than
+// being superseded, so the candidate waits instead of being asked about twice.
+func unconsumableReview(rec ExchangeRecord, cause error) error {
+	return &roles.ReviewUnanswered{
+		RequestID: rec.RequestID, RequestComment: rec.RequestComment, Conversation: rec.Conversation,
+		Binding: roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
+			CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree},
+		ReviewCommit: rec.ReviewCommit,
+		Cause:        fmt.Errorf("a review for request %s exists and was not consumed: %w", rec.RequestID, cause),
+	}
 }
 
 // subjectBindingComplete checks the four identity fields the engine supplies,

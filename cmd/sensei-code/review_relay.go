@@ -155,7 +155,7 @@ func relayHandler(runners engineResolver) control.RelayHandler {
 		}
 		rec, err := ghbridge.AcceptRelayedReview(ctx, ghbridge.RelaySubmission{
 			Artifact: artifact, Principal: principal,
-			Exchanges: runners.Exchanges, Store: runners.Relays, Mailbox: runners.Mailbox,
+			Exchanges: runners.Exchanges, Store: runners.Relays, Reviews: runners.Reviews, Mailbox: runners.Mailbox,
 		})
 		return control.LocalRelayResult{
 			State: rec.State, TaskID: rec.TaskID, RequestID: rec.RequestID, Reviewer: rec.Reviewer,

@@ -318,7 +318,12 @@ func TestTheBridgeCarriesOnlyItsProvidersReviewTurns(t *testing.T) {
 			if err != nil {
 				t.Fatalf("resolve: %v", err)
 			}
-			gotBridge := resolved.Runner == agent.Runner(bridge.Reviewer)
+			// A carried REVIEW turn resolves to a per-turn copy of the bridge
+			// runner carrying the workflow's assignment, so identity is the
+			// mailbox it serves rather than the pointer.
+			carried, isRunner := resolved.Runner.(*ghbridge.Runner)
+			gotBridge := resolved.Runner == agent.Runner(bridge.Reviewer) ||
+				(isRunner && bridge.Reviewer != nil && carried.Issue.Number == bridge.Reviewer.Issue.Number)
 			if gotBridge != tc.wantBridge {
 				t.Fatalf("resolved to %T (bridge=%v), want bridge=%v", resolved.Runner, gotBridge, tc.wantBridge)
 			}
@@ -326,6 +331,11 @@ func TestTheBridgeCarriesOnlyItsProvidersReviewTurns(t *testing.T) {
 				// The transport does not rename the assignment.
 				if resolved.Name != "chatgpt" {
 					t.Errorf("the carried turn resolved as provider %q, not the assigned chatgpt", resolved.Name)
+				}
+				// The assignment is what the request will state, and it comes
+				// from the workflow rather than from the mailbox or a login.
+				if isRunner && carried.ReviewerProvider != "chatgpt" {
+					t.Errorf("the carried runner was assigned %q, want the workflow's chatgpt", carried.ReviewerProvider)
 				}
 				return
 			}

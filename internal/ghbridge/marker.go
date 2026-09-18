@@ -57,6 +57,11 @@ const (
 
 var (
 	fullSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+	// ProviderShape is the reviewer-provider vocabulary, the same shape the
+	// canonical artifact requires of reviewer=<provider>. Request and artifact
+	// must agree on what a provider name even looks like, or "the same provider"
+	// would depend on which side was asked.
+	ProviderShape = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,63}$`)
 	// A candidate digest is the workflow's own content identity. It is not
 	// required to be a git object id, so it is checked for presence and shape
 	// rather than length.
@@ -153,6 +158,26 @@ type Request struct {
 	// which is why these live on the shared request rather than on review alone.
 	MailboxRepository   string
 	WorkspaceRepository string
+
+	// ReviewerProvider is the provider the WORKFLOW assigned to judge this
+	// candidate, stated on the request so the answer has something exact to
+	// echo.
+	//
+	// The authority runs one way only:
+	//
+	//	workflow assignment -> this request -> the reviewer's artifact
+	//
+	// never GitHub login -> inferred provider, and never artifact -> provider of
+	// its own choosing. The authenticated GitHub principal and the reviewer
+	// provider are different facts about different parties: authenticating an
+	// account proves who posted a comment, not which model produced the verdict
+	// inside it. A request that did not state the assignment would leave the
+	// answer free to name any provider and be believed.
+	//
+	// It belongs to the review OBLIGATION, deliberately not to Subject.
+	// Candidate identity is task + base + candidate digest + candidate tree;
+	// who was asked is a fact about the question, not about the artifact.
+	ReviewerProvider string
 }
 
 // Validate states the request rules on top of the subject's.
@@ -165,6 +190,9 @@ func (r Request) Validate() error {
 	}
 	if !r.Kind.Valid() {
 		return fmt.Errorf("unknown request kind %q; this bridge serves review only", r.Kind)
+	}
+	if !ProviderShape.MatchString(r.ReviewerProvider) {
+		return fmt.Errorf("a review request must name the provider the workflow assigned, got %q", r.ReviewerProvider)
 	}
 	return nil
 }
@@ -183,6 +211,11 @@ func (r Request) Marker() (string, error) {
 	fmt.Fprintf(&b, "candidate_digest=%s\n", r.CandidateDigest)
 	fmt.Fprintf(&b, "candidate_tree=%s\n", r.CandidateTree)
 	fmt.Fprintf(&b, "review_commit=%s\n", r.ReviewCommit)
+	// The assignment the answer must echo, in the SAME spelling the reviewer
+	// writes back. One spelling for one fact: a request that said
+	// reviewer_provider= and an artifact that said reviewer= would be two names
+	// for the same thing, and they agree only until somebody edits one.
+	fmt.Fprintf(&b, "reviewer=%s\n", r.ReviewerProvider)
 	// Emitted only when known: a bridge that cannot name a repository must
 	// produce the previous marker rather than one asserting an empty identity.
 	if strings.TrimSpace(r.MailboxRepository) != "" {
@@ -303,6 +336,7 @@ func ParseRequest(body string) (Request, bool) {
 		Kind:                Kind(f["kind"]),
 		MailboxRepository:   f["mailbox_repository"],
 		WorkspaceRepository: f["workspace_repository"],
+		ReviewerProvider:    f["reviewer"],
 	}
 	if r.Validate() != nil {
 		return Request{}, false
@@ -311,6 +345,13 @@ func ParseRequest(body string) (Request, bool) {
 }
 
 // ParseReview reads a review from a comment body.
+//
+// LEGACY as of R2 (#182). It does not require reviewer=<provider>, so it cannot
+// tell whether an answer came from the provider the workflow assigned. No
+// production acceptance path may use it: the mailbox reads answers through
+// reviewartifact.Parse, which is the same grammar the relay uses. It remains
+// only so existing fixtures and tooling that predate the canonical artifact
+// keep working, and R6 removes it.
 //
 // An incomplete envelope yields false rather than a partly-populated review: a
 // reply that does not state exactly what it reviewed is not a review of

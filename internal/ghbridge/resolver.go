@@ -122,7 +122,18 @@ func (r Resolver) Resolve(spec workflow.RunnerSpec) (workflow.Resolved, error) {
 			if r.Reviewer == nil {
 				return workflow.Resolved{}, fmt.Errorf("%w: provider %s", ErrBridgeUnavailable, spec.Agent.Name)
 			}
-			return workflow.Resolved{Runner: r.Reviewer, Name: spec.Agent.Name, Label: ResolverLabel}, nil
+			// A per-turn copy carrying the ASSIGNMENT the workflow made.
+			//
+			// The provider stated on the request comes from spec.Agent.Name and
+			// from nowhere else: not from this resolver's configuration, which is
+			// mutable, and never from the GitHub login that will post the answer,
+			// which is a different party. That direction is the whole authority
+			// chain -- workflow assignment, request, artifact -- and a shared
+			// runner with a provider baked in at startup would break its first
+			// link.
+			reviewer := *r.Reviewer
+			reviewer.ReviewerProvider = spec.Agent.Name
+			return workflow.Resolved{Runner: &reviewer, Name: spec.Agent.Name, Label: ResolverLabel}, nil
 		case roles.Architect:
 			// No task means there is no governed architecture subject to carry.
 			// This is distinct from a real task whose binding was lost: the latter

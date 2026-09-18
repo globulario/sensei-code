@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 )
 
 // The transport half: posting a request and reading answers from one dedicated
@@ -202,14 +204,37 @@ type restComment struct {
 	} `json:"user"`
 }
 
-// Reviews reads every answer on the mailbox that came from the configured
-// reviewer.
+// MailboxReview is one canonical review observed on the mailbox, together with
+// the transport facts about how it was observed.
 //
-// Authentication happens BEFORE identity matching and before anything reaches
-// the workflow: a perfectly formed marker from another GitHub account is not an
-// answer, it is a comment. Comments from anyone else are skipped silently — an
-// issue is a place people talk.
-func Reviews(ctx context.Context, box Issue) ([]Review, error) {
+// The two halves never mix. Artifact is what the REVIEWER produced -- including
+// which provider it names. Author, AuthorID and Comment are what GITHUB says
+// about the account that posted it. Authenticating that account proves who sent
+// the bytes; it says nothing about which model wrote them, and it is why the
+// provider is read from the artifact and checked against the assignment rather
+// than inferred from the login sitting right next to it.
+type MailboxReview struct {
+	Artifact reviewartifact.Artifact
+
+	Author   string
+	AuthorID int64
+	Comment  int64
+}
+
+// Reviews reads every canonical review on the mailbox that came from the
+// configured reviewer account.
+//
+// Authentication comes FIRST and parsing second: a canonical artifact posted by
+// anybody else is an ordinary comment, and reading it before establishing who
+// sent it would let the mailbox be answered by whoever writes the best-formed
+// envelope.
+//
+// Parsing is reviewartifact.Parse -- the same grammar the relay uses, on the
+// exact comment bytes. Before R2 this path used the legacy ParseReview, which
+// did not require reviewer=<provider>: the same review therefore meant one
+// thing here and another on the relay, and neither path could say whether the
+// answer came from the provider the workflow actually asked.
+func Reviews(ctx context.Context, box Issue) ([]MailboxReview, error) {
 	if !box.Valid() {
 		return nil, errors.New("reading the mailbox needs a pull request number and an expected reviewer")
 	}
@@ -239,15 +264,20 @@ func Reviews(ctx context.Context, box Issue) ([]Review, error) {
 			return nil, fmt.Errorf("gh returned a body this bridge could not read: %w", jerr)
 		}
 	}
-	var found []Review
+	var found []MailboxReview
 	for _, c := range comments {
 		if !box.ExpectedReviewer.Matches(c.User.ID, c.User.Login) {
 			continue
 		}
-		if rev, ok := ParseReview(c.Body, c.User.Login); ok {
-			rev.AuthorID = c.User.ID
-			found = append(found, rev)
+		// The EXACT comment bytes. Nothing is trimmed or re-rendered on the way
+		// in, so the digest recorded later names what the reviewer posted.
+		art, err := reviewartifact.Parse(c.Body)
+		if err != nil {
+			continue
 		}
+		found = append(found, MailboxReview{
+			Artifact: art, Author: c.User.Login, AuthorID: c.User.ID, Comment: c.ID,
+		})
 	}
 	return found, nil
 }
@@ -269,9 +299,9 @@ var ErrNoAnswer = errors.New("no review answering that request was posted")
 //
 // A timeout leaves the task durable and pending. Nothing here completes or
 // discards work.
-func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration) (Review, error) {
+func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration) (MailboxReview, error) {
 	if err := r.Validate(); err != nil {
-		return Review{}, err
+		return MailboxReview{}, err
 	}
 	if every <= 0 {
 		every = 15 * time.Second
@@ -281,9 +311,9 @@ func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration)
 		if err != nil {
 			// Distinguish "the mailbox is unreadable" from "nobody answered".
 			if ctx.Err() != nil {
-				return Review{}, ctx.Err()
+				return MailboxReview{}, ctx.Err()
 			}
-			return Review{}, fmt.Errorf("reading the review mailbox: %w", err)
+			return MailboxReview{}, fmt.Errorf("reading the review mailbox: %w", err)
 		}
 		for _, rev := range revs {
 			if rev.Answers(r) {
@@ -292,10 +322,47 @@ func AwaitReview(ctx context.Context, box Issue, r Request, every time.Duration)
 		}
 		select {
 		case <-ctx.Done():
-			return Review{}, fmt.Errorf("%w: %v", ErrNoAnswer, ctx.Err())
+			return MailboxReview{}, fmt.Errorf("%w: %v", ErrNoAnswer, ctx.Err())
 		case <-time.After(every):
 		}
 	}
+}
+
+// Answers reports whether this observed review replies to this exact request.
+//
+// Request id, every candidate identity field, AND the assigned reviewer
+// provider must match. The provider participates because an artifact that named
+// a different provider would otherwise answer the question -- a review by
+// somebody the workflow did not ask, accepted because the envelope was
+// well-formed and the posting account was the right one.
+func (m MailboxReview) Answers(r Request) bool {
+	return m.Artifact.RequestID == r.RequestID &&
+		m.Subject().Same(r.Subject) &&
+		sameProvider(m.Artifact.ReviewerProvider, r.ReviewerProvider)
+}
+
+// Subject is the candidate identity the observed artifact carries.
+func (m MailboxReview) Subject() Subject {
+	return Subject{
+		TaskID:          m.Artifact.TaskID,
+		BaseSHA:         m.Artifact.BaseSHA,
+		CandidateDigest: m.Artifact.CandidateDigest,
+		CandidateTree:   m.Artifact.CandidateTree,
+		ReviewCommit:    m.Artifact.ReviewCommit,
+	}
+}
+
+// sameProvider compares two provider names.
+//
+// Case-insensitive because the workflow's assignment is a display-shaped name
+// ("ChatGPT") while the wire vocabulary is lowercase; that is one encoding of
+// one fact. An EMPTY name on either side never matches: an unknown assignment
+// is not a wildcard, and a legacy record that never recorded who was asked
+// cannot authenticate anybody.
+func sameProvider(a, b string) bool {
+	a = strings.ToLower(strings.TrimSpace(a))
+	b = strings.ToLower(strings.TrimSpace(b))
+	return a != "" && a == b
 }
 
 // ErrNotAPullRequest reports a mailbox number that resolves to an ordinary
