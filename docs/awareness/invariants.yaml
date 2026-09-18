@@ -767,3 +767,42 @@ invariants:
       - 'mutation M8 (2026-09-17): the relay adapter re-digested strings.TrimSpace(Raw) and every existing relay test still passed; the gap was closed by relay_artifact_test.go:TestTheRelayDigestsTheExactBytesItWasGiven'
       - 'sensei-code#183 R1 review (2026-09-17): Render enforced no size bound while Parse did, so the canonical writer could manufacture an artifact the canonical reader refused -- the same writer/reader asymmetry recorded for session records in #181. Repaired by bounding Render on its exact rendered bytes; mutations removing and widening that bound are both killed by artifact_test.go:TestRenderIsBoundedExactlyAsParseIs'
     contract: the artifact says what the reviewer produced; transport says only how it arrived
+  - id: sensei_code.reviewstore.transport_establishes_acceptance_once
+    title: Transport establishes acceptance once; it does not own a review's lifetime
+    severity: critical
+    status: active
+    description: 'One review obligation has at most one canonical artifact, ever, held in internal/reviewstore as the reviewer''s exact bytes plus the digest naming them. The record keeps no second copy of the decision, summary, findings or reviewer provider: identity is DERIVED by reparsing the stored bytes, because a stored copy can disagree with the artifact it describes. The assigned reviewer provider flows workflow assignment -> published request -> ExchangeRecord -> the artifact''s reviewer= line, and an answer must echo it; a GitHub login, a terminal relay principal and the App publication are transport evidence about delivery and none may become reviewer identity. An obligation that never recorded its assignment authenticates nobody and the gap is never filled from current configuration. Redelivering the same digest converges and adds at most an evidence row; a different artifact for an answered request is an explicit typed conflict that never replaces the first. Ingestion is where transport establishes acceptance: authenticate the principal, match the exact binding, parse canonically, validate the body through the workflow reviewer parser, then record. CONSUMPTION READS NO TRANSPORT. It re-derives locally and every time -- reparse, recompute the digest over the exact stored bytes, match the request id, match every candidate identity field and the reviewer provider against the durable obligation, and revalidate the body through the same workflow parser -- so a deleted or edited comment, a moved conversation, an unreachable GitHub or a rewritten relay receipt cannot retract a review that was already accepted. Re-proving delivery at consumption would make this store a cache of an external system instead of the review''s durable record. This does not make a hand-written record cryptographically impossible: the repository already trusts workspace-local governed state, the same writer could edit the attestation that overrides a review or the obligation this validates against, and hardening that boundary is one question about all those stores (sensei-code#184).'
+    protects:
+      files:
+        - internal/reviewstore/store.go
+        - internal/ghbridge/transport.go
+        - internal/ghbridge/runner.go
+        - internal/ghbridge/relay.go
+        - internal/ghbridge/marker.go
+    related_invariants:
+      - sensei_code.reviewartifact.one_grammar_owns_what_a_review_means
+    forbidden_fixes:
+      - re-read the mailbox at consumption to re-prove that an accepted review was delivered
+    required_tests:
+      - internal/reviewstore/store_test.go:TestIdentityIsDerivedFromTheStoredBytes
+      - internal/reviewstore/store_test.go:TestADifferentArtifactConflictsAndCannotReplaceTheFirst
+      - internal/reviewstore/store_test.go:TestConcurrentWritersConvergeOrConflictAndNeverReplace
+      - internal/reviewstore/store_test.go:TestTransportPrincipalsNeverBecomeTheReviewer
+      - internal/reviewstore/store_test.go:TestNothingIsStoredWithoutTheReviewerBodyCheck
+      - internal/reviewstore/store_test.go:TestAnUnprovableRecordIsRefusedAndNeverRepaired
+      - internal/ghbridge/review_convergence_test.go:TestADirectMailboxReviewBecomesTheCommonRecord
+      - internal/ghbridge/review_convergence_test.go:TestTheMailboxStoresTheExactCommentBytes
+      - internal/ghbridge/review_convergence_test.go:TestTheMailboxRefusesAnAnswerThatIsNotTheOneAsked
+      - internal/ghbridge/review_convergence_test.go:TestTheProviderIsNeverInferredFromTheGitHubLogin
+      - internal/ghbridge/review_convergence_test.go:TestAPublishedRelayConvergesOnTheCommonRecord
+      - internal/ghbridge/review_convergence_test.go:TestAFailedConvergenceRetriesTheStoreWriteWithoutPublishingTwice
+      - internal/ghbridge/review_convergence_test.go:TestAStoredReviewCannotAnswerAnObligationThatNeverNamedItsReviewer
+      - internal/ghbridge/review_convergence_test.go:TestTheProductionMailboxPathUsesTheCanonicalParser
+      - internal/ghbridge/relay_test.go:TestAnAcceptedMailboxReviewSurvivesItsCommentAndTheMailbox
+      - internal/ghbridge/relay_test.go:TestAnAcceptedRelayedReviewSurvivesItsReceiptAndTheMailbox
+      - internal/ghbridge/relay_test.go:TestAStoredReviewThatCannotProveItsBindingIsNotConsumed
+      - internal/ghbridge/relay_test.go:TestTamperingWithARelayReceiptAfterPublicationCannotChangeTheVerdict
+    evidence:
+      - 'sensei-code#182 R2: a relayed verdict had a durable receipt and the same bytes on the authenticated mailbox had none, so delivery decided which review could answer a turn'
+      - 'sensei-code#182 R2 review (2026-09-18, comment 5723415934): a first repair made consumption re-prove transport on the mailbox, which would have let a deleted comment or an outage retract an accepted review; ruled out because runreceipt re-derives what it can and AttestationStore consumes a local published record without re-asking GitHub'
+    contract: the assigned reviewer and the exact artifact come from the obligation and the reviewer's bytes; delivery adds evidence at ingestion and never rewrites or retracts meaning afterwards

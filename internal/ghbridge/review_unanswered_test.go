@@ -29,7 +29,7 @@ func unansweredReviewFixture(t *testing.T, wait time.Duration) (*Runner, roles.B
 	}
 	runner := &Runner{
 		Issue: box, RepoDir: dir, Remote: "origin", NewRequestID: NewRequestID,
-		Poll: 10 * time.Millisecond, Wait: wait,
+		Poll: 10 * time.Millisecond, Wait: wait, ReviewerProvider: "chatgpt",
 	}
 	return runner, roles.Binding{TaskID: "T", BaseSHA: base, CandidateTree: tree1, CandidateDigest: digestC1}
 }

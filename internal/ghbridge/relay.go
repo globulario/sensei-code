@@ -13,6 +13,7 @@ import (
 	"github.com/globulario/sensei-code/internal/agent"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
@@ -48,6 +49,13 @@ var (
 	// ErrRelayPublication reports a relay that WAS accepted and whose publication
 	// did not complete. The accepted review is preserved.
 	ErrRelayPublication = errors.New("the relayed review is accepted and preserved, and its publication did not complete")
+	// ErrRelayConvergence reports a relay that was accepted AND published, and
+	// whose record in the common review store did not complete.
+	//
+	// Its own error because the recovery is different: the GitHub receipt
+	// already exists, so the repair is to retry the store write, never to
+	// publish again. Resubmitting the identical artifact does exactly that.
+	ErrRelayConvergence = errors.New("the relayed review is published and preserved, and recording it in the review store did not complete")
 )
 
 // RelayPrincipal is who relayed a review, as the control process observed the
@@ -253,8 +261,12 @@ type RelaySubmission struct {
 	Principal RelayPrincipal
 	Exchanges ExchangeLog
 	Store     RelayStore
-	Mailbox   Issue
-	Now       func() time.Time
+	// Reviews is the common semantic record every transport converges on. A
+	// published relay writes the ORIGINAL reviewer artifact here, so the same
+	// bytes mean the same thing whether they came down this pipe or the mailbox.
+	Reviews reviewstore.Store
+	Mailbox Issue
+	Now     func() time.Time
 }
 
 func refused(format string, args ...any) error {
@@ -309,12 +321,25 @@ func AcceptRelayedReview(ctx context.Context, in RelaySubmission) (RelayRecord, 
 	if mismatch := subjectMismatch(rec.Subject(), art.Subject); mismatch != "" {
 		return RelayRecord{}, refused("the review is not about the candidate request %s carried: %s", art.RequestID, mismatch)
 	}
+	// The artifact must name the provider the WORKFLOW assigned when the request
+	// was published. A record that never captured the assignment cannot
+	// authenticate anybody: inferring it from today's configuration would invent
+	// the very fact this check exists to verify, so an unknown assignment is a
+	// refusal and the request may be superseded instead.
+	if strings.TrimSpace(rec.ReviewerProvider) == "" {
+		return RelayRecord{}, refused("request %s predates the recorded reviewer assignment, so this artifact cannot be "+
+			"authenticated against who was asked; supersede it with a new request rather than relaying against it", art.RequestID)
+	}
+	if !sameProvider(art.Provider, rec.ReviewerProvider) {
+		return RelayRecord{}, refused("the artifact names reviewer %q and request %s was assigned to %q",
+			art.Provider, art.RequestID, rec.ReviewerProvider)
+	}
 	if rec.Conversation != "" && rec.Conversation != in.Mailbox.Number {
 		return RelayRecord{}, refused("request %s was published in conversation %s and this process publishes to %s",
 			art.RequestID, rec.Conversation, in.Mailbox.Number)
 	}
 	binding := roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA, CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree}
-	verdict, err := workflow.ValidateRelayedReview(art.Body, binding, art.Provider)
+	verdict, err := workflow.ValidateReviewBody(art.Body, binding, art.Provider)
 	if err != nil {
 		return RelayRecord{}, refused("the reviewer payload does not satisfy the reviewer contract: %v", err)
 	}
@@ -352,9 +377,55 @@ func AcceptRelayedReview(ctx context.Context, in RelaySubmission) (RelayRecord, 
 		record = existing
 	}
 	if record.State == RelayPublished {
-		return record, nil
+		// Already on the mailbox. The only thing that can still be owed is the
+		// common-store record, so resubmitting the identical artifact retries
+		// exactly that and publishes nothing a second time.
+		return record, convergeRelay(in, record)
 	}
-	return publishRelayRecord(ctx, in.Mailbox, in.Store, record, now)
+	published, err := publishRelayRecord(ctx, in.Mailbox, in.Store, record, now)
+	if err != nil {
+		return published, err
+	}
+	return published, convergeRelay(in, published)
+}
+
+// convergeRelay records a PUBLISHED relay's original reviewer artifact in the
+// common review store, with relay and publication evidence.
+//
+// Only after publication, deliberately. An accepted-but-unpublished relay is
+// not yet an answer anybody may consume, and writing it here early would make
+// the common store say a request was answered while the mailbox still showed
+// nothing -- the relay's own two-step lifecycle leaking into review meaning.
+//
+// The bytes written are the reviewer's own, exactly as submitted. The terminal
+// principal and the App publication go in as EVIDENCE beside them: the operator
+// carried this verdict and the App posted it, and neither of them produced it.
+func convergeRelay(in RelaySubmission, rec RelayRecord) error {
+	if in.Reviews.Dir == "" {
+		return nil
+	}
+	binding := roles.Binding{TaskID: rec.TaskID, BaseSHA: rec.BaseSHA,
+		CandidateDigest: rec.CandidateDigest, CandidateTree: rec.CandidateTree}
+	_, err := in.Reviews.Accept(reviewstore.Acceptance{
+		RequestID: rec.RequestID,
+		Artifact:  rec.Artifact,
+		Evidence: reviewstore.Evidence{
+			Transport:          reviewstore.LocalRelay,
+			RelayPrincipal:     rec.RelayPrincipal.token(),
+			Publication:        rec.Publication,
+			PublicationComment: rec.PublicationComment,
+			PublishedAt:        rec.PublishedAt,
+		},
+		Validate: func(a reviewartifact.Artifact) error {
+			_, verr := workflow.ValidateReviewBody(a.Body, binding, a.ReviewerProvider)
+			return verr
+		},
+		Now: in.Now,
+	})
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrRelayConvergence, err)
+	}
+	return nil
 }
 
 // subjectMismatch names the first identity field on which two subjects differ.

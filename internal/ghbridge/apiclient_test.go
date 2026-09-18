@@ -112,11 +112,7 @@ func TestReviewerAuthenticationIsUnchangedUnderTheAppTransport(t *testing.T) {
 	keyPath, _ := writeTestKey(t)
 	m, box := newAppMailbox(t, keyPath)
 
-	envelope, err := Review{Subject: subjC1(), RequestID: "r-1", Body: reviewerJSON}.Marker()
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := envelope + "\n" + reviewerJSON
+	body := canonicalAnswer(t, subjC1(), "r-1", "chatgpt", reviewerJSON)
 
 	// From the wrong account: ignored, however well formed.
 	m.comments = append(m.comments, map[string]any{

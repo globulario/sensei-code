@@ -349,7 +349,7 @@ func gitOut(t *testing.T, dir string, args ...string) string {
 // ---------- runner ----------
 
 func TestRunnerServesReviewerOnly(t *testing.T) {
-	r := &Runner{Issue: Issue{Dir: t.TempDir(), Number: "1"}, NewRequestID: func() string { return "r-1" }}
+	r := &Runner{Issue: Issue{Dir: t.TempDir(), Number: "1"}, NewRequestID: func() string { return "r-1" }, ReviewerProvider: "chatgpt"}
 	for _, role := range []roles.Role{roles.Architect, roles.Implementer} {
 		_, err := r.Run(context.Background(), agent.Request{TaskID: "T-1", Role: role}, nil)
 		if !errors.Is(err, ErrNotReviewer) {
@@ -360,7 +360,7 @@ func TestRunnerServesReviewerOnly(t *testing.T) {
 
 // A reviewer turn with no exact binding must refuse before publishing anything.
 func TestRunnerRefusesAnUnboundSubject(t *testing.T) {
-	r := &Runner{Issue: Issue{Dir: t.TempDir(), Number: "1"}, NewRequestID: func() string { return "r-1" }}
+	r := &Runner{Issue: Issue{Dir: t.TempDir(), Number: "1"}, NewRequestID: func() string { return "r-1" }, ReviewerProvider: "chatgpt"}
 	for _, tc := range []struct {
 		name string
 		b    roles.Binding

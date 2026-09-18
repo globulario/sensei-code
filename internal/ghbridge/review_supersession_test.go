@@ -82,13 +82,11 @@ func TestAnAnswerToTheOldRequestCannotSatisfyTheNewOne(t *testing.T) {
 			return nil
 		}
 		// The reviewer answers the NEW request's subject under the OLD id.
-		stale, err := Review{Subject: fresh.Subject, RequestID: first.RequestID}.Marker()
-		if err != nil {
-			return nil
-		}
+		stale := canonicalAnswer(t, fresh.Subject, first.RequestID, fresh.ReviewerProvider,
+			`{"decision":"accept","summary":"the candidate stands","instructions":"","findings":[]}`)
 		answered++
 		return []map[string]any{{
-			"body": stale + "\n" + `{"decision":"accept","summary":"the candidate stands","instructions":"","findings":[]}`,
+			"body": stale,
 			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
 		}}
 	}

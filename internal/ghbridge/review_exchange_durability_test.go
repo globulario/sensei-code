@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
@@ -86,6 +87,8 @@ func reviewRunnerWithLog(t *testing.T, wait time.Duration) (*prMailbox, *Runner,
 	runner := &Runner{
 		Issue: box, RepoDir: dir, Remote: "origin", NewRequestID: NewRequestID,
 		Poll: 10 * time.Millisecond, Wait: wait, Exchanges: log,
+		Reviews:          reviewstore.Store{Dir: filepath.Join(dir, "reviews")},
+		ReviewerProvider: "chatgpt",
 	}
 	return m, runner, roles.Binding{TaskID: "T", BaseSHA: base, CandidateTree: tree1, CandidateDigest: digestC1}, log
 }
@@ -128,12 +131,10 @@ func TestAnAnsweredReviewClosesItsRecordWithoutWithdrawing(t *testing.T) {
 		if !ok {
 			return nil
 		}
-		answer, err := Review{Subject: req.Subject, RequestID: req.RequestID}.Marker()
-		if err != nil {
-			return nil
-		}
+		answer := canonicalAnswer(t, req.Subject, req.RequestID, req.ReviewerProvider,
+			`{"decision":"accept","summary":"the candidate stands","instructions":"","findings":[]}`)
 		return []map[string]any{{
-			"body": answer + "\n" + `{"decision":"accept","summary":"the candidate stands","instructions":"","findings":[]}`,
+			"body": answer,
 			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
 		}}
 	}

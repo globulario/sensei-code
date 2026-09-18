@@ -7,7 +7,7 @@ import (
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
-// ValidateRelayedReview reads a relayed reviewer payload through the SAME wire
+// ValidateReviewBody reads a reviewer payload through the SAME wire
 // contract and the SAME advisory rules the engine applies to a review answered
 // over a transport.
 //
@@ -19,7 +19,7 @@ import (
 //
 // The session mode is Unverified by construction. A relayed review is advisory:
 // the operator carried it, nobody here observed the reviewer's isolation.
-func ValidateRelayedReview(body string, binding roles.Binding, provider string) (roles.ReviewVerdict, error) {
+func ValidateReviewBody(body string, binding roles.Binding, provider string) (roles.ReviewVerdict, error) {
 	var d reviewDecision
 	if err := decodeModelJSON(body, &d); err != nil {
 		return roles.ReviewVerdict{}, err

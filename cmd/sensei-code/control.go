@@ -19,6 +19,7 @@ import (
 	"github.com/globulario/sensei-code/internal/ghbridge"
 	"github.com/globulario/sensei-code/internal/ghwebhook"
 	"github.com/globulario/sensei-code/internal/gitx"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/sensei"
 	"github.com/globulario/sensei-code/internal/session"
@@ -469,6 +470,9 @@ type engineResolver struct {
 	// and records into. Zero when the bridge is off, and a relay is then refused.
 	Exchanges ghbridge.ExchangeLog
 	Relays    ghbridge.RelayStore
+	// Reviews is the common semantic record the relay handler converges into and
+	// the engine consumes from.
+	Reviews reviewstore.Store
 	// Attestations is where recorded human overrides live. The engine READS it;
 	// only the attestation socket handler writes one.
 	Attestations ghbridge.AttestationStore
@@ -544,6 +548,10 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	// here -- which is what makes withdrawing them at startup honest (#162).
 	exchanges := ghbridge.ExchangeLog{Dir: filepath.Join(repoRoot, ".sensei-code", "exchanges")}
 	relays := ghbridge.RelayStore{Dir: filepath.Join(repoRoot, ".sensei-code", "relays")}
+	// One durable record of what a reviewer produced, whatever carried it. The
+	// mailbox and the relay both converge here, so "which review answered this
+	// request" has one answer rather than one per transport.
+	reviews := reviewstore.Store{Dir: filepath.Join(repoRoot, ".sensei-code", "reviews")}
 	attestations := ghbridge.AttestationStore{Dir: filepath.Join(repoRoot, ".sensei-code", "attestations")}
 
 	resolver := ghbridge.Resolver{
@@ -566,6 +574,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 			Doorbell:  doorbell,
 			Exchanges: exchanges,
 			Relays:    relays,
+			Reviews:   reviews,
 		},
 		Fallback: base,
 	}
@@ -608,7 +617,7 @@ func composeEngineResolver(base workflow.RunnerResolver, repoRoot, sessionID str
 	}
 
 	return engineResolver{Resolver: resolver, Banner: banner, Mailbox: box,
-		Exchanges: exchanges, Relays: relays, Attestations: attestations}, nil
+		Exchanges: exchanges, Relays: relays, Reviews: reviews, Attestations: attestations}, nil
 }
 
 // credentialFromEnvOrMint resolves the credential and reports whether the

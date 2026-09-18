@@ -101,6 +101,21 @@ type ExchangeRecord struct {
 	CandidateDigest string `json:"candidate_digest,omitempty"`
 	CandidateTree   string `json:"candidate_tree,omitempty"`
 	ReviewCommit    string `json:"review_commit,omitempty"`
+
+	// ReviewerProvider is the provider the workflow assigned when this request
+	// was published, kept so a later process can check an answer against the
+	// ASSIGNMENT rather than against whatever is configured by then.
+	//
+	// Configuration is mutable and a login is a different party's name; neither
+	// can say who was asked six hours ago. A restarted process, or a relay
+	// arriving after a reconfiguration, validates against this.
+	//
+	// Empty means the record predates the field (#182 R2). Such a record can
+	// still be superseded under the existing lifecycle, but it cannot
+	// authenticate a canonical artifact: the assignment is unknown, and
+	// inferring it from today's configuration would be inventing the fact the
+	// check exists to verify.
+	ReviewerProvider string `json:"reviewer_provider,omitempty"`
 }
 
 const (

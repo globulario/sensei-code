@@ -1,0 +1,386 @@
+// Package reviewstore is the one durable record of what a reviewer produced.
+//
+// A review used to mean different things depending on the pipe it came down.
+// A relayed verdict got a durable receipt; the same bytes arriving directly on
+// the authenticated mailbox got none, so "which review answered this request"
+// had one answer for relays and another for everything else. Delivery was
+// standing in for authority.
+//
+// So there is one record per review obligation, and every adapter converges on
+// it. The canonical artifact's exact bytes and their digest ARE the semantic
+// identity; everything a transport knows -- a GitHub login, a terminal
+// principal, an App publication -- is kept beside them as evidence of HOW the
+// bytes arrived, never as a statement of what they mean.
+//
+// Two rules make that stick:
+//
+//   - One request has at most one canonical artifact, ever. Redelivering the
+//     same bytes converges; different bytes for an answered request are a
+//     conflict and never replace the first.
+//   - Identity is DERIVED by reparsing the stored bytes, not kept as a second
+//     copy that can drift from them.
+//
+// This package interprets no verdict. What a review SAYS is the workflow
+// parser's to read, and Accept refuses to record anything that parser has not
+// already passed -- which is why the validator is a required argument rather
+// than an option.
+package reviewstore
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/globulario/sensei-code/internal/reviewartifact"
+)
+
+// Transport names how canonical bytes reached this workspace.
+//
+// A closed vocabulary, read by membership: an unknown transport is refused
+// rather than recorded, because evidence nobody can interpret later is
+// indistinguishable from evidence nobody checked.
+type Transport string
+
+const (
+	// GitHubMailbox is a review read directly off the authenticated mailbox.
+	GitHubMailbox Transport = "github_mailbox"
+	// LocalRelay is a review a terminal principal carried and the App published.
+	LocalRelay Transport = "local_relay"
+)
+
+// Valid reads the closed set by membership.
+func (t Transport) Valid() bool { return t == GitHubMailbox || t == LocalRelay }
+
+// Advisory is the only standing this store records.
+//
+// No transport establishes reviewer independence: authenticating a GitHub
+// account proves who posted, and observing a terminal principal proves who
+// relayed. Neither is anyone observing the reviewer's isolation.
+const Advisory = "advisory"
+
+// Evidence is one observation of how the canonical bytes arrived.
+//
+// Deliberately NOT one generic "author" field. A single field would mean the
+// reviewer on one path and the relaying operator on another, and the moment two
+// transports share a name for two different parties, the party becomes whatever
+// the last writer meant.
+type Evidence struct {
+	Transport  Transport `json:"transport"`
+	ObservedAt time.Time `json:"observed_at"`
+
+	// Mailbox transport facts: who GitHub says posted, and where.
+	GitHubAuthor   string `json:"github_author,omitempty"`
+	GitHubAuthorID int64  `json:"github_author_id,omitempty"`
+	GitHubComment  int64  `json:"github_comment,omitempty"`
+
+	// Relay transport facts: who carried it, and the App's separate publication.
+	RelayPrincipal     string    `json:"relay_principal,omitempty"`
+	Publication        string    `json:"publication,omitempty"`
+	PublicationComment int64     `json:"publication_comment,omitempty"`
+	PublishedAt        time.Time `json:"published_at,omitempty"`
+}
+
+// Record is one review obligation's durable semantic record.
+//
+// It holds the reviewer's exact bytes and the digest naming them, and no second
+// copy of what those bytes say. There is deliberately no decision, summary,
+// findings or reviewer-provider field: every one of those is recoverable by
+// reparsing ArtifactRaw, and a stored copy is a value that can disagree with
+// the artifact it claims to describe.
+type Record struct {
+	Version   int    `json:"version"`
+	RequestID string `json:"request_id"`
+
+	// The reviewer's bytes, and the digest that names exactly those bytes.
+	ArtifactRaw  string `json:"artifact_raw"`
+	ReviewDigest string `json:"review_digest"`
+
+	Standing   string    `json:"standing"`
+	AcceptedAt time.Time `json:"accepted_at"`
+
+	// How the bytes arrived, once per distinct observation. Additive: a second
+	// transport seeing the same artifact adds a row and changes nothing else.
+	Evidence []Evidence `json:"transport_evidence"`
+}
+
+// Artifact reparses the stored bytes.
+//
+// Every identity question -- which candidate, which request, which reviewer
+// provider -- is answered from HERE, so the answer is always the artifact's own
+// and never a field somebody set beside it.
+func (r Record) Artifact() (reviewartifact.Artifact, error) {
+	return reviewartifact.Parse(r.ArtifactRaw)
+}
+
+var (
+	// ErrConflict reports a DIFFERENT artifact offered for a request that
+	// already has one. The stored record is untouched.
+	ErrConflict = errors.New("this request already has a different canonical review")
+	// ErrUnreadable reports a stored record that could not be trusted. It is
+	// never repaired by overwriting: the bytes we cannot read are the only
+	// evidence of what was accepted.
+	ErrUnreadable = errors.New("the stored review record could not be read as the review it claims to be")
+)
+
+// requestFileSafe bounds a request id to something that names one file in this
+// directory and nothing anywhere else.
+var requestFileSafe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$`)
+
+// Store holds one canonical review per request id.
+type Store struct {
+	Dir string
+}
+
+func (s Store) path(requestID string) (string, error) {
+	if strings.TrimSpace(s.Dir) == "" {
+		return "", errors.New("the review store has no directory")
+	}
+	if !requestFileSafe.MatchString(requestID) {
+		return "", fmt.Errorf("request id %q is not a safe file name", requestID)
+	}
+	return filepath.Join(s.Dir, requestID+".json"), nil
+}
+
+// writers serializes read-modify-write of one record's evidence within this
+// process.
+//
+// Creation is already atomic across processes (O_EXCL), and creation is what
+// decides SEMANTIC identity. This lock covers the weaker case: appending an
+// evidence row. Two processes racing there can still lose a row -- which loses a
+// transport observation and can never change what the review means, because the
+// artifact bytes are only ever written once.
+var writers struct {
+	sync.Mutex
+	held map[string]*sync.Mutex
+}
+
+func lockFor(path string) *sync.Mutex {
+	writers.Lock()
+	defer writers.Unlock()
+	if writers.held == nil {
+		writers.held = map[string]*sync.Mutex{}
+	}
+	m, ok := writers.held[path]
+	if !ok {
+		m = &sync.Mutex{}
+		writers.held[path] = m
+	}
+	return m
+}
+
+// Load reads the record for a request and proves it is what it claims to be.
+//
+// The stored bytes are reparsed, the digest is recomputed over them, and the
+// artifact must answer this exact request. A record failing any of those is
+// reported as unreadable rather than returned partly trusted: a half-verified
+// review is the kind of evidence that qualifies the wrong candidate.
+func (s Store) Load(requestID string) (Record, bool, error) {
+	path, err := s.path(requestID)
+	if err != nil {
+		return Record{}, false, err
+	}
+	blob, err := os.ReadFile(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return Record{}, false, nil
+	}
+	if err != nil {
+		return Record{}, false, err
+	}
+	var rec Record
+	if err := json.Unmarshal(blob, &rec); err != nil {
+		return Record{}, false, fmt.Errorf("%w: %s is not valid json: %v", ErrUnreadable, requestID, err)
+	}
+	if err := rec.verify(requestID); err != nil {
+		return Record{}, false, err
+	}
+	return rec, true, nil
+}
+
+// verify states what a stored record must prove about itself before anyone
+// reads a review out of it.
+func (r Record) verify(requestID string) error {
+	art, err := r.Artifact()
+	if err != nil {
+		return fmt.Errorf("%w: %s no longer parses as a canonical review: %v", ErrUnreadable, requestID, err)
+	}
+	if want := reviewartifact.Digest(r.ArtifactRaw); r.ReviewDigest != want {
+		return fmt.Errorf("%w: %s stores bytes digesting to %s under the name %s",
+			ErrUnreadable, requestID, want, r.ReviewDigest)
+	}
+	if r.RequestID != requestID || art.RequestID != requestID {
+		return fmt.Errorf("%w: %s holds a review of request %s/%s",
+			ErrUnreadable, requestID, r.RequestID, art.RequestID)
+	}
+	if r.Standing != Advisory {
+		return fmt.Errorf("%w: %s records standing %q and this store records %q only",
+			ErrUnreadable, requestID, r.Standing, Advisory)
+	}
+	return nil
+}
+
+// Acceptance is one adapter offering canonical bytes for one obligation.
+type Acceptance struct {
+	// RequestID is the obligation being answered. The artifact must name it too.
+	RequestID string
+	// Artifact is the reviewer's EXACT bytes. Never re-rendered before storing.
+	Artifact string
+	// Evidence is what this transport observed about the delivery.
+	Evidence Evidence
+	// Validate is the reviewer-body check that must already have passed. It is
+	// required, not optional: this store never becomes a second place where a
+	// payload that no parser accepted turns into a durable review.
+	Validate func(reviewartifact.Artifact) error
+	// Now supplies the acceptance time. Nil uses the wall clock.
+	Now func() time.Time
+}
+
+// Accept records canonical bytes against one obligation, or refuses.
+//
+// Exact-byte semantics throughout:
+//
+//   - nothing stored yet -> created atomically;
+//   - same digest -> the semantic record is untouched and this observation is
+//     added if it is new; re-offering an observation already recorded is a no-op
+//     and the acceptance time does not move;
+//   - different digest -> ErrConflict, and the stored artifact is left byte for
+//     byte as it was.
+//
+// A semantically similar ACCEPT that differs by one byte is a DIFFERENT
+// artifact and therefore conflicts. Nothing here normalizes bytes to make two
+// digests agree, merges bodies, or lets a later comment win.
+func (s Store) Accept(in Acceptance) (Record, error) {
+	if in.Validate == nil {
+		return Record{}, errors.New("a review is recorded only after the reviewer-body parser has passed it")
+	}
+	if !in.Evidence.Transport.Valid() {
+		return Record{}, fmt.Errorf("transport %q is not one this store records", in.Evidence.Transport)
+	}
+	path, err := s.path(in.RequestID)
+	if err != nil {
+		return Record{}, err
+	}
+	art, err := reviewartifact.Parse(in.Artifact)
+	if err != nil {
+		return Record{}, fmt.Errorf("the offered review is not a canonical artifact: %w", err)
+	}
+	if art.RequestID != in.RequestID {
+		return Record{}, fmt.Errorf("the artifact answers request %s and it is offered for %s", art.RequestID, in.RequestID)
+	}
+	if err := in.Validate(art); err != nil {
+		return Record{}, fmt.Errorf("the reviewer payload does not satisfy the reviewer contract: %w", err)
+	}
+
+	now := time.Now
+	if in.Now != nil {
+		now = in.Now
+	}
+	ev := in.Evidence
+	if ev.ObservedAt.IsZero() {
+		ev.ObservedAt = now().UTC()
+	}
+	ev.ObservedAt = ev.ObservedAt.UTC()
+
+	mu := lockFor(path)
+	mu.Lock()
+	defer mu.Unlock()
+
+	rec := Record{
+		Version:      1,
+		RequestID:    in.RequestID,
+		ArtifactRaw:  in.Artifact,
+		ReviewDigest: art.Digest,
+		Standing:     Advisory,
+		AcceptedAt:   now().UTC(),
+		Evidence:     []Evidence{ev},
+	}
+	created, err := s.create(path, rec)
+	if err != nil {
+		return Record{}, err
+	}
+	if created {
+		return rec, nil
+	}
+
+	// Somebody got here first. Read what they wrote and compare EXACT bytes;
+	// never truncate, replace or repair.
+	existing, found, err := s.Load(in.RequestID)
+	if err != nil {
+		return Record{}, err
+	}
+	if !found {
+		return Record{}, fmt.Errorf("%w: %s exists and holds nothing readable", ErrUnreadable, in.RequestID)
+	}
+	if existing.ReviewDigest != art.Digest {
+		return Record{}, fmt.Errorf("%w: %s is answered by %s and this artifact is %s",
+			ErrConflict, in.RequestID, existing.ReviewDigest, art.Digest)
+	}
+	if existing.hasEvidence(ev) {
+		return existing, nil
+	}
+	existing.Evidence = append(existing.Evidence, ev)
+	if err := s.replace(path, existing); err != nil {
+		return Record{}, err
+	}
+	return existing, nil
+}
+
+// hasEvidence reports whether this exact observation is already recorded, so a
+// repeated poll of the same comment adds nothing.
+func (r Record) hasEvidence(ev Evidence) bool {
+	for _, have := range r.Evidence {
+		if have == ev {
+			return true
+		}
+	}
+	return false
+}
+
+// create writes a record that must not already exist. It reports whether it
+// won the creation, so the caller can converge rather than overwrite.
+func (s Store) create(path string, rec Record) (bool, error) {
+	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+		return false, err
+	}
+	blob, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if errors.Is(err, os.ErrExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if _, err := f.Write(append(blob, '\n')); err != nil {
+		_ = f.Close()
+		return false, err
+	}
+	return true, f.Close()
+}
+
+// replace rewrites a record whose ARTIFACT BYTES are unchanged.
+//
+// Only the evidence list ever grows this way. It verifies before writing, so a
+// bug that mutated the artifact in memory cannot be persisted over the bytes
+// that were accepted.
+func (s Store) replace(path string, rec Record) error {
+	if err := rec.verify(rec.RequestID); err != nil {
+		return err
+	}
+	blob, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, append(blob, '\n'), 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
+}

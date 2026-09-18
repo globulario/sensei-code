@@ -18,7 +18,10 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/agent"
+	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // relayMailbox is an App mailbox that numbers comments and can refuse posts.
@@ -124,6 +127,7 @@ type relayFixture struct {
 	mailbox   *relayMailbox
 	exchanges ExchangeLog
 	store     RelayStore
+	reviews   reviewstore.Store
 }
 
 func newRelayFixture(t *testing.T) relayFixture {
@@ -132,12 +136,14 @@ func newRelayFixture(t *testing.T) relayFixture {
 	dir := t.TempDir()
 	f := relayFixture{box: box, mailbox: m,
 		exchanges: ExchangeLog{Dir: filepath.Join(dir, "exchanges")},
-		store:     RelayStore{Dir: filepath.Join(dir, "relays")}}
+		store:     RelayStore{Dir: filepath.Join(dir, "relays")},
+		reviews:   reviewstore.Store{Dir: filepath.Join(dir, "reviews")}}
 	if err := f.exchanges.Open(ExchangeRecord{
 		TaskID: relaySubject.TaskID, RequestID: relayRequest, RequestComment: 5686428018, Conversation: "157",
 		PublishedAt: time.Now().Add(-time.Hour).UTC(), Kind: ExchangeReview,
 		BaseSHA: relaySubject.BaseSHA, CandidateDigest: relaySubject.CandidateDigest,
 		CandidateTree: relaySubject.CandidateTree, ReviewCommit: relaySubject.ReviewCommit,
+		ReviewerProvider: "chatgpt",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -146,13 +152,15 @@ func newRelayFixture(t *testing.T) relayFixture {
 
 func (f relayFixture) submit(artifact string) (RelayRecord, error) {
 	return AcceptRelayedReview(context.Background(), RelaySubmission{
-		Artifact: artifact, Principal: operator, Exchanges: f.exchanges, Store: f.store, Mailbox: f.box,
+		Artifact: artifact, Principal: operator, Exchanges: f.exchanges, Store: f.store,
+		Reviews: f.reviews, Mailbox: f.box,
 	})
 }
 
 func (f relayFixture) runner() *Runner {
 	return &Runner{Issue: f.box, NewRequestID: NewRequestID, Poll: 10 * time.Millisecond,
-		Wait: 50 * time.Millisecond, Exchanges: f.exchanges, Relays: f.store}
+		Wait: 50 * time.Millisecond, Exchanges: f.exchanges, Relays: f.store, Reviews: f.reviews,
+		ReviewerProvider: "chatgpt"}
 }
 
 func (f relayFixture) turn() agent.Request {
@@ -312,6 +320,11 @@ func TestAPublicationFailurePreservesTheAcceptedReviewForRetry(t *testing.T) {
 // through the relay handler's publication -- hand-written, pointing at a comment
 // that is not its publication, or holding bytes that are not what it names -- is
 // not consumed, and the request stays owed.
+//
+// R2 note: these are the cases where NO genuine publication ever happened, so
+// nothing on the mailbox corroborates the receipt. What changed in R2 is only
+// which store answers the turn; a review nothing outside this machine
+// corroborates is still not an answer.
 func TestTheRunnerDoesNotConsumeAReceiptTheRelayHandlerDidNotPublish(t *testing.T) {
 	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
 	forged := RelayRecord{Version: 1, State: RelayPublished, TaskID: relaySubject.TaskID, RequestID: relayRequest,
@@ -322,14 +335,6 @@ func TestTheRunnerDoesNotConsumeAReceiptTheRelayHandlerDidNotPublish(t *testing.
 
 	swapped := artifactFor(t, relaySubject, relayRequest, "chatgpt",
 		`{"decision":"accept","summary":"swapped","instructions":"","findings":[]}`)
-	publish := func(t *testing.T, f relayFixture) RelayRecord {
-		t.Helper()
-		published, err := f.submit(artifact)
-		if err != nil || published.PublicationComment <= 0 {
-			t.Fatalf("the genuine relay did not publish: %+v %v", published, err)
-		}
-		return published
-	}
 
 	for name, setup := range map[string]func(t *testing.T, f relayFixture) RelayRecord{
 		"no such publication comment": func(*testing.T, relayFixture) RelayRecord { return forged },
@@ -348,26 +353,6 @@ func TestTheRunnerDoesNotConsumeAReceiptTheRelayHandlerDidNotPublish(t *testing.
 			r.State, r.PublicationComment = RelayAccepted, 0
 			return r
 		},
-		// These two have a REAL publication on the mailbox, so the mailbox check
-		// cannot mask the receipt's own checks.
-		"tampered after publication": func(t *testing.T, f relayFixture) RelayRecord {
-			r := publish(t, f)
-			r.Artifact = swapped
-			return r
-		},
-		// The handler's receipt, not the mailbox alone, says a publication
-		// completed: a receipt still marked accepted is not consumed even when it
-		// names a genuine publication.
-		"a real publication the receipt never recorded": func(t *testing.T, f relayFixture) RelayRecord {
-			r := publish(t, f)
-			r.State = RelayAccepted
-			return r
-		},
-		"another relay's publication": func(t *testing.T, f relayFixture) RelayRecord {
-			r := publish(t, f)
-			r.Artifact, r.ReviewDigest = swapped, ReviewDigest(swapped)
-			return r
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			f := newRelayFixture(t)
@@ -384,6 +369,254 @@ func TestTheRunnerDoesNotConsumeAReceiptTheRelayHandlerDidNotPublish(t *testing.
 			}
 		})
 	}
+}
+
+// A stored review is consumed on what can be RE-DERIVED from it, so a record
+// that cannot prove its own binding is refused however it got there.
+//
+// This is what replaced a live mailbox re-check. Re-proving delivery at
+// consumption would have made an accepted review evaporate when a comment was
+// deleted or GitHub was down; re-deriving the binding costs nothing and catches
+// the thing that actually matters -- a record that is not about this candidate,
+// or not from the reviewer this obligation asked.
+func TestAStoredReviewThatCannotProveItsBindingIsNotConsumed(t *testing.T) {
+	for name, raw := range map[string]string{
+		"another candidate tree": artifactFor(t, func() Subject {
+			s := relaySubject
+			s.CandidateTree = strings.Repeat("a", 40)
+			return s
+		}(), relayRequest, "chatgpt", acceptPayload),
+		"another base": artifactFor(t, func() Subject {
+			s := relaySubject
+			s.BaseSHA = strings.Repeat("b", 40)
+			return s
+		}(), relayRequest, "chatgpt", acceptPayload),
+		"another review commit": artifactFor(t, func() Subject {
+			s := relaySubject
+			s.ReviewCommit = strings.Repeat("c", 40)
+			return s
+		}(), relayRequest, "chatgpt", acceptPayload),
+		"a provider this obligation did not ask": artifactFor(t, relaySubject, relayRequest, "claude", acceptPayload),
+		"a body the reviewer contract refuses":   artifactFor(t, relaySubject, relayRequest, "chatgpt", "LGTM, ship it"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			if err := writeStoredReview(f.reviews, relayRequest, raw, reviewstore.Evidence{
+				Transport: reviewstore.GitHubMailbox, GitHubAuthor: "davecourtois",
+				GitHubAuthorID: 1697116, GitHubComment: 4242,
+			}); err != nil {
+				t.Fatal(err)
+			}
+			res, err := f.runner().Run(context.Background(), f.turn(), nil)
+			var owed *roles.ReviewUnanswered
+			if !errors.As(err, &owed) || owed.RequestID != relayRequest {
+				t.Fatalf("a record that cannot prove its binding answered the turn: text=%q err=%v", res.Text, err)
+			}
+			if pending, _ := f.exchanges.PendingReviews(); len(pending) != 1 {
+				t.Fatalf("the owed request did not survive: %+v", pending)
+			}
+		})
+	}
+}
+
+// unreachableMailbox is the configured conversation with a GitHub that cannot
+// be reached at all. Any attempt to read or post through it fails.
+func unreachableMailbox(box Issue) Issue {
+	out := box
+	if out.API == nil || out.API.Auth == nil {
+		return out
+	}
+	// A FRESH auth aimed at a closed port, never a copy: InstallationAuth
+	// carries a mutex and a cached token, and copying it would both trip vet and
+	// hand this mailbox a token minted against the live fixture.
+	out.API = &AppClient{
+		Auth: &InstallationAuth{
+			AppID:          out.API.Auth.AppID,
+			InstallationID: out.API.Auth.InstallationID,
+			PrivateKeyPath: out.API.Auth.PrivateKeyPath,
+			APIBase:        "http://127.0.0.1:1",
+		},
+		Owner: out.API.Owner,
+		Repo:  out.API.Repo,
+	}
+	return out
+}
+
+// An accepted review survives the transport that delivered it.
+//
+// Transport establishes acceptance ONCE. A GitHub comment that is deleted or
+// edited, a conversation that moves, an outage -- none of them may retract a
+// review that was already authenticated, bound, validated and durably recorded.
+// If they could, this store would be a cache of GitHub rather than the review's
+// durable semantic record, and every later slice would inherit that.
+func TestAnAcceptedMailboxReviewSurvivesItsCommentAndTheMailbox(t *testing.T) {
+	f := newRelayFixture(t)
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	// Accepted the way the mailbox adapter accepts one: exact bytes, GitHub's
+	// transport facts recorded beside them.
+	if _, err := f.reviews.Accept(reviewstore.Acceptance{
+		RequestID: relayRequest, Artifact: raw,
+		Evidence: reviewstore.Evidence{Transport: reviewstore.GitHubMailbox,
+			GitHubAuthor: "davecourtois", GitHubAuthorID: 1697116, GitHubComment: 5150},
+		Validate: func(a reviewartifact.Artifact) error {
+			_, err := workflow.ValidateReviewBody(a.Body, roles.Binding{
+				TaskID: relaySubject.TaskID, BaseSHA: relaySubject.BaseSHA,
+				CandidateDigest: relaySubject.CandidateDigest, CandidateTree: relaySubject.CandidateTree,
+			}, a.ReviewerProvider)
+			return err
+		},
+	}); err != nil {
+		t.Fatalf("accepting a mailbox review: %v", err)
+	}
+
+	// The comment is gone and GitHub is unreachable.
+	runner := f.runner()
+	runner.Issue = unreachableMailbox(f.box)
+	if _, err := Reviews(context.Background(), runner.Issue); err == nil {
+		t.Fatal("the fixture mailbox is still readable; this test proves nothing about an outage")
+	}
+
+	res, err := runner.Run(context.Background(), f.turn(), nil)
+	if err != nil {
+		t.Fatalf("an accepted review stopped being consumable when GitHub went away: %v", err)
+	}
+	if res.ReviewDigest != ReviewDigest(raw) {
+		t.Fatalf("consumed digest %s, want %s", res.ReviewDigest, ReviewDigest(raw))
+	}
+	if res.Session != roles.Unverified {
+		t.Fatalf("a consumed review claimed session %q", res.Session)
+	}
+	if pending, _ := f.exchanges.PendingReviews(); len(pending) != 0 {
+		t.Fatalf("the answered obligation is still owed: %+v", pending)
+	}
+}
+
+// The same law for a published relay: once the canonical artifact is accepted,
+// the relay receipt and the mailbox are history, not preconditions.
+//
+// RelayStore keeps owning retry and publication state. It no longer owns what a
+// review MEANS, so deleting or rewriting it afterwards cannot erase the accepted
+// review or substitute different bytes for it.
+func TestAnAcceptedRelayedReviewSurvivesItsReceiptAndTheMailbox(t *testing.T) {
+	raw := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	swapped := artifactFor(t, relaySubject, relayRequest, "chatgpt",
+		`{"decision":"accept","summary":"swapped","instructions":"","findings":[]}`)
+
+	for name, wreck := range map[string]func(t *testing.T, f relayFixture){
+		"the relay receipt is deleted": func(t *testing.T, f relayFixture) {
+			if err := os.Remove(filepath.Join(f.store.Dir, relayRequest+".json")); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"the relay receipt is rewritten to name other bytes": func(t *testing.T, f relayFixture) {
+			rec, found, err := f.store.Load(relayRequest)
+			if err != nil || !found {
+				t.Fatalf("load: found=%v err=%v", found, err)
+			}
+			rec.Artifact, rec.ReviewDigest = swapped, ReviewDigest(swapped)
+			if err := overwriteReceipt(f.store, rec); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"the relay receipt is emptied": func(t *testing.T, f relayFixture) {
+			if err := os.WriteFile(filepath.Join(f.store.Dir, relayRequest+".json"), []byte("{}"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			if _, err := f.submit(raw); err != nil {
+				t.Fatalf("the genuine relay did not publish: %v", err)
+			}
+			wreck(t, f)
+
+			runner := f.runner()
+			runner.Issue = unreachableMailbox(f.box)
+			res, err := runner.Run(context.Background(), f.turn(), nil)
+			if err != nil {
+				t.Fatalf("an accepted relayed review stopped being consumable: %v", err)
+			}
+			if res.ReviewDigest != ReviewDigest(raw) {
+				t.Fatalf("consumed digest %s, want the accepted %s", res.ReviewDigest, ReviewDigest(raw))
+			}
+			if strings.Contains(res.Text, "swapped") {
+				t.Fatalf("a rewritten relay receipt substituted its bytes: %q", res.Text)
+			}
+		})
+	}
+}
+
+// Once a relay is genuinely published, editing its RELAY receipt afterwards
+// changes nothing: the verdict comes from the common store, which holds the
+// reviewer's own bytes, and the mailbox publication still corroborates them.
+//
+// BEHAVIOUR CHANGED IN R2, deliberately. Before R2 the relay receipt WAS the
+// semantic source, so tampering with it after publication made a genuinely
+// published review unconsumable. That is no longer the rule -- but the property
+// that mattered is stronger here than it was: the tampered bytes can never be
+// what gets consumed.
+func TestTamperingWithARelayReceiptAfterPublicationCannotChangeTheVerdict(t *testing.T) {
+	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	swapped := artifactFor(t, relaySubject, relayRequest, "chatgpt",
+		`{"decision":"accept","summary":"swapped","instructions":"","findings":[]}`)
+
+	for name, tamper := range map[string]func(RelayRecord) RelayRecord{
+		"the receipt's bytes are swapped": func(r RelayRecord) RelayRecord {
+			r.Artifact = swapped
+			return r
+		},
+		"the receipt is reset to accepted": func(r RelayRecord) RelayRecord {
+			r.State, r.PublicationComment = RelayAccepted, 0
+			return r
+		},
+		"the receipt names another review": func(r RelayRecord) RelayRecord {
+			r.Artifact, r.ReviewDigest = swapped, ReviewDigest(swapped)
+			return r
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			published, err := f.submit(artifact)
+			if err != nil || published.PublicationComment <= 0 {
+				t.Fatalf("the genuine relay did not publish: %+v %v", published, err)
+			}
+			if err := overwriteReceipt(f.store, tamper(published)); err != nil {
+				t.Fatal(err)
+			}
+			res, err := f.runner().Run(context.Background(), f.turn(), nil)
+			if err != nil {
+				t.Fatalf("the genuinely published review was not consumed: %v", err)
+			}
+			if res.ReviewDigest != ReviewDigest(artifact) {
+				t.Fatalf("consumed review %s, want the genuinely published %s", res.ReviewDigest, ReviewDigest(artifact))
+			}
+			if strings.Contains(res.Text, "swapped") {
+				t.Fatalf("the tampered bytes were consumed: %q", res.Text)
+			}
+		})
+	}
+}
+
+// writeStoredReview puts a record into the common store the way a process
+// OUTSIDE any adapter would: straight onto disk, with no publication behind it.
+func writeStoredReview(s reviewstore.Store, requestID, raw string, ev reviewstore.Evidence) error {
+	rec := reviewstore.Record{
+		Version: 1, RequestID: requestID, ArtifactRaw: raw,
+		ReviewDigest: reviewartifact.Digest(raw), Standing: reviewstore.Advisory,
+		AcceptedAt: time.Now().UTC(),
+	}
+	if ev.Transport != "" {
+		rec.Evidence = []reviewstore.Evidence{ev}
+	}
+	if err := os.MkdirAll(s.Dir, 0o700); err != nil {
+		return err
+	}
+	blob, err := json.MarshalIndent(rec, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.Dir, requestID+".json"), append(blob, '\n'), 0o600)
 }
 
 // overwriteReceipt writes a receipt the way a process OUTSIDE the relay handler
