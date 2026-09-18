@@ -793,6 +793,20 @@ func (e *Engine) recordObjective(taskID string, o Objective) {
 	e.objectives[taskID] = o
 }
 
+// recordObjectiveIfAbsent records an objective only when this process holds
+// none for the task, so a resume never replaces what the submission recorded.
+func (e *Engine) recordObjectiveIfAbsent(taskID string, o Objective) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if _, ok := e.objectives[taskID]; ok {
+		return
+	}
+	if e.objectives == nil {
+		e.objectives = make(map[string]Objective)
+	}
+	e.objectives[taskID] = o
+}
+
 // observes reports whether a task entered through the observation lane.
 func (e *Engine) observes(taskID string) bool {
 	e.mu.Lock()
@@ -5310,9 +5324,12 @@ func (e *Engine) resumeBlockedArchitecture(ctx context.Context, task session.Int
 			"the task cannot be resumed at its blocked turn: "+err.Error(), nil)
 		return
 	}
-	// The objective is the recorded one, and the provenance says this is a
-	// resumption: nobody submitted it again.
-	e.recordObjective(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	// The objective is the recorded one. A process that still holds it -- the
+	// TUI that took the /run -- keeps its provenance exactly; overwriting it
+	// would quietly demote a task a human asked for. A restarted process holds
+	// nothing, and gets the resumption's own provenance, which establishes no
+	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
+	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"resuming the same task at the turn it is owed ("+block.Describe()+"); the objective, task identity and "+
 			"candidate base are the recorded ones", block))

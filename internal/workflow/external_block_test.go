@@ -294,6 +294,9 @@ func TestResumingAnUnplannedBlockedTaskReentersTheSameTask(t *testing.T) {
 	}
 	restarted, events, _ := blockedEngine(t, root, "session-c")
 	restarted.Config.Sensei.Command = "/nonexistent/awareness-mcp"
+	// Same-process resume: the submission's provenance is still held, and the
+	// resume must not demote it.
+	restarted.recordObjective(task, Objective{Text: "the objective", Provenance: RequestedByHuman})
 	if got := restarted.Resume(context.Background(), found[0]); got != task {
 		t.Fatalf("resume answered for task %q, want %q", got, task)
 	}
@@ -327,6 +330,9 @@ func TestResumingAnUnplannedBlockedTaskReentersTheSameTask(t *testing.T) {
 	if !resumedAt {
 		t.Fatalf("the resume did not announce the recorded turn: %v", kinds(seen))
 	}
+	if got := restarted.objective(task).Provenance; got != RequestedByHuman {
+		t.Fatalf("the resume replaced the recorded provenance with %q", got)
+	}
 }
 
 // implementerResolver serves implementer turns by provider name, and the
@@ -334,11 +340,16 @@ func TestResumingAnUnplannedBlockedTaskReentersTheSameTask(t *testing.T) {
 type implementerResolver struct {
 	implementers map[string]agent.Runner
 	reviewer     agent.Runner
+	architect    agent.Runner
 	session      string
 }
 
 func (r implementerResolver) Resolve(spec RunnerSpec) (Resolved, error) {
 	switch spec.Role {
+	case roles.Architect:
+		if r.architect != nil {
+			return Resolved{Runner: r.architect, Name: "chatgpt", Label: "ChatGPT"}, nil
+		}
 	case roles.Reviewer:
 		return Resolved{Runner: r.reviewer, Name: "remote:abc", Label: "remote:abc"}, nil
 	case roles.Implementer:
@@ -443,5 +454,37 @@ func TestABlockAfterPlanningKeepsThePlan(t *testing.T) {
 	e.blockExternally(task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
 	if rec := receiptFrom(t, drainEvents(events)); rec.PlanState != runreceipt.PlanPresent {
 		t.Fatalf("a recorded plan was erased by a later block: plan_state %q", rec.PlanState)
+	}
+}
+
+// An architect turn blocked INSIDE the cycle -- the reviewer escalated and the
+// re-plan cannot be served -- blocks the task as an ARCHITECT turn. It must not
+// be mistaken for implementer unavailability and passed to the next implementor.
+func TestAnArchitectBlockedMidCycleIsNotHandedToAnotherImplementor(t *testing.T) {
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Unverified, "escalate")
+	down := &unavailableRunner{cause: quota()}
+	next := &unavailableRunner{cause: quota()}
+	h.engine.Config.Implementors = []config.Agent{h.worker, {Name: "codex", Command: "false", Graph: "none"}}
+	h.engine.Runners = implementerResolver{implementers: map[string]agent.Runner{"codex": next}, architect: down,
+		reviewer: answeringRunner{text: `{"decision":"escalate","summary":"the plan needs an architectural answer"}`, mode: roles.Unverified},
+		session:  "session-1"}
+
+	var failed error
+	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
+		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
+	seen := drainEvents(h.events)
+
+	if down.calls.Load() == 0 {
+		t.Fatalf("the escalation never reached the architect, so this witness exercised nothing: %v (%v)", failed, kinds(seen))
+	}
+	var blocked *RoleUnavailable
+	if !errors.As(failed, &blocked) || blocked.Role != roles.Architect {
+		t.Fatalf("an architect blocked mid-cycle was not reported as an architect block: %v", failed)
+	}
+	if got := next.calls.Load(); got != 0 {
+		t.Fatalf("the architect's unavailability was handed to another implementor (%d calls)", got)
+	}
+	if contains(seen, event.HandoffCreated) {
+		t.Fatalf("an architect block created an implementer handoff: %v", kinds(seen))
 	}
 }
