@@ -176,6 +176,11 @@ func TestABlockedTurnIsATerminalThatSurvivesRestartAsTheSameTask(t *testing.T) {
 			if rec.ExternalBlock.State != runreceipt.Known || !strings.Contains(rec.ExternalBlock.Text, "architect turn: chatgpt reported usageLimitExceeded") {
 				t.Fatalf("the receipt does not say which turn was blocked and why: %+v", rec.ExternalBlock)
 			}
+			// Blocked before the architect answered: no plan exists, and the
+			// record says so rather than leaving it unknown.
+			if rec.PlanState != runreceipt.PlanNone {
+				t.Fatalf("an architect blocked before planning left plan_state %q", rec.PlanState)
+			}
 
 			// Restart.
 			found := reopen(t, root, "session-a")
@@ -426,4 +431,17 @@ func receiptFrom(t *testing.T, events []event.Event) runreceipt.Receipt {
 	}
 	t.Fatalf("no run receipt was emitted: %v", kinds(events))
 	return runreceipt.Receipt{}
+}
+
+// A plan already recorded stands when a later architect turn is blocked -- an
+// architect re-planning inside a cycle does not un-plan the run.
+func TestABlockAfterPlanningKeepsThePlan(t *testing.T) {
+	e, events, _ := blockedEngine(t, t.TempDir(), "session-d")
+	const task = "task-11"
+	e.beginReceipt(task)
+	e.notePlan(task, "", "the bounded plan")
+	e.blockExternally(task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
+	if rec := receiptFrom(t, drainEvents(events)); rec.PlanState != runreceipt.PlanPresent {
+		t.Fatalf("a recorded plan was erased by a later block: plan_state %q", rec.PlanState)
+	}
 }
