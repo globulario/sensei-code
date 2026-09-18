@@ -4048,6 +4048,20 @@ ARCHITECTURAL PLAN:
 CYCLE: %d%s`, role, conversationOrNone(tc.Conversation), tc.intent(), tc.WorkspaceStatus, tc.Preflight, tc.Task, plan, cycle, extra)
 }
 
+// ReviewPayloadHeading introduces the reviewer's JSON verdict contract.
+//
+// Exported so a TRANSPORT can qualify it exactly. For an in-process adapter
+// returning only agent.Result.Text this heading is true: the JSON is the whole
+// reply. Over a mailbox it is false -- the whole comment must be a canonical
+// review artifact, and the JSON is only its payload. A transport that had to
+// find this sentence by guessing at its wording would re-introduce the drift
+// this repair exists to remove, so the two owners agree on one constant rather
+// than on a string that looks the same today.
+//
+// The workflow owns the JSON verdict schema. reviewartifact owns the artifact
+// that carries it. Neither owns the other.
+const ReviewPayloadHeading = "Return ONLY JSON:"
+
 func reviewPrompt(p roles.IndependentReviewPacket) string {
 	if p.Inspection() {
 		return inspectionReviewPrompt(p)
@@ -4076,7 +4090,7 @@ asked for, so you can judge whether the candidate serves it. Context does not
 lower the bar: a candidate that matches the conversation but violates the plan or
 Sensei's evidence is still a REVISE.
 
-Return ONLY JSON:
+`+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
  "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
 
@@ -4172,7 +4186,7 @@ covered, or when limits are missing. ACCEPT means: these findings are supported
 and honestly bounded. It does not mean you agree with every judgement in them.
 ESCALATE only for a genuine architectural-authority question.
 
-Return ONLY JSON:
+`+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
  "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
 
