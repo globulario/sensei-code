@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // A human overriding a review obligation, recorded where the relay is recorded
@@ -25,6 +27,12 @@ const (
 	AttestationAccepted = "accepted"
 	// AttestationPublished is one the App has published on the mailbox.
 	AttestationPublished = "published"
+
+	// AttestationSchemaVersion is the record shape this code writes and can
+	// read back. A record on another version is refused rather than
+	// interpreted: reading an authority object under the wrong schema is how a
+	// field means something its writer never said.
+	AttestationSchemaVersion = 1
 )
 
 // ErrAttestationRefused reports an attestation that was not accepted. Nothing
@@ -146,6 +154,11 @@ func (s AttestationStore) markPublished(requestID, digest string, comment int64,
 // Published only: an attestation the App never posted is not yet part of the
 // record anyone else can read, and consuming one would let a local file alone
 // advance a candidate. It satisfies workflow.AttestationSource.
+//
+// Every record it reads must satisfy usableAsHistory first -- the same contract
+// AcceptAttestation applies before reusing one. Structural and lifecycle only:
+// no transport is re-contacted, no file is rewritten, and the frozen legacy
+// statement stays valid.
 func (s AttestationStore) AttestationFor(b roles.Binding, reviewDigest string) (roles.Attestation, bool, error) {
 	if s.Dir == "" {
 		return roles.Attestation{}, false, nil
@@ -165,6 +178,21 @@ func (s AttestationStore) AttestationFor(b roles.Binding, reviewDigest string) (
 		blob, err := os.ReadFile(filepath.Join(s.Dir, e.Name()))
 		if err != nil || json.Unmarshal(blob, &rec) != nil {
 			return roles.Attestation{}, false, fmt.Errorf("unreadable attestation record: %s", e.Name())
+		}
+		// The SAME validity contract the retry path applies. One persisted
+		// authority object cannot have two standards: refusing a malformed
+		// record when republishing it and honouring the same record when
+		// consuming it would mean the override that advances a candidate was
+		// held to the weaker of the two.
+		//
+		// Reported rather than skipped, like the unreadable case above and for
+		// the same reason: local authority state that cannot be read is not
+		// "there is no override", and the engine turns that error into a
+		// candidate that stays advisory. Nothing is rewritten, and no legacy
+		// statement is weakened -- the pre-R3 writer already recorded a version,
+		// an acceptance time and complete publication details.
+		if err := rec.usableAsHistory(); err != nil {
+			return roles.Attestation{}, false, fmt.Errorf("unusable attestation record %s: %w", e.Name(), err)
 		}
 		if rec.State != AttestationPublished {
 			continue
@@ -188,23 +216,43 @@ type AttestationSubmission struct {
 	// Permitted is the owner's local grant of this authority (config). Refused
 	// here rather than ignored: an override nobody authorized is not an override.
 	Permitted bool
-	Relays    RelayStore
-	Store     AttestationStore
-	Mailbox   Issue
-	Now       func() time.Time
+	// Reviews is the canonical review being overridden.
+	//
+	// The common store since #182 R3, deliberately not RelayStore. An owner
+	// overrides a specific REVIEW, not a delivery receipt: while attestation
+	// read the relay receipt, two semantically identical advisory ACCEPTs had
+	// different owner authority depending on which pipe carried them, and a
+	// review read directly off the authenticated mailbox could not be attested
+	// at all.
+	Reviews reviewstore.Store
+	Store   AttestationStore
+	Mailbox Issue
+	Now     func() time.Time
 }
 
 func attestationRefused(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrAttestationRefused, fmt.Sprintf(format, args...))
 }
 
-// AcceptAttestation records a local operator's override of one exact relayed
+// AcceptAttestation records a local operator's override of one exact canonical
 // review, and has the App publish it.
 //
 // Called ONLY by the control process's attestation socket handler, with the
 // principal that socket observed. The operator must name both the request and
 // the review digest: an override typed from memory against "whatever review is
 // there" would cover an artifact its author never read.
+//
+// What is overridden is the canonical artifact in the common review store.
+// Reviewer, decision and candidate binding are RE-DERIVED from those exact
+// bytes rather than read from any receipt beside them, so no transport fact can
+// decide who reviewed, what they decided, or which candidate it was about. How
+// the review arrived is recorded in the store as evidence and is not consulted
+// here: a mailbox review and a relayed review with the same bytes are the same
+// review, and the override says the same thing about either.
+//
+// No transport is re-contacted. The store proved its own acceptance residue
+// when it was written (#182 R2), and re-proving delivery now would make a
+// human override depend on GitHub still being reachable.
 func AcceptAttestation(ctx context.Context, in AttestationSubmission) (AttestationRecord, error) {
 	now := time.Now
 	if in.Now != nil {
@@ -214,8 +262,8 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 		return AttestationRecord{}, attestationRefused(
 			"this workspace has not granted owner-attestation authority; set workflow.owner_attestation in .sensei-code config")
 	}
-	if in.Store.Dir == "" || in.Relays.Dir == "" {
-		return AttestationRecord{}, attestationRefused("this process keeps no relay store or attestation store")
+	if in.Store.Dir == "" || in.Reviews.Dir == "" {
+		return AttestationRecord{}, attestationRefused("this process keeps no review store or attestation store")
 	}
 	if err := relayPublisherReady(in.Mailbox); err != nil {
 		return AttestationRecord{}, attestationRefused("%v", err)
@@ -224,34 +272,45 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 		return AttestationRecord{}, attestationRefused("an attestation must name the terminal principal who made it")
 	}
 
-	relay, found, err := in.Relays.Load(strings.TrimSpace(in.RequestID))
+	requestID := strings.TrimSpace(in.RequestID)
+	stored, found, err := in.Reviews.Load(requestID)
 	if err != nil {
 		return AttestationRecord{}, attestationRefused("%v", err)
 	}
 	if !found {
-		return AttestationRecord{}, attestationRefused("no relayed review is recorded for request %s", in.RequestID)
-	}
-	if relay.State != RelayPublished {
-		return AttestationRecord{}, attestationRefused(
-			"the relayed review for %s is %s; only a published review can be attested to", in.RequestID, relay.State)
+		return AttestationRecord{}, attestationRefused("no canonical review is recorded for request %s", requestID)
 	}
 	// The operator names the digest, and it must be the one on record. This is
-	// what ties the override to a review its author actually read.
-	if relay.ReviewDigest != strings.TrimSpace(in.ReviewDigest) {
+	// what ties the override to a review its author actually read, and it is
+	// checked before anything durable exists.
+	if stored.ReviewDigest != strings.TrimSpace(in.ReviewDigest) {
 		return AttestationRecord{}, attestationRefused(
-			"the relayed review for %s is %s and the attestation names %s", in.RequestID, relay.ReviewDigest, in.ReviewDigest)
+			"the review recorded for %s is %s and the attestation names %s", requestID, stored.ReviewDigest, in.ReviewDigest)
+	}
+	// Everything the override asserts comes from the reviewer's own bytes.
+	art, err := stored.Artifact()
+	if err != nil {
+		return AttestationRecord{}, attestationRefused("%v", err)
+	}
+	binding := roles.Binding{TaskID: art.TaskID, BaseSHA: art.BaseSHA,
+		CandidateDigest: art.CandidateDigest, CandidateTree: art.CandidateTree}
+	// The decision is read by the one component that reads decisions, from the
+	// payload inside those bytes. An override of an ACCEPT that was never an
+	// ACCEPT would advance a candidate its reviewer objected to.
+	verdict, err := workflow.ValidateReviewBody(art.Body, binding, art.ReviewerProvider)
+	if err != nil {
+		return AttestationRecord{}, attestationRefused("the reviewer payload does not satisfy the reviewer contract: %v", err)
 	}
 
 	att := roles.Attestation{
-		RequestID:    relay.RequestID,
-		ReviewDigest: relay.ReviewDigest,
-		Reviewer:     relay.Reviewer,
-		Decision:     roles.Decision(strings.ToLower(strings.TrimSpace(relay.Decision))),
-		Binding: roles.Binding{TaskID: relay.TaskID, BaseSHA: relay.BaseSHA,
-			CandidateDigest: relay.CandidateDigest, CandidateTree: relay.CandidateTree},
-		Principal: in.Principal.token(),
-		At:        now().UTC(),
-		Statement: roles.AttestationStatement,
+		RequestID:    art.RequestID,
+		ReviewDigest: stored.ReviewDigest,
+		Reviewer:     art.ReviewerProvider,
+		Decision:     verdict.Decision,
+		Binding:      binding,
+		Principal:    in.Principal.token(),
+		At:           now().UTC(),
+		Statement:    roles.AttestationStatement,
 	}
 	if err := att.Validate(); err != nil {
 		return AttestationRecord{}, attestationRefused("%v", err)
@@ -278,12 +337,111 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 				"request %s is already attested for review %s; an attestation is not replaced",
 				att.RequestID, existing.Attestation.ReviewDigest)
 		}
+		// Preserving an existing override's owner facts is only defensible when
+		// those facts form a VALID historical override. Load unmarshals JSON and
+		// proves nothing, so a record could agree with the canonical review on
+		// every review-derived field while carrying no principal, a statement
+		// outside the closed set, or a zero attested time -- and the retry would
+		// publish it, announcing a human override whose stored act does not
+		// satisfy roles.Attestation.Validate.
+		//
+		// Preservation is not permission to publish malformed authority. Checked
+		// BEFORE the meaning comparison, so an unreadable record is reported as
+		// unreadable rather than as a disagreement about a review.
+		if err := existing.usableAsHistory(); err != nil {
+			return AttestationRecord{}, attestationRefused(
+				"request %s already has an attestation that is not a valid record: %v; "+
+					"it is preserved unchanged and nothing was published", att.RequestID, err)
+		}
+		// A matching digest is not agreement. The stored override states what
+		// review it is about, and if that disagrees with what the canonical
+		// bytes actually say, reusing it would let the older record supply the
+		// meaning this function just re-derived -- an attestation store acting
+		// as a second semantic source. A reviewer mismatch is the sharp case:
+		// Covers() checks candidate and digest, not who reviewed, so such a
+		// record can advance a candidate while naming the wrong reviewer.
+		if m := reviewMeaningMismatch(existing.Attestation, att); m != "" {
+			return AttestationRecord{}, attestationRefused(
+				"request %s already has an attestation that disagrees with the canonical review: %s; "+
+					"it is preserved unchanged and nothing was published", att.RequestID, m)
+		}
+		// The review agrees, so the OWNER's facts stay the existing record's:
+		// who attested, when, the statement they attested under (current or the
+		// frozen legacy one) and how far publication got. Those are history, not
+		// something this call re-derives.
 		record = existing
 	}
 	if record.State == AttestationPublished {
 		return record, nil
 	}
 	return publishAttestation(ctx, in.Mailbox, in.Store, record, now)
+}
+
+// usableAsHistory states what a stored override must prove about itself before
+// this process will stand behind it -- reuse it, publish it, or return it as
+// the authority covering a candidate.
+//
+// Structural and lifecycle only. It asks nothing about authenticity, which is
+// #184's question about every governed local store; it asks whether this record
+// is the kind of object its own schema describes.
+func (r AttestationRecord) usableAsHistory() error {
+	if r.Version != AttestationSchemaVersion {
+		return fmt.Errorf("it declares schema version %d and this package writes %d", r.Version, AttestationSchemaVersion)
+	}
+	switch r.State {
+	case AttestationAccepted, AttestationPublished:
+	default:
+		return fmt.Errorf("it is in unknown state %q", r.State)
+	}
+	if r.AcceptedAt.IsZero() {
+		return errors.New("it does not say when it was accepted")
+	}
+	if err := r.Attestation.Validate(); err != nil {
+		return err
+	}
+	if r.Attestation.At.IsZero() {
+		return errors.New("it does not say when it was attested")
+	}
+	if r.State == AttestationPublished {
+		if strings.TrimSpace(r.Publication) == "" || r.PublicationComment <= 0 || r.PublishedAt.IsZero() {
+			return errors.New("it claims publication and does not say by whom, as which comment, or when")
+		}
+		return nil
+	}
+	// ACCEPTED. Stray publication fields are not proof that anything was
+	// published: a record that is half-published is a record whose lifecycle
+	// nobody can read, and treating those fields as evidence would let one be
+	// consumed as though the App had posted it.
+	if strings.TrimSpace(r.Publication) != "" || r.PublicationComment != 0 || !r.PublishedAt.IsZero() {
+		return errors.New("it is accepted and carries publication details, so its lifecycle cannot be read")
+	}
+	return nil
+}
+
+// reviewMeaningMismatch names the first review-derived field on which a stored
+// override disagrees with the canonical review, or "" when they agree.
+//
+// Only the fields that describe the REVIEW participate. Principal, At and
+// Statement are the owner's own record of what they did and when, and are
+// deliberately absent: a historical override carrying the frozen pre-R3
+// statement still describes the same review, and retrying its publication must
+// not require the operator to re-attest under today's wording.
+func reviewMeaningMismatch(stored, canonical roles.Attestation) string {
+	for _, f := range []struct{ name, stored, canonical string }{
+		{"request", stored.RequestID, canonical.RequestID},
+		{"review_digest", stored.ReviewDigest, canonical.ReviewDigest},
+		{"reviewer", stored.Reviewer, canonical.Reviewer},
+		{"decision", string(stored.Decision), string(canonical.Decision)},
+		{"task", stored.Binding.TaskID, canonical.Binding.TaskID},
+		{"base", stored.Binding.BaseSHA, canonical.Binding.BaseSHA},
+		{"candidate_digest", stored.Binding.CandidateDigest, canonical.Binding.CandidateDigest},
+		{"candidate_tree", stored.Binding.CandidateTree, canonical.Binding.CandidateTree},
+	} {
+		if f.stored != f.canonical {
+			return fmt.Sprintf("it records %s %q and the canonical review says %q", f.name, f.stored, f.canonical)
+		}
+	}
+	return ""
 }
 
 // RenderAttestation renders the App's publication of one override.

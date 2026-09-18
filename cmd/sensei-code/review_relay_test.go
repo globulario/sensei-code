@@ -68,3 +68,31 @@ func assertSoleCallers(t *testing.T, symbol string, allowed ...string) {
 		}
 	}
 }
+
+// The attestation handler resolves the override's review from the COMMON store.
+//
+// An override binds to a canonical review, so the one production caller of
+// AcceptAttestation must hand it the review store. Passing the relay store here
+// would restore the transport/authority split R3 removed, in the one place that
+// holds local override authority.
+func TestTheAttestationHandlerPassesTheCommonReviewStore(t *testing.T) {
+	blob, err := os.ReadFile("review_relay.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(blob)
+	start := strings.Index(src, "func attestHandler(")
+	if start < 0 {
+		t.Fatal("attestHandler was not found; this check proves nothing")
+	}
+	body := src[start:]
+	if end := strings.Index(body, "\n}\n"); end > 0 {
+		body = body[:end]
+	}
+	if !strings.Contains(body, "Reviews:   runners.Reviews") && !strings.Contains(body, "Reviews: runners.Reviews") {
+		t.Errorf("attestHandler does not pass the common review store:\n%s", body)
+	}
+	if strings.Contains(body, "runners.Relays") {
+		t.Errorf("attestHandler still reaches for the relay store:\n%s", body)
+	}
+}
