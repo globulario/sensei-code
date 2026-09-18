@@ -52,8 +52,25 @@ type Attestation struct {
 	Statement string `json:"statement"`
 }
 
-// AttestationStatement is what every attestation says, verbatim.
-const AttestationStatement = "A local operator, at a controlling terminal, accepted this relayed review on their own " +
+// AttestationStatement is what every NEW attestation says, verbatim.
+//
+// Transport-neutral since #182 R3. An owner overrides a specific canonical
+// advisory review, whatever carried it; while only relayed reviews could be
+// attested the older wording below was accurate, and once a review read
+// directly off the authenticated mailbox became attestable it would have been
+// a false description of what the operator did.
+const AttestationStatement = "A local operator, at a controlling terminal, accepted this advisory review on their own " +
+	"authority. Reviewer isolation was NOT established: this is a recorded human override, not an independent review."
+
+// LegacyRelayAttestationStatement is the FROZEN text attestations carried
+// before R3, kept valid and never rewritten.
+//
+// It described the narrower path that existed when those overrides were made,
+// and it described it correctly. Editing a historical record to modernise its
+// wording would restate what a person attested to, in their name, years after
+// they said it; refusing it would retract an authority they actually exercised.
+// So it is read, accepted, and left exactly as written.
+const LegacyRelayAttestationStatement = "A local operator, at a controlling terminal, accepted this relayed review on their own " +
 	"authority. Reviewer isolation was NOT established: this is a recorded human override, not an independent review."
 
 // ErrNotAttested reports that no attestation covers what was asked about.
@@ -75,7 +92,10 @@ func (a Attestation) Validate() error {
 		return fmt.Errorf("only an accepting review can be attested to, and this one says %q", a.Decision)
 	case strings.TrimSpace(a.Principal) == "":
 		return errors.New("an attestation must name the terminal principal who made it")
-	case a.Statement != AttestationStatement:
+	case a.Statement != AttestationStatement && a.Statement != LegacyRelayAttestationStatement:
+		// Two accepted texts and no third: the current one, and the frozen
+		// pre-R3 one. A closed set read by membership, because "anything that
+		// looks close enough" is how an override acquires free-form prose.
 		return errors.New("an attestation carries the statement this project defines for one, unaltered")
 	case strings.TrimSpace(a.Binding.TaskID) == "" ||
 		strings.TrimSpace(a.Binding.BaseSHA) == "" ||

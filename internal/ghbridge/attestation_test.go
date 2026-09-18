@@ -19,7 +19,7 @@ func attestStore(t *testing.T) AttestationStore {
 func (f relayFixture) attest(store AttestationStore, requestID, digest string, permitted bool) (AttestationRecord, error) {
 	return AcceptAttestation(context.Background(), AttestationSubmission{
 		RequestID: requestID, ReviewDigest: digest, Principal: operator, Permitted: permitted,
-		Relays: f.store, Store: store, Mailbox: f.box,
+		Reviews: f.reviews, Store: store, Mailbox: f.box,
 	})
 }
 

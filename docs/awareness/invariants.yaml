@@ -810,3 +810,43 @@ invariants:
       - 'sensei-code#182 R2: a relayed verdict had a durable receipt and the same bytes on the authenticated mailbox had none, so delivery decided which review could answer a turn'
       - 'sensei-code#182 R2 review (2026-09-18, comment 5723415934): a first repair made consumption re-prove transport on the mailbox, which would have let a deleted comment or an outage retract an accepted review; ruled out because runreceipt re-derives what it can and AttestationStore consumes a local published record without re-asking GitHub'
     contract: the assigned reviewer and the exact artifact come from the obligation and the reviewer's bytes; delivery adds evidence at ingestion and never rewrites or retracts meaning afterwards
+  - id: sensei_code.attestation.an_override_binds_to_a_canonical_review_not_a_receipt
+    title: Owner attestation binds to one exact canonical review, not to a delivery receipt
+    severity: critical
+    status: active
+    description: 'AcceptAttestation resolves the review being overridden from the common internal/reviewstore by exact request id AND the digest the operator names, and from nowhere else. Both are required: the request selects the record and the digest proves which exact reviewer bytes the operator says they read, so an override typed against whatever review happens to be there is refused before anything durable exists. Reviewer provider, decision and candidate binding are RE-DERIVED from those exact bytes -- the artifact''s reviewer= line, the decision read by workflow''s own reviewer parser, and the artifact''s task/base/candidate digest/candidate tree. A GitHub author, a terminal relay principal, an App publication identity and current provider configuration are transport or owner evidence; none of them may become reviewer identity or candidate identity. A relay receipt is not a review: an override needs the canonical record, and a receipt alone, a missing record or an unreadable one is refused. Attestation therefore no longer branches on transport, so a review read directly off the authenticated mailbox and a relayed review with the same bytes produce an identical attestation in every semantic field. No transport is re-contacted at attestation or at consumption, per the acceptance law the review store already holds. Only ACCEPT can be overridden, because overriding a REVISE or an ESCALATE would reverse a finding rather than override an obligation. Every new attestation carries the transport-neutral project statement; the frozen pre-R3 relay-specific statement stays valid and is never rewritten on disk, because it correctly described the narrower path that existed when it was made. The override advances a candidate on owner authority alone and never satisfies the independent-review obligation, which stays explicitly unmet in the record.'
+    protects:
+      files:
+        - internal/ghbridge/attestation.go
+        - internal/reviewstore/store.go
+        - internal/roles/attestation.go
+        - internal/workflow/attestation.go
+        - cmd/sensei-code/review_relay.go
+    related_invariants:
+      - sensei_code.reviewstore.transport_establishes_acceptance_once
+    forbidden_fixes:
+      - resolve the review an attestation overrides from RelayStore, or require a relay receipt before an owner may override
+      - rewrite a historical attestation's fixed statement to the current wording
+    required_tests:
+      - internal/ghbridge/attestation_canonical_test.go:TestADirectMailboxReviewCanBeAttestedWithNoRelayReceipt
+      - internal/ghbridge/attestation_canonical_test.go:TestMailboxAndRelayReviewsAttestIdentically
+      - internal/ghbridge/attestation_canonical_test.go:TestRelayStoreCannotChangeWhatIsAttestedAfterConvergence
+      - internal/ghbridge/attestation_canonical_test.go:TestTheOverrideDerivesEverythingFromTheCanonicalArtifact
+      - internal/ghbridge/attestation_canonical_test.go:TestAnOverrideNeedsTheExactRequestAndDigest
+      - internal/ghbridge/attestation_canonical_test.go:TestARelayReceiptAloneCannotBeAttested
+      - internal/ghbridge/attestation_canonical_test.go:TestAnUnreadableCanonicalRecordCannotBeAttested
+      - internal/ghbridge/attestation_canonical_test.go:TestOnlyAnAcceptingCanonicalReviewCanBeAttested
+      - internal/ghbridge/attestation_canonical_test.go:TestANewOverrideCarriesTheTransportNeutralStatement
+      - internal/ghbridge/attestation_canonical_test.go:TestAHistoricalOverrideRemainsValidAndIsNeverRewritten
+      - internal/ghbridge/attestation_canonical_test.go:TestAPublishedOverrideSurvivesAnUnreachableMailbox
+      - internal/ghbridge/attestation_canonical_test.go:TestAnOverrideRetriesPublicationWithoutCreatingAnother
+      - internal/ghbridge/attestation_canonical_test.go:TestAttestationAuthorityDoesNotReadRelayStore
+      - internal/ghbridge/attestation_test.go:TestAnUnpublishedOverrideIsNotFoundUntilItIsPublished
+      - internal/ghbridge/attestation_test.go:TestTheOverrideSelectedIsTheOneNamingTheReviewBeingConsumed
+      - cmd/sensei-code/review_relay_test.go:TestOnlyTheAttestationSocketHandlerRecordsAnOverride
+      - cmd/sensei-code/review_relay_test.go:TestTheAttestationHandlerPassesTheCommonReviewStore
+      - internal/workflow/attestation_gate_test.go:TestAnAttestedResultStillSatisfiesNoAdversarialObligation
+    evidence:
+      - 'sensei-code#182 R3: AcceptAttestation read RelayStore, so two semantically identical advisory ACCEPTs had different owner authority -- a relayed review was attestable and the same bytes on the authenticated mailbox were not'
+      - 'sensei-code#182 R3: the fixed attestation statement said ''accepted this relayed review'', which becomes false once a mailbox review is attestable; the new statement is transport-neutral and the old one is frozen rather than rewritten'
+    contract: the owner overrides a specific canonical review; how it arrived is evidence and never decides whether it can be overridden

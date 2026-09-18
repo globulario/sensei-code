@@ -10,7 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // A human overriding a review obligation, recorded where the relay is recorded
@@ -188,23 +190,43 @@ type AttestationSubmission struct {
 	// Permitted is the owner's local grant of this authority (config). Refused
 	// here rather than ignored: an override nobody authorized is not an override.
 	Permitted bool
-	Relays    RelayStore
-	Store     AttestationStore
-	Mailbox   Issue
-	Now       func() time.Time
+	// Reviews is the canonical review being overridden.
+	//
+	// The common store since #182 R3, deliberately not RelayStore. An owner
+	// overrides a specific REVIEW, not a delivery receipt: while attestation
+	// read the relay receipt, two semantically identical advisory ACCEPTs had
+	// different owner authority depending on which pipe carried them, and a
+	// review read directly off the authenticated mailbox could not be attested
+	// at all.
+	Reviews reviewstore.Store
+	Store   AttestationStore
+	Mailbox Issue
+	Now     func() time.Time
 }
 
 func attestationRefused(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrAttestationRefused, fmt.Sprintf(format, args...))
 }
 
-// AcceptAttestation records a local operator's override of one exact relayed
+// AcceptAttestation records a local operator's override of one exact canonical
 // review, and has the App publish it.
 //
 // Called ONLY by the control process's attestation socket handler, with the
 // principal that socket observed. The operator must name both the request and
 // the review digest: an override typed from memory against "whatever review is
 // there" would cover an artifact its author never read.
+//
+// What is overridden is the canonical artifact in the common review store.
+// Reviewer, decision and candidate binding are RE-DERIVED from those exact
+// bytes rather than read from any receipt beside them, so no transport fact can
+// decide who reviewed, what they decided, or which candidate it was about. How
+// the review arrived is recorded in the store as evidence and is not consulted
+// here: a mailbox review and a relayed review with the same bytes are the same
+// review, and the override says the same thing about either.
+//
+// No transport is re-contacted. The store proved its own acceptance residue
+// when it was written (#182 R2), and re-proving delivery now would make a
+// human override depend on GitHub still being reachable.
 func AcceptAttestation(ctx context.Context, in AttestationSubmission) (AttestationRecord, error) {
 	now := time.Now
 	if in.Now != nil {
@@ -214,8 +236,8 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 		return AttestationRecord{}, attestationRefused(
 			"this workspace has not granted owner-attestation authority; set workflow.owner_attestation in .sensei-code config")
 	}
-	if in.Store.Dir == "" || in.Relays.Dir == "" {
-		return AttestationRecord{}, attestationRefused("this process keeps no relay store or attestation store")
+	if in.Store.Dir == "" || in.Reviews.Dir == "" {
+		return AttestationRecord{}, attestationRefused("this process keeps no review store or attestation store")
 	}
 	if err := relayPublisherReady(in.Mailbox); err != nil {
 		return AttestationRecord{}, attestationRefused("%v", err)
@@ -224,34 +246,45 @@ func AcceptAttestation(ctx context.Context, in AttestationSubmission) (Attestati
 		return AttestationRecord{}, attestationRefused("an attestation must name the terminal principal who made it")
 	}
 
-	relay, found, err := in.Relays.Load(strings.TrimSpace(in.RequestID))
+	requestID := strings.TrimSpace(in.RequestID)
+	stored, found, err := in.Reviews.Load(requestID)
 	if err != nil {
 		return AttestationRecord{}, attestationRefused("%v", err)
 	}
 	if !found {
-		return AttestationRecord{}, attestationRefused("no relayed review is recorded for request %s", in.RequestID)
-	}
-	if relay.State != RelayPublished {
-		return AttestationRecord{}, attestationRefused(
-			"the relayed review for %s is %s; only a published review can be attested to", in.RequestID, relay.State)
+		return AttestationRecord{}, attestationRefused("no canonical review is recorded for request %s", requestID)
 	}
 	// The operator names the digest, and it must be the one on record. This is
-	// what ties the override to a review its author actually read.
-	if relay.ReviewDigest != strings.TrimSpace(in.ReviewDigest) {
+	// what ties the override to a review its author actually read, and it is
+	// checked before anything durable exists.
+	if stored.ReviewDigest != strings.TrimSpace(in.ReviewDigest) {
 		return AttestationRecord{}, attestationRefused(
-			"the relayed review for %s is %s and the attestation names %s", in.RequestID, relay.ReviewDigest, in.ReviewDigest)
+			"the review recorded for %s is %s and the attestation names %s", requestID, stored.ReviewDigest, in.ReviewDigest)
+	}
+	// Everything the override asserts comes from the reviewer's own bytes.
+	art, err := stored.Artifact()
+	if err != nil {
+		return AttestationRecord{}, attestationRefused("%v", err)
+	}
+	binding := roles.Binding{TaskID: art.TaskID, BaseSHA: art.BaseSHA,
+		CandidateDigest: art.CandidateDigest, CandidateTree: art.CandidateTree}
+	// The decision is read by the one component that reads decisions, from the
+	// payload inside those bytes. An override of an ACCEPT that was never an
+	// ACCEPT would advance a candidate its reviewer objected to.
+	verdict, err := workflow.ValidateReviewBody(art.Body, binding, art.ReviewerProvider)
+	if err != nil {
+		return AttestationRecord{}, attestationRefused("the reviewer payload does not satisfy the reviewer contract: %v", err)
 	}
 
 	att := roles.Attestation{
-		RequestID:    relay.RequestID,
-		ReviewDigest: relay.ReviewDigest,
-		Reviewer:     relay.Reviewer,
-		Decision:     roles.Decision(strings.ToLower(strings.TrimSpace(relay.Decision))),
-		Binding: roles.Binding{TaskID: relay.TaskID, BaseSHA: relay.BaseSHA,
-			CandidateDigest: relay.CandidateDigest, CandidateTree: relay.CandidateTree},
-		Principal: in.Principal.token(),
-		At:        now().UTC(),
-		Statement: roles.AttestationStatement,
+		RequestID:    art.RequestID,
+		ReviewDigest: stored.ReviewDigest,
+		Reviewer:     art.ReviewerProvider,
+		Decision:     verdict.Decision,
+		Binding:      binding,
+		Principal:    in.Principal.token(),
+		At:           now().UTC(),
+		Statement:    roles.AttestationStatement,
 	}
 	if err := att.Validate(); err != nil {
 		return AttestationRecord{}, attestationRefused("%v", err)

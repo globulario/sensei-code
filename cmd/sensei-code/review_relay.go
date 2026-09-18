@@ -120,7 +120,7 @@ func runReviewAttest(repo gitx.Repo, args []string) error {
 // socket observed and the authority this workspace's config grants.
 func attestHandler(runners engineResolver, cfg config.Config) control.AttestHandler {
 	return func(ctx context.Context, in control.LocalAttestation, p control.LocalRelayPrincipal) (control.LocalAttestationResult, error) {
-		if runners.Attestations.Dir == "" || runners.Relays.Dir == "" {
+		if runners.Attestations.Dir == "" || runners.Reviews.Dir == "" {
 			return control.LocalAttestationResult{}, errors.New("this control process has no GitHub review bridge, so it cannot record an attestation")
 		}
 		principal := ghbridge.RelayPrincipal{UID: p.UID, PID: p.PID, Terminal: p.Terminal}
@@ -130,7 +130,7 @@ func attestHandler(runners engineResolver, cfg config.Config) control.AttestHand
 		rec, err := ghbridge.AcceptAttestation(ctx, ghbridge.AttestationSubmission{
 			RequestID: in.RequestID, ReviewDigest: in.ReviewDigest, Principal: principal,
 			Permitted: cfg.Workflow.OwnerAttestation,
-			Relays:    runners.Relays, Store: runners.Attestations, Mailbox: runners.Mailbox,
+			Reviews:   runners.Reviews, Store: runners.Attestations, Mailbox: runners.Mailbox,
 		})
 		return control.LocalAttestationResult{
 			State: rec.State, TaskID: rec.Attestation.Binding.TaskID, RequestID: rec.Attestation.RequestID,
