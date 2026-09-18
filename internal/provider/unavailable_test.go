@@ -110,3 +110,16 @@ func TestACompletedTurnStillAnswers(t *testing.T) {
 		t.Fatalf("a completed turn: text=%q err=%v", text, err)
 	}
 }
+
+// The structured code decides even when the provider sends no message and no
+// preceding error notification: an empty message is presentation missing, not
+// proof missing.
+func TestTheCodeDecidesEvenWithoutAMessage(t *testing.T) {
+	_, err := replayedSession(
+		`{"id":1,"result":{"turn":{"id":"T1"}}}`,
+		`{"method":"turn/completed","params":{"threadId":"TH","turn":{"id":"T1","status":"failed","error":{"message":"","codexErrorInfo":"usageLimitExceeded"}}}}`,
+	).runTurn("TH", "prompt")
+	if u, ok := AsUnavailable(err); !ok || u.Reason != "usageLimitExceeded" {
+		t.Fatalf("a structured unavailability code with an empty message was dropped: %v", err)
+	}
+}

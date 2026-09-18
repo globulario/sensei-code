@@ -410,9 +410,15 @@ func (s *ChatGPTSession) runTurn(threadID, prompt string) (string, error) {
 				continue
 			}
 			if p.Turn.Status != "completed" {
+				// Each field is taken from the turn's own error when it carries
+				// it, independently: a turn error with a structured code and no
+				// message still carries the proof.
 				message, info := eventError, eventErrorInfo
 				if p.Turn.Error != nil && p.Turn.Error.Message != "" {
-					message, info = p.Turn.Error.Message, p.Turn.Error.ErrorInfo
+					message = p.Turn.Error.Message
+				}
+				if p.Turn.Error != nil && len(p.Turn.Error.ErrorInfo) != 0 {
+					info = p.Turn.Error.ErrorInfo
 				}
 				// The provider's structured code decides; the message never does.
 				if u := codexTurnUnavailable(string(ChatGPT), info, message); u != nil {
