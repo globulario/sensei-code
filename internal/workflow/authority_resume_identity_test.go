@@ -429,7 +429,19 @@ func TestTheBehaviouralRecordLearnsStoppedNotFailureFromAHumanStop(t *testing.T)
 // drift apart again. The classifier takes no boolean and returns none, so a call
 // site cannot guard it off and fall through.
 func TestNeitherAuthorityPathKeepsItsOwnTerminalDecision(t *testing.T) {
-	for _, fn := range []string{"execute", "resumeAuthority"} {
+	// execute and Resume end through terminateRun, and terminateRun through
+	// the authority classifier. Resume used to keep a closure of its own that
+	// reported every ending as FAILED, which turned a deferred question raised
+	// during a resumed re-plan into a final failure (#194 review at b23a8ae).
+	for _, fn := range []string{"execute", "Resume"} {
+		if !strings.Contains(funcBody(t, "internal/workflow/engine.go", fn), "terminateRun") {
+			t.Errorf("%s does not end through the shared run classifier", fn)
+		}
+	}
+	if strings.Contains(funcBody(t, "internal/workflow/engine.go", "Resume"), "event.WorkflowFailed") {
+		t.Error("Resume decides a failure terminal itself instead of through the shared classifier")
+	}
+	for _, fn := range []string{"terminateRun", "resumeAuthority"} {
 		body := funcBody(t, "internal/workflow/engine.go", fn)
 		if !strings.Contains(body, "terminateAuthorityOutcome") {
 			t.Errorf("%s does not route its authority ending through the shared classifier", fn)

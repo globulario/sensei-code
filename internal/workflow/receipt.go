@@ -369,6 +369,22 @@ func (e *Engine) noteCandidateWorkUnmeasured(taskID string) {
 	e.withReceipt(taskID, func(f *receiptFacts) { f.candidateState = runreceipt.CandidateUnknown })
 }
 
+// noteInheritedCandidate records what a resumed invocation found on disk
+// before it did anything: work is PRESENT, a clean worktree is NONE, and a
+// worktree that could not be read is UNKNOWN rather than either claim.
+func (e *Engine) noteInheritedCandidate(taskID string, seen observation) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		switch {
+		case seen.Err != nil:
+			f.candidateState = runreceipt.CandidateUnknown
+		case seen.DiffBytes > 0 || len(seen.ChangedPaths) > 0:
+			f.candidateState = runreceipt.CandidatePresent
+		default:
+			f.candidateState = runreceipt.CandidateNone
+		}
+	})
+}
+
 // noteCandidateUnattempted records that work exists and no canonical candidate
 // identity will be created, because the run is refusing before the mint.
 //
