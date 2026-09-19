@@ -26,7 +26,9 @@ import (
 // terminal. The task stays itself, the candidate stays as it stands, and what it
 // owes is an ARCHITECT re-plan over the candidate and its open findings -- the
 // party that can change the plan, rather than another implementer re-running the
-// same plan against the same objection. Resuming delivers exactly that.
+// same plan against the same objection. Resuming delivers exactly that, and
+// records the re-plan as the task's plan (PlanProposed), which discharges the
+// obligation and binds every later resume to the revised plan.
 //
 // Only exhaustion qualifies. A worker that errored, a structural refusal, a
 // refuted prospective grant, or a failure beside exhaustion stay FAILED: they are

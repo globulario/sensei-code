@@ -238,8 +238,8 @@ type Interrupted struct {
 	BlockedExternal json.RawMessage
 	// NotConverged is the WorkflowNotConverged payload, byte for byte: every
 	// implementer spent its review cycles and the task is owed an architect
-	// re-plan. It stands until the task ends, because the re-plan a resume makes
-	// is not a durable plan: an interruption after it owes the re-plan again.
+	// re-plan. A later PlanProposed -- the re-plan a resume records -- discharges
+	// it.
 	NotConverged json.RawMessage
 }
 
@@ -309,10 +309,14 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.Plan = e.Summary
 			p.planned = true
 			p.PlanRecord = e.Payload
-			// A plan discharges an architect turn a block was holding.
+			// A plan discharges an architect turn a block was holding, and the
+			// re-plan a non-converged task was owed: a resume records its re-plan
+			// as exactly this event, so what it owes next is the implementation
+			// of THAT plan.
 			if blockedRole(p.BlockedExternal) == "architect" {
 				p.BlockedExternal = nil
 			}
+			p.NotConverged = nil
 			p.PlanEventSource = e.Source
 			var src struct {
 				Source string `json:"plan_source"`
@@ -396,15 +400,6 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// Emitting this as WorkflowFailed is exactly what made the first
 			// dogfood run (2026-09-18) unrecoverable except as a new task.
 			p.blocked = true
-			// The newest block names the turn -- except that an architect
-			// re-plan owed by a PLANNED task survives a later block of another
-			// role. The re-plan a resume makes is not a durable plan, so if an
-			// implementer block replaced it the next resume would continue under
-			// the original plan while the candidate had moved on under the
-			// revised one. Only a plan discharges it (PlanProposed, above).
-			if p.planned && blockedRole(p.BlockedExternal) == "architect" && blockedRole(e.Payload) != "architect" {
-				break
-			}
 			p.BlockedExternal = e.Payload
 		case event.WorkflowNotConverged:
 			// Not terminal: the candidate stands and the task is owed an

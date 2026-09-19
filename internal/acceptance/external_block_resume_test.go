@@ -416,6 +416,9 @@ func TestANotConvergedTaskIsRePlannedAndCompletesAfterRestart(t *testing.T) {
 	if !replanned {
 		t.Fatalf("the resume did not announce the owed re-plan: %v", second)
 	}
+	if !has(second, event.PlanProposed) {
+		t.Fatalf("the re-plan was not recorded as the task's plan, so a later resume could not be bound to it: %v", second)
+	}
 	if !has(second, event.WorkflowCompleted) {
 		t.Fatalf("the re-planned task did not complete once the reviewer accepted: %v", second)
 	}

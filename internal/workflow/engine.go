@@ -5556,7 +5556,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 					fail(errors.New("the architect did not return a revised bounded plan for the owed re-plan"))
 					return
 				}
-				e.emit(event.New(e.SessionID, task.TaskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+				// Recorded as THE plan, exactly as execute records one. A re-plan
+				// held only in memory left two wrong continuations after any later
+				// interruption: re-plan again from the plan that did not converge, or
+				// continue the candidate under that plan. This plan discharges the
+				// obligation (FindInterrupted) and binds every later resume.
+				e.emit(event.New(e.SessionID, task.TaskID, planEventSource(e.planSource(task.TaskID)), event.PlanProposed,
+					planSummaryFrom(revised, e.planSource(task.TaskID), e.planDigest(task.TaskID)),
+					proposedPlan{architectureDecision: revised, PlanSource: e.planSource(task.TaskID), PlanDigest: e.planDigest(task.TaskID)}))
 				plan = revised.Plan
 				tc.Rationale, tc.Steps, tc.Consequences = revised.Summary, revised.Steps, revised.Consequences
 				tc.Invariants, tc.Mode = revised.Invariants, planMode(revised.Mode)
