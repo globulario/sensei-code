@@ -27,8 +27,9 @@ import (
 var errBlockedBehindQuestion = errors.New("that task is waiting on a human-owned decision; answer it with --answer before its blocked turn can be retried")
 
 // selectBlockedResume decides, from the durable record alone, whether a task is
-// to be continued as a blocked role turn. ok=false with no error means the task
-// is not in that lane and the caller should try the next one.
+// to be continued at a turn it is owed: a role turn a provider blocked, or the
+// architect re-plan a non-converged task is owed. ok=false with no error means
+// the task is not in that lane and the caller should try the next one.
 //
 // Precedence is fixed and read from the record: a standing human question comes
 // first (sensei_code.resume.never_skips_a_human_decision), then an owed review,
@@ -39,11 +40,21 @@ func selectBlockedResume(tasks []session.Interrupted, taskID string, reviewOwed 
 		if task.TaskID != taskID {
 			continue
 		}
-		if len(task.BlockedExternal) == 0 || task.AwaitingReview || reviewOwed {
+		if (len(task.BlockedExternal) == 0 && len(task.NotConverged) == 0) || task.AwaitingReview || reviewOwed {
 			return session.Interrupted{}, false, nil
 		}
 		if len(task.AwaitingAuthority) != 0 {
 			return session.Interrupted{}, false, fmt.Errorf("%w: %s", errBlockedBehindQuestion, taskID)
+		}
+		if len(task.NotConverged) != 0 {
+			n, err := workflow.ParseNotConverged(task.NotConverged)
+			if err != nil {
+				return session.Interrupted{}, false, err
+			}
+			if n.TaskID != taskID {
+				return session.Interrupted{}, false, fmt.Errorf("the non-convergence record is bound to task %s, not %s", n.TaskID, taskID)
+			}
+			return task, true, nil
 		}
 		block, err := workflow.ParseExternalBlock(task.BlockedExternal)
 		if err != nil {
@@ -87,9 +98,13 @@ func resumeBlockedExternal(ctx context.Context, repo gitx.Repo, cfg config.Confi
 	}
 
 	if !quiet {
-		block, _ := workflow.ParseExternalBlock(target.BlockedExternal)
 		fmt.Printf("resuming task %s  session %s\n", target.TaskID, sessionID)
-		fmt.Printf("blocked   %s\n", block.Describe())
+		if n, err := workflow.ParseNotConverged(target.NotConverged); err == nil {
+			fmt.Printf("owed      architect re-plan: %s\n", n.Describe())
+		} else {
+			block, _ := workflow.ParseExternalBlock(target.BlockedExternal)
+			fmt.Printf("blocked   %s\n", block.Describe())
+		}
 	}
 
 	// No answer is carried, so the engine itself is the run control.

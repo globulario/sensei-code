@@ -56,7 +56,9 @@ type receiptFacts struct {
 	executionBudget  runreceipt.Value
 	// externalBlock is the role turn a BLOCKED_EXTERNAL run is owed and the
 	// provider condition that blocked it.
-	externalBlock                         runreceipt.Value
+	externalBlock runreceipt.Value
+	// notConverged is who spent which review budget, and what is owed.
+	notConverged                          runreceipt.Value
 	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
@@ -109,6 +111,7 @@ func freshFacts() *receiptFacts {
 		deferredQuestion: notYet("no authority question was deferred"),
 		executionBudget:  notYet("no execution budget expired"),
 		externalBlock:    notYet("no role turn was blocked externally"),
+		notConverged:     notYet("the run did not end unconverged"),
 		// Stated, not defaulted: a candidate that never reached validation has
 		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
 		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
@@ -315,6 +318,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		DeferredQuestion:          facts.deferredQuestion,
 		ExecutionBudget:           facts.executionBudget,
 		ExternalBlock:             facts.externalBlock,
+		NotConverged:              facts.notConverged,
 		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
@@ -590,6 +594,22 @@ func (e *Engine) noteExternalBlock(taskID string, b ExternalBlock) {
 		if b.Role == string(roles.Architect) && f.planState == runreceipt.PlanUnknown {
 			f.planState = runreceipt.PlanNone
 			f.plan = runreceipt.UnknownValue("the architect turn was blocked before any plan was produced")
+		}
+	})
+}
+
+// noteNotConverged records the spent budget and what the task is owed.
+//
+// A candidate that holds work at this point was never minted and will not be in
+// this invocation, which is exactly UNATTEMPTED: a positive claim, where
+// PRESENT would demand mint evidence that does not exist and make every such
+// receipt INCOMPLETE (the second half of the 2026-09-19 finding).
+func (e *Engine) noteNotConverged(taskID string, n NotConverged) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.notConverged = runreceipt.MeasuredValue(n.Describe(),
+			"the implementers whose review budgets were spent, and what the task is owed")
+		if f.candidateState == runreceipt.CandidatePresent {
+			f.candidateState = runreceipt.CandidateUnattempted
 		}
 	})
 }

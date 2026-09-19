@@ -379,6 +379,14 @@ func printStandingQuestions(out io.Writer, sessionID string, tasks []session.Int
 	// listing that hid them would leave a waiting task invisible. The retry
 	// time printed is the one the provider supplied, or UNKNOWN.
 	for _, task := range tasks {
+		if len(task.NotConverged) != 0 {
+			if n, err := workflow.ParseNotConverged(task.NotConverged); err != nil {
+				fmt.Fprintf(out, "task %s\n  not converged, but the record could not be read back: %v\n\n", task.TaskID, err)
+			} else {
+				fmt.Fprintf(out, "task %s\n  not converged  %s\n  resume         --task %s\n\n", task.TaskID, n.Describe(), task.TaskID)
+			}
+			continue
+		}
 		if len(task.BlockedExternal) == 0 {
 			continue
 		}

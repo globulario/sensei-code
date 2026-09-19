@@ -68,6 +68,10 @@ const (
 	// Read as exitFailed, it taught the first dogfood run that its objective
 	// broke; read as success, it would claim work nobody did.
 	exitBlockedExternal = 8
+	// exitNotConverged means every implementer spent its review cycles and the
+	// reviewer still requires revision. The task is preserved and owed an
+	// architect re-plan; `sensei-code resume --task <id>` delivers it.
+	exitNotConverged = 9
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
@@ -369,6 +373,8 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitAwaitingReview, true
 	case event.WorkflowBlockedExternal:
 		return exitBlockedExternal, true
+	case event.WorkflowNotConverged:
+		return exitNotConverged, true
 	}
 	return 0, false
 }
@@ -380,7 +386,7 @@ func terminal(k event.Kind) bool {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
 		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
-		event.AuthorityRequired:
+		event.WorkflowNotConverged, event.AuthorityRequired:
 		return true
 	}
 	return false

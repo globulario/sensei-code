@@ -2115,7 +2115,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("unsupported review decision %q", review.Decision)
 		}
 	}
-	return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("candidate did not converge after %d review cycles", e.Config.Workflow.ReviewCycles)
+	return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("%w after %d review cycles", errReviewCyclesExhausted, e.Config.Workflow.ReviewCycles)
 }
 
 // planMode normalises the architect's declaration.
@@ -4608,6 +4608,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// unavailable is kept separate from failures for the same reason: a
 	// provider that proved it cannot serve now did not fail at the work.
 	var unavailable []*RoleUnavailable
+	// exhausted names the workers whose failure was spending every review cycle
+	// with the reviewer still objecting -- the one failure a re-plan can answer.
+	var exhausted []string
 	// continuing names the candidate the next worker would take over, so an
 	// exclusion recorded against THAT candidate applies and one recorded against
 	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
@@ -4864,6 +4867,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				return
 			}
 			failures = append(failures, worker.Name+": "+err.Error())
+			if errors.Is(err, errReviewCyclesExhausted) {
+				exhausted = append(exhausted, worker.Name)
+			}
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
 			state.Phase = taskstate.Revising
@@ -5041,6 +5047,18 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	e.reportUndeliveredNotes(taskID)
 	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 		"no bounded implementor converged and the candidate holds no work")
+	// Every failure was a spent review budget, and nothing else went wrong: the
+	// reviewer still objects and no implementer can change the plan. The task is
+	// owed an architect re-plan, not a final failure (DF-6).
+	if len(failures) > 0 && len(exhausted) == len(failures) && len(unavailable) == 0 {
+		state.Phase = taskstate.Revising
+		_ = state.Save(e.Repo.Root)
+		e.endNotConverged(taskID, NotConverged{
+			TaskID: taskID, Implementers: exhausted,
+			ReviewCycles: e.Config.Workflow.ReviewCycles, Owed: OwedArchitectReplan,
+		})
+		return
+	}
 	if len(failures) == 0 && len(ineligible) > 0 {
 		// Every implementor was excluded and none failed. Reporting that as
 		// "no implementor produced an acceptable candidate" would blame workers
@@ -5499,9 +5517,41 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		if r := strings.TrimSpace(task.Review); carried == "" && r != "" {
 			carried = "This candidate was interrupted before it converged. Its changes are already present.\n\nThe last review said:\n" + r
 		}
+		plan := bound.Plan
+		// An owed review comes first; otherwise a task that did not converge, or
+		// whose architect re-plan was blocked, is owed that re-plan BEFORE any
+		// implementer is asked again -- re-running the same plan against the same
+		// objection is what did not converge.
+		if !task.AwaitingReview {
+			why, owed, err := owedReplan(task.NotConverged, task.BlockedExternal, task.TaskID)
+			if err != nil {
+				fail(fmt.Errorf("the task cannot be resumed at its owed re-plan: %w", err))
+				return
+			}
+			if owed {
+				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+					"resuming the same task at the architect re-plan it is owed: "+why, nil))
+				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, task.TaskID, task.Task,
+					replanPrompt(task.Task, plan, why, task.Review), why)
+				if err != nil {
+					fail(err)
+					return
+				}
+				if strings.TrimSpace(revised.Plan) == "" {
+					fail(errors.New("the architect did not return a revised bounded plan for the owed re-plan"))
+					return
+				}
+				e.emit(event.New(e.SessionID, task.TaskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+				plan = revised.Plan
+				tc.Rationale, tc.Steps, tc.Consequences = revised.Summary, revised.Steps, revised.Consequences
+				tc.Invariants, tc.Mode = revised.Invariants, planMode(revised.Mode)
+				carried = "The architect re-planned this task because the candidate did not converge under the previous plan. " +
+					"Reconcile the existing candidate with the revised plan.\n\nThe last review said:\n" + strings.TrimSpace(task.Review)
+			}
+		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
-		e.implement(ctx, sc, start, task.TaskID, &tc, bound.Plan, carried, fail)
+		e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)
 	}()
 	return task.TaskID
 }

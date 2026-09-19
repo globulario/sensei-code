@@ -172,6 +172,14 @@ const (
 	// The payload is the block itself (workflow.ExternalBlock), so a resume
 	// retries the same turn of the same task.
 	WorkflowBlockedExternal Kind = "workflow.blocked_external"
+	// WorkflowNotConverged is a task whose every configured implementer spent
+	// its review cycles while the independent reviewer still required revision.
+	//
+	// Terminal for the INVOCATION and not for the TASK. Emitted as
+	// WorkflowFailed it was final to FindInterrupted while the candidate record
+	// called the same work resumable (DF-6, 2026-09-19). The payload is
+	// workflow.NotConverged; a resume has the architect re-plan the candidate.
+	WorkflowNotConverged Kind = "workflow.not_converged"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record
