@@ -1086,6 +1086,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
 		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)),
 		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID)}))
+	e.recordTestEditGrants(taskID)
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -1671,6 +1672,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						Remaining: revised.Consequences,
 					})
 					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					e.recordRevisedPlan(taskID, revised)
+					applyPlanScope(tc, revised)
 					plan = revised.Plan
 					feedback = "The architect resolved the review escalation. Inspect again under the revised plan."
 					continue
@@ -2035,6 +2038,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
 				if !stands {
+					e.recordRevisedPlan(taskID, revised)
+					applyPlanScope(tc, revised)
 					plan = revised.Plan
 					feedback = "The architect adjudicated a contradiction between two reviews of this candidate. Reconcile the current candidate with the revised plan."
 					continue
@@ -2114,6 +2119,8 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				Remaining: revised.Consequences,
 			})
 			e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+			e.recordRevisedPlan(taskID, revised)
+			applyPlanScope(tc, revised)
 			plan = revised.Plan
 			feedback = "The architect resolved the review escalation. Reconcile the current candidate with the revised plan."
 		default:
@@ -3077,14 +3084,13 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		//
 		// At the world the coverage computation used, never a freshly resolved one: two
 		// worlds would authorize an edit against bytes neither answer describes.
-		if extra := e.authoredTestEditGrants(ctx, taskID, d.Files, authored); len(extra) != 0 {
-			merged := append(e.testEditGrants(taskID), extra...)
-			e.setTestEditGrants(taskID, merged)
-			action.OperationalAuthority = operationalFiles(merged)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
-				"existing-test edit authority recorded from AUTHORED production governance: "+
-					strings.Join(operationalFiles(extra), ", "), testEditRecord{World: extra[0].World, Grants: extra}))
-		}
+		//
+		// Held, not recorded: the grant set is recorded once, complete, when the plan it
+		// was routed for becomes the task's plan (recordTestEditGrants). A partial record
+		// per pass left a resume comparing against whichever pass wrote last.
+		merged := withAuthoredTestEditGrants(ctx, e.coverageWorld(taskID), d.Files, e.testEditGrants(taskID), authored, gitShowAt(e.Repo.Root))
+		e.setTestEditGrants(taskID, merged)
+		action.OperationalAuthority = operationalFiles(merged)
 	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
@@ -3340,12 +3346,20 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 	if !probeNeeded(routing, true) {
 		return routing, false, nil
 	}
-	unexamined, docs, _, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
+	unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 	if err != nil {
 		return Routing{}, false, err
 	}
 	action.Unexamined = unexamined
 	action.DocumentEvidence = docs
+	// A human answer satisfies the consequence boundary, not the per-file
+	// governance relation. The probes above establish that relation at the
+	// pinned world, so compose their authored evidence with the derived grants
+	// before the accepted plan is recorded. Discarding prod here made a
+	// human-authorized route record only its derived half.
+	authored := authoredEvidence{World: e.coverageWorld(taskID), ByFile: prod}
+	merged := withAuthoredTestEditGrants(context.Background(), e.coverageWorld(taskID), action.Files, e.testEditGrants(taskID), authored, gitShowAt(e.Repo.Root))
+	e.setTestEditGrants(taskID, merged)
 	after := afterAuthorization(routing, true, action, readBlindSpots(scoped.BlindSpots))
 	// The same gap identity routePlan would have built: completed with the
 	// pinned world, or the closure budget would treat the question this
@@ -3419,13 +3433,6 @@ type coverageComputation struct {
 // coverageAtWorld computes coverage and grants for a plan at the candidate's
 // pinned base, side-effect free. See coverageComputation.
 func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) (coverageComputation, bool) {
-	if len(planned) == 0 {
-		return coverageComputation{}, false
-	}
-	recipes, err := derived.LoadRecipes(filepath.Join(e.Repo.Root, derivedRecipesPath))
-	if err != nil || len(recipes) == 0 {
-		return coverageComputation{}, false
-	}
 	// The world is the candidate's pinned base, not the canonical HEAD. The
 	// worktree is cut from that base; facts read from a HEAD that advanced
 	// between establishing the identity and finishing routing would authorize
@@ -3443,6 +3450,19 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 			return coverageComputation{}, false
 		}
 		declarations = nil
+	}
+	// An inspect plan may intentionally name no files. It still has a candidate
+	// base, and routing must persist an empty grant snapshot bound to that base
+	// so resume can distinguish it from an absent or malformed record.
+	if len(planned) == 0 {
+		return coverageComputation{world: world}, true
+	}
+	recipes, err := derived.LoadRecipes(filepath.Join(e.Repo.Root, derivedRecipesPath))
+	if err != nil || len(recipes) == 0 {
+		// A plan with no derived recipe still needs a complete, world-bound
+		// snapshot: an empty grant set is authority routing's answer, not an
+		// omitted record that a later resume may reinterpret.
+		return coverageComputation{world: world}, true
 	}
 	// The future-only rule, applied before any derivation is spent.
 	//
@@ -3465,20 +3485,17 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) []CoverageAnchor {
 	c, ok := e.coverageAtWorld(ctx, taskID, planned, declarations)
 	if !ok {
+		// This plan holds no test-edit grant; one routed for an earlier plan must not
+		// survive into it.
+		e.setTestEditGrants(taskID, nil)
+		e.setCoverageWorld(taskID, "")
 		return nil
 	}
 	e.setProspectiveGrants(taskID, c.prospective)
+	// The derived grants are held for this plan; the authored pass may add to them, and
+	// the complete set is recorded when the plan is (recordTestEditGrants).
 	e.setTestEditGrants(taskID, c.edits)
 	e.setCoverageWorld(taskID, c.world)
-	if len(c.edits) != 0 {
-		names := make([]string, 0, len(c.edits))
-		for _, g := range c.edits {
-			names = append(names, g.Path+" beside "+g.Covering)
-		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
-			"existing-test edit authority recorded for "+strings.Join(names, ", ")+" (operational, not coverage)",
-			testEditRecord{World: c.world, Grants: c.edits}))
-	}
 	for _, r := range c.reasons {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no test-edit authority: "+r, nil))
 	}
@@ -3495,6 +3512,83 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 			prospectiveRecord{World: c.world, Grants: c.prospective}))
 	}
 	return c.coverage
+}
+
+// recordRevisedPlan is the one transition by which a routed revision is recorded as
+// the task's current plan: every path that continues under a revised plan -- a review
+// escalation, an adjudicated contradiction, an owed re-plan on resume -- calls it and
+// then applies the revision's whole scope (applyPlanScope) before the next worker
+// cycle. The plan is recorded (PlanProposed), which supersedes the previous plan's
+// grant record, and the revision's complete grant set is recorded immediately after
+// it. A revision adopted only in memory governed the next worker cycle while an
+// interruption resumed the earlier plan and its grants.
+func (e *Engine) recordRevisedPlan(taskID string, revised architectureDecision) {
+	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
+		planSummaryFrom(revised, e.planSource(taskID), e.planDigest(taskID)),
+		proposedPlan{architectureDecision: revised, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID)}))
+	e.recordTestEditGrants(taskID)
+}
+
+// recordTestEditGrants records the complete existing-test edit grant set routing
+// settled on for the plan just recorded as the task's plan -- derived and authored
+// together, bound to the world they were computed in. Called only immediately after a
+// PlanProposed: the record is plan-scoped, and FindInterrupted lets a later PlanProposed
+// supersede it, so no grant routed for one plan is re-established for another.
+//
+// Only the routing path records. A resume that did not re-plan computes and compares
+// (restoreTestEditGrants) and never calls this.
+func (e *Engine) recordTestEditGrants(taskID string) {
+	grants := e.testEditGrants(taskID)
+	names := make([]string, 0, len(grants))
+	for _, g := range grants {
+		names = append(names, g.Path+" beside "+g.Covering+" ("+g.CoveringEvidence+")")
+	}
+	summary := "existing-test edit authority recorded: no existing-test edits authorized (operational, not coverage)"
+	if len(names) != 0 {
+		summary = "existing-test edit authority recorded for " + strings.Join(names, ", ") + " (operational, not coverage)"
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted, summary,
+		testEditRecord{World: e.coverageWorld(taskID), Grants: grants}))
+}
+
+// authoredGovernanceForResume re-reads, for a resume, the authored production
+// governance routing's per-file probe supplied: a region preflight over the plan's
+// files, then the same per-file probe in that answer's graph generation. Nothing is
+// granted by it; the result is composed by withAuthoredTestEditGrants and compared
+// against the record. An answer that cannot be obtained or certified is an error, so
+// an unavailable Sensei refuses the resume rather than quietly dropping authored
+// grants into a mismatch nobody can explain.
+func (e *Engine) authoredGovernanceForResume(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, planned []string, world string) (authoredEvidence, error) {
+	if strings.TrimSpace(world) == "" || len(planned) == 0 {
+		return authoredEvidence{}, nil
+	}
+	args := map[string]any{"task": task, "files": planned, "mode": "compact"}
+	if domain := start.Domain(); domain != "" {
+		args["domain"] = domain
+	}
+	subjectRevision := repositoryHead(ctx, e.Repo)
+	result, err := sc.CallTool("awareness_preflight", args)
+	if err != nil {
+		return authoredEvidence{}, fmt.Errorf("Sensei scoped preflight: %w", err)
+	}
+	e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.SenseiResult,
+		firstText(result), e.preflightRecord(args, result.Structured, subjectRevision, sensei.PreflightGraphDigest(result))))
+	scoped, err := sensei.DecodePreflight(result)
+	if err != nil {
+		return authoredEvidence{}, err
+	}
+	if !scoped.Authority.Certifiable() {
+		return authoredEvidence{}, fmt.Errorf("scoped preflight authority is not certifiable: %s", scoped.Authority.Diagnostic())
+	}
+	stage := StageCandidateEdit
+	if e.observes(taskID) {
+		stage = StageObserve
+	}
+	_, _, prod, err := e.unexaminedPlannedFiles(sc, start, task, Action{Stage: stage, Files: planned}, scoped)
+	if err != nil {
+		return authoredEvidence{}, err
+	}
+	return authoredEvidence{World: world, ByFile: prod}, nil
 }
 
 // restoreProspectiveGrants re-establishes, from the session record, the
@@ -5495,7 +5589,20 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// Recording here minted authority on a SECOND resume, which read the
 		// first resume's write as the run's own record.
 		recomputed, _ := e.coverageAtWorld(ctx, task.TaskID, bound.Files, bound.Prospective)
-		if err := e.restoreTestEditGrants(task, recomputed.edits, bound.Files, identity.BaseSHA); err != nil {
+		// Routing composed derived AND authored governance; re-establishing only the
+		// derived half refused every grant authored governance produced. The authored
+		// half is re-read from current certified per-file evidence, at the same pinned
+		// world, and composed by the same function. This happens even for an empty or
+		// absent snapshot: resume must establish the complete current comparison set
+		// before it can reject a malformed or missing authority record.
+		edits := recomputed.edits
+		authored, err := e.authoredGovernanceForResume(ctx, sc, start, task.TaskID, task.Task, bound.Files, recomputed.world)
+		if err != nil {
+			fail(fmt.Errorf("cannot resume %s: the authored governance its recorded test-edit authority is re-established against could not be read: %w", task.TaskID, err))
+			return
+		}
+		edits = withAuthoredTestEditGrants(ctx, recomputed.world, bound.Files, recomputed.edits, authored, gitShowAt(e.Repo.Root))
+		if err := e.restoreTestEditGrants(task, edits, bound.Files, identity.BaseSHA); err != nil {
 			fail(err)
 			return
 		}
@@ -5570,10 +5677,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				// interruption: re-plan again from the plan that did not converge, or
 				// continue the candidate under that plan. This plan discharges the
 				// obligation (FindInterrupted) and binds every later resume.
-				e.emit(event.New(e.SessionID, task.TaskID, planEventSource(e.planSource(task.TaskID)), event.PlanProposed,
-					planSummaryFrom(revised, e.planSource(task.TaskID), e.planDigest(task.TaskID)),
-					proposedPlan{architectureDecision: revised, PlanSource: e.planSource(task.TaskID), PlanDigest: e.planDigest(task.TaskID)}))
-				plan = revised.Plan
+				e.recordRevisedPlan(task.TaskID, revised)
 				// The WHOLE scope moves to the revised plan -- files and prospective
 				// surfaces included. Moving only the prose left the resumed candidate
 				// captured and inspected under the old plan's files (canonical review
@@ -5581,6 +5685,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				applyPlanScope(&tc, revised)
 				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 					"the resumed candidate continues under the re-planned scope: "+scopeSummary(tc), nil))
+				plan = revised.Plan
 				carried = "The architect re-planned this task because the candidate did not converge under the previous plan. " +
 					"Reconcile the existing candidate with the revised plan.\n\nThe last review said:\n" + strings.TrimSpace(task.Review)
 			}

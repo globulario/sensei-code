@@ -118,3 +118,28 @@ func TestAnsweredAuthorityIsNoLongerPending(t *testing.T) {
 		t.Errorf("an answered question is still pending, so resume would ask it again: %s", got[0].AwaitingAuthority)
 	}
 }
+
+// Existing-test edit authority is plan-scoped: a later PlanProposed supersedes the
+// grant record routed for the plan before it, and the grant recorded after a plan
+// belongs to that plan.
+func TestALaterPlanSupersedesTheEarlierPlansTestEditRecord(t *testing.T) {
+	grant := event.Event{TaskID: "t1", Kind: event.TestEditGranted, Payload: []byte(`{"world":"w","grants":[{"path":"a_test.go"}]}`)}
+	got := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the first plan"),
+		grant,
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the re-plan"),
+	})
+	if len(got) != 1 || len(got[0].TestEditRecord) != 0 {
+		t.Fatalf("an earlier plan's test-edit record survived a later plan: %+v", got)
+	}
+	got = FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the first plan"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the re-plan"),
+		grant,
+	})
+	if len(got) != 1 || string(got[0].TestEditRecord) != string(grant.Payload) {
+		t.Fatalf("the current plan's test-edit record was lost: %+v", got)
+	}
+}

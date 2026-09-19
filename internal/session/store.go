@@ -317,6 +317,11 @@ func FindInterrupted(events []event.Event) []Interrupted {
 				p.BlockedExternal = nil
 			}
 			p.NotConverged = nil
+			// A new plan supersedes the existing-test edit authority routed for the one
+			// before it. The engine records the new plan's complete grant set AFTER this
+			// event; a grant recorded before it belongs to an earlier plan and must not be
+			// re-established for this one.
+			p.TestEditRecord = nil
 			p.PlanEventSource = e.Source
 			var src struct {
 				Source string `json:"plan_source"`
