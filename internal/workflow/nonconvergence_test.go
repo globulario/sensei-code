@@ -245,3 +245,31 @@ func TestARestartedEngineStillRefusesToRePlanASuppliedPlan(t *testing.T) {
 		t.Fatalf("a restarted engine let the architect revise a supplied plan: %v", err)
 	}
 }
+
+// The objection that prevented convergence reaches the architect. The verdict
+// below is the exact REVISE payload a real stubsmoke run recorded on
+// 2026-09-19; FindInterrupted carries its instruction as the task's Review, and
+// the owed re-plan puts it under OPEN FINDINGS. A re-plan without it would ask
+// the architect to change a plan blind.
+func TestTheOpenFindingsReachTheOwedReplan(t *testing.T) {
+	const recorded = `{"provenance":{"task_id":"task-1789832817677608252","role":"reviewer","provider":"chatgpt","session_id":"session-20260919T154657.677324504Z","session_mode":"fresh","base_sha":"3b07f93df8a7ed7ed460e3e7f8c6d9aae8fe98af","candidate_digest":"d027ceb1144f0dbaaefc79601955f6924fa91003921b26ac7220cccea770bad7","candidate_tree":"974b16913e41fd98370caf6d06321e1c487166e6","graph_build_commit":"05feaf64d2694e97ac42b6bb93fbb49b9851a1f1","at":"2026-09-19T15:47:56.467303811Z"},"decision":"revise","summary":"the proof is missing","findings":[{"id":"1","severity":"blocking","claim":"the change is not proven","reference":"internal/report/report.go","reason":"no witness"}]}`
+	nc, _ := json.Marshal(NotConverged{TaskID: "t", Implementers: []string{"claude"}, ReviewCycles: 1, Owed: OwedArchitectReplan})
+	events := []event.Event{
+		event.New("s", "t", event.SourceSystem, event.TaskCreated, "objective", nil),
+		event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", nil),
+		{SessionID: "s", TaskID: "t", Source: event.SourceReviewer, Kind: event.ReviewCompleted, Summary: "REVISE", Payload: json.RawMessage(recorded)},
+		{SessionID: "s", TaskID: "t", Source: event.SourceSystem, Kind: event.WorkflowNotConverged, Payload: nc},
+	}
+	found := session.FindInterrupted(events)
+	if len(found) != 1 {
+		t.Fatalf("task not found: %+v", found)
+	}
+	why, owed, err := owedReplan(found[0].NotConverged, found[0].BlockedExternal, "t")
+	if err != nil || !owed {
+		t.Fatalf("no re-plan owed: %v %v", owed, err)
+	}
+	prompt := replanPrompt("objective", "the plan", why, found[0].Review)
+	if !strings.Contains(prompt, "the change is not proven") || strings.Contains(prompt, "(the record carries no review text)") {
+		t.Fatalf("the re-plan prompt does not carry the finding that prevented convergence:\n%s", prompt)
+	}
+}
