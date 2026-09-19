@@ -9,6 +9,7 @@ import (
 
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/runreceipt"
 	"github.com/globulario/sensei-code/internal/session"
@@ -220,4 +221,27 @@ func blockRoleOf(raw json.RawMessage) string {
 		return ""
 	}
 	return b.Role
+}
+
+// A supplied plan is never re-planned by the architect, in a RESTARTED process
+// too. The refusal reads the in-memory supplied plan, so this proves the resume
+// path restores it from the durable record before any re-plan is attempted:
+// a restart must not change who may author the governing plan.
+func TestARestartedEngineStillRefusesToRePlanASuppliedPlan(t *testing.T) {
+	plan, err := ParseSuppliedPlan([]byte(goodPlan))
+	if err != nil {
+		t.Fatalf("the shared supplied-plan fixture no longer parses, so this witness would exercise nothing: %v", err)
+	}
+	record, _ := json.Marshal(proposedPlan{architectureDecision: plan.decision, PlanSource: PlanSupplied, PlanDigest: plan.Digest})
+	task := session.Interrupted{TaskID: "task-s", Task: "x", Planned: true,
+		PlanSource: string(PlanSupplied), PlanDigest: plan.Digest, PlanRecord: record}
+
+	restarted := New(gitx.Repo{Root: t.TempDir()}, config.Default(), event.NewBus(), nil, "fresh-session")
+	if _, err := restarted.restorePlanBound(task); err != nil {
+		t.Fatalf("the supplied bound was not restored from the record: %v", err)
+	}
+	_, err = restarted.resolveArchitectureForRevision(context.Background(), nil, certifiedStart{}, "task-s", "x", "PROMPT", "the candidate did not converge")
+	if err == nil || !strings.Contains(err.Error(), "A supplied plan is not revised by the architect") {
+		t.Fatalf("a restarted engine let the architect revise a supplied plan: %v", err)
+	}
 }

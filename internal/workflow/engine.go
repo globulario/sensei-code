@@ -5572,7 +5572,10 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			}
 		}
 		// The plan this invocation carries: the supplied bound by its digest, or
-		// the architect's plan -- the re-planned one when a re-plan was owed.
+		// the architect's plan -- the re-planned one when a re-plan was owed. A
+		// supplied bound is never re-planned: restorePlanBound put it back in
+		// memory above, so resolveArchitectureForRevision refuses before any plan
+		// changes (TestARestartedEngineStillRefusesToRePlanASuppliedPlan).
 		if bound.Source == PlanSupplied {
 			e.notePlan(task.TaskID, task.PlanDigest, "")
 		} else {
