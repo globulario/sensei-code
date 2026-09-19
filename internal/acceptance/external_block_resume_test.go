@@ -70,7 +70,8 @@ func settle(t *testing.T, events <-chan event.Event, taskID string) []event.Even
 			t.Logf("[%-26s] %s", ev.Kind, oneLine(ev.Summary))
 			switch ev.Kind {
 			case event.WorkflowFailed, event.WorkflowCompleted, event.WorkflowBlockedExternal,
-				event.WorkflowAwaitingAuthority, event.WorkflowStopped, event.WorkflowAwaitingReview:
+				event.WorkflowNotConverged, event.WorkflowAwaitingAuthority, event.WorkflowStopped,
+				event.WorkflowAwaitingReview, event.WorkflowTimedOut:
 				return seen
 			case event.AuthorityRequired:
 				t.Fatalf("a reply-only run reached a human boundary: %s", ev.Summary)
