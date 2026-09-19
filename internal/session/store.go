@@ -396,6 +396,15 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// Emitting this as WorkflowFailed is exactly what made the first
 			// dogfood run (2026-09-18) unrecoverable except as a new task.
 			p.blocked = true
+			// The newest block names the turn -- except that an architect
+			// re-plan owed by a PLANNED task survives a later block of another
+			// role. The re-plan a resume makes is not a durable plan, so if an
+			// implementer block replaced it the next resume would continue under
+			// the original plan while the candidate had moved on under the
+			// revised one. Only a plan discharges it (PlanProposed, above).
+			if p.planned && blockedRole(p.BlockedExternal) == "architect" && blockedRole(e.Payload) != "architect" {
+				break
+			}
 			p.BlockedExternal = e.Payload
 		case event.WorkflowNotConverged:
 			// Not terminal: the candidate stands and the task is owed an

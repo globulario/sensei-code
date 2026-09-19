@@ -181,3 +181,38 @@ func TestAHistoricalNonConvergenceFailureIsNotReopened(t *testing.T) {
 		t.Fatalf("a historical FAILED task was reopened: %+v", found)
 	}
 }
+
+// An architect re-plan owed on a PLANNED task is not overwritten by a later
+// implementer block. The re-plan a resume makes is not durable; if a later
+// implementer block replaced the record, the next resume would continue under
+// the ORIGINAL plan while the candidate had moved on under the revised one.
+func TestALaterImplementerBlockDoesNotEraseAnOwedReplan(t *testing.T) {
+	arch, _ := json.Marshal(ExternalBlock{TaskID: "t", Role: "architect", Provider: "chatgpt", Reason: "usageLimitExceeded", RetryAtState: RetryAtUnknown})
+	impl, _ := json.Marshal(ExternalBlock{TaskID: "t", Role: "implementer", Provider: "claude", Reason: "usageLimitExceeded", RetryAtState: RetryAtUnknown})
+	events := []event.Event{
+		event.New("s", "t", event.SourceSystem, event.TaskCreated, "objective", nil),
+		event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", nil),
+		{SessionID: "s", TaskID: "t", Source: event.SourceSystem, Kind: event.WorkflowBlockedExternal, Payload: arch},
+		{SessionID: "s", TaskID: "t", Source: event.SourceSystem, Kind: event.WorkflowBlockedExternal, Payload: impl},
+	}
+	found := session.FindInterrupted(events)
+	if len(found) != 1 {
+		t.Fatalf("task not found: %+v", found)
+	}
+	if _, owed, err := owedReplan(found[0].NotConverged, found[0].BlockedExternal, "t"); err != nil || !owed {
+		t.Fatalf("a later implementer block erased the architect re-plan the planned task still owes: owed=%v err=%v", owed, err)
+	}
+	// Unplanned, the same sequence is ordinary: the newest block names the turn.
+	unplanned := []event.Event{events[0], events[2], events[3]}
+	if got := session.FindInterrupted(unplanned); len(got) != 1 || blockRoleOf(got[0].BlockedExternal) != "implementer" {
+		t.Fatalf("an unplanned task did not keep the newest block: %+v", got)
+	}
+}
+
+func blockRoleOf(raw json.RawMessage) string {
+	b, err := ParseExternalBlock(raw)
+	if err != nil {
+		return ""
+	}
+	return b.Role
+}
