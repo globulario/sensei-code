@@ -5327,25 +5327,44 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	e.execute(ctx, task.TaskID, task.Task)
 }
 
-// resumeBlockedArchitecture continues a task that was blocked before it had a
-// plan: the turn it is owed is its architect's.
+// resumeUnplannedArchitecture continues a task that never reached a plan: the
+// turn it is owed is its architect's.
+//
+// TWO SHAPES REACH HERE and they are the same continuation. One is a task whose
+// architect turn a provider blocked. The other has nothing in its record at all:
+// task-1789848074761930104 (2026-09-19) answered its standing question, the
+// answer was recorded, the run re-entered governed execution, the architect
+// began re-planning, and the process died before any plan existed. Its record
+// then stated no question, no plan and no block -- and the earlier version of
+// this function required a block record, so that task could not be continued by
+// any path while its candidate identity sat on disk.
 //
 // It re-enters execute under the SAME task id, which is exactly what an
 // answered authority question does. Nothing is minted: candidate.Establish
 // reloads the base recorded for this task (and refuses if HEAD moved), the
 // start gate re-certifies against the graph as it is now, and any human answer
 // this task already gave is honoured from the session record by
-// applyAnsweredCondition. What is retried is the architect turn.
-func (e *Engine) resumeBlockedArchitecture(ctx context.Context, task session.Interrupted) {
-	block, err := ParseExternalBlock(task.BlockedExternal)
-	if err == nil && block.TaskID != task.TaskID {
-		err = fmt.Errorf("the external block record is bound to task %s, not to this one", block.TaskID)
-	}
-	if err != nil {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-			"the task cannot be resumed at its blocked turn: "+err.Error(), nil)
-		return
+// applyAnsweredCondition -- which settles the question it was asked, about the
+// files it was asked about, and no other. What is retried is the architect turn.
+func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.Interrupted) {
+	// A block record that NAMES a different task is a mismatch and refuses
+	// before anything starts. A task with NO block record is the ordinary
+	// unplanned case and is continued: absence of a block is not a defect, it
+	// is a task that was interrupted while nothing was blocking it.
+	owed := "it has no recorded plan, so the architect turn is the one it never took"
+	var record any
+	if len(task.BlockedExternal) != 0 {
+		block, err := ParseExternalBlock(task.BlockedExternal)
+		if err == nil && block.TaskID != task.TaskID {
+			err = fmt.Errorf("the external block record is bound to task %s, not to this one", block.TaskID)
+		}
+		if err != nil {
+			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+				"the task cannot be resumed at its blocked turn: "+err.Error(), nil)
+			return
+		}
+		owed, record = block.Describe(), block
 	}
 	// The objective is the recorded one. A process that still holds it -- the
 	// TUI that took the /run -- keeps its provenance exactly; overwriting it
@@ -5354,8 +5373,8 @@ func (e *Engine) resumeBlockedArchitecture(ctx context.Context, task session.Int
 	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
 	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
-		"resuming the same task at the turn it is owed ("+block.Describe()+"); the objective, task identity and "+
-			"candidate base are the recorded ones", block))
+		"resuming the same task at the turn it is owed ("+owed+"); the objective, task identity and "+
+			"candidate base are the recorded ones", record))
 	e.execute(ctx, task.TaskID, task.Task)
 }
 
@@ -5371,8 +5390,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.resumeAuthority(ctx, task)
 			return
 		}
-		if !task.Planned && len(task.BlockedExternal) != 0 {
-			e.resumeBlockedArchitecture(ctx, task)
+		// NO PLAN, NO IMPLEMENTATION TO RESUME. Everything below this point
+		// restores a bound plan and hands a candidate back to an implementer,
+		// and a task that never had a plan has neither. It is owed the architect
+		// turn instead -- whether a provider blocked that turn or the process
+		// simply died before it produced one.
+		if !task.Planned {
+			e.resumeUnplannedArchitecture(ctx, task)
 			return
 		}
 		// A resumed invocation is a run, and it owes its own receipt. Without

@@ -117,3 +117,21 @@ forbidden_fixes:
     related_invariants:
       - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
     reason: Matching 'usage limit' or 'try again at' in an error string would turn any runner, model or fixture output containing those words into a resumable external block, and parsing a retry time out of prose invents a structured fact. Only the provider's structured code classifies; retry_at is KNOWN only from a structured provider field.
+  - id: forbidden_fix.sensei_code.derive_a_task_s_existence_from_the_obligations_it_currently
+    title: Derive a task's existence from the obligations it currently holds
+    summary: Making a task discoverable because it is planned, or deferring a question, or blocked, or has a usable objective, turns every window between those states into a hole the task falls into -- and the symptom is always the same sentence, 'no interrupted task with that id', about a task whose candidate is still on disk. Existence is bounded by task.created and a task-terminal event and by nothing else; what the task OWES is a separate ordered reading, and a task that owes nothing continuable is shown and refused, never hidden.
+    related_invariants:
+      - sensei_code.resume.never_skips_a_human_decision
+    reason: Making a task discoverable because it is planned, or deferring a question, or blocked, or has a usable objective, turns every window between those states into a hole the task falls into -- and the symptom is always the same sentence, 'no interrupted task with that id', about a task whose candidate is still on disk. Existence is bounded by task.created and a task-terminal event and by nothing else; what the task OWES is a separate ordered reading, and a task that owes nothing continuable is shown and refused, never hidden.
+  - id: forbidden_fix.sensei_code.treat_a_session_record_that_could_not_be_read_as_a_session_r
+    title: Treat a session record that could not be read as a session record that holds nothing
+    summary: 'Skipping an os.Stat or os.ReadDir failure, or collapsing it into a false return, shrinks the world discovery searched instead of stopping the search: the task being looked for may be inside the record nobody could open, and ''no such task'' is then stated from ignorance. Only os.ErrNotExist is absence -- a session directory created and never written to. Every other failure is returned.'
+    related_invariants:
+      - sensei_code.resume.never_skips_a_human_decision
+    reason: 'Skipping an os.Stat or os.ReadDir failure, or collapsing it into a false return, shrinks the world discovery searched instead of stopping the search: the task being looked for may be inside the record nobody could open, and ''no such task'' is then stated from ignorance. Only os.ErrNotExist is absence -- a session directory created and never written to. Every other failure is returned.'
+  - id: forbidden_fix.sensei_code.let_a_named_session_scope_discovery_instead_of_filtering_its
+    title: Let a named session scope discovery instead of filtering its result
+    summary: 'Reading only the record a person named -- session.ActiveIn -- makes naming a subset a waiver of every check that makes the whole set trustworthy: another record claiming the same task id is invisible, and an unreadable history elsewhere is never met, so an operator can select one side of a split identity and continue it in silence. Repository-wide session.FindActive runs first, ALWAYS; --session narrows its validated result through Discovery.ScopedTo. A name is a filter, never a scope.'
+    related_invariants:
+      - sensei_code.resume.never_skips_a_human_decision
+    reason: 'Reading only the record a person named -- session.ActiveIn -- makes naming a subset a waiver of every check that makes the whole set trustworthy: another record claiming the same task id is invisible, and an unreadable history elsewhere is never met, so an operator can select one side of a split identity and continue it in silence. Repository-wide session.FindActive runs first, ALWAYS; --session narrows its validated result through Discovery.ScopedTo. A name is a filter, never a scope.'

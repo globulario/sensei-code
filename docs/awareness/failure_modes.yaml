@@ -353,3 +353,31 @@ failure_modes:
       - internal/acceptance/external_block_resume_test.go:TestANotConvergedTaskIsRePlannedAndCompletesAfterRestart
     evidence:
       - DF-9, stubsmoke acceptance run 2026-09-19 15:14Z, verdict tree a5602b7f present in the event, mint refused
+  - id: failure.sensei_code.a_created_task_vanished_from_resume_between_its_answer_and_i
+    title: A created task vanished from resume between its answer and its plan
+    description: 'Resume derived a task''s EXISTENCE from its obligations -- resumable if planned, or deferring a question, or blocked -- so every window between those states was a hole a task could fall into. task.created is now the continuity root: a task is discoverable from its creation until a task-terminal event, and what it owes is a separate ordered reading. Discovery also read only the newest session record, skipped any record whose stat failed for any reason, and compared duplicate identities only among tasks that were still active, so unreadable storage shrank the searched world and a split identity could pass.'
+    protects:
+      files:
+        - internal/session/store.go
+        - cmd/sensei-code/resume.go
+    related_invariants:
+      - sensei_code.resume.never_skips_a_human_decision
+    required_tests:
+      - internal/session/interrupted_test.go:TestATaskIsDiscoverableFromItsCreationUntilItEnds
+      - cmd/sensei-code/resume_test.go:TestUnreadableStorageIsNeverReportedAsAbsence
+      - cmd/sensei-code/resume_test.go:TestOneTaskIdentityClaimedByTwoRecordsIsAlwaysRefused
+    evidence:
+      - 'task-1789848074761930104 (2026-09-19): the owner answered the deferred Level-3 question, authority.resolved was recorded, the run re-entered governed execution, the architect began re-planning and the process died before any plan was proposed; resume --list omitted the task and resume --task answered ''no interrupted task with that id'' while its candidate identity was still on disk'
+  - id: failure.sensei_code.the_listing_routed_from_the_transcript_while_the_durable_obl
+    title: The listing routed from the transcript while the durable obligation owned the answer
+    description: resume --list chose each task's lane with reviewOwed hardcoded false, so it never consulted the durable review obligation. A candidate whose process died after the review request was published and recorded, but before the workflow wrote its WAITING_REVIEW terminal, was advertised as owing implementation while --task correctly routed it to review. The projection disagreed with the router, and the durable owner of review lifetime was the one neither asked. The identity comparison also read an unreadable transcript record as naming no request, turning a check that could not run into one that passed.
+    protects:
+      files:
+        - cmd/sensei-code/resume.go
+        - cmd/sensei-code/resume_review.go
+    related_invariants:
+      - sensei_code.reviewobligation.a_waiter_is_disposable_the_obligation_is_not
+    required_tests:
+      - cmd/sensei-code/resume_test.go:TestTheListingReadsTheDurableReviewObligationAndNotOnlyTheTranscript
+    evidence:
+      - cmd/sensei-code/resume.go:printActiveTasks called selectResumeLane(task, false) unconditionally, with a comment admitting such a task is displayed in a different lane from the one --task will take

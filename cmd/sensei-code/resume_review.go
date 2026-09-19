@@ -59,35 +59,66 @@ func selectReviewResume(tasks []session.Interrupted, taskID string, owed *ghbrid
 		if !task.AwaitingReview && owed == nil {
 			return session.Interrupted{}, fmt.Errorf("%w: %s", errNoReviewOwed, taskID)
 		}
-		// When BOTH name a request and they disagree, neither is chosen and
-		// nothing is minted to paper over it: one of the two records is wrong
-		// about which review this candidate is owed, and guessing would either
-		// consume a review through the wrong request or ask for a second one.
-		if owed != nil {
-			if recorded := recordedReviewRequest(task); recorded != "" && recorded != owed.RequestID {
-				return session.Interrupted{}, fmt.Errorf("%w: transcript says %s, obligation says %s",
-					errReviewIdentitySplit, recorded, owed.RequestID)
-			}
+		if err := reviewIdentityConflict(task, owed); err != nil {
+			return session.Interrupted{}, err
 		}
 		return task, nil
 	}
 	return session.Interrupted{}, fmt.Errorf("%w: %s", errTaskUnknown, taskID)
 }
 
+// reviewIdentityConflict is the ONE rule for comparing what the session
+// transcript says a task's review is with what the durable obligation says it
+// is. nil means they can be reconciled; an error means they cannot, and nothing
+// is minted to paper over it.
+//
+// Shared by the router and the listing on purpose. They used to differ -- the
+// listing did not consult the obligation at all -- so a task could be printed as
+// owing implementation while `--task` refused it as a split identity, and the
+// only way to find that out was to try. What is printed is now what resuming
+// would do, because both ask this.
+//
+// THREE OUTCOMES, not two. Agreement passes. Disagreement is refused: one of the
+// records is wrong about which review this candidate is owed, and guessing would
+// either consume a review through the wrong request or ask for a second one. And
+// a transcript record that EXISTS AND CANNOT BE READ is refused as well, because
+// the comparison could not be made -- treating it as "names no request" would
+// turn a failed check into a passed one, which is the difference between
+// absence and ignorance that this whole repair turns on.
+func reviewIdentityConflict(task session.Interrupted, owed *ghbridge.ReviewObligation) error {
+	if owed == nil {
+		return nil
+	}
+	recorded, err := recordedReviewRequest(task)
+	if err != nil {
+		return fmt.Errorf("%w: the transcript's waiting-review record could not be read, so it cannot be shown to "+
+			"name obligation %s: %w", errReviewIdentitySplit, owed.RequestID, err)
+	}
+	if recorded != "" && recorded != owed.RequestID {
+		return fmt.Errorf("%w: transcript says %s, obligation says %s",
+			errReviewIdentitySplit, recorded, owed.RequestID)
+	}
+	return nil
+}
+
 // recordedReviewRequest is the request id the session transcript names, or ""
 // when it names none. A PROJECTION: it is compared against the obligation, and
 // never substituted for it.
-func recordedReviewRequest(task session.Interrupted) string {
+//
+// The error distinguishes "this task never recorded a wait" from "it recorded
+// one and the bytes are unreadable". Both used to return "", and the second is
+// not a statement about which review is owed -- it is the absence of one.
+func recordedReviewRequest(task session.Interrupted) (string, error) {
 	if len(task.AwaitingReviewRecord) == 0 {
-		return ""
+		return "", nil
 	}
 	var w struct {
 		RequestID string `json:"request_id"`
 	}
-	if json.Unmarshal(task.AwaitingReviewRecord, &w) != nil {
-		return ""
+	if err := json.Unmarshal(task.AwaitingReviewRecord, &w); err != nil {
+		return "", err
 	}
-	return strings.TrimSpace(w.RequestID)
+	return strings.TrimSpace(w.RequestID), nil
 }
 
 // owedReviewObligation is the durable review obligation this workspace records
