@@ -72,3 +72,29 @@ func TestTheBlockedLaneKeepsItsPrecedence(t *testing.T) {
 		t.Fatal("a block record bound to another task was accepted")
 	}
 }
+
+// A non-converged task exits with its own code and is continued through the
+// same lane, after a standing question and an owed review.
+func TestANotConvergedTaskHasItsOwnExitAndLane(t *testing.T) {
+	if code, ok := exitFor(event.WorkflowNotConverged, false); !ok || code != exitNotConverged || code == exitFailed {
+		t.Fatalf("exitFor(not converged) = %d,%v; want %d", code, ok, exitNotConverged)
+	}
+	if !terminal(event.WorkflowNotConverged) {
+		t.Fatal("a quiet run would not print the not-converged terminal")
+	}
+	raw, _ := json.Marshal(workflow.NotConverged{TaskID: "t1", Implementers: []string{"claude", "codex"},
+		ReviewCycles: 3, Owed: workflow.OwedArchitectReplan})
+	nc := session.Interrupted{TaskID: "t1", Task: "x", Planned: true, NotConverged: raw}
+	if got, ok, err := selectBlockedResume([]session.Interrupted{nc}, "t1", false); err != nil || !ok || got.TaskID != "t1" {
+		t.Fatalf("a non-converged task was not selected: ok=%v err=%v", ok, err)
+	}
+	reviewing := nc
+	reviewing.AwaitingReview = true
+	if _, ok, err := selectBlockedResume([]session.Interrupted{reviewing}, "t1", false); ok || err != nil {
+		t.Fatalf("an owed review was passed over for a re-plan: ok=%v err=%v", ok, err)
+	}
+	other, _ := json.Marshal(workflow.NotConverged{TaskID: "t2", Implementers: []string{"claude"}, ReviewCycles: 3, Owed: workflow.OwedArchitectReplan})
+	if _, ok, err := selectBlockedResume([]session.Interrupted{{TaskID: "t1", Task: "x", NotConverged: other}}, "t1", false); ok || err == nil {
+		t.Fatal("a non-convergence record bound to another task was accepted")
+	}
+}

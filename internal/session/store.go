@@ -232,9 +232,31 @@ type Interrupted struct {
 	Planned bool
 	// BlockedExternal is the WorkflowBlockedExternal payload, byte for byte:
 	// which role turn the task is owed and which provider proved it could not
-	// serve it. The newest block wins; it is never cleared by a later event,
-	// because what a resume retries is decided by Planned, not by this record.
+	// serve it. The newest block wins. An ARCHITECT block is discharged by a
+	// later PlanProposed -- the architect turn it was owed was delivered -- so a
+	// planned task is never sent back to re-plan by a turn it already took.
 	BlockedExternal json.RawMessage
+	// NotConverged is the WorkflowNotConverged payload, byte for byte: every
+	// implementer spent its review cycles and the task is owed an architect
+	// re-plan. A later PlanProposed -- the re-plan a resume records -- discharges
+	// it.
+	NotConverged json.RawMessage
+}
+
+// blockedRole reads only the role an external-block record names. The workflow
+// package owns the record's full shape; this package needs one field of it and
+// must not import that package.
+func blockedRole(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var b struct {
+		Role string `json:"role"`
+	}
+	if json.Unmarshal(raw, &b) != nil {
+		return ""
+	}
+	return b.Role
 }
 
 // FindInterrupted recovers tasks that were left mid-flight, from the session
@@ -287,6 +309,14 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.Plan = e.Summary
 			p.planned = true
 			p.PlanRecord = e.Payload
+			// A plan discharges an architect turn a block was holding, and the
+			// re-plan a non-converged task was owed: a resume records its re-plan
+			// as exactly this event, so what it owes next is the implementation
+			// of THAT plan.
+			if blockedRole(p.BlockedExternal) == "architect" {
+				p.BlockedExternal = nil
+			}
+			p.NotConverged = nil
 			p.PlanEventSource = e.Source
 			var src struct {
 				Source string `json:"plan_source"`
@@ -371,6 +401,11 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// dogfood run (2026-09-18) unrecoverable except as a new task.
 			p.blocked = true
 			p.BlockedExternal = e.Payload
+		case event.WorkflowNotConverged:
+			// Not terminal: the candidate stands and the task is owed an
+			// architect re-plan. Emitted as WorkflowFailed it was final here while
+			// the candidate record called the same work resumable (DF-6).
+			p.NotConverged = e.Payload
 		case event.WorkflowAwaitingAuthority:
 			// Also not terminal, and resumable even with no plan: a question
 			// deferred during architecture is the ordinary case, and it is

@@ -305,7 +305,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed ||
 			e.Kind == event.WorkflowStopped || e.Kind == event.WorkflowAwaitingAuthority ||
-			e.Kind == event.WorkflowBlockedExternal {
+			e.Kind == event.WorkflowBlockedExternal || e.Kind == event.WorkflowNotConverged {
 			m.busy = false
 			m.pending = nil
 			m.pendingTask = ""
@@ -613,6 +613,10 @@ func renderEvent(e event.Event) string {
 		prefix = dimStyle.Render("◇ DEFERRED")
 		indent = "  "
 	}
+	if e.Kind == event.WorkflowNotConverged {
+		prefix = dimStyle.Render("◇ NOT CONVERGED")
+		indent = "  "
+	}
 	if e.Kind == event.WorkflowBlockedExternal {
 		// Not an error either: a provider said it cannot serve now, and the
 		// task is waiting on it, not broken.
@@ -814,7 +818,8 @@ func max(a, b int) int {
 func isConversation(e event.Event) bool {
 	switch e.Kind {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
-		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority, event.WorkflowBlockedExternal:
+		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority, event.WorkflowBlockedExternal,
+		event.WorkflowNotConverged:
 		return true
 	case event.ArchitectReconciliation:
 		// Why the loop took the branch it took when two agents disagreed. Filed

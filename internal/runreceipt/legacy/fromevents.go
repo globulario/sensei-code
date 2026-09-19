@@ -106,6 +106,7 @@ func FromEvents(r io.Reader) runreceipt.Receipt {
 	rec.DeferredQuestion = runreceipt.UnknownValue("the event stream does not record a deferred authority question")
 	rec.ExecutionBudget = runreceipt.UnknownValue("the event stream does not record an execution budget")
 	rec.ExternalBlock = runreceipt.UnknownValue("the event stream does not record an externally blocked role turn")
+	rec.NotConverged = runreceipt.UnknownValue("the event stream does not record a non-convergence")
 	rec.FormatterMutationState = runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
 		"the historical event stream does not record whether a formatter rewrote the candidate")
 

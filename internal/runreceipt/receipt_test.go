@@ -175,6 +175,7 @@ func completeReceipt() Receipt {
 		ExecutionBudget:           UnknownValue("no execution budget expired"),
 		DeferredQuestion:          UnknownValue("no authority question was deferred"),
 		ExternalBlock:             UnknownValue("no role turn was blocked externally"),
+		NotConverged:              UnknownValue("the run did not end unconverged"),
 		PlanState:                 PlanPresent,
 		CandidateState:            CandidatePresent,
 		CandidateCommit:           MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
@@ -591,13 +592,13 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v9"
+	const version = "sensei-code.governed-run-receipt/v10"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
 	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
-		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeUnknown}
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged, OutcomeUnknown}
 	for _, o := range outcomes {
 		if !o.Valid() {
 			t.Errorf("%q is enumerated here but not Valid()", o)
@@ -610,7 +611,7 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 			t.Errorf("%q is valid but not pinned by this test", candidate)
 		}
 	}
-	if len(outcomes) != 10 {
+	if len(outcomes) != 11 {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
 	}
 }
@@ -705,6 +706,36 @@ func TestABlockedExternalRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	}
 	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v8", OutcomeBlockedExternal); err == nil {
 		t.Fatal("v8 + BLOCKED_EXTERNAL must be invalid: BLOCKED_EXTERNAL was added in v9")
+	}
+}
+
+// NOT_CONVERGED is a real terminal outcome: every implementer spent its review
+// budget and the reviewer still objects. Complete only when it says who spent
+// what and what is owed; it follows a bounded REVISE by construction, and its
+// candidate -- work, never minted -- is UNATTEMPTED, a positive claim.
+func TestANotConvergedRunIsACompleteRecordOfARealOutcome(t *testing.T) {
+	if !OutcomeNotConverged.SufficientForComplete() {
+		t.Fatal("NOT_CONVERGED must be a valid outcome sufficient for a complete record")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeNotConverged
+	rec.CandidateState = CandidateUnattempted
+	rec.CandidateCommit = UnknownValue("never minted")
+	rec.CandidateTree = UnknownValue("never minted")
+	rec.CandidateFirstParent = UnknownValue("never minted")
+	rec.CandidateDigest = UnknownValue("never minted")
+	rec.CandidateCommitDiffDigest = UnknownValue("never minted")
+	rec.NotConverged = MeasuredValue("claude, codex each spent 3 review cycles; owed: architect_replan", "the budget spent")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / NOT_CONVERGED must be representable: %v", missing)
+	}
+	rec.NotConverged = UnknownValue("not recorded")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "not_converged") {
+		t.Fatalf("a non-convergence that does not say who spent what must be incomplete: state=%s missing=%v", state, missing)
+	}
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v9", OutcomeNotConverged); err == nil {
+		t.Fatal("v9 + NOT_CONVERGED must be invalid: NOT_CONVERGED was added in v10")
 	}
 }
 

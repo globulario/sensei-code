@@ -562,9 +562,15 @@ func TestDeferralCallsNoOneAfterwards(t *testing.T) {
 	}
 	// And the run must not report it as an outcome: reportOutcome is how a task
 	// tells the behavioural record what happened, and nothing happened.
-	fail := funcBody(t, "internal/workflow/engine.go", "execute")
-	if i := strings.Index(fail, "errAuthorityDeferred"); i < 0 {
+	// Every governed ending -- a fresh run or a resumed one -- is classified by
+	// terminateRun, which must recognise a deferral before anything else.
+	if !strings.Contains(funcBody(t, "internal/workflow/engine.go", "terminateRun"), "errAuthorityDeferred") {
 		t.Error("the governed run does not recognise a deferred decision")
+	}
+	for _, fn := range []string{"execute", "Resume"} {
+		if !strings.Contains(funcBody(t, "internal/workflow/engine.go", fn), "terminateRun") {
+			t.Errorf("%s does not end through the classifier that recognises a deferral", fn)
+		}
 	}
 }
 

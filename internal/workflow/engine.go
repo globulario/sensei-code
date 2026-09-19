@@ -824,6 +824,63 @@ func (e *Engine) markObserving(taskID string) {
 	e.observing[taskID] = true
 }
 
+// terminateRun is the one classifier for how a governed invocation ends when
+// it does not complete: a deferred question (already recorded), a caller stop
+// or deadline, a provider that proved it cannot serve a role turn, a human
+// stop, or a failure. execute and Resume both end through it.
+//
+// Resume used to have a closure of its own that reported EVERY error as
+// WorkflowFailed. A re-plan or an escalation inside a resumed task that
+// reached a human decision therefore turned a preserved, deferred obligation
+// into a final failure (canonical review of #194 at b23a8ae).
+func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err error) {
+	// A deferred authority decision has already recorded itself -- receipt
+	// and terminal event together, with the question attached. Reporting it
+	// again as a failure or a stop would describe the same moment three
+	// ways, and two of them would be wrong: nothing failed, and the human
+	// did not withdraw from the work — they declined to answer one question
+	// about it.
+	if errors.Is(err, errAuthorityDeferred) {
+		return
+	}
+	// A stopped run is not a failed one, and recording it as failure would
+	// teach the behavioural record that this task shape breaks. The human
+	// withdrew; nothing was proved about the work. The outcome is still
+	// reported, on a context the cancellation cannot reach, because a run
+	// that goes silent when stopped leaves no account of why it ended.
+	if ctx.Err() != nil {
+		// A deadline and a withdrawal both cancel the context, and they are
+		// different evidence. The invocation owes an account either way.
+		if e.timedOutBy(taskID) {
+			const note = "the execution budget expired; the task was stopped and its candidate left in place"
+			e.emitRunTerminal(taskID, event.WorkflowTimedOut, event.SourceSystem,
+				runreceipt.OutcomeTimedOut, e.candidateStateFor(taskID), note, nil)
+			e.reportOutcome(context.WithoutCancel(ctx), "timed_out", task, note)
+			return
+		}
+		const note = "stopped by the human; the candidate is left as it stands"
+		// A human withdrawing is a real terminal outcome, not a failure:
+		// recording it as one would teach the behavioural record that this
+		// task shape breaks. STOPPED says what happened, and a receipt
+		// carrying it is complete.
+		e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceSystem,
+			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), note, nil)
+		e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
+		return
+	}
+	// A provider that proved it cannot serve a role turn ends the
+	// invocation, not the task.
+	if e.blockExternally(taskID, err) {
+		return
+	}
+	// One classifier for both authority paths. A person choosing Stop is not
+	// a broken run, and this used to arrive as an anonymous error and be
+	// recorded as FAILED -- teaching the behavioural record that this task
+	// shape breaks, when what happened is that the human answered and said
+	// no.
+	e.terminateAuthorityOutcome(ctx, taskID, task, err)
+}
+
 // execute is the governed run itself, separated from how it was entered.
 //
 // A task resumed after a deferred authority decision re-enters here rather than
@@ -841,53 +898,7 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	if supplied := e.planDigest(taskID); supplied != "" {
 		e.notePlan(taskID, supplied, "")
 	}
-	fail := func(err error) {
-		// A deferred authority decision has already recorded itself -- receipt
-		// and terminal event together, with the question attached. Reporting it
-		// again as a failure or a stop would describe the same moment three
-		// ways, and two of them would be wrong: nothing failed, and the human
-		// did not withdraw from the work — they declined to answer one question
-		// about it.
-		if errors.Is(err, errAuthorityDeferred) {
-			return
-		}
-		// A stopped run is not a failed one, and recording it as failure would
-		// teach the behavioural record that this task shape breaks. The human
-		// withdrew; nothing was proved about the work. The outcome is still
-		// reported, on a context the cancellation cannot reach, because a run
-		// that goes silent when stopped leaves no account of why it ended.
-		if ctx.Err() != nil {
-			// A deadline and a withdrawal both cancel the context, and they are
-			// different evidence. The invocation owes an account either way.
-			if e.timedOutBy(taskID) {
-				const note = "the execution budget expired; the task was stopped and its candidate left in place"
-				e.emitRunTerminal(taskID, event.WorkflowTimedOut, event.SourceSystem,
-					runreceipt.OutcomeTimedOut, e.candidateStateFor(taskID), note, nil)
-				e.reportOutcome(context.WithoutCancel(ctx), "timed_out", task, note)
-				return
-			}
-			const note = "stopped by the human; the candidate is left as it stands"
-			// A human withdrawing is a real terminal outcome, not a failure:
-			// recording it as one would teach the behavioural record that this
-			// task shape breaks. STOPPED says what happened, and a receipt
-			// carrying it is complete.
-			e.emitRunTerminal(taskID, event.WorkflowStopped, event.SourceSystem,
-				runreceipt.OutcomeStopped, e.candidateStateFor(taskID), note, nil)
-			e.reportOutcome(context.WithoutCancel(ctx), "stopped", task, note)
-			return
-		}
-		// A provider that proved it cannot serve a role turn ends the
-		// invocation, not the task.
-		if e.blockExternally(taskID, err) {
-			return
-		}
-		// One classifier for both authority paths. A person choosing Stop is not
-		// a broken run, and this used to arrive as an anonymous error and be
-		// recorded as FAILED -- teaching the behavioural record that this task
-		// shape breaks, when what happened is that the human answered and said
-		// no.
-		e.terminateAuthorityOutcome(ctx, taskID, task, err)
-	}
+	fail := func(err error) { e.terminateRun(ctx, taskID, task, err) }
 	// Validation without normalization: an all-whitespace objective states
 	// nothing and is refused, while an objective with whitespace around it is
 	// carried exactly as submitted.
@@ -1081,18 +1092,12 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 		Conversation:    conversation,
 		WorkspaceStatus: firstText(workspaceStatus),
 		Preflight:       firstText(preflight),
-		Rationale:       decision.Summary,
-		Files:           decision.Files,
-		Steps:           decision.Steps,
 		Domain:          sensei.RepositoryDomain(workspaceStatus),
-		Mode:            planMode(decision.Mode),
-		Consequences:    decision.Consequences,
-		Invariants:      decision.Invariants,
-		Prospective:     decision.ProspectiveSurfaces,
 		PlanSource:      e.planSource(taskID),
 		PlanDigest:      e.planDigest(taskID),
 		Identity:        identity,
 	}
+	applyPlanScope(&tc, decision)
 
 	if !e.Config.Permissions.CreateWorktrees || !e.Config.Permissions.WriteCandidates {
 		fail(errors.New("candidate worktree capability is not granted"))
@@ -2115,7 +2120,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("unsupported review decision %q", review.Decision)
 		}
 	}
-	return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("candidate did not converge after %d review cycles", e.Config.Workflow.ReviewCycles)
+	return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("%w after %d review cycles", errReviewCyclesExhausted, e.Config.Workflow.ReviewCycles)
 }
 
 // planMode normalises the architect's declaration.
@@ -4608,6 +4613,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// unavailable is kept separate from failures for the same reason: a
 	// provider that proved it cannot serve now did not fail at the work.
 	var unavailable []*RoleUnavailable
+	// exhausted names the workers whose failure was spending every review cycle
+	// with the reviewer still objecting -- the one failure a re-plan can answer.
+	var exhausted []string
 	// continuing names the candidate the next worker would take over, so an
 	// exclusion recorded against THAT candidate applies and one recorded against
 	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
@@ -4864,6 +4872,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				return
 			}
 			failures = append(failures, worker.Name+": "+err.Error())
+			if errors.Is(err, errReviewCyclesExhausted) {
+				exhausted = append(exhausted, worker.Name)
+			}
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
 			state.Phase = taskstate.Revising
@@ -5041,6 +5052,18 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	e.reportUndeliveredNotes(taskID)
 	e.disposeIfEmpty(ctx, taskID, identity, tc, workspace,
 		"no bounded implementor converged and the candidate holds no work")
+	// Every failure was a spent review budget, and nothing else went wrong: the
+	// reviewer still objects and no implementer can change the plan. The task is
+	// owed an architect re-plan, not a final failure (DF-6).
+	if len(failures) > 0 && len(exhausted) == len(failures) && len(unavailable) == 0 {
+		state.Phase = taskstate.Revising
+		_ = state.Save(e.Repo.Root)
+		e.endNotConverged(taskID, NotConverged{
+			TaskID: taskID, Implementers: exhausted,
+			ReviewCycles: e.Config.Workflow.ReviewCycles, Owed: OwedArchitectReplan,
+		})
+		return
+	}
 	if len(failures) == 0 && len(ineligible) > 0 {
 		// Every implementor was excluded and none failed. Reporting that as
 		// "no implementor produced an acceptable candidate" would blame workers
@@ -5352,17 +5375,33 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.resumeBlockedArchitecture(ctx, task)
 			return
 		}
-		fail := func(err error) {
-			// Blocked again is blocked, not failed, and the task stays itself.
-			if e.blockExternally(task.TaskID, err) {
-				return
-			}
-			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-				err.Error(), nil)
-			e.reportOutcome(ctx, "failure", task.Task, err.Error())
+		// A resumed invocation is a run, and it owes its own receipt. Without
+		// one every fact it measured -- the world it re-certified, the plan it
+		// carried, the tree an ACCEPT was bound to -- was recorded into nothing,
+		// and the mint refused an accepted candidate with "no bounded review
+		// delivered a content identity" (DF-9, 2026-09-19). The unplanned and
+		// question branches above re-enter execute, which opens its own.
+		e.beginReceipt(task.TaskID)
+		// The receipt opens with candidate_state NONE, a positive claim. A
+		// resumed task may already hold a retained candidate, and a failure
+		// before implement measures it would record "no candidate" beside work
+		// sitting on disk (canonical review of #194 at b23a8ae). So the inherited
+		// candidate is measured first, before anything here can fail.
+		if inherited, ok, err := candidate.Load(e.Repo.Root, task.TaskID); err == nil && ok {
+			e.noteInheritedCandidate(task.TaskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
+		} else {
+			e.noteCandidateWorkUnmeasured(task.TaskID)
 		}
+		// The same classifier execute uses: blocked stays blocked, a deferred
+		// question stays deferred, a stop is a stop, and only a failure fails.
+		fail := func(err error) { e.terminateRun(ctx, task.TaskID, task.Task, err) }
 		sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
+		if err == nil {
+			pid, ok := sc.ServingPID()
+			e.noteServingProducer(task.TaskID, pid, ok)
+		} else {
+			e.noteServingProducer(task.TaskID, 0, false)
+		}
 		if err != nil {
 			fail(fmt.Errorf("start Sensei: %w", err))
 			return
@@ -5406,7 +5445,8 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.preflightRecord(preflightArgs, preflight.Structured,
 				subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
-		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo),
+		head := repositoryHead(ctx, e.Repo)
+		start, err := certifyStart(workspaceStatus, preflight, head,
 			domainFromRemote(e.Repo.OriginURL(ctx)), awarenessAddress(e.Config.Sensei.Args))
 		if err != nil {
 			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
@@ -5419,6 +5459,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// may have been rebuilt while the task was not running, and resurrecting
 		// the old commit would attribute the new rules to the old generation.
 		e.bindGraph(task.TaskID, start)
+		e.noteWorld(task.TaskID, head, start.GraphDigest())
 
 		// A resumed task already has a base recorded. Establish loads it rather
 		// than re-deriving one, which is what keeps the base immutable across a
@@ -5469,6 +5510,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			WorkspaceStatus: firstText(workspaceStatus),
 			Preflight:       firstText(preflight),
 			Rationale:       bound.Rationale,
+			Files:           bound.Files,
 			Steps:           bound.Steps,
 			Domain:          start.Domain(),
 			Mode:            bound.Mode,
@@ -5499,11 +5541,95 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		if r := strings.TrimSpace(task.Review); carried == "" && r != "" {
 			carried = "This candidate was interrupted before it converged. Its changes are already present.\n\nThe last review said:\n" + r
 		}
+		plan := bound.Plan
+		// An owed review comes first; otherwise a task that did not converge, or
+		// whose architect re-plan was blocked, is owed that re-plan BEFORE any
+		// implementer is asked again -- re-running the same plan against the same
+		// objection is what did not converge.
+		if !task.AwaitingReview {
+			why, owed, err := owedReplan(task.NotConverged, task.BlockedExternal, task.TaskID)
+			if err != nil {
+				fail(fmt.Errorf("the task cannot be resumed at its owed re-plan: %w", err))
+				return
+			}
+			if owed {
+				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+					"resuming the same task at the architect re-plan it is owed: "+why, nil))
+				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, task.TaskID, task.Task,
+					replanPrompt(task.Task, plan, why, task.Review), why)
+				if err != nil {
+					fail(err)
+					return
+				}
+				if strings.TrimSpace(revised.Plan) == "" {
+					fail(errors.New("the architect did not return a revised bounded plan for the owed re-plan"))
+					return
+				}
+				// Recorded as THE plan, exactly as execute records one. A re-plan
+				// held only in memory left two wrong continuations after any later
+				// interruption: re-plan again from the plan that did not converge, or
+				// continue the candidate under that plan. This plan discharges the
+				// obligation (FindInterrupted) and binds every later resume.
+				e.emit(event.New(e.SessionID, task.TaskID, planEventSource(e.planSource(task.TaskID)), event.PlanProposed,
+					planSummaryFrom(revised, e.planSource(task.TaskID), e.planDigest(task.TaskID)),
+					proposedPlan{architectureDecision: revised, PlanSource: e.planSource(task.TaskID), PlanDigest: e.planDigest(task.TaskID)}))
+				plan = revised.Plan
+				// The WHOLE scope moves to the revised plan -- files and prospective
+				// surfaces included. Moving only the prose left the resumed candidate
+				// captured and inspected under the old plan's files (canonical review
+				// of #194 at b23a8ae).
+				applyPlanScope(&tc, revised)
+				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+					"the resumed candidate continues under the re-planned scope: "+scopeSummary(tc), nil))
+				carried = "The architect re-planned this task because the candidate did not converge under the previous plan. " +
+					"Reconcile the existing candidate with the revised plan.\n\nThe last review said:\n" + strings.TrimSpace(task.Review)
+			}
+		}
+		// The plan this invocation carries: the supplied bound by its digest, or
+		// the architect's plan -- the re-planned one when a re-plan was owed. A
+		// supplied bound is never re-planned: restorePlanBound put it back in
+		// memory above, so resolveArchitectureForRevision refuses before any plan
+		// changes (TestARestartedEngineStillRefusesToRePlanASuppliedPlan).
+		if bound.Source == PlanSupplied {
+			e.notePlan(task.TaskID, task.PlanDigest, "")
+		} else {
+			e.notePlan(task.TaskID, "", plan)
+		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
-		e.implement(ctx, sc, start, task.TaskID, &tc, bound.Plan, carried, fail)
+		e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)
 	}()
 	return task.TaskID
+}
+
+// applyPlanScope is the one mapping from a plan to the scope a candidate is
+// worked, captured and inspected under. execute and a resumed re-plan both go
+// through it, so a plan cannot move only part of its scope.
+func applyPlanScope(tc *taskContext, d architectureDecision) {
+	tc.Rationale = d.Summary
+	tc.Files = d.Files
+	tc.Steps = d.Steps
+	tc.Mode = planMode(d.Mode)
+	tc.Consequences = d.Consequences
+	tc.Invariants = d.Invariants
+	tc.Prospective = d.ProspectiveSurfaces
+}
+
+// scopeSummary names the files and prospective surfaces a candidate is bound
+// to, for the record.
+func scopeSummary(tc taskContext) string {
+	files := "files " + strings.Join(tc.Files, ", ")
+	if len(tc.Files) == 0 {
+		files = "no planned files"
+	}
+	var surfaces []string
+	for _, p := range tc.Prospective {
+		surfaces = append(surfaces, p.Path)
+	}
+	if len(surfaces) == 0 {
+		return files
+	}
+	return files + "; prospective " + strings.Join(surfaces, ", ")
 }
 
 // repoHead adapts the context-taking git surface to the narrow interface the

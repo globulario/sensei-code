@@ -59,7 +59,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v9"
+const SchemaVersion = "sensei-code.governed-run-receipt/v10"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -134,6 +134,15 @@ const (
 	// neither did. So the fact gets its own name: the task stands, the role turn
 	// it is owed is unanswered, and the reason is outside this system.
 	OutcomeBlockedExternal Outcome = "BLOCKED_EXTERNAL"
+	// OutcomeNotConverged: every configured implementer spent its review cycles
+	// and the independent reviewer still requires revision. The task stands and
+	// is owed an architect re-plan.
+	//
+	// FAILED said this about task-1789775984590842441 (2026-09-19), and it was
+	// final to resume while the candidate record called the same work
+	// resumable. REFUSED names a verdict and this is the end of a budget.
+	// UNREVIEWED is false: every cycle was reviewed.
+	OutcomeNotConverged Outcome = "NOT_CONVERGED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -146,7 +155,7 @@ func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
-		OutcomeBlockedExternal, OutcomeUnknown:
+		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -203,6 +212,12 @@ var vocabularies = map[string][]Outcome{
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeUnknown,
 	},
+	// v10 adds NOT_CONVERGED, and the not_converged field it requires.
+	"sensei-code.governed-run-receipt/v10": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -227,6 +242,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	},
 	// v9 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
 	"sensei-code.governed-run-receipt/v9": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v10 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v10": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
@@ -622,6 +641,10 @@ type Receipt struct {
 	// cannot be resumed against or waited on.
 	ExternalBlock Value `json:"external_block"`
 
+	// NotConverged is which implementers spent which review budget and what
+	// the task is owed. Required when the outcome is NOT_CONVERGED.
+	NotConverged Value `json:"not_converged"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -684,6 +707,7 @@ func (r Receipt) Fields() []Field {
 	deferred := r.Outcome == OutcomeDeferred
 	timedOut := r.Outcome == OutcomeTimedOut
 	blocked := r.Outcome == OutcomeBlockedExternal
+	notConverged := r.Outcome == OutcomeNotConverged
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -704,6 +728,7 @@ func (r Receipt) Fields() []Field {
 		{"deferred_question", r.DeferredQuestion, Observed, deferred},
 		{"execution_budget", r.ExecutionBudget, Observed, timedOut},
 		{"external_block", r.ExternalBlock, Observed, blocked},
+		{"not_converged", r.NotConverged, Observed, notConverged},
 		{"formatter_mutation", r.FormatterMutationState, Observed, worked},
 		{"terminal", r.Terminal, Observed, true},
 	}

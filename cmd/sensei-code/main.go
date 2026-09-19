@@ -173,7 +173,8 @@ Run it with no command to launch the ChatGPT architect workspace.
 Headless governed run:
   sensei-code run --task "..."      exit 0 complete · 1 failed · 3 awaiting human
                                     authority · 4 stopped · 5 timed out ·
-                                    8 blocked external (resume --task <id> retries)
+                                    8 blocked external · 9 not converged
+                                    (resume --task <id> continues either)
   --json      emit the event stream as JSONL
   --timeout   give up after a duration, leaving the candidate in place
   --plan      JSON file holding the bounded plan (an architect decision with
