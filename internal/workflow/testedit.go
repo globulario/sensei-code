@@ -275,7 +275,7 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 		if facts.Package != g.Facts.Package {
 			return fmt.Errorf("test edit refuted: %s changed its package clause from %q to %q", f, g.Facts.Package, facts.Package)
 		}
-		if strings.Join(facts.Constraints, "\n") != strings.Join(g.Facts.Constraints, "\n") {
+		if !sameStrings(facts.Constraints, g.Facts.Constraints) {
 			return fmt.Errorf("test edit refuted: %s changed its build constraints (%q -> %q)", f, strings.Join(g.Facts.Constraints, "; "), strings.Join(facts.Constraints, "; "))
 		}
 		imports := make([]string, 0, len(facts.Imports))
@@ -327,7 +327,12 @@ func matchTestEditGrants(planned []string, grants []testEditGrant, world string)
 	}
 	seen := map[string]bool{}
 	for _, g := range grants {
-		f := path.Clean(strings.TrimSpace(g.Path))
+		f := g.Path
+		// Routing records the canonical spelling; a record spelling the same file any
+		// other way was not written by routing, and is not normalised into agreement.
+		if f != path.Clean(strings.TrimSpace(f)) {
+			return fmt.Errorf("the recorded test-edit authorization names %q, which is not a canonical path", f)
+		}
 		if !isPlanned[f] {
 			return fmt.Errorf("the recorded test-edit authorization names %s, which the plan does not", f)
 		}
@@ -335,8 +340,21 @@ func matchTestEditGrants(planned []string, grants []testEditGrant, world string)
 			return fmt.Errorf("the recorded test-edit authorization holds two grants for %s", f)
 		}
 		seen[f] = true
-		if strings.TrimSpace(g.World) != strings.TrimSpace(world) || strings.TrimSpace(g.Covering) == "" || strings.TrimSpace(g.BaseHash) == "" || g.Facts.Imports == nil || g.Facts.Package == "" {
+		if strings.TrimSpace(world) == "" || g.World != world || strings.TrimSpace(g.Covering) == "" || strings.TrimSpace(g.BaseHash) == "" || g.Facts.Imports == nil || g.Facts.Package == "" {
 			return fmt.Errorf("the recorded grant for %s is not bound to world %s with a covering subject, base hash and facts", f, shortWorldID(world))
+		}
+		// Which instrument governed the neighbour is part of the grant, not a detail of it:
+		// a grant that cannot name its evidence class and identity is not evidence.
+		if g.CoveringEvidence != evidenceDerived && g.CoveringEvidence != evidenceAuthored {
+			return fmt.Errorf("the recorded grant for %s names covering evidence %q, which is neither %s nor %s", f, g.CoveringEvidence, evidenceDerived, evidenceAuthored)
+		}
+		if len(g.CoveringIdentity) == 0 {
+			return fmt.Errorf("the recorded grant for %s names no covering identity", f)
+		}
+		for _, id := range g.CoveringIdentity {
+			if strings.TrimSpace(id) == "" {
+				return fmt.Errorf("the recorded grant for %s holds an empty covering identity", f)
+			}
 		}
 	}
 	return nil
@@ -403,26 +421,26 @@ func operationalFiles(grants []testEditGrant) []string {
 // The record alone is not authority: routing does not re-run on resume, so a
 // stale, damaged or edited local record would otherwise become operational
 // authority by being present. The grants are therefore RECOMPUTED from the
-// pinned world by the same predicate routing used -- F and S planned, same
-// directory and package at W, S covered by a derived anchor at W, F's bytes
-// and facts at W -- and the record must match the recomputation exactly:
-// same paths, same covering subjects, same base hashes, same facts. Any
-// difference, in either direction, refuses the resume (sensei-code#101
-// review).
+// pinned world by the same composition routing used -- F and S planned, same
+// directory and package at W, S governed at W by a derived anchor or, where
+// none, by an authored invariant (withAuthoredTestEditGrants), F's bytes and
+// facts at W -- and the record must match the recomputation exactly: same
+// paths, same covering subjects, same evidence class and identity, same base
+// hashes, same facts. Any difference, in either direction, refuses the resume
+// (sensei-code#101 review).
+//
+// The record is the ONE snapshot routing wrote for the plan being resumed
+// (recordTestEditGrants); a later plan supersedes it (session.FindInterrupted),
+// so a grant routed for an earlier plan is never what this compares against.
 func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []testEditGrant, planned []string, world string) error {
 	if len(task.TestEditRecord) == 0 {
-		if len(recomputed) != 0 {
-			// The world now authorises what the run never recorded: the run
-			// did not operate under it, so neither does its resumption.
-			e.setTestEditGrants(task.TaskID, nil)
-		}
-		return nil
+		return fmt.Errorf("cannot resume %s: the plan has no recorded existing-test edit authorization snapshot", task.TaskID)
 	}
 	var rec testEditRecord
 	if err := json.Unmarshal(task.TestEditRecord, &rec); err != nil {
 		return fmt.Errorf("cannot resume %s: the recorded test-edit authorization is unreadable: %v", task.TaskID, err)
 	}
-	if strings.TrimSpace(rec.World) != strings.TrimSpace(world) {
+	if strings.TrimSpace(world) == "" || rec.World != world {
 		return fmt.Errorf("cannot resume %s: the recorded test-edit authorization was read at world %s, not the candidate's pinned base %s", task.TaskID, shortWorldID(rec.World), shortWorldID(world))
 	}
 	if err := matchTestEditGrants(planned, rec.Grants, world); err != nil {
@@ -430,13 +448,13 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
 	}
 	fresh := map[string]testEditGrant{}
 	for _, g := range recomputed {
-		fresh[path.Clean(g.Path)] = g
+		fresh[g.Path] = g
 	}
 	if len(fresh) != len(rec.Grants) {
 		return fmt.Errorf("cannot resume %s: the pinned world authorises %d existing-test edit(s) and the record holds %d; the record is not re-established", task.TaskID, len(fresh), len(rec.Grants))
 	}
 	for _, g := range rec.Grants {
-		f, ok := fresh[path.Clean(g.Path)]
+		f, ok := fresh[g.Path]
 		switch {
 		case !ok:
 			return fmt.Errorf("cannot resume %s: the pinned world does not authorise the recorded edit of %s", task.TaskID, g.Path)
@@ -444,6 +462,12 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
 			return fmt.Errorf("cannot resume %s: the record says %s is covered beside %s; the pinned world says %s", task.TaskID, g.Path, g.Covering, f.Covering)
 		case f.BaseHash != g.BaseHash:
 			return fmt.Errorf("cannot resume %s: the recorded base hash of %s does not match its bytes at the pinned world", task.TaskID, g.Path)
+		case f.World != g.World:
+			return fmt.Errorf("cannot resume %s: the recorded grant of %s is bound to world %s; the pinned world is %s", task.TaskID, g.Path, shortWorldID(g.World), shortWorldID(f.World))
+		case f.CoveringEvidence != g.CoveringEvidence:
+			return fmt.Errorf("cannot resume %s: the record says %s is governed by %s evidence; the pinned world establishes %s evidence", task.TaskID, g.Path, g.CoveringEvidence, f.CoveringEvidence)
+		case !sameStrings(f.CoveringIdentity, g.CoveringIdentity):
+			return fmt.Errorf("cannot resume %s: the record names %v as the governance of %s; the pinned world names %v", task.TaskID, g.CoveringIdentity, g.Path, f.CoveringIdentity)
 		case !sameTestFacts(f.Facts, g.Facts):
 			return fmt.Errorf("cannot resume %s: the recorded facts of %s do not match the pinned world", task.TaskID, g.Path)
 		}
@@ -453,11 +477,26 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
 }
 
 func sameTestFacts(a, b testEditFacts) bool {
-	if a.Package != b.Package || len(a.Imports) != len(b.Imports) || strings.Join(a.Constraints, "\n") != strings.Join(b.Constraints, "\n") {
+	if a.Package != b.Package || len(a.Imports) != len(b.Imports) || !sameStrings(a.Constraints, b.Constraints) {
 		return false
 	}
 	for imp := range a.Imports {
 		if !b.Imports[imp] {
+			return false
+		}
+	}
+	return true
+}
+
+// sameStrings compares two slices element by element. Joining them on a delimiter
+// would let ["a","b"] equal ["a\nb"]: a record could then forge an identity or a
+// constraint the pinned world never named.
+func sameStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
 			return false
 		}
 	}
@@ -504,30 +543,32 @@ func (e *Engine) coverageWorld(taskID string) string {
 	return e.coverageWorlds[taskID]
 }
 
-// authoredTestEditGrants applies the SAME predicate over the authored instrument only.
+// withAuthoredTestEditGrants is THE composition of the two instruments, used by routing
+// and by resume alike: the derived grants, then the SAME predicate over the authored
+// instrument only, for the planned tests the derived pass did not grant.
 //
-// Separate from the derived pass because of when each fact becomes available, not because
-// the rule differs: derived coverage is computed before routing, authored governance after
-// the per-file probe. Runs no derivations, so it costs one read per candidate neighbour.
+// Separate passes because of when each fact becomes available, not because the rule
+// differs: derived coverage is computed before routing, authored governance after the
+// per-file probe. Derived is preferred where both hold. One function, so the grant set a
+// resume recomputes cannot be composed differently from the one routing recorded.
 //
-// Returns nothing when no world was recorded: a grant must be bound to the world its
-// coverage was computed in, and inventing one here is exactly the substitution the
-// pinned-world discipline exists to refuse.
-func (e *Engine) authoredTestEditGrants(ctx context.Context, taskID string, planned []string, authored authoredEvidence) []testEditGrant {
-	world := e.coverageWorld(taskID)
+// Adds nothing when no world is known: a grant must be bound to the world its coverage
+// was computed in, and inventing one here is exactly the substitution the pinned-world
+// discipline exists to refuse.
+func withAuthoredTestEditGrants(ctx context.Context, world string, planned []string, derivedGrants []testEditGrant, authored authoredEvidence, read worldReader) []testEditGrant {
+	merged := append([]testEditGrant(nil), derivedGrants...)
 	if strings.TrimSpace(world) == "" || len(planned) == 0 {
-		return nil
+		return merged
 	}
 	already := map[string]bool{}
-	for _, g := range e.testEditGrants(taskID) {
+	for _, g := range derivedGrants {
 		already[g.Path] = true
 	}
-	grants, _ := testEditGrants(ctx, world, planned, nil, authored, gitShowAt(e.Repo.Root))
-	var out []testEditGrant
+	grants, _ := testEditGrants(ctx, world, planned, nil, authored, read)
 	for _, g := range grants {
 		if !already[g.Path] {
-			out = append(out, g)
+			merged = append(merged, g)
 		}
 	}
-	return out
+	return merged
 }
