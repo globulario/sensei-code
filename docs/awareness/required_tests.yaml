@@ -69,3 +69,31 @@ required_tests:
         - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
       failure_modes:
         - failure.sensei_code.provider_quota_ended_the_task_failed
+  - id: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
+    title: 'Non-convergence witness: TestSpendingEveryReviewCycleEndsNotConvergedNotFailed'
+    protects:
+      invariants:
+        - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+      failure_modes:
+        - failure.sensei_code.non_convergence_ended_failed_while_candidate_resumable
+  - id: internal/workflow/nonconvergence_test.go:TestExhaustionBesideARealFailureStaysFailed
+    title: 'Non-convergence witness: TestExhaustionBesideARealFailureStaysFailed'
+    protects:
+      invariants:
+        - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+      failure_modes:
+        - failure.sensei_code.non_convergence_ended_failed_while_candidate_resumable
+  - id: internal/workflow/nonconvergence_test.go:TestANotConvergedTaskIsResumableAfterRestart
+    title: 'Non-convergence witness: TestANotConvergedTaskIsResumableAfterRestart'
+    protects:
+      invariants:
+        - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+      failure_modes:
+        - failure.sensei_code.non_convergence_ended_failed_while_candidate_resumable
+  - id: internal/workflow/nonconvergence_test.go:TestOwedReplanReadsTheRecord
+    title: 'Non-convergence witness: TestOwedReplanReadsTheRecord'
+    protects:
+      invariants:
+        - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+      failure_modes:
+        - failure.sensei_code.non_convergence_ended_failed_while_candidate_resumable

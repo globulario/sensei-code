@@ -1133,3 +1133,25 @@ invariants:
     evidence:
       - task-1789770525156538509 (2026-09-18) ended FAILED on ChatGPT usageLimitExceeded; live proof task-1789772230833396306 blocked, resumed as the same task in a second process, exit 8
     contract: A provider that PROVES through its structured protocol that it cannot serve a role turn (e.g. codexErrorInfo usageLimitExceeded) ends the invocation BLOCKED_EXTERNAL; the task, its identity, its candidate base and the unanswered role turn survive, and resume retries that turn under the same task id. Only the adapter establishes unavailability; the role is attached where the turn is asked; message text never classifies; retry_at is KNOWN only when the provider supplied it.
+  - id: sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+    title: A task whose every implementer spent its review cycles is owed an architect re-plan, not a final failure
+    severity: high
+    status: active
+    description: 'Owner ruling 2026-09-19 (DF-6): non-convergence is resumable and owed a re-plan. Only exhaustion qualifies; a crashed or structural failure beside it stays FAILED. The re-plan is not a durable plan, so the record stands until the task ends.'
+    protects:
+      files:
+        - internal/workflow/nonconvergence.go
+        - internal/workflow/engine.go
+        - internal/session/store.go
+        - cmd/sensei-code/resume_blocked.go
+    related_invariants:
+      - sensei_code.workflow.provider_unavailability_blocks_the_turn_not_the_task
+      - sensei_code.workflow.repeated_resume_cannot_mint_authority
+    required_tests:
+      - internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
+      - internal/workflow/nonconvergence_test.go:TestExhaustionBesideARealFailureStaysFailed
+      - internal/workflow/nonconvergence_test.go:TestANotConvergedTaskIsResumableAfterRestart
+      - internal/workflow/nonconvergence_test.go:TestOwedReplanReadsTheRecord
+    evidence:
+      - 'task-1789775984590842441 (2026-09-19): 6 REVISE cycles, ended workflow.failed while candidate disposition said resumable; resume --task refused ''no interrupted task with that id'''
+    contract: When every configured implementer's failure is review-cycle exhaustion (and nothing else failed), the invocation ends NOT_CONVERGED; the task stays resumable as itself with its candidate, and resume asks the architect to re-plan over the candidate and its open findings before any implementer runs again. Any other failure stays FAILED. A resumed invocation opens its own run receipt.

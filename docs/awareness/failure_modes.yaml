@@ -326,3 +326,30 @@ failure_modes:
       - internal/workflow/external_block_test.go:TestAProvenUnavailableArchitectEndsTheTurnTypedAndUnretried
     evidence:
       - 'dogfood run 1, task-1789770525156538509, 2026-09-18: exit 1, receipt INCOMPLETE/FAILED, architect started twice'
+  - id: failure.sensei_code.non_convergence_ended_failed_while_candidate_resumable
+    title: Non-convergence ended the task FAILED while its candidate record said resumable
+    severity: high
+    description: implement() reported review-cycle exhaustion through fail() as WorkflowFailed, which FindInterrupted treats as done, while disposeIfEmpty resolved the same candidate as resumable -- two records disagreeing about whether the task lives.
+    protects:
+      files:
+        - internal/workflow/engine.go
+        - internal/session/store.go
+    related_invariants:
+      - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+    required_tests:
+      - internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
+    evidence:
+      - task-1789775984590842441, 2026-09-19 14:51Z
+  - id: failure.sensei_code.resumed_invocation_had_no_run_receipt
+    title: A resumed planned invocation opened no run receipt, so an ACCEPT after resume could never mint
+    severity: high
+    description: 'Engine.Resume''s planned path never called beginReceipt; withReceipt is a no-op without facts, so the reviewed tree of an ACCEPT was never recorded and the mint refused: ''no bounded review delivered a content identity for this candidate''. Affected every planned resume, including WAITING_REVIEW continuation.'
+    protects:
+      files:
+        - internal/workflow/engine.go
+    related_invariants:
+      - sensei_code.workflow.non_convergence_is_owed_an_architect_replan
+    required_tests:
+      - internal/acceptance/external_block_resume_test.go:TestANotConvergedTaskIsRePlannedAndCompletesAfterRestart
+    evidence:
+      - DF-9, stubsmoke acceptance run 2026-09-19 15:14Z, verdict tree a5602b7f present in the event, mint refused
