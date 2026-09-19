@@ -5370,6 +5370,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.resumeBlockedArchitecture(ctx, task)
 			return
 		}
+		// A resumed invocation is a run, and it owes its own receipt. Without
+		// one every fact it measured -- the world it re-certified, the plan it
+		// carried, the tree an ACCEPT was bound to -- was recorded into nothing,
+		// and the mint refused an accepted candidate with "no bounded review
+		// delivered a content identity" (DF-9, 2026-09-19). The unplanned and
+		// question branches above re-enter execute, which opens its own.
+		e.beginReceipt(task.TaskID)
 		fail := func(err error) {
 			// Blocked again is blocked, not failed, and the task stays itself.
 			if e.blockExternally(task.TaskID, err) {
@@ -5381,6 +5388,12 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.reportOutcome(ctx, "failure", task.Task, err.Error())
 		}
 		sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
+		if err == nil {
+			pid, ok := sc.ServingPID()
+			e.noteServingProducer(task.TaskID, pid, ok)
+		} else {
+			e.noteServingProducer(task.TaskID, 0, false)
+		}
 		if err != nil {
 			fail(fmt.Errorf("start Sensei: %w", err))
 			return
@@ -5424,7 +5437,8 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.preflightRecord(preflightArgs, preflight.Structured,
 				subjectRevision, sensei.PreflightGraphDigest(preflight))))
 
-		start, err := certifyStart(workspaceStatus, preflight, repositoryHead(ctx, e.Repo),
+		head := repositoryHead(ctx, e.Repo)
+		start, err := certifyStart(workspaceStatus, preflight, head,
 			domainFromRemote(e.Repo.OriginURL(ctx)), awarenessAddress(e.Config.Sensei.Args))
 		if err != nil {
 			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSensei, event.Status, err.Error(), preflight.Structured))
@@ -5437,6 +5451,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// may have been rebuilt while the task was not running, and resurrecting
 		// the old commit would attribute the new rules to the old generation.
 		e.bindGraph(task.TaskID, start)
+		e.noteWorld(task.TaskID, head, start.GraphDigest())
 
 		// A resumed task already has a base recorded. Establish loads it rather
 		// than re-deriving one, which is what keeps the base immutable across a
@@ -5548,6 +5563,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				carried = "The architect re-planned this task because the candidate did not converge under the previous plan. " +
 					"Reconcile the existing candidate with the revised plan.\n\nThe last review said:\n" + strings.TrimSpace(task.Review)
 			}
+		}
+		// The plan this invocation carries: the supplied bound by its digest, or
+		// the architect's plan -- the re-planned one when a re-plan was owed.
+		if bound.Source == PlanSupplied {
+			e.notePlan(task.TaskID, task.PlanDigest, "")
+		} else {
+			e.notePlan(task.TaskID, "", plan)
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
