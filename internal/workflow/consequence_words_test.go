@@ -234,10 +234,10 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 6. Quoted and PERFORMED. Row 3's operation is quoted too, and the
-		// only difference is the word introducing the quotation: "says" reports
-		// it, "execute" runs it. Suppressing every quoted span makes these two
-		// rows identical, and this is the one where a run that had just said it
+		// 6. Quoted and PERFORMED. Row 3's operation is quoted too, and what
+		// separates the two is what stands INSIDE the quotation: a prohibition
+		// there, none here. A repair that suppressed every quoted span made
+		// them identical, and this is the row where a run that had just said it
 		// would publish reached a grant with nobody asked.
 		name:       "an asserted quoted command is a use, not a mention",
 		step:       `the final step is to execute "push to main" exactly as written`,
@@ -270,9 +270,10 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		says:       "outside the worktree",
 	}, {
 		// 9. Named, then run. "named" is how a plan labels a step it is about
-		// to perform, and reading labelling words as citation granted exactly
-		// the plans that were most explicit about what they would do. Only
-		// reported speech makes a quotation a mention; compare row 3.
+		// to perform, and an earlier repair that read labelling words as
+		// citation granted exactly the plans that were most explicit about what
+		// they would do. A quotation suppresses nothing now -- compare row 3,
+		// where what is quoted carries its own prohibition.
 		name:       "naming a step is not reporting a rule",
 		step:       `the step named "deploy to production" runs last`,
 		wantResult: ConsequenceUnacceptable,
@@ -312,8 +313,7 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		// 13. A contraction is a negation. No word split recovers the negator
 		// inside "don't", so without the expansion this prohibition reads as a
 		// declaration and escalates -- the original false-escalation bug, in
-		// the one spelling people actually use. The only bounded control here
-		// besides rows 2 and 3.
+		// the one spelling people actually use.
 		name:       "a contracted negation is still a negation",
 		step:       "we don't push to main",
 		wantResult: ConsequenceBounded,
@@ -351,17 +351,18 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 17. Row 9 removed labelling words; this removes FETCHING ones. A
-		// machine reads a command in order to run it, so "reads", "writes" and
-		// "states" introduce a quotation that is used, not reported. Row 9
-		// cannot see this: "named" labels, "reads" retrieves.
+		// 17. Row 9 removed labelling words from the citation list; this
+		// removed FETCHING ones, and the list itself is gone now. A machine
+		// reads a command in order to run it, so no introducing word makes a
+		// quotation safe -- which is why "reads" and "named" reach the same
+		// answer by the same route.
 		name:       "an ordinary verb before a quotation is not a citation",
 		step:       "the workflow reads `deploy to production` from the matrix and executes it",
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 18. NEGATIVE CONCORD, and the fifth bounded row. One prohibition
+		// 18. NEGATIVE CONCORD. One prohibition
 		// spelled with two words: counted as two negations it cancelled itself
 		// and escalated, which is the original bug in the most careful
 		// phrasing of the sentence that caused it. Pair to row 2.
@@ -370,10 +371,10 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
 	}, {
-		// 19. A subordinator ends the clause it subordinates. Row 12 proves a
-		// sentence boundary resets polarity; this is the same property where
-		// the boundary is a word rather than a full stop, which is how a plan
-		// usually writes a limit and then the step that follows it.
+		// 19. A subordinator ends the prohibition. Row 12 proves a full stop
+		// resets polarity; here the boundary is a word, and it needs no entry
+		// in any break list -- "before" and "stop" are not predicate material,
+		// so the walk from the deploy stops at them.
 		name:       "a prohibition does not reach past the subordinator that ends it",
 		step:       "do not stop before deploy to production",
 		wantResult: ConsequenceUnacceptable,
@@ -383,34 +384,34 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		// 20. A RUN-ON, with no connector at all. Rows 5, 7, 14 and 19 are each
 		// saved by something in the text -- a conjunction, a dash, a
 		// subordinator -- and terse plan prose often supplies none of them.
-		// Here the only thing that ends the prohibition is the AUXILIARY in the
-		// second predicate, which is what keeps predicateMarkers real work
-		// rather than a rule the break list already covers.
+		// What ends the prohibition here is simply that "run" is not predicate
+		// material, so the walk from the push stops one word short of the
+		// auxiliary chain.
 		//
-		// Not the subject: strip both "is" and "will" and "no reviewer bypassed
-		// the run push to main" is still read as bounded, because a noun-phrase
-		// subject ends nothing. That shape is a known limit, recorded with the
-		// others above declaredOutwardActions.
+		// Row 34 is this sentence with both auxiliaries removed and must
+		// escalate too. An earlier implementation read that one as bounded,
+		// because a noun-phrase subject ended nothing.
 		name:       "a new predicate with no connector still ends the negation",
 		step:       "no reviewer is bypassed the run will push to main",
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 21. "so" is a consequence connector: what follows is the result, not
-		// more of the prohibition. It is listed separately from " so that ",
-		// which is a purpose clause, and only this row tells the two apart.
+		// 21. "so" introduces a RESULT, not more of the prohibition. It needs
+		// no entry in the break list and has none: it is not predicate
+		// material, so the walk from the deploy stops there. An earlier version
+		// had to list " so " separately from " so that " to get this right.
 		name:       "a consequence connector does not carry the prohibition into its result",
 		step:       "the branch is not merged so deploy to production happens from the tag",
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 22. Rows 9 and 17 removed labelling and fetching words; this is the
-		// third member of that family, and it is the one that shows the
-		// argument has to be applied to the whole list rather than to the two
-		// words somebody happened to test. "the matrix describes X and the job
-		// runs it" labels a step exactly as "named" does.
+		// 22. The third member of rows 9 and 17's family, and the one that
+		// showed the argument had to reach the whole list rather than the two
+		// words somebody happened to test -- "the matrix describes X and the
+		// job runs it" labels a step exactly as "named" does. Three rounds of
+		// that is why there is no list left to be incomplete.
 		name:       "a labelling verb is not reporting, whatever its spelling",
 		step:       `the step described "deploy to production" runs last`,
 		wantResult: ConsequenceUnacceptable,
@@ -418,20 +419,21 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		says:       "outside the worktree",
 	}, {
 		// 23. "without" negates a NOUN PHRASE, and here the operation IS that
-		// phrase, so this is a double negative that asserts the push: the
-		// release cannot complete unless it happens. Row 8 is the same property
-		// through the "avoid" stem and cannot see this; dropping "without" from
-		// the negators outright fixed row 24's shape and broke this one.
+		// phrase, so the claim is that the release cannot complete unless the
+		// push happens: the push is asserted. Nothing positively binds
+		// "without" to the operation as a prohibition, so the default decides
+		// it. Row 8 is the same property through the "avoid" stem and cannot
+		// see this; row 28 is the same claim with the word order reversed.
 		name:       "a complement negation still composes into a double negative",
 		step:       "the release cannot complete without a push to main",
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 24. The pair to row 23, and the reason "without" is scoped rather
-		// than simply listed. Here its complement is "further review", not the
-		// push, so the push is what the plan says it will do -- and reading
-		// "without" as a negator that runs forward suppressed exactly that.
+		// 24. The pair to row 23. Here "without" takes "further review" as its
+		// complement rather than the push, so the push is what the plan says it
+		// will do -- and an implementation that ran "without" forward as a
+		// negator suppressed exactly that.
 		name:       "a complement negation does not reach the clause after its complement",
 		step:       "without further review push to main",
 		wantResult: ConsequenceUnacceptable,
