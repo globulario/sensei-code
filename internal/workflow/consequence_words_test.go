@@ -171,7 +171,6 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 // 2/10 are one coordination under two connectors. A repair that gets one of a
 // pair right and the other wrong is exactly the repair this test exists to
 // refuse.
-// is exactly the repair this test exists to refuse.
 func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
