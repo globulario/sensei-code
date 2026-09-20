@@ -376,11 +376,19 @@ var outwardPhrases = []string{
 // So the vocabulary stays exactly as it is, and what changes is WHERE each
 // occurrence is read:
 //
-//	MENTION   the operation appears inside quotation marks -- it is being named,
+//	MENTION   a citing word introduces a quotation of it -- it is being reported,
 //	          as the identity of a boundary or the text of a rule, not performed
-//	NEGATED   a negator governs it inside its own clause -- the plan asserts the
-//	          absence of the action
+//	NEGATED   a negator whose scope actually reaches it -- the plan asserts the
+//	          absence of THIS action, not of something else in the same sentence
 //	ASSERTED  everything else -- a consequence signal, exactly as before
+//
+// Both readings are bounded to what they govern, and that boundary is the whole
+// difficulty. A negation that is merely EARLIER, and a quotation that is merely
+// PRESENT, say nothing about the operation beside them: "no reviewer is bypassed
+// and the run will push to main" declares the push, and `execute "push to main"`
+// performs what it quotes. Reading either one as blanket suppression loses a
+// declaration the router must interrupt on -- the single direction this must
+// never fail in.
 //
 // Three repairs are forbidden here and recorded in the graph, because each one
 // would make this symptom disappear while leaving the defect:
@@ -425,13 +433,44 @@ var clauseBreaks = []string{
 	" because ", " then ", " so that ", " therefore ",
 }
 
-// quotePairs delimit a MENTION.
+// quotePairs delimit a quotation.
 //
 // The apostrophe is not one, and its absence is the point: "the agent's plan
 // will push to main" would open a span at the possessive and swallow the rest
 // of the text, so a real declaration would go unread. An unbalanced delimiter
 // suppresses nothing for the same reason.
 var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
+
+// mentionCues turn a quotation into a MENTION: the one word immediately before
+// the opening delimiter, and nothing wider.
+//
+// A quotation is not by itself a mention. Suppressing every quoted span made
+// `execute "push to main"` indistinguishable from a rule that merely names the
+// operation, and the run that performs what it quotes is exactly the one the
+// authority router has to interrupt. So a quotation suppresses nothing unless a
+// citing word introduces it, and the default -- an unintroduced quotation is a
+// use -- fails toward the person rather than past them. The price is that a
+// bare code reference in prose, `git push` in a sentence about publish.go,
+// escalates; that is what it did before any of this existed.
+//
+// Citing words only. "step", "command" and "action" are deliberately absent:
+// they introduce something to be DONE, not something being reported.
+var mentionCues = []string{
+	"says", "said", "reads", "read", "states", "stated", "writes", "wrote",
+	"quotes", "quoted", "calls", "called", "names", "named", "labelled", "labeled",
+	"describes", "described", "mentions", "mentioned",
+	"rule", "constraint", "boundary", "prohibition", "objective", "instruction",
+	"phrase", "wording", "text", "literal",
+}
+
+// coordinators continue one predicate into another WITHIN a clause.
+//
+// They are not clause breaks -- "never merge or push to main" is one negator
+// over a coordination, and breaking there would re-manufacture the false
+// escalation this exists to remove. What they do is mark the place where a
+// negation might stop carrying; see scopeReaches. " nor " is absent because it
+// continues a negation rather than starting a predicate.
+var coordinators = []string{" and ", " or ", " plus "}
 
 // declaredOutwardActions reads a plan's own steps and consequences for an
 // outward action it ASSERTS.
@@ -463,11 +502,15 @@ func declaredOutwardActions(steps []string, consequences string) []string {
 	return found
 }
 
-// maskMentions blanks quoted spans, delimiters included.
+// maskMentions blanks the quoted spans a citing word introduces, delimiters
+// included, and leaves every other quotation exactly where it is.
 //
 // Blanked rather than removed: what is left is the sentence that did the
-// quoting, with a hole where the named operation was, so the surrounding
+// quoting, with a hole where the reported operation was, so the surrounding
 // clauses keep their own shape and are read normally.
+//
+// An uncited quotation is written through untouched, so the operation inside it
+// is read as the clause's own -- `execute "push to main"` declares the push.
 func maskMentions(text, open, close string) string {
 	var b strings.Builder
 	i := 0
@@ -479,17 +522,49 @@ func maskMentions(text, open, close string) string {
 		o += i
 		c := strings.Index(text[o+len(open):], close)
 		if c < 0 {
-			// No closing delimiter. A mention nobody can delimit is not
+			// No closing delimiter. A quotation nobody can delimit is not
 			// suppressed -- failing toward the human, not past them.
 			break
 		}
 		c += o + len(open)
+		end := c + len(close)
 		b.WriteString(text[i:o])
-		b.WriteString(strings.Repeat(" ", (c+len(close))-o))
-		i = c + len(close)
+		if citedAt(text, o) {
+			b.WriteString(strings.Repeat(" ", end-o))
+		} else {
+			b.WriteString(text[o:end])
+		}
+		i = end
 	}
 	b.WriteString(text[i:])
 	return b.String()
+}
+
+// citedAt reports whether the quotation opening at o is introduced by a citing
+// word: the last whole word before the delimiter, and nothing wider.
+//
+// Deliberately one word. Widening this to "a citing word somewhere in the
+// clause" would let any sentence that happens to mention a rule suppress an
+// operation it goes on to perform, which is the quotation-shaped form of the
+// forbidden fix that drops every sentence containing "never".
+func citedAt(text string, o int) bool {
+	j := o
+	for j > 0 && !isWordByte(text[j-1]) {
+		j--
+	}
+	i := j
+	for i > 0 && isWordByte(text[i-1]) {
+		i--
+	}
+	if i == j {
+		return false
+	}
+	for _, cue := range mentionCues {
+		if text[i:j] == cue {
+			return true
+		}
+	}
+	return false
 }
 
 // clausesOf splits text where polarity resets.
@@ -505,7 +580,7 @@ func clausesOf(text string) []string {
 func assertedIn(parts []string, token string, word bool) bool {
 	for _, c := range parts {
 		for _, at := range occurrencesOf(c, token, word) {
-			if countNegators(c[:at])%2 == 0 {
+			if governingNegators(c, at)%2 == 0 {
 				return true
 			}
 		}
@@ -532,28 +607,110 @@ func occurrencesOf(text, token string, word bool) []int {
 	return out
 }
 
-// countNegators counts the negators in the text PRECEDING an occurrence.
+// governingNegators counts the negators in clause c whose scope actually
+// reaches the operation at offset at.
 //
-// Preceding only, on purpose. A negator governs what comes after it, and
-// counting the whole clause would let "the last step will push to main and no
-// rollback is possible" clear itself on a word that negates something else --
-// fail-open, the one direction this must not fail in. The cost is the mirror
-// case, "push to main is never allowed", which escalates to a person who can
-// see at a glance that it should not have. That is the affordable error.
-func countNegators(text string) int {
+// Two bindings, and both are load-bearing.
+//
+// PRECEDING ONLY. A negator governs what comes after it, so a negator later in
+// the clause says nothing about this operation: "the last step will push to
+// main and no rollback is possible" declares the push.
+//
+// AND ONLY AS FAR AS ITS OWN PREDICATE. Counting every earlier negator was the
+// mirror mistake, and it failed in the direction that matters: "no reviewer is
+// bypassed and the run will push to main" carries a single "no" that negates
+// the bypass and nothing else, and the push was silently cleared -- the
+// router never got to interrupt a run that had just said it would publish.
+// scopeReaches is where that stops.
+//
+// Parity, not presence, for what does reach: "cannot avoid writing outside the
+// worktree" carries two and asserts the thing. Reading presence is the
+// forbidden fix.
+//
+// The residual error is the mirror case, "push to main is never allowed", which
+// escalates to a person who can see at a glance that it should not have. That
+// is the affordable one.
+func governingNegators(c string, at int) int {
 	n := 0
-	for _, neg := range negators {
-		n += len(occurrencesOf(text, neg, true))
-	}
-	for _, w := range strings.FieldsFunc(text, func(r rune) bool { return r > 127 || !isWordByte(byte(r)) }) {
-		for _, stem := range negatorStems {
-			if strings.HasPrefix(w, stem) {
-				n++
-				break
-			}
+	for _, end := range negatorEndsBefore(c, at) {
+		if scopeReaches(c, end, at) {
+			n++
 		}
 	}
 	return n
+}
+
+// negatorEndsBefore returns the end offset of every negator that starts before
+// at: the listed words, and the verbs that negate their own complement in any
+// inflection ("refuses to push to main", "forbidden to deploy").
+func negatorEndsBefore(c string, at int) []int {
+	var ends []int
+	for _, neg := range negators {
+		for _, p := range occurrencesOf(c[:at], neg, true) {
+			ends = append(ends, p+len(neg))
+		}
+	}
+	for i := 0; i < at; {
+		if !isWordByte(c[i]) {
+			i++
+			continue
+		}
+		j := i
+		for j < at && isWordByte(c[j]) {
+			j++
+		}
+		for _, stem := range negatorStems {
+			if strings.HasPrefix(c[i:j], stem) {
+				ends = append(ends, j)
+				break
+			}
+		}
+		i = j
+	}
+	return ends
+}
+
+// scopeReaches reports whether a negation ending at from still governs the
+// operation at at, or whether a new predicate began in between.
+//
+// The test is read from the SAME closed outward vocabulary the classifier
+// already owns, never from a guess about subjects: a coordination carries the
+// negation across only when it coordinates the operations themselves -- "never
+// merge or push to main", "never push to main or deploy". Anything else after
+// "and"/"or" -- "and the run will", "and no rollback exists" -- starts a new
+// predicate, and the negation stops there.
+//
+// That direction is chosen. An unrecognized continuation ends the scope, so the
+// operation is read as asserted and reaches a person; the opposite default
+// would carry a negation across an arbitrary amount of reassuring prose, which
+// is precisely how the affirmative push got cleared.
+func scopeReaches(c string, from, at int) bool {
+	if from > at {
+		return false
+	}
+	for _, co := range coordinators {
+		for _, p := range occurrencesOf(c[from:at], co, false) {
+			if !startsOutward(c[from+p+len(co):]) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// startsOutward reports whether text begins with an outward-vocabulary token.
+func startsOutward(text string) bool {
+	for _, verb := range outwardVerbs {
+		if strings.HasPrefix(text, verb) {
+			return true
+		}
+	}
+	for _, phrase := range outwardPhrases {
+		if strings.HasPrefix(text, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 // containsWord reports a token present at word boundaries.

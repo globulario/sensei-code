@@ -68,7 +68,7 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 	}
 }
 
-// POLARITY, NOT STRINGS. The same hazardous operation, read in four contexts.
+// POLARITY, NOT STRINGS. One hazardous operation, read in six contexts.
 //
 // Observed 2026-09-20 on task-1789870806342069862: the plan step "publication
 // may open a branch and pull request only, never merge or push to main" was
@@ -77,16 +77,29 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 // to reach. The inversion is the harm: the more carefully an objective writes
 // down what it will NOT do, the more certainly it escalates.
 //
-// So the operation is held constant -- "push to main" in all four rows -- and
-// only the context around it moves. A row that passed because the wording
-// changed would prove nothing; these rows share the wording.
+// So the operation is held constant -- "push to main" in every row -- and only
+// the context around it moves. A row that passed because the wording changed
+// would prove nothing; these rows share the wording.
 //
-// Rows 1 and 4 are the control. They are the Level-3 path this repair must
-// leave exactly as it is, and row 4 in particular is the negative control for
-// the forbidden fix of suppressing any sentence containing "never" or "not":
-// it carries "no reviewer is bypassed" in the same clause as a genuinely
-// asserted push, so a classifier that read negation at the sentence, or
-// anywhere in the clause rather than ahead of the operation, would grant it.
+// Rows 2 and 3 are the defect: a prohibition and a cited rule, both refused
+// before this repair. Rows 1, 4, 5 and 6 are the control -- the Level-3 path
+// this repair must leave exactly as it is -- and they are the ones that carry
+// the cost of overshooting. Each of the four ways to overshoot is somebody's
+// obvious first fix:
+//
+//	row 4  a negation AFTER the operation ("...push to main and no reviewer
+//	       is bypassed") -- killed by reading polarity at the sentence
+//	row 5  a negation BEFORE it, governing something else ("no reviewer is
+//	       bypassed and the run will push to main") -- killed by counting every
+//	       negator earlier in the clause, which row 4 cannot see
+//	row 6  the operation quoted and PERFORMED -- killed by suppressing every
+//	       quoted span, which row 3 cannot see
+//	row 1  a bare declaration -- killed by anything that stops reading
+//
+// Rows 4 and 5 are the same sentence with the reassurance on either side of the
+// push, and rows 3 and 6 are the same quotation under two introducing words.
+// Those pairings are the point: a repair that gets one of each pair right and
+// the other wrong is exactly the repair this test exists to refuse.
 func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -120,13 +133,36 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
 	}, {
-		// 4. Asserted, wrapped in reassurance. The negator sits in the SAME
-		// clause as the push and negates something else entirely, so this row
-		// fails both ways a repair can overshoot: suppressing a sentence that
-		// contains "no", and counting negators anywhere in the clause instead
-		// of only ahead of the operation they govern.
+		// 4. Asserted, wrapped in reassurance that FOLLOWS it. The negator sits
+		// in the SAME clause as the push and negates something else entirely,
+		// so this row fails both ways a repair can overshoot: suppressing a
+		// sentence that contains "no", and counting negators anywhere in the
+		// clause instead of only ahead of the operation they govern.
 		name:       "reassuring prose does not clear an asserted outward action",
 		step:       "every edit stays in the disposable candidate worktree; the last step will push to main and no reviewer is bypassed",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 5. The same reassurance, moved AHEAD of the push -- and row 4 cannot
+		// see this. Counting every negator earlier in the clause clears the
+		// push here while row 4 still passes, so ordering is the whole test:
+		// "no" negates the bypass, the coordination then starts a new predicate
+		// with its own subject, and the push it introduces is asserted. A
+		// negation that merely precedes an operation has said nothing about it.
+		name:       "a negation that governs something else does not clear the push that follows it",
+		step:       "no reviewer is bypassed and the run will push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 6. Quoted and PERFORMED. Row 3's operation is quoted too, and the
+		// only difference is the word introducing the quotation: "says" reports
+		// it, "execute" runs it. Suppressing every quoted span makes these two
+		// rows identical, and this is the one where a run that had just said it
+		// would publish reached a grant with nobody asked.
+		name:       "an asserted quoted command is a use, not a mention",
+		step:       `the final step is to execute "push to main" exactly as written`,
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",

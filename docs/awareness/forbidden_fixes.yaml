@@ -141,6 +141,8 @@ forbidden_fixes:
     protects:
       files:
         - internal/workflow/consequence.go
+    related_invariants:
+      - sensei_code.workflow.execution_is_authorized_once_at_run
     reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
     evidence:
       - '2026-09-20, task-1789870806342069862: the step ''publication may open a branch and pull request only, never merge or push to main'' was assessed UNACCEPTABLE with ''the plan declares an outward action: push to'' and stopped at a Level-3 boundary the plan promised never to reach.'
@@ -151,6 +153,8 @@ forbidden_fixes:
     protects:
       files:
         - internal/workflow/consequence.go
+    related_invariants:
+      - sensei_code.workflow.execution_is_authorized_once_at_run
     reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
     evidence:
       - 'Run directly, ''the run must never deploy anything; it only edits files in the candidate worktree'' is also assessed UNACCEPTABLE: the defect is not bound to one verb, one wording, one objective file or one caller.'
@@ -161,6 +165,8 @@ forbidden_fixes:
     protects:
       files:
         - internal/workflow/consequence.go
+    related_invariants:
+      - sensei_code.workflow.execution_is_authorized_once_at_run
     reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
     evidence:
       - The required behaviour separates 'never push to main' (no signal) from 'cannot avoid writing outside the worktree' (signal); a sentence-level 'never' filter cannot tell them apart, because both contain the same token.
