@@ -797,8 +797,8 @@ func compoundAt(text string, start, end int) bool {
 // router never got to interrupt a run that had just said it would publish.
 // scopeReaches is where that stops.
 //
-// Parity, not presence, for what does reach: "cannot avoid writing outside the
-// worktree" carries two and asserts the thing. Reading presence is the
+// Parity, not presence, for what does reach: "the run cannot avoid a deploy to
+// production" carries two and asserts the deploy. Reading presence is the
 // forbidden fix.
 //
 // The residual error is the mirror case, "push to main is never allowed", which
@@ -818,9 +818,12 @@ func governingNegators(c string, at int) int {
 // at: the listed words, and the verbs that negate their own complement in any
 // inflection ("refuses to push to main", "forbidden to deploy").
 //
-// Two occurrences are refused, and both because ONE spurious negator is enough
-// -- parity is the decision, so a wrong count does not degrade the answer, it
-// inverts it.
+// A complement negator ("without") is counted only where the operation IS its
+// complement; see complementDeterminers.
+//
+// Two other occurrences are refused, and both because ONE spurious negator is
+// enough -- parity is the decision, so a wrong count does not degrade the
+// answer, it inverts it.
 //
 // A HYPHENATED COMPOUND is a word, not a negator. "-" is not a word byte, so
 // "no-op" offered a free "no": adding "the no-op run" to "cannot avoid a deploy
@@ -896,7 +899,7 @@ func negatingVerb(word string) bool {
 // operation at at, or whether something in between took the sentence somewhere
 // else.
 //
-// Two ways it stops, and both are closed classes rather than guesses:
+// Three ways it stops, and all three are closed classes rather than guesses:
 //
 //	a CONJUNCTION -- "not stop AND push to main" asserts the push; a
 //	disjunction does not stop it, because "never merge OR push to main"
@@ -904,13 +907,17 @@ func negatingVerb(word string) bool {
 //	a PREDICATE MARKER -- a subject pronoun or an auxiliary, which is a new
 //	clause wearing a connector the break list never listed: "- the run will",
 //	"so we", "before we"
+//	a PREPOSITION -- "no approval gate remains FOR the push to main" opens a
+//	new complement, and says the push is unobstructed rather than forbidden
 //
-// Everything else carries. That default is the one place this reads a negation
-// further than it can prove, so it is bounded by two independent tests rather
-// than by the break list alone: the earlier version stopped only at a
-// coordination, and any other connector -- a dash, a bracket, " so ", " since "
-// -- carried a reassurance straight over an asserted push and granted it. A
+// Everything else carries, and that default is the whole weakness of this
+// design: it reads a negation further than it can prove, so an unrecognised
+// construction fails toward suppression. Each of these three exists because a
+// review found a sentence the previous set let through -- the first version
+// stopped only at a coordination, and a dash, a bracket, " so " or " since "
+// carried a reassurance straight over an asserted push and granted it. A
 // missing connector must not be the difference between asking a person and not.
+// See KNOWN LIMITS above for the shapes that still get through.
 func scopeReaches(c string, from, at int) bool {
 	if from > at {
 		return false
