@@ -781,16 +781,33 @@ func (c clause) frontedNegativeAdverbial(k int) bool {
 	return sawAuxiliary
 }
 
-// newPredicateBefore reports an auxiliary in [from,to), which is what a
-// coordinated clause brings and a coordinated bare verb does not.
+// newPredicateBefore reports a new SUBJECT taking a predicate in [from,to).
+//
+// An auxiliary alone is not the boundary. "merge or BE ALLOWED TO push to
+// main" coordinates a second predicate under the same subject and the same
+// modal, and the prohibition still reaches it; reading "be" as a fresh
+// predicate re-escalated an operation nobody proposed. What a coordinated
+// CLAUSE brings that a coordinated predicate does not is a subject of its own:
+// "merge and THE RUN will push to main" hands the sentence to someone else,
+// and the prohibition stops there.
 func (c clause) newPredicateBefore(from, to int) bool {
+	subject := false
 	for i := from; i < to; i++ {
-		if listed(auxiliaries, c.words[i].text) {
+		w := c.words[i].text
+		if listed(determiners, w) || listed(subjectPronouns, w) {
+			subject = true
+			continue
+		}
+		if subject && listed(auxiliaries, w) {
 			return true
 		}
 	}
 	return false
 }
+
+// subjectPronouns stand where a determiner would, naming a new subject without
+// one: "merge and WE will push to main".
+var subjectPronouns = []string{"we", "it", "they", "you", "he", "she", "i", "one"}
 
 // postposed reports the operation standing as the clause's own SUBJECT with the
 // predicate made of it negated: "push to main is never allowed".
@@ -836,7 +853,15 @@ func (c clause) postposed(first, last int) bool {
 				if listed(auxiliaries, predicate) {
 					continue
 				}
-				return listed(permissionVerbs, predicate) || negatingVerb(predicate)
+				// Parity, the same law the rest of the classifier uses. A
+				// negator over a NEGATING verb is two negations, and two
+				// negations assert: "push to main is not forbidden" permits
+				// the push. Reading the second negation as further evidence of
+				// prohibition suppressed the assertion it actually makes.
+				if negatingVerb(predicate) {
+					return false
+				}
+				return listed(permissionVerbs, predicate)
 			}
 			return false
 		}

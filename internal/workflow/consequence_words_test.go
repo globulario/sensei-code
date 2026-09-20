@@ -831,3 +831,37 @@ func TestAFrontedProhibitionStopsAtANewPredicate(t *testing.T) {
 		}
 	}
 }
+
+// Two negations are not a prohibition, and a coordinated predicate is not a new
+// one. Both found by independent review of c62b084.
+//
+// "push to main is not forbidden" carried a negator AND a negating verb, and
+// postposed read the second as further evidence of prohibition instead of
+// applying the parity law the rest of the classifier uses. It suppressed an
+// asserted publish -- the dangerous direction.
+//
+// "merge or be allowed to push to main" coordinates a second predicate under
+// one subject and one modal, so the prohibition still reaches it. Treating any
+// auxiliary after a coordination as a new predicate re-escalated it: the safe
+// direction, but it recreates the false-authority tax this work exists to end.
+// A predicate is new when a new SUBJECT takes it, not when a verb appears.
+func TestNegationParityAndCoordinatedPredicates(t *testing.T) {
+	for _, c := range []struct {
+		want ConsequenceResult
+		step string
+	}{
+		{ConsequenceBounded, "push to main is forbidden"},
+		{ConsequenceUnacceptable, "push to main is not forbidden"},
+		{ConsequenceBounded, "push to main is never allowed"},
+		{ConsequenceUnacceptable, "push to main is not prohibited"},
+		{ConsequenceBounded, "under no circumstances should the plan merge or be allowed to push to main"},
+		{ConsequenceBounded, "under no circumstances should the plan merge or push to main"},
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge and the run will push to main"},
+		{ConsequenceUnacceptable, "under no circumstances should the tree be dirty or the runner will deploy"},
+	} {
+		got := AssessConsequences(Action{Stage: StageCandidateEdit, DeclaredSteps: []string{c.step}})
+		if got.Result != c.want {
+			t.Errorf("%q\n got: %v %v\nwant: %v", c.step, got.Result, got.Effects, c.want)
+		}
+	}
+}
