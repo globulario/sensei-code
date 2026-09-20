@@ -514,18 +514,15 @@ var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
 // bare code reference in prose, `git push` in a sentence about publish.go,
 // escalates; that is what it did before any of this existed.
 //
-// REPORTED SPEECH ONLY, and the distinction is not fussy. A wider list held
-// labelling words -- "named", "called", "the instruction", "the text" -- and
-// labelling is how a plan introduces a step it is ABOUT TO RUN: "the step named
-// \"deploy to production\" runs last" was read as a mention and granted. A rule
-// that is quoted is being reported; a step that is quoted is being named, and
-// naming a thing is the ordinary prelude to doing it.
-// Everything that FETCHES or LABELS has been removed, in that order and for one
-// argument: a machine reads a command in order to run it, and naming a step is
-// the ordinary prelude to doing it. "named"/"called" went first, then
-// "reads"/"writes"/"states", then "describes"/"mentions"/"quoted" -- "the
-// matrix describes `deploy to production` and the job runs it" labels a step
-// exactly as "named" does.
+// REPORTED SPEECH ONLY, and the distinction is not fussy. Everything that
+// LABELS or FETCHES has been removed, in three rounds and for one argument: a
+// rule that is quoted is being reported, while a step that is quoted is being
+// named or retrieved, and both of those are the ordinary prelude to doing it.
+// "named"/"called" went first -- "the step named \"deploy to production\" runs
+// last" was read as a mention and granted -- then "reads"/"writes"/"states",
+// because a machine reads a command in order to run it, then
+// "describes"/"mentions"/"quoted", because "the matrix describes `deploy to
+// production` and the job runs it" labels a step exactly as "named" does.
 //
 // What is left only reports. Some residual ambiguity is unavoidable -- "the
 // config says `deploy to production` and the runner obeys" still reads as a
