@@ -744,13 +744,49 @@ func (c clause) frontedNegativeAdverbial(k int) bool {
 		c.words[1].text != "no" || c.words[2].text != "circumstances" {
 		return false
 	}
+	// The auxiliary does not end the scan. Coordination does.
+	//
+	// Returning at the first auxiliary made every later conjunction
+	// unreachable, so "under no circumstances should the plan merge AND the
+	// run will push to main" suppressed an asserted publish: the fronted
+	// prohibition was read as governing a clause it had already handed over.
+	// A prohibition stops governing where a new predicate is coordinated onto
+	// it, wherever its own auxiliary happened to fall.
+	// Coordination alone does not end the prohibition: what ends it is a NEW
+	// PREDICATE. "merge or push to main" coordinates two bare verbs under one
+	// subject and one auxiliary, so the prohibition reaches both. "merge and
+	// the run will push to main" coordinates a fresh subject and a fresh
+	// auxiliary onto it, and the prohibition stops at that hand-over.
+	//
+	// Returning at the first auxiliary made the question unaskable: every
+	// later coordination was unreachable, so an asserted publish in a second
+	// predicate was suppressed. Returning at the first coordination answers it
+	// the other way and suppresses nothing, but re-escalates the bare-verb
+	// prohibition that this shape exists to read.
+	sawAuxiliary := false
 	for i := 3; i < k; i++ {
+		if listed(negators, c.words[i].text) && !c.compound(i) {
+			return false
+		}
+		if listed(conjunctions, c.words[i].text) || listed(disjunctions, c.words[i].text) {
+			if c.newPredicateBefore(i+1, k) {
+				return false
+			}
+			continue
+		}
+		if listed(auxiliaries, c.words[i].text) {
+			sawAuxiliary = true
+		}
+	}
+	return sawAuxiliary
+}
+
+// newPredicateBefore reports an auxiliary in [from,to), which is what a
+// coordinated clause brings and a coordinated bare verb does not.
+func (c clause) newPredicateBefore(from, to int) bool {
+	for i := from; i < to; i++ {
 		if listed(auxiliaries, c.words[i].text) {
 			return true
-		}
-		if listed(conjunctions, c.words[i].text) || listed(disjunctions, c.words[i].text) ||
-			(listed(negators, c.words[i].text) && !c.compound(i)) {
-			return false
 		}
 	}
 	return false

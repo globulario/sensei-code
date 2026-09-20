@@ -797,3 +797,37 @@ func TestOutwardActionIntentContexts(t *testing.T) {
 		})
 	}
 }
+
+// A fronted prohibition governs its own predicate, not everything after it.
+//
+// Found by an external chunked review of this candidate, conducted under a
+// recorded bootstrap exception because the governed review channel returned no
+// verdict on a candidate this size. Confirmed by executing the assessor before
+// the repair: the first case below came back BOUNDED, suppressing an asserted
+// publish, which weakens the Level-3 path rather than over-triggering it.
+//
+// The boundary is not coordination itself. "merge or push to main" coordinates
+// two bare verbs under one subject and one auxiliary, and the prohibition
+// reaches both. "merge and the run will push to main" coordinates a fresh
+// subject and auxiliary onto it, and the prohibition stops at that hand-over.
+// A first repair that ended the scan at any coordination fixed the first case
+// and broke the fifth; both are here so neither can be traded for the other.
+func TestAFrontedProhibitionStopsAtANewPredicate(t *testing.T) {
+	for _, c := range []struct {
+		want ConsequenceResult
+		step string
+	}{
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge and the run will push to main"},
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge, and the run will publish the release"},
+		{ConsequenceUnacceptable, "under no circumstances should the tree be dirty or the runner will deploy"},
+		{ConsequenceBounded, "under no circumstances should the plan push to main"},
+		{ConsequenceBounded, "under no circumstances should the plan merge or push to main"},
+		{ConsequenceUnacceptable, "the run will push to main"},
+		{ConsequenceBounded, "never merge or push to main"},
+	} {
+		got := AssessConsequences(Action{Stage: StageCandidateEdit, DeclaredSteps: []string{c.step}})
+		if got.Result != c.want {
+			t.Errorf("%q\n got: %v %v\nwant: %v", c.step, got.Result, got.Effects, c.want)
+		}
+	}
+}
