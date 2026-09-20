@@ -616,7 +616,28 @@ func (c clause) asserted(at, end int) bool {
 	if first < 0 {
 		return true
 	}
-	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.postposed(first, last)
+	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.postposed(first, last) && !c.mentioned(at, end)
+}
+
+// mentioned reports a quoted operation that the clause explicitly characterizes
+// as forbidden. The quotation alone is not enough: a plan can quote the command
+// it is about to execute. The forbidden characterization is the evidence that
+// this occurrence describes a prohibited action rather than asserts one.
+func (c clause) mentioned(at, end int) bool {
+	open := strings.LastIndex(c.text[:at], "\"")
+	if open < 0 || strings.Count(c.text[:at], "\"")%2 == 0 {
+		return false
+	}
+	close := strings.Index(c.text[end:], "\"")
+	if close < 0 {
+		return false
+	}
+	context := strings.TrimSpace(c.text[end+close+1:])
+	return strings.HasPrefix(context, "as forbidden") ||
+		strings.HasPrefix(context, "as prohibited") ||
+		strings.HasPrefix(context, "is forbidden") ||
+		strings.HasPrefix(context, "is prohibited") ||
+		strings.HasPrefix(context, "must not")
 }
 
 // negatedPredicate walks left from the operation and reports whether it lands

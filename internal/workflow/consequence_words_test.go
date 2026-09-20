@@ -740,3 +740,28 @@ func TestAQuotationIsNotSuppression(t *testing.T) {
 		})
 	}
 }
+
+func TestOutwardActionIntentContexts(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		step       string
+		wantResult ConsequenceResult
+		wantRoute  Route
+	}{
+		{"affirmative action escalates", "the plan will push to main", ConsequenceUnacceptable, RouteHuman},
+		{"explicit prohibition is bounded", "never push to main", ConsequenceBounded, RouteArchitectural},
+		{"quoted forbidden action is bounded", `the policy describes "push to main" as forbidden behavior`, ConsequenceBounded, RouteArchitectural},
+		{"reassurance does not suppress an action", `the plan will execute "push to main" because direct deploy is forbidden`, ConsequenceUnacceptable, RouteHuman},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			action := Action{Stage: StageCandidateEdit, Files: []string{"internal/workflow/consequence.go"}, DeclaredSteps: []string{tc.step}}
+			if got := AssessConsequences(action); got.Result != tc.wantResult {
+				t.Fatalf("AssessConsequences = %s, want %s", got.Result, tc.wantResult)
+			}
+			got := routeAuthorityForAction(scopedPreflight(t, okBody(t, nil, "APPROVAL_GATE_NONE")), nil, action)
+			if got.Route != tc.wantRoute {
+				t.Fatalf("route = %s, want %s", got.Route, tc.wantRoute)
+			}
+		})
+	}
+}
