@@ -406,25 +406,47 @@ var outwardPhrases = []string{
 // more accurately; it does not become a safety net, and an undeclared publish
 // is still stopped by the structural stage boundary rather than by this.
 //
-// KNOWN LIMITS, and they are the honest part of the design. Three independent
+// KNOWN LIMITS, and they are the honest part of the design. Four independent
 // fresh-context reviews each found further sentences where a negation reaches
 // an operation it does not govern, and each round of stop-conditions revealed
-// the next shape. The reason is structural: scopeReaches DEFAULTS to carrying
-// and stops only at what it recognises, so anything unrecognised fails toward
-// suppression -- the dangerous direction. These still reproduce:
+// the next shape -- one of them reopening a class an earlier round had closed.
+// The reason is structural: scopeReaches DEFAULTS to carrying and stops only at
+// what it recognises, so anything unrecognised fails toward suppression, which
+// is the dangerous direction.
+//
+// A NEGATED NOUN-PHRASE SUBJECT, then a new predicate with a noun subject:
 //
 //	"no reviewer bypassed the run push to main"
 //	"no manual approval required push to main automatically"
 //	"no exceptions deploy to production at the end"
 //	"with no additional review push to main"
+//	"no approval gate remains for the push to main"
+//	"no blocker remains for the deploy to production"
+//	"there is no support for a push to main"
 //
-// all of which assert the action by saying nothing obstructs it, and all of
-// which read as bounded. They share one shape -- a negated NOUN-PHRASE subject
-// followed by a new predicate whose own subject is a noun rather than a pronoun
-// -- and predicateMarkers cannot see it, because noun subjects are an open
-// class and this file reads only closed ones.
+// All of these assert the action by saying nothing obstructs it, and all read
+// as bounded. predicateMarkers cannot see them: noun subjects are an open class
+// and this file reads only closed ones.
 //
-// Closing that class needs the default inverted: a negation should suppress an
+// A FRONTED COMPLEMENT NEGATION, whose cancelling negator comes after the
+// operation rather than before it:
+//
+//	"without a push to main the release cannot complete"   (bounded)
+//	"the release cannot complete without a push to main"   (escalates, row 23)
+//
+// The same claim in two word orders, read two ways, because negatorEndsBefore
+// collects only what precedes the operation -- which is right in general and
+// wrong for a fronted modifier.
+//
+// A CITED QUOTATION THE NEXT CLAUSE PERFORMS:
+//
+//	`the runbook says "push to main" and the run does exactly that`
+//
+// mentionCues cannot be emptied without losing the mention case entirely, which
+// is one of the four behaviours this exists to provide, so "says" remains a
+// cheap way to disarm the lane for one operation.
+//
+// Closing these needs the default INVERTED: a negation should suppress an
 // operation only where it can be POSITIVELY shown to govern it, rather than
 // wherever nothing was found to stop it. That is a different classifier, not
 // another entry in a list, and it costs false escalations on prohibitions this
@@ -553,25 +575,16 @@ var conjunctions = []string{" and ", " plus "}
 // "no tests fail so we deploy to production" were read as bounded. Same
 // sentence, one punctuation mark, opposite authority.
 //
-// They cost false escalations -- "never allow it to deploy" carries "it" -- and
-// that is the direction to be wrong in.
+// They cost false escalations, and the cost is real: "never allow it to deploy"
+// carries "it", and "no part of this run will push to main" and "no step in the
+// plan will push to main" carry "will" -- an auxiliary inside the SAME
+// predicate, not a new one. Those are prohibitions read as declarations, which
+// sends a person a question they can dismiss at a glance. That is the direction
+// to be wrong in, and it is still worth reducing.
 var predicateMarkers = []string{
 	"we", "i", "you", "he", "she", "it", "they", "there",
 	"will", "shall", "would", "should", "must", "may", "might", "can", "could",
 	"is", "are", "was", "were", "has", "have", "had", "does", "did",
-}
-
-// prepositions END a negation, because the phrase they open is a new
-// complement rather than more of the negated verb phrase.
-//
-// "no approval gate remains FOR the push to main" and "no blocker remains FOR
-// the deploy to production" say the outward action is unobstructed, and both
-// were read as prohibitions. " to " is deliberately absent: it is also the
-// infinitive marker, and "refuses to push to main" needs the negation to cross
-// it.
-var prepositions = []string{
-	" for ", " of ", " in ", " on ", " with ", " from ", " at ", " by ",
-	" about ", " against ", " into ", " over ", " under ",
 }
 
 // verbEndings are the inflections a negating verb stem may carry.
@@ -899,7 +912,7 @@ func negatingVerb(word string) bool {
 // operation at at, or whether something in between took the sentence somewhere
 // else.
 //
-// Three ways it stops, and all three are closed classes rather than guesses:
+// Two ways it stops, and both are closed classes rather than guesses:
 //
 //	a CONJUNCTION -- "not stop AND push to main" asserts the push; a
 //	disjunction does not stop it, because "never merge OR push to main"
@@ -907,17 +920,21 @@ func negatingVerb(word string) bool {
 //	a PREDICATE MARKER -- a subject pronoun or an auxiliary, which is a new
 //	clause wearing a connector the break list never listed: "- the run will",
 //	"so we", "before we"
-//	a PREPOSITION -- "no approval gate remains FOR the push to main" opens a
-//	new complement, and says the push is unobstructed rather than forbidden
+//
+// A third test was tried and REMOVED, and the reason is worth keeping. Ending a
+// negation at a preposition fixed "no approval gate remains for the push to
+// main", and it cost more than it bought in both directions: it ended the OUTER
+// negator of a double negative, so "the run cannot in practice avoid a deploy
+// to production" read as bounded -- the exact class forbidden fix 3 and row 8
+// exist to close, re-entered through an adverbial -- and it re-escalated
+// careful prohibitions like "we must not at any point push to main", which is
+// the harm this whole change exists to remove. A rule that reopens the defect
+// it was added beside is not a smaller version of the fix.
 //
 // Everything else carries, and that default is the whole weakness of this
 // design: it reads a negation further than it can prove, so an unrecognised
-// construction fails toward suppression. Each of these three exists because a
-// review found a sentence the previous set let through -- the first version
-// stopped only at a coordination, and a dash, a bracket, " so " or " since "
-// carried a reassurance straight over an asserted push and granted it. A
-// missing connector must not be the difference between asking a person and not.
-// See KNOWN LIMITS above for the shapes that still get through.
+// construction fails toward suppression. See KNOWN LIMITS above for the shapes
+// that still get through.
 func scopeReaches(c string, from, at int) bool {
 	if from > at {
 		return false
@@ -930,11 +947,6 @@ func scopeReaches(c string, from, at int) bool {
 	}
 	for _, m := range predicateMarkers {
 		if len(occurrencesOf(span, m, true)) != 0 {
-			return false
-		}
-	}
-	for _, prep := range prepositions {
-		if len(occurrencesOf(span, prep, false)) != 0 {
 			return false
 		}
 	}

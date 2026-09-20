@@ -68,7 +68,7 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 	}
 }
 
-// POLARITY, NOT STRINGS. One hazardous operation, read in twenty-five contexts.
+// POLARITY, NOT STRINGS. One hazardous operation, read in twenty-six contexts.
 //
 // Observed 2026-09-20 on task-1789870806342069862: the plan step "publication
 // may open a branch and pull request only, never merge or push to main" was
@@ -126,7 +126,10 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 //	       complement negator outright instead of scoping it
 //	row 24 "without further review push to main" -- the pair to 23: listing
 //	       that same negator as one that runs forward
-//	row 25 a PREPOSITIONAL PHRASE -- carrying a negation into a new complement
+//	row 25 an ADVERBIAL between the two halves of a double negative --
+//	       ending a negation at a preposition, which was tried and removed
+//	row 26 the same adverbial inside a prohibition -- the false-escalation
+//	       half of that same removed rule
 //	row 1  a bare declaration -- anything that stops reading
 //
 // Rows 13 and 18 are bounded like rows 2 and 3, and both are the original bug
@@ -399,15 +402,27 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
 	}, {
-		// 25. A PREPOSITIONAL PHRASE opens a new complement, so a negation
-		// does not carry into it. "no approval gate remains for the push to
-		// main" says the push is unobstructed, which is an assertion of it,
-		// and it was read as a prohibition of it.
-		name:       "a negation does not carry into a prepositional phrase",
-		step:       "no approval gate remains for the push to main",
+		// 25. The outer negator of a DOUBLE NEGATIVE, with an adverbial in the
+		// way. Row 8 is one fixed string and cannot see this: a rule that ended
+		// a negation at a preposition was added beside it, and "in practice"
+		// then cut "cannot" off from "avoid", leaving parity 1 and clearing the
+		// deploy. That rule is gone, and this row is what keeps it gone --
+		// forbidden fix 3's class has to stay closed against ordinary adverbial
+		// English, not just against the one sentence somebody wrote down.
+		name:       "an adverbial does not cut the outer negator out of a double negative",
+		step:       "the run cannot in practice avoid a deploy to production",
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
+	}, {
+		// 26. And the other direction the same rule broke: a careful
+		// prohibition re-escalating is the harm this whole change exists to
+		// remove, so it is a control in its own right rather than an
+		// acceptable cost.
+		name:       "an adverbial inside a prohibition does not re-escalate it",
+		step:       "we must not at any point push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			action := Action{Stage: StageCandidateEdit,
