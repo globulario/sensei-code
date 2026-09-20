@@ -126,11 +126,13 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 //	       that runs forward, which inverts the guard outright
 //	row 16 row 8's sentence plus "no-op" -- letting a hyphenated compound
 //	       donate a negator, which reverses parity rather than blunting it
-//	row 17 a quotation introduced by a FETCHING verb ("reads")
-//	row 19 a subordinator ("before") -- row 12's property where the boundary is
-//	       a word rather than a full stop
+//	row 17 a quotation introduced by a FETCHING verb ("reads"), which a
+//	       citation list had to keep growing to exclude
+//	row 19 a subordinator ("before") -- row 12's property where the boundary
+//	       is a word rather than a full stop, and needs no break entry
 //	row 20 a RUN-ON with no connector at all
-//	row 21 " so " -- a consequence connector introducing a result
+//	row 21 "so" -- a consequence connector introducing a result, not more of
+//	       the prohibition
 //	row 22 a THIRD labelling verb, applying rows 9 and 17's argument to the
 //	       whole class rather than the two words somebody happened to test
 //	row 23 "cannot complete without a push to main" -- a double negative
