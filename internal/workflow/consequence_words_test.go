@@ -68,7 +68,7 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 	}
 }
 
-// POLARITY, NOT STRINGS. One hazardous operation, read in thirteen contexts.
+// POLARITY, NOT STRINGS. One hazardous operation, read in twenty-one contexts.
 //
 // Observed 2026-09-20 on task-1789870806342069862: the plan step "publication
 // may open a branch and pull request only, never merge or push to main" was
@@ -106,11 +106,27 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 //	row 11 a noun built on a negating stem ("preventive") -- matching those
 //	       stems by bare prefix
 //	row 12 a prohibition in the previous SENTENCE -- not splitting clauses
+//	row 14 an IMPERATIVE second clause after a dash -- stopping a negation
+//	       only at a pronoun or an auxiliary; row 7 cannot see this, because
+//	       "the run will" supplies both
+//	row 15 "instead of X, <asserted>" -- reading a prepositional negator as
+//	       one that runs forward, which inverts the guard outright
+//	row 16 row 8's sentence plus "no-op" -- letting a hyphenated compound
+//	       donate a negator, which reverses parity rather than blunting it
+//	row 17 a quotation introduced by a FETCHING verb ("reads") -- row 9
+//	       removed labelling words and cannot see this one
+//	row 19 a subordinator ("before") -- row 12's property where the boundary
+//	       is a word rather than a full stop
+//	row 20 a RUN-ON with no connector -- the only row where the new predicate
+//	       must be recognised by its subject alone
+//	row 21 " so " -- a consequence connector, distinct from " so that "
 //	row 1  a bare declaration -- anything that stops reading
 //
-// Row 13 is the fourth bounded row and the only one that is not a control:
-// "don't" is the spelling people use, and it is the original bug intact unless
-// the contraction is expanded.
+// Rows 13 and 18 are bounded like rows 2 and 3, and both are the original bug
+// intact in a spelling people actually use: "don't" unless the contraction is
+// expanded, and "neither merge nor push to main" unless a concord is counted
+// once. Row 18 is the pair to row 2 -- the same prohibition, spelled the more
+// careful way.
 //
 // The pairings are the point. Rows 4/5/7 are one sentence with its reassurance
 // moved and its connector swapped; rows 3/6/9 are one quotation under three
@@ -256,6 +272,88 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		step:       "we don't push to main",
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
+	}, {
+		// 14. An IMPERATIVE second clause. Row 7 passes on "the run will",
+		// which supplies a pronoun and an auxiliary for the negation to stop
+		// at; plan prose is mostly imperative and supplies neither, so the
+		// prohibition ran straight into the instruction after the dash. The
+		// connector is what a reader sees as the boundary.
+		name:       "an imperative after a connector does not inherit the prohibition",
+		step:       "never touch the vendor tree - deploy to production from the release branch",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 15. A PREPOSITIONAL negator names the branch NOT taken, so what
+		// follows is the branch the plan is choosing. Read as a forward-running
+		// negator it suppressed precisely the asserted action -- the guard
+		// inverted on a sentence whose whole purpose is to state intent.
+		name:       "instead of X names the rejected branch, not the asserted one",
+		step:       "instead of merging push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 16. Row 8's own sentence, plus three characters. "-" is not a word
+		// byte, so "no-op" donated a free "no" and flipped parity -- the
+		// double-negation control inverted by a word this repository writes
+		// constantly. One spurious negator does not degrade parity, it reverses
+		// it, which is why this is not a rounding error.
+		name:       "a hyphenated compound does not donate a negator",
+		step:       "the no-op run cannot avoid a deploy to production",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 17. Row 9 removed labelling words; this removes FETCHING ones. A
+		// machine reads a command in order to run it, so "reads", "writes" and
+		// "states" introduce a quotation that is used, not reported. Row 9
+		// cannot see this: "named" labels, "reads" retrieves.
+		name:       "an ordinary verb before a quotation is not a citation",
+		step:       "the workflow reads `deploy to production` from the matrix and executes it",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 18. NEGATIVE CONCORD, and the fifth bounded row. One prohibition
+		// spelled with two words: counted as two negations it cancelled itself
+		// and escalated, which is the original bug in the most careful
+		// phrasing of the sentence that caused it. Pair to row 2.
+		name:       "neither/nor is one prohibition, not two",
+		step:       "neither merge nor push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 19. A subordinator ends the clause it subordinates. Row 12 proves a
+		// sentence boundary resets polarity; this is the same property where
+		// the boundary is a word rather than a full stop, which is how a plan
+		// usually writes a limit and then the step that follows it.
+		name:       "a prohibition does not reach past the subordinator that ends it",
+		step:       "do not stop before deploy to production",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 20. A RUN-ON, with no connector at all. Rows 5, 7, 14 and 19 are each
+		// saved by something in the text -- a conjunction, a dash, a
+		// subordinator -- and terse plan prose often supplies none of them.
+		// This is the only row where the new predicate must be recognised by
+		// its subject alone, and it is what keeps that rule honest work rather
+		// than a rule the break list already covers.
+		name:       "a new predicate with no connector still ends the negation",
+		step:       "no reviewer is bypassed the run will push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 21. "so" is a consequence connector: what follows is the result, not
+		// more of the prohibition. It is listed separately from " so that ",
+		// which is a purpose clause, and only this row tells the two apart.
+		name:       "a consequence connector does not carry the prohibition into its result",
+		step:       "the branch is not merged so deploy to production happens from the tag",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			action := Action{Stage: StageCandidateEdit,
@@ -303,24 +401,39 @@ func TestAStrayDelimiterDoesNotReachIntoAnotherStep(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		steps []string
+		// survives names the token that sits on the OTHER side of the stray
+		// delimiter. Asserting only that something was found would pass on a
+		// regression that blanked the later lines, because the same line as
+		// the delimiter can contribute a token of its own.
+		survives string
 	}{{
-		name:  "an unbalanced quotation does not blank the steps after it",
-		steps: []string{`the objective says "push to main`, "deploy to production", `is refused"`},
+		name:     "an unbalanced quotation does not blank the steps after it",
+		steps:    []string{`the objective says "push to main`, "deploy to production", `is refused"`},
+		survives: "deploy",
 	}, {
-		name:  "an unbalanced backtick does not blank the steps after it",
-		steps: []string{"the rule reads `git push", "then deploy to production", "see publish.go`"},
+		name:     "an unbalanced backtick does not blank the steps after it",
+		steps:    []string{"the rule says `git push", "then deploy to production", "see publish.go`"},
+		survives: "deploy",
 	}, {
 		// And inside ONE step, across its own lines. Steps are joined with a
 		// newline, so per-step masking alone would look like it covered this;
 		// a step is prose and carries its own line breaks, and the reach is
 		// the same.
-		name:  "an unbalanced delimiter does not blank the next line of its own step",
-		steps: []string{"the rule reads `git push\ndeploy to production is the last step\nsee publish.go`"},
+		name:     "an unbalanced delimiter does not blank the next line of its own step",
+		steps:    []string{"the rule says `git push\ndeploy to production is the last step\nsee publish.go`"},
+		survives: "deploy",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := declaredOutwardActions(tc.steps, ""); len(got) == 0 {
-				t.Fatalf("a declaration between two steps was erased by a delimiter "+
-					"in neither of them: %q", tc.steps)
+			got := declaredOutwardActions(tc.steps, "")
+			found := false
+			for _, g := range got {
+				if g == tc.survives {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("%q was erased by a delimiter on another line; read %v from %q",
+					tc.survives, got, tc.steps)
 			}
 			// And the same delimiter, balanced inside one step, still masks --
 			// otherwise this would pass on a classifier that had simply stopped

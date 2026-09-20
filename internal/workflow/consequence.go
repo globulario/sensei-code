@@ -412,9 +412,16 @@ var outwardPhrases = []string{
 // production" carries two and asserts the deploy; presence alone is forbidden
 // fix 3 and would swallow it.
 var negators = []string{
-	"never", "not", "cannot", "no", "nor", "neither", "without",
-	"rather than", "instead of",
+	"never", "not", "cannot", "no", "nor", "neither",
 }
+
+// "without", "instead of" and "rather than" are NOT here, and their absence is
+// a correction rather than an omission. They are prepositional: they negate
+// their own complement and nothing after it, so the clause that follows is the
+// branch the plan is CHOOSING. Listed as forward-running negators they
+// suppressed exactly the asserted action -- "instead of merging push to main"
+// and "without further review push to main" both read as bounded, which is the
+// sign of the guard inverted on the sentences that state intent most plainly.
 
 // negatorStems are verbs that negate their own complement, in any inflection:
 // "refuses to push to main", "forbidden to deploy", "prevented from publishing".
@@ -427,10 +434,19 @@ var negatorStems = []string{"refus", "reject", "forbid", "prohibit", "prevent", 
 // the exact false escalation this exists to remove. A comma DOES break, which
 // fails toward escalation: "we never merge, and we will push to main" asserts
 // the push.
+//
+// The dashes, brackets and subordinators are here because plan prose is largely
+// IMPERATIVE, and an imperative second clause offers no pronoun and no
+// auxiliary for scopeReaches to stop at. "never touch the vendor tree - deploy
+// to production from the release branch" and "do not stop before deploy to
+// production" inherited the prohibition and were granted; the connector is what
+// a reader sees as the boundary, so it is what has to end the clause.
 var clauseBreaks = []string{
 	".", ";", ":", "!", "?", "\n", ",",
+	" - ", "\u2014", "\u2013", "(", ")", "[", "]",
 	" but ", " however ", " whereas ", " although ", " though ", " while ",
-	" because ", " then ", " so that ", " therefore ",
+	" because ", " then ", " so that ", " so ", " therefore ",
+	" before ", " after ", " once ", " when ", " unless ", " until ", " since ",
 }
 
 // quotePairs delimit a quotation.
@@ -459,9 +475,16 @@ var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
 // \"deploy to production\" runs last" was read as a mention and granted. A rule
 // that is quoted is being reported; a step that is quoted is being named, and
 // naming a thing is the ordinary prelude to doing it.
+// "reads", "writes" and "states" were here and are gone, because a machine
+// reads a command in order to run it: "the workflow reads `deploy to
+// production` from the matrix and executes it" was read as a mention. What is
+// left reports; it does not fetch. Some residual ambiguity is unavoidable --
+// "the config says `deploy to production` and the runner obeys" still reads as
+// a mention -- because a classifier with no notion of citation at all cannot
+// tell a rule from a plan, which is the defect this exists to repair.
 var mentionCues = []string{
-	"says", "said", "reads", "states", "stated", "writes", "wrote",
-	"quotes", "quoted", "describes", "described", "mentions", "mentioned",
+	"says", "said", "quotes", "quoted",
+	"describes", "described", "mentions", "mentioned",
 }
 
 // conjunctions END a negation inside its own clause; a disjunction does not.
@@ -646,12 +669,24 @@ func occurrencesOf(text, token string, word bool) []int {
 		}
 		start := i + j
 		end := start + len(token)
-		if !word || ((start == 0 || !isWordByte(text[start-1])) && (end == len(text) || !isWordByte(text[end]))) {
+		if !word || wordAt(text, start, end) {
 			out = append(out, start)
 		}
 		i = start + 1
 	}
 	return out
+}
+
+// wordAt reports whether [start,end) sits on word boundaries in text.
+func wordAt(text string, start, end int) bool {
+	return (start == 0 || !isWordByte(text[start-1])) &&
+		(end == len(text) || !isWordByte(text[end]))
+}
+
+// compoundAt reports whether [start,end) is joined to a neighbour by a hyphen,
+// which makes it part of a compound word rather than a token of its own.
+func compoundAt(text string, start, end int) bool {
+	return (start > 0 && text[start-1] == '-') || (end < len(text) && text[end] == '-')
 }
 
 // governingNegators counts the negators in clause c whose scope actually
@@ -690,11 +725,37 @@ func governingNegators(c string, at int) int {
 // negatorEndsBefore returns the end offset of every negator that starts before
 // at: the listed words, and the verbs that negate their own complement in any
 // inflection ("refuses to push to main", "forbidden to deploy").
+//
+// Two occurrences are refused, and both because ONE spurious negator is enough
+// -- parity is the decision, so a wrong count does not degrade the answer, it
+// inverts it.
+//
+// A HYPHENATED COMPOUND is a word, not a negator. "-" is not a word byte, so
+// "no-op" offered a free "no": adding "the no-op run" to "cannot avoid a deploy
+// to production" flipped that sentence from declared to bounded, and "no-op" is
+// everywhere in this repository's own prose.
+//
+// A SECOND NEGATOR IN A CONCORD does not negate twice. "neither merge nor push
+// to main" is one prohibition spelled with two words; counted as two it
+// cancelled itself and escalated -- the original bug, in the most careful
+// phrasing of the sentence that caused it.
 func negatorEndsBefore(c string, at int) []int {
 	var ends []int
-	for _, neg := range negators {
-		for _, p := range occurrencesOf(c[:at], neg, true) {
-			ends = append(ends, p+len(neg))
+	seen := false
+	for i := 0; i < at; i++ {
+		for _, neg := range negators {
+			if i+len(neg) > at || c[i:i+len(neg)] != neg {
+				continue
+			}
+			if !wordAt(c, i, i+len(neg)) || compoundAt(c, i, i+len(neg)) {
+				continue
+			}
+			if neg == "nor" && seen {
+				continue // concord: it continues the negation, it does not add one
+			}
+			seen = true
+			ends = append(ends, i+len(neg))
+			break
 		}
 	}
 	for i := 0; i < at; {
@@ -769,6 +830,9 @@ func scopeReaches(c string, from, at int) bool {
 }
 
 // containsWord reports a token present at word boundaries.
+//
+// isWordByte knows only lowercase, so this reads lowercased text. Every caller
+// passes an assessment's own Boundary or Condition, which are written that way.
 func containsWord(text, token string) bool {
 	return len(occurrencesOf(text, token, true)) != 0
 }
