@@ -616,7 +616,7 @@ func (c clause) asserted(at, end int) bool {
 	if first < 0 {
 		return true
 	}
-	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.postposed(first, last) && !c.mentioned(at, end)
+	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.frontedNegativeAdverbial(first) && !c.postposed(first, last) && !c.mentioned(at, end)
 }
 
 // mentioned reports a quoted operation that the clause explicitly characterizes
@@ -636,8 +636,7 @@ func (c clause) mentioned(at, end int) bool {
 	return strings.HasPrefix(context, "as forbidden") ||
 		strings.HasPrefix(context, "as prohibited") ||
 		strings.HasPrefix(context, "is forbidden") ||
-		strings.HasPrefix(context, "is prohibited") ||
-		strings.HasPrefix(context, "must not")
+		strings.HasPrefix(context, "is prohibited")
 }
 
 // negatedPredicate walks left from the operation and reports whether it lands
@@ -736,6 +735,27 @@ func (c clause) negativeSubject(k int) bool {
 	return aux >= 0
 }
 
+// frontedNegativeAdverbial reports inverted prohibitions such as "under no
+// circumstances should the plan push to main". The opening negative adverbial
+// governs the predicate introduced by the following auxiliary, not every
+// later word in the clause.
+func (c clause) frontedNegativeAdverbial(k int) bool {
+	if len(c.words) < 4 || c.words[0].text != "under" ||
+		c.words[1].text != "no" || c.words[2].text != "circumstances" {
+		return false
+	}
+	for i := 3; i < k; i++ {
+		if listed(auxiliaries, c.words[i].text) {
+			return true
+		}
+		if listed(conjunctions, c.words[i].text) || listed(disjunctions, c.words[i].text) ||
+			(listed(negators, c.words[i].text) && !c.compound(i)) {
+			return false
+		}
+	}
+	return false
+}
+
 // postposed reports the operation standing as the clause's own SUBJECT with the
 // predicate made of it negated: "push to main is never allowed".
 //
@@ -771,7 +791,20 @@ func (c clause) postposed(first, last int) bool {
 	}
 	for i := aux + 1; i < len(c.words); i++ {
 		w := c.words[i].text
-		if (listed(negators, w) && !c.compound(i)) || negatingVerb(w) {
+		if listed(negators, w) && !c.compound(i) {
+			// The negation must govern a predicate ABOUT the operation, not a
+			// later predicate that merely requires it: "push to main must not be
+			// skipped" asserts the push.
+			for j := i + 1; j < len(c.words); j++ {
+				predicate := c.words[j].text
+				if listed(auxiliaries, predicate) {
+					continue
+				}
+				return listed(permissionVerbs, predicate) || negatingVerb(predicate)
+			}
+			return false
+		}
+		if negatingVerb(w) {
 			return true
 		}
 		if listed(auxiliaries, w) || listed(adverbials, w) {
@@ -782,21 +815,23 @@ func (c clause) postposed(first, last int) bool {
 	return false
 }
 
-// cancelled reports whether an odd number of negations already stand before the
-// one at i, which reverses it: "the run cannot avoid a deploy to production"
-// carries "cannot" before "avoid" and therefore ASSERTS the deploy.
+// cancelled reports whether the negation immediately governing the predicate
+// at i reverses it: "the run cannot avoid a deploy to production" carries
+// "cannot" before "avoid" and therefore ASSERTS the deploy.
 //
 // Parity is the decision, so a single spurious negator does not blunt the
 // answer -- it inverts it. That is why compounds are excluded.
 func (c clause) cancelled(i int) bool {
-	n := 0
-	for j := 0; j < i; j++ {
+	for j := i - 1; j >= 0; j-- {
 		w := c.words[j].text
 		if (listed(negators, w) && !c.compound(j)) || negatingVerb(w) {
-			n++
+			return true
+		}
+		if !c.predicateMaterial(j) {
+			return false
 		}
 	}
-	return n%2 == 1
+	return false
 }
 
 // compound reports whether the word at i is joined to a neighbour by a hyphen,

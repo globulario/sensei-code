@@ -632,6 +632,29 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		step:       "deploy to production is never permitted",
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
+	}, {
+		name:       "an unrelated earlier negator does not cancel cannot avoid",
+		step:       "the review is not skipped and the run cannot avoid a deploy to production",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		name:       "a quoted action required not to be skipped is asserted",
+		step:       `the final step "push to main" must not be skipped`,
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		name:       "fronted negative adverbial prohibits the action",
+		step:       "under no circumstances should the plan push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		name:       "fronted negative adverbial affirmative minimal pair escalates",
+		step:       "under all circumstances should the plan push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			action := Action{Stage: StageCandidateEdit,
@@ -747,16 +770,25 @@ func TestOutwardActionIntentContexts(t *testing.T) {
 		step       string
 		wantResult ConsequenceResult
 		wantRoute  Route
+		wantEffect string
 	}{
-		{"affirmative action escalates", "the plan will push to main", ConsequenceUnacceptable, RouteHuman},
-		{"explicit prohibition is bounded", "never push to main", ConsequenceBounded, RouteArchitectural},
-		{"quoted forbidden action is bounded", `the policy describes "push to main" as forbidden behavior`, ConsequenceBounded, RouteArchitectural},
-		{"reassurance does not suppress an action", `the plan will execute "push to main" because direct deploy is forbidden`, ConsequenceUnacceptable, RouteHuman},
+		{"affirmative action escalates", "the plan will push to main", ConsequenceUnacceptable, RouteHuman, "push to"},
+		{"explicit prohibition is bounded", "never push to main", ConsequenceBounded, RouteArchitectural, ""},
+		{"quoted forbidden action is bounded", `the policy describes "push to main" as forbidden behavior`, ConsequenceBounded, RouteArchitectural, ""},
+		{"reassurance does not suppress an action", "the plan will push to main and no reviewer is bypassed", ConsequenceUnacceptable, RouteHuman, "push to"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			action := Action{Stage: StageCandidateEdit, Files: []string{"internal/workflow/consequence.go"}, DeclaredSteps: []string{tc.step}}
 			if got := AssessConsequences(action); got.Result != tc.wantResult {
 				t.Fatalf("AssessConsequences = %s, want %s", got.Result, tc.wantResult)
+			} else if tc.wantEffect != "" {
+				found := false
+				for _, effect := range got.Effects {
+					found = found || containsWord(effect, tc.wantEffect)
+				}
+				if !found {
+					t.Fatalf("effects = %v, want an effect naming %q", got.Effects, tc.wantEffect)
+				}
 			}
 			got := routeAuthorityForAction(scopedPreflight(t, okBody(t, nil, "APPROVAL_GATE_NONE")), nil, action)
 			if got.Route != tc.wantRoute {
