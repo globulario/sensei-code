@@ -68,7 +68,7 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 	}
 }
 
-// POLARITY, NOT STRINGS. One hazardous operation, read in twenty-one contexts.
+// POLARITY, NOT STRINGS. One hazardous operation, read in twenty-five contexts.
 //
 // Observed 2026-09-20 on task-1789870806342069862: the plan step "publication
 // may open a branch and pull request only, never merge or push to main" was
@@ -120,6 +120,13 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 //	row 20 a RUN-ON with no connector -- the only row where the new predicate
 //	       must be recognised by its subject alone
 //	row 21 " so " -- a consequence connector, distinct from " so that "
+//	row 22 a THIRD labelling verb -- applying rows 9 and 17's argument to the
+//	       two words somebody happened to test, and no further
+//	row 23 "cannot complete without a push to main" -- dropping a
+//	       complement negator outright instead of scoping it
+//	row 24 "without further review push to main" -- the pair to 23: listing
+//	       that same negator as one that runs forward
+//	row 25 a PREPOSITIONAL PHRASE -- carrying a negation into a new complement
 //	row 1  a bare declaration -- anything that stops reading
 //
 // Rows 13 and 18 are bounded like rows 2 and 3, and both are the original bug
@@ -337,9 +344,14 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		// 20. A RUN-ON, with no connector at all. Rows 5, 7, 14 and 19 are each
 		// saved by something in the text -- a conjunction, a dash, a
 		// subordinator -- and terse plan prose often supplies none of them.
-		// This is the only row where the new predicate must be recognised by
-		// its subject alone, and it is what keeps that rule honest work rather
-		// than a rule the break list already covers.
+		// Here the only thing that ends the prohibition is the AUXILIARY in the
+		// second predicate, which is what keeps predicateMarkers real work
+		// rather than a rule the break list already covers.
+		//
+		// Not the subject: strip both "is" and "will" and "no reviewer bypassed
+		// the run push to main" is still read as bounded, because a noun-phrase
+		// subject ends nothing. That shape is a known limit, recorded with the
+		// others above declaredOutwardActions.
 		name:       "a new predicate with no connector still ends the negation",
 		step:       "no reviewer is bypassed the run will push to main",
 		wantResult: ConsequenceUnacceptable,
@@ -351,6 +363,48 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		// which is a purpose clause, and only this row tells the two apart.
 		name:       "a consequence connector does not carry the prohibition into its result",
 		step:       "the branch is not merged so deploy to production happens from the tag",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 22. Rows 9 and 17 removed labelling and fetching words; this is the
+		// third member of that family, and it is the one that shows the
+		// argument has to be applied to the whole list rather than to the two
+		// words somebody happened to test. "the matrix describes X and the job
+		// runs it" labels a step exactly as "named" does.
+		name:       "a labelling verb is not reporting, whatever its spelling",
+		step:       `the step described "deploy to production" runs last`,
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 23. "without" negates a NOUN PHRASE, and here the operation IS that
+		// phrase, so this is a double negative that asserts the push: the
+		// release cannot complete unless it happens. Row 8 is the same property
+		// through the "avoid" stem and cannot see this; dropping "without" from
+		// the negators outright fixed row 24's shape and broke this one.
+		name:       "a complement negation still composes into a double negative",
+		step:       "the release cannot complete without a push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 24. The pair to row 23, and the reason "without" is scoped rather
+		// than simply listed. Here its complement is "further review", not the
+		// push, so the push is what the plan says it will do -- and reading
+		// "without" as a negator that runs forward suppressed exactly that.
+		name:       "a complement negation does not reach the clause after its complement",
+		step:       "without further review push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 25. A PREPOSITIONAL PHRASE opens a new complement, so a negation
+		// does not carry into it. "no approval gate remains for the push to
+		// main" says the push is unobstructed, which is an assertion of it,
+		// and it was read as a prohibition of it.
+		name:       "a negation does not carry into a prepositional phrase",
+		step:       "no approval gate remains for the push to main",
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",

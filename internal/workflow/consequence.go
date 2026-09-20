@@ -405,6 +405,34 @@ var outwardPhrases = []string{
 // This is a claim-reader, as it always was. It reads the plan's own account
 // more accurately; it does not become a safety net, and an undeclared publish
 // is still stopped by the structural stage boundary rather than by this.
+//
+// KNOWN LIMITS, and they are the honest part of the design. Three independent
+// fresh-context reviews each found further sentences where a negation reaches
+// an operation it does not govern, and each round of stop-conditions revealed
+// the next shape. The reason is structural: scopeReaches DEFAULTS to carrying
+// and stops only at what it recognises, so anything unrecognised fails toward
+// suppression -- the dangerous direction. These still reproduce:
+//
+//	"no reviewer bypassed the run push to main"
+//	"no manual approval required push to main automatically"
+//	"no exceptions deploy to production at the end"
+//	"with no additional review push to main"
+//
+// all of which assert the action by saying nothing obstructs it, and all of
+// which read as bounded. They share one shape -- a negated NOUN-PHRASE subject
+// followed by a new predicate whose own subject is a noun rather than a pronoun
+// -- and predicateMarkers cannot see it, because noun subjects are an open
+// class and this file reads only closed ones.
+//
+// Closing that class needs the default inverted: a negation should suppress an
+// operation only where it can be POSITIVELY shown to govern it, rather than
+// wherever nothing was found to stop it. That is a different classifier, not
+// another entry in a list, and it costs false escalations on prohibitions this
+// one currently reads correctly. It is not attempted here.
+//
+// What makes the residue survivable is what has always made it survivable: an
+// outward action this misreads still meets the structural stage boundary, which
+// does not consult any of this.
 
 // negators are the words that reverse what FOLLOWS them in the same clause.
 //
@@ -415,13 +443,30 @@ var negators = []string{
 	"never", "not", "cannot", "no", "nor", "neither",
 }
 
-// "without", "instead of" and "rather than" are NOT here, and their absence is
-// a correction rather than an omission. They are prepositional: they negate
-// their own complement and nothing after it, so the clause that follows is the
+// "instead of" and "rather than" are NOT here, and their absence is a
+// correction rather than an omission. They are prepositional and take the
+// REJECTED alternative as their complement, so the clause that follows is the
 // branch the plan is CHOOSING. Listed as forward-running negators they
 // suppressed exactly the asserted action -- "instead of merging push to main"
-// and "without further review push to main" both read as bounded, which is the
-// sign of the guard inverted on the sentences that state intent most plainly.
+// read as bounded, which is the sign of the guard inverted on a sentence whose
+// whole purpose is to state intent.
+//
+// "without" is prepositional too, and it is handled separately by
+// complementNegators below rather than dropped: it negates its own complement,
+// which is sometimes the operation itself.
+var complementNegators = []string{"without"}
+
+// complementDeterminers are all that may stand between a complement negator and
+// the operation it negates.
+//
+// "without" negates a NOUN PHRASE, so it suppresses an operation only when the
+// operation IS that noun phrase: "without a push to main". Dropping it outright
+// fixed "without further review push to main" and broke the double negative it
+// also appears in -- "the release cannot complete without a push to main" read
+// as bounded, which is the very class the third forbidden fix describes. A
+// determiner is the only thing that may intervene, so the two readings never
+// meet.
+var complementDeterminers = []string{"a", "an", "the", "any"}
 
 // negatorStems are verbs that negate their own complement, in any inflection:
 // "refuses to push to main", "forbidden to deploy", "prevented from publishing".
@@ -475,17 +520,18 @@ var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
 // \"deploy to production\" runs last" was read as a mention and granted. A rule
 // that is quoted is being reported; a step that is quoted is being named, and
 // naming a thing is the ordinary prelude to doing it.
-// "reads", "writes" and "states" were here and are gone, because a machine
-// reads a command in order to run it: "the workflow reads `deploy to
-// production` from the matrix and executes it" was read as a mention. What is
-// left reports; it does not fetch. Some residual ambiguity is unavoidable --
-// "the config says `deploy to production` and the runner obeys" still reads as
-// a mention -- because a classifier with no notion of citation at all cannot
-// tell a rule from a plan, which is the defect this exists to repair.
-var mentionCues = []string{
-	"says", "said", "quotes", "quoted",
-	"describes", "described", "mentions", "mentioned",
-}
+// Everything that FETCHES or LABELS has been removed, in that order and for one
+// argument: a machine reads a command in order to run it, and naming a step is
+// the ordinary prelude to doing it. "named"/"called" went first, then
+// "reads"/"writes"/"states", then "describes"/"mentions"/"quoted" -- "the
+// matrix describes `deploy to production` and the job runs it" labels a step
+// exactly as "named" does.
+//
+// What is left only reports. Some residual ambiguity is unavoidable -- "the
+// config says `deploy to production` and the runner obeys" still reads as a
+// mention -- because a classifier with no notion of citation at all cannot tell
+// a rule from a plan, which is the defect this exists to repair.
+var mentionCues = []string{"says", "said"}
 
 // conjunctions END a negation inside its own clause; a disjunction does not.
 //
@@ -516,6 +562,19 @@ var predicateMarkers = []string{
 	"we", "i", "you", "he", "she", "it", "they", "there",
 	"will", "shall", "would", "should", "must", "may", "might", "can", "could",
 	"is", "are", "was", "were", "has", "have", "had", "does", "did",
+}
+
+// prepositions END a negation, because the phrase they open is a new
+// complement rather than more of the negated verb phrase.
+//
+// "no approval gate remains FOR the push to main" and "no blocker remains FOR
+// the deploy to production" say the outward action is unobstructed, and both
+// were read as prohibitions. " to " is deliberately absent: it is also the
+// infinitive marker, and "refuses to push to main" needs the negation to cross
+// it.
+var prepositions = []string{
+	" for ", " of ", " in ", " on ", " with ", " from ", " at ", " by ",
+	" about ", " against ", " into ", " over ", " under ",
 }
 
 // verbEndings are the inflections a negating verb stem may carry.
@@ -677,6 +736,42 @@ func occurrencesOf(text, token string, word bool) []int {
 	return out
 }
 
+// negatesItsComplement reports whether the operation at `at` IS the complement
+// of a preposition ending at `from` -- nothing but determiners in between.
+func negatesItsComplement(c string, from, at int) bool {
+	for _, w := range wordsIn(c[from:at]) {
+		ok := false
+		for _, d := range complementDeterminers {
+			if w == d {
+				ok = true
+				break
+			}
+		}
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// wordsIn splits text into its word-byte runs.
+func wordsIn(text string) []string {
+	var out []string
+	for i := 0; i < len(text); {
+		if !isWordByte(text[i]) {
+			i++
+			continue
+		}
+		j := i
+		for j < len(text) && isWordByte(text[j]) {
+			j++
+		}
+		out = append(out, text[i:j])
+		i = j
+	}
+	return out
+}
+
 // wordAt reports whether [start,end) sits on word boundaries in text.
 func wordAt(text string, start, end int) bool {
 	return (start == 0 || !isWordByte(text[start-1])) &&
@@ -757,6 +852,14 @@ func negatorEndsBefore(c string, at int) []int {
 			ends = append(ends, i+len(neg))
 			break
 		}
+		for _, neg := range complementNegators {
+			if i+len(neg) > at || c[i:i+len(neg)] != neg || !wordAt(c, i, i+len(neg)) {
+				continue
+			}
+			if negatesItsComplement(c, i+len(neg), at) {
+				ends = append(ends, i+len(neg))
+			}
+		}
 	}
 	for i := 0; i < at; {
 		if !isWordByte(c[i]) {
@@ -823,6 +926,11 @@ func scopeReaches(c string, from, at int) bool {
 	}
 	for _, m := range predicateMarkers {
 		if len(occurrencesOf(span, m, true)) != 0 {
+			return false
+		}
+	}
+	for _, prep := range prepositions {
+		if len(occurrencesOf(span, prep, false)) != 0 {
 			return false
 		}
 	}
