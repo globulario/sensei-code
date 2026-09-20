@@ -352,46 +352,213 @@ var outwardPhrases = []string{
 	"migrate the database", "database migration", "schema migration",
 }
 
+// --- INTENT, NOT VOCABULARY -------------------------------------------------------
+//
+// A closed vocabulary answers "is this word here". The question the assessment
+// actually asks is "does this plan say it will DO this", and the two came apart
+// the moment a plan wrote down what it would NOT do.
+//
+// Live, 2026-09-20, task-1789870806342069862:
+//
+//	publication may open a branch and pull request only, never merge or push to main
+//	  -> UNACCEPTABLE: "the plan declares an outward action: push to"
+//
+// and the task stopped at a human boundary that its own plan had promised never
+// to reach. Run directly, "the run must never deploy anything; it only edits
+// files in the candidate worktree" refuses the same way, so it is not one verb
+// and not one wording.
+//
+// The inversion is the harm. The more carefully an objective states its own
+// limits, the more certainly it escalates -- and a person is then asked to
+// authorize a boundary nobody proposed crossing. A guard that punishes the
+// safest way to write a plan teaches plans to stop saying what they will not do.
+//
+// So the vocabulary stays exactly as it is, and what changes is WHERE each
+// occurrence is read:
+//
+//	MENTION   the operation appears inside quotation marks -- it is being named,
+//	          as the identity of a boundary or the text of a rule, not performed
+//	NEGATED   a negator governs it inside its own clause -- the plan asserts the
+//	          absence of the action
+//	ASSERTED  everything else -- a consequence signal, exactly as before
+//
+// Three repairs are forbidden here and recorded in the graph, because each one
+// would make this symptom disappear while leaving the defect:
+//
+//  1. rephrasing the plan's safety constraint so the matcher stops seeing it.
+//     The constraint is the thing being protected.
+//  2. whitelisting an objective file, a path or a caller. That fixes the inputs
+//     somebody has met and nothing else -- and an exempted caller loses the real
+//     escalation too.
+//  3. ignoring any sentence that contains "never" or "not". That is this same
+//     lexical hack with the sign flipped, and it eventually swallows a real
+//     declaration such as "we cannot avoid writing outside the worktree".
+//
+// This is a claim-reader, as it always was. It reads the plan's own account
+// more accurately; it does not become a safety net, and an undeclared publish
+// is still stopped by the structural stage boundary rather than by this.
+
+// negators are the words that reverse what FOLLOWS them in the same clause.
+//
+// Counted by parity, not by presence. "cannot avoid writing outside the
+// worktree" carries two and asserts the thing; presence alone is forbidden fix
+// 3 and would swallow it.
+var negators = []string{
+	"never", "not", "cannot", "no", "nor", "neither", "without",
+	"rather than", "instead of",
+}
+
+// negatorStems are verbs that negate their own complement, in any inflection:
+// "refuses to push to main", "forbidden to deploy", "prevented from publishing".
+var negatorStems = []string{"refus", "reject", "forbid", "prohibit", "prevent", "avoid", "declin"}
+
+// clauseBreaks are where a negator stops carrying.
+//
+// " and " and " or " are deliberately absent. "never merge or push to main" is
+// one negator governing a coordination, and breaking there would re-manufacture
+// the exact false escalation this exists to remove. A comma DOES break, which
+// fails toward escalation: "we never merge, and we will push to main" asserts
+// the push.
+var clauseBreaks = []string{
+	".", ";", ":", "!", "?", "\n", ",",
+	" but ", " however ", " whereas ", " although ", " though ", " while ",
+	" because ", " then ", " so that ", " therefore ",
+}
+
+// quotePairs delimit a MENTION.
+//
+// The apostrophe is not one, and its absence is the point: "the agent's plan
+// will push to main" would open a span at the possessive and swallow the rest
+// of the text, so a real declaration would go unread. An unbalanced delimiter
+// suppresses nothing for the same reason.
+var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
+
 // declaredOutwardActions reads a plan's own steps and consequences for an
-// outward action it declares.
+// outward action it ASSERTS.
 //
 // Word-anchored for the bare tokens, so "deploy" does not fire inside
 // "deployment.go" or "redeployable"; phrase-anchored for the ambiguous ones.
+// Each occurrence is then read in its clause: a quoted mention and a negated
+// clause are not declarations, and anything else is.
 func declaredOutwardActions(steps []string, consequences string) []string {
 	declared := strings.ToLower(strings.Join(append(append([]string{}, steps...), consequences), " \n "))
+	// Contractions carry their negator in a form no word split recovers.
+	declared = strings.ReplaceAll(declared, "n't", " not ")
+	for _, q := range quotePairs {
+		declared = maskMentions(declared, q[0], q[1])
+	}
+	parts := clausesOf(declared)
+
 	var found []string
 	for _, verb := range outwardVerbs {
-		if containsWord(declared, verb) {
+		if assertedIn(parts, verb, true) {
 			found = append(found, verb)
 		}
 	}
 	for _, phrase := range outwardPhrases {
-		if strings.Contains(declared, phrase) {
+		if assertedIn(parts, phrase, false) {
 			found = append(found, strings.TrimSpace(phrase))
 		}
 	}
 	return found
 }
 
-// containsWord reports a token present at word boundaries.
-func containsWord(text, token string) bool {
-	for i := 0; ; {
+// maskMentions blanks quoted spans, delimiters included.
+//
+// Blanked rather than removed: what is left is the sentence that did the
+// quoting, with a hole where the named operation was, so the surrounding
+// clauses keep their own shape and are read normally.
+func maskMentions(text, open, close string) string {
+	var b strings.Builder
+	i := 0
+	for i < len(text) {
+		o := strings.Index(text[i:], open)
+		if o < 0 {
+			break
+		}
+		o += i
+		c := strings.Index(text[o+len(open):], close)
+		if c < 0 {
+			// No closing delimiter. A mention nobody can delimit is not
+			// suppressed -- failing toward the human, not past them.
+			break
+		}
+		c += o + len(open)
+		b.WriteString(text[i:o])
+		b.WriteString(strings.Repeat(" ", (c+len(close))-o))
+		i = c + len(close)
+	}
+	b.WriteString(text[i:])
+	return b.String()
+}
+
+// clausesOf splits text where polarity resets.
+func clausesOf(text string) []string {
+	for _, b := range clauseBreaks {
+		text = strings.ReplaceAll(text, b, "\x00")
+	}
+	return strings.Split(text, "\x00")
+}
+
+// assertedIn reports whether the token appears in some clause as an action the
+// plan asserts, rather than one it denies.
+func assertedIn(parts []string, token string, word bool) bool {
+	for _, c := range parts {
+		for _, at := range occurrencesOf(c, token, word) {
+			if countNegators(c[:at])%2 == 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// occurrencesOf returns the start offsets of token in text, at word boundaries
+// when word is set.
+func occurrencesOf(text, token string, word bool) []int {
+	var out []int
+	for i := 0; i+len(token) <= len(text); {
 		j := strings.Index(text[i:], token)
 		if j < 0 {
-			return false
+			break
 		}
 		start := i + j
 		end := start + len(token)
-		beforeOK := start == 0 || !isWordByte(text[start-1])
-		afterOK := end == len(text) || !isWordByte(text[end])
-		if beforeOK && afterOK {
-			return true
+		if !word || ((start == 0 || !isWordByte(text[start-1])) && (end == len(text) || !isWordByte(text[end]))) {
+			out = append(out, start)
 		}
 		i = start + 1
-		if i >= len(text) {
-			return false
+	}
+	return out
+}
+
+// countNegators counts the negators in the text PRECEDING an occurrence.
+//
+// Preceding only, on purpose. A negator governs what comes after it, and
+// counting the whole clause would let "the last step will push to main and no
+// rollback is possible" clear itself on a word that negates something else --
+// fail-open, the one direction this must not fail in. The cost is the mirror
+// case, "push to main is never allowed", which escalates to a person who can
+// see at a glance that it should not have. That is the affordable error.
+func countNegators(text string) int {
+	n := 0
+	for _, neg := range negators {
+		n += len(occurrencesOf(text, neg, true))
+	}
+	for _, w := range strings.FieldsFunc(text, func(r rune) bool { return r > 127 || !isWordByte(byte(r)) }) {
+		for _, stem := range negatorStems {
+			if strings.HasPrefix(w, stem) {
+				n++
+				break
+			}
 		}
 	}
+	return n
+}
+
+// containsWord reports a token present at word boundaries.
+func containsWord(text, token string) bool {
+	return len(occurrencesOf(text, token, true)) != 0
 }
 
 func isWordByte(b byte) bool {

@@ -135,3 +135,33 @@ forbidden_fixes:
     related_invariants:
       - sensei_code.resume.never_skips_a_human_decision
     reason: 'Reading only the record a person named -- session.ActiveIn -- makes naming a subset a waiver of every check that makes the whole set trustworthy: another record claiming the same task id is invisible, and an unreadable history elsewhere is never met, so an operator can select one side of a split identity and continue it in silence. Repository-wide session.FindActive runs first, ALWAYS; --session narrows its validated result through Discovery.ScopedTo. A name is a filter, never a scope.'
+  - id: forbidden_fix.sensei_code.rewrite_the_plan_s_safety_constraint_so_the_consequence_matc
+    title: Rewrite the plan's safety constraint so the consequence matcher stops seeing it
+    summary: 'Editing ''publication may open a branch and pull request only, never merge or push to main'' into wording the matcher does not hit -- dropping the clause, renaming the verb, or softening the prohibition -- makes the false escalation disappear while the classifier stays context-free. The constraint is the thing being protected: it is the plan''s own promise not to cross the boundary, and the safer a plan is written the more certainly it would then have to be unwritten. It also inverts the guard''s direction, because the next plan that omits the promise escalates identically. Repair the classifier''s notion of polarity, never the text it reads.'
+    protects:
+      files:
+        - internal/workflow/consequence.go
+    reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
+    evidence:
+      - '2026-09-20, task-1789870806342069862: the step ''publication may open a branch and pull request only, never merge or push to main'' was assessed UNACCEPTABLE with ''the plan declares an outward action: push to'' and stopped at a Level-3 boundary the plan promised never to reach.'
+    contract: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
+  - id: forbidden_fix.sensei_code.whitelist_the_objective_file_path_or_caller_whose_text_tripp
+    title: Whitelist the objective file, path or caller whose text tripped the consequence matcher
+    summary: 'Exempting a known objective file, a path prefix, a caller or a particular task from declaredOutwardActions turns a classification defect into a per-input exception list. The one plan that was observed stops escalating and every plan nobody has met yet keeps the same false Level-3 escalation, so the defect survives with its evidence deleted. It is also strictly weaker than the bug: an exempted caller loses the REAL escalation too, so a plan that genuinely declares a push reaches a grant because of where it came from. Consequence is a property of the asserted action, never of the file or caller that supplied the text.'
+    protects:
+      files:
+        - internal/workflow/consequence.go
+    reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
+    evidence:
+      - 'Run directly, ''the run must never deploy anything; it only edits files in the candidate worktree'' is also assessed UNACCEPTABLE: the defect is not bound to one verb, one wording, one objective file or one caller.'
+    contract: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
+  - id: forbidden_fix.sensei_code.suppress_any_sentence_that_contains_never_or_not
+    title: Suppress any sentence that contains never or not
+    summary: 'Dropping a whole step, sentence or text block because the word ''never'', ''not'', ''no'' or ''don''''t'' appears anywhere in it is the same lexical hack with the sign flipped: it replaces one context-free keyword scan with another, and it reads a token''s PRESENCE instead of what the token negates. It fails in the dangerous direction, because it eventually swallows a real declaration -- ''we cannot avoid writing outside the worktree'', ''the migration cannot be deferred, so it runs against production'', ''do not stop before deploying'' -- and an outward action inside such a sentence reaches a grant with no human ever asked. Negation must be resolved at the clause the outward verb actually sits in, and only when it governs that verb.'
+    protects:
+      files:
+        - internal/workflow/consequence.go
+    reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
+    evidence:
+      - The required behaviour separates 'never push to main' (no signal) from 'cannot avoid writing outside the worktree' (signal); a sentence-level 'never' filter cannot tell them apart, because both contain the same token.
+    contract: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
