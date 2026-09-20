@@ -400,7 +400,7 @@ var outwardPhrases = []string{
 //     escalation too.
 //  3. ignoring any sentence that contains "never" or "not". That is this same
 //     lexical hack with the sign flipped, and it eventually swallows a real
-//     declaration such as "we cannot avoid writing outside the worktree".
+//     declaration such as "the run cannot avoid a deploy to production".
 //
 // This is a claim-reader, as it always was. It reads the plan's own account
 // more accurately; it does not become a safety net, and an undeclared publish
@@ -408,9 +408,9 @@ var outwardPhrases = []string{
 
 // negators are the words that reverse what FOLLOWS them in the same clause.
 //
-// Counted by parity, not by presence. "cannot avoid writing outside the
-// worktree" carries two and asserts the thing; presence alone is forbidden fix
-// 3 and would swallow it.
+// Counted by parity, not by presence. "the run cannot avoid a deploy to
+// production" carries two and asserts the deploy; presence alone is forbidden
+// fix 3 and would swallow it.
 var negators = []string{
 	"never", "not", "cannot", "no", "nor", "neither", "without",
 	"rather than", "instead of",
@@ -453,24 +453,55 @@ var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
 // bare code reference in prose, `git push` in a sentence about publish.go,
 // escalates; that is what it did before any of this existed.
 //
-// Citing words only. "step", "command" and "action" are deliberately absent:
-// they introduce something to be DONE, not something being reported.
+// REPORTED SPEECH ONLY, and the distinction is not fussy. A wider list held
+// labelling words -- "named", "called", "the instruction", "the text" -- and
+// labelling is how a plan introduces a step it is ABOUT TO RUN: "the step named
+// \"deploy to production\" runs last" was read as a mention and granted. A rule
+// that is quoted is being reported; a step that is quoted is being named, and
+// naming a thing is the ordinary prelude to doing it.
 var mentionCues = []string{
-	"says", "said", "reads", "read", "states", "stated", "writes", "wrote",
-	"quotes", "quoted", "calls", "called", "names", "named", "labelled", "labeled",
-	"describes", "described", "mentions", "mentioned",
-	"rule", "constraint", "boundary", "prohibition", "objective", "instruction",
-	"phrase", "wording", "text", "literal",
+	"says", "said", "reads", "states", "stated", "writes", "wrote",
+	"quotes", "quoted", "describes", "described", "mentions", "mentioned",
 }
 
-// coordinators continue one predicate into another WITHIN a clause.
+// conjunctions END a negation inside its own clause; a disjunction does not.
 //
-// They are not clause breaks -- "never merge or push to main" is one negator
-// over a coordination, and breaking there would re-manufacture the false
-// escalation this exists to remove. What they do is mark the place where a
-// negation might stop carrying; see scopeReaches. " nor " is absent because it
-// continues a negation rather than starting a predicate.
-var coordinators = []string{" and ", " or ", " plus "}
+// That asymmetry is De Morgan's, not a heuristic. "never merge OR push to main"
+// forbids both, so the negation has to reach the second conjunct -- and " or "
+// is therefore not a clause break and not listed here. "we will not stop AND
+// push to main" does not forbid the push: the natural reading is two
+// statements, and the one that matters is asserted. " nor " is absent because
+// it continues a negation rather than starting a predicate.
+var conjunctions = []string{" and ", " plus "}
+
+// predicateMarkers END a negation because a new predicate has started.
+//
+// Subject pronouns and auxiliaries, both closed classes in English, and that is
+// the whole reason they are usable here: the alternative is guessing at subject
+// nouns, which is open-ended and would be a different lexical hack.
+//
+// Without this the negation ran to the end of its clause, so a reassurance and
+// a declaration joined by anything unlisted became a grant: "no reviewer is
+// bypassed and the run will push to main" escalated only because it used the
+// word "and", while "no reviewer is bypassed - the run will push to main" and
+// "no tests fail so we deploy to production" were read as bounded. Same
+// sentence, one punctuation mark, opposite authority.
+//
+// They cost false escalations -- "never allow it to deploy" carries "it" -- and
+// that is the direction to be wrong in.
+var predicateMarkers = []string{
+	"we", "i", "you", "he", "she", "it", "they", "there",
+	"will", "shall", "would", "should", "must", "may", "might", "can", "could",
+	"is", "are", "was", "were", "has", "have", "had", "does", "did",
+}
+
+// verbEndings are the inflections a negating verb stem may carry.
+//
+// Bare prefix matching read "preventive", "prevention", "avoidance", "refusal"
+// and "rejected" as negations, and one spurious negator flips parity -- which
+// is the fail-open direction. A stem plus a VERBAL ending is a verb; a stem
+// plus "-ive", "-ion", "-ance" or "-al" is the noun or adjective beside it.
+var verbEndings = []string{"", "e", "s", "es", "ed", "en", "den", "ing"}
 
 // declaredOutwardActions reads a plan's own steps and consequences for an
 // outward action it ASSERTS.
@@ -480,13 +511,22 @@ var coordinators = []string{" and ", " or ", " plus "}
 // Each occurrence is then read in its clause: a quoted mention and a negated
 // clause are not declarations, and anything else is.
 func declaredOutwardActions(steps []string, consequences string) []string {
-	declared := strings.ToLower(strings.Join(append(append([]string{}, steps...), consequences), " \n "))
-	// Contractions carry their negator in a form no word split recovers.
-	declared = strings.ReplaceAll(declared, "n't", " not ")
-	for _, q := range quotePairs {
-		declared = maskMentions(declared, q[0], q[1])
+	// Masked PER STATEMENT, before anything is joined. A quotation belongs to
+	// the step that wrote it, and an unbalanced delimiter must not reach past
+	// it: joining first let one step's stray backtick pair with a delimiter
+	// several steps later and blank every declaration in between, which is the
+	// only fault here with unbounded reach.
+	var said []string
+	for _, s := range append(append([]string{}, steps...), consequences) {
+		s = strings.ToLower(s)
+		// Contractions carry their negator in a form no word split recovers.
+		s = strings.ReplaceAll(s, "n't", " not ")
+		for _, q := range quotePairs {
+			s = maskMentions(s, q[0], q[1])
+		}
+		said = append(said, s)
 	}
-	parts := clausesOf(declared)
+	parts := clausesOf(strings.Join(said, " \n "))
 
 	var found []string
 	for _, verb := range outwardVerbs {
@@ -520,7 +560,14 @@ func maskMentions(text, open, close string) string {
 			break
 		}
 		o += i
-		c := strings.Index(text[o+len(open):], close)
+		rest := text[o+len(open):]
+		if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
+			// A quotation that does not close on its own line is not a
+			// quotation. Without this a stray delimiter reaches across every
+			// line after it looking for a partner.
+			rest = rest[:nl]
+		}
+		c := strings.Index(rest, close)
 		if c < 0 {
 			// No closing delimiter. A quotation nobody can delimit is not
 			// suppressed -- failing toward the human, not past them.
@@ -659,58 +706,66 @@ func negatorEndsBefore(c string, at int) []int {
 		for j < at && isWordByte(c[j]) {
 			j++
 		}
-		for _, stem := range negatorStems {
-			if strings.HasPrefix(c[i:j], stem) {
-				ends = append(ends, j)
-				break
-			}
+		if negatingVerb(c[i:j]) {
+			ends = append(ends, j)
 		}
 		i = j
 	}
 	return ends
 }
 
+// negatingVerb reports whether a word is one of the negatorStems in a verbal
+// inflection -- "refuses", "forbidden", "prevented" -- and not the noun or
+// adjective built on the same stem.
+func negatingVerb(word string) bool {
+	for _, stem := range negatorStems {
+		if !strings.HasPrefix(word, stem) {
+			continue
+		}
+		for _, end := range verbEndings {
+			if word[len(stem):] == end {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // scopeReaches reports whether a negation ending at from still governs the
-// operation at at, or whether a new predicate began in between.
+// operation at at, or whether something in between took the sentence somewhere
+// else.
 //
-// The test is read from the SAME closed outward vocabulary the classifier
-// already owns, never from a guess about subjects: a coordination carries the
-// negation across only when it coordinates the operations themselves -- "never
-// merge or push to main", "never push to main or deploy". Anything else after
-// "and"/"or" -- "and the run will", "and no rollback exists" -- starts a new
-// predicate, and the negation stops there.
+// Two ways it stops, and both are closed classes rather than guesses:
 //
-// That direction is chosen. An unrecognized continuation ends the scope, so the
-// operation is read as asserted and reaches a person; the opposite default
-// would carry a negation across an arbitrary amount of reassuring prose, which
-// is precisely how the affirmative push got cleared.
+//	a CONJUNCTION -- "not stop AND push to main" asserts the push; a
+//	disjunction does not stop it, because "never merge OR push to main"
+//	forbids both
+//	a PREDICATE MARKER -- a subject pronoun or an auxiliary, which is a new
+//	clause wearing a connector the break list never listed: "- the run will",
+//	"so we", "before we"
+//
+// Everything else carries. That default is the one place this reads a negation
+// further than it can prove, so it is bounded by two independent tests rather
+// than by the break list alone: the earlier version stopped only at a
+// coordination, and any other connector -- a dash, a bracket, " so ", " since "
+// -- carried a reassurance straight over an asserted push and granted it. A
+// missing connector must not be the difference between asking a person and not.
 func scopeReaches(c string, from, at int) bool {
 	if from > at {
 		return false
 	}
-	for _, co := range coordinators {
-		for _, p := range occurrencesOf(c[from:at], co, false) {
-			if !startsOutward(c[from+p+len(co):]) {
-				return false
-			}
+	span := c[from:at]
+	for _, conj := range conjunctions {
+		if len(occurrencesOf(span, conj, false)) != 0 {
+			return false
+		}
+	}
+	for _, m := range predicateMarkers {
+		if len(occurrencesOf(span, m, true)) != 0 {
+			return false
 		}
 	}
 	return true
-}
-
-// startsOutward reports whether text begins with an outward-vocabulary token.
-func startsOutward(text string) bool {
-	for _, verb := range outwardVerbs {
-		if strings.HasPrefix(text, verb) {
-			return true
-		}
-	}
-	for _, phrase := range outwardPhrases {
-		if strings.HasPrefix(text, phrase) {
-			return true
-		}
-	}
-	return false
 }
 
 // containsWord reports a token present at word boundaries.

@@ -68,7 +68,7 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 	}
 }
 
-// POLARITY, NOT STRINGS. One hazardous operation, read in six contexts.
+// POLARITY, NOT STRINGS. One hazardous operation, read in thirteen contexts.
 //
 // Observed 2026-09-20 on task-1789870806342069862: the plan step "publication
 // may open a branch and pull request only, never merge or push to main" was
@@ -77,29 +77,45 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 // to reach. The inversion is the harm: the more carefully an objective writes
 // down what it will NOT do, the more certainly it escalates.
 //
-// So the operation is held constant -- "push to main" in every row -- and only
-// the context around it moves. A row that passed because the wording changed
-// would prove nothing; these rows share the wording.
+// So the operation is held constant -- one outward action, mostly "push to
+// main" -- and only the context around it moves. A row that passed because the
+// wording changed would prove nothing; these rows share the wording.
 //
-// Rows 2 and 3 are the defect: a prohibition and a cited rule, both refused
-// before this repair. Rows 1, 4, 5 and 6 are the control -- the Level-3 path
-// this repair must leave exactly as it is -- and they are the ones that carry
-// the cost of overshooting. Each of the four ways to overshoot is somebody's
-// obvious first fix:
+// Rows 2 and 3 are the defect: a prohibition and a reported rule, both refused
+// before this repair. EVERY OTHER ROW IS A CONTROL, and they are all the same
+// shape -- a plan that genuinely declares the action, which must still reach a
+// person. Each one names a specific way to overshoot, and each of those is
+// somebody's plausible first fix:
 //
-//	row 4  a negation AFTER the operation ("...push to main and no reviewer
-//	       is bypassed") -- killed by reading polarity at the sentence
-//	row 5  a negation BEFORE it, governing something else ("no reviewer is
-//	       bypassed and the run will push to main") -- killed by counting every
-//	       negator earlier in the clause, which row 4 cannot see
-//	row 6  the operation quoted and PERFORMED -- killed by suppressing every
-//	       quoted span, which row 3 cannot see
-//	row 1  a bare declaration -- killed by anything that stops reading
+//	row 4  a negation AFTER the operation -- suppressing a sentence that
+//	       contains "no"
+//	row 5  a negation BEFORE it, governing something else, joined by "and" --
+//	       counting every negator earlier in the clause; row 4 cannot see this
+//	row 6  the operation quoted and PERFORMED -- suppressing every quoted
+//	       span; row 3 cannot see this
+//	row 7  row 5 with the connector swapped for a dash -- ending a negation
+//	       only at a coordination; row 5 cannot see this
+//	row 8  a double negation -- reading a negator's PRESENCE rather than what
+//	       it negates, which is the third recorded forbidden fix; no other row
+//	       can see this
+//	row 9  a step NAMED in quotation marks and then run -- treating labelling
+//	       as citation; row 6 cannot see this, because it has no cue at all
+//	row 10 a conjunction under a negation ("not stop and push to main") --
+//	       carrying a negation across "and"; row 5 cannot see this, because
+//	       its negation is stopped by a pronoun too. Pair to row 2.
+//	row 11 a noun built on a negating stem ("preventive") -- matching those
+//	       stems by bare prefix
+//	row 12 a prohibition in the previous SENTENCE -- not splitting clauses
+//	row 1  a bare declaration -- anything that stops reading
 //
-// Rows 4 and 5 are the same sentence with the reassurance on either side of the
-// push, and rows 3 and 6 are the same quotation under two introducing words.
-// Those pairings are the point: a repair that gets one of each pair right and
-// the other wrong is exactly the repair this test exists to refuse.
+// Row 13 is the fourth bounded row and the only one that is not a control:
+// "don't" is the spelling people use, and it is the original bug intact unless
+// the contraction is expanded.
+//
+// The pairings are the point. Rows 4/5/7 are one sentence with its reassurance
+// moved and its connector swapped; rows 3/6/9 are one quotation under three
+// introducing words. A repair that gets one of a pair right and the other wrong
+// is exactly the repair this test exists to refuse.
 func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
@@ -166,6 +182,80 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantResult: ConsequenceUnacceptable,
 		wantRoute:  RouteHuman,
 		says:       "outside the worktree",
+	}, {
+		// 7. Row 5 with the connector swapped, and nothing else. An earlier
+		// version stopped a negation only at a coordination, so row 5 passed
+		// on the word "and" and this sentence -- the same claim, one
+		// punctuation mark -- was granted. A missing connector must not be the
+		// difference between asking a person and not.
+		name:       "a connector the break list never listed does not carry the negation",
+		step:       "no reviewer is bypassed - the run will push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 8. PARITY, NOT PRESENCE -- the negative control for the third
+		// recorded forbidden fix, which is to read a negator's presence
+		// instead of what it negates. Two negations that reach the operation
+		// cancel, and the plan is declaring the deploy. A classifier that
+		// suppressed on presence would grant this while rows 2 and 3 stayed
+		// green, so without this row that forbidden fix is implementable
+		// without any test noticing.
+		name:       "a double negation asserts the action it double-negates",
+		step:       "the run cannot avoid a deploy to production",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 9. Named, then run. "named" is how a plan labels a step it is about
+		// to perform, and reading labelling words as citation granted exactly
+		// the plans that were most explicit about what they would do. Only
+		// reported speech makes a quotation a mention; compare row 3.
+		name:       "naming a step is not reporting a rule",
+		step:       `the step named "deploy to production" runs last`,
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 10. A conjunction under a negation does not distribute: "not stop"
+		// and "push to main" are two statements, and the second is asserted.
+		// Row 5 cannot see this -- its negation is also stopped by "is" and
+		// "will" -- so without this row the conjunction rule is unproven, and
+		// a disjunction is what makes row 2 bounded. This is the pair to row 2.
+		name:       "a conjunction under a negation does not carry it",
+		step:       "we will not stop and push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 11. A negating STEM must appear as a verb. Bare prefix matching read
+		// "preventive", "prevention", "avoidance", "refusal" and "rejected" as
+		// negations, and one spurious negator flips parity -- the fail-open
+		// direction. This repository's own prose is full of these words.
+		name:       "a noun built on a negating stem is not a negation",
+		step:       "preventive checks push to main immediately",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 12. A sentence boundary resets polarity. Without clause splitting a
+		// prohibition in one sentence suppresses a declaration in the next,
+		// which is how a plan states its limits and then states its plan.
+		name:       "a prohibition does not reach into the next sentence",
+		step:       "never merge. deploy to production is the final step",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 13. A contraction is a negation. No word split recovers the negator
+		// inside "don't", so without the expansion this prohibition reads as a
+		// declaration and escalates -- the original false-escalation bug, in
+		// the one spelling people actually use. The only bounded control here
+		// besides rows 2 and 3.
+		name:       "a contracted negation is still a negation",
+		step:       "we don't push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			action := Action{Stage: StageCandidateEdit,
@@ -192,6 +282,52 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 			}
 			if tc.wantResult == ConsequenceBounded && !containsWord(got.Boundary, "candidate worktree") {
 				t.Fatalf("bounded without naming the boundary: %q", got.Boundary)
+			}
+		})
+	}
+}
+
+// A quotation belongs to the step that wrote it.
+//
+// Masking ran over the joined text, so an unbalanced delimiter in one step
+// paired with a delimiter several steps later and blanked everything between
+// them -- every declaration in the gap, silently, with no negation and no
+// citation anywhere near them. It is the only fault in this classifier whose
+// reach is unbounded: one stray backtick, and an arbitrary number of asserted
+// outward actions stop existing.
+//
+// Backticks make it ordinary rather than exotic. Plans are markdown-flavoured
+// prose, and a lone backtick around a path or an identifier, after a word like
+// "says", is a completely normal thing to write.
+func TestAStrayDelimiterDoesNotReachIntoAnotherStep(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		steps []string
+	}{{
+		name:  "an unbalanced quotation does not blank the steps after it",
+		steps: []string{`the objective says "push to main`, "deploy to production", `is refused"`},
+	}, {
+		name:  "an unbalanced backtick does not blank the steps after it",
+		steps: []string{"the rule reads `git push", "then deploy to production", "see publish.go`"},
+	}, {
+		// And inside ONE step, across its own lines. Steps are joined with a
+		// newline, so per-step masking alone would look like it covered this;
+		// a step is prose and carries its own line breaks, and the reach is
+		// the same.
+		name:  "an unbalanced delimiter does not blank the next line of its own step",
+		steps: []string{"the rule reads `git push\ndeploy to production is the last step\nsee publish.go`"},
+	}} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := declaredOutwardActions(tc.steps, ""); len(got) == 0 {
+				t.Fatalf("a declaration between two steps was erased by a delimiter "+
+					"in neither of them: %q", tc.steps)
+			}
+			// And the same delimiter, balanced inside one step, still masks --
+			// otherwise this would pass on a classifier that had simply stopped
+			// reading quotations at all.
+			cited := []string{`the objective says "push to main" is refused`}
+			if got := declaredOutwardActions(cited, ""); len(got) != 0 {
+				t.Fatalf("a cited rule inside one step was read as a declaration: %v", got)
 			}
 		})
 	}

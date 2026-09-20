@@ -169,5 +169,6 @@ forbidden_fixes:
       - sensei_code.workflow.execution_is_authorized_once_at_run
     reason: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
     evidence:
-      - The required behaviour separates 'never push to main' (no signal) from 'cannot avoid writing outside the worktree' (signal); a sentence-level 'never' filter cannot tell them apart, because both contain the same token.
+      - "The required behaviour separates 'never push to main' -- verified: declaredOutwardActions returns nothing -- from 'the run cannot avoid a deploy to production' -- verified: it returns [deploy, to production]. A sentence-level 'never'/'not' filter cannot tell them apart, because both contain the same token and the second one carries two. Bound by internal/workflow/consequence_words_test.go, row 'a double negation asserts the action it double-negates', which fails if parity is replaced by presence."
+
     contract: Consequence detection classifies what a plan ASSERTS it will do. A hazardous operation named inside a prohibition, a constraint, a quotation or a description of forbidden behaviour is not a declared consequence; an asserted outward action is one wherever it appears.
