@@ -74,8 +74,8 @@ func TestTheRecordedObjectiveIsTheExactSubmittedBytes(t *testing.T) {
 
 		// And the architecture binding names those exact bytes -- the property
 		// the whole proposal/architecture protocol rests on.
-		want64 := roles.BindArchitecture("t", want, "", "").ObjectiveDigest
-		got64 := roles.BindArchitecture("t", got.Text, "", "").ObjectiveDigest
+		want64 := roles.BindArchitecture("t", want, "", "", "").ObjectiveDigest
+		got64 := roles.BindArchitecture("t", got.Text, "", "", "").ObjectiveDigest
 		if got64 != want64 {
 			t.Errorf("the architecture digest names different bytes than were submitted:\n got  %s\n want %s", got64, want64)
 		}

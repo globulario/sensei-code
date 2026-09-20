@@ -87,6 +87,17 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 			// A turn: its waiter is the only consumer, so a waiter that is gone
 			// makes this request abandoned and startup withdraws it.
 			Kind: ExchangeArchitecture,
+			// The provenance and all three routes, exactly as published. A
+			// process that did not publish this request must be able to say
+			// which repository owns each pinned commit without re-deriving it
+			// from its own configuration -- re-derivation is how a commit ends
+			// up looked for in a repository that never held it.
+			BaseSHA:             request.Binding.BaseSHA,
+			ObjectiveDigest:     request.Binding.ObjectiveDigest,
+			GraphRepository:     request.Binding.GraphRepository,
+			GraphBuildCommit:    request.Binding.GraphBuildCommit,
+			MailboxRepository:   request.MailboxRepository,
+			WorkspaceRepository: request.WorkspaceRepository,
 		}
 		if openErr := r.Exchanges.Open(rec); openErr != nil && emit != nil {
 			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentStarted,
@@ -133,6 +144,7 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 				"request_id":         request.RequestID,
 				"objective_digest":   r.Binding.ObjectiveDigest,
 				"base":               r.Binding.BaseSHA,
+				"graph_repository":   r.Binding.GraphRepository,
 				"graph_build_commit": r.Binding.GraphBuildCommit,
 				"transport":          "github",
 			}))
@@ -191,6 +203,7 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 					"request_comment":    requestComment,
 					"objective_digest":   r.Binding.ObjectiveDigest,
 					"base":               r.Binding.BaseSHA,
+					"graph_repository":   r.Binding.GraphRepository,
 					"graph_build_commit": r.Binding.GraphBuildCommit,
 					"waited":             wait.String(),
 					"outcome":            "unanswered",
@@ -216,6 +229,7 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 				"request_id":         request.RequestID,
 				"objective_digest":   r.Binding.ObjectiveDigest,
 				"base":               r.Binding.BaseSHA,
+				"graph_repository":   r.Binding.GraphRepository,
 				"graph_build_commit": r.Binding.GraphBuildCommit,
 				"github_author":      answer.Author,
 				"github_author_id":   answer.AuthorID,
