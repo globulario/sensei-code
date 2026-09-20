@@ -865,3 +865,41 @@ func TestNegationParityAndCoordinatedPredicates(t *testing.T) {
 		}
 	}
 }
+
+// A subject is not a word this classifier knows.
+//
+// Found by independent review of 59580ca. The hand-off rule was right and its
+// implementation enumerated how a subject may be spelled -- determiner, then
+// pronoun -- so every bare noun was invisible: "and runner will push to main"
+// handed the sentence to a new subject and the fronted prohibition kept
+// governing it, suppressing an asserted publish. The dangerous direction.
+//
+// The closed vocabularies are the function words. What is left over is open
+// class, and an open-class word taking an auxiliary is a subject taking a
+// predicate. Asking what a word is NOT cannot be outrun by a noun nobody
+// listed, which is why "CI", "runner" and any future name all work.
+func TestASubjectIsAnythingTheClassifierDoesNotKnow(t *testing.T) {
+	for _, c := range []struct {
+		want ConsequenceResult
+		step string
+	}{
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge and the runner will push to main"},
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge and it will push to main"},
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge and runner will push to main"},
+		{ConsequenceUnacceptable, "under no circumstances should the plan merge and CI will deploy"},
+		{ConsequenceBounded, "under no circumstances should the plan merge or be allowed to push to main"},
+		{ConsequenceBounded, "under no circumstances should the plan merge or push to main"},
+		{ConsequenceBounded, "under no circumstances should the plan push to main"},
+		// Two auxiliaries and no subject between them. Only the open-class
+		// test tells these from a hand-over: a rule that counted ANY word as a
+		// subject would see "can", then "be", and invent a new predicate that
+		// nobody introduced.
+		{ConsequenceBounded, "under no circumstances should the plan merge or can be allowed to push to main"},
+		{ConsequenceBounded, "under no circumstances should the plan merge or must be able to push to main"},
+	} {
+		got := AssessConsequences(Action{Stage: StageCandidateEdit, DeclaredSteps: []string{c.step}})
+		if got.Result != c.want {
+			t.Errorf("%q\n got: %v %v\nwant: %v", c.step, got.Result, got.Effects, c.want)
+		}
+	}
+}

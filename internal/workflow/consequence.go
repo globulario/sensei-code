@@ -794,20 +794,39 @@ func (c clause) newPredicateBefore(from, to int) bool {
 	subject := false
 	for i := from; i < to; i++ {
 		w := c.words[i].text
-		if listed(determiners, w) || listed(subjectPronouns, w) {
-			subject = true
-			continue
-		}
 		if subject && listed(auxiliaries, w) {
 			return true
+		}
+		if c.inOp[i] {
+			continue
+		}
+		// A subject is not a word this classifier knows. Naming the ways one
+		// can be spelled -- determiners, then pronouns -- left every bare noun
+		// out: "and RUNNER will push to main" handed the sentence over and was
+		// not seen to, so the prohibition kept governing an asserted publish.
+		// The closed vocabularies are the function words; what is left over is
+		// open class, and an open-class word taking an auxiliary is a subject
+		// taking a predicate. This asks what a word is NOT, so it cannot be
+		// outrun by a noun nobody listed.
+		if listed(determiners, w) || listed(pronouns, w) || !c.functionWord(i) {
+			subject = true
 		}
 	}
 	return false
 }
 
-// subjectPronouns stand where a determiner would, naming a new subject without
-// one: "merge and WE will push to main".
-var subjectPronouns = []string{"we", "it", "they", "you", "he", "she", "i", "one"}
+// functionWord reports a word drawn from one of this classifier's closed
+// vocabularies. Everything else is open class -- a noun, a name, a verb nobody
+// enumerated -- which is exactly what cannot be listed in advance.
+func (c clause) functionWord(i int) bool {
+	w := c.words[i].text
+	return w == "to" ||
+		listed(auxiliaries, w) || listed(determiners, w) ||
+		listed(adverbials, w) || listed(permissionVerbs, w) ||
+		listed(negators, w) || listed(pronouns, w) ||
+		listed(conjunctions, w) || listed(disjunctions, w) ||
+		negatingVerb(w)
+}
 
 // postposed reports the operation standing as the clause's own SUBJECT with the
 // predicate made of it negated: "push to main is never allowed".
