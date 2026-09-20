@@ -114,7 +114,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	sessionID, resumed := session.Latest(repo.Root)
+	// An unreadable session store is fatal here rather than a fresh start.
+	// Starting a new session inside storage that could not even be listed would
+	// write this run's history where the previous one is unaccounted for, and
+	// the first symptom would be a task nobody can find.
+	sessionID, resumed, err := session.Latest(repo.Root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code:", err)
+		os.Exit(1)
+	}
 	if !resumed {
 		sessionID = session.ID(time.Now())
 	}

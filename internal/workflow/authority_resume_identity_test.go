@@ -743,3 +743,129 @@ func TestNoOverrideRestoresUnprovenAuthorisation(t *testing.T) {
 		t.Error("the gate does not name the one outcome it admits, so a new outcome would default to permitted")
 	}
 }
+
+// WITNESS 14 — a task that answered its question and died before it had a plan
+// re-enters governed execution as ITSELF.
+//
+// The record task-1789848074761930104 left on 2026-09-19 carried no standing
+// question (it was answered), no plan (none was proposed) and no block. The
+// earlier continuation for an unplanned task REQUIRED a block record, so this
+// shape had no path at all while its candidate identity sat on disk.
+//
+// Execution is entered here and stops at the first capability gate, which is
+// exactly the evidence wanted: what this proves is WHICH task re-entered, not
+// how far a run with no repository can get.
+func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+
+	task := session.Interrupted{TaskID: "task-1789848074761930104", Task: "repair the resume path"}
+	e.resumeUnplannedArchitecture(context.Background(), task)
+
+	evs := take()
+	if len(evs) == 0 {
+		t.Fatal("an unplanned task produced no account of being resumed at all")
+	}
+	owed := ""
+	for _, ev := range evs {
+		if ev.TaskID != task.TaskID {
+			t.Fatalf("a resumed task emitted an event under another identity %q: %s", ev.TaskID, ev.Kind)
+		}
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, "the turn it is owed") {
+			owed = ev.Summary
+		}
+	}
+	if owed == "" {
+		t.Fatalf("the record does not say what the task was resumed at: %v", kindsOf(evs))
+	}
+	if !strings.Contains(owed, "architect turn") && !strings.Contains(owed, "no recorded plan") {
+		t.Fatalf("the owed turn is not named as the architect's: %q", owed)
+	}
+	// The objective is the recorded one, under the resumption's own provenance:
+	// a restarted process establishes no human.
+	if got := e.objective(task.TaskID); got.Text != task.Task || got.Provenance != ResumedGoverned {
+		t.Fatalf("the recorded objective was not carried: %+v", got)
+	}
+	// And the run it entered is a continuation, never a fresh submission.
+	body := funcBody(t, "internal/workflow/engine.go", "resumeUnplannedArchitecture")
+	for _, forbidden := range []string{"SubmitGoverned", "SubmitObservation", "SubmitGovernedWithPlan", "SubmitGovernedUnattended"} {
+		if strings.Contains(body, forbidden) {
+			t.Errorf("resuming reaches %s; a fresh task is not a continuation", forbidden)
+		}
+	}
+	// funcBody yields a flattened token stream, so these are token paths.
+	for _, want := range []string{"e.execute(", "task.TaskID(", "task.Task("} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the continuation does not carry the recorded task id and objective: %s absent", want)
+		}
+	}
+	// And RESUME itself routes on the absence of a plan, not on the presence of
+	// a block. Asserted by driving Resume rather than by reading it: the earlier
+	// version called this very function, and only its GUARD -- a block record it
+	// also required -- left this shape unreachable.
+	resumed := event.NewBus()
+	ch, stop := resumed.Subscribe(64)
+	defer stop()
+	r := &Engine{Bus: resumed, SessionID: "s1", pending: map[string]chan string{}}
+	if got := r.Resume(context.Background(), task); got != task.TaskID {
+		t.Fatalf("Resume continued %q instead of the task it was given", got)
+	}
+	deadline := time.After(20 * time.Second)
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Kind == event.Status && strings.Contains(ev.Summary, "the turn it is owed") {
+				return
+			}
+			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowCompleted {
+				t.Fatalf("Resume settled without routing an unplanned task to its architect turn: %s", ev.Summary)
+			}
+		case <-deadline:
+			t.Fatal("Resume never reached the architect turn an unplanned task is owed")
+		}
+	}
+}
+
+// WITNESS 15 — the answer a resumed task carries authorizes exactly the question
+// it answered, about exactly the files it was asked about.
+//
+// This is what makes re-entering execution safe: the run re-derives its routing
+// from current evidence, and the recorded answer settles the one condition it
+// was given for. A resumed task must not be asked its settled question again --
+// and must not treat that answer as a yes to anything else.
+func TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered(t *testing.T) {
+	store, err := session.New(t.TempDir(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded := authority.Resolution{
+		TaskID: "task-1", SessionID: "s1", Question: "Architectural authority reached a human-owned boundary.",
+		Condition: scopedCondition, OptionID: "1", OptionLabel: "Authorize the architectural change described above",
+		Scope: planScope(), Outcome: authority.Authorize, DecidedAt: time.Now().UTC(),
+	}
+	if err := store.Append(event.New("s1", "task-1", event.SourceUser, event.AuthorityResolved,
+		recorded.OptionLabel, recorded)); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Bus: event.NewBus(), SessionID: "s1", Store: store}
+
+	// The same question about the same files is not asked again.
+	if authorized, asked := e.applyAnsweredCondition("task-1", scopedCondition, planScope()...); !authorized || !asked {
+		t.Fatalf("the settled question would be asked again: authorized=%v asked=%v", authorized, asked)
+	}
+	// One file more than the human saw is a WIDER question, and unanswered.
+	wider := append(append([]string{}, planScope()...), "internal/workflow/engine.go")
+	if authorized, _ := e.applyAnsweredCondition("task-1", scopedCondition, wider...); authorized {
+		t.Fatal("the recorded answer authorized a file scope nobody was shown")
+	}
+	// A different condition over the same files is a different question.
+	if _, asked := e.applyAnsweredCondition("task-1", "human_approval_required (blast radius security)", planScope()...); asked {
+		t.Fatal("the recorded answer was read as an answer to another question")
+	}
+	// And it is bound to the task it was given for.
+	if _, asked := e.applyAnsweredCondition("task-2", scopedCondition, planScope()...); asked {
+		t.Fatal("another task inherited this task's answer")
+	}
+}

@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/config"
 	"github.com/globulario/sensei-code/internal/event"
+	"github.com/globulario/sensei-code/internal/ghbridge"
 	"github.com/globulario/sensei-code/internal/gitx"
 	"github.com/globulario/sensei-code/internal/session"
 	"github.com/globulario/sensei-code/internal/workflow"
@@ -50,7 +50,8 @@ import (
 // named a task that is not asking anything.
 var (
 	errNoSession        = errors.New("this repository has no session, so no question can be standing in one")
-	errTaskUnknown      = errors.New("no interrupted task with that id is recorded in the latest session")
+	errTaskUnknown      = errors.New("no active task with that id is recorded in any session of this repository")
+	errTaskNotInSession = errors.New("that task is active, but not in the session named")
 	errNoQuestion       = errors.New("that task is interrupted but is not waiting on a human-owned decision, so there is nothing to answer")
 	errQuestionUnusable = errors.New("that task's preserved question could not be read back, so it cannot be answered")
 	errNoOptions        = errors.New("that task's preserved question carried no options, so no answer to it exists")
@@ -221,66 +222,153 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 		return exitUsage
 	}
 
-	sessionID := strings.TrimSpace(*sessionName)
-	if sessionID == "" {
-		latest, ok := session.Latest(repo.Root)
-		if !ok {
-			fmt.Fprintln(os.Stderr, "sensei-code resume:", errNoSession)
+	// EVERY session record. ALWAYS. `--session` narrows the ANSWER, afterwards.
+	//
+	// A task outlives the process that began it, so the session that holds it is
+	// rarely the newest. Reading only the latest record is what made an active
+	// task answer "no interrupted task with that id" the moment anything else
+	// ran. Discovery fails closed: an unreadable history or two records claiming
+	// one task id end this command rather than shrinking the world it searched.
+	//
+	// `--session` USED TO BRANCH AWAY FROM THAT, into a reader that opened the
+	// named record alone. Both of discovery's refusals were then unreachable for
+	// the path a person takes when they know which session they mean: another
+	// record claiming the same task id was invisible, and a history elsewhere
+	// that nobody could open was never met. Naming one side of a split identity
+	// selected it. A name is not a scope -- it is a filter over a world that has
+	// already been validated whole, which is why the narrowing happens below and
+	// through Discovery itself.
+	//
+	// This is also the one read that says whether this repository has any
+	// history at all. There used to be a session.Latest precheck in front of it
+	// answering a boolean: a sessions directory that could not be listed, or a
+	// record that could not be stat'd, came back false and this command printed
+	// "no session in this repository" -- absence, stated from a history nobody
+	// had managed to open, about storage that might hold the very task being
+	// looked for.
+	scoped := strings.TrimSpace(*sessionName)
+	inventory, err := session.FindActive(repo.Root)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+		return exitFailed
+	}
+	if len(inventory.Records) == 0 {
+		fmt.Fprintln(os.Stderr, "sensei-code resume:", errNoSession)
+		return exitUsage
+	}
+	active := inventory.Active
+	if scoped != "" {
+		narrowed, err := inventory.ScopedTo(scoped)
+		if err != nil {
+			// A session nobody recorded is the person's mistake, not a storage
+			// failure: discovery read every record this repository holds and
+			// none of them is the one named.
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 			return exitUsage
 		}
-		sessionID = latest
+		active = narrowed
 	}
-	// The SAME session, opened for append. A resumed task continues one account
-	// of what happened; a new session log would leave the question in one file
-	// and its answer in another.
+
+	if *list {
+		// The durable review obligations are established BEFORE anything is
+		// printed, and a store failure ends the command. A listing that could
+		// not read what a task owes must not render a guess about it.
+		owed, err := loadReviewStates(repo.Root, active)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+			return exitFailed
+		}
+		printActiveTasks(os.Stdout, scoped, active, owed)
+		if scoped != "" && countStanding(tasksOf(active)) == 0 {
+			// A named session is a window onto one account. Say where else to
+			// look rather than letting "none here" read as "there are none".
+			// The hint is drawn from the inventory the listing itself came
+			// from, so it speaks about the same world.
+			reportOtherSessionsWithQuestions(os.Stdout, inventory.Active, scoped)
+		}
+		return exitCompleted
+	}
+	if strings.TrimSpace(*taskID) == "" {
+		fmt.Fprintln(os.Stderr, "sensei-code resume: --task is required; "+
+			"run `sensei-code resume --list` to see the tasks still active and what each one owes")
+		return exitUsage
+	}
+	// The record that HOLDS the task is the one this continuation appends to. A
+	// resumed task continues one account of what happened; writing into the
+	// newest session instead would leave the question in one file and its answer
+	// in another.
+	holder, held := activeTask(active, *taskID)
+	if !held {
+		// A SCOPED MISS IS NOT A REPOSITORY-WIDE ABSENCE. errTaskUnknown speaks
+		// about every session there is, and after `--session` narrowed the
+		// lookup that sentence would be stated about records this lookup never
+		// consulted -- while the inventory in hand can name the one that holds
+		// the task. Saying the wider thing is the same confident disappearance
+		// this command exists to end, one layer in.
+		if elsewhere, anywhere := activeTask(inventory.Active, *taskID); anywhere {
+			fmt.Fprintf(os.Stderr, "sensei-code resume: %v: %s is active in session %s; name that session, or omit "+
+				"--session\n", errTaskNotInSession, strings.TrimSpace(*taskID), elsewhere.SessionID)
+			return exitUsage
+		}
+		fmt.Fprintf(os.Stderr, "sensei-code resume: %v: %s\n", errTaskUnknown, strings.TrimSpace(*taskID))
+		return exitUsage
+	}
+	// A task that recorded no objective is refused HERE, ahead of both
+	// continuations, because neither of them survives it: an implementation has
+	// nothing to implement, and an --answer would spend a human-owned decision
+	// re-entering a governed path that refuses an empty objective. The task is
+	// still listed -- it exists and its candidate may be on disk -- and this is
+	// the sentence that says why it cannot go on.
+	if !holder.Task.ObjectiveUsable() {
+		fmt.Fprintf(os.Stderr, "sensei-code resume: %v: %s\n", errObjectiveUnusable, holder.Task.TaskID)
+		return exitUsage
+	}
+	sessionID := holder.SessionID
 	store, err := session.New(repo.Root, sessionID)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 		return exitFailed
 	}
-	history, err := store.Load()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "sensei-code resume: could not read the session record:", err)
-		return exitFailed
-	}
-	interrupted := session.FindInterrupted(history)
+	interrupted := tasksOf(active)
 
-	if *list {
-		printStandingQuestions(os.Stdout, sessionID, interrupted)
-		if *sessionName == "" && countStanding(interrupted) == 0 {
-			// The default session is the newest, which is rarely the one that
-			// deferred. Say where else to look rather than letting "none" read
-			// as "there are none".
-			reportOtherSessionsWithQuestions(os.Stdout, repo.Root, sessionID)
-		}
-		return exitCompleted
-	}
-	// A task named WITHOUT an answer can only be continued as a waiting review:
-	// there is nothing to authorize, only a review the candidate is already owed.
-	// selectReviewResume refuses a task that is asking a question instead.
-	if strings.TrimSpace(*taskID) != "" && strings.TrimSpace(*answer) == "" {
-		// A blocked role turn is the other thing a task can owe without a
-		// question. The durable review obligation is read first, so a task
-		// that owes a review is never continued as anything else.
+	// A task named WITHOUT an answer is continued at whatever it currently owes,
+	// decided once by selectResumeLane rather than by asking each lane in turn.
+	if strings.TrimSpace(*answer) == "" {
+		// The durable review obligation is established BEFORE the lane is
+		// chosen: a process can die after publishing a review request and
+		// recording the obligation but before the workflow writes its
+		// WAITING_REVIEW terminal, and that task owes a review the transcript
+		// does not mention.
 		owed, err := owedReviewObligation(repo.Root, *taskID)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 			return exitFailed
 		}
-		target, blocked, err := selectBlockedResume(interrupted, *taskID, owed != nil)
+		lane, err := selectResumeLane(holder.Task, owed != nil)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
 			return exitUsage
 		}
-		if blocked {
+		switch lane {
+		case laneReview:
+			return resumeAwaitingReview(ctx, repo, cfg, store, sessionID, interrupted, *taskID, *timeout, *asJSON, *quiet)
+		case laneBlocked:
+			// The lane is chosen above; this re-reads the block record to check
+			// it is bound to this task, and refuses if it is not.
+			target, blocked, err := selectBlockedResume(interrupted, *taskID, owed != nil)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "sensei-code resume:", err)
+				return exitUsage
+			}
+			if !blocked {
+				fmt.Fprintln(os.Stderr, "sensei-code resume: the record no longer states the blocked turn it was "+
+					"routed to; nothing is continued")
+				return exitFailed
+			}
 			return resumeBlockedExternal(ctx, repo, cfg, store, sessionID, target, *timeout, *asJSON, *quiet)
+		default:
+			return resumeInterruptedWork(ctx, repo, cfg, store, sessionID, holder.Task, lane, *timeout, *asJSON, *quiet)
 		}
-		return resumeAwaitingReview(ctx, repo, cfg, store, sessionID, interrupted, *taskID, *timeout, *asJSON, *quiet)
-	}
-	if strings.TrimSpace(*taskID) == "" || strings.TrimSpace(*answer) == "" {
-		fmt.Fprintln(os.Stderr, "sensei-code resume: --task and --answer are both required; "+
-			"run `sensei-code resume --list` to see the questions standing and the options each offers")
-		return exitUsage
 	}
 
 	// Decided from the durable record before anything is started. A refusal here
@@ -343,72 +431,207 @@ func resumeAuthorityAnswered(ctx context.Context, repo gitx.Repo, cfg config.Con
 	return streamUntilSettled(ctx, answered, events, resumedID, *asJSON, *quiet, *timeout)
 }
 
-// printStandingQuestions shows what may be answered, and the option ids to
-// answer it with. Without this a person has to read the event log to find out
-// what this command will accept.
-func printStandingQuestions(out io.Writer, sessionID string, tasks []session.Interrupted) {
+// reviewState is what the durable review store says about one task, read before
+// that task's lane is chosen.
+//
+// The conflict is carried rather than raised, because a listing and a router
+// answer different questions. `--task` names ONE task, so a conflict in its
+// records ends the command. `--list` is the map of everything active, and
+// refusing the whole map because one task's two records disagree would hide
+// every other task -- which is the disappearance this repair exists to end. So
+// a conflicted task is RENDERED as unroutable, with the reason, and the rest of
+// the listing stands. Fail closed about that task; do not fail closed about the
+// repository.
+type reviewState struct {
+	owed     *ghbridge.ReviewObligation
+	conflict error
+}
+
+// loadReviewStates reads the durable review obligation of every active task.
+//
+// A store failure is RETURNED. The listing used to consult no obligation at all
+// and route purely from the session transcript, so a task whose process died
+// after the review request was published and recorded but before the workflow
+// wrote its WAITING_REVIEW terminal was printed as owing implementation while
+// `--task` correctly sent it to review. The projection disagreed with the
+// router, and the durable owner of review lifetime was the one neither of them
+// asked (sensei_code.reviewobligation.a_waiter_is_disposable_the_obligation_is_not).
+func loadReviewStates(repoRoot string, active []session.Active) (map[string]reviewState, error) {
+	states := map[string]reviewState{}
+	for _, entry := range active {
+		if _, seen := states[entry.Task.TaskID]; seen {
+			continue
+		}
+		owed, err := owedReviewObligation(repoRoot, entry.Task.TaskID)
+		if err != nil {
+			return nil, fmt.Errorf("the review obligation of task %s could not be established, so what it owes "+
+				"is unknown rather than absent: %w", entry.Task.TaskID, err)
+		}
+		states[entry.Task.TaskID] = reviewState{owed: owed, conflict: reviewIdentityConflict(entry.Task, owed)}
+	}
+	return states, nil
+}
+
+// printActiveTasks shows every task this repository has begun and not finished,
+// and what each of them currently owes.
+//
+// EVERY active task, not only the ones asking a question or holding a typed
+// block. A listing that rendered three of the lanes taught its readers that the
+// other two do not exist: a task interrupted before it was planned was absent
+// here and refused by --task, so the only visible evidence of it was a candidate
+// worktree nobody could account for.
+//
+// The obligation is rendered through selectResumeLane, the same ordered decision
+// --task routes on, AND with the same durable review state --task establishes
+// before routing. Passing false for it -- which this used to do, with a comment
+// admitting the listing could not see an obligation recorded outside the session
+// record -- meant a task could be advertised at a lane resuming would not take.
+// What is printed is now what resuming would do.
+func printActiveTasks(out io.Writer, scope string, active []session.Active, review map[string]reviewState) {
 	standing := 0
-	for _, task := range tasks {
-		if len(task.AwaitingAuthority) == 0 {
-			continue
-		}
-		var q workflow.DeferredAuthority
-		if err := json.Unmarshal(task.AwaitingAuthority, &q); err != nil {
-			standing++
-			fmt.Fprintf(out, "task %s\n  the preserved question could not be read back: %v\n\n", task.TaskID, err)
-			continue
-		}
-		standing++
-		fmt.Fprintf(out, "task %s\n", task.TaskID)
+	for _, entry := range active {
+		task := entry.Task
+		fmt.Fprintf(out, "task %s  session %s\n", task.TaskID, entry.SessionID)
 		if s := strings.TrimSpace(task.Task); s != "" {
 			fmt.Fprintf(out, "  objective  %s\n", s)
 		}
-		fmt.Fprintf(out, "  question   %s\n", strings.TrimSpace(q.Decision.Subject))
-		if s := strings.TrimSpace(q.Condition); s != "" {
-			fmt.Fprintf(out, "  condition  %s\n", s)
+		state := review[task.TaskID]
+		if state.conflict != nil {
+			// Shown, and shown as unroutable. Choosing a lane for it would pick
+			// one of two records that disagree about which review this candidate
+			// is owed, and the listing has no better claim to that choice than
+			// the router, which refuses it.
+			fmt.Fprintf(out, "  owed       cannot be decided: %v\n", state.conflict)
+			fmt.Fprintln(out)
+			continue
 		}
-		if s := strings.TrimSpace(q.Decision.Reason); s != "" {
-			fmt.Fprintf(out, "  reason     %s\n", s)
-		}
-		for _, option := range q.Decision.Options {
-			fmt.Fprintf(out, "  --answer %-4s %s\n", option.ID, option.Label)
+		lane, laneErr := selectResumeLane(task, state.owed != nil)
+		switch lane {
+		case laneUnusable:
+			// Discoverable, and plainly not continuable. Dropping it from the
+			// listing is what this repair removed; pretending it can be resumed
+			// would be the same dishonesty facing the other way.
+			fmt.Fprintf(out, "  owed       %v\n", laneErr)
+		case laneQuestion:
+			standing++
+			printStandingQuestion(out, task)
+		case laneBlocked:
+			printBlockedObligation(out, task)
+		default:
+			fmt.Fprintf(out, "  owed       %s\n", lane)
+			if s := strings.TrimSpace(task.Review); s != "" && lane == laneImplementation {
+				fmt.Fprintf(out, "  review     %s\n", oneLine(s))
+			}
+			fmt.Fprintf(out, "  resume     --task %s\n", task.TaskID)
 		}
 		fmt.Fprintln(out)
 	}
-	// Blocked turns are not questions and are not counted as standing, but a
-	// listing that hid them would leave a waiting task invisible. The retry
-	// time printed is the one the provider supplied, or UNKNOWN.
-	for _, task := range tasks {
-		if len(task.NotConverged) != 0 {
-			if n, err := workflow.ParseNotConverged(task.NotConverged); err != nil {
-				fmt.Fprintf(out, "task %s\n  not converged, but the record could not be read back: %v\n\n", task.TaskID, err)
-			} else {
-				fmt.Fprintf(out, "task %s\n  not converged  %s\n  resume         --task %s\n\n", task.TaskID, n.Describe(), task.TaskID)
-			}
-			continue
-		}
-		if len(task.BlockedExternal) == 0 {
-			continue
-		}
-		block, err := workflow.ParseExternalBlock(task.BlockedExternal)
-		if err != nil {
-			fmt.Fprintf(out, "task %s\n  blocked external, but the record could not be read back: %v\n\n", task.TaskID, err)
-			continue
-		}
-		fmt.Fprintf(out, "task %s\n  blocked    %s\n  resume     --task %s\n\n", task.TaskID, block.Describe(), task.TaskID)
+	where := "all sessions"
+	if strings.TrimSpace(scope) != "" {
+		where = "session " + scope
 	}
-	if standing == 0 {
-		fmt.Fprintf(out, "session %s: no human-owned question is standing\n", sessionID)
+	if len(active) == 0 {
+		fmt.Fprintf(out, "%s: no task is active\n", where)
 		return
 	}
-	fmt.Fprintf(out, "session %s: %d standing\n", sessionID, standing)
+	if standing == 0 {
+		fmt.Fprintf(out, "%s: %d active, no human-owned question is standing\n", where, len(active))
+		return
+	}
+	fmt.Fprintf(out, "%s: %d active, %d standing\n", where, len(active), standing)
+}
+
+// printStandingQuestion renders the question a task is asking, and the option
+// ids --answer will accept. Without this a person has to read the event log to
+// find out what this command takes.
+func printStandingQuestion(out io.Writer, task session.Interrupted) {
+	var q workflow.DeferredAuthority
+	if err := json.Unmarshal(task.AwaitingAuthority, &q); err != nil {
+		fmt.Fprintf(out, "  the preserved question could not be read back: %v\n", err)
+		return
+	}
+	fmt.Fprintf(out, "  question   %s\n", strings.TrimSpace(q.Decision.Subject))
+	if s := strings.TrimSpace(q.Condition); s != "" {
+		fmt.Fprintf(out, "  condition  %s\n", s)
+	}
+	if s := strings.TrimSpace(q.Decision.Reason); s != "" {
+		fmt.Fprintf(out, "  reason     %s\n", s)
+	}
+	for _, option := range q.Decision.Options {
+		fmt.Fprintf(out, "  --answer %-4s %s\n", option.ID, option.Label)
+	}
+}
+
+// printBlockedObligation renders a turn a provider blocked, or a re-plan a
+// non-converged task is owed. The retry time printed is the one the provider
+// supplied, or UNKNOWN.
+func printBlockedObligation(out io.Writer, task session.Interrupted) {
+	if len(task.NotConverged) != 0 {
+		if n, err := workflow.ParseNotConverged(task.NotConverged); err != nil {
+			fmt.Fprintf(out, "  not converged, but the record could not be read back: %v\n", err)
+		} else {
+			fmt.Fprintf(out, "  not converged  %s\n  resume         --task %s\n", n.Describe(), task.TaskID)
+		}
+		return
+	}
+	block, err := workflow.ParseExternalBlock(task.BlockedExternal)
+	if err != nil {
+		fmt.Fprintf(out, "  blocked external, but the record could not be read back: %v\n", err)
+		return
+	}
+	fmt.Fprintf(out, "  blocked    %s\n  resume     --task %s\n", block.Describe(), task.TaskID)
+}
+
+// tasksOf is the tasks alone, for the selectors that decide from a task record
+// and have no use for which session holds it.
+func tasksOf(active []session.Active) []session.Interrupted {
+	out := make([]session.Interrupted, 0, len(active))
+	for _, entry := range active {
+		out = append(out, entry.Task)
+	}
+	return out
+}
+
+// activeTask finds one task by the id a person named. It never falls back to a
+// near match or to "the only one there is": continuing a task nobody named is
+// how a restart silently works on something else.
+func activeTask(active []session.Active, taskID string) (session.Active, bool) {
+	taskID = strings.TrimSpace(taskID)
+	for _, entry := range active {
+		if entry.Task.TaskID == taskID {
+			return entry, true
+		}
+	}
+	return session.Active{}, false
+}
+
+// oneLine keeps a multi-line review readable inside a listing.
+func oneLine(s string) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " · "))
+	if len(s) > 160 {
+		return s[:160] + "…"
+	}
+	return s
+}
+
+// standsAnAnswerableQuestion is the ONE definition of "this task is asking
+// something a person can answer", so the listing, its footer and the "look in
+// these other sessions" hint cannot disagree about which tasks those are.
+//
+// An unusable objective disqualifies one. Such a task holds a question nobody
+// can answer -- the lane selector refuses it ahead of laneQuestion -- and
+// counting it would suppress the hint on the strength of a question this command
+// will not accept an answer to, leaving a person with no answerable question and
+// no pointer to one.
+func standsAnAnswerableQuestion(task session.Interrupted) bool {
+	return len(task.AwaitingAuthority) != 0 && task.ObjectiveUsable()
 }
 
 // countStanding is how many of these tasks are actually asking something.
 func countStanding(tasks []session.Interrupted) int {
 	n := 0
 	for _, task := range tasks {
-		if len(task.AwaitingAuthority) != 0 {
+		if standsAnAnswerableQuestion(task) {
 			n++
 		}
 	}
@@ -416,33 +639,31 @@ func countStanding(tasks []session.Interrupted) int {
 }
 
 // reportOtherSessionsWithQuestions points at sessions that DO hold a standing
-// question, so an empty default listing is not read as "there are none".
+// question, so an empty scoped listing is not read as "there are none".
 //
-// It reads the recorded event kinds only — it does not decide anything and does
-// not resume anything. Naming a session is the person's act, which is why
-// --session exists rather than this picking one.
-func reportOtherSessionsWithQuestions(out io.Writer, root, skip string) {
-	dir := filepath.Join(root, ".sensei-code", "sessions")
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return
+// IT IS A PROJECTION OF THE VALIDATED INVENTORY, not a second walk of storage.
+// It used to read the sessions directory itself and skip every failure it met --
+// an unlistable directory, a record it could not open, a history it could not
+// parse -- returning silently in each case. So the one sentence whose whole
+// purpose is to say "look elsewhere" said nothing at all about exactly the
+// records that might be hiding the question, and an empty listing beside that
+// silence read as a repository with nothing standing in it. Discovery has
+// already refused those records outright by the time this is called; what
+// remains is a grouping of what it returned.
+//
+// It decides nothing and resumes nothing. Naming a session is the person's act,
+// which is why --session exists rather than this picking one.
+func reportOtherSessionsWithQuestions(out io.Writer, inventory []session.Active, skip string) {
+	standing := map[string]int{}
+	for _, entry := range inventory {
+		if entry.SessionID == skip || !standsAnAnswerableQuestion(entry.Task) {
+			continue
+		}
+		standing[entry.SessionID]++
 	}
 	var others []string
-	for _, entry := range entries {
-		if !entry.IsDir() || entry.Name() == skip {
-			continue
-		}
-		store, err := session.New(root, entry.Name())
-		if err != nil {
-			continue
-		}
-		history, err := store.Load()
-		if err != nil {
-			continue
-		}
-		if n := countStanding(session.FindInterrupted(history)); n > 0 {
-			others = append(others, fmt.Sprintf("  --session %s   (%d standing)", entry.Name(), n))
-		}
+	for sessionID, n := range standing {
+		others = append(others, fmt.Sprintf("  --session %s   (%d standing)", sessionID, n))
 	}
 	if len(others) == 0 {
 		return
