@@ -68,7 +68,7 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 	}
 }
 
-// POLARITY, NOT STRINGS. One hazardous operation, read in twenty-six contexts.
+// POLARITY, NOT STRINGS. One hazardous operation, read in forty-two contexts.
 //
 // Observed 2026-09-20 on task-1789870806342069862: the plan step "publication
 // may open a branch and pull request only, never merge or push to main" was
@@ -77,70 +77,100 @@ func TestASemaphorePlanIsNotADeployment(t *testing.T) {
 // to reach. The inversion is the harm: the more carefully an objective writes
 // down what it will NOT do, the more certainly it escalates.
 //
-// So the operation is held constant -- one outward action, mostly "push to
-// main" -- and only the context around it moves. A row that passed because the
-// wording changed would prove nothing; these rows share the wording.
+// So the operation is held constant -- one outward action, almost always "push
+// to main" -- and only the context around it moves. A row that passed because
+// the wording changed would prove nothing; these rows share the wording.
 //
-// Rows 2 and 3 are the defect: a prohibition and a reported rule, both refused
-// before this repair. EVERY OTHER ROW IS A CONTROL, and they are all the same
-// shape -- a plan that genuinely declares the action, which must still reach a
-// person. Each one names a specific way to overshoot, and each of those is
-// somebody's plausible first fix:
+// Rows 2, 3 and 39 are the defect: a prohibition, a quoted rule, and the second
+// sentence the live run also refused. The BOUNDED rows below them are the
+// ordinary prohibition forms an earlier attempt escalated anyway. Every other
+// row is a CONTROL of the same shape -- a plan that genuinely declares the
+// action, which must still reach a person -- and each one names a specific way
+// to overshoot.
+//
+// # The four required contexts
+//
+//	affirmative intent            rows 1, 40, 41
+//	explicit prohibition          rows 2, 13, 18, 26, 30, 31, 32, 33, 39, 42, 43
+//	quoted or described forbidden action   row 3
+//	asserted action wrapped in reassurance rows 4, 5, 7, 27
+//
+// "do not merge" is in the task's required behaviour and is not a row, because
+// it would be vacuous: "merge" is not in outwardVerbs at all, so no wording of
+// it can produce a merge consequence and the row would prove nothing about
+// polarity. Row 2 carries the same prohibition over an operation that IS in the
+// vocabulary.
+//
+// # What each control is guarding
 //
 //	row 4  a negation AFTER the operation -- suppressing a sentence that
 //	       contains "no"
 //	row 5  a negation BEFORE it, governing something else, joined by "and" --
 //	       counting every negator earlier in the clause; row 4 cannot see this
-//	row 6  the operation quoted and PERFORMED -- suppressing every quoted
-//	       span; row 3 cannot see this
-//	row 7  row 5 with the connector swapped for a dash -- ending a negation
-//	       only at a coordination; row 5 cannot see this
+//	row 6  the operation quoted and PERFORMED -- suppressing every quoted span
+//	row 7  row 5 with the connector swapped for a dash
 //	row 8  a double negation -- reading a negator's PRESENCE rather than what
 //	       it negates, which is the third recorded forbidden fix; no other row
 //	       can see this
 //	row 9  a step NAMED in quotation marks and then run -- treating labelling
-//	       as citation; row 6 cannot see this, because it has no cue at all
-//	row 10 a conjunction under a negation ("not stop and push to main") --
-//	       carrying a negation across "and"; row 5 cannot see this, because
-//	       its negation is stopped by a pronoun too. Pair to row 2.
+//	       as citation
+//	row 10 a conjunction under a negation ("not stop and push to main");
+//	       row 2's disjunction is what makes these two differ, and only this
+//	       pair proves the asymmetry is De Morgan's rather than a preference
 //	row 11 a noun built on a negating stem ("preventive") -- matching those
 //	       stems by bare prefix
 //	row 12 a prohibition in the previous SENTENCE -- not splitting clauses
-//	row 14 an IMPERATIVE second clause after a dash -- stopping a negation
-//	       only at a pronoun or an auxiliary; row 7 cannot see this, because
-//	       "the run will" supplies both
-//	row 15 "instead of X, <asserted>" -- reading a prepositional negator as
-//	       one that runs forward, which inverts the guard outright
+//	row 14 an IMPERATIVE second clause after a dash, which supplies neither a
+//	       pronoun nor an auxiliary to stop at
+//	row 15 "instead of X, <asserted>" -- reading a prepositional negator as one
+//	       that runs forward, which inverts the guard outright
 //	row 16 row 8's sentence plus "no-op" -- letting a hyphenated compound
 //	       donate a negator, which reverses parity rather than blunting it
-//	row 17 a quotation introduced by a FETCHING verb ("reads") -- row 9
-//	       removed labelling words and cannot see this one
-//	row 19 a subordinator ("before") -- row 12's property where the boundary
-//	       is a word rather than a full stop
-//	row 20 a RUN-ON with no connector -- the only row where the new predicate
-//	       must be recognised by its subject alone
-//	row 21 " so " -- a consequence connector, distinct from " so that "
-//	row 22 a THIRD labelling verb -- applying rows 9 and 17's argument to the
-//	       two words somebody happened to test, and no further
-//	row 23 "cannot complete without a push to main" -- dropping a
-//	       complement negator outright instead of scoping it
-//	row 24 "without further review push to main" -- the pair to 23: listing
-//	       that same negator as one that runs forward
-//	row 25 an ADVERBIAL between the two halves of a double negative --
-//	       ending a negation at a preposition, which was tried and removed
-//	row 26 the same adverbial inside a prohibition -- the false-escalation
-//	       half of that same removed rule
+//	row 17 a quotation introduced by a FETCHING verb ("reads")
+//	row 19 a subordinator ("before") -- row 12's property where the boundary is
+//	       a word rather than a full stop
+//	row 20 a RUN-ON with no connector at all
+//	row 21 " so " -- a consequence connector introducing a result
+//	row 22 a THIRD labelling verb, applying rows 9 and 17's argument to the
+//	       whole class rather than the two words somebody happened to test
+//	row 23 "cannot complete without a push to main" -- a double negative
+//	       through a prepositional negator
+//	row 24 "without further review push to main" -- the pair to 23
+//	row 25 an ADVERBIAL between the two halves of a double negative
+//	row 27 "with no additional review push to main" -- a negated noun phrase
+//	       inside an adjunct, then a bare imperative
+//	row 28 row 23 with the same claim in the other word order, which an
+//	       implementation that only looks BACKWARDS from the operation reads
+//	       the opposite way
+//	row 29 a quotation whose next clause performs what it cited
+//	row 34 a negated subject with its own finite verb, then a second predicate
+//	row 35 the operation as the object of a preposition after a negated subject
+//	row 36 existential "there is no ..." over the same shape
+//	row 37 a negated fragment followed by a bare imperative
+//	row 38 the same, with no auxiliary anywhere in the clause
 //	row 1  a bare declaration -- anything that stops reading
 //
-// Rows 13 and 18 are bounded like rows 2 and 3, and both are the original bug
-// intact in a spelling people actually use: "don't" unless the contraction is
-// expanded, and "neither merge nor push to main" unless a concord is counted
-// once. Row 18 is the pair to row 2 -- the same prohibition, spelled the more
-// careful way.
+// Rows 27, 28, 29, 34, 35, 36, 37 and 38 are the ones that matter most, and
+// they are here because an earlier implementation carried a negation forward
+// until something recognised stopped it. Under that default every construction
+// nobody had listed fell toward SUPPRESSION, so each of these plain
+// declarations was read as bounded. They are the proof that the default is now
+// the other way round: a negation suppresses an occurrence only where it can be
+// shown to govern it.
+//
+// Rows 30, 31, 32 and 33 are the cost of that inversion paid off rather than
+// accepted: ordinary prohibitions -- an embedded predicate under a permission
+// verb, a negated subject with an auxiliary, and a postposed prohibition --
+// which the same earlier implementation escalated. A classifier that only
+// fixed the false grants by escalating everything would pass rows 27-38 and
+// fail these.
 //
 // The pairings are the point. Rows 4/5/7 are one sentence with its reassurance
-// moved and its connector swapped; rows 3/6/9 are one quotation under three
-// introducing words. A repair that gets one of a pair right and the other wrong
+// moved and its connector swapped; rows 3/6/9/17/22/29 are one quotation under
+// six introducing words; rows 23/28 are one claim in two word orders; rows
+// 2/10 are one coordination under two connectors. A repair that gets one of a
+// pair right and the other wrong is exactly the repair this test exists to
+// refuse.
 // is exactly the repair this test exists to refuse.
 func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 	for _, tc := range []struct {
@@ -167,11 +197,18 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
 	}, {
-		// 3. Mentioned. The operation is quoted, as the name of a boundary the
-		// run is writing a test for. Deliberately carries no negator of its own,
-		// so it can only pass if mentions are distinguished from uses.
-		name:       "a quoted forbidden action is a mention, not a use",
-		step:       `the objective the worker was given says "push to main" is out of bounds, and this run adds the test that proves it`,
+		// 3. QUOTED AND FORBIDDEN -- the third required context. The plan cites
+		// the rule it is under, verbatim, in the sentence that also says what
+		// this run does instead.
+		//
+		// What makes it bounded is the PROHIBITION inside the quotation, read
+		// exactly as it would be read unquoted; the quotation marks contribute
+		// nothing. That is deliberate, and row 29 is why: a repair that treated
+		// a cited span as a mention and blanked it lost the operation in `the
+		// runbook says "push to main" and the run does exactly that`, where the
+		// very next clause performs what was quoted.
+		name:       "a quoted prohibition is bounded by its prohibition",
+		step:       `the objective the worker was given says "never push to main", and this run adds the test that proves it`,
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
 	}, {
@@ -423,6 +460,175 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 		step:       "we must not at any point push to main",
 		wantResult: ConsequenceBounded,
 		wantRoute:  RouteArchitectural,
+	}, {
+		// 27. A negated NOUN PHRASE inside an adjunct, then a bare imperative.
+		// "no" negates the review, not the push, and the plan is saying it will
+		// push WITHOUT one -- the worst sentence in the table to misread. An
+		// implementation that carries a negation forward until something
+		// recognised stops it reads this as bounded, because nothing between
+		// "no" and the push is on any stop list.
+		name:       "a negated adjunct does not clear the imperative after it",
+		step:       "with no additional review push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 28. Row 23's claim in the other word order, and the pair that proves
+		// the reading does not depend on it. The release cannot complete unless
+		// the push happens, so the push is asserted both ways round; an
+		// implementation that collects only what PRECEDES the operation reads
+		// this one as bounded while row 23 escalates -- the same sentence
+		// answered two ways.
+		name:       "a fronted complement negation is still a double negative",
+		step:       "without a push to main the release cannot complete",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 29. CITED, THEN PERFORMED. Row 3 is bounded and this is not, and the
+		// only difference is that the quotation here carries no prohibition and
+		// the next clause runs it. Blanking a cited span removes the single
+		// hazardous token in this text, so the router is handed a bounded
+		// result for a run that has just said it will publish. Rows 6, 9, 17
+		// and 22 each vary the introducing word; this one varies what the
+		// sentence goes on to do.
+		name:       "a citation whose next clause performs it is a use",
+		step:       `the runbook says "push to main" and the run does exactly that`,
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 30. An EMBEDDED PREDICATE under a permission verb. "never allow it to
+		// deploy" prohibits deploying, not allowing, and it is one of the most
+		// ordinary ways to write a limit. Treating the pronoun as the start of
+		// a new predicate escalated it -- a person asked to authorize a
+		// boundary the plan had just drawn.
+		name:       "a prohibition through a permission verb is not a declaration",
+		step:       "never allow it to deploy",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 31. A NEGATED SUBJECT with an auxiliary. The auxiliary is what says
+		// "no part of this run" heads the predicate the push is in; row 34
+		// removes it and must escalate, which is what keeps this row from being
+		// satisfied by suppressing every clause that begins with "no".
+		name:       "a negated subject with an auxiliary is a prohibition",
+		step:       "no part of this run will push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 32. The same shape with a different subject noun, because the rule
+		// must not depend on the noun: subject nouns are an open class, and a
+		// classifier that happened to know "part" and not "step" would be the
+		// second forbidden fix with a smaller whitelist.
+		name:       "the negated subject may be any noun",
+		step:       "no step in the plan will push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 33. POSTPOSED. The prohibition comes AFTER the operation it governs,
+		// which nothing reading leftwards from the operation can see. This is
+		// how a plan states a rule about a named action rather than a step it
+		// is taking.
+		name:       "a postposed prohibition governs the operation before it",
+		step:       "push to main is never allowed",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 34. Row 31 with the auxiliary removed, so "no reviewer bypassed" is a
+		// complete predicate of its own and the push that follows is a second
+		// one. Without this row, row 31 is satisfiable by suppressing anything
+		// that starts with "no", which is the third forbidden fix narrowed to
+		// one word.
+		name:       "a negated subject with its own verb does not reach the next predicate",
+		step:       "no reviewer bypassed the run push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 35. The operation as the object of a PREPOSITION after a negated
+		// subject: what is denied is the approval gate, and the push is the
+		// thing nothing now stands in the way of. Read as bounded, this is a
+		// plan announcing an unguarded publish and being granted it.
+		name:       "a negated subject does not reach into a following prepositional phrase",
+		step:       "no approval gate remains for the push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 36. The existential form of row 35. "there is no support for X" says
+		// X is unsupported, not that X will not happen -- and the clause does
+		// not even begin with the negator, so a rule keyed on that alone would
+		// pass this by accident rather than on purpose.
+		name:       "an existential negation does not clear the operation it is about",
+		step:       "there is no support for a push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 37. A negated FRAGMENT followed by a bare imperative, with no
+		// connector between them. "no manual approval required" is the
+		// reassurance; "push to main automatically" is the plan.
+		name:       "a negated fragment does not clear the imperative after it",
+		step:       "no manual approval required push to main automatically",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 38. The terse version, with no auxiliary anywhere. Plan prose written
+		// as notes looks exactly like this, and every word of it is either a
+		// negator, a noun or the operation.
+		name:       "a negated noun fragment does not clear the imperative after it",
+		step:       "no exceptions deploy to production at the end",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 39. The SECOND sentence the live defect refused, run directly, which
+		// is what proved it was not one verb and not one wording. The
+		// prohibition and the account of what the run actually does are two
+		// sentences, and both have to be read correctly for this to be bounded.
+		name:       "the second observed sentence is bounded too",
+		step:       "the run must never deploy anything; it only edits files in the candidate worktree",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 40. The required behaviour, stated bare: "push to main" is a
+		// consequence signal. Row 1 wraps it in a sentence; this is the
+		// operation with no context at all, which is what every other row is a
+		// deviation from.
+		name:       "the bare operation is a declaration",
+		step:       "push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 41. And with an explicit subject and auxiliary, which is the minimal
+		// affirmative declaration: "the plan will push to main".
+		name:       "an explicit affirmative declaration escalates",
+		step:       "the plan will push to main",
+		wantResult: ConsequenceUnacceptable,
+		wantRoute:  RouteHuman,
+		says:       "outside the worktree",
+	}, {
+		// 42. Its minimal pair, one word apart: "never push to main". Rows 40,
+		// 41 and 42 are the task's required behaviour in full, and the only
+		// thing separating the last from the first two is that word.
+		name:       "the bare prohibition is not a declaration",
+		step:       "never push to main",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
+	}, {
+		// 43. Row 33's shape where the subject is a MULTI-WORD operation whose
+		// first token is not the one being classified: "to production" is an
+		// outward phrase in its own right and it sits after "deploy" rather
+		// than at the front of the clause. Both occurrences have to be read as
+		// the subject of the same negated predicate, or the phrase escalates
+		// while the verb does not.
+		name:       "a postposed prohibition governs a multi-word operation",
+		step:       "deploy to production is never permitted",
+		wantResult: ConsequenceBounded,
+		wantRoute:  RouteArchitectural,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			action := Action{Stage: StageCandidateEdit,
@@ -454,62 +660,79 @@ func TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts(t *testing.T) {
 	}
 }
 
-// A quotation belongs to the step that wrote it.
+// A QUOTATION IS NOT SUPPRESSION.
 //
-// Masking ran over the joined text, so an unbalanced delimiter in one step
-// paired with a delimiter several steps later and blanked everything between
-// them -- every declaration in the gap, silently, with no negation and no
-// citation anywhere near them. It is the only fault in this classifier whose
-// reach is unbounded: one stray backtick, and an arbitrary number of asserted
-// outward actions stop existing.
+// An earlier repair read a quotation introduced by a citing word as a MENTION
+// and blanked the span. Two faults, and this proves both are gone.
 //
-// Backticks make it ordinary rather than exotic. Plans are markdown-flavoured
-// prose, and a lone backtick around a path or an identifier, after a word like
-// "says", is a completely normal thing to write.
-func TestAStrayDelimiterDoesNotReachIntoAnotherStep(t *testing.T) {
+// It could not survive its own counterexample. A plan that quotes an operation
+// and then performs it -- `the runbook says "push to main" and the run does
+// exactly that` -- has exactly one hazardous token, inside the quotation, so
+// blanking it handed the authority router a bounded result for a run that had
+// just said it would publish. That is the end-to-end row 29; here it is at the
+// classifier.
+//
+// And the blanking had UNBOUNDED REACH: an unbalanced delimiter in one step
+// paired with a delimiter several steps later and erased every declaration in
+// between, with no negation and no citation anywhere near them. Backticks make
+// that ordinary rather than exotic -- plans are markdown-flavoured prose, and a
+// lone backtick around a path after a word like "says" is a normal thing to
+// write.
+//
+// So quotation marks are punctuation and nothing more. The last case is what
+// that costs and what it does not: a quoted PROHIBITION is still bounded,
+// because the prohibition inside it is read exactly as it would be read
+// unquoted.
+func TestAQuotationIsNotSuppression(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		steps []string
-		// survives names the token that sits on the OTHER side of the stray
-		// delimiter. Asserting only that something was found would pass on a
-		// regression that blanked the later lines, because the same line as
-		// the delimiter can contribute a token of its own.
-		survives string
+		// want is the exact reading. Asserting only that something was found
+		// would pass on a regression that blanked the later steps, because the
+		// step holding the delimiter can contribute a token of its own.
+		want []string
 	}{{
-		name:     "an unbalanced quotation does not blank the steps after it",
-		steps:    []string{`the objective says "push to main`, "deploy to production", `is refused"`},
-		survives: "deploy",
+		name:  "a quoted operation the next clause performs is a declaration",
+		steps: []string{`the runbook says "push to main" and the run does exactly that`},
+		want:  []string{"push to"},
 	}, {
-		name:     "an unbalanced backtick does not blank the steps after it",
-		steps:    []string{"the rule says `git push", "then deploy to production", "see publish.go`"},
-		survives: "deploy",
+		name:  "a quoted operation with no prohibition in it is a declaration",
+		steps: []string{`the objective says "push to main" is the rule here`},
+		want:  []string{"push to"},
 	}, {
-		// And inside ONE step, across its own lines. Steps are joined with a
-		// newline, so per-step masking alone would look like it covered this;
-		// a step is prose and carries its own line breaks, and the reach is
-		// the same.
-		name:     "an unbalanced delimiter does not blank the next line of its own step",
-		steps:    []string{"the rule says `git push\ndeploy to production is the last step\nsee publish.go`"},
-		survives: "deploy",
+		name:  "a quoted prohibition is still bounded",
+		steps: []string{`the objective says "never push to main" and this run obeys it`},
+		want:  nil,
+	}, {
+		name:  "an unbalanced quotation does not blank the steps after it",
+		steps: []string{`the objective says "push to main`, "deploy to production", `is refused"`},
+		want:  []string{"deploy", "push to", "to production"},
+	}, {
+		// "publish" in the last step is read too, and that is the vocabulary
+		// working as it always has: "." is not a word byte, so "publish.go" is
+		// a word-boundary match. It is listed here rather than written around,
+		// because an expected reading that quietly omits a token is not one.
+		name:  "an unbalanced backtick does not blank the steps after it",
+		steps: []string{"the rule says `git push", "then deploy to production", "see publish.go`"},
+		want:  []string{"deploy", "publish", "git push", "to production"},
+	}, {
+		// And inside ONE step, across its own lines. A step is prose and
+		// carries its own line breaks, so per-step handling alone would look
+		// like it covered this.
+		name:  "an unbalanced delimiter does not blank the next line of its own step",
+		steps: []string{"the rule says `git push\ndeploy to production is the last step\nsee publish.go`"},
+		want:  []string{"deploy", "publish", "git push", "to production"},
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := declaredOutwardActions(tc.steps, "")
-			found := false
-			for _, g := range got {
-				if g == tc.survives {
-					found = true
+			same := len(got) == len(tc.want)
+			for i := range got {
+				if same && got[i] != tc.want[i] {
+					same = false
 				}
 			}
-			if !found {
-				t.Fatalf("%q was erased by a delimiter on another line; read %v from %q",
-					tc.survives, got, tc.steps)
-			}
-			// And the same delimiter, balanced inside one step, still masks --
-			// otherwise this would pass on a classifier that had simply stopped
-			// reading quotations at all.
-			cited := []string{`the objective says "push to main" is refused`}
-			if got := declaredOutwardActions(cited, ""); len(got) != 0 {
-				t.Fatalf("a cited rule inside one step was read as a declaration: %v", got)
+			if !same {
+				t.Fatalf("read %v from %q, want %v", got, tc.steps, tc.want)
 			}
 		})
 	}

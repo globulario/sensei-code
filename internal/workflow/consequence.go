@@ -352,7 +352,7 @@ var outwardPhrases = []string{
 	"migrate the database", "database migration", "schema migration",
 }
 
-// --- INTENT, NOT VOCABULARY -------------------------------------------------------
+// --- WHAT THE PLAN ASSERTS, NOT WHICH WORDS IT CONTAINS ---------------------
 //
 // A closed vocabulary answers "is this word here". The question the assessment
 // actually asks is "does this plan say it will DO this", and the two came apart
@@ -373,25 +373,68 @@ var outwardPhrases = []string{
 // authorize a boundary nobody proposed crossing. A guard that punishes the
 // safest way to write a plan teaches plans to stop saying what they will not do.
 //
-// So the vocabulary stays exactly as it is, and what changes is WHERE each
-// occurrence is read:
+// So the vocabulary stays exactly as it is, and what changes is how each
+// occurrence is READ.
 //
-//	MENTION   a citing word introduces a quotation of it -- it is being reported,
-//	          as the identity of a boundary or the text of a rule, not performed
-//	NEGATED   a negator whose scope actually reaches it -- the plan asserts the
-//	          absence of THIS action, not of something else in the same sentence
-//	ASSERTED  everything else -- a consequence signal, exactly as before
+// # Suppression requires positive evidence
 //
-// Both readings are bounded to what they govern, and that boundary is the whole
-// difficulty. A negation that is merely EARLIER, and a quotation that is merely
-// PRESENT, say nothing about the operation beside them: "no reviewer is bypassed
-// and the run will push to main" declares the push, and `execute "push to main"`
-// performs what it quotes. Reading either one as blanket suppression loses a
-// declaration the router must interrupt on -- the single direction this must
-// never fail in.
+// The first attempt at this carried a negation FORWARD until something
+// recognisable stopped it. That default is the wrong way round. Every
+// construction nobody had thought of yet fell toward suppression, so plain
+// declarations -- "with no additional review push to main", "no approval gate
+// remains for the push to main", "there is no support for a push to main" --
+// were read as bounded, and the authority router never got to interrupt a run
+// that had just said it would publish. Adding stop-conditions cannot repair
+// that, because the list of them is precisely what is incomplete.
 //
-// Three repairs are forbidden here and recorded in the graph, because each one
-// would make this symptom disappear while leaving the defect:
+// So the default is inverted. An occurrence is ASSERTED unless one of three
+// relations can be POSITIVELY shown to hold between a negation and that
+// occurrence. Anything unrecognised is asserted, which fails toward the person
+// rather than past them.
+//
+//	NEGATED PREDICATE   a negator, or a verb that negates its own complement,
+//	                    stands before the operation with nothing in between but
+//	                    the material of one predicate: auxiliaries, the
+//	                    infinitive "to", determiners, adverbials, a permission
+//	                    verb and its object, or a disjunct the same negation
+//	                    governs.
+//	                      "never merge or push to main"
+//	                      "never allow it to deploy"
+//	                      "refuses to push to main"
+//	NEGATIVE SUBJECT    the clause opens with "no"/"none"/"neither" and an
+//	                    auxiliary marks the predicate that subject heads.
+//	                      "no part of this run will push to main"
+//	POSTPOSED           the operation stands as the clause's own subject and the
+//	                    predicate made of it is negated.
+//	                      "push to main is never allowed"
+//
+// Parity, never presence: "the run cannot avoid a deploy to production" carries
+// two negations that reach the deploy, and therefore asserts it. Reading a
+// negator's presence is the third recorded forbidden fix.
+//
+// # Quotation is not suppression
+//
+// An earlier version read a quotation introduced by a citing word as a MENTION
+// and blanked it. It did not survive its own counterexample: in
+//
+//	the runbook says "push to main" and the run does exactly that
+//
+// the operation is quoted and then performed, and blanking the only hazardous
+// token in the text made the performance invisible. Nothing about being quoted
+// is evidence that an action will not be taken, and the blanking had unbounded
+// reach besides -- one unbalanced delimiter erased every declaration after it.
+//
+// So quotation marks are punctuation here and nothing else. A quoted
+// PROHIBITION is still bounded, because the prohibition inside it is read
+// exactly as it would be anywhere else: `the objective says "never push to
+// main"` is bounded by its "never", not by its quotation marks. The price is
+// that a bare cited operation carrying no negation of its own escalates -- what
+// it did before any of this existed, and the direction to be wrong in.
+//
+// # Forbidden repairs
+//
+// Three are recorded in the graph, because each would make the symptom
+// disappear while leaving the defect:
 //
 //  1. rephrasing the plan's safety constraint so the matcher stops seeing it.
 //     The constraint is the thing being protected.
@@ -403,303 +446,370 @@ var outwardPhrases = []string{
 //     declaration such as "the run cannot avoid a deploy to production".
 //
 // This is a claim-reader, as it always was. It reads the plan's own account
-// more accurately; it does not become a safety net, and an undeclared publish
-// is still stopped by the structural stage boundary rather than by this.
-//
-// KNOWN LIMITS, and they are the honest part of the design. Four independent
-// fresh-context reviews each found further sentences where a negation reaches
-// an operation it does not govern, and each round of stop-conditions revealed
-// the next shape -- one of them reopening a class an earlier round had closed.
-// The reason is structural: scopeReaches DEFAULTS to carrying and stops only at
-// what it recognises, so anything unrecognised fails toward suppression, which
-// is the dangerous direction.
-//
-// A NEGATED NOUN-PHRASE SUBJECT, then a new predicate with a noun subject:
-//
-//	"no reviewer bypassed the run push to main"
-//	"no manual approval required push to main automatically"
-//	"no exceptions deploy to production at the end"
-//	"with no additional review push to main"
-//	"no approval gate remains for the push to main"
-//	"no blocker remains for the deploy to production"
-//	"there is no support for a push to main"
-//
-// All of these assert the action by saying nothing obstructs it, and all read
-// as bounded. predicateMarkers cannot see them: noun subjects are an open class
-// and this file reads only closed ones.
-//
-// A FRONTED COMPLEMENT NEGATION, whose cancelling negator comes after the
-// operation rather than before it:
-//
-//	"without a push to main the release cannot complete"   (bounded)
-//	"the release cannot complete without a push to main"   (escalates, row 23)
-//
-// The same claim in two word orders, read two ways, because negatorEndsBefore
-// collects only what precedes the operation -- which is right in general and
-// wrong for a fronted modifier.
-//
-// A CITED QUOTATION THE NEXT CLAUSE PERFORMS:
-//
-//	`the runbook says "push to main" and the run does exactly that`
-//
-// mentionCues cannot be emptied without losing the mention case entirely, which
-// is one of the four behaviours this exists to provide, so "says" remains a
-// cheap way to disarm the lane for one operation.
-//
-// Closing these needs the default INVERTED: a negation should suppress an
-// operation only where it can be POSITIVELY shown to govern it, rather than
-// wherever nothing was found to stop it. That is a different classifier, not
-// another entry in a list, and it costs false escalations on prohibitions this
-// one currently reads correctly. It is not attempted here.
-//
-// What makes the residue survivable is what has always made it survivable: an
-// outward action this misreads still meets the structural stage boundary, which
-// does not consult any of this.
+// more accurately; it does not become a safety net, and an UNDECLARED publish
+// is stopped by the structural stage boundary rather than by any of this.
 
-// negators are the words that reverse what FOLLOWS them in the same clause.
+// negators deny the predicate they attach to.
 //
-// Counted by parity, not by presence. "the run cannot avoid a deploy to
-// production" carries two and asserts the deploy; presence alone is forbidden
-// fix 3 and would swallow it.
-var negators = []string{
-	"never", "not", "cannot", "no", "nor", "neither",
-}
+// Counted by parity, never by presence: "the run cannot avoid a deploy to
+// production" carries two and asserts the deploy.
+//
+// " nor " is deliberately absent. Negative concord spells ONE prohibition with
+// two words -- "neither merge nor push to main" -- so counting it as a second
+// negation cancelled the first and escalated the most careful phrasing of the
+// sentence that caused this defect. It is a disjunction here.
+var negators = []string{"never", "not", "cannot", "no", "none", "neither"}
 
-// "instead of" and "rather than" are NOT here, and their absence is a
-// correction rather than an omission. They are prepositional and take the
-// REJECTED alternative as their complement, so the clause that follows is the
-// branch the plan is CHOOSING. Listed as forward-running negators they
-// suppressed exactly the asserted action -- "instead of merging push to main"
-// read as bounded, which is the sign of the guard inverted on a sentence whose
-// whole purpose is to state intent.
-//
-// "without" is prepositional too, and it is handled separately by
-// complementNegators below rather than dropped: it negates its own complement,
-// which is sometimes the operation itself.
-var complementNegators = []string{"without"}
-
-// complementDeterminers are all that may stand between a complement negator and
-// the operation it negates.
-//
-// "without" negates a NOUN PHRASE, so it suppresses an operation only when the
-// operation IS that noun phrase: "without a push to main". Dropping it outright
-// fixed "without further review push to main" and broke the double negative it
-// also appears in -- "the release cannot complete without a push to main" read
-// as bounded, which is the very class the third forbidden fix describes. A
-// determiner is the only thing that may intervene, so the two readings never
-// meet.
-var complementDeterminers = []string{"a", "an", "the", "any"}
+// subjectNegators are the quantifiers that can head a negated SUBJECT. The
+// adverbial negators are not among them: "never part of this run" is not a
+// sentence anybody writes.
+var subjectNegators = []string{"no", "none", "neither"}
 
 // negatorStems are verbs that negate their own complement, in any inflection:
 // "refuses to push to main", "forbidden to deploy", "prevented from publishing".
 var negatorStems = []string{"refus", "reject", "forbid", "prohibit", "prevent", "avoid", "declin"}
 
-// clauseBreaks are where a negator stops carrying.
-//
-// " and " and " or " are deliberately absent. "never merge or push to main" is
-// one negator governing a coordination, and breaking there would re-manufacture
-// the exact false escalation this exists to remove. A comma DOES break, which
-// fails toward escalation: "we never merge, and we will push to main" asserts
-// the push.
-//
-// The dashes, brackets and subordinators are here because plan prose is largely
-// IMPERATIVE, and an imperative second clause offers no pronoun and no
-// auxiliary for scopeReaches to stop at. "never touch the vendor tree - deploy
-// to production from the release branch" and "do not stop before deploy to
-// production" inherited the prohibition and were granted; the connector is what
-// a reader sees as the boundary, so it is what has to end the clause.
-var clauseBreaks = []string{
-	".", ";", ":", "!", "?", "\n", ",",
-	" - ", "\u2014", "\u2013", "(", ")", "[", "]",
-	" but ", " however ", " whereas ", " although ", " though ", " while ",
-	" because ", " then ", " so that ", " so ", " therefore ",
-	" before ", " after ", " once ", " when ", " unless ", " until ", " since ",
-}
-
-// quotePairs delimit a quotation.
-//
-// The apostrophe is not one, and its absence is the point: "the agent's plan
-// will push to main" would open a span at the possessive and swallow the rest
-// of the text, so a real declaration would go unread. An unbalanced delimiter
-// suppresses nothing for the same reason.
-var quotePairs = [][2]string{{`"`, `"`}, {"`", "`"}, {"\u201c", "\u201d"}}
-
-// mentionCues turn a quotation into a MENTION: the one word immediately before
-// the opening delimiter, and nothing wider.
-//
-// A quotation is not by itself a mention. Suppressing every quoted span made
-// `execute "push to main"` indistinguishable from a rule that merely names the
-// operation, and the run that performs what it quotes is exactly the one the
-// authority router has to interrupt. So a quotation suppresses nothing unless a
-// citing word introduces it, and the default -- an unintroduced quotation is a
-// use -- fails toward the person rather than past them. The price is that a
-// bare code reference in prose, `git push` in a sentence about publish.go,
-// escalates; that is what it did before any of this existed.
-//
-// REPORTED SPEECH ONLY, and the distinction is not fussy. Everything that
-// LABELS or FETCHES has been removed, in three rounds and for one argument: a
-// rule that is quoted is being reported, while a step that is quoted is being
-// named or retrieved, and both of those are the ordinary prelude to doing it.
-// "named"/"called" went first -- "the step named \"deploy to production\" runs
-// last" was read as a mention and granted -- then "reads"/"writes"/"states",
-// because a machine reads a command in order to run it, then
-// "describes"/"mentions"/"quoted", because "the matrix describes `deploy to
-// production` and the job runs it" labels a step exactly as "named" does.
-//
-// What is left only reports. Some residual ambiguity is unavoidable -- "the
-// config says `deploy to production` and the runner obeys" still reads as a
-// mention -- because a classifier with no notion of citation at all cannot tell
-// a rule from a plan, which is the defect this exists to repair.
-var mentionCues = []string{"says", "said"}
-
-// conjunctions END a negation inside its own clause; a disjunction does not.
-//
-// That asymmetry is De Morgan's, not a heuristic. "never merge OR push to main"
-// forbids both, so the negation has to reach the second conjunct -- and " or "
-// is therefore not a clause break and not listed here. "we will not stop AND
-// push to main" does not forbid the push: the natural reading is two
-// statements, and the one that matters is asserted. " nor " is absent because
-// it continues a negation rather than starting a predicate.
-var conjunctions = []string{" and ", " plus "}
-
-// predicateMarkers END a negation because a new predicate has started.
-//
-// Subject pronouns and auxiliaries, both closed classes in English, and that is
-// the whole reason they are usable here: the alternative is guessing at subject
-// nouns, which is open-ended and would be a different lexical hack.
-//
-// Without this the negation ran to the end of its clause, so a reassurance and
-// a declaration joined by anything unlisted became a grant: "no reviewer is
-// bypassed and the run will push to main" escalated only because it used the
-// word "and", while "no reviewer is bypassed - the run will push to main" and
-// "no tests fail so we deploy to production" were read as bounded. Same
-// sentence, one punctuation mark, opposite authority.
-//
-// They cost false escalations, and the cost is real: "never allow it to deploy"
-// carries "it", and "no part of this run will push to main" and "no step in the
-// plan will push to main" carry "will" -- an auxiliary inside the SAME
-// predicate, not a new one. Those are prohibitions read as declarations, which
-// sends a person a question they can dismiss at a glance. That is the direction
-// to be wrong in, and it is still worth reducing.
-var predicateMarkers = []string{
-	"we", "i", "you", "he", "she", "it", "they", "there",
-	"will", "shall", "would", "should", "must", "may", "might", "can", "could",
-	"is", "are", "was", "were", "has", "have", "had", "does", "did",
-}
-
 // verbEndings are the inflections a negating verb stem may carry.
 //
 // Bare prefix matching read "preventive", "prevention", "avoidance", "refusal"
-// and "rejected" as negations, and one spurious negator flips parity -- which
-// is the fail-open direction. A stem plus a VERBAL ending is a verb; a stem
-// plus "-ive", "-ion", "-ance" or "-al" is the noun or adjective beside it.
+// and "rejected" as negations, and one spurious negator flips parity -- the
+// fail-open direction. A stem plus a VERBAL ending is a verb; a stem plus
+// "-ive", "-ion", "-ance" or "-al" is the noun or adjective beside it.
 var verbEndings = []string{"", "e", "s", "es", "ed", "en", "den", "ing"}
 
-// declaredOutwardActions reads a plan's own steps and consequences for an
-// outward action it ASSERTS.
-//
-// Word-anchored for the bare tokens, so "deploy" does not fire inside
-// "deployment.go" or "redeployable"; phrase-anchored for the ambiguous ones.
-// Each occurrence is then read in its clause: a quoted mention and a negated
-// clause are not declarations, and anything else is.
-func declaredOutwardActions(steps []string, consequences string) []string {
-	// Masked PER STATEMENT, before anything is joined. A quotation belongs to
-	// the step that wrote it, and an unbalanced delimiter must not reach past
-	// it: joining first let one step's stray backtick pair with a delimiter
-	// several steps later and blank every declaration in between, which is the
-	// only fault here with unbounded reach.
-	var said []string
-	for _, s := range append(append([]string{}, steps...), consequences) {
-		s = strings.ToLower(s)
-		// Contractions carry their negator in a form no word split recovers.
-		s = strings.ReplaceAll(s, "n't", " not ")
-		for _, q := range quotePairs {
-			s = maskMentions(s, q[0], q[1])
-		}
-		said = append(said, s)
-	}
-	parts := clausesOf(strings.Join(said, " \n "))
+// auxiliaries and modals mark where a predicate begins, and they are usable
+// here for one reason: in English they are a closed class. The alternative is
+// guessing at lexical verbs, which is open-ended.
+var auxiliaries = []string{
+	"will", "shall", "would", "should", "must", "may", "might", "can", "could",
+	"do", "does", "did", "is", "are", "was", "were", "be", "been", "being",
+	"has", "have", "had",
+}
 
-	var found []string
-	for _, verb := range outwardVerbs {
-		if assertedIn(parts, verb, true) {
-			found = append(found, verb)
+// permissionVerbs negate their complement when they are themselves negated:
+// "never allow it to deploy" is a prohibition on deploying, not on allowing.
+var permissionVerbs = []string{
+	"allow", "allows", "allowed", "permit", "permits", "permitted",
+	"let", "lets", "authorize", "authorizes", "authorized",
+	"authorise", "authorises", "authorised", "enable", "enables", "enabled",
+}
+
+// pronouns are subject pronouns: a closed class, and the evidence that a new
+// clause has started rather than a coordinated phrase continuing.
+var pronouns = []string{"we", "i", "you", "he", "she", "it", "they", "there"}
+
+// determiners may stand between a negation and the operation it negates
+// without ending the predicate: "forbids a push to main".
+var determiners = []string{
+	"a", "an", "the", "this", "that", "these", "those", "its", "their", "our", "any",
+}
+
+// adverbials are the modifiers a prohibition puts between its negator and its
+// verb: "we must not at any point push to main".
+//
+// Short and closed on purpose. A word that is not listed ENDS the walk, which
+// asserts the operation, so the cost of an omission here is a false escalation
+// and never a false grant.
+var adverbials = []string{
+	"ever", "again", "at", "any", "all", "in", "under",
+	"point", "time", "times", "circumstances", "practice", "case", "cases",
+	"further", "directly", "immediately", "actually", "ultimately",
+	"explicitly", "silently", "automatically",
+}
+
+// disjunctions distribute a negation over both of their elements: "never merge
+// OR push to main" forbids the push as well.
+var disjunctions = []string{"or", "nor"}
+
+// conjunctions do NOT distribute it. "we will not stop AND push to main" is two
+// statements, and the one that matters is asserted. That asymmetry is
+// De Morgan's, not a preference.
+var conjunctions = []string{"and", "plus", "but"}
+
+// clauseBreaks are where polarity resets.
+//
+// Punctuation only. Subordinating WORDS used to be listed here and no longer
+// need to be: an unrecognised word ends the walk by itself, so "do not stop
+// before deploy to production" asserts the deploy because "before" and "stop"
+// are not predicate material -- not because " before " was written down.
+//
+// A comma DOES break, which fails toward escalation: "we never merge, and we
+// will push to main" asserts the push.
+var clauseBreaks = []string{
+	".", ";", ":", "!", "?", "\n", ",",
+	" - ", "—", "–", "(", ")", "[", "]",
+}
+
+// word is one word-byte run of a clause, with its offsets.
+type word struct {
+	text  string
+	start int
+	end   int
+}
+
+// clause is one clause read once: its words, and which of those words belong to
+// an outward operation. The second is what lets a coordinated operation stand
+// between a negator and the one being classified.
+type clause struct {
+	text  string
+	words []word
+	inOp  []bool
+}
+
+// readClause tokenises a clause and marks the words every outward operation in
+// it covers.
+func readClause(text string) clause {
+	c := clause{text: text}
+	for i := 0; i < len(text); {
+		if !isWordByte(text[i]) {
+			i++
+			continue
 		}
+		j := i
+		for j < len(text) && isWordByte(text[j]) {
+			j++
+		}
+		c.words = append(c.words, word{text: text[i:j], start: i, end: j})
+		i = j
+	}
+	c.inOp = make([]bool, len(c.words))
+	mark := func(token string, atWordBoundary bool) {
+		for _, at := range occurrencesOf(text, token, atWordBoundary) {
+			first, last := c.span(at, at+len(token))
+			for i := first; i >= 0 && i <= last; i++ {
+				c.inOp[i] = true
+			}
+		}
+	}
+	for _, verb := range outwardVerbs {
+		mark(verb, true)
 	}
 	for _, phrase := range outwardPhrases {
-		if assertedIn(parts, phrase, false) {
-			found = append(found, strings.TrimSpace(phrase))
-		}
+		mark(phrase, false)
 	}
-	return found
+	return c
 }
 
-// maskMentions blanks the quoted spans a citing word introduces, delimiters
-// included, and leaves every other quotation exactly where it is.
-//
-// Blanked rather than removed: what is left is the sentence that did the
-// quoting, with a hole where the reported operation was, so the surrounding
-// clauses keep their own shape and are read normally.
-//
-// An uncited quotation is written through untouched, so the operation inside it
-// is read as the clause's own -- `execute "push to main"` declares the push.
-func maskMentions(text, open, close string) string {
-	var b strings.Builder
-	i := 0
-	for i < len(text) {
-		o := strings.Index(text[i:], open)
-		if o < 0 {
-			break
+// span returns the first and last word indices the byte range [at,end) covers,
+// or (-1,-1) if it covers none.
+func (c clause) span(at, end int) (int, int) {
+	first, last := -1, -1
+	for i, w := range c.words {
+		if w.end > at && w.start < end {
+			if first < 0 {
+				first = i
+			}
+			last = i
 		}
-		o += i
-		rest := text[o+len(open):]
-		if nl := strings.IndexByte(rest, '\n'); nl >= 0 {
-			// A quotation that does not close on its own line is not a
-			// quotation. Without this a stray delimiter reaches across every
-			// line after it looking for a partner.
-			rest = rest[:nl]
-		}
-		c := strings.Index(rest, close)
-		if c < 0 {
-			// No closing delimiter. A quotation nobody can delimit is not
-			// suppressed -- failing toward the human, not past them.
-			break
-		}
-		c += o + len(open)
-		end := c + len(close)
-		b.WriteString(text[i:o])
-		if citedAt(text, o) {
-			b.WriteString(strings.Repeat(" ", end-o))
-		} else {
-			b.WriteString(text[o:end])
-		}
-		i = end
 	}
-	b.WriteString(text[i:])
-	return b.String()
+	return first, last
 }
 
-// citedAt reports whether the quotation opening at o is introduced by a citing
-// word: the last whole word before the delimiter, and nothing wider.
+// asserted reports whether the operation covering [at,end) is one this clause
+// declares, rather than one a negation in it denies.
 //
-// Deliberately one word. Widening this to "a citing word somewhere in the
-// clause" would let any sentence that happens to mention a rule suppress an
-// operation it goes on to perform, which is the quotation-shaped form of the
-// forbidden fix that drops every sentence containing "never".
-func citedAt(text string, o int) bool {
-	j := o
-	for j > 0 && !isWordByte(text[j-1]) {
-		j--
+// The default is ASSERTED. Each of the three suppressing relations must be
+// positively established against THIS occurrence; none of them is a state the
+// clause carries around.
+func (c clause) asserted(at, end int) bool {
+	first, last := c.span(at, end)
+	if first < 0 {
+		return true
 	}
-	i := j
-	for i > 0 && isWordByte(text[i-1]) {
-		i--
+	return !c.negatedPredicate(first) && !c.negativeSubject(first) && !c.postposed(first, last)
+}
+
+// negatedPredicate walks left from the operation and reports whether it lands
+// on a negation with nothing but one predicate's own material in between.
+//
+// Every step has to be recognised. An unrecognised word is a new predicate as
+// far as this can tell, and the walk stops there: "no reviewer is bypassed and
+// the run will push to main" stops at "run" and declares the push, and "with no
+// additional review push to main" stops at "review" and declares it too.
+func (c clause) negatedPredicate(k int) bool {
+	for i := k - 1; i >= 0; i-- {
+		w := c.words[i].text
+		switch {
+		case listed(negators, w) && !c.compound(i):
+			return !c.cancelled(i)
+		case negatingVerb(w):
+			return !c.cancelled(i)
+		case listed(disjunctions, w):
+			// "never merge or push to main": one negation over two elements.
+			n := c.negatorBeforeDisjunct(i)
+			return n >= 0 && !c.cancelled(n)
+		case c.predicateMaterial(i):
+			continue
+		case i > 0 && listed(permissionVerbs, c.words[i-1].text):
+			continue // the object of a control verb: "never allow IT to deploy"
+		default:
+			return false
+		}
 	}
-	if i == j {
+	return false
+}
+
+// predicateMaterial reports whether a word can stand inside the predicate a
+// negation governs without ending it.
+func (c clause) predicateMaterial(i int) bool {
+	w := c.words[i].text
+	return c.inOp[i] || w == "to" ||
+		listed(auxiliaries, w) || listed(determiners, w) ||
+		listed(adverbials, w) || listed(permissionVerbs, w)
+}
+
+// negatorBeforeDisjunct resolves the first element of a negated coordination:
+// in "never merge or push to main" the negator governs the second disjunct too,
+// even though "merge" is not in the outward vocabulary and so is not otherwise
+// recognisable.
+//
+// Bounded to a SHORT BARE element -- no auxiliary, no subject pronoun, no
+// second coordination, four words at most -- because that is what distinguishes
+// a coordinated verb phrase from a new clause that happens to begin with "or".
+func (c clause) negatorBeforeDisjunct(d int) int {
+	for i := d - 1; i >= 0 && d-i <= 5; i-- {
+		w := c.words[i].text
+		if listed(negators, w) && !c.compound(i) {
+			return i
+		}
+		if listed(auxiliaries, w) || listed(pronouns, w) ||
+			listed(disjunctions, w) || listed(conjunctions, w) {
+			return -1
+		}
+	}
+	return -1
+}
+
+// negativeSubject reports a clause opening with a negative quantifier whose
+// subject heads the predicate the operation sits in: "no part of this run will
+// push to main", "no step in the plan will push to main".
+//
+// The AUXILIARY is the positive evidence, and it is what separates this from
+// two statements run together. "no exceptions deploy to production at the end"
+// and "no manual approval required push to main automatically" carry none, and
+// assert their operation. A coordination ends it as well: "no rollback is
+// possible and the run will push to main" declares the push.
+func (c clause) negativeSubject(k int) bool {
+	if len(c.words) == 0 || !listed(subjectNegators, c.words[0].text) || c.compound(0) {
 		return false
 	}
-	for _, cue := range mentionCues {
-		if text[i:j] == cue {
+	aux := -1
+	for i := 1; i < k; i++ {
+		w := c.words[i].text
+		if listed(disjunctions, w) || listed(conjunctions, w) || listed(negators, w) {
+			return false
+		}
+		if aux < 0 {
+			if listed(auxiliaries, w) {
+				aux = i
+			}
+			continue
+		}
+		// Past the auxiliary only the predicate's own material may stand;
+		// anything else is a second predicate, as in "no reviewer is bypassed
+		// the run will push to main".
+		if !c.predicateMaterial(i) {
+			return false
+		}
+	}
+	return aux >= 0
+}
+
+// postposed reports the operation standing as the clause's own SUBJECT with the
+// predicate made of it negated: "push to main is never allowed".
+//
+// Positive evidence in both directions. Only the operation's own material may
+// precede it, so `the objective says "push to main" is refused` is not this
+// shape and escalates. And the auxiliary must follow across at most the
+// operation's own object, with no coordination and no second negation, so
+// "push to main and the tag is not signed" is not this shape either.
+func (c clause) postposed(first, last int) bool {
+	for i := 0; i < first; i++ {
+		if !c.inOp[i] && !listed(determiners, c.words[i].text) {
+			return false
+		}
+	}
+	aux, gap := -1, 0
+	for i := last + 1; i < len(c.words); i++ {
+		w := c.words[i].text
+		if listed(auxiliaries, w) {
+			aux = i
+			break
+		}
+		if c.inOp[i] {
+			continue
+		}
+		if listed(disjunctions, w) || listed(conjunctions, w) ||
+			listed(negators, w) || w == "to" || gap >= 2 {
+			return false
+		}
+		gap++
+	}
+	if aux < 0 {
+		return false
+	}
+	for i := aux + 1; i < len(c.words); i++ {
+		w := c.words[i].text
+		if (listed(negators, w) && !c.compound(i)) || negatingVerb(w) {
+			return true
+		}
+		if listed(auxiliaries, w) || listed(adverbials, w) {
+			continue
+		}
+		return false
+	}
+	return false
+}
+
+// cancelled reports whether an odd number of negations already stand before the
+// one at i, which reverses it: "the run cannot avoid a deploy to production"
+// carries "cannot" before "avoid" and therefore ASSERTS the deploy.
+//
+// Parity is the decision, so a single spurious negator does not blunt the
+// answer -- it inverts it. That is why compounds are excluded.
+func (c clause) cancelled(i int) bool {
+	n := 0
+	for j := 0; j < i; j++ {
+		w := c.words[j].text
+		if (listed(negators, w) && !c.compound(j)) || negatingVerb(w) {
+			n++
+		}
+	}
+	return n%2 == 1
+}
+
+// compound reports whether the word at i is joined to a neighbour by a hyphen,
+// which makes it part of a compound word rather than a token of its own.
+//
+// "-" is not a word byte, so without this "no-op" donates a free "no" -- and
+// this repository writes "no-op" constantly.
+func (c clause) compound(i int) bool {
+	w := c.words[i]
+	return (w.start > 0 && c.text[w.start-1] == '-') ||
+		(w.end < len(c.text) && c.text[w.end] == '-')
+}
+
+// negatingVerb reports whether a word is one of the negatorStems in a verbal
+// inflection -- "refuses", "forbidden", "prevented" -- and not the noun or
+// adjective built on the same stem.
+func negatingVerb(w string) bool {
+	for _, stem := range negatorStems {
+		if !strings.HasPrefix(w, stem) {
+			continue
+		}
+		for _, end := range verbEndings {
+			if w[len(stem):] == end {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// listed reports membership of one of this file's closed vocabularies.
+func listed(set []string, w string) bool {
+	for _, s := range set {
+		if s == w {
 			return true
 		}
 	}
@@ -714,12 +824,46 @@ func clausesOf(text string) []string {
 	return strings.Split(text, "\x00")
 }
 
-// assertedIn reports whether the token appears in some clause as an action the
-// plan asserts, rather than one it denies.
-func assertedIn(parts []string, token string, word bool) bool {
-	for _, c := range parts {
-		for _, at := range occurrencesOf(c, token, word) {
-			if governingNegators(c, at)%2 == 0 {
+// declaredOutwardActions reads a plan's own steps and consequences for an
+// outward action it ASSERTS.
+//
+// Word-anchored for the bare tokens, so "deploy" does not fire inside
+// "deployment.go" or "redeployable"; phrase-anchored for the ambiguous ones.
+// Each occurrence is then read in its own clause, and it is a declaration
+// unless a negation can be shown to govern it.
+func declaredOutwardActions(steps []string, consequences string) []string {
+	// Read PER STATEMENT, and never joined. A construction in one step has no
+	// way to reach an operation in another.
+	var clauses []clause
+	for _, s := range append(append([]string{}, steps...), consequences) {
+		s = strings.ToLower(s)
+		// Contractions carry their negator in a form no word split recovers.
+		s = strings.ReplaceAll(s, "n't", " not ")
+		for _, part := range clausesOf(s) {
+			clauses = append(clauses, readClause(part))
+		}
+	}
+
+	var found []string
+	for _, verb := range outwardVerbs {
+		if assertedIn(clauses, verb, true) {
+			found = append(found, verb)
+		}
+	}
+	for _, phrase := range outwardPhrases {
+		if assertedIn(clauses, phrase, false) {
+			found = append(found, strings.TrimSpace(phrase))
+		}
+	}
+	return found
+}
+
+// assertedIn reports whether the token appears anywhere as an action the plan
+// asserts, rather than one it denies.
+func assertedIn(clauses []clause, token string, atWordBoundary bool) bool {
+	for _, c := range clauses {
+		for _, at := range occurrencesOf(c.text, token, atWordBoundary) {
+			if c.asserted(at, at+len(token)) {
 				return true
 			}
 		}
@@ -728,8 +872,8 @@ func assertedIn(parts []string, token string, word bool) bool {
 }
 
 // occurrencesOf returns the start offsets of token in text, at word boundaries
-// when word is set.
-func occurrencesOf(text, token string, word bool) []int {
+// when atWordBoundary is set.
+func occurrencesOf(text, token string, atWordBoundary bool) []int {
 	var out []int
 	for i := 0; i+len(token) <= len(text); {
 		j := strings.Index(text[i:], token)
@@ -738,46 +882,10 @@ func occurrencesOf(text, token string, word bool) []int {
 		}
 		start := i + j
 		end := start + len(token)
-		if !word || wordAt(text, start, end) {
+		if !atWordBoundary || wordAt(text, start, end) {
 			out = append(out, start)
 		}
 		i = start + 1
-	}
-	return out
-}
-
-// negatesItsComplement reports whether the operation at `at` IS the complement
-// of a preposition ending at `from` -- nothing but determiners in between.
-func negatesItsComplement(c string, from, at int) bool {
-	for _, w := range wordsIn(c[from:at]) {
-		ok := false
-		for _, d := range complementDeterminers {
-			if w == d {
-				ok = true
-				break
-			}
-		}
-		if !ok {
-			return false
-		}
-	}
-	return true
-}
-
-// wordsIn splits text into its word-byte runs.
-func wordsIn(text string) []string {
-	var out []string
-	for i := 0; i < len(text); {
-		if !isWordByte(text[i]) {
-			i++
-			continue
-		}
-		j := i
-		for j < len(text) && isWordByte(text[j]) {
-			j++
-		}
-		out = append(out, text[i:j])
-		i = j
 	}
 	return out
 }
@@ -786,171 +894,6 @@ func wordsIn(text string) []string {
 func wordAt(text string, start, end int) bool {
 	return (start == 0 || !isWordByte(text[start-1])) &&
 		(end == len(text) || !isWordByte(text[end]))
-}
-
-// compoundAt reports whether [start,end) is joined to a neighbour by a hyphen,
-// which makes it part of a compound word rather than a token of its own.
-func compoundAt(text string, start, end int) bool {
-	return (start > 0 && text[start-1] == '-') || (end < len(text) && text[end] == '-')
-}
-
-// governingNegators counts the negators in clause c whose scope actually
-// reaches the operation at offset at.
-//
-// Two bindings, and both are load-bearing.
-//
-// PRECEDING ONLY. A negator governs what comes after it, so a negator later in
-// the clause says nothing about this operation: "the last step will push to
-// main and no rollback is possible" declares the push.
-//
-// AND ONLY AS FAR AS ITS OWN PREDICATE. Counting every earlier negator was the
-// mirror mistake, and it failed in the direction that matters: "no reviewer is
-// bypassed and the run will push to main" carries a single "no" that negates
-// the bypass and nothing else, and the push was silently cleared -- the
-// router never got to interrupt a run that had just said it would publish.
-// scopeReaches is where that stops.
-//
-// Parity, not presence, for what does reach: "the run cannot avoid a deploy to
-// production" carries two and asserts the deploy. Reading presence is the
-// forbidden fix.
-//
-// The residual error is the mirror case, "push to main is never allowed", which
-// escalates to a person who can see at a glance that it should not have. That
-// is the affordable one.
-func governingNegators(c string, at int) int {
-	n := 0
-	for _, end := range negatorEndsBefore(c, at) {
-		if scopeReaches(c, end, at) {
-			n++
-		}
-	}
-	return n
-}
-
-// negatorEndsBefore returns the end offset of every negator that starts before
-// at: the listed words, and the verbs that negate their own complement in any
-// inflection ("refuses to push to main", "forbidden to deploy").
-//
-// A complement negator ("without") is counted only where the operation IS its
-// complement; see complementDeterminers.
-//
-// Two other occurrences are refused, and both because ONE spurious negator is
-// enough -- parity is the decision, so a wrong count does not degrade the
-// answer, it inverts it.
-//
-// A HYPHENATED COMPOUND is a word, not a negator. "-" is not a word byte, so
-// "no-op" offered a free "no": adding "the no-op run" to "cannot avoid a deploy
-// to production" flipped that sentence from declared to bounded, and "no-op" is
-// everywhere in this repository's own prose.
-//
-// A SECOND NEGATOR IN A CONCORD does not negate twice. "neither merge nor push
-// to main" is one prohibition spelled with two words; counted as two it
-// cancelled itself and escalated -- the original bug, in the most careful
-// phrasing of the sentence that caused it.
-func negatorEndsBefore(c string, at int) []int {
-	var ends []int
-	seen := false
-	for i := 0; i < at; i++ {
-		for _, neg := range negators {
-			if i+len(neg) > at || c[i:i+len(neg)] != neg {
-				continue
-			}
-			if !wordAt(c, i, i+len(neg)) || compoundAt(c, i, i+len(neg)) {
-				continue
-			}
-			if neg == "nor" && seen {
-				continue // concord: it continues the negation, it does not add one
-			}
-			seen = true
-			ends = append(ends, i+len(neg))
-			break
-		}
-		for _, neg := range complementNegators {
-			if i+len(neg) > at || c[i:i+len(neg)] != neg || !wordAt(c, i, i+len(neg)) {
-				continue
-			}
-			if negatesItsComplement(c, i+len(neg), at) {
-				ends = append(ends, i+len(neg))
-			}
-		}
-	}
-	for i := 0; i < at; {
-		if !isWordByte(c[i]) {
-			i++
-			continue
-		}
-		j := i
-		for j < at && isWordByte(c[j]) {
-			j++
-		}
-		if negatingVerb(c[i:j]) {
-			ends = append(ends, j)
-		}
-		i = j
-	}
-	return ends
-}
-
-// negatingVerb reports whether a word is one of the negatorStems in a verbal
-// inflection -- "refuses", "forbidden", "prevented" -- and not the noun or
-// adjective built on the same stem.
-func negatingVerb(word string) bool {
-	for _, stem := range negatorStems {
-		if !strings.HasPrefix(word, stem) {
-			continue
-		}
-		for _, end := range verbEndings {
-			if word[len(stem):] == end {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// scopeReaches reports whether a negation ending at from still governs the
-// operation at at, or whether something in between took the sentence somewhere
-// else.
-//
-// Two ways it stops, and both are closed classes rather than guesses:
-//
-//	a CONJUNCTION -- "not stop AND push to main" asserts the push; a
-//	disjunction does not stop it, because "never merge OR push to main"
-//	forbids both
-//	a PREDICATE MARKER -- a subject pronoun or an auxiliary, which is a new
-//	clause wearing a connector the break list never listed: "- the run will",
-//	"so we", "before we"
-//
-// A third test was tried and REMOVED, and the reason is worth keeping. Ending a
-// negation at a preposition fixed "no approval gate remains for the push to
-// main", and it cost more than it bought in both directions: it ended the OUTER
-// negator of a double negative, so "the run cannot in practice avoid a deploy
-// to production" read as bounded -- the exact class forbidden fix 3 and row 8
-// exist to close, re-entered through an adverbial -- and it re-escalated
-// careful prohibitions like "we must not at any point push to main", which is
-// the harm this whole change exists to remove. A rule that reopens the defect
-// it was added beside is not a smaller version of the fix.
-//
-// Everything else carries, and that default is the whole weakness of this
-// design: it reads a negation further than it can prove, so an unrecognised
-// construction fails toward suppression. See KNOWN LIMITS above for the shapes
-// that still get through.
-func scopeReaches(c string, from, at int) bool {
-	if from > at {
-		return false
-	}
-	span := c[from:at]
-	for _, conj := range conjunctions {
-		if len(occurrencesOf(span, conj, false)) != 0 {
-			return false
-		}
-	}
-	for _, m := range predicateMarkers {
-		if len(occurrencesOf(span, m, true)) != 0 {
-			return false
-		}
-	}
-	return true
 }
 
 // containsWord reports a token present at word boundaries.
