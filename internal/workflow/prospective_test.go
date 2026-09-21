@@ -578,3 +578,63 @@ func TestTheGrantSurvivesAReviewFeedbackCycle(t *testing.T) {
 		t.Fatal("the grant section is repeated")
 	}
 }
+
+// DF-20: a declared regression-test WITNESS is not the #312 prospective CREATE,
+// and must never quietly become one.
+//
+// The forbidden repair here is "future test does not exist -> fabricate an
+// anchor or graph identity -> call it covered". The two channels are computed
+// from different inputs and neither writes into the other's output: the
+// coverage computation never sees a witness declaration, so an absent witness
+// path stays uncovered by the graph; the witness channel issues an operational
+// grant that carries no anchor and no base bytes.
+func TestAPlannedTestCreateMintsNoAnchorAndNoProspectiveGrant(t *testing.T) {
+	anchors := derivedAnchorNaming(t, gosumcheckS, gosumcheckF)
+	read := worldOf(map[string]string{gosumcheckS: gosumcheckSrc})
+	planned := []string{gosumcheckS, gosumcheckF}
+
+	// The plan declares the absent test as a witness and declares NO
+	// prospective surface. The #312 channel therefore grants nothing, and the
+	// absent path takes no coverage -- even though an anchor names it.
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned, nil, anchors, read)
+	if len(grants) != 0 {
+		t.Fatalf("a witness declaration leaked into prospective authority: %+v", grants)
+	}
+	for _, a := range out {
+		if a.File == gosumcheckF {
+			t.Fatalf("the planned test create was given a graph anchor: %+v", a)
+		}
+	}
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("the existing surface should be the only covered file: %+v", out)
+	}
+
+	// The witness channel grants the same path, from the subject's evidence.
+	bind := planBinding{Task: "t", Objective: identityOf("prove the check"), Plan: identityOf("the plan")}
+	witness := TestWitness{Path: gosumcheckF, Operation: witnessCreate, Role: roleGoRegressionTestCreate,
+		Subject: gosumcheckS, Package: "gosumcheck", Dependencies: []string{"testing"}}
+	edits, reasons := testWitnessGrants(context.Background(), bind, prospectiveWorld, planned,
+		[]TestWitness{witness}, nil, out, authoredEvidence{}, read)
+	if len(edits) != 1 || len(reasons) != 0 {
+		t.Fatalf("the declared witness was not granted: %+v %v", edits, reasons)
+	}
+	if edits[0].BaseHash != "" || edits[0].Covering != gosumcheckS || edits[0].CoveringEvidence != evidenceDerived {
+		t.Fatalf("the planned create is not an evidence-derived, byte-less grant: %+v", edits[0])
+	}
+	// And the coverage the graph established is exactly what it was.
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("issuing a witness grant moved derived coverage: %+v", out)
+	}
+}
+
+// Both witness renderings reach the worker, through the same prompt the
+// prospective grants travel on. Authority that constrains execution must be
+// visible at the execution boundary, or the worker discovers it by refutation.
+func TestRunCandidateHandsTheWitnessGrantsToThePrompt(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	for _, want := range []string{"renderTestEditGrants", "editGrants", "renderTestWitnessCreates", "createGrants"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("runCandidate does not pass %s into the implementation prompt", want)
+		}
+	}
+}

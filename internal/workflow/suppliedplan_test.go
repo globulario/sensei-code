@@ -285,3 +285,56 @@ func TestASuppliedPlanDecisionIsNotRecordedAsTheArchitects(t *testing.T) {
 		t.Fatalf("an unattended run is recorded as a /run grant: %+v", g)
 	}
 }
+
+// DF-20: the regression-test witness declarations are part of the executable
+// bound, so a resumed run validates its recorded grants against the same
+// declarations the original run was routed under.
+//
+// They travel in the durable plan record and never in the rendered summary,
+// which omits them entirely -- a resume that read the summary would restore a
+// plan that declares no witnesses and then refuse every grant the run held.
+func TestAResumedBoundCarriesItsRegressionTestWitnesses(t *testing.T) {
+	const raw = `{"decision":"proceed","summary":"repair the unavailability semantics",` +
+		`"plan":"THE GOVERNING BOUND: prove the change with the declared witnesses","files":["internal/provider/unavailable.go","internal/provider/unavailable_test.go","internal/agent/unavailable_test.go"],` +
+		`"test_witnesses":[` +
+		`{"path":"internal/provider/unavailable_test.go","operation":"edit","role":"go-regression-test-edit","subject":"internal/provider/unavailable.go"},` +
+		`{"path":"internal/agent/unavailable_test.go","operation":"create","role":"go-regression-test-create","subject":"internal/provider/unavailable.go","package":"agent","dependencies":["testing"]}` +
+		`]}`
+	p, err := ParseSuppliedPlan([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(p.decision.TestWitnesses) != 2 {
+		t.Fatalf("the plan contract did not carry the declarations: %+v", p.decision.TestWitnesses)
+	}
+	summary := planSummaryFrom(p.decision, PlanSupplied, p.Digest)
+	if strings.Contains(summary, "unavailable_test.go") {
+		t.Fatal("precondition: the summary must be the lossy rendering this test guards against")
+	}
+	record, _ := json.Marshal(proposedPlan{architectureDecision: p.decision, PlanSource: PlanSupplied, PlanDigest: p.Digest})
+	found := session.FindInterrupted([]event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Summary: "task"},
+		{TaskID: "t", Kind: event.PlanProposed, Summary: summary, Payload: record},
+	})
+	bound, err := (&Engine{}).restorePlanBound(found[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bound.Witnesses) != 2 {
+		t.Fatalf("the resumed bound lost its witness declarations: %+v", bound.Witnesses)
+	}
+	for i, want := range p.decision.TestWitnesses {
+		if !sameWitness(bound.Witnesses[i], want) {
+			t.Fatalf("witness %d came back as a different declaration: %+v want %+v", i, bound.Witnesses[i], want)
+		}
+	}
+	// And a resumed task's scope states them, so what a restart is bound to is
+	// legible rather than implied.
+	tc := taskContext{Files: bound.Files, Witnesses: bound.Witnesses}
+	for _, want := range []string{"edit witness internal/provider/unavailable_test.go", "create witness internal/agent/unavailable_test.go"} {
+		if !strings.Contains(scopeSummary(tc), want) {
+			t.Fatalf("the resumed scope does not state %q: %s", want, scopeSummary(tc))
+		}
+	}
+	_ = roles.Reviewer
+}

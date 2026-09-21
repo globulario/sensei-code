@@ -706,6 +706,9 @@ type taskContext struct {
 	// Prospective is the plan's declared new surfaces. See
 	// architectureDecision.ProspectiveSurfaces.
 	Prospective []ProspectiveSurface
+	// Witnesses are the plan's declared regression-test witnesses. See
+	// architectureDecision.TestWitnesses.
+	Witnesses []TestWitness
 	// PlanSource and PlanDigest say who authored the bound. See PlanSource.
 	PlanSource PlanSource
 	PlanDigest string
@@ -781,6 +784,21 @@ func (e *Engine) objective(taskID string) Objective {
 		return o
 	}
 	return Objective{Provenance: SubmittedUnattended}
+}
+
+// planBindingFor is the exact authority a witness grant issued for this task is
+// bound to: the task, the objective as submitted, and the plan being routed.
+//
+// The objective and the plan are carried as identities, not as text. A resume
+// compares the recorded binding field by field, and the question it is asking is
+// whether this is the same authority -- not whether two renderings of one plan
+// are byte-identical.
+func (e *Engine) planBindingFor(taskID, plan string) planBinding {
+	return planBinding{
+		Task:      strings.TrimSpace(taskID),
+		Objective: identityOf(e.objective(taskID).Text),
+		Plan:      planIdentity(plan, e.planDigest(taskID)),
+	}
 }
 
 // recordObjective stores the request and its provenance at submission.
@@ -1527,7 +1545,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				"resuming at the review boundary: the candidate stands and owes an independent review, "+
 					"so it is reviewed before any worker is called", nil))
 		} else {
-			prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
+			prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)),
+				renderTestEditGrants(editGrants(e.testEditGrants(taskID))),
+				renderTestWitnessCreates(createGrants(e.testEditGrants(taskID)))))
 			impl, err := e.resolveRunner(RunnerSpec{
 				Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
 			})
@@ -1754,13 +1774,18 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				return candidateNotConverged, plan, lastReview, lastAudit, err
 			}
 		}
-		// Post-edit inspection of every granted existing test (M2.2): the
-		// candidate's file against the exact grant, before any review, with
-		// no retry -- the same discipline as a prospective refutation.
-		if edits := e.testEditGrants(taskID); len(edits) != 0 {
-			if err := inspectTestEdits(diff, edits, func(p string) ([]byte, error) { return os.ReadFile(filepath.Join(workspace, p)) }); err != nil {
-				return candidateNotConverged, plan, lastReview, lastAudit, err
-			}
+		// Post-validation inspection of every regression test the candidate
+		// touched, against the exact witness grants this run holds (DF-20):
+		// before any review and with no retry, the same discipline as a
+		// prospective refutation.
+		//
+		// UNCONDITIONAL. It was gated on the run holding grants, which made the
+		// undeclared-test refusal unreachable in exactly the case it exists for:
+		// a run with no witness grant at all could touch any test file and the
+		// inspection would not run. A planned create is discharged here too --
+		// the prospective authorization is spent on the bytes that now exist.
+		if err := inspectTestWitnesses(diff, e.testEditGrants(taskID), func(p string) ([]byte, error) { return os.ReadFile(filepath.Join(workspace, p)) }); err != nil {
+			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
 
 		auditArgs := map[string]any{"diff": diff, "task": task}
@@ -2192,6 +2217,16 @@ type architectureDecision struct {
 	// against the covering surface's bytes at the pinned world; an undeclared
 	// new file is uncovered exactly as before.
 	ProspectiveSurfaces []ProspectiveSurface `json:"prospective_surfaces,omitempty"`
+	// TestWitnesses declares, for each regression test this plan must edit or
+	// create in order to prove its own claims, the exact test path, the
+	// operation, the closed regression-test role, and the already-governed
+	// production subject the authority is derived from (DF-20).
+	//
+	// It is the plan's proof obligation stated as paths. Nothing here is
+	// authority: testWitnessGrants checks every declaration against the pinned
+	// world and against the evidence already governing the subject it names, and
+	// an undeclared test file is editable by nothing.
+	TestWitnesses []TestWitness `json:"test_witnesses,omitempty"`
 	// PremiseResolutions are the closure round's answers to the premise
 	// receipts it was asked about. See premise.go.
 	PremiseResolutions []PremiseResolution `json:"premise_resolutions,omitempty"`
@@ -3007,6 +3042,11 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	if e.observes(taskID) {
 		stage = StageObserve
 	}
+	// The exact authority any witness grant issued below is bound to. Resolved
+	// once, here, from what this run already holds: the task, the objective as
+	// submitted, and the plan being routed. A grant that cannot name all three
+	// is not issued.
+	bind := e.planBindingFor(taskID, d.Plan)
 	// Machine-derived coverage, revalidated in THIS world over THESE files.
 	//
 	// This was absent, and the absence was silent. The router's only coverage
@@ -3031,7 +3071,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
-		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
+		DerivedCoverage:      e.derivedCoverage(ctx, taskID, bind, d.Files, d.ProspectiveSurfaces, d.TestWitnesses),
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
 	// Which planned files the graph has NOT examined, established per file.
@@ -3077,12 +3117,12 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		//
 		// At the world the coverage computation used, never a freshly resolved one: two
 		// worlds would authorize an edit against bytes neither answer describes.
-		if extra := e.authoredTestEditGrants(ctx, taskID, d.Files, authored); len(extra) != 0 {
+		if extra := e.authoredTestEditGrants(ctx, taskID, bind, d.Files, d.TestWitnesses, d.ProspectiveSurfaces, authored); len(extra) != 0 {
 			merged := append(e.testEditGrants(taskID), extra...)
 			e.setTestEditGrants(taskID, merged)
 			action.OperationalAuthority = operationalFiles(merged)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
-				"existing-test edit authority recorded from AUTHORED production governance: "+
+				"regression-test witness authority recorded from AUTHORED production governance: "+
 					strings.Join(operationalFiles(extra), ", "), testEditRecord{World: extra[0].World, Grants: extra}))
 		}
 	}
@@ -3117,7 +3157,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		}
 		if op := action.OperationalAuthority; len(op) != 0 {
 			// Stated as its own kind, beside coverage and never summed with it.
-			summary += fmt.Sprintf("\n  operational authority (existing-test edit): %d file(s): %s", len(op), strings.Join(op, ", "))
+			summary += fmt.Sprintf("\n  operational authority (regression-test witness): %d file(s): %s", len(op), strings.Join(op, ", "))
 		}
 		if un := action.unexaminedArchitecturalFiles(); len(un) != 0 {
 			summary += fmt.Sprintf("\n  unexamined by the graph: %d file(s): %s", len(un), strings.Join(un, ", "))
@@ -3402,12 +3442,16 @@ func senseiBinary() string {
 // binary without `derive`, a derivation that refuses — each leaves the region
 // uncovered and the gap intact, which is the direction this must fail in.
 // coverageComputation is what one look at the pinned world establishes:
-// coverage, prospective grants, existing-test edit grants, and the reasons
-// a test was not granted. It is a VALUE. Computing it records nothing and
-// emits nothing, so a resume can re-establish what a run's record claims
-// without writing a record of its own -- a second resume that read such a
-// write would find an authority the original run never held (sensei-code#101
-// review).
+// coverage, prospective grants, regression-test witness grants, and the reasons
+// a witness was not granted. It is a VALUE: computing it records nothing and
+// emits nothing.
+//
+// The purity is load-bearing even now that routing is its only caller. A
+// computation that recorded would have let a resume that merely LOOKED write a
+// record, and a second resume would then have read the first one's write as the
+// run's own authority (sensei-code#101 review). Keeping the computation and the
+// recording apart is what makes "only routing grants" a property of the code
+// rather than of the current call graph.
 type coverageComputation struct {
 	world       string
 	coverage    []CoverageAnchor
@@ -3418,7 +3462,7 @@ type coverageComputation struct {
 
 // coverageAtWorld computes coverage and grants for a plan at the candidate's
 // pinned base, side-effect free. See coverageComputation.
-func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) (coverageComputation, bool) {
+func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, bind planBinding, planned []string, declarations []ProspectiveSurface, witnesses []TestWitness) (coverageComputation, bool) {
 	if len(planned) == 0 {
 		return coverageComputation{}, false
 	}
@@ -3453,17 +3497,24 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 	recipes = derived.ExcludingTask(recipes, taskID)
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
-	edits, reasons := testEditGrants(ctx, world, planned, out, authoredEvidence{}, gitShowAt(e.Repo.Root))
+	// Witness authority is derived from the plan's DECLARATIONS and the evidence
+	// governing the subjects they name -- never from `out`, which is coverage.
+	// A planned test create takes no anchor from this and adds none to it: a
+	// file absent at the pinned base has no graph identity, and it does not
+	// acquire one by being declared.
+	edits, reasons := testWitnessGrants(ctx, bind, world, planned, witnesses, declarations, out, authoredEvidence{}, gitShowAt(e.Repo.Root))
 	return coverageComputation{world: world, coverage: out, prospective: grants, edits: edits, reasons: reasons}, true
 }
 
-// derivedCoverage is the ROUTING path: it computes coverage at the world and
-// then records what routing will act on -- the prospective and test-edit
-// grants on the engine and in the session -- so a resume can re-establish
-// them against the record. Only routing writes; a resume computes (see
-// coverageAtWorld) and compares.
-func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) []CoverageAnchor {
-	c, ok := e.coverageAtWorld(ctx, taskID, planned, declarations)
+// derivedCoverage is the ROUTING path, and the only one: it computes coverage at
+// the world and then records what routing will act on -- the prospective and
+// regression-test witness grants, on the engine and in the session -- so a
+// resume can validate them against the record.
+//
+// Only routing grants. A resume reads the record and the pinned base and derives
+// nothing (see restoreTestWitnessGrants and restoreProspectiveGrants).
+func (e *Engine) derivedCoverage(ctx context.Context, taskID string, bind planBinding, planned []string, declarations []ProspectiveSurface, witnesses []TestWitness) []CoverageAnchor {
+	c, ok := e.coverageAtWorld(ctx, taskID, bind, planned, declarations, witnesses)
 	if !ok {
 		return nil
 	}
@@ -3473,14 +3524,14 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 	if len(c.edits) != 0 {
 		names := make([]string, 0, len(c.edits))
 		for _, g := range c.edits {
-			names = append(names, g.Path+" beside "+g.Covering)
+			names = append(names, g.Declared.Operation+" "+g.Path+" as witness for "+g.Covering)
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
-			"existing-test edit authority recorded for "+strings.Join(names, ", ")+" (operational, not coverage)",
+			"regression-test witness authority recorded for "+strings.Join(names, ", ")+" (operational, not coverage)",
 			testEditRecord{World: c.world, Grants: c.edits}))
 	}
 	for _, r := range c.reasons {
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no test-edit authority: "+r, nil))
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no regression-test witness authority: "+r, nil))
 	}
 	if len(c.prospective) != 0 {
 		names := make([]string, 0, len(c.prospective))
@@ -5078,7 +5129,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 }
 
 func isProspectiveSurfaceRefutation(err error) bool {
-	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") || strings.HasPrefix(err.Error(), "test edit refuted:"))
+	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") ||
+		strings.HasPrefix(err.Error(), "test edit refuted:") ||
+		strings.HasPrefix(err.Error(), "test witness refuted:"))
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
@@ -5511,15 +5564,20 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// written to, bound to the candidate's pinned base. Routing does not
 		// re-run on resume, so it is the only source of the facts the
 		// post-creation inspection checks against (sensei#312 cycle 3).
-		// Existing-test edit authority is RE-ESTABLISHED, not restored: the
-		// grants are recomputed from the pinned world through the same
-		// derivation and predicate routing used, and the record must match
-		// them exactly, or the resume refuses (sensei-code#101 review).
-		// Side-effect free: a resume computes and compares; it never records.
-		// Recording here minted authority on a SECOND resume, which read the
-		// first resume's write as the run's own record.
-		recomputed, _ := e.coverageAtWorld(ctx, task.TaskID, bound.Files, bound.Prospective)
-		if err := e.restoreTestEditGrants(task, recomputed.edits, bound.Files, identity.BaseSHA); err != nil {
+		//
+		// Regression-test witness authority is restored the same way, and
+		// deliberately NOT re-derived (DF-20). It used to be recomputed from the
+		// pinned world through the routing predicate, which meant a resume asked
+		// TODAY's graph a question the original run asked an older one: a graph
+		// rebuilt while the task was not running could withdraw a grant the run
+		// legitimately held, or offer one it never had. What is re-read instead
+		// is the pinned base, which is immutable and can only give the same
+		// answer -- the recorded task, objective, plan, base, subject, operation
+		// and path must all still hold, and the base facts must still be what the
+		// grant was issued over. No record, no grant: a resume never mints.
+		// Side-effect free: a resume compares; it never records.
+		bind := e.planBindingFor(task.TaskID, bound.Plan)
+		if err := e.restoreTestWitnessGrants(ctx, task, bind, bound.Files, bound.Witnesses, identity.BaseSHA, gitShowAt(e.Repo.Root)); err != nil {
 			fail(err)
 			return
 		}
@@ -5541,6 +5599,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Consequences:    bound.Consequences,
 			Invariants:      bound.Invariants,
 			Prospective:     bound.Prospective,
+			Witnesses:       bound.Witnesses,
 			PlanSource:      bound.Source,
 			PlanDigest:      task.PlanDigest,
 			AwaitingReview:  task.AwaitingReview,
@@ -5637,6 +5696,7 @@ func applyPlanScope(tc *taskContext, d architectureDecision) {
 	tc.Consequences = d.Consequences
 	tc.Invariants = d.Invariants
 	tc.Prospective = d.ProspectiveSurfaces
+	tc.Witnesses = d.TestWitnesses
 }
 
 // scopeSummary names the files and prospective surfaces a candidate is bound
@@ -5649,6 +5709,9 @@ func scopeSummary(tc taskContext) string {
 	var surfaces []string
 	for _, p := range tc.Prospective {
 		surfaces = append(surfaces, p.Path)
+	}
+	for _, w := range tc.Witnesses {
+		surfaces = append(surfaces, w.Operation+" witness "+w.Path)
 	}
 	if len(surfaces) == 0 {
 		return files

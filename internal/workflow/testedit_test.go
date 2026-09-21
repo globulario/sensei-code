@@ -1,7 +1,12 @@
 package workflow
 
-// M2.2 -- the frozen falsifiers of docs/work/m2.2-existing-test-edit-authority.md.
-// Each leaves F ungranted, refutes the candidate, or is the one positive.
+// DF-20 -- the frozen falsifiers of regression-test witness authority, and the
+// M2.2 falsifiers they replace.
+//
+// Every test here answers one question: does authority over a test file come
+// from a declared proof obligation over a governed subject, or from where the
+// file happens to sit? Each case either leaves the witness ungranted, refutes
+// the candidate, or is one of the two positives.
 
 import (
 	"context"
@@ -16,11 +21,14 @@ import (
 )
 
 const (
-	teS     = "modfile/rule.go"
-	teF     = "modfile/rule_test.go"
-	teWorld = "989c6210000000000000000000000000000000000"
-	teSSrc  = "package modfile\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n)\n\ntype File struct{ Module *Module }\ntype Module struct{}\n\nfunc (f *File) AddComment(s string) { _ = fmt.Sprint(strings.TrimSpace(s)) }\n"
-	teFSrc  = "//go:build go1.20\n\npackage modfile\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestX(t *testing.T) { _ = strings.ToUpper }\n"
+	teS      = "modfile/rule.go"
+	teF      = "modfile/rule_test.go"
+	teOther  = "modfile/other_test.go"
+	teAbsent = "modfile/unavailable_test.go"
+	teFar    = "acceptance/governed_run_test.go"
+	teWorld  = "989c6210000000000000000000000000000000000"
+	teSSrc   = "package modfile\n\nimport (\n\t\"fmt\"\n\t\"strings\"\n)\n\ntype File struct{ Module *Module }\ntype Module struct{}\n\nfunc (f *File) AddComment(s string) { _ = fmt.Sprint(strings.TrimSpace(s)) }\n"
+	teFSrc   = "//go:build go1.20\n\npackage modfile\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestX(t *testing.T) { _ = strings.ToUpper }\n"
 )
 
 func teCovered() []CoverageAnchor {
@@ -43,43 +51,165 @@ func teRead(files map[string]string) worldReader {
 	}
 }
 
-// The positive: an existing test beside a covered subject, same package,
-// same directory, present at the world -> one grant bound to F's bytes.
-func TestAnExistingTestBesideACoveredSubjectIsGrantedAnEdit(t *testing.T) {
-	grants, reasons := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
+func teWorldFiles() map[string]string { return map[string]string{teS: teSSrc, teF: teFSrc} }
+
+// teBind is the one proof obligation every grant below belongs to.
+func teBind() planBinding {
+	return planBinding{Task: "t", Objective: identityOf("prove the rule"), Plan: identityOf("the plan text")}
+}
+
+// teEdit declares the existing test as the witness for the governed subject.
+func teEdit() TestWitness {
+	return TestWitness{Path: teF, Operation: witnessEdit, Role: roleGoRegressionTestEdit, Subject: teS}
+}
+
+// teCreate declares a regression test that does not exist at the pinned base.
+func teCreate() TestWitness {
+	return TestWitness{Path: teAbsent, Operation: witnessCreate, Role: roleGoRegressionTestCreate,
+		Subject: teS, Package: "modfile", Dependencies: []string{"strings"}}
+}
+
+func teGrant(t *testing.T, planned []string, declared []TestWitness, covered []CoverageAnchor, files map[string]string) ([]testEditGrant, []string) {
+	t.Helper()
+	return testWitnessGrants(context.Background(), teBind(), teWorld, planned, declared, nil, covered, authoredEvidence{}, teRead(files))
+}
+
+// WITNESS 1 -- EXISTING TEST EDIT. A plan governs a production behaviour and
+// names an existing test as its witness. The test file has no anchor of its
+// own; the subject supplies the authority and the declaration bounds it.
+func TestADeclaredExistingTestIsGrantedAnEditBoundToItsObligation(t *testing.T) {
+	grants, reasons := teGrant(t, []string{teS, teF, teOther}, []TestWitness{teEdit()}, teCovered(), teWorldFiles())
 	if len(grants) != 1 || len(reasons) != 0 {
 		t.Fatalf("grants=%+v reasons=%v", grants, reasons)
 	}
 	g := grants[0]
-	if g.Path != teF || g.Covering != teS || g.World != teWorld || g.BaseHash == "" || g.Facts.Package != "modfile" || !g.Facts.Imports["testing"] || len(g.Facts.Constraints) != 1 {
-		t.Fatalf("grant is not bound to F at the world: %+v", g)
+	switch {
+	case g.Path != teF, g.Covering != teS, g.World != teWorld, g.BaseHash == "":
+		t.Fatalf("grant is not bound to the declared path at the pinned world: %+v", g)
+	case g.Facts.Package != "modfile", !g.Facts.Imports["testing"], len(g.Facts.Constraints) != 1:
+		t.Fatalf("grant carries no base facts to inspect against: %+v", g)
+	case g.CoveringEvidence != evidenceDerived, len(g.CoveringIdentity) == 0:
+		t.Fatalf("grant cannot name the instrument that governed its subject: %+v", g)
+	case !g.Binding.equal(teBind()), !sameWitness(g.Declared, teEdit()):
+		t.Fatalf("grant is not bound to this task, objective, plan and declaration: %+v", g)
 	}
+	// NOTHING ELSE BECAME EDITABLE. modfile/other_test.go is planned, is a test,
+	// and sits in the same directory as both the subject and the granted
+	// witness. It is undeclared, so it holds nothing.
 	if got := operationalFiles(grants); len(got) != 1 || got[0] != teF {
-		t.Fatalf("operational files: %v", got)
+		t.Fatalf("authority reached past the declared path: %v", got)
 	}
 }
 
-// The frozen falsifiers that leave F ungranted.
-func TestAnExistingTestIsNotGrantedWhenThePredicateFails(t *testing.T) {
+// The declared witness need not sit anywhere near its subject. This is the
+// DF-20 blockage itself: an acceptance test in a package holding no production
+// file at all could never be granted under the proximity rule, and the plan it
+// was required by was admissible.
+func TestADeclaredWitnessInAnotherPackageIsGranted(t *testing.T) {
+	far := teEdit()
+	far.Path = teFar
+	files := teWorldFiles()
+	files[teFar] = "package acceptance\n\nimport \"testing\"\n\nfunc TestGoverned(t *testing.T) {}\n"
+	grants, reasons := teGrant(t, []string{teS, teFar}, []TestWitness{far}, teCovered(), files)
+	if len(grants) != 1 || grants[0].Path != teFar || grants[0].Covering != teS {
+		t.Fatalf("a witness outside the subject's directory was refused: %+v %v", grants, reasons)
+	}
+	if grants[0].Facts.Package != "acceptance" {
+		t.Fatalf("the grant did not read the witness's own package: %+v", grants[0])
+	}
+}
+
+// WITNESS 2 -- PLANNED TEST CREATE. Absence at the pinned base is confirmed,
+// the path is authorized for that task alone, and no graph identity is minted:
+// the grant carries no anchor and no base bytes, because there are none.
+func TestADeclaredAbsentTestIsAPlannedCreateAndNotAnAnchor(t *testing.T) {
+	grants, reasons := teGrant(t, []string{teS, teAbsent}, []TestWitness{teCreate()}, teCovered(), teWorldFiles())
+	if len(grants) != 1 || len(reasons) != 0 {
+		t.Fatalf("grants=%+v reasons=%v", grants, reasons)
+	}
+	g := grants[0]
+	switch {
+	case g.Path != teAbsent, g.Declared.Operation != witnessCreate:
+		t.Fatalf("the absent witness was not classified as a planned create: %+v", g)
+	case g.BaseHash != "":
+		t.Fatal("a file absent at the pinned base was given base bytes")
+	case g.Facts.Package != "modfile", !g.Facts.Imports["strings"], g.Facts.Imports["fmt"]:
+		t.Fatalf("the create envelope is not the DECLARED one: %+v", g.Facts)
+	case g.Covering != teS, g.CoveringEvidence != evidenceDerived:
+		t.Fatalf("the create is not derived from a governed subject: %+v", g)
+	}
+	// It is operational authority, never coverage. The router is handed the
+	// path as an operational grant and the coverage question is unchanged.
+	action := plannedEdit(teS, teAbsent)
+	action.DerivedCoverage = teCovered()
+	action.OperationalAuthority = operationalFiles(grants)
+	for _, c := range action.DerivedCoverage {
+		if c.File == teAbsent {
+			t.Fatal("the planned create entered DerivedCoverage; an absent file has no graph identity")
+		}
+	}
+	if arch := action.architecturalFiles(); len(arch) != 1 || arch[0] != teS {
+		t.Fatalf("the planned create is being asked the coverage question: %v", arch)
+	}
+}
+
+// The frozen falsifiers that leave a declared witness ungranted. Each names the
+// clause it failed, so the record says which evidence was missing.
+func TestADeclaredWitnessIsNotGrantedWhenThePredicateFails(t *testing.T) {
+	badRole := teEdit()
+	badRole.Role = roleGoRegressionTestCreate
+	badOp := teEdit()
+	badOp.Operation = "amend"
+	production := teEdit()
+	production.Path = "modfile/helper.go"
+	noSubject := teEdit()
+	noSubject.Subject = ""
+	testSubject := teEdit()
+	testSubject.Subject = teOther
+	unplannedSubject := teEdit()
+	unplannedSubject.Subject = "modfile/elsewhere.go"
+	createExisting := teCreate()
+	createExisting.Path = teF
+	editAbsent := teEdit()
+	editAbsent.Path = teAbsent
+	noPackage := teCreate()
+	noPackage.Package = ""
+	unreadable := teEdit()
+	unreadable.Path = "modfile/broken_test.go"
+
 	cases := map[string]struct {
-		planned []string
-		covered []CoverageAnchor
-		files   map[string]string
-		reason  string
+		planned  []string
+		declared []TestWitness
+		covered  []CoverageAnchor
+		files    map[string]string
+		reason   string
 	}{
-		"foreign-package test": {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc, teF: strings.Replace(teFSrc, "package modfile", "package modfile_test", 1)}, "foreign-package"},
-		"missing test":         {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc}, "absent at the pinned world"},
-		// The wording changed with the rule: "architectural coverage" named only the
-		// derived instrument, and the refusal now has to say that NEITHER instrument
-		// governs a neighbour, or it would misreport which evidence is missing.
-		"ungoverned sibling":  {[]string{teS, teF}, nil, map[string]string{teS: teSSrc, teF: teFSrc}, "is governed at the pinned world, by a derived anchor or by an authored invariant"},
-		"different directory": {[]string{teS, "module/module_test.go"}, teCovered(), map[string]string{teS: teSSrc, "module/module_test.go": teFSrc}, "no planned file in its directory"},
-		"unreadable F":        {[]string{teS, teF}, teCovered(), map[string]string{teS: teSSrc, teF: "\x00unreadable"}, "presence not established"},
-		"sibling not planned": {[]string{teF}, teCovered(), map[string]string{teS: teSSrc, teF: teFSrc}, "no planned file in its directory"},
+		// NEGATIVE 5: the subject carries no governed evidence, so the test
+		// path cannot bootstrap governance for what it claims to prove.
+		"ungoverned subject":  {[]string{teS, teF}, []TestWitness{teEdit()}, nil, teWorldFiles(), "no derived anchor and no authored invariant governs"},
+		"subject not planned": {[]string{teS, teF}, []TestWitness{unplannedSubject}, teCovered(), teWorldFiles(), "which this plan does not carry"},
+		"subject is a test":   {[]string{teS, teF, teOther}, []TestWitness{testSubject}, teCovered(), teWorldFiles(), "not a Go production surface"},
+		"no subject at all":   {[]string{teS, teF}, []TestWitness{noSubject}, teCovered(), teWorldFiles(), "cannot bootstrap governance"},
+		"subject absent at the world": {[]string{teS, teF}, []TestWitness{teEdit()}, teCovered(),
+			map[string]string{teF: teFSrc}, "could not be read at the pinned world"},
+		// NEGATIVE 4: test authority never reaches a production path.
+		"production path": {[]string{teS, "modfile/helper.go"}, []TestWitness{production}, teCovered(), teWorldFiles(), "never reaches a production path"},
+		// The closed vocabularies, read by membership.
+		"unknown operation": {[]string{teS, teF}, []TestWitness{badOp}, teCovered(), teWorldFiles(), "not an operation this build knows"},
+		"mismatched role":   {[]string{teS, teF}, []TestWitness{badRole}, teCovered(), teWorldFiles(), "admits only " + roleGoRegressionTestEdit},
+		// The two operations are not interchangeable.
+		"create of a file that exists": {[]string{teS, teF}, []TestWitness{createExisting}, teCovered(), teWorldFiles(), "already exists at the pinned world"},
+		"edit of a file that does not": {[]string{teS, teAbsent}, []TestWitness{editAbsent}, teCovered(), teWorldFiles(), "the pinned world's tree lacks it"},
+		"create with no package":       {[]string{teS, teAbsent}, []TestWitness{noPackage}, teCovered(), teWorldFiles(), "with no package"},
+		// STRICT ABSENCE: an unanswered read is not absence and not presence.
+		"unreadable witness": {[]string{teS, "modfile/broken_test.go"}, []TestWitness{unreadable}, teCovered(),
+			map[string]string{teS: teSSrc, "modfile/broken_test.go": "\x00unreadable"}, "presence at the pinned world could not be established"},
+		"witness not planned": {[]string{teS}, []TestWitness{teEdit()}, teCovered(), teWorldFiles(), "is not one of this plan's files"},
+		"declared twice":      {[]string{teS, teF}, []TestWitness{teEdit(), teEdit()}, teCovered(), teWorldFiles(), "declared twice"},
 	}
 	for name, c := range cases {
-		grants, reasons := testEditGrants(context.Background(), teWorld, c.planned, c.covered, authoredEvidence{}, teRead(c.files))
-		if len(grants) != 0 {
+		grants, reasons := teGrant(t, c.planned, c.declared, c.covered, c.files)
+		if name != "declared twice" && len(grants) != 0 {
 			t.Errorf("%s: granted anyway: %+v", name, grants)
 		}
 		if len(reasons) == 0 || !strings.Contains(strings.Join(reasons, " "), c.reason) {
@@ -88,19 +218,77 @@ func TestAnExistingTestIsNotGrantedWhenThePredicateFails(t *testing.T) {
 	}
 }
 
-// The frozen falsifiers that refute a candidate, and the one that passes.
+// A run that cannot say which task, objective and plan a grant would serve
+// issues none. Authority nothing bounds is not authority.
+func TestAnIncompleteBindingIssuesNoWitnessGrant(t *testing.T) {
+	for name, bind := range map[string]planBinding{
+		"no task":      {Objective: identityOf("o"), Plan: identityOf("p")},
+		"no objective": {Task: "t", Plan: identityOf("p")},
+		"no plan":      {Task: "t", Objective: identityOf("o")},
+	} {
+		grants, reasons := testWitnessGrants(context.Background(), bind, teWorld, []string{teS, teF},
+			[]TestWitness{teEdit()}, nil, teCovered(), authoredEvidence{}, teRead(teWorldFiles()))
+		if len(grants) != 0 {
+			t.Errorf("%s: granted anyway: %+v", name, grants)
+		}
+		if len(reasons) != 1 || !strings.Contains(reasons[0], "cannot name the task, objective and plan") {
+			t.Errorf("%s: reason not named: %v", name, reasons)
+		}
+	}
+}
+
+// A path may hold ONE authority. A file declared both as a prospective CREATE
+// surface and as a regression-test witness would be inspected twice against two
+// different envelopes, and whichever ran first would decide.
+func TestAPathCannotHoldBothProspectiveAndWitnessAuthority(t *testing.T) {
+	surfaces := []ProspectiveSurface{{Path: teAbsent, Package: "modfile", Role: roleGoRegressionTest}}
+	grants, reasons := testWitnessGrants(context.Background(), teBind(), teWorld, []string{teS, teAbsent},
+		[]TestWitness{teCreate()}, surfaces, teCovered(), authoredEvidence{}, teRead(teWorldFiles()))
+	if len(grants) != 0 || len(reasons) == 0 || !strings.Contains(reasons[0], "one path takes one authority") {
+		t.Fatalf("grants=%+v reasons=%v", grants, reasons)
+	}
+}
+
+// NEGATIVE 3 -- UNDECLARED TEST. The candidate edits a second test file the
+// plan never declared. Being a test file, and sitting beside a granted one,
+// authorizes nothing.
+func TestAnUndeclaredTestFileIsRefusedAtInspection(t *testing.T) {
+	grants, _ := teGrant(t, []string{teS, teF, teOther}, []TestWitness{teEdit()}, teCovered(), teWorldFiles())
+	if len(grants) != 1 {
+		t.Fatal("premise: the declared witness is granted")
+	}
+	sibling := "diff --git a/" + teOther + " b/" + teOther + "\nindex 1..2 100644\n--- a/" + teOther + "\n+++ b/" + teOther + "\n@@ -1 +1 @@\n-a\n+b\n"
+	err := inspectTestWitnesses(sibling, grants, func(string) ([]byte, error) { return []byte(teFSrc), nil })
+	if err == nil || !strings.HasPrefix(err.Error(), "test witness refuted:") || !strings.Contains(err.Error(), teOther) {
+		t.Fatalf("an undeclared sibling test was accepted: %v", err)
+	}
+	// And with no grants at all, a touched test file is still refused: the
+	// inspection is not gated on the run holding authority.
+	if err := inspectTestWitnesses(sibling, nil, func(string) ([]byte, error) { return []byte(teFSrc), nil }); err == nil {
+		t.Fatal("a run holding no witness grant edited a test file unchallenged")
+	}
+	// A candidate that touches only production files is not this check's
+	// business: confinement and the audit own those.
+	production := "diff --git a/" + teS + " b/" + teS + "\nindex 1..2 100644\n--- a/" + teS + "\n+++ b/" + teS + "\n@@ -1 +1 @@\n-a\n+b\n"
+	if err := inspectTestWitnesses(production, nil, func(string) ([]byte, error) { return nil, errors.New("unused") }); err != nil {
+		t.Fatalf("a production-only candidate was refuted by the witness inspection: %v", err)
+	}
+}
+
+// The frozen falsifiers that refute a granted EDIT, and the one that passes.
 func TestAGrantedTestEditIsInspectedAgainstItsExactGrant(t *testing.T) {
-	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
+	grants, _ := teGrant(t, []string{teS, teF}, []TestWitness{teEdit()}, teCovered(), teWorldFiles())
 	edited := "diff --git a/" + teF + " b/" + teF + "\nindex 1..2 100644\n--- a/" + teF + "\n+++ b/" + teF + "\n@@ -9 +9 @@\n-func TestX\n+func TestY\n"
 	after := func(src string) func(string) ([]byte, error) {
 		return func(string) ([]byte, error) { return []byte(src), nil }
 	}
 	good := strings.Replace(teFSrc, "TestX", "TestY", 1)
-	if err := inspectTestEdits(edited, grants, after(good)); err != nil {
+	if err := inspectTestWitnesses(edited, grants, after(good)); err != nil {
 		t.Fatalf("an in-place edit inside the grant was refuted: %v", err)
 	}
-	// An untouched granted file is not a mismatch.
-	if err := inspectTestEdits("diff --git a/"+teS+" b/"+teS+"\n", grants, after("")); err != nil {
+	// An untouched granted EDIT is not a mismatch: the grant authorized an
+	// edit rather than requiring one.
+	if err := inspectTestWitnesses("diff --git a/"+teS+" b/"+teS+"\n", grants, after("")); err != nil {
 		t.Fatalf("an untouched grant was inspected: %v", err)
 	}
 	refutations := map[string]struct {
@@ -116,13 +304,56 @@ func TestAGrantedTestEditIsInspectedAgainstItsExactGrant(t *testing.T) {
 		"rename":           {"diff --git a/" + teF + " b/modfile/rule2_test.go\nrename from " + teF + "\nrename to modfile/rule2_test.go\n", good, "renames it"},
 	}
 	for name, r := range refutations {
-		err := inspectTestEdits(r.diff, grants, after(r.after))
-		if err == nil || !strings.HasPrefix(err.Error(), "test edit refuted:") || !strings.Contains(err.Error(), r.want) {
+		err := inspectTestWitnesses(r.diff, grants, after(r.after))
+		if err == nil || !strings.Contains(err.Error(), r.want) {
 			t.Errorf("%s: %v", name, err)
 		}
+		if !isProspectiveSurfaceRefutation(err) {
+			t.Errorf("%s: refutation is not terminal", name)
+		}
 	}
-	if !isProspectiveSurfaceRefutation(errors.New("test edit refuted: x")) {
-		t.Fatal("a test-edit refutation is not terminal")
+}
+
+// WITNESS 7 -- CANDIDATE VALIDATION. The prospective authorization is spent on
+// the bytes that now exist, and cannot survive as a substitute for them.
+func TestAPlannedCreateIsDischargedByTheBytesTheCandidateProduced(t *testing.T) {
+	grants, _ := teGrant(t, []string{teS, teAbsent}, []TestWitness{teCreate()}, teCovered(), teWorldFiles())
+	if len(grants) != 1 {
+		t.Fatal("premise: the planned create is granted")
+	}
+	created := "diff --git a/" + teAbsent + " b/" + teAbsent + "\nnew file mode 100644\n--- /dev/null\n+++ b/" + teAbsent + "\n@@ -0,0 +1 @@\n+x\n"
+	good := "package modfile\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestUnavailable(t *testing.T) { _ = strings.ToUpper }\n"
+	after := func(src string) func(string) ([]byte, error) {
+		return func(string) ([]byte, error) { return []byte(src), nil }
+	}
+	if err := inspectTestWitnesses(created, grants, after(good)); err != nil {
+		t.Fatalf("a created witness inside its declared envelope was refuted: %v", err)
+	}
+	refutations := map[string]struct {
+		diff  string
+		after string
+		want  string
+	}{
+		"not created":      {"diff --git a/" + teS + " b/" + teS + "\n", good, "did not create it"},
+		"wrong package":    {created, strings.Replace(good, "package modfile", "package modfile_test", 1), "has package"},
+		"import outside":   {created, strings.Replace(good, "\"strings\"\n", "\"strings\"\n\t\"bytes\"\n", 1), "outside the declared dependencies"},
+		"modified instead": {"diff --git a/" + teAbsent + " b/" + teAbsent + "\nindex 1..2 100644\n--- a/" + teAbsent + "\n+++ b/" + teAbsent + "\n@@ -1 +1 @@\n-a\n+b\n", good, "modifies an existing file"},
+		"deleted":          {"diff --git a/" + teAbsent + " b/" + teAbsent + "\ndeleted file mode 100644\n", good, "deletes or renames it"},
+		"unreadable bytes": {created, "package modfile\n\nimport (\n", "could not be read as Go"},
+	}
+	for name, r := range refutations {
+		err := inspectTestWitnesses(r.diff, grants, after(r.after))
+		if err == nil || !strings.HasPrefix(err.Error(), "test witness refuted:") || !strings.Contains(err.Error(), r.want) {
+			t.Errorf("%s: %v", name, err)
+		}
+		if !isProspectiveSurfaceRefutation(err) {
+			t.Errorf("%s: refutation is not terminal", name)
+		}
+	}
+	// The role's one novel allowance, and nothing more.
+	novel := "package modfile\n\nimport \"testing\"\n\nfunc TestUnavailable(t *testing.T) {}\n"
+	if err := inspectTestWitnesses(created, grants, after(novel)); err != nil {
+		t.Fatalf("the role allowance was not honoured: %v", err)
 	}
 }
 
@@ -166,124 +397,153 @@ func TestOperationalAuthorityIsSubtractedFromTheCoverageQuestionNotAddedToIt(t *
 // The grant reaches the worker as its own kind, and survives resume exactly
 // or refuses.
 func TestATestEditGrantReachesTheWorkerAndSurvivesResume(t *testing.T) {
-	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, teF: teFSrc}))
-	rendered := renderTestEditGrants(grants)
-	for _, want := range []string{"EDIT " + teF, "beside covered subject: " + teS, "package: modfile (may not change)", "//go:build go1.20", "ALLOWED IMPORTS", "testing", "do not create, delete, or rename"} {
-		if !strings.Contains(rendered, want) {
-			t.Fatalf("rendered grant lacks %q:\n%s", want, rendered)
+	grants, _ := teGrant(t, []string{teS, teF, teAbsent}, []TestWitness{teEdit(), teCreate()}, teCovered(), teWorldFiles())
+	if len(grants) != 2 {
+		t.Fatalf("premise: both witness forms are granted: %+v", grants)
+	}
+	edits := renderTestEditGrants(editGrants(grants))
+	for _, want := range []string{"EDIT " + teF, "witness for governed subject: " + teS, "derived", "package: modfile (may not change)", "//go:build go1.20", "ALLOWED IMPORTS", "testing", "do not create, delete, or rename"} {
+		if !strings.Contains(edits, want) {
+			t.Fatalf("rendered edit grant lacks %q:\n%s", want, edits)
 		}
 	}
-	joined := joinGrants("", rendered)
+	creates := renderTestWitnessCreates(createGrants(grants))
+	for _, want := range []string{"CREATE " + teAbsent, roleGoRegressionTestCreate, "witness for governed subject: " + teS, "has no graph identity", "package: modfile (must be exactly this)", "strings, testing", "not a sibling, not a directory, not a production file"} {
+		if !strings.Contains(creates, want) {
+			t.Fatalf("rendered create grant lacks %q:\n%s", want, creates)
+		}
+	}
+	joined := joinGrants("", edits, creates)
 	if !strings.Contains(joined, "EXISTING-TEST EDIT GRANTS") || !strings.Contains(joined, "not coverage") {
-		t.Fatalf("the worker is not told what kind of authority this is:\n%s", joined)
+		t.Fatalf("the worker is not told what kind of authority an edit is:\n%s", joined)
+	}
+	if !strings.Contains(joined, "PLANNED TEST CREATE GRANTS") || !strings.Contains(joined, "gains none by being created") {
+		t.Fatalf("the worker is not told what kind of authority a planned create is:\n%s", joined)
 	}
 	prompt := implementationPrompt(taskContext{Task: "t"}, "plan", "", 1, nil, joined)
-	if !strings.Contains(prompt, rendered) {
-		t.Fatal("the grant did not reach the worker's prompt")
+	if !strings.Contains(prompt, edits) || !strings.Contains(prompt, creates) {
+		t.Fatal("the grants did not reach the worker's prompt")
 	}
 
+	// WITNESS 6 -- RESUME DURABILITY. Both forms are recorded, the process
+	// restarts, and the exact grants come back.
 	record, _ := json.Marshal(testEditRecord{World: teWorld, Grants: grants})
 	found := session.FindInterrupted([]event.Event{
 		{TaskID: "t", Kind: event.TaskCreated, Summary: "task"},
-		{TaskID: "t", Kind: event.PlanProposed, Source: event.SourceArchitect, Summary: "plan", Payload: json.RawMessage(`{"plan":"p","files":["` + teS + `","` + teF + `"]}`)},
+		{TaskID: "t", Kind: event.PlanProposed, Source: event.SourceArchitect, Summary: "plan", Payload: json.RawMessage(`{"plan":"p","files":["` + teS + `","` + teF + `","` + teAbsent + `"]}`)},
 		{TaskID: "t", Kind: event.TestEditGranted, Payload: record},
 	})
 	if len(found) != 1 || len(found[0].TestEditRecord) == 0 {
 		t.Fatalf("the record did not survive the session: %+v", found)
 	}
-	planned := []string{teS, teF}
-	// Resume RE-ESTABLISHES the grant from the pinned world and requires the
-	// record to match it exactly; the intact record does.
 	e := &Engine{}
-	if err := e.restoreTestEditGrants(found[0], grants, planned, teWorld); err != nil || len(e.testEditGrants("t")) != 1 {
+	err := e.restoreTestWitnessGrants(context.Background(), found[0], teBind(), []string{teS, teF, teAbsent},
+		[]TestWitness{teEdit(), teCreate()}, teWorld, teRead(teWorldFiles()))
+	if err != nil || len(e.testEditGrants("t")) != 2 {
 		t.Fatalf("an intact record was not re-established: %v", err)
+	}
+	restored := e.testEditGrants("t")
+	if !sameWitness(restored[0].Declared, teEdit()) || !sameWitness(restored[1].Declared, teCreate()) {
+		t.Fatalf("the resumed grants are not the recorded ones: %+v", restored)
 	}
 	_ = roles.Reviewer
 }
 
-// #101 review, P2: a record is not authority. Each of these records parses,
-// names the right world and the right planned file, and would have restored
-// under a matcher that only checks fields are present. The pinned world
-// disagrees with every one, and the resume refuses.
+// A record is not authority. Each of these parses, names the right world and
+// the right planned file, and would restore under a matcher that only checked
+// fields were present. The plan, the binding or the pinned base disagrees with
+// every one, and the resume refuses.
 func TestARecordedTestEditGrantIsReEstablishedFromTheWorldOrRefused(t *testing.T) {
-	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
-	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, world)
-	if len(fresh) != 1 {
-		t.Fatal("premise: one fresh grant")
+	planned := []string{teS, teF, teAbsent}
+	declared := []TestWitness{teEdit(), teCreate()}
+	fresh, _ := teGrant(t, planned, declared, teCovered(), teWorldFiles())
+	if len(fresh) != 2 {
+		t.Fatal("premise: both grants")
 	}
-	record := func(g testEditGrant) session.Interrupted {
-		raw, _ := json.Marshal(testEditRecord{World: teWorld, Grants: []testEditGrant{g}})
+	record := func(gs ...testEditGrant) session.Interrupted {
+		raw, _ := json.Marshal(testEditRecord{World: teWorld, Grants: gs})
 		return session.Interrupted{TaskID: "t", TestEditRecord: raw}
 	}
-	forgedCovering := fresh[0]
-	forgedCovering.Covering = "modfile/other.go"
-	forgedHash := fresh[0]
-	forgedHash.BaseHash = "0000"
-	forgedFacts := fresh[0]
-	forgedFacts.Facts = testEditFacts{Package: "modfile", Imports: map[string]bool{"testing": true, "bytes": true}, Constraints: forgedFacts.Facts.Constraints}
-	for name, g := range map[string]testEditGrant{"forged covering": forgedCovering, "forged base hash": forgedHash, "forged facts": forgedFacts} {
+	mutate := func(f func(*testEditGrant)) testEditGrant {
+		g := fresh[0]
+		g.CoveringIdentity = append([]string(nil), fresh[0].CoveringIdentity...)
+		f(&g)
+		return g
+	}
+	// The pinned base still holds these bytes; only the record lies.
+	forged := map[string]testEditGrant{
+		"forged subject":   mutate(func(g *testEditGrant) { g.Covering = "modfile/other.go" }),
+		"forged base hash": mutate(func(g *testEditGrant) { g.BaseHash = "0000" }),
+		"forged facts": mutate(func(g *testEditGrant) {
+			g.Facts = testEditFacts{Package: "modfile", Imports: map[string]bool{"testing": true, "bytes": true}, Constraints: g.Facts.Constraints}
+		}),
+		"forged task":       mutate(func(g *testEditGrant) { g.Binding.Task = "other" }),
+		"forged objective":  mutate(func(g *testEditGrant) { g.Binding.Objective = identityOf("another request") }),
+		"forged plan":       mutate(func(g *testEditGrant) { g.Binding.Plan = identityOf("another plan") }),
+		"forged world":      mutate(func(g *testEditGrant) { g.World = strings.Repeat("b", 40) }),
+		"forged operation":  mutate(func(g *testEditGrant) { g.Declared.Operation = witnessCreate }),
+		"unnamed evidence":  mutate(func(g *testEditGrant) { g.CoveringIdentity = nil }),
+		"create with bytes": mutate(func(g *testEditGrant) { g.Declared = teCreate(); g.Path = teAbsent }),
+	}
+	// A planned create has no base bytes to re-read, so a widened envelope is
+	// caught only by recomputing it from the declaration.
+	widened := fresh[1]
+	widened.Facts = testEditFacts{Package: "modfile", Imports: map[string]bool{"strings": true, "net/http": true}}
+	forged["widened create envelope"] = widened
+	for name, g := range forged {
 		e := &Engine{}
-		if err := e.restoreTestEditGrants(record(g), fresh, []string{teS, teF}, teWorld); err == nil || len(e.testEditGrants("t")) != 0 {
+		err := e.restoreTestWitnessGrants(context.Background(), record(g), teBind(), planned, declared, teWorld, teRead(teWorldFiles()))
+		if err == nil || len(e.testEditGrants("t")) != 0 {
 			t.Errorf("%s: resumed (%v)", name, err)
 		}
 	}
-	// S no longer planned, or no longer covered: the world recomputes NO
-	// grant, and a record holding one is refused.
+	// A grant for a path the resumed plan no longer declares, and one the plan
+	// no longer carries at all.
 	for name, c := range map[string]struct {
-		planned []string
-		covered []CoverageAnchor
+		planned  []string
+		declared []TestWitness
 	}{
-		"S no longer planned": {[]string{teF}, teCovered()},
-		"S no longer covered": {[]string{teS, teF}, nil},
+		"witness no longer declared": {planned, []TestWitness{teCreate()}},
+		"witness no longer planned":  {[]string{teS, teAbsent}, declared},
 	} {
-		recomputed, _ := testEditGrants(context.Background(), teWorld, c.planned, c.covered, authoredEvidence{}, world)
 		e := &Engine{}
-		if err := e.restoreTestEditGrants(record(fresh[0]), recomputed, c.planned, teWorld); err == nil || len(e.testEditGrants("t")) != 0 {
+		err := e.restoreTestWitnessGrants(context.Background(), record(fresh[0]), teBind(), c.planned, c.declared, teWorld, teRead(teWorldFiles()))
+		if err == nil || len(e.testEditGrants("t")) != 0 {
 			t.Errorf("%s: resumed (%v)", name, err)
 		}
 	}
-	// And a world that authorises what the run never recorded does not hand
-	// the resumed run that authority.
+	// The pinned base itself disagrees: the witness's bytes moved, and the
+	// planned-create path now exists there.
+	for name, files := range map[string]map[string]string{
+		"base bytes moved":        {teS: teSSrc, teF: strings.Replace(teFSrc, "TestX", "TestMoved", 1)},
+		"planned create is there": {teS: teSSrc, teF: teFSrc, teAbsent: teFSrc},
+	} {
+		e := &Engine{}
+		err := e.restoreTestWitnessGrants(context.Background(), record(fresh...), teBind(), planned, declared, teWorld, teRead(files))
+		if err == nil || len(e.testEditGrants("t")) != 0 {
+			t.Errorf("%s: resumed (%v)", name, err)
+		}
+	}
+	// And a record read at another world authorizes nothing here.
+	raw, _ := json.Marshal(testEditRecord{World: strings.Repeat("c", 40), Grants: fresh})
 	e := &Engine{}
-	if err := e.restoreTestEditGrants(session.Interrupted{TaskID: "t"}, fresh, []string{teS, teF}, teWorld); err != nil || len(e.testEditGrants("t")) != 0 {
-		t.Fatalf("an unrecorded grant became authority on resume: %v %d", err, len(e.testEditGrants("t")))
+	if err := e.restoreTestWitnessGrants(context.Background(), session.Interrupted{TaskID: "t", TestEditRecord: raw},
+		teBind(), planned, declared, teWorld, teRead(teWorldFiles())); err == nil {
+		t.Error("a record from another world was restored")
+	}
+	// A pinned base that cannot be read re-establishes nothing.
+	e2 := &Engine{}
+	if err := e2.restoreTestWitnessGrants(context.Background(), record(fresh...), teBind(), planned, declared, teWorld, nil); err == nil {
+		t.Error("grants were restored without reading the pinned base")
 	}
 }
 
-// #101 review, P2: a granted path containing whitespace is seen as Git
-// wrote it, so an illegal change to that file is caught rather than skipped.
-func TestAGrantedTestPathWithWhitespaceIsStillInspected(t *testing.T) {
-	const f = "modfile/a b_test.go"
-	src := strings.Replace(teFSrc, "TestX", "TestSpace", 1)
-	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, f}, teCovered(), authoredEvidence{}, teRead(map[string]string{teS: teSSrc, f: src}))
-	if len(grants) != 1 || grants[0].Path != f {
-		t.Fatalf("premise: a grant for the whitespace path: %+v", grants)
-	}
-	diff := "diff --git a/" + f + " b/" + f + "\nindex 1..2 100644\n--- a/" + f + "\n+++ b/" + f + "\n@@ -9 +9 @@\n-x\n+y\n"
-	touched, _, _, _ := diffFileStates(diff)
-	if !touched[f] {
-		t.Fatalf("the whitespace path was not seen as touched: %v", touched)
-	}
-	novel := strings.Replace(src, "\"strings\"\n", "\"strings\"\n\t\"bytes\"\n", 1)
-	err := inspectTestEdits(diff, grants, func(string) ([]byte, error) { return []byte(novel), nil })
-	if err == nil || !strings.Contains(err.Error(), "novel import") {
-		t.Fatalf("an illegal import change on a whitespace path slipped past inspection: %v", err)
-	}
-	pkg := strings.Replace(src, "package modfile", "package modfile_test", 1)
-	if err := inspectTestEdits(diff, grants, func(string) ([]byte, error) { return []byte(pkg), nil }); err == nil || !strings.Contains(err.Error(), "package clause") {
-		t.Fatalf("an illegal package change on a whitespace path slipped past inspection: %v", err)
-	}
-	// A rename of the whitespace path is seen too.
-	ren := "diff --git a/" + f + " b/modfile/c d_test.go\nrename from " + f + "\nrename to modfile/c d_test.go\n"
-	if err := inspectTestEdits(ren, grants, func(string) ([]byte, error) { return []byte(src), nil }); err == nil || !strings.Contains(err.Error(), "renames it") {
-		t.Fatalf("a rename of a whitespace path was not refuted: %v", err)
-	}
-}
-
-// #101 review 5047003424: re-establishment must not write. The routing path
-// records; the resume path only computes and compares. Two resumes of a task
-// whose original run recorded no grant must leave it ungranted both times --
-// including when the pinned world would grant it today.
+// #101 review 5047003424, carried forward: resume revalidates recorded
+// authority and never mints new authority. A task whose original run recorded
+// no grant resumes with none, twice, however broadly the world would authorize
+// it today -- and DF-20 strengthens this: the resume asks the CURRENT GRAPH
+// nothing at all, so a graph rebuilt between runs can neither add a grant nor
+// take one away.
 func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 	// The pure computation records nothing: no engine state, no event.
 	body := funcBody(t, "internal/workflow/engine.go", "coverageAtWorld")
@@ -292,9 +552,17 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 			t.Fatalf("coverageAtWorld has a side effect: %s", forbidden)
 		}
 	}
+	// The resume path runs NO current graph authority: neither the recording
+	// path nor the pure recomputation. Its only inputs are the record and the
+	// pinned base.
 	resume := funcBody(t, "internal/workflow/engine.go", "Resume")
-	if strings.Contains(resume, "e.derivedCoverage(") || !strings.Contains(resume, "e.coverageAtWorld(") {
-		t.Fatal("Resume re-establishes through the recording path")
+	for _, forbidden := range []string{"e.derivedCoverage(", "e.coverageAtWorld(", "testWitnessGrants(", "e.setTestEditGrants("} {
+		if strings.Contains(resume, forbidden) {
+			t.Fatalf("Resume re-derives authority from the current graph: %s", forbidden)
+		}
+	}
+	if !strings.Contains(resume, "e.restoreTestWitnessGrants(") {
+		t.Fatal("Resume does not restore the recorded witness authority")
 	}
 	routing := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
 	if !strings.Contains(routing, "e.setTestEditGrants(") || !strings.Contains(routing, "TestEditGranted") {
@@ -303,8 +571,9 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 
 	// The two-resume scenario at the level of records. The original run
 	// recorded nothing. The world would grant today.
-	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
-	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, world)
+	planned := []string{teS, teF}
+	declared := []TestWitness{teEdit()}
+	fresh, _ := teGrant(t, planned, declared, teCovered(), teWorldFiles())
 	if len(fresh) != 1 {
 		t.Fatal("premise: the world grants today")
 	}
@@ -314,7 +583,7 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 	}
 	first := session.FindInterrupted(original)[0]
 	e := &Engine{}
-	if err := e.restoreTestEditGrants(first, fresh, []string{teS, teF}, teWorld); err != nil || len(e.testEditGrants("t")) != 0 {
+	if err := e.restoreTestWitnessGrants(context.Background(), first, teBind(), planned, declared, teWorld, teRead(teWorldFiles())); err != nil || len(e.testEditGrants("t")) != 0 {
 		t.Fatalf("first resume: %v, grants=%d", err, len(e.testEditGrants("t")))
 	}
 	// The first resume wrote nothing a session could read back: the events
@@ -326,7 +595,7 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 		t.Fatal("the first resume left a test-edit record behind")
 	}
 	e2 := &Engine{}
-	if err := e2.restoreTestEditGrants(second, fresh, []string{teS, teF}, teWorld); err != nil || len(e2.testEditGrants("t")) != 0 {
+	if err := e2.restoreTestWitnessGrants(context.Background(), second, teBind(), planned, declared, teWorld, teRead(teWorldFiles())); err != nil || len(e2.testEditGrants("t")) != 0 {
 		t.Fatalf("second resume minted authority: %v, grants=%d", err, len(e2.testEditGrants("t")))
 	}
 	// Had the first resume recorded (the defect), the second would have been
@@ -334,7 +603,39 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 	minted, _ := json.Marshal(testEditRecord{World: teWorld, Grants: fresh})
 	tainted := session.FindInterrupted(append(afterFirstResume, event.Event{TaskID: "t", Kind: event.TestEditGranted, Payload: minted}))[0]
 	e3 := &Engine{}
-	if err := e3.restoreTestEditGrants(tainted, fresh, []string{teS, teF}, teWorld); err != nil || len(e3.testEditGrants("t")) != 1 {
-		t.Fatal("precondition: a written record would have been honoured, which is exactly why resume must not write one")
+	if err := e3.restoreTestWitnessGrants(context.Background(), tainted, teBind(), planned, declared, teWorld, teRead(teWorldFiles())); err != nil || len(e3.testEditGrants("t")) != 1 {
+		t.Fatalf("precondition: a written record would have been honoured, which is exactly why resume must not write one: %v", err)
+	}
+}
+
+// #101 review, P2: a granted path containing whitespace is seen as Git
+// wrote it, so an illegal change to that file is caught rather than skipped.
+func TestAGrantedTestPathWithWhitespaceIsStillInspected(t *testing.T) {
+	const f = "modfile/a b_test.go"
+	src := strings.Replace(teFSrc, "TestX", "TestSpace", 1)
+	d := teEdit()
+	d.Path = f
+	grants, reasons := teGrant(t, []string{teS, f}, []TestWitness{d}, teCovered(), map[string]string{teS: teSSrc, f: src})
+	if len(grants) != 1 || grants[0].Path != f {
+		t.Fatalf("premise: a grant for the whitespace path: %+v %v", grants, reasons)
+	}
+	diff := "diff --git a/" + f + " b/" + f + "\nindex 1..2 100644\n--- a/" + f + "\n+++ b/" + f + "\n@@ -9 +9 @@\n-x\n+y\n"
+	touched, _, _, _ := diffFileStates(diff)
+	if !touched[f] {
+		t.Fatalf("the whitespace path was not seen as touched: %v", touched)
+	}
+	novel := strings.Replace(src, "\"strings\"\n", "\"strings\"\n\t\"bytes\"\n", 1)
+	err := inspectTestWitnesses(diff, grants, func(string) ([]byte, error) { return []byte(novel), nil })
+	if err == nil || !strings.Contains(err.Error(), "novel import") {
+		t.Fatalf("an illegal import change on a whitespace path slipped past inspection: %v", err)
+	}
+	pkg := strings.Replace(src, "package modfile", "package modfile_test", 1)
+	if err := inspectTestWitnesses(diff, grants, func(string) ([]byte, error) { return []byte(pkg), nil }); err == nil || !strings.Contains(err.Error(), "package clause") {
+		t.Fatalf("an illegal package change on a whitespace path slipped past inspection: %v", err)
+	}
+	// A rename of the whitespace path is seen too.
+	ren := "diff --git a/" + f + " b/modfile/c d_test.go\nrename from " + f + "\nrename to modfile/c d_test.go\n"
+	if err := inspectTestWitnesses(ren, grants, func(string) ([]byte, error) { return []byte(src), nil }); err == nil || !strings.Contains(err.Error(), "renames it") {
+		t.Fatalf("a rename of a whitespace path was not refuted: %v", err)
 	}
 }
