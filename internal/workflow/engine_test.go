@@ -1327,3 +1327,360 @@ func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
 		}
 	}
 }
+
+// terminalOf returns the one run-terminal event a classifier emitted, and its
+// decoded preserving record when it carried one.
+func terminalOf(t *testing.T, evs []event.Event, kind event.Kind) (event.Event, *PreservedInvocation) {
+	t.Helper()
+	var found *event.Event
+	for i := range evs {
+		if evs[i].Kind == kind {
+			if found != nil {
+				t.Fatalf("two %s terminals were emitted for one run", kind)
+			}
+			found = &evs[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("no %s terminal was emitted; got %v", kind, kindsOf(evs))
+	}
+	if len(found.Payload) == 0 {
+		return *found, nil
+	}
+	record, err := ParsePreservedInvocation(found.Payload)
+	if err != nil {
+		return *found, nil
+	}
+	return *found, &record
+}
+
+// PRODUCING NO DIFF FOR A LAWFUL REASON IS NOT IMPLEMENTOR FAILURE.
+//
+// task-1789998421052523830, 2026-09-20: the implementer was asked to mutate,
+// found that the architectural context it needed was unavailable, refused to
+// guess, and said so. The engine recorded "implementor produced no candidate
+// diff" and ended the task INCOMPLETE/FAILED. The worker did the right thing
+// and was recorded as having failed at the work.
+//
+// The empty-diff refusal is unchanged -- a modify plan that changed nothing has
+// not been implemented, and accepting it would let a worker pass by doing
+// nothing. What the empty diff does not establish is that the task failed: the
+// implementation is still OWED.
+func TestAnImplementerThatHonestlyProducedNoDiffDoesNotFailTheTask(t *testing.T) {
+	const account = "The plan's step 1 requires task-briefing --active, which refuses with " +
+		"authority_refusal because no actor identity is enrolled. I will not mutate without it."
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1"}
+
+	e.endFailed(context.Background(), "t", "separate refusal from failure",
+		preserveInvocation("t", ObligationImplementationOwed, "abc123", "sensei-code/t", account,
+			errors.New("no bounded implementer produced a candidate diff: claude: implementor produced no candidate diff")))
+
+	_, preserved := terminalOf(t, take(), event.WorkflowFailed)
+	if preserved == nil {
+		t.Fatal("an honest refusal to mutate was recorded as plain task failure")
+	}
+	if preserved.Obligation != ObligationImplementationOwed {
+		t.Fatalf("the task owes %q", preserved.Obligation)
+	}
+	// THE WORKER'S ACCOUNT TRAVELS AS CONTEXT, VERBATIM -- and as nothing else.
+	// It is not evidence that the work was done and it is not authority for
+	// anything; the classification was decided by the empty diff.
+	if preserved.Account != account {
+		t.Fatalf("the worker's account was not carried verbatim:\n got %q\nwant %q", preserved.Account, account)
+	}
+	if !strings.Contains(preserved.Reason, "implementor produced no candidate diff") {
+		t.Fatalf("the refusal's own words were lost: %q", preserved.Reason)
+	}
+	if preserved.CandidateBaseSHA != "abc123" || preserved.CandidateBranch != "sensei-code/t" {
+		t.Fatalf("the candidate identity was lost: %+v", preserved)
+	}
+}
+
+// THE TRUE-FAILURE CONTROL. This repair must not make task-terminal FAILED
+// unreachable: an ordinary error still ends the task, with no preserving
+// record for any reader to act on.
+//
+// Without this, "the invocation ended, not the task" becomes "nothing ever
+// fails", and a run that broke would merely look recoverable.
+func TestAnOrdinaryFailureStillEndsTheTask(t *testing.T) {
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1"}
+
+	e.endFailed(context.Background(), "t", "a task", errors.New("create the candidate worktree: disk full"))
+
+	ev, preserved := terminalOf(t, take(), event.WorkflowFailed)
+	if preserved != nil {
+		t.Fatalf("a real failure was recorded as a preserved obligation: %+v", preserved)
+	}
+	if len(ev.Payload) != 0 {
+		t.Fatalf("a failure carried a payload a reader could mistake for an obligation: %s", ev.Payload)
+	}
+	if !strings.Contains(ev.Summary, "disk full") {
+		t.Fatalf("the failure did not say what went wrong: %q", ev.Summary)
+	}
+}
+
+// PRESERVATION IS THE LAST READING OF AN ERROR, NEVER THE FIRST.
+//
+// A human stop, a deferred question and a provider that proved it cannot serve
+// a role turn each already have a terminal that says what actually happened.
+// Classifying any of them as a preserved failure would replace a precise
+// account with a vaguer one -- and an operator's next action differs for each.
+func TestTheEarlierClassifiersStillWinOverPreservation(t *testing.T) {
+	// A deferred question has already recorded itself, so terminateRun emits
+	// nothing at all for it.
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1"}
+	e.terminateRun(context.Background(), "t", "a task",
+		preserveInvocation("t", ObligationRestorationRefused, "abc123", "b", "", errAuthorityDeferred))
+	if evs := take(); len(evs) != 0 {
+		t.Fatalf("a deferred question was terminalized a second time: %v", kindsOf(evs))
+	}
+
+	// A caller stop is a stop, whatever the error wrapped inside it says.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	stopping := &Engine{Bus: bus, SessionID: "s1"}
+	stopping.terminateRun(ctx, "t", "a task",
+		preserveInvocation("t", ObligationRestorationRefused, "abc123", "b", "", errors.New("refused")))
+	if _, ok := terminalOf(t, take(), event.WorkflowStopped); ok != nil {
+		t.Fatal("a stop carried a preserving record")
+	}
+}
+
+// THE CLOSED VOCABULARY IS DUPLICATED IN internal/session, AND THIS IS WHERE
+// THE DUPLICATION IS PINNED.
+//
+// session.FindInterrupted decides which FAILED records to retain, and it cannot
+// import this package -- this one imports it. So its reader carries its own
+// copy of the obligation names. The copy can drift, and drift there is silent:
+// a new obligation this engine mints would be written durably and read back as
+// a terminal failure, losing exactly the task the new obligation was added to
+// preserve.
+//
+// Read by MEMBERSHIP on both sides, so drift fails CLOSED -- a task shows as
+// ended rather than being lost -- and this witness names it the moment it
+// happens.
+func TestTheSessionReaderKnowsEveryObligationThisEngineCanMint(t *testing.T) {
+	declared := continuationObligationsDeclaredIn(t, "internal/workflow/engine.go")
+	if len(declared) == 0 {
+		t.Fatal("no ContinuationObligation constants were found; the guard is inspecting the wrong thing")
+	}
+	reader := rawSource(t, "internal/session/store.go")
+	for name, value := range declared {
+		if !ContinuationObligation(value).Valid() {
+			t.Errorf("%s = %q is declared but its own vocabulary does not admit it", name, value)
+		}
+		if !strings.Contains(reader, `"`+value+`"`) {
+			t.Errorf("internal/session/store.go does not retain %s (%q), so a task preserved with it would be "+
+				"read back as a terminal failure and lost", name, value)
+		}
+	}
+	// And the reader admits nothing this engine cannot mint: a name it knows
+	// that no constant declares is a leftover, which would keep alive tasks
+	// carrying an obligation nothing can act on.
+	for _, retained := range obligationLiteralsIn(t, reader, "preservingFailure") {
+		if !ContinuationObligation(retained).Valid() {
+			t.Errorf("internal/session/store.go retains %q, which this engine does not mint", retained)
+		}
+	}
+}
+
+// continuationObligationsDeclaredIn reads the constants of type
+// ContinuationObligation out of the source, so the guard above enumerates what
+// the code declares rather than what a test author remembered.
+func continuationObligationsDeclaredIn(t *testing.T, rel string) map[string]string {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "../../"+rel, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", rel, err)
+	}
+	out := map[string]string{}
+	for _, decl := range f.Decls {
+		gen, ok := decl.(*ast.GenDecl)
+		if !ok || gen.Tok != token.CONST {
+			continue
+		}
+		for _, spec := range gen.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			ident, ok := vs.Type.(*ast.Ident)
+			if !ok || ident.Name != "ContinuationObligation" {
+				continue
+			}
+			for i, name := range vs.Names {
+				if i >= len(vs.Values) {
+					continue
+				}
+				lit, ok := vs.Values[i].(*ast.BasicLit)
+				if !ok || lit.Kind != token.STRING {
+					continue
+				}
+				out[name.Name] = strings.Trim(lit.Value, `"`)
+			}
+		}
+	}
+	return out
+}
+
+// obligationLiteralsIn reads the string literals of one function's switch in a
+// foreign package's source. It is deliberately crude: it exists to catch a
+// leftover name, and a crude reader that names the file is better than no
+// reader at all.
+func obligationLiteralsIn(t *testing.T, source, fn string) []string {
+	t.Helper()
+	start := strings.Index(source, "func "+fn+"(")
+	if start < 0 {
+		t.Fatalf("%s was not found in the source being inspected", fn)
+	}
+	body := source[start:]
+	if end := strings.Index(body, "\n}\n"); end > 0 {
+		body = body[:end]
+	}
+	var out []string
+	for _, part := range strings.Split(body, "\n") {
+		part = strings.TrimSpace(part)
+		if !strings.HasPrefix(part, "case ") {
+			continue
+		}
+		for _, item := range strings.Split(strings.TrimSuffix(strings.TrimPrefix(part, "case "), ":"), ",") {
+			item = strings.TrimSpace(item)
+			if strings.HasPrefix(item, `"`) && strings.HasSuffix(item, `"`) {
+				out = append(out, strings.Trim(item, `"`))
+			}
+		}
+	}
+	return out
+}
+
+// EVERY IMPLEMENTER DECLINED, AND NOTHING ELSE WENT WRONG, is the exact and
+// only condition that reaches the preserved terminal from the handoff ladder.
+//
+// A source witness rather than a behavioural one, because reaching that
+// aggregate needs a live repository, a provider and a reviewer. What it guards
+// is the shape that makes the classification honest: the branch requires that
+// EVERY failure was a decline, that no provider was unavailable, and that a
+// decline was actually observed -- so a single genuine failure beside a decline
+// still ends the task, which is forbidden repair 2.
+func TestOnlyAnAllDeclinedOutcomeReachesThePreservedImplementationTerminal(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	// Every conjunct, named separately, because dropping any one of them is a
+	// different defect and a single combined assertion would report the wrong one.
+	for reason, conjunct := range map[string]string{
+		"EVERY failure must have been a decline, or a genuine failure beside one would be recorded as " +
+			"work the task merely still owes": "len(declined) == len(failures)",
+		"a provider that could not serve the turn must exclude the decline classification, or an " +
+			"unavailability would be reported as an implementation nobody performed": "len(unavailable) == 0",
+		"there must be at least one failure, or a run in which nothing was asked would preserve an " +
+			"obligation nobody refused": "len(failures) > 0",
+		"a decline must actually have been observed, or the terminal would state an obligation it " +
+			"cannot account for": "owed != nil",
+	} {
+		if !strings.Contains(body, conjunct) {
+			t.Errorf("the preserved implementation terminal no longer requires %s (missing %q)", reason, conjunct)
+		}
+	}
+	// THE CLASSIFICATION IS TYPED AT BOTH ENDS, and both ends are checked:
+	// recognising a decline by type while the site that produces one returns a
+	// plain sentence is a classifier that can never fire.
+	if !strings.Contains(body, "errors.As(err, &declining)") {
+		t.Fatal("the decline is no longer recognised by type, so it would be recognised by reading a message")
+	}
+	if !strings.Contains(body, "&implementationOwed{account: report}") {
+		t.Fatal("the empty-diff site no longer returns the typed decline, so the aggregate can never recognise one " +
+			"and an honest refusal would again be recorded as implementor failure")
+	}
+	// A message is not a classification. Any layer can produce the same
+	// sentence, and re-producing it must not manufacture an obligation.
+	var decline *implementationOwed
+	if errors.As(errors.New(noCandidateDiff), &decline) {
+		t.Fatal("a plain error carrying the same words is read as a decline")
+	}
+	if !errors.As(error(&implementationOwed{}), &decline) {
+		t.Fatal("the decline type is not recognised by the check the aggregate uses")
+	}
+}
+
+// THE RESTORATION REFUSAL REACHES THE TERMINAL AS A PRESERVED OBLIGATION.
+//
+// TestARestorationRefusalPreservesTheTaskAcrossARestart proves what the
+// classifier does with such a refusal; this proves that the refusal is handed
+// to it. Those are two different claims, and only the second one fails if the
+// resume path goes back to reporting the refusal as plain failure -- which is
+// the DF-23 defect exactly.
+//
+// A source witness, and its limit stated: reaching this line behaviourally
+// needs a repository, a Sensei client and a certified start. What it pins is
+// the one line between a correct guard and the terminal it produces.
+func TestTheRestorationRefusalReachesTheTerminalAsAPreservedObligation(t *testing.T) {
+	resume := funcBody(t, "internal/workflow/engine.go", "Resume")
+	if !strings.Contains(resume, "e.restoreTestEditGrants") {
+		t.Fatal("premise: Resume re-establishes recorded test-edit grants")
+	}
+	for _, want := range []string{"preserveInvocation", "ObligationRestorationRefused"} {
+		if !strings.Contains(resume, want) {
+			t.Fatalf("Resume no longer classifies the restoration refusal (%s is absent), so a correct refusal "+
+				"would again end the task rather than the invocation", want)
+		}
+	}
+	// The same statement, and the identity it carries is the one Resume ALREADY
+	// LOADED -- not re-derived at the point of refusal.
+	const site = `fail(preserveInvocation(task.TaskID, ObligationRestorationRefused, identity.BaseSHA, identity.Branch, "", err))`
+	if !strings.Contains(rawSource(t, "internal/workflow/engine.go"), site) {
+		t.Fatalf("the restoration refusal is no longer classified at its call site; expected:\n\t%s", site)
+	}
+	// AND THE GUARD ITSELF IS UNTOUCHED. Only its blast radius changed: the
+	// comparison still refuses, in the same words, on the same inputs.
+	guard := funcBody(t, "internal/workflow/testedit.go", "restoreTestEditGrants")
+	if strings.Contains(guard, "preserveInvocation") {
+		t.Fatal("the restoration guard now classifies its own refusal; the guard decides whether to refuse, " +
+			"and the terminal decides what a refusal ends")
+	}
+	if !strings.Contains(guard, "e.setTestEditGrants") {
+		t.Fatal("premise: the guard still installs grants only when the record is re-established")
+	}
+}
+
+// A RECORD THIS ENGINE COULD NOT READ BACK MUST NOT BE WRITTEN AS THOUGH IT
+// PRESERVED SOMETHING.
+//
+// The transcript would say the task was preserved while the reconstruction,
+// applying the same parser, dropped it -- two records disagreeing about whether
+// a task is alive, with the reassuring one being the wrong one. That exact
+// disagreement is what DF-6 and DF-23 both turned on: a candidate record saying
+// "resumable" beside a session record saying the task had ended.
+//
+// The unreadable case is reachable: a run that fails before candidate identity
+// is established has no base to name, and a preserving classification built
+// from it would state an obligation about nothing.
+func TestAPreservingRecordThatCannotBeReadBackIsATerminalFailure(t *testing.T) {
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1"}
+
+	// No candidate base: nothing names what would be continued.
+	e.endFailed(context.Background(), "t", "a task",
+		preserveInvocation("t", ObligationRestorationRefused, "", "", "", errors.New("the bound could not be re-established")))
+
+	ev, preserved := terminalOf(t, take(), event.WorkflowFailed)
+	if preserved != nil {
+		t.Fatalf("an unreadable obligation was written as a preserved one: %+v", preserved)
+	}
+	if len(ev.Payload) != 0 {
+		t.Fatalf("the terminal carried a record the reconstruction would refuse: %s", ev.Payload)
+	}
+	if !strings.Contains(ev.Summary, "the bound could not be re-established") {
+		t.Fatalf("the refusal's own words were lost on the way to the terminal: %q", ev.Summary)
+	}
+}

@@ -412,3 +412,79 @@ func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
 		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }
+
+// A PRESERVED INVOCATION IS STILL A RUN, AND IT STILL OWES ITS RECEIPT IN THE
+// VOCABULARY EVERY EXISTING READER ALREADY SPEAKS.
+//
+// endFailed is where an invocation becomes a FAILED terminal, and where the two
+// FAILED facts -- established task failure, and an invocation that ended while
+// the task kept an obligation -- are told apart. Both of its exits go through
+// emitRunTerminal, so both emit a receipt first; TestOnlyEmitRunTerminalEndsARun
+// above is what makes that impossible to bypass.
+//
+// What this adds is the vocabulary and the candidate. A preserving terminal
+// that invented a tenth outcome would oblige every existing reader to learn it
+// before a FAILED receipt could be trusted at all -- and one that claimed a
+// different CandidateState would erase, in the receipt, the very candidate it
+// exists to preserve. Both branches must therefore state FAILED and MEASURE the
+// candidate rather than assert anything about it.
+func TestBothFailedTerminalsKeepTheExistingReceiptVocabulary(t *testing.T) {
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "engine.go", nil, 0)
+	if err != nil {
+		t.Fatalf("parse engine.go: %v", err)
+	}
+	var calls []*ast.CallExpr
+	for _, decl := range f.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || fn.Name.Name != "endFailed" || fn.Body == nil {
+			continue
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			call, ok := n.(*ast.CallExpr)
+			if !ok {
+				return true
+			}
+			if sel, ok := call.Fun.(*ast.SelectorExpr); ok && sel.Sel.Name == "emitRunTerminal" {
+				calls = append(calls, call)
+			}
+			return true
+		})
+	}
+	if len(calls) != 2 {
+		t.Fatalf("endFailed has %d terminal exits, want 2 (a preserved obligation and a task failure); "+
+			"a third would be a FAILED fact nothing in this test has looked at", len(calls))
+	}
+	selector := func(e ast.Expr) string {
+		sel, ok := e.(*ast.SelectorExpr)
+		if !ok {
+			return ""
+		}
+		pkg, ok := sel.X.(*ast.Ident)
+		if !ok {
+			return ""
+		}
+		return pkg.Name + "." + sel.Sel.Name
+	}
+	for i, call := range calls {
+		if len(call.Args) < 5 {
+			t.Fatalf("exit %d takes %d arguments", i, len(call.Args))
+		}
+		if got := selector(call.Args[1]); got != "event.WorkflowFailed" {
+			t.Errorf("exit %d emits %q rather than event.WorkflowFailed; a new terminal kind is one every "+
+				"existing reader would read as nothing", i, got)
+		}
+		if got := selector(call.Args[3]); got != "runreceipt.OutcomeFailed" {
+			t.Errorf("exit %d records outcome %q rather than runreceipt.OutcomeFailed", i, got)
+		}
+		inner, ok := call.Args[4].(*ast.CallExpr)
+		if !ok {
+			t.Errorf("exit %d states a candidate state instead of measuring one: %T", i, call.Args[4])
+			continue
+		}
+		if got := selector(inner.Fun); got != "e.candidateStateFor" {
+			t.Errorf("exit %d gets its candidate state from %q rather than measuring it with e.candidateStateFor; "+
+				"a preserving terminal that asserted CandidateNone would erase the candidate it preserves", i, got)
+		}
+	}
+}

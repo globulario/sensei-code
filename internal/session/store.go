@@ -285,6 +285,63 @@ type Interrupted struct {
 	// re-plan. A later PlanProposed -- the re-plan a resume records -- discharges
 	// it.
 	NotConverged json.RawMessage
+	// Preserved is the payload of a WorkflowFailed that ended the INVOCATION
+	// and not the task, byte for byte: what the task still owes, why, and which
+	// candidate it is about. Absent on every other FAILED record.
+	//
+	// Byte for byte, and for the same reason AwaitingAuthority is: the
+	// obligation a continuation honours must be the one that was recorded, and
+	// a round trip through this package's idea of the shape is exactly where an
+	// obligation quietly becomes a different one.
+	Preserved json.RawMessage
+}
+
+// preservingFailure reports whether a WorkflowFailed record ended the
+// invocation while leaving the task a continuation obligation.
+//
+// THIS PACKAGE OWNS THE RETENTION DECISION AND DUPLICATES THE VOCABULARY TO
+// MAKE IT, and that is deliberate. The workflow package owns the record's full
+// shape and imports this one, so this one cannot import it back; the obligation
+// names below are therefore a second copy of a closed vocabulary, and the two
+// can drift.
+//
+// The drift is SAFE IN ONE DIRECTION ONLY, which is why the list is written as
+// membership rather than exclusion: an obligation this package has not learned
+// reads as malformed and the record stays TERMINAL. A task is then visible as
+// ended rather than invisible as active, and the writer's own test (workflow's
+// TestEveryContinuationObligationIsRetainedByTheReconstruction) fails the
+// moment a new obligation is minted without teaching this reader about it.
+//
+// Four kinds of FAILED record are terminal here and each for its own reason: a
+// GENUINE failure carries no such payload; a HISTORICAL one predates the field
+// entirely; an UNCLASSIFIED one carries a payload that is not this record; and
+// a MALFORMED one cannot say which task, which obligation, why, or about which
+// candidate. None of them can be continued from, and treating any of them as
+// preserved would be the "preserve everything" bug facing the other way.
+func preservingFailure(taskID string, raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return false
+	}
+	var p struct {
+		TaskID           string `json:"task_id"`
+		Obligation       string `json:"obligation"`
+		Reason           string `json:"reason"`
+		CandidateBaseSHA string `json:"candidate_base_sha"`
+	}
+	if json.Unmarshal(raw, &p) != nil {
+		return false
+	}
+	switch p.Obligation {
+	case "restoration_refused", "implementation_owed":
+	default:
+		return false
+	}
+	// The record must be about the task it was recorded under. One naming a
+	// different task is not this task's obligation, and honouring it would let
+	// one task's refusal keep another alive.
+	return p.TaskID == taskID &&
+		strings.TrimSpace(p.Reason) != "" &&
+		strings.TrimSpace(p.CandidateBaseSHA) != ""
 }
 
 // blockedRole reads only the role an external-block record names. The workflow
@@ -402,10 +459,11 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.ProspectiveRecord = e.Payload
 		case event.TestEditGranted:
 			p.TestEditRecord = e.Payload
-		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved:
+		case event.WorkflowCompleted, event.WorkflowObserved:
 			// THE TASK-TERMINAL SET, stated positively and in one place: a change
-			// was admitted, the work failed, or a read-only run reported what it
-			// found. Nothing else ends a task.
+			// was admitted, or a read-only run reported what it found. The third
+			// member, an unpreserved failure, is the case below -- it needs one
+			// question asked of it first. Nothing else ends a task.
 			//
 			// WorkflowObserved is here because an observation IS an ending -- the
 			// run succeeded and admitted nothing. Leaving it out would have made
@@ -415,10 +473,34 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// disagreement between the record and the lifecycle.
 			//
 			// The INVOCATION terminals -- stopped, timed out, awaiting review,
-			// awaiting authority, blocked external, not converged -- are
-			// deliberately absent. Each of them ends one process's attempt and
-			// leaves the task owing something, which is precisely the state this
-			// function exists to report.
+			// awaiting authority, blocked external, not converged, and a
+			// preserved failure -- are deliberately absent. Each of them ends
+			// one process's attempt and leaves the task owing something, which
+			// is precisely the state this function exists to report.
+			p.done = true
+		case event.WorkflowFailed:
+			// TWO FACTS ARRIVE UNDER ONE EVENT KIND, and this is where they are
+			// told apart. A governed invocation may end while the task still
+			// owes something -- a bound that could not be re-established, a
+			// change nobody made -- and the engine records that as a FAILED
+			// terminal carrying a preserving record. Every other FAILED record
+			// ends the task, exactly as it always has.
+			//
+			// NO RESURRECTION, and it rests on ONE property of this whole
+			// switch: done is set and never cleared, anywhere. A task that has
+			// already reached a genuine terminal therefore stays ended whatever
+			// arrives afterwards, including a perfectly well-formed preserving
+			// record. Without that, "preserve the obligation" becomes "preserve
+			// everything", which is the same disagreement between the record
+			// and the lifecycle facing the other way.
+			if preservingFailure(e.TaskID, e.Payload) {
+				p.Preserved = e.Payload
+				break
+			}
+			// A genuine failure after a preserved one is the end of the task,
+			// and it clears the obligation: leaving it set would hand a reader
+			// an obligation belonging to a task that has since finished.
+			p.Preserved = nil
 			p.done = true
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing

@@ -519,6 +519,7 @@ func printActiveTasks(out io.Writer, scope string, active []session.Active, revi
 			printBlockedObligation(out, task)
 		default:
 			fmt.Fprintf(out, "  owed       %s\n", lane)
+			printPreservedObligation(out, task)
 			if s := strings.TrimSpace(task.Review); s != "" && lane == laneImplementation {
 				fmt.Fprintf(out, "  review     %s\n", oneLine(s))
 			}
@@ -580,6 +581,38 @@ func printBlockedObligation(out io.Writer, task session.Interrupted) {
 		return
 	}
 	fmt.Fprintf(out, "  blocked    %s\n  resume     --task %s\n", block.Describe(), task.TaskID)
+}
+
+// printPreservedObligation renders what a task owes after an invocation ended
+// without it: a bound that could not be re-established, or a change no
+// implementer made.
+//
+// It is rendered and NOT routed on. The lane is unchanged -- such a task has a
+// plan and a candidate, so it is continued as implementation through the
+// ordinary resume path, which re-runs every restoration, every start-gate
+// certification and every authority guard from scratch. Printing the obligation
+// is what stops an operator having to read the event log to find out why the
+// last invocation stopped and whether resuming will simply stop again.
+//
+// A record that cannot be read back is SAID SO rather than dropped. The
+// reconstruction already refused to retain an unreadable one, so anything
+// arriving here parsed once; a disagreement between the two readers is exactly
+// the thing an operator needs told, not hidden.
+func printPreservedObligation(out io.Writer, task session.Interrupted) {
+	if len(task.Preserved) == 0 {
+		return
+	}
+	preserved, err := workflow.ParsePreservedInvocation(task.Preserved)
+	if err != nil {
+		fmt.Fprintf(out, "  preserved, but the record could not be read back: %v\n", err)
+		return
+	}
+	fmt.Fprintf(out, "  preserved  %s\n", preserved.Describe())
+	fmt.Fprintf(out, "  candidate  base %s", preserved.CandidateBaseSHA)
+	if branch := strings.TrimSpace(preserved.CandidateBranch); branch != "" {
+		fmt.Fprintf(out, " on %s", branch)
+	}
+	fmt.Fprintln(out)
 }
 
 // tasksOf is the tasks alone, for the selectors that decide from a task record

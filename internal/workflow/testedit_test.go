@@ -338,3 +338,179 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 		t.Fatal("precondition: a written record would have been honoured, which is exactly why resume must not write one")
 	}
 }
+
+// A CORRECT REFUSAL MUST NOT DESTROY THE TASK IT REFUSED FOR.
+//
+// DF-23, task-1789960053774525922, 2026-09-20. The candidate e1da8dd held 1,796
+// insertions, validated and audited. The resume recomputed test-edit grants,
+// got a set that disagreed with the seven the run had recorded, and refused --
+// correctly: the record alone is not authority, routing does not re-run on
+// resume, and a stale or edited local record must not become operational
+// authority by being present (#101 review). That refusal then emitted a TASK
+// terminal, and the task left `resume --list` entirely.
+//
+// Everything above the terminal is unchanged here. The same comparison, on the
+// same inputs, by the same rules, produces the same refusal with the same
+// words. What is witnessed is that the refusal now ends the INVOCATION: the
+// task survives, carrying that exact sentence and the candidate it was about,
+// through a fresh session store and a fresh engine -- the process restart being
+// the point, because an obligation preserved only in memory dies with the
+// process that refused.
+func TestARestorationRefusalPreservesTheTaskAcrossARestart(t *testing.T) {
+	world := teRead(map[string]string{teS: teSSrc, teF: teFSrc})
+	fresh, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, world)
+	if len(fresh) != 1 {
+		t.Fatal("premise: one fresh grant at the pinned world")
+	}
+	// The DF-23 shape: a recorded grant the pinned world does not re-establish.
+	forged := fresh[0]
+	forged.BaseHash = "0000"
+	record, _ := json.Marshal(testEditRecord{World: teWorld, Grants: []testEditGrant{forged}})
+
+	const base = "e1da8dd0000000000000000000000000000000000"
+	const branch = "sensei-code/task-1789960053774525922"
+	repo := t.TempDir()
+	store, err := session.New(repo, "session-1")
+	if err != nil {
+		t.Fatalf("session store: %v", err)
+	}
+	for _, ev := range []event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Source: event.SourceUser, Summary: "separate refusal from failure"},
+		{TaskID: "t", Kind: event.PlanProposed, Source: event.SourceArchitect, Summary: "plan",
+			Payload: json.RawMessage(`{"plan":"p","files":["` + teS + `","` + teF + `"]}`)},
+		{TaskID: "t", Kind: event.TestEditGranted, Payload: record},
+	} {
+		if err := store.Append(ev); err != nil {
+			t.Fatalf("append: %v", err)
+		}
+	}
+	history, err := store.Load()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	interrupted := session.FindInterrupted(history)
+	if len(interrupted) != 1 {
+		t.Fatalf("premise: one interrupted task, got %+v", interrupted)
+	}
+
+	// THE REFUSAL ITSELF, unchanged: restoreTestEditGrants, its inputs and its
+	// comparison rules are exactly what they were.
+	refusal := (&Engine{}).restoreTestEditGrants(interrupted[0], fresh, []string{teS, teF}, teWorld)
+	if refusal == nil {
+		t.Fatal("premise: the pinned world must refuse a record it does not re-establish")
+	}
+
+	// The run ends through the shared FAILED terminal, as it did before.
+	refusing := &Engine{Store: store, SessionID: "session-1"}
+	refusing.endFailed(context.Background(), "t", "separate refusal from failure",
+		preserveInvocation("t", ObligationRestorationRefused, base, branch, "", refusal))
+
+	// A FRESH PROCESS. Nothing in memory survives; the durable record is read
+	// back by a new store over the same repository, which is what `resume
+	// --list` does.
+	reopened, err := session.New(repo, "session-1")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	after, err := reopened.Load()
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	found := session.FindInterrupted(after)
+	if len(found) != 1 {
+		t.Fatalf("after a correct refusal the task is gone: %+v", found)
+	}
+	preserved, perr := ParsePreservedInvocation(found[0].Preserved)
+	if perr != nil {
+		t.Fatalf("the preserved obligation could not be read back: %v", perr)
+	}
+	if preserved.Obligation != ObligationRestorationRefused {
+		t.Fatalf("the task owes %q", preserved.Obligation)
+	}
+	// THE EXACT REASON, not a summary of it. An operator's next action depends
+	// on which comparison disagreed.
+	if preserved.Reason != refusal.Error() {
+		t.Fatalf("the refusal was not carried verbatim:\n got %q\nwant %q", preserved.Reason, refusal.Error())
+	}
+	if preserved.CandidateBaseSHA != base || preserved.CandidateBranch != branch {
+		t.Fatalf("the candidate identity was lost: %+v", preserved)
+	}
+	if preserved.TaskID != "t" {
+		t.Fatalf("the record is bound to %q", preserved.TaskID)
+	}
+	// The task is still continuable as itself: its plan and its recorded grant
+	// are intact, which is what the resume re-checks.
+	if !found[0].Planned || len(found[0].TestEditRecord) == 0 {
+		t.Fatalf("the preserved task lost what a continuation reads: %+v", found[0])
+	}
+
+	// AND NOTHING WAS MINTED. A FRESH ENGINE resuming this preserved task runs
+	// the same restoration against the same world and refuses again, installing
+	// no grant. Preservation keeps the question open; it does not answer it.
+	continuing := &Engine{}
+	again := continuing.restoreTestEditGrants(found[0], fresh, []string{teS, teF}, teWorld)
+	if again == nil {
+		t.Fatal("the preserved task resumed past the guard that refused it")
+	}
+	if again.Error() != refusal.Error() {
+		t.Fatalf("the resumed refusal changed:\n got %q\nwant %q", again.Error(), refusal.Error())
+	}
+	if len(continuing.testEditGrants("t")) != 0 {
+		t.Fatal("being preserved installed test-edit authority nobody re-established")
+	}
+	// And the whole-repository discovery path -- the one `resume --list` takes
+	// -- finds exactly this one task.
+	discovered, derr := session.FindActive(repo)
+	if derr != nil {
+		t.Fatalf("discovery failed: %v", derr)
+	}
+	if len(discovered.Active) != 1 || discovered.Active[0].Task.TaskID != "t" ||
+		string(discovered.Active[0].Task.Preserved) != string(found[0].Preserved) {
+		t.Fatalf("resume --list does not return the preserved task with its obligation: %+v", discovered.Active)
+	}
+}
+
+// EVERY OBLIGATION THIS ENGINE CAN MINT IS ONE THE RECONSTRUCTION RETAINS, and
+// nothing else is.
+//
+// session.FindInterrupted decides retention from its OWN copy of this closed
+// vocabulary, because it cannot import this package. That copy can drift, and
+// this is the witness that fails when it does. It is a behavioural check rather
+// than a source one on purpose: what matters is that a record this engine
+// writes is a record that reader retains.
+func TestEveryContinuationObligationIsRetainedByTheReconstruction(t *testing.T) {
+	for _, obligation := range []ContinuationObligation{ObligationRestorationRefused, ObligationImplementationOwed} {
+		if !obligation.Valid() {
+			t.Fatalf("%q is not admitted by its own vocabulary", obligation)
+		}
+		raw, _ := json.Marshal(PreservedInvocation{
+			TaskID: "t", Obligation: obligation, Reason: "the invocation stopped", CandidateBaseSHA: "abc123",
+		})
+		found := session.FindInterrupted([]event.Event{
+			{TaskID: "t", Kind: event.TaskCreated, Source: event.SourceUser, Summary: "a task"},
+			{TaskID: "t", Kind: event.WorkflowFailed, Source: event.SourceSystem, Summary: "ended", Payload: raw},
+		})
+		if len(found) != 1 {
+			t.Fatalf("%q: the reconstruction does not retain an obligation this engine mints", obligation)
+		}
+		if string(found[0].Preserved) != string(raw) {
+			t.Errorf("%q: the record was not carried byte for byte", obligation)
+		}
+	}
+	// The other direction: a value outside the vocabulary is read by
+	// membership, so it is terminal rather than "some other obligation".
+	unknown, _ := json.Marshal(PreservedInvocation{
+		TaskID: "t", Obligation: ContinuationObligation("something_else"),
+		Reason: "the invocation stopped", CandidateBaseSHA: "abc123",
+	})
+	if _, err := ParsePreservedInvocation(unknown); err == nil {
+		t.Fatal("an unknown obligation parsed as a continuation this engine can act on")
+	}
+	stillEnded := session.FindInterrupted([]event.Event{
+		{TaskID: "t", Kind: event.TaskCreated, Source: event.SourceUser, Summary: "a task"},
+		{TaskID: "t", Kind: event.WorkflowFailed, Source: event.SourceSystem, Summary: "ended", Payload: unknown},
+	})
+	if len(stillEnded) != 0 {
+		t.Fatalf("an unknown obligation kept a task alive: %+v", stillEnded)
+	}
+}

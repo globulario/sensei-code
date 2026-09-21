@@ -548,8 +548,10 @@ func (e *Engine) refuseUnprovenAuthority(taskID string, option authority.Option)
 //	stopped  -> STOPPED, reported as "stopped". A person answered and the answer
 //	            was no. The behavioural record must not learn from this that the
 //	            task shape breaks.
-//	anything -> FAILED, reported as "failure". A real defect.
-//	else
+//	anything -> the FAILED terminal, where endFailed makes the last
+//	else        distinction: an established task failure, reported as
+//	            "failure", or an invocation that ended while the task kept a
+//	            durable continuation obligation.
 //
 // It takes no boolean and returns none: a caller cannot guard it off and fall
 // through to its own idea of the terminal, which is the shape this replaced.
@@ -562,9 +564,11 @@ func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task str
 			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), humanStopNote, nil)
 		e.reportOutcome(context.WithoutCancel(ctx), behaviourStopped, task, humanStopNote)
 	default:
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
-		e.reportOutcome(ctx, behaviourFailure, task, err.Error())
+		// THE SHARED FAILED EMISSION. execute and Resume both reach it through
+		// terminateRun, and resumeAuthority reaches it directly, so the one
+		// classifier that separates task failure from a preserved obligation
+		// belongs here rather than at each site that can produce either.
+		e.endFailed(ctx, taskID, task, err)
 	}
 }
 
@@ -822,6 +826,238 @@ func (e *Engine) markObserving(taskID string) {
 		e.observing = make(map[string]bool)
 	}
 	e.observing[taskID] = true
+}
+
+// A GOVERNED INVOCATION MAY BECOME TASK-TERMINAL ONLY WHEN NO CONTINUATION
+// OBLIGATION REMAINS.
+//
+// Observed five times in eleven days, each time losing real work: a candidate
+// of 120,101 bytes recorded INCOMPLETE/FAILED (DF-19); a recorded human
+// authorization destroyed four seconds after it was given (DF-21); 171,373
+// bytes that had converged from six findings to one (DF-21b); a validated and
+// audited candidate killed by a refusal that was LOCALLY CORRECT (DF-23); and
+// an implementer that declined to mutate without the architectural context it
+// needed, produced no diff, and was recorded as having failed at the work.
+//
+// The terminal model collapsed two different facts into one:
+//
+//	"this invocation cannot safely continue"  ->  "this task FAILED, and is not resumable"
+//
+// They are separated HERE, at the FAILED terminal, and nowhere else. The guards
+// that produce these refusals are untouched: DF-23's restoration exact-match
+// comparison is right -- the record alone is not authority -- and so is an
+// implementer that declines to guess. What changes is the blast radius of being
+// right. The invocation ends; the task keeps its candidate and its exact
+// obligation; and the ordinary resume path re-runs every safety and authority
+// guard from scratch, so a condition that still holds refuses again.
+//
+// NOTHING IS MINTED HERE. A preserving disposition carries the refusal's own
+// words and the candidate identity the refusing site ALREADY HELD. It grants no
+// authority, re-derives no evidence, and re-establishes no bound.
+
+// ContinuationObligation names what a task still owes after an invocation ended
+// without it.
+//
+// CLOSED, and read by MEMBERSHIP rather than by exclusion. A value this
+// vocabulary does not contain is not "some other obligation"; it is a record
+// this engine cannot act on, and the only honest reading of that is a terminal
+// FAILED. An exclusion list would have made every unknown string preserving,
+// which is "preserve everything" -- the opposite bug, and the one that would
+// make genuine failure unreachable.
+type ContinuationObligation string
+
+const (
+	// ObligationRestorationRefused: a prior bound could not be re-established
+	// at the pinned world, so the invocation refused to operate under a record
+	// it could not verify. The refusal stands. What is preserved is the task it
+	// was refusing FOR.
+	ObligationRestorationRefused ContinuationObligation = "restoration_refused"
+	// ObligationImplementationOwed: a modify-mode implementer turn returned no
+	// candidate diff. The change the plan asked for has not been made, so the
+	// task owes its implementation. That is an undischarged obligation -- not a
+	// worker that failed at the work, and not work that succeeded.
+	ObligationImplementationOwed ContinuationObligation = "implementation_owed"
+)
+
+// Valid reads the vocabulary by membership.
+func (o ContinuationObligation) Valid() bool {
+	switch o {
+	case ObligationRestorationRefused, ObligationImplementationOwed:
+		return true
+	default:
+		return false
+	}
+}
+
+// PreservedInvocation is the durable record a preserving FAILED terminal
+// carries: what the task still owes, in the refusing party's own words, and the
+// candidate identity observed where the refusal happened.
+//
+// It is the payload of an ordinary event.WorkflowFailed with an ordinary
+// runreceipt.OutcomeFailed, and the vocabularies are unchanged on purpose. The
+// invocation did fail; a tenth terminal kind would oblige every existing reader
+// to learn it before it could be trusted to read a FAILED record at all, and a
+// reader that had not learned it yet would read the new kind as nothing. What
+// distinguishes the two FAILED facts is this record, and session.FindInterrupted
+// is the one reader that acts on the distinction.
+type PreservedInvocation struct {
+	TaskID     string                 `json:"task_id"`
+	Obligation ContinuationObligation `json:"obligation"`
+	// Reason is the refusal's own account, verbatim, never a summary of it.
+	// DF-23's refusal named exactly which comparison disagreed, and an
+	// operator's next action depends on that sentence.
+	Reason string `json:"reason"`
+	// The candidate identity as the refusing site ALREADY HELD it. It is not
+	// looked up here: a classification that could load an identity could also
+	// load a different one than the refusal was about.
+	//
+	// The worktree PATH is deliberately absent. It is where this machine
+	// happened to put the candidate, not what the candidate IS, and a
+	// continuation re-creates it from the base -- so recording it would offer a
+	// later reader a location to trust instead of an identity to verify.
+	CandidateBaseSHA string `json:"candidate_base_sha"`
+	CandidateBranch  string `json:"candidate_branch,omitempty"`
+	// Account is the worker's own text, carried as CONTEXT for whoever picks
+	// the task up. Nothing reads it, nothing routes on it, and no authority is
+	// derived from it: prose explaining why a worker declined is an
+	// explanation, not a grant, and not evidence that anything was done.
+	Account string `json:"account,omitempty"`
+}
+
+// Describe is the one-line account the terminal carries.
+func (p PreservedInvocation) Describe() string {
+	what := "the invocation could not continue"
+	switch p.Obligation {
+	case ObligationRestorationRefused:
+		what = "a bound this task already had could not be re-established, so the invocation refused to continue under it"
+	case ObligationImplementationOwed:
+		what = "the change this plan asked for has not been made, so the task still owes its implementation"
+	}
+	return what + ": " + oneLine(p.Reason)
+}
+
+// ParsePreservedInvocation reads a preserving record back, refusing one that
+// cannot say which task it belongs to, what that task owes, why, or which
+// candidate it is about.
+//
+// Every one of those refusals reads the FAILED record it came from as TERMINAL.
+// A record that cannot state its obligation is not a weaker obligation; it is a
+// record nothing can continue from, and continuing anyway would be the engine
+// inventing the continuation it was unable to read.
+func ParsePreservedInvocation(raw json.RawMessage) (PreservedInvocation, error) {
+	var p PreservedInvocation
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return PreservedInvocation{}, fmt.Errorf("the preserved-invocation record is unreadable: %w", err)
+	}
+	if strings.TrimSpace(p.TaskID) == "" {
+		return PreservedInvocation{}, errors.New("the preserved-invocation record names no task")
+	}
+	if !p.Obligation.Valid() {
+		return PreservedInvocation{}, fmt.Errorf("the preserved-invocation record owes %q, which is not a continuation "+
+			"obligation this engine can act on", p.Obligation)
+	}
+	if strings.TrimSpace(p.Reason) == "" {
+		return PreservedInvocation{}, errors.New("the preserved-invocation record does not say why the invocation stopped")
+	}
+	if strings.TrimSpace(p.CandidateBaseSHA) == "" {
+		return PreservedInvocation{}, errors.New("the preserved-invocation record names no candidate base, so what would " +
+			"be continued cannot be established")
+	}
+	return p, nil
+}
+
+// preservedInvocation is the error shape that carries a preserving
+// classification to the FAILED terminal.
+//
+// It WRAPS the refusal rather than replacing it, so errors.Is and errors.As
+// keep working: a refusal that is also a stop, a deferral or a provider block
+// is still classified as that by the branches that run before this one.
+// Preservation is the LAST reading of an error, never the first.
+type preservedInvocation struct {
+	record PreservedInvocation
+	cause  error
+}
+
+func (p *preservedInvocation) Error() string { return p.cause.Error() }
+
+func (p *preservedInvocation) Unwrap() error { return p.cause }
+
+// preserveInvocation classifies a refusal as ending the INVOCATION while the
+// task keeps a durable obligation.
+//
+// The caller passes the base and branch it ALREADY HOLDS, and the account, if
+// any, of the party that refused. There is deliberately no variant that looks
+// either of them up: a classifier that could load a candidate identity could
+// load a different one than the refusal was about.
+func preserveInvocation(taskID string, obligation ContinuationObligation, base, branch, account string, cause error) error {
+	return &preservedInvocation{
+		record: PreservedInvocation{
+			TaskID:           taskID,
+			Obligation:       obligation,
+			Reason:           cause.Error(),
+			CandidateBaseSHA: base,
+			CandidateBranch:  branch,
+			Account:          strings.TrimSpace(account),
+		},
+		cause: cause,
+	}
+}
+
+// implementationOwed is a modify-mode implementer turn that returned no
+// candidate diff.
+//
+// TYPED, not a sentence. The condition was already refused with exactly this
+// wording, and a string is something a later reader has to re-classify by
+// matching on it; the type is what lets the aggregate below tell "no implementer
+// made the change" apart from "an implementer failed at making it" without
+// reading anyone's prose.
+type implementationOwed struct {
+	// account is the worker's own text. Context only -- see the call site.
+	account string
+}
+
+// noCandidateDiff is the refusal's wording, unchanged since the empty-diff
+// check was written. Named rather than inline so the one sentence has one
+// source: the aggregate below joins it into its account, and the classification
+// is by type, so a second copy would drift without anything noticing.
+const noCandidateDiff = "implementor produced no candidate diff"
+
+func (i *implementationOwed) Error() string { return noCandidateDiff }
+
+// endFailed is the ONE place a governed invocation becomes a FAILED terminal,
+// and therefore the one place that decides which of the two FAILED facts it is:
+// established task failure, or an invocation that ended while the task kept a
+// durable continuation obligation.
+//
+// The record is validated here by the SAME parser the reconstruction will apply
+// to it. A record this engine would not accept back must not be written as
+// though it preserved something: it would read as preservation in the
+// transcript while ending the task in fact, which is the disagreement between
+// two records that DF-6 and DF-23 both turned on.
+//
+// A preserving terminal files NO behavioural outcome, exactly as BLOCKED_EXTERNAL
+// and NOT_CONVERGED file none. Filing "failure" would teach the behavioural
+// record that this task shape breaks, when what happened is that a guard held.
+func (e *Engine) endFailed(ctx context.Context, taskID, task string, err error) {
+	var preserved *preservedInvocation
+	if errors.As(err, &preserved) {
+		if raw, merr := json.Marshal(preserved.record); merr == nil {
+			if _, perr := ParsePreservedInvocation(raw); perr == nil {
+				e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+					runreceipt.OutcomeFailed, e.candidateStateFor(taskID),
+					"this invocation ended and the task did not: "+preserved.record.Describe()+
+						". The task and its candidate are preserved; resume it to continue",
+					preserved.record)
+				return
+			}
+		}
+		// Falling through is the fail-closed direction, and it is the only one
+		// available: a preserving record this engine cannot read back would
+		// make the task undiscoverable while claiming otherwise.
+	}
+	e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
+		runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
+	e.reportOutcome(ctx, behaviourFailure, task, err.Error())
 }
 
 // terminateRun is the one classifier for how a governed invocation ends when
@@ -1682,7 +1918,21 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					continue
 				}
 			}
-			return candidateNotConverged, plan, lastReview, lastAudit, errors.New("implementor produced no candidate diff")
+			// PRODUCING NO DIFF FOR A LAWFUL REASON IS NOT IMPLEMENTOR FAILURE.
+			//
+			// The condition is unchanged and still refuses: a modify plan that
+			// changed nothing has not been implemented, and accepting the empty
+			// diff would let a worker pass by doing nothing. What the empty diff
+			// does NOT establish is that the worker failed at the work --
+			// task-1789998421052523830 (2026-09-20) is the witness, where the
+			// implementer correctly declined to mutate without the architectural
+			// context it needed and the run recorded it as having failed.
+			//
+			// The worker's own account travels with the refusal as context. It
+			// is not read, not routed on, and never treated as authority or as
+			// evidence that anything was done; the classification is decided by
+			// the empty diff alone.
+			return candidateNotConverged, plan, lastReview, lastAudit, &implementationOwed{account: report}
 		}
 		// A read-only plan that changed something is out of scope, and saying so
 		// is more useful than reviewing the change: the worker was asked to
@@ -4616,6 +4866,13 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	// exhausted names the workers whose failure was spending every review cycle
 	// with the reviewer still objecting -- the one failure a re-plan can answer.
 	var exhausted []string
+	// declined names the workers that returned no candidate diff at all, and
+	// owed is the last such refusal, kept so its account reaches the terminal.
+	// Separate from failures for the same reason exhausted is: producing
+	// nothing for a lawful reason is an obligation the task still owes, not a
+	// worker that failed at the work.
+	var declined []string
+	var owed *implementationOwed
 	// continuing names the candidate the next worker would take over, so an
 	// exclusion recorded against THAT candidate applies and one recorded against
 	// an earlier, unrelated candidate does not. Empty on a fresh start: there is
@@ -4875,6 +5132,11 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			if errors.Is(err, errReviewCyclesExhausted) {
 				exhausted = append(exhausted, worker.Name)
 			}
+			var declining *implementationOwed
+			if errors.As(err, &declining) {
+				declined = append(declined, worker.Name)
+				owed = declining
+			}
 			// The candidate stays: it holds real work, and the reviewer's
 			// unresolved findings travel with it to whoever picks it up next.
 			state.Phase = taskstate.Revising
@@ -5062,6 +5324,25 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			TaskID: taskID, Implementers: exhausted,
 			ReviewCycles: e.Config.Workflow.ReviewCycles, Owed: OwedArchitectReplan,
 		})
+		return
+	}
+	// EVERY IMPLEMENTER THAT WAS ASKED DECLINED TO MUTATE, AND NOTHING ELSE
+	// WENT WRONG. The change this plan asked for has not been made, which is an
+	// obligation the task still owes -- not a failure at making it.
+	//
+	// The same shape as the exhaustion branch above, and for the same reason:
+	// only this exact condition qualifies. A worker that errored, a structural
+	// refusal or a refuted grant is not "nobody changed anything", and each of
+	// them already returned before reaching here.
+	//
+	// The candidate held no work, so disposeIfEmpty above removed an empty
+	// container; the identity it was cut from is what the record carries, and a
+	// resume re-creates the worktree from exactly that base.
+	if len(failures) > 0 && len(declined) == len(failures) && len(unavailable) == 0 && owed != nil {
+		state.Phase = taskstate.Implementing
+		_ = state.Save(e.Repo.Root)
+		fail(preserveInvocation(taskID, ObligationImplementationOwed, identity.BaseSHA, identity.Branch, owed.account,
+			fmt.Errorf("no bounded implementer produced a candidate diff: %s", strings.Join(failures, " | "))))
 		return
 	}
 	if len(failures) == 0 && len(ineligible) > 0 {
@@ -5520,7 +5801,19 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// first resume's write as the run's own record.
 		recomputed, _ := e.coverageAtWorld(ctx, task.TaskID, bound.Files, bound.Prospective)
 		if err := e.restoreTestEditGrants(task, recomputed.edits, bound.Files, identity.BaseSHA); err != nil {
-			fail(err)
+			// THE REFUSAL IS RIGHT AND ITS BLAST RADIUS WAS NOT (DF-23,
+			// task-1789960053774525922). The record alone is not authority, so
+			// a recomputation that disagrees with it must stop this invocation
+			// -- and nothing about that establishes that the TASK failed. On
+			// 2026-09-20 it killed a candidate of 1,796 insertions that had
+			// already been validated and audited.
+			//
+			// The comparison, its inputs and its rules are untouched here. Only
+			// what the refusal ENDS is: the invocation stops, and the task
+			// stays discoverable carrying this refusal, verbatim, as what it
+			// owes. A resume re-runs this same restoration and refuses again
+			// until the world and the record agree.
+			fail(preserveInvocation(task.TaskID, ObligationRestorationRefused, identity.BaseSHA, identity.Branch, "", err))
 			return
 		}
 		if err := e.restoreProspectiveGrants(task, bound.Prospective, identity.BaseSHA); err != nil {

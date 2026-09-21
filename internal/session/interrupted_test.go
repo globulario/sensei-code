@@ -267,3 +267,167 @@ func TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable(t *testing.T) {
 		t.Fatalf("a completed task with no objective is still active: %+v", ended)
 	}
 }
+
+// preserving is a well-formed preserving-FAILED payload for task t1. It is
+// written as literal bytes rather than built from the workflow package's type,
+// because that package imports this one and the point of the test is that THIS
+// reader, reading bytes off a disk written by some other process, retains the
+// right records.
+const preserving = `{"task_id":"t1","obligation":"restoration_refused",` +
+	`"reason":"cannot resume t1: the recorded base hash of modfile/rule_test.go does not match its bytes at the pinned world",` +
+	`"candidate_base_sha":"e1da8dd0000000000000000000000000000000000","candidate_branch":"sensei-code/t1"}`
+
+func failed(taskID, payload string) event.Event {
+	return event.Event{TaskID: taskID, Source: event.SourceSystem, Kind: event.WorkflowFailed,
+		Summary: "the invocation ended", Payload: []byte(payload)}
+}
+
+// WITNESS 1, at the reader. A FAILED record that states a continuation
+// obligation ends the INVOCATION: the task stays discoverable and carries the
+// obligation byte for byte.
+//
+// DF-23 (task-1789960053774525922, 2026-09-20) is what this is about. A
+// validated, audited candidate of 1,796 insertions was removed from
+// `resume --list` entirely by a refusal that was locally correct -- the
+// restoration exact-match guard doing exactly its job.
+func TestAPreservedFailureEndsTheInvocationAndNotTheTask(t *testing.T) {
+	events := []event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "separate refusal from failure"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the bounded plan"),
+		failed("t1", preserving),
+	}
+	got := FindInterrupted(events)
+	if len(got) != 1 {
+		t.Fatalf("a preserved invocation ended the task: %+v", got)
+	}
+	if string(got[0].Preserved) != preserving {
+		t.Fatalf("the obligation was not carried verbatim:\n got %s\nwant %s", got[0].Preserved, preserving)
+	}
+	if !got[0].Planned || got[0].Task != "separate refusal from failure" {
+		t.Fatalf("the task lost what it needs to be continued: %+v", got[0])
+	}
+}
+
+// WITNESS 5, THE CONTROL. This repair must not make task-terminal FAILED
+// unreachable, so every FAILED record that does not state a continuation
+// obligation still ends the task -- and each of the four reasons a record fails
+// to state one is checked separately, because they are four different defects
+// and a single case would let three of them regress unseen.
+func TestAFailureThatStatesNoObligationStillEndsTheTask(t *testing.T) {
+	for name, payload := range map[string]string{
+		// A genuine failure: the engine recorded no payload at all.
+		"genuine": "",
+		// Historical: written before this field existed. Its payload is some
+		// other run's structured detail.
+		"historical": `{"workspace":"/tmp/wt","implementor":"claude","publication":"failed"}`,
+		// Unclassified: shaped like the record but owing nothing this engine
+		// knows. Read by MEMBERSHIP -- an unknown obligation is terminal, never
+		// "some other obligation" that keeps the task alive.
+		"unclassified obligation": `{"task_id":"t1","obligation":"something_else","reason":"r","candidate_base_sha":"abc"}`,
+		"absent obligation":       `{"task_id":"t1","reason":"r","candidate_base_sha":"abc"}`,
+		// Malformed: cannot say why, or about which candidate.
+		"no reason":         `{"task_id":"t1","obligation":"restoration_refused","candidate_base_sha":"abc"}`,
+		"blank reason":      `{"task_id":"t1","obligation":"restoration_refused","reason":"  ","candidate_base_sha":"abc"}`,
+		"no candidate base": `{"task_id":"t1","obligation":"restoration_refused","reason":"r"}`,
+		"unreadable":        `{"task_id":`,
+		// Bound to a different task. Honouring it would let one task's refusal
+		// keep another one alive.
+		"foreign task": `{"task_id":"t2","obligation":"restoration_refused","reason":"r","candidate_base_sha":"abc"}`,
+	} {
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			failed("t1", payload),
+		})
+		if len(got) != 0 {
+			t.Errorf("%s: the task survived a terminal failure: %+v", name, got)
+		}
+	}
+}
+
+// WITNESS 7, THE OTHER CONTROL. Once a genuine task terminal exists, nothing
+// brings the task back -- not a later preserving record, however well formed.
+//
+// Without this, "preserve the obligation" becomes "preserve everything", which
+// is the same defect facing the other way: a task that can never be finished
+// and a task that cannot be found are the same disagreement between the record
+// and the lifecycle.
+func TestAGenuineTerminalIsNotResurrectedByALaterPreservingRecord(t *testing.T) {
+	for name, terminal := range map[string]event.Kind{
+		"completed": event.WorkflowCompleted,
+		"failed":    event.WorkflowFailed,
+		"observed":  event.WorkflowObserved,
+	} {
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			ev("t1", event.SourceSystem, terminal, "ended"),
+			failed("t1", preserving),
+		})
+		if len(got) != 0 {
+			t.Errorf("%s: a preserving record reopened a task that had ended: %+v", name, got)
+		}
+	}
+	// And the reverse order is the ordinary one: a preserved invocation
+	// followed by a real failure ends the task, and the obligation goes with
+	// it rather than being left attached to work that has finished.
+	ended := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+		failed("t1", preserving),
+		failed("t1", ""),
+	})
+	if len(ended) != 0 {
+		t.Fatalf("a genuine failure after a preserved one left the task active: %+v", ended)
+	}
+}
+
+// WITNESSES 2 AND 4, THE CONTROLS THAT MUST NOT MOVE. A candidate awaiting an
+// independent review, and a turn a provider proved it could not serve, are
+// already invocation terminals. A preserving refusal arriving after either of
+// them must leave that obligation exactly where it was: the task owes the
+// review, or owes the blocked turn, and it now also carries the refusal.
+//
+// The combination is the case: each of these was, on its own, once emitted as
+// WorkflowFailed and read here as the end of the task.
+func TestAPreservedFailureDoesNotConsumeAnObligationAlreadyStanding(t *testing.T) {
+	base := []event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+	}
+	const block = `{"task_id":"t1","role":"implementer","provider":"chatgpt","reason":"quota","retry_at_state":"UNKNOWN"}`
+	const question = `{"condition":"graph coverage is absent","decision":{"subject":"Authorize?","options":[{"id":"1"}]}}`
+	for name, standing := range map[string]event.Event{
+		"awaiting review": {TaskID: "t1", Source: event.SourceReviewer, Kind: event.WorkflowAwaitingReview,
+			Summary: "owed a review", Payload: []byte(`{"review_kind":"unanswered"}`)},
+		"blocked external": {TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowBlockedExternal,
+			Summary: "blocked", Payload: []byte(block)},
+		"awaiting authority": {TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
+			Summary: "deferred", Payload: []byte(question)},
+	} {
+		got := FindInterrupted(append(append([]event.Event(nil), base...), standing, failed("t1", preserving)))
+		if len(got) != 1 {
+			t.Fatalf("%s: the task ended: %+v", name, got)
+		}
+		task := got[0]
+		if string(task.Preserved) != preserving {
+			t.Errorf("%s: the refusal was not carried: %s", name, task.Preserved)
+		}
+		switch name {
+		case "awaiting review":
+			if !task.AwaitingReview {
+				t.Error("awaiting review: the review obligation was consumed by the refusal")
+			}
+		case "blocked external":
+			if string(task.BlockedExternal) != block {
+				t.Errorf("blocked external: the blocked turn was lost: %s", task.BlockedExternal)
+			}
+		case "awaiting authority":
+			// AND NO AUTHORITY WAS MINTED. The question is still the one that
+			// was asked, byte for byte; nothing about being preserved answers it.
+			if string(task.AwaitingAuthority) != question {
+				t.Errorf("awaiting authority: the standing question changed: %s", task.AwaitingAuthority)
+			}
+		}
+	}
+}
