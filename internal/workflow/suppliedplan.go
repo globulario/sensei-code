@@ -151,6 +151,10 @@ type resumedBound struct {
 	Consequences string
 	Invariants   []string
 	Prospective  []ProspectiveSurface
+	// Witnesses are the plan's declared regression-test witnesses. They are part
+	// of the executable contract: the resumed run's witness grants are validated
+	// against these declarations and against nothing else (DF-20).
+	Witnesses []TestWitness
 }
 
 // restorePlanBound re-establishes, from the session record, both who authored a
@@ -205,5 +209,6 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 		Consequences: rec.Consequences,
 		Invariants:   rec.Invariants,
 		Prospective:  rec.ProspectiveSurfaces,
+		Witnesses:    rec.TestWitnesses,
 	}, nil
 }

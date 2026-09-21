@@ -578,3 +578,204 @@ func TestTheGrantSurvivesAReviewFeedbackCycle(t *testing.T) {
 		t.Fatal("the grant section is repeated")
 	}
 }
+
+// DF-20: a declared regression-test WITNESS is not the #312 prospective CREATE,
+// and must never quietly become one.
+//
+// The forbidden repair here is "future test does not exist -> fabricate an
+// anchor or graph identity -> call it covered". The two channels are computed
+// from different inputs and neither writes into the other's output: the
+// coverage computation never sees a witness declaration, so an absent witness
+// path stays uncovered by the graph; the witness channel issues an operational
+// grant that carries no anchor and no base bytes.
+func TestAPlannedTestCreateMintsNoAnchorAndNoProspectiveGrant(t *testing.T) {
+	anchors := derivedAnchorNaming(t, gosumcheckS, gosumcheckF)
+	read := worldOf(map[string]string{gosumcheckS: gosumcheckSrc})
+	planned := []string{gosumcheckS, gosumcheckF}
+
+	// The plan declares the absent test as a witness and declares NO
+	// prospective surface. The #312 channel therefore grants nothing, and the
+	// absent path takes no coverage -- even though an anchor names it.
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, planned, nil, anchors, read)
+	if len(grants) != 0 {
+		t.Fatalf("a witness declaration leaked into prospective authority: %+v", grants)
+	}
+	for _, a := range out {
+		if a.File == gosumcheckF {
+			t.Fatalf("the planned test create was given a graph anchor: %+v", a)
+		}
+	}
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("the existing surface should be the only covered file: %+v", out)
+	}
+
+	// The witness channel grants the same path, from the subject's evidence.
+	bind := planBinding{Task: "t", Objective: identityOf("prove the check"), Plan: identityOf("the plan")}
+	witness := TestWitness{Path: gosumcheckF, Operation: witnessCreate, Role: roleGoRegressionTestCreate,
+		Subject: gosumcheckS, Package: "gosumcheck", Dependencies: []string{"testing"}}
+	edits, reasons := testWitnessGrants(context.Background(), bind, prospectiveWorld, planned,
+		[]TestWitness{witness}, nil, out, authoredEvidence{}, read)
+	if len(edits) != 1 || len(reasons) != 0 {
+		t.Fatalf("the declared witness was not granted: %+v %v", edits, reasons)
+	}
+	if edits[0].BaseHash != "" || edits[0].Covering != gosumcheckS || edits[0].CoveringEvidence != evidenceDerived {
+		t.Fatalf("the planned create is not an evidence-derived, byte-less grant: %+v", edits[0])
+	}
+	// And the coverage the graph established is exactly what it was.
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("issuing a witness grant moved derived coverage: %+v", out)
+	}
+}
+
+// Both witness renderings reach the worker, through the same prompt the
+// prospective grants travel on. Authority that constrains execution must be
+// visible at the execution boundary, or the worker discovers it by refutation.
+func TestRunCandidateHandsTheWitnessGrantsToThePrompt(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "runCandidate")
+	for _, want := range []string{"renderTestEditGrants", "editGrants", "renderTestWitnessCreates", "createGrants"} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("runCandidate does not pass %s into the implementation prompt", want)
+		}
+	}
+}
+
+// f2 -- A RESTARTED PROCESS RESTORES THE EXACT RECORDED GRANTS.
+//
+// The earlier restart tests handed restoreTestWitnessGrants a synthetic binding
+// and so could not see the defect: a fresh Engine holds no objective for the
+// task, planBindingFor would hash an empty string, and the binding computed on
+// resume would not be the binding the grants were recorded under. Every grant
+// the original run legitimately held would have been refused -- not because the
+// authority changed, but because the process forgot what the task was.
+//
+// This drives the real restoration path instead: a real Git world for the
+// pinned base, a real session record, restorePlanBound for the bound, and
+// resumeWitnessAuthority -- the one function Resume delegates restoration to.
+// Only the Sensei-served turns of Resume above it are absent; nothing between
+// the record and the grants is stood in for.
+func TestARestartedProcessRestoresTheExactRecordedWitnessGrants(t *testing.T) {
+	const (
+		task      = "task-w"
+		objective = "prove what happens when a provider is unavailable"
+		existing  = "gosumcheck/existing_test.go"
+	)
+	root := t.TempDir()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q")
+	if err := os.MkdirAll(filepath.Join(root, "gosumcheck"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The subject and the existing witness are at the base; the planned create
+	// is not, and its absence is what the reader must establish.
+	for path, src := range map[string]string{
+		gosumcheckS: gosumcheckSrc,
+		existing:    "package gosumcheck\n\nimport \"testing\"\n\nfunc TestExisting(t *testing.T) {}\n",
+	} {
+		if err := os.WriteFile(filepath.Join(root, path), []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "base")
+	world := run("rev-parse", "HEAD")
+	read := gitShowAt(root)
+
+	d := architectureDecision{
+		Decision: "proceed", Summary: "s", Plan: "the plan text", Mode: string(ModeModify),
+		Files: []string{gosumcheckS, existing, gosumcheckF},
+		TestWitnesses: []TestWitness{
+			{Path: existing, Operation: witnessEdit, Role: roleGoRegressionTestEdit, Subject: gosumcheckS},
+			{Path: gosumcheckF, Operation: witnessCreate, Role: roleGoRegressionTestCreate,
+				Subject: gosumcheckS, Package: "gosumcheck", Dependencies: []string{"strings"}},
+		},
+	}
+
+	// THE ORIGINAL RUN: the process that took the submission still holds it.
+	origin := &Engine{}
+	origin.recordObjective(task, Objective{Text: objective, Provenance: RequestedByHuman})
+	bind := origin.planBindingFor(task, d.Plan)
+	grants, reasons := testWitnessGrants(context.Background(), bind, world, d.Files, d.TestWitnesses,
+		d.ProspectiveSurfaces, gosumcheckAnchors(), authoredEvidence{}, read)
+	if len(grants) != 2 || len(reasons) != 0 {
+		t.Fatalf("premise: both witness forms are granted at the pinned base: %+v %v", grants, reasons)
+	}
+
+	// THE RECORD, as a session holds it once that process is gone.
+	granted, _ := json.Marshal(testEditRecord{World: world, Grants: grants})
+	proposed, _ := json.Marshal(proposedPlan{architectureDecision: d, PlanSource: PlanByArchitect})
+	found := session.FindInterrupted([]event.Event{
+		{TaskID: task, Kind: event.TaskCreated, Summary: objective},
+		{TaskID: task, Kind: event.PlanProposed, Source: event.SourceArchitect, Summary: planSummary(d), Payload: proposed},
+		{TaskID: task, Kind: event.TestEditGranted, Payload: granted},
+	})
+	if len(found) != 1 || len(found[0].TestEditRecord) == 0 {
+		t.Fatalf("the record did not survive the session: %+v", found)
+	}
+	interrupted := found[0]
+
+	// THE DEFECT, demonstrated before the repair is exercised. A fresh process
+	// holds nothing, so a binding it computes without restoring the recorded
+	// objective is incomplete, and the recorded grants are refused.
+	naive := &Engine{}
+	bound, err := naive.restorePlanBound(interrupted)
+	if err != nil {
+		t.Fatalf("the bound did not come back from the record: %v", err)
+	}
+	if naive.planBindingFor(task, bound.Plan).complete() {
+		t.Fatal("precondition: a restarted process holds no objective, so its binding is incomplete")
+	}
+	if err := naive.restoreTestWitnessGrants(context.Background(), interrupted,
+		naive.planBindingFor(task, bound.Plan), bound.Files, bound.Witnesses, world, read); err == nil {
+		t.Fatal("a binding computed without the recorded objective accepted the grants anyway")
+	}
+
+	// THE RESTART, through the path Resume takes.
+	restarted := &Engine{}
+	bound, err = restarted.restorePlanBound(interrupted)
+	if err != nil {
+		t.Fatalf("the bound did not come back from the record: %v", err)
+	}
+	if err := restarted.resumeWitnessAuthority(context.Background(), interrupted, bound, world, read); err != nil {
+		t.Fatalf("the restart lost the recorded witness authority: %v", err)
+	}
+
+	// THE EXACT GRANTS, and no others.
+	restored := restarted.testEditGrants(task)
+	if len(restored) != 2 {
+		t.Fatalf("the restart restored %d grants, not the 2 that were recorded: %+v", len(restored), restored)
+	}
+	for i, want := range grants {
+		got := restored[i]
+		switch {
+		case got.Path != want.Path, got.Covering != want.Covering, got.World != want.World, got.BaseHash != want.BaseHash:
+			t.Fatalf("grant %d came back describing another file, subject or base: %+v want %+v", i, got, want)
+		case !got.Binding.equal(want.Binding), !sameWitness(got.Declared, want.Declared):
+			t.Fatalf("grant %d came back bound to another obligation: %+v want %+v", i, got, want)
+		case !sameTestFacts(got.Facts, want.Facts):
+			t.Fatalf("grant %d came back with other facts to inspect against: %+v want %+v", i, got.Facts, want.Facts)
+		}
+	}
+	if got := strings.Join(operationalFiles(restored), " "); got != existing+" "+gosumcheckF {
+		t.Fatalf("the restored authority names other paths: %s", got)
+	}
+
+	// The binding the restart computed IS the one the grants were issued under,
+	// and the objective it restored invents no human: a restarted process
+	// establishes nobody, however the submission was authorized.
+	if got := restarted.planBindingFor(task, bound.Plan); !got.equal(bind) {
+		t.Fatalf("the resumed binding is not the recorded one: %+v want %+v", got, bind)
+	}
+	o := restarted.objective(task)
+	if o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
+		t.Fatalf("the restart did not restore the recorded objective under resumption provenance: %+v", o)
+	}
+}
