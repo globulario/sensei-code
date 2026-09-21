@@ -285,6 +285,62 @@ type Interrupted struct {
 	// re-plan. A later PlanProposed -- the re-plan a resume records -- discharges
 	// it.
 	NotConverged json.RawMessage
+	// Continuation is the payload of a preserving FAILED terminal, byte for
+	// byte: why this invocation stopped while the task did not.
+	//
+	// CONTEXT, NEVER ROUTING. What the task owes is still read from the fields
+	// above -- a standing question routes from AwaitingAuthority, a candidate
+	// owed a review from AwaitingReview -- and a continuation record grants
+	// nothing and satisfies nothing. It says what happened to the last attempt,
+	// so a person reading the listing is not shown a task with no account of
+	// why it stopped. The newest one wins.
+	Continuation json.RawMessage
+}
+
+// continuationKinds is the closed continuation vocabulary, READ BY MEMBERSHIP.
+//
+// The workflow package owns these kinds; this package needs to recognise them
+// and must not import it (it is the importer). An exclusion list here would
+// fail open -- anything nobody had thought of would preserve a task -- so a
+// kind absent from this map leaves its terminal exactly as terminal as every
+// FAILED was before. The agreement between the two packages is a behavioural
+// test in the workflow package, not a shared string.
+var continuationKinds = map[string]bool{
+	"restoration_refused":           true,
+	"implementation_declined":       true,
+	"authority_reentry_unavailable": true,
+}
+
+// preservedContinuation reports whether a FAILED terminal carries a closed,
+// well-formed continuation obligation for THIS task, and returns its payload
+// unchanged.
+//
+// Every refusal here keeps the task terminal, which is the direction that
+// cannot lose work already recorded as finished: a malformed record, an
+// unknown kind, a record about another task, or one with no reason is exactly
+// the FAILED it has always been. Preservation is claimed by a record that
+// survives these questions, never inferred from a payload's shape.
+func preservedContinuation(payload json.RawMessage, taskID string) (json.RawMessage, bool) {
+	if len(payload) == 0 {
+		return nil, false
+	}
+	var p struct {
+		Obligation *struct {
+			TaskID string `json:"task_id"`
+			Kind   string `json:"kind"`
+			Reason string `json:"reason"`
+		} `json:"continuation_obligation"`
+	}
+	if json.Unmarshal(payload, &p) != nil || p.Obligation == nil {
+		return nil, false
+	}
+	if !continuationKinds[p.Obligation.Kind] {
+		return nil, false
+	}
+	if p.Obligation.TaskID != taskID || strings.TrimSpace(p.Obligation.Reason) == "" {
+		return nil, false
+	}
+	return payload, true
 }
 
 // blockedRole reads only the role an external-block record names. The workflow
@@ -402,10 +458,35 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.ProspectiveRecord = e.Payload
 		case event.TestEditGranted:
 			p.TestEditRecord = e.Payload
-		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved:
-			// THE TASK-TERMINAL SET, stated positively and in one place: a change
-			// was admitted, the work failed, or a read-only run reported what it
-			// found. Nothing else ends a task.
+		case event.WorkflowFailed:
+			// A FAILED TERMINAL ENDS THE TASK UNLESS IT SAYS, IN A RECORD THIS
+			// READER CAN VALIDATE, THAT AN OBLIGATION REMAINS.
+			//
+			// The kind is unchanged on purpose: a process running the previous
+			// generation reads this event exactly as it always did, so the
+			// candidate that introduces these semantics can be carried by the
+			// engine it replaces.
+			//
+			// DONE IS MONOTONIC, and that -- not the guard below -- is what
+			// stops a resurrection: nothing in this reconstruction ever clears
+			// it, so a preserving record appended after a genuine terminal
+			// cannot bring the task back. The `!p.done` guard is narrower than
+			// it looks and is stated as what it is: a task that has already
+			// ended does not even record an obligation, so no reader is handed
+			// a continuation for work that is over. A mutation that clears done
+			// here is caught by
+			// TestAGenuineTerminalIsNeverResurrectedByALaterPreservingRecord;
+			// removing the guard alone changes nothing a caller can observe.
+			if record, ok := preservedContinuation(e.Payload, e.TaskID); ok && !p.done {
+				p.Continuation = record
+				break
+			}
+			p.done = true
+		case event.WorkflowCompleted, event.WorkflowObserved:
+			// THE REST OF THE TASK-TERMINAL SET, stated positively and in one
+			// place: a change was admitted, or a read-only run reported what it
+			// found. With the FAILED case above -- the work failed and left no
+			// obligation anybody can act on -- nothing else ends a task.
 			//
 			// WorkflowObserved is here because an observation IS an ending -- the
 			// run succeeded and admitted nothing. Leaving it out would have made
