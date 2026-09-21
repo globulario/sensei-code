@@ -495,6 +495,7 @@ func printActiveTasks(out io.Writer, scope string, active []session.Active, revi
 		if s := strings.TrimSpace(task.Task); s != "" {
 			fmt.Fprintf(out, "  objective  %s\n", s)
 		}
+		printPreservedInvocation(out, task)
 		state := review[task.TaskID]
 		if state.conflict != nil {
 			// Shown, and shown as unroutable. Choosing a lane for it would pick
@@ -560,6 +561,27 @@ func printStandingQuestion(out io.Writer, task session.Interrupted) {
 	for _, option := range q.Decision.Options {
 		fmt.Fprintf(out, "  --answer %-4s %s\n", option.ID, option.Label)
 	}
+}
+
+// printPreservedInvocation renders why the last attempt at this task stopped,
+// when it stopped without ending the task.
+//
+// CONTEXT, NEVER AN AUTHORITY SOURCE. It is printed before the lane is decided
+// and has no part in deciding it: selectResumeLane reads the same durable
+// obligations it always did, so a task holding a standing question still routes
+// from AwaitingAuthority and a preserved restoration or implementation
+// continuation re-enters the ordinary resume path, where every guard that
+// refused runs again. A record that cannot be read back prints nothing rather
+// than a sentence about a record nobody validated.
+func printPreservedInvocation(out io.Writer, task session.Interrupted) {
+	if len(task.Continuation) == 0 {
+		return
+	}
+	o, err := workflow.ParseContinuation(task.Continuation)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(out, "  preserved  %s\n", oneLine(o.Describe()))
 }
 
 // printBlockedObligation renders a turn a provider blocked, or a re-plan a

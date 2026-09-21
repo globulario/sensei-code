@@ -412,3 +412,60 @@ func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
 		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }
+
+// A PRESERVED INVOCATION IS STILL A GOVERNED RUN AND STILL OWES ITS ACCOUNT.
+//
+// Preserving the task must not create a quieter way to end: the receipt comes
+// first, the terminal names the event it emitted, and the outcome is the FAILED
+// it actually was. A run that ended the invocation without ending the task is
+// exactly the run whose account a later process has to read.
+func TestAPreservedTerminalStillEmitsItsReceiptFirst(t *testing.T) {
+	bus := event.NewBus()
+	stream, cancel := bus.Subscribe(16)
+	defer cancel()
+	e := &Engine{Bus: bus, SessionID: "s1"}
+	e.beginReceipt("task-1")
+	e.endFailed("task-1", preserveContinuation(ContinuationObligation{
+		TaskID: "task-1", Kind: ContinuationRestorationRefused, CandidateBaseSHA: "abc123",
+	}, refusalText("cannot resume task-1: the pinned world authorises 0 existing-test edit(s) and the record holds 7")))
+
+	var seen []event.Event
+	for {
+		select {
+		case ev := <-stream:
+			seen = append(seen, ev)
+			continue
+		default:
+		}
+		break
+	}
+	receipt, terminal := -1, -1
+	for i, ev := range seen {
+		switch ev.Kind {
+		case event.RunReceipt:
+			receipt = i
+		case event.WorkflowFailed:
+			terminal = i
+		}
+	}
+	if receipt < 0 || terminal < 0 {
+		t.Fatalf("a preserved invocation left an incomplete pair: %+v", seen)
+	}
+	if receipt > terminal {
+		t.Fatal("the terminal was emitted before its receipt, so a reader can see an ending with no account of it")
+	}
+	if !strings.Contains(seen[receipt].Summary, string(runreceipt.OutcomeFailed)) {
+		t.Fatalf("the receipt does not report the outcome it had: %q", seen[receipt].Summary)
+	}
+	// The refusal reaches the transcript in its own words, beside the
+	// obligation the record carries.
+	if !strings.Contains(seen[terminal].Summary, "the record holds 7") {
+		t.Fatalf("the terminal summary lost the refusal: %q", seen[terminal].Summary)
+	}
+}
+
+// refusalText is a guard's sentence standing in for the guard, so this file
+// keeps exactly the imports it had.
+type refusalText string
+
+func (r refusalText) Error() string { return string(r) }

@@ -1327,3 +1327,115 @@ func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
 		}
 	}
 }
+
+// ORDINARY FAILURE IS THE DEFAULT AT THE SHARED BOUNDARY.
+//
+// The repair must not make a task-terminal FAILED unreachable, and the way it
+// could is not by intent but by admitting records nobody validated. So the
+// preserving branch is entered by exactly one thing -- a typed obligation this
+// engine can validate and read back -- and everything else, including a TYPED
+// record that fails validation, ends the task as it always did.
+func TestOnlyAValidatedObligationMakesAFailedTerminalPreserving(t *testing.T) {
+	valid := ContinuationObligation{TaskID: "task-1", Kind: ContinuationRestorationRefused,
+		CandidateBaseSHA: "abc123", CandidateBranch: "sensei-code/task-1"}
+	cases := map[string]struct {
+		err      error
+		preserve bool
+	}{
+		"an untyped failure": {errors.New("the worker died"), false},
+		"a wrapped untyped failure": {fmt.Errorf("implement: %w",
+			errors.New("no bounded implementor produced an acceptable candidate")), false},
+		"a typed record with no candidate where its kind requires one": {
+			preserveContinuation(ContinuationObligation{TaskID: "task-1",
+				Kind: ContinuationRestorationRefused}, errors.New("refused")), false},
+		"a typed record about another task": {
+			preserveContinuation(ContinuationObligation{TaskID: "task-2",
+				Kind: ContinuationRestorationRefused, CandidateBaseSHA: "abc123"}, errors.New("refused")), false},
+		"a typed record of a kind nobody defined": {
+			preserveContinuation(ContinuationObligation{TaskID: "task-1",
+				Kind: "looks_continuable", CandidateBaseSHA: "abc123"}, errors.New("refused")), false},
+		"a validated record": {preserveContinuation(valid, errors.New("refused")), true},
+	}
+	for name, c := range cases {
+		bus := event.NewBus()
+		stream, done := bus.Subscribe(16)
+		e := &Engine{Bus: bus, SessionID: "s1"}
+		e.endFailed("task-1", c.err)
+		var terminal *event.Event
+		var accounted bool
+		for {
+			select {
+			case ev := <-stream:
+				if ev.Kind == event.WorkflowFailed {
+					got := ev
+					terminal = &got
+				}
+				if ev.Kind == event.Status && strings.Contains(ev.Summary, "could not be admitted") {
+					accounted = true
+				}
+				continue
+			default:
+			}
+			break
+		}
+		done()
+		if terminal == nil {
+			t.Errorf("%s: the invocation emitted no terminal at all", name)
+			continue
+		}
+		_, err := ParseContinuation(terminal.Payload)
+		if c.preserve && err != nil {
+			t.Errorf("%s: a validated obligation did not reach the terminal: %v", name, err)
+		}
+		if !c.preserve && err == nil {
+			t.Errorf("%s: an unvalidated record made the terminal preserving", name)
+		}
+		// A refused record leaves an account. A preservation that silently did
+		// not happen is indistinguishable from one nobody attempted.
+		if !c.preserve && strings.HasPrefix(name, "a typed record") && !accounted {
+			t.Errorf("%s: the record was dropped without saying so", name)
+		}
+		// The failure is still reported in the guard's own words.
+		if terminal.Summary == "" {
+			t.Errorf("%s: the terminal says nothing about why the invocation ended", name)
+		}
+	}
+}
+
+// THE LANES THAT ALREADY PRESERVE STILL RETURN BEFORE THE FAILED BOUNDARY.
+//
+// A deferred question, a stop, a deadline and a provider that proved it cannot
+// serve each end the invocation their own way, and none of them may be
+// reclassified by the new mechanism -- witnesses 2, 3 and 4 are about turns that
+// are already preserved and must stay that way. terminateRun's order is what
+// keeps them out of it, and endFailed is reached only after all four.
+func TestThePreservingClassifierSitsBehindEveryLaneThatAlreadyPreserves(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "terminateRun")
+	order := []string{"errAuthorityDeferred ", "ctx.Err( ", "e.blockExternally( ", "e.terminateAuthorityOutcome( "}
+	at := -1
+	for _, step := range order {
+		next := strings.Index(body, step)
+		if next < 0 {
+			t.Fatalf("terminateRun no longer consults %s", strings.TrimSpace(step))
+		}
+		if next < at {
+			t.Fatalf("%s is consulted after the terminal is decided", strings.TrimSpace(step))
+		}
+		at = next
+	}
+	// And the FAILED decision itself is made in one place rather than at the
+	// call site, so a new lane cannot inherit a terminal by writing one.
+	outcome := funcBody(t, "internal/workflow/engine.go", "terminateAuthorityOutcome")
+	if !strings.Contains(outcome, "e.endFailed( ") {
+		t.Fatal("the shared boundary no longer routes its FAILED decision through one helper")
+	}
+	if strings.Contains(outcome, "WorkflowFailed ") {
+		t.Fatal("the classifier emits a FAILED terminal of its own beside the helper that decides it")
+	}
+	// The stop and the deferral keep their own endings: neither reaches the
+	// helper, so neither can be turned into a preserved failure.
+	stop := strings.Index(outcome, "WorkflowStopped ")
+	if stop < 0 || stop > strings.Index(outcome, "e.endFailed( ") {
+		t.Fatal("a human stop no longer has its own terminal ahead of the failure branch")
+	}
+}

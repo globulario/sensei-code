@@ -267,3 +267,233 @@ func TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable(t *testing.T) {
 		t.Fatalf("a completed task with no objective is still active: %+v", ended)
 	}
 }
+
+// preserving builds the payload a preserving FAILED terminal carries, IN THE
+// SHAPE THE WRITER PRODUCES FOR THAT KIND: the kinds whose call site already
+// holds a candidate carry its identity, and the deferred-authority boundary --
+// reached before any candidate exists -- carries none.
+//
+// It was not always kind-faithful, and that is how the reader and the writer
+// came to disagree unnoticed. A helper that attached a candidate to every kind
+// is a shape no engine writes; it made an authority record carrying an invented
+// identity look like the record this reader was agreeing with, so the agreement
+// test passed while the reader admitted records the writer refuses.
+func preserving(taskID, kind, reason string) []byte {
+	identity := `,"candidate_base_sha":"abc123","candidate_branch":"sensei-code/` + taskID + `"`
+	if kind == "authority_reentry_unavailable" {
+		identity = ""
+	}
+	return obligation(`"task_id":"` + taskID + `","kind":"` + kind + `","reason":"` + reason + `"` + identity)
+}
+
+// obligation builds a record from EXACTLY the fields named, so a control can
+// state a malformed shape without the helper above quietly repairing it.
+func obligation(fields string) []byte {
+	return []byte(`{"continuation_obligation":{` + fields + `}}`)
+}
+
+// A REFUSED INVOCATION IS NOT A FINISHED TASK.
+//
+// DF-23 (task-1789960053774525922): a validated, audited candidate of 1796
+// insertions was killed at 13:27:02Z by a restoration refusal that was locally
+// correct. The refusal ended the INVOCATION and the terminal ended the TASK, so
+// `resume --list` stopped showing it at all and the work was reachable only as
+// a new task with a new identity.
+//
+// The refusal still refuses. What changes is that the terminal carries the
+// obligation, and this reconstruction keeps the task.
+func TestAPreservedInvocationLeavesTheTaskDiscoverableWithItsObligation(t *testing.T) {
+	const reason string = "cannot resume t1: the pinned world authorises 0 existing-test edit(s) and the record holds 7"
+	payload := preserving("t1", "restoration_refused", reason)
+	got := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "close the lifecycle boundary"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+		{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed,
+			Summary: "the invocation ended and the task is preserved", Payload: payload},
+	})
+	if len(got) != 1 {
+		t.Fatalf("a refused invocation ended the task: %+v", got)
+	}
+	if !got[0].Planned || got[0].TaskID != "t1" {
+		t.Fatalf("the task came back without its identity or its plan: %+v", got[0])
+	}
+	// Byte for byte. A continuation that re-renders the obligation is a
+	// continuation that can disagree with the record it came from.
+	if string(got[0].Continuation) != string(payload) {
+		t.Fatalf("the obligation was not carried verbatim:\n got %s\nwant %s", got[0].Continuation, payload)
+	}
+	// Each kind of the closed vocabulary preserves, and each is recognised
+	// by membership rather than by anything about the record's shape.
+	for _, kind := range []string{"restoration_refused", "implementation_declined", "authority_reentry_unavailable"} {
+		again := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			{TaskID: "t1", Kind: event.WorkflowFailed, Payload: preserving("t1", kind, "r")},
+		})
+		if len(again) != 1 {
+			t.Errorf("%s ended the task: %+v", kind, again)
+		}
+	}
+}
+
+// THE CONTROL THAT KEEPS THIS FROM BECOMING "FAILURE IS IMPOSSIBLE".
+//
+// Every one of these is a FAILED terminal that does NOT establish a remaining
+// obligation, and each must end the task exactly as it always has. The last two
+// matter most: "preserve the existing record" must never widen into "preserve
+// anything shaped vaguely like one", so a corrupt or task-mismatched record
+// fails closed rather than becoming a resumable obligation because continuity
+// exists.
+func TestOnlyAClosedWellFormedRecordKeepsAFailedTaskAlive(t *testing.T) {
+	for name, payload := range map[string][]byte{
+		"no payload at all":     nil,
+		"an ordinary payload":   []byte(`{"workspace":"/tmp/w","implementor":"claude"}`),
+		"unreadable json":       []byte(`{"continuation_obligation":`),
+		"no obligation key":     []byte(`{"task_id":"t1","kind":"restoration_refused","reason":"r"}`),
+		"a kind nobody defined": preserving("t1", "looks_continuable", "r"),
+		"an empty kind":         preserving("t1", "", "r"),
+		"another task's record": preserving("t2", "restoration_refused", "r"),
+		"no reason":             preserving("t1", "restoration_refused", ""),
+	} {
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed, Summary: "failed", Payload: payload},
+		})
+		if len(got) != 0 {
+			t.Errorf("%s: the task survived a terminal that establishes no obligation: %+v", name, got)
+		}
+	}
+}
+
+// NO RESURRECTION. Done is monotonic.
+//
+// "Preserve everything" is the same bug facing the other way, and this is where
+// it would land: a genuine terminal followed by a preserving record -- appended
+// by a later process, a replayed log, or a malicious one -- must not bring the
+// task back.
+func TestAGenuineTerminalIsNeverResurrectedByALaterPreservingRecord(t *testing.T) {
+	for name, terminal := range map[string]event.Kind{
+		"failed":    event.WorkflowFailed,
+		"completed": event.WorkflowCompleted,
+		"observed":  event.WorkflowObserved,
+	} {
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			{TaskID: "t1", Source: event.SourceSystem, Kind: terminal, Summary: "ended"},
+			{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed,
+				Summary: "preserved", Payload: preserving("t1", "restoration_refused", "r")},
+		})
+		if len(got) != 0 {
+			t.Errorf("%s: a preserving record resurrected an ended task: %+v", name, got)
+		}
+	}
+}
+
+// A PRESERVED INVOCATION LEAVES THE STANDING QUESTION EXACTLY WHERE IT WAS.
+//
+// DF-21 (task-1789937196152726632) destroyed a recorded human authorization in
+// four seconds. The question is the authority object: a re-entry that could not
+// start its dependency preserves the question, and preserves it byte for byte
+// -- no candidate, no answer, no actor, no scope invented on the way.
+func TestAPreservedAuthorityReentryLeavesTheQuestionUntouched(t *testing.T) {
+	question := []byte(`{"condition":"graph coverage is absent","decision":{"subject":"Authorize?","options":[{"id":"1"}]},"task_id":"t1"}`)
+	got := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "widen the boundary"),
+		{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
+			Summary: "deferred", Payload: question},
+		{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed,
+			Summary: "the deferred question could not be re-entered",
+			Payload: []byte(`{"continuation_obligation":{"task_id":"t1","kind":"authority_reentry_unavailable","reason":"start Sensei: exec: no command"}}`)},
+	})
+	if len(got) != 1 {
+		t.Fatalf("an unresolved question plus an unavailable dependency killed the task: %+v", got)
+	}
+	if string(got[0].AwaitingAuthority) != string(question) {
+		t.Fatalf("the standing question did not survive verbatim:\n got %s\nwant %s", got[0].AwaitingAuthority, question)
+	}
+	// And it is still the question that routes: the continuation record is
+	// context beside it, never a second authority source.
+	if len(got[0].Continuation) == 0 {
+		t.Fatal("the invocation left no account of why it stopped")
+	}
+	// A question that was ANSWERED stays answered. Preservation must not
+	// resurrect a resolved decision.
+	answered := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "widen the boundary"),
+		{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority, Summary: "deferred", Payload: question},
+		ev("t1", event.SourceUser, event.AuthorityResolved, "Authorize the architectural change"),
+		{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed, Summary: "preserved",
+			Payload: preserving("t1", "implementation_declined", "every bounded implementor declined")},
+	})
+	if len(answered) != 1 {
+		t.Fatalf("the task ended: %+v", answered)
+	}
+	if len(answered[0].AwaitingAuthority) != 0 {
+		t.Fatalf("a settled question is standing again, so a resume would ask it twice: %s", answered[0].AwaitingAuthority)
+	}
+}
+
+// THE READER IS NOT LAXER THAN ITS WRITER.
+//
+// A reader that admits records the engine refuses to write is not a lenient
+// reader, it is a SECOND ADMISSION RULE -- and the weaker of the two decides
+// what survives, because this is the function every later process consults to
+// ask whether a task is still alive. The engine's refusal governs only what
+// THIS process writes; records also arrive from another generation, a replayed
+// log, or a hand-edited one.
+//
+// Both directions lose the thing preservation exists to keep. A restoration or
+// implementation record naming no candidate keeps a task alive while dropping
+// the identity the obligation is ABOUT, handing a resume a living task and
+// nothing to continue. An authority record carrying a candidate is the
+// forbidden repair itself: nothing at that boundary established an identity,
+// so one that is present there was minted by the recovery procedure.
+func TestTheReaderRefusesEveryContinuationRecordTheWriterWouldRefuse(t *testing.T) {
+	refused := map[string]string{
+		"restoration naming no candidate":       `"task_id":"t1","kind":"restoration_refused","reason":"r"`,
+		"restoration whose candidate is blank":  `"task_id":"t1","kind":"restoration_refused","reason":"r","candidate_base_sha":"   "`,
+		"restoration carrying only a branch":    `"task_id":"t1","kind":"restoration_refused","reason":"r","candidate_branch":"sensei-code/t1"`,
+		"implementation naming no candidate":    `"task_id":"t1","kind":"implementation_declined","reason":"r"`,
+		"authority carrying a candidate sha":    `"task_id":"t1","kind":"authority_reentry_unavailable","reason":"r","candidate_base_sha":"abc123"`,
+		"authority carrying a candidate branch": `"task_id":"t1","kind":"authority_reentry_unavailable","reason":"r","candidate_branch":"sensei-code/t1"`,
+	}
+	for name, fields := range refused {
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed,
+				Summary: "failed", Payload: obligation(fields)},
+		})
+		if len(got) != 0 {
+			t.Errorf("%s: a record the engine will not write kept the task alive: %+v", name, got)
+		}
+	}
+
+	// And the rule refuses a SHAPE, not a kind: the well-formed record of each
+	// kind still preserves, and still preserves byte for byte. Without this the
+	// test above is satisfied by a reader that refuses everything.
+	admitted := map[string]string{
+		"restoration naming its candidate": `"task_id":"t1","kind":"restoration_refused","reason":"r","candidate_base_sha":"abc123"`,
+		"implementation naming its candidate": `"task_id":"t1","kind":"implementation_declined","reason":"r",` +
+			`"candidate_base_sha":"abc123","candidate_branch":"sensei-code/t1"`,
+		"authority naming no candidate": `"task_id":"t1","kind":"authority_reentry_unavailable","reason":"r"`,
+	}
+	for name, fields := range admitted {
+		payload := obligation(fields)
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			{TaskID: "t1", Source: event.SourceSystem, Kind: event.WorkflowFailed,
+				Summary: "preserved", Payload: payload},
+		})
+		if len(got) != 1 {
+			t.Errorf("%s: a well-formed record was refused: %+v", name, got)
+			continue
+		}
+		if string(got[0].Continuation) != string(payload) {
+			t.Errorf("%s: the obligation was not carried verbatim:\n got %s\nwant %s",
+				name, got[0].Continuation, payload)
+		}
+	}
+}
