@@ -251,25 +251,28 @@ func TestAnAnchorNamingAnAbsentPlannedPathCannotCoverItWithoutADeclaration(t *te
 		t.Fatalf("the existing surface should be the only covered file, got %v", files)
 	}
 
-	// With an admissible declaration the same absent path is covered ONLY by
-	// the prospective anchor, which names S and says so.
+	// With an admissible declaration the same absent path is still covered by
+	// NOTHING. The declaration establishes the SHAPE the created file must
+	// have -- S's package, S's import envelope, checked after creation -- and
+	// a shape is not an observation: a file that does not exist has no bytes
+	// for S's derivation to have answered about, so letting S's anchor stand
+	// in for F made a neighbour an imaginary anchor for an unobserved file.
+	// The grant carries what it legitimately establishes; coverage does not.
 	grants, out = coverPlannedAtWorld(context.Background(), prospectiveWorld, planned,
 		[]ProspectiveSurface{gosumcheckDeclaration()}, anchors, world)
 	if len(grants) != 1 || grants[0].Covering != gosumcheckS {
 		t.Fatalf("an admissible declaration did not grant against S: %+v", grants)
 	}
-	n := 0
+	if !strings.HasPrefix(grants[0].Anchor.Describe, "PROSPECTIVE") || grants[0].Anchor.Requirement != RequirementInvocationConfinement {
+		t.Fatalf("the grant does not record what S establishes, or does not say it is PROSPECTIVE: %+v", grants[0].Anchor)
+	}
 	for _, a := range out {
-		if a.File != gosumcheckF {
-			continue
-		}
-		n++
-		if !strings.HasPrefix(a.Describe, "PROSPECTIVE") || a.Requirement != RequirementInvocationConfinement {
-			t.Fatalf("the absent file's coverage is not the prospective anchor: %+v", a)
+		if a.File == gosumcheckF {
+			t.Fatalf("a declaration bought the absent file coverage from its neighbour: %+v", a)
 		}
 	}
-	if n != 1 {
-		t.Fatalf("the absent file carries %d anchors, want exactly the prospective one", n)
+	if len(out) != 1 || out[0].File != gosumcheckS {
+		t.Fatalf("the existing surface should still be the only covered file, got %+v", out)
 	}
 
 	// An existence check that cannot be answered is neither presence nor
@@ -576,5 +579,262 @@ func TestTheGrantSurvivesAReviewFeedbackCycle(t *testing.T) {
 	}
 	if strings.Count(got, "PROSPECTIVE CREATE GRANTS") != 1 {
 		t.Fatal("the grant section is repeated")
+	}
+}
+
+// --- PLANNED_CREATE: the 02a shape ------------------------------------------
+//
+// The specimen is the run that could not finish. The objective's whole job was
+// to write docs/evidence/operator-actions-inventory.md; the path does not exist
+// at the pinned base, so no invariant protects it and no actor reachable from a
+// governed run can examine it. Two architect turns tried, and the run ended
+// COMPLETE / FAILED, terminal KNOWLEDGE_LIMITED. Nothing about the plan was
+// wrong: governance had no way to say "this artifact does not exist yet".
+const (
+	operatorInventory = "docs/evidence/operator-actions-inventory.md"
+	// The existing code the inventory is BUILT FROM. Ordinary existing files,
+	// governed ordinarily -- the exemption must not touch them.
+	operatorSubjectA = "internal/workflow/authority.go"
+	operatorSubjectB = "cmd/sensei-code/control.go"
+)
+
+func inventoryBinding() createBinding {
+	return createBinding{TaskID: "task-02a", ObjectiveDigest: strings.Repeat("a", 64), Base: prospectiveWorld}
+}
+
+func inventoryFiles() []string {
+	return []string{operatorSubjectA, operatorSubjectB, operatorInventory}
+}
+
+// inventoryWorld is the pinned base: it holds the evidence inputs and does NOT
+// hold the declared output. That absence is the premise of the task.
+func inventoryWorld(extra map[string]string) worldReader {
+	files := map[string]string{operatorSubjectA: "package workflow\n", operatorSubjectB: "package main\n"}
+	for k, v := range extra {
+		files[k] = v
+	}
+	return worldOf(files)
+}
+
+func inventoryCreates(t *testing.T, extra map[string]string) ([]plannedCreate, []string) {
+	t.Helper()
+	return plannedCreates(context.Background(), inventoryBinding(), inventoryFiles(),
+		[]string{operatorInventory}, inventoryWorld(extra))
+}
+
+// inventoryAction is the 02a plan as the router sees it: two examined evidence
+// inputs the graph has facts about, and the declared output.
+func inventoryAction(creates []plannedCreate) Action {
+	return Action{
+		Stage: StageCandidateEdit,
+		Files: inventoryFiles(),
+		DerivedCoverage: []CoverageAnchor{
+			{File: operatorSubjectA, Requirement: RequirementInvocationConfinement, Describe: "derived over " + operatorSubjectA},
+			{File: operatorSubjectB, Requirement: RequirementInvocationConfinement, Describe: "derived over " + operatorSubjectB},
+		},
+		PlannedCreates: plannedCreatePaths(creates),
+	}
+}
+
+// THE WITNESS. The absent declared output may proceed past the pre-existence
+// identity check, while the identical plan without the declaration is still
+// refused exactly as 02a was.
+func TestTheDeclaredAbsentInventoryProceedsPastThePreExistenceIdentityCheck(t *testing.T) {
+	creates, reasons := inventoryCreates(t, nil)
+	if len(creates) != 1 {
+		t.Fatalf("the declared absent path was not bound as a create: %+v (refused: %v)", creates, reasons)
+	}
+	got := creates[0]
+	if got.Path != operatorInventory || got.Disposition != dispositionCreate {
+		t.Fatalf("the disposition does not name the exact path and CREATE: %+v", got)
+	}
+	if got.Bound != inventoryBinding() {
+		t.Fatalf("the create is not bound to the task, its objective digest and its pinned base: %+v", got.Bound)
+	}
+
+	// The specimen is real: without the disposition, this exact plan is the
+	// refusal 02a died on.
+	bare, open := unexaminedCoverageGap(inventoryAction(nil), blindSpotReading{})
+	if !open || bare.Gap.Kind != gapDocumentGovernanceUnestablished || !strings.Contains(bare.Condition, operatorInventory) {
+		t.Fatalf("premise: the undeclared absent document must still be refused, got open=%v %+v", open, bare)
+	}
+
+	// With it, the same plan proceeds.
+	if r, open := unexaminedCoverageGap(inventoryAction(creates), blindSpotReading{}); open {
+		t.Fatalf("the declared future artifact was still refused for having no identity: %s", r.Condition)
+	}
+
+	// And it bought no coverage doing it: no graph anchor, no derived anchor,
+	// no invariant identity for a file nobody has observed.
+	a := inventoryAction(creates)
+	for _, c := range a.DerivedCoverage {
+		if c.File == operatorInventory {
+			t.Fatalf("the declared create was credited with coverage: %+v", c)
+		}
+	}
+	if ev, asked := a.documentEvidenceFor(operatorInventory); asked || len(ev) != 0 {
+		t.Fatalf("the declared create was credited with document evidence: %v (asked=%v)", ev, asked)
+	}
+}
+
+// The exemption is one exact path wide. Everything else in the same plan, the
+// same directory and the same run keeps every requirement it had.
+func TestACreateDeclarationExemptsNothingButItsOwnExactPath(t *testing.T) {
+	creates, _ := inventoryCreates(t, nil)
+
+	// A neighbour in the SAME directory, undeclared: still refused.
+	neighbour := inventoryAction(creates)
+	neighbour.Files = append(neighbour.Files, "docs/evidence/operator-actions-appendix.md")
+	r, open := documentGovernanceGap(neighbour)
+	if !open || strings.Contains(r.Condition, operatorInventory) || !strings.Contains(r.Condition, "appendix") {
+		t.Fatalf("the exemption reached past the declared path: open=%v %s", open, r.Condition)
+	}
+
+	// An existing evidence input the graph has not examined: still refused,
+	// and named as itself.
+	input := inventoryAction(creates)
+	input.DerivedCoverage = []CoverageAnchor{{File: operatorSubjectB, Requirement: RequirementInvocationConfinement, Describe: "derived over " + operatorSubjectB}}
+	input.Unexamined = []string{operatorSubjectA}
+	r, open = unexaminedCoverageGap(input, blindSpotReading{})
+	if !open || r.Gap.Kind != "coverage-unexamined" || !strings.Contains(r.Condition, operatorSubjectA) {
+		t.Fatalf("an unexamined existing evidence input was carried by the create's exemption: open=%v %+v", open, r)
+	}
+}
+
+// Falsifier (a): a path that ALREADY EXISTS at the pinned base is an ordinary
+// existing file and cannot be claimed as a future one. The other two ways a
+// declaration fails to bind are refused beside it.
+func TestAnExistingPathCannotBeClaimedAsAPlannedCreate(t *testing.T) {
+	creates, reasons := inventoryCreates(t, map[string]string{operatorInventory: "# already written\n"})
+	if len(creates) != 0 {
+		t.Fatalf("a path present at the pinned base was bound as a create: %+v", creates)
+	}
+	if len(reasons) != 1 || !strings.Contains(reasons[0], "already exists at the pinned base") {
+		t.Fatalf("the refusal does not say the path already exists: %v", reasons)
+	}
+	// And the guard it would have exempted still fires for it.
+	if r, open := documentGovernanceGap(inventoryAction(creates)); !open || !strings.Contains(r.Condition, operatorInventory) {
+		t.Fatalf("an existing document escaped governance through a refused create: open=%v %+v", open, r)
+	}
+
+	// An unanswered read is not absence.
+	dark := unreadableAt(inventoryWorld(nil), operatorInventory)
+	if c, reasons := plannedCreates(context.Background(), inventoryBinding(), inventoryFiles(), []string{operatorInventory}, dark); len(c) != 0 ||
+		len(reasons) != 1 || !strings.Contains(reasons[0], "could not be established") {
+		t.Fatalf("an unclassified read failure was taken as absence: %+v %v", c, reasons)
+	}
+
+	// A create the plan does not touch is not this plan's future artifact.
+	if c, reasons := plannedCreates(context.Background(), inventoryBinding(), []string{operatorSubjectA},
+		[]string{operatorInventory}, inventoryWorld(nil)); len(c) != 0 ||
+		len(reasons) != 1 || !strings.Contains(reasons[0], "not part of the plan") {
+		t.Fatalf("a path outside the plan was bound as its create: %+v %v", c, reasons)
+	}
+
+	// A binding that cannot name its task, objective or base grants nothing.
+	for _, incomplete := range []createBinding{
+		{ObjectiveDigest: strings.Repeat("a", 64), Base: prospectiveWorld},
+		{TaskID: "task-02a", Base: prospectiveWorld},
+		{TaskID: "task-02a", ObjectiveDigest: strings.Repeat("a", 64)},
+	} {
+		if c, reasons := plannedCreates(context.Background(), incomplete, inventoryFiles(),
+			[]string{operatorInventory}, inventoryWorld(nil)); len(c) != 0 || len(reasons) != 1 {
+			t.Fatalf("an unbound declaration granted %+v (%v)", c, reasons)
+		}
+	}
+}
+
+// Falsifier (b): a second path the task never declared is refused, and the
+// declared one must actually be created -- which is what ends the temporary
+// state rather than letting it persist.
+func TestACandidateThatCreatesAnUndeclaredPathIsRefused(t *testing.T) {
+	creates, _ := inventoryCreates(t, nil)
+	declared := createdDiff(operatorInventory, "# Operator actions inventory\n\n- sensei briefing\n")
+	if err := inspectPlannedCreates(declared, creates, nil); err != nil {
+		t.Fatalf("the declared create, created exactly as declared, was refuted: %v", err)
+	}
+
+	second := declared + createdDiff("docs/evidence/operator-actions-appendix.md", "# appendix\n")
+	err := inspectPlannedCreates(second, creates, nil)
+	if err == nil || !strings.HasPrefix(err.Error(), "planned create refuted:") ||
+		!strings.Contains(err.Error(), "operator-actions-appendix.md") {
+		t.Fatalf("an undeclared created path was accepted: %v", err)
+	}
+	if !isProspectiveSurfaceRefutation(err) {
+		t.Fatalf("the refutation is not terminal: %v", err)
+	}
+	if strings.Contains(err.Error(), operatorInventory+",") {
+		t.Fatalf("the refusal blames the declared path: %v", err)
+	}
+
+	// A declaration the candidate never honoured is refuted too: the state is
+	// temporary, and it ends in the file existing.
+	err = inspectPlannedCreates("", creates, nil)
+	if err == nil || !strings.Contains(err.Error(), "did not create it") {
+		t.Fatalf("a declared create the candidate never made was accepted: %v", err)
+	}
+}
+
+// The same law in the other check the pre-existence identity gates: a declared
+// absent PRODUCTION file is not an unexamined existing one. The graph has no
+// facts about a path the base does not hold and cannot acquire any -- `sensei
+// import --refresh` examines a repository, and the repository does not contain
+// this file yet. An absent path the plan did NOT declare stays unexamined.
+func TestADeclaredAbsentProductionPathIsNotAnUnexaminedExistingFile(t *testing.T) {
+	const generator = "internal/workflow/operatorinventory.go"
+	files := append(inventoryFiles(), generator)
+	creates, reasons := plannedCreates(context.Background(), inventoryBinding(), files,
+		[]string{operatorInventory, generator}, inventoryWorld(nil))
+	if len(creates) != 2 {
+		t.Fatalf("the declared absent paths were not bound: %+v (refused: %v)", creates, reasons)
+	}
+
+	a := inventoryAction(creates)
+	a.Files = files
+	a.Unexamined = []string{generator}
+	if r, open := unexaminedCoverageGap(a, blindSpotReading{}); open {
+		t.Fatalf("a declared future production file was refused for having no graph facts: %s", r.Condition)
+	}
+
+	// Undeclared: the same absent path is an unexamined planned file again.
+	b := inventoryAction(nil)
+	b.Files = files
+	b.Unexamined = []string{generator}
+	r, open := unexaminedCoverageGap(b, blindSpotReading{})
+	if !open || r.Gap.Kind != "coverage-unexamined" || !strings.Contains(r.Condition, generator) {
+		t.Fatalf("an undeclared absent path escaped the coverage question: open=%v %+v", open, r)
+	}
+}
+
+// The disposition travels in the DURABLE plan bound, not in a record of its
+// own. A resume that lost it would ask a path the base provably lacks for an
+// identity all over again, and the re-planned scope carries it for the same
+// reason the files it belongs to are carried.
+func TestTheCreateDispositionSurvivesTheDurablePlanBound(t *testing.T) {
+	d := architectureDecision{Plan: "p", Files: inventoryFiles(), Creates: []string{operatorInventory}}
+	found := session.FindInterrupted([]event.Event{
+		event.New("s", "t1", event.SourceSystem, event.TaskCreated, "task", nil),
+		event.New("s", "t1", event.SourceArchitect, event.PlanProposed, "plan",
+			proposedPlan{architectureDecision: d, PlanSource: PlanByArchitect}),
+	})
+	if len(found) != 1 {
+		t.Fatalf("premise: one interrupted task, got %+v", found)
+	}
+	bound, err := (&Engine{}).restorePlanBound(found[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(bound.Creates, ",") != operatorInventory {
+		t.Fatalf("the CREATE disposition did not survive the plan record: %+v", bound.Creates)
+	}
+
+	// A re-plan moves the whole scope, this included, and says so for the record.
+	var tc taskContext
+	applyPlanScope(&tc, d)
+	if strings.Join(tc.Creates, ",") != operatorInventory {
+		t.Fatalf("a re-planned scope dropped the CREATE disposition: %+v", tc.Creates)
+	}
+	if !strings.Contains(scopeSummary(tc), "creates "+operatorInventory) {
+		t.Fatalf("the recorded scope does not say what the candidate is bound to create: %s", scopeSummary(tc))
 	}
 }

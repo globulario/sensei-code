@@ -117,6 +117,19 @@ type Action struct {
 	//	entry present, empty      the graph looked and found none -> ordinary documentation
 	//	NO entry                  the graph never looked -> knowledge limit, not "ordinary"
 	DocumentEvidence map[string][]string
+	// PlannedCreates are the exact planned paths this task DECLARED it will
+	// create and that were positively proven ABSENT at the task's pinned base.
+	//
+	// Engine-owned, exact-path, and derived only from the plan's own CREATE
+	// disposition plus a read of the pinned base (see plannedCreates). It is
+	// NOT coverage and never becomes any: nothing here enters DerivedCoverage
+	// or DocumentEvidence, a create is never covered by its neighbour or its
+	// directory, and the only questions it answers are "has the graph examined
+	// this file" and "what invariant protects this document" -- both of which
+	// demand a pre-existence identity the premise of the task says is absent.
+	// Every other planned path, including the existing files a create's
+	// CONTENTS are decided from, keeps every requirement it had.
+	PlannedCreates []string
 	// Unexamined are planned files the graph has no facts about at plan time:
 	// a per-file preflight found no anchor and no indexed file for each.
 	//
@@ -144,10 +157,31 @@ func (a Action) unexaminedArchitecturalFiles() []string {
 	for _, f := range a.Unexamined {
 		unexamined[path.Clean(strings.TrimSpace(f))] = true
 	}
+	// A DECLARED FUTURE ARTIFACT IS NOT AN UNEXAMINED EXISTING ONE. The graph
+	// has no facts about a path that does not exist at the pinned base, and it
+	// cannot acquire any: `sensei import --refresh` examines a repository, and
+	// the repository does not contain this file yet. Asking for its examination
+	// is asking for the premise of the task to be false, so exactly that one
+	// path is subtracted -- and nothing else is.
+	planned := a.plannedCreateSet()
 	var out []string
 	for _, f := range a.architecturalFiles() {
-		if unexamined[f] {
+		if unexamined[f] && !planned[f] {
 			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// plannedCreateSet is PlannedCreates as an exact-path set, canonicalised the
+// way every other path in this file is. Exact paths only: no prefix, no
+// directory and no pattern, because a create's exemption must not reach one
+// character past the path the task bound.
+func (a Action) plannedCreateSet() map[string]bool {
+	out := map[string]bool{}
+	for _, f := range a.PlannedCreates {
+		if c := path.Clean(strings.TrimSpace(f)); c != "." {
+			out[c] = true
 		}
 	}
 	return out
@@ -1142,10 +1176,21 @@ func (a Action) documentEvidenceFor(file string) ([]string, bool) {
 // documentArtifacts are the planned documents whose governance could not be established:
 // the graph was never asked, or it was asked and the identities it returned are blank.
 func (a Action) ungovernedDocumentArtifacts() []string {
+	planned := a.plannedCreateSet()
 	var out []string
 	for _, f := range a.Files {
 		c := path.Clean(strings.TrimSpace(f))
 		if classifyArtifact(c) != classDocument {
+			continue
+		}
+		// A document this task declared it will CREATE, proven absent at the
+		// pinned base, cannot already be protected by an invariant: an
+		// invariant's protects.files names a file that exists. The exemption is
+		// from that impossibility alone. It confers no protection, credits the
+		// document with no invariant identity, and ends the moment the file is
+		// created -- after which it is reviewed as an ordinary artifact and
+		// owed a normal identity once it lands.
+		if planned[c] {
 			continue
 		}
 		ids, asked := a.documentEvidenceFor(c)
