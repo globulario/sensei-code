@@ -72,6 +72,13 @@ const (
 	// reviewer still requires revision. The task is preserved and owed an
 	// architect re-plan; `sensei-code resume --task <id>` delivers it.
 	exitNotConverged = 9
+	// exitRestorationRefused means a resume could not re-establish the
+	// authority its own record holds and declined to execute under authority it
+	// could not verify. Nothing failed and nothing was decided; the task is
+	// preserved and still listed by `sensei-code resume --list`. Read as
+	// exitFailed it would say the objective broke, which is the classification
+	// that destroyed the task this terminal exists to keep.
+	exitRestorationRefused = 10
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
@@ -375,6 +382,8 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitBlockedExternal, true
 	case event.WorkflowNotConverged:
 		return exitNotConverged, true
+	case event.WorkflowRestorationRefused:
+		return exitRestorationRefused, true
 	}
 	return 0, false
 }
@@ -386,7 +395,7 @@ func terminal(k event.Kind) bool {
 	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
 		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
-		event.WorkflowNotConverged, event.AuthorityRequired:
+		event.WorkflowNotConverged, event.WorkflowRestorationRefused, event.AuthorityRequired:
 		return true
 	}
 	return false
