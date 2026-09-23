@@ -873,6 +873,14 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	if e.blockExternally(taskID, err) {
 		return
 	}
+	// A resume that could not re-establish the authority its record holds ends
+	// the invocation, not the task. Recorded as a failure it was final to
+	// FindInterrupted, so the refusal destroyed the obligation it was
+	// protecting (2026-09-23; see testedit.go's restoration section). Nothing
+	// failed: a check declined to execute under authority it could not verify.
+	if e.refuseRestoration(taskID, err) {
+		return
+	}
 	// One classifier for both authority paths. A person choosing Stop is not
 	// a broken run, and this used to arrive as an anonymous error and be
 	// recorded as FAILED -- teaching the behavioural record that this task
