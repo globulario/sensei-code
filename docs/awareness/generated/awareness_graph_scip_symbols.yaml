@@ -6617,17 +6617,23 @@ code_symbols:
     file: internal/config/config.go
     symbol: Command
     kind: type
-  - id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
+  - id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
     namespace: structural.scip
     language: go
     file: internal/config/config.go
-    symbol: Config.$anon_92cc5b11686d51ee.Args
+    symbol: Config.$anon_c8be6179330fcb50.Args
     kind: var
-  - id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
+  - id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
     namespace: structural.scip
     language: go
     file: internal/config/config.go
-    symbol: Config.$anon_92cc5b11686d51ee.Command
+    symbol: Config.$anon_c8be6179330fcb50.Command
+    kind: var
+  - id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Repository
+    namespace: structural.scip
+    language: go
+    file: internal/config/config.go
+    symbol: Config.$anon_c8be6179330fcb50.Repository
     kind: var
   - id: internal/config/config.go:Config.Architect
     namespace: structural.scip
@@ -12473,6 +12479,12 @@ code_symbols:
     file: internal/ghbridge/architecture.go
     symbol: ArchitectureRequest.RequestID
     kind: var
+  - id: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: ArchitectureRequest.ResolvePinnedEvidence
+    kind: method
   - id: internal/ghbridge/architecture.go:ArchitectureRequest.Validate
     namespace: structural.scip
     language: go
@@ -12545,6 +12557,12 @@ code_symbols:
     file: internal/ghbridge/architecture.go
     symbol: ArchitectureResponse
     kind: type
+  - id: internal/ghbridge/architecture.go:ErrEvidenceHasNoOwningRepository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: ErrEvidenceHasNoOwningRepository
+    kind: var
   - id: internal/ghbridge/architecture.go:ParseArchitectureRequest
     namespace: structural.scip
     language: go
@@ -12677,11 +12695,29 @@ code_symbols:
     file: internal/ghbridge/architecture_test.go
     symbol: TestALegacyArchitectureRequestStillParses
     kind: function
+  - id: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    kind: function
+  - id: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    kind: function
   - id: internal/ghbridge/architecture_test.go:TestAnArchitectureRequestNamesBothRepositories
     namespace: structural.scip
     language: go
     file: internal/ghbridge/architecture_test.go
     symbol: TestAnArchitectureRequestNamesBothRepositories
+    kind: function
+  - id: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
     kind: function
   - id: internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRefusesAmbiguousIdentityHeaders
     namespace: structural.scip
@@ -12707,6 +12743,18 @@ code_symbols:
     file: internal/ghbridge/architecture_test.go
     symbol: TestArchitectureRunnerRefusesWrongRoleBeforeTransport
     kind: function
+  - id: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    kind: function
+  - id: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: TestGraphProvenanceTravelsAsAnInseparablePair
+    kind: function
   - id: internal/ghbridge/architecture_test.go:TestResolverCarriesOnlyBoundArchitectForItsProvider
     namespace: structural.scip
     language: go
@@ -12725,6 +12773,78 @@ code_symbols:
     file: internal/ghbridge/architecture_test.go
     symbol: architectureGraphCommit
     kind: const
+  - id: internal/ghbridge/architecture_test.go:architectureGraphRepository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: architectureGraphRepository
+    kind: const
+  - id: internal/ghbridge/architecture_test.go:architectureMailboxRepository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: architectureMailboxRepository
+    kind: const
+  - id: internal/ghbridge/architecture_test.go:architectureWorkspaceRepository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: architectureWorkspaceRepository
+    kind: const
+  - id: internal/ghbridge/architecture_test.go:noSuchCommit.Error
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: noSuchCommit.Error
+    kind: method
+  - id: internal/ghbridge/architecture_test.go:noSuchCommit.commit
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: noSuchCommit.commit
+    kind: var
+  - id: internal/ghbridge/architecture_test.go:noSuchCommit.repository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: noSuchCommit.repository
+    kind: var
+  - id: internal/ghbridge/architecture_test.go:noSuchCommit~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: noSuchCommit
+    kind: type
+  - id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: recordingLookup.attempted
+    kind: var
+  - id: internal/ghbridge/architecture_test.go:recordingLookup.holds
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: recordingLookup.holds
+    kind: var
+  - id: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: recordingLookup.resolve
+    kind: method
+  - id: internal/ghbridge/architecture_test.go:recordingLookup.tried
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: recordingLookup.tried
+    kind: method
+  - id: internal/ghbridge/architecture_test.go:recordingLookup~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_test.go
+    symbol: recordingLookup
+    kind: type
   - id: internal/ghbridge/architecture_transport.go:Architectures
     namespace: structural.scip
     language: go
@@ -13451,6 +13571,18 @@ code_symbols:
     file: internal/ghbridge/exchange.go
     symbol: ExchangeRecord.ExpectedReviewerLogin
     kind: var
+  - id: internal/ghbridge/exchange.go:ExchangeRecord.GraphBuildCommit
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange.go
+    symbol: ExchangeRecord.GraphBuildCommit
+    kind: var
+  - id: internal/ghbridge/exchange.go:ExchangeRecord.GraphRepository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange.go
+    symbol: ExchangeRecord.GraphRepository
+    kind: var
   - id: internal/ghbridge/exchange.go:ExchangeRecord.IsReview
     namespace: structural.scip
     language: go
@@ -13468,6 +13600,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/exchange.go
     symbol: ExchangeRecord.MailboxRepository
+    kind: var
+  - id: internal/ghbridge/exchange.go:ExchangeRecord.ObjectiveDigest
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange.go
+    symbol: ExchangeRecord.ObjectiveDigest
     kind: var
   - id: internal/ghbridge/exchange.go:ExchangeRecord.PublishedAt
     namespace: structural.scip
@@ -13595,11 +13733,23 @@ code_symbols:
     file: internal/ghbridge/exchange_test.go
     symbol: TestAFailedWithdrawalKeepsTheRecordForTheNextStartup
     kind: function
+  - id: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange_test.go
+    symbol: TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    kind: function
   - id: internal/ghbridge/exchange_test.go:TestAPendingExchangeSurvivesTheProcessThatOpenedIt
     namespace: structural.scip
     language: go
     file: internal/ghbridge/exchange_test.go
     symbol: TestAPendingExchangeSurvivesTheProcessThatOpenedIt
+    kind: function
+  - id: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange_test.go
+    symbol: TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
     kind: function
   - id: internal/ghbridge/exchange_test.go:TestATimedOutTurnWithdrawsTheRequestItPublished
     namespace: structural.scip
@@ -13643,6 +13793,30 @@ code_symbols:
     file: internal/ghbridge/exchange_test.go
     symbol: TestTheResolverCarriesTheExchangeLogIntoTheArchitectTurn
     kind: function
+  - id: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange_test.go
+    symbol: openRecordReader.Ring
+    kind: method
+  - id: internal/ghbridge/exchange_test.go:openRecordReader.dir
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange_test.go
+    symbol: openRecordReader.dir
+    kind: var
+  - id: internal/ghbridge/exchange_test.go:openRecordReader.seen
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange_test.go
+    symbol: openRecordReader.seen
+    kind: var
+  - id: internal/ghbridge/exchange_test.go:openRecordReader~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/exchange_test.go
+    symbol: openRecordReader
+    kind: type
   - id: internal/ghbridge/exchange_test.go:withdrawalsIn
     namespace: structural.scip
     language: go
@@ -27791,6 +27965,18 @@ code_symbols:
     file: internal/roles/architecture.go
     symbol: ArchitectureBinding.GraphBuildCommit
     kind: var
+  - id: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    namespace: structural.scip
+    language: go
+    file: internal/roles/architecture.go
+    symbol: ArchitectureBinding.GraphProvenanceValid
+    kind: method
+  - id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    namespace: structural.scip
+    language: go
+    file: internal/roles/architecture.go
+    symbol: ArchitectureBinding.GraphRepository
+    kind: var
   - id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
     namespace: structural.scip
     language: go
@@ -27839,6 +28025,12 @@ code_symbols:
     file: internal/roles/architecture.go
     symbol: lowerHex64
     kind: var
+  - id: internal/roles/architecture.go:repositoryPath
+    namespace: structural.scip
+    language: go
+    file: internal/roles/architecture.go
+    symbol: repositoryPath
+    kind: var
   - id: internal/roles/architecture_test.go:TestArchitectureBindingNamesExactObjectiveAndWorld
     namespace: structural.scip
     language: go
@@ -27862,6 +28054,12 @@ code_symbols:
     language: go
     file: internal/roles/architecture_test.go
     symbol: architectureGraph
+    kind: const
+  - id: internal/roles/architecture_test.go:architectureGraphRepo
+    namespace: structural.scip
+    language: go
+    file: internal/roles/architecture_test.go
+    symbol: architectureGraphRepo
     kind: const
   - id: internal/roles/assign.go:Assign
     namespace: structural.scip
@@ -37433,12 +37631,30 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: StageUnknown
     kind: const
+  - id: internal/workflow/consequence.go:adverbials
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: adverbials
+    kind: var
   - id: internal/workflow/consequence.go:artifactClass~type
     namespace: structural.scip
     language: go
     file: internal/workflow/consequence.go
     symbol: artifactClass
     kind: type
+  - id: internal/workflow/consequence.go:assertedIn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: assertedIn
+    kind: function
+  - id: internal/workflow/consequence.go:auxiliaries
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: auxiliaries
+    kind: var
   - id: internal/workflow/consequence.go:classDocument
     namespace: structural.scip
     language: go
@@ -37469,12 +37685,132 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: classifyArtifact
     kind: function
+  - id: internal/workflow/consequence.go:clause.asserted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.asserted
+    kind: method
+  - id: internal/workflow/consequence.go:clause.cancelled
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.cancelled
+    kind: method
+  - id: internal/workflow/consequence.go:clause.compound
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.compound
+    kind: method
+  - id: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.frontedNegativeAdverbial
+    kind: method
+  - id: internal/workflow/consequence.go:clause.functionWord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.functionWord
+    kind: method
+  - id: internal/workflow/consequence.go:clause.inOp
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.inOp
+    kind: var
+  - id: internal/workflow/consequence.go:clause.mentioned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.mentioned
+    kind: method
+  - id: internal/workflow/consequence.go:clause.negatedPredicate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.negatedPredicate
+    kind: method
+  - id: internal/workflow/consequence.go:clause.negativeSubject
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.negativeSubject
+    kind: method
+  - id: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.negatorBeforeDisjunct
+    kind: method
+  - id: internal/workflow/consequence.go:clause.newPredicateBefore
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.newPredicateBefore
+    kind: method
+  - id: internal/workflow/consequence.go:clause.postposed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.postposed
+    kind: method
+  - id: internal/workflow/consequence.go:clause.predicateMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.predicateMaterial
+    kind: method
+  - id: internal/workflow/consequence.go:clause.span
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.span
+    kind: method
+  - id: internal/workflow/consequence.go:clause.text
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.text
+    kind: var
+  - id: internal/workflow/consequence.go:clause.words
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.words
+    kind: var
+  - id: internal/workflow/consequence.go:clauseBreaks
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clauseBreaks
+    kind: var
+  - id: internal/workflow/consequence.go:clausesOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clausesOf
+    kind: function
+  - id: internal/workflow/consequence.go:clause~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause
+    kind: type
   - id: internal/workflow/consequence.go:cleanPlannedPath
     namespace: structural.scip
     language: go
     file: internal/workflow/consequence.go
     symbol: cleanPlannedPath
     kind: function
+  - id: internal/workflow/consequence.go:conjunctions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: conjunctions
+    kind: var
   - id: internal/workflow/consequence.go:containsWord
     namespace: structural.scip
     language: go
@@ -37487,11 +37823,53 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: declaredOutwardActions
     kind: function
+  - id: internal/workflow/consequence.go:determiners
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: determiners
+    kind: var
+  - id: internal/workflow/consequence.go:disjunctions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: disjunctions
+    kind: var
   - id: internal/workflow/consequence.go:isWordByte
     namespace: structural.scip
     language: go
     file: internal/workflow/consequence.go
     symbol: isWordByte
+    kind: function
+  - id: internal/workflow/consequence.go:listed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: listed
+    kind: function
+  - id: internal/workflow/consequence.go:negatingVerb
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: negatingVerb
+    kind: function
+  - id: internal/workflow/consequence.go:negatorStems
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: negatorStems
+    kind: var
+  - id: internal/workflow/consequence.go:negators
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: negators
+    kind: var
+  - id: internal/workflow/consequence.go:occurrencesOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: occurrencesOf
     kind: function
   - id: internal/workflow/consequence.go:outwardPhrases
     namespace: structural.scip
@@ -37511,6 +37889,66 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: outwardVerbs
     kind: var
+  - id: internal/workflow/consequence.go:permissionVerbs
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: permissionVerbs
+    kind: var
+  - id: internal/workflow/consequence.go:pronouns
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: pronouns
+    kind: var
+  - id: internal/workflow/consequence.go:readClause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: readClause
+    kind: function
+  - id: internal/workflow/consequence.go:subjectNegators
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: subjectNegators
+    kind: var
+  - id: internal/workflow/consequence.go:verbEndings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: verbEndings
+    kind: var
+  - id: internal/workflow/consequence.go:word.end
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: word.end
+    kind: var
+  - id: internal/workflow/consequence.go:word.start
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: word.start
+    kind: var
+  - id: internal/workflow/consequence.go:word.text
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: word.text
+    kind: var
+  - id: internal/workflow/consequence.go:wordAt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: wordAt
+    kind: function
+  - id: internal/workflow/consequence.go:word~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: word
+    kind: type
   - id: internal/workflow/consequence_structural_test.go:TestConsequencesAreAssessedForEveryRoutedAction
     namespace: structural.scip
     language: go
@@ -37559,17 +37997,53 @@ code_symbols:
     file: internal/workflow/consequence_test.go
     symbol: TestArchitecturalFilesSubtractAGrantWhateverThePlanSpelling
     kind: function
+  - id: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_words_test.go
+    symbol: TestAFrontedProhibitionStopsAtANewPredicate
+    kind: function
+  - id: internal/workflow/consequence_words_test.go:TestAQuotationIsNotSuppression
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_words_test.go
+    symbol: TestAQuotationIsNotSuppression
+    kind: function
   - id: internal/workflow/consequence_words_test.go:TestASemaphorePlanIsNotADeployment
     namespace: structural.scip
     language: go
     file: internal/workflow/consequence_words_test.go
     symbol: TestASemaphorePlanIsNotADeployment
     kind: function
+  - id: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_words_test.go
+    symbol: TestASubjectIsAnythingTheClassifierDoesNotKnow
+    kind: function
+  - id: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_words_test.go
+    symbol: TestNegationParityAndCoordinatedPredicates
+    kind: function
+  - id: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_words_test.go
+    symbol: TestOutwardActionIntentContexts
+    kind: function
   - id: internal/workflow/consequence_words_test.go:TestOutwardActionsAreReadFromDeclaredActionsNotScaryWords
     namespace: structural.scip
     language: go
     file: internal/workflow/consequence_words_test.go
     symbol: TestOutwardActionsAreReadFromDeclaredActionsNotScaryWords
+    kind: function
+  - id: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_words_test.go
+    symbol: TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
     kind: function
   - id: internal/workflow/coverageverdict_test.go:TestADegradedCoverageGapIsBoundedWork
     namespace: structural.scip
