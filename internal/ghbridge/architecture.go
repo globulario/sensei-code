@@ -6,12 +6,18 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
 const (
 	architectureRequestMarker  = "[sensei-code:architecture-request]"
 	architectureResponseMarker = "[sensei-code:architecture]"
+	// architectureRefusalMarker is the ADDITIVE envelope through which a
+	// consumer says it refused one exact request. It is not an answer, and the
+	// two are separate markers precisely so no reader can mistake one for the
+	// other. See THE REFUSAL ENVELOPE below for what it exists to repair.
+	architectureRefusalMarker = "[sensei-code:refused]"
 )
 
 var architectureRequestID = regexp.MustCompile(`^[0-9A-Za-z_.:-]{1,128}$`)
@@ -129,15 +135,47 @@ func (r ArchitectureResponse) Answers(q ArchitectureRequest) bool {
 	return r.RequestID == q.RequestID && r.Binding.Same(q.Binding)
 }
 
+// firstLineOf names what an envelope was actually followed by, bounded so a
+// diagnostic quotes a delimiter rather than reprinting a payload.
+func firstLineOf(rest string) string {
+	line, _, _ := strings.Cut(rest, "\n")
+	if len(line) > 40 {
+		line = line[:40]
+	}
+	return line
+}
+
 // parseArchitectureEnvelope is strict about the identity header. Duplicate or
 // unknown fields are refused rather than ignored: ambiguity in presentation
 // must never decide which objective/world an answer belongs to.
-func parseArchitectureEnvelope(body, marker string, request bool) (roles.ArchitectureBinding, string, string, map[string]string, error) {
+//
+// extra names REQUIRED header fields an envelope kind carries in addition to the
+// binding, so a new envelope can add its own fields without any existing one
+// changing shape. It is variadic for exactly that reason: the request and
+// response call sites read byte for byte as they did before it existed.
+func parseArchitectureEnvelope(body, marker string, request bool, extra ...string) (roles.ArchitectureBinding, string, string, map[string]string, error) {
 	body = strings.ReplaceAll(body, "\r\n", "\n")
-	if !strings.HasPrefix(body, marker+"\n") {
+	// IDENTIFICATION, then this envelope's grammar (A7). The delimiter used to be
+	// part of the identification test -- marker+"\n" as one prefix -- so a body
+	// that opened with the marker and a wrong delimiter identified as NOTHING and
+	// was handed back to its caller as ordinary content. It is a malformed
+	// envelope OF THIS KIND, and separating the two steps is what lets it be
+	// reported as one.
+	if !reviewartifact.Opens(body, marker) {
 		return roles.ArchitectureBinding{}, "", "", nil, errors.New("architecture marker missing")
 	}
-	rest := strings.TrimPrefix(body, marker+"\n")
+	rest := body[len(marker):]
+	// The same delimiter rule the review and request envelopes use, from the one
+	// place it is spelled. This envelope had it first; a second hand-written copy
+	// of a rule is how two readers in one grammar come to disagree about where a
+	// header may begin. Line endings are already normalized above, so accepting
+	// CRLF there changes nothing here.
+	if !reviewartifact.DelimitsHeader(rest) {
+		return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf(
+			"the %s envelope must be followed by a newline, and this one is followed by %q",
+			marker, firstLineOf(rest))
+	}
+	rest = rest[1:]
 	header, payload, ok := strings.Cut(rest, "\n\n")
 	if !ok {
 		return roles.ArchitectureBinding{}, "", "", nil, errors.New("architecture envelope has no payload boundary")
@@ -156,6 +194,12 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 	allowed := map[string]bool{
 		"task": true, "request": true, "objective_digest": true,
 		"base": true, "graph_repository": true, "graph_build_commit": true,
+	}
+	// Required, not optional: a field an envelope kind declares is part of its
+	// identity, and the completeness loop below refuses an envelope that omits
+	// one. A partially stated refusal must not be readable as a whole one.
+	for _, key := range extra {
+		allowed[key] = true
 	}
 	// Routing is accepted but NOT required. A request that predates repository
 	// binding must still parse, so an in-flight exchange keeps matching its
@@ -225,9 +269,6 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 }
 
 func ParseArchitectureRequest(body string) (ArchitectureRequest, bool) {
-	if !strings.HasPrefix(strings.ReplaceAll(body, "\r\n", "\n"), architectureRequestMarker+"\n") {
-		return ArchitectureRequest{}, false
-	}
 	binding, id, prompt, fields, err := parseArchitectureEnvelope(body, architectureRequestMarker, true)
 	if err != nil {
 		return ArchitectureRequest{}, false
@@ -242,9 +283,6 @@ func ParseArchitectureRequest(body string) (ArchitectureRequest, bool) {
 }
 
 func ParseArchitectureResponse(body string) (ArchitectureResponse, bool) {
-	if !strings.HasPrefix(strings.ReplaceAll(body, "\r\n", "\n"), architectureResponseMarker+"\n") {
-		return ArchitectureResponse{}, false
-	}
 	binding, id, answer, _, err := parseArchitectureEnvelope(body, architectureResponseMarker, false)
 	if err != nil {
 		return ArchitectureResponse{}, false
@@ -288,4 +326,241 @@ func (r ArchitectureRequest) ResolvePinnedEvidence(lookup func(repository, commi
 		}
 	}
 	return nil
+}
+
+// THE REFUSAL ENVELOPE -- ADDITIVE, AND TERMINAL FOR ONE EXACT REQUEST.
+//
+// MEASURED 2026-09-24. A governed run published two architecture requests, rang
+// the doorbell, waited 30 minutes each and ended "no architecture answer
+// answering that request was posted". The consumer had not been silent: it had
+// computed an exact diagnostic -- a commit the objective pinned existed on no
+// remote -- and had nowhere to put it. Seven prefixes, none of which can express
+// a rejection, so the rejection became silence; and silence is indistinguishable
+// from an absent consumer, an exhausted quota and a broken doorbell. An hour was
+// spent, the cause was misattributed to quota twice, and the true reason
+// surfaced by accident through another channel.
+//
+// This envelope is the place to put it. It is VISIBILITY, not recovery: it makes
+// a refused request end immediately and by its true name, and it changes nothing
+// about what happens next.
+
+const (
+	refusalStageField      = "stage"
+	refusalVocabularyField = "stage_vocabulary"
+)
+
+// RefusalStageVocabulary versions the closed stage set below.
+//
+// Versioned because a consumer and this reader must agree on what a stage MEANS,
+// not merely on its spelling. A refusal quoting a vocabulary this build does not
+// know is refused rather than read as though the member set were the same: the
+// alternative is to interpret a future stage by its string and act on a meaning
+// nobody stated here.
+const RefusalStageVocabulary = "v1"
+
+// RefusalStage is the point in a consumer's own pipeline at which it stopped.
+//
+// Every member is POST-BINDING, deliberately. A refusal may only be posted once
+// an exact request has been authenticated and bound, because the envelope's
+// whole claim is the binding it echoes. A consumer failure with no trustworthy
+// binding -- a malformed wake, an event it could not attribute -- has no stage
+// here and stays a consumer-side diagnostic; the protocol never invents,
+// infers, or partially fills a binding in order to report one.
+type RefusalStage string
+
+const (
+	// RefusalStagePinnedEvidence: evidence this request pins could not be
+	// resolved in the repository that owns it. THE MEASURED CASE.
+	RefusalStagePinnedEvidence RefusalStage = "pinned-evidence"
+	// RefusalStageWorkspace: the governed workspace this request routes could
+	// not be established, so nothing pinned in it could be read at all.
+	RefusalStageWorkspace RefusalStage = "workspace"
+	// RefusalStageAnswerContract: the consumer reached the point of answering
+	// and could not produce an answer meeting the contract the request states.
+	RefusalStageAnswerContract RefusalStage = "answer-contract"
+)
+
+// refusalStages is the closed set, read by MEMBERSHIP.
+//
+// Membership rather than a list of rejected spellings: an exclusion test admits
+// everything nobody thought to exclude, which for a vocabulary that decides
+// meaning is failing open.
+var refusalStages = map[RefusalStage]bool{
+	RefusalStagePinnedEvidence: true,
+	RefusalStageWorkspace:      true,
+	RefusalStageAnswerContract: true,
+}
+
+// Known reports membership in the closed vocabulary named by
+// RefusalStageVocabulary.
+func (s RefusalStage) Known() bool { return refusalStages[s] }
+
+// ArchitectureRefusal is a consumer saying, in the protocol's own grammar, that
+// it refused ONE exact request and why.
+//
+// It is not an answer and cannot become one: it carries no plan, no decision, no
+// coverage and no grant, and there is no field here an architecture result could
+// be read out of. Binding is the COMPLETE request binding, echoed so a reader
+// can tell this refusal apart from a refusal of something else.
+type ArchitectureRefusal struct {
+	Binding   roles.ArchitectureBinding
+	RequestID string
+	Stage     RefusalStage
+	// Reason is the consumer's own text, verbatim, never a paraphrase. It is the
+	// payload rather than a header field so multi-line diagnostics survive
+	// exactly as the consumer wrote them.
+	Reason string
+	// Author, AuthorID and Comment are transport facts about how this refusal
+	// was observed, filled in by the reader. They are never part of the binding.
+	Author   string
+	AuthorID int64
+	Comment  int64
+}
+
+func (f ArchitectureRefusal) Validate() error {
+	if !f.Binding.Valid() {
+		return fmt.Errorf("architecture refusal has no complete objective/world binding: %+v", f.Binding)
+	}
+	if !architectureRequestID.MatchString(strings.TrimSpace(f.RequestID)) {
+		return fmt.Errorf("architecture refusal request id is missing or malformed: %q", f.RequestID)
+	}
+	if !f.Stage.Known() {
+		return fmt.Errorf("architecture refusal stage %q is not a member of the closed stage vocabulary %s",
+			f.Stage, RefusalStageVocabulary)
+	}
+	if strings.TrimSpace(f.Reason) == "" {
+		return errors.New("architecture refusal carries no reason")
+	}
+	return nil
+}
+
+// Marker renders the refusal in canonical order: the request's own binding
+// order, then this envelope's own fields.
+//
+// The binding order matches ArchitectureRequest.Marker exactly so the echo is
+// readable as an echo. The graph provenance pair is emitted together and never
+// half stated -- Validate has already refused a binding carrying one half --
+// for the same reason it is inseparable in a request: graph_build_commit is
+// Sensei graph provenance and base is a workspace object, so a commit emitted
+// without the repository that owns it hands its reader a guess.
+func (f ArchitectureRefusal) Marker() (string, error) {
+	if err := f.Validate(); err != nil {
+		return "", err
+	}
+	b := strings.Builder{}
+	b.WriteString(architectureRefusalMarker + "\n")
+	fmt.Fprintf(&b, "task=%s\n", f.Binding.TaskID)
+	fmt.Fprintf(&b, "request=%s\n", f.RequestID)
+	fmt.Fprintf(&b, "objective_digest=%s\n", f.Binding.ObjectiveDigest)
+	fmt.Fprintf(&b, "base=%s\n", f.Binding.BaseSHA)
+	fmt.Fprintf(&b, "graph_repository=%s\n", f.Binding.GraphRepository)
+	fmt.Fprintf(&b, "graph_build_commit=%s\n", f.Binding.GraphBuildCommit)
+	fmt.Fprintf(&b, "%s=%s\n", refusalVocabularyField, RefusalStageVocabulary)
+	fmt.Fprintf(&b, "%s=%s\n", refusalStageField, f.Stage)
+	b.WriteString("\n")
+	b.WriteString(f.Reason)
+	return b.String(), nil
+}
+
+// mismatch names the FIRST identity on which this refusal differs from an open
+// request, or "" when it binds to it exactly.
+//
+// One predicate with two readers: Refuses decides settlement from it and a
+// rejected refusal states its diagnostic from it, so what settles a wait and
+// what a reader is told cannot drift apart.
+func (f ArchitectureRefusal) mismatch(q ArchitectureRequest) string {
+	switch {
+	case f.RequestID != q.RequestID:
+		return fmt.Sprintf("request is %q and the open request is %q", f.RequestID, q.RequestID)
+	case f.Binding.TaskID != q.Binding.TaskID:
+		return fmt.Sprintf("task is %q and the open request is bound to %q", f.Binding.TaskID, q.Binding.TaskID)
+	case f.Binding.ObjectiveDigest != q.Binding.ObjectiveDigest:
+		return fmt.Sprintf("objective_digest is %q and the open request is bound to %q",
+			f.Binding.ObjectiveDigest, q.Binding.ObjectiveDigest)
+	case f.Binding.BaseSHA != q.Binding.BaseSHA:
+		return fmt.Sprintf("base is %q and the open request is bound to %q", f.Binding.BaseSHA, q.Binding.BaseSHA)
+	case f.Binding.GraphRepository != q.Binding.GraphRepository:
+		return fmt.Sprintf("graph_repository is %q and the open request is bound to %q",
+			f.Binding.GraphRepository, q.Binding.GraphRepository)
+	case f.Binding.GraphBuildCommit != q.Binding.GraphBuildCommit:
+		return fmt.Sprintf("graph_build_commit is %q and the open request is bound to %q",
+			f.Binding.GraphBuildCommit, q.Binding.GraphBuildCommit)
+	}
+	// The backstop, which is not redundant with the cases above. Those name
+	// fields so a rejection can say WHICH one differs, and they can only name
+	// the fields that existed when they were written. Equality over the whole
+	// binding is the predicate: an identity added to ArchitectureBinding later
+	// fails closed here instead of being quietly left out of the match.
+	if !f.Binding.Same(q.Binding) {
+		return fmt.Sprintf("binding %+v differs from the open request's %+v", f.Binding, q.Binding)
+	}
+	return ""
+}
+
+// Refuses reports whether this refusal is bound to THAT EXACT request.
+//
+// Full binding equality, with no subset fallback. Matching on task alone, or on
+// request id alone, would let a refusal of one objective/world end a wait for
+// another -- and a refusal is terminal, so a loose match terminates the wrong
+// exchange with a reason that was never about it.
+func (f ArchitectureRefusal) Refuses(q ArchitectureRequest) bool { return f.mismatch(q) == "" }
+
+// ErrNotAnArchitectureRefusal reports a body that does not even CLAIM to be one.
+var ErrNotAnArchitectureRefusal = errors.New("not a sensei-code architecture refusal")
+
+// ArchitectureRefusalShaped reports whether a comment CLAIMS to be a refusal.
+//
+// The distinction that keeps this repair from recreating the defect one layer
+// up. A body that claims to be a refusal and cannot be read is a REJECTED
+// refusal an operator must be shown; a body that never claimed to be one is
+// just another comment. Collapsing the two turns a malformed rejection back
+// into silence, which is the exact failure this envelope removes.
+//
+// CLAIMING is position zero and the exact marker, nothing more. It previously
+// required marker+"\n", so a bare refusal marker, or one followed by any other
+// delimiter, began with the additive prefix and was still classified as ordinary
+// content: it never reached the parser and never reached the rejected list, so
+// silence returned at exactly the boundary this envelope exists to remove. The
+// delimiter is a rule of the GRAMMAR, enforced by ParseArchitectureRefusal,
+// which can then say what was wrong with it.
+//
+// This is the general positional rule applied here, not a special case for
+// refusals: identity comes from the first token, and well-formedness is decided
+// afterwards by the grammar that token selected.
+func ArchitectureRefusalShaped(body string) bool {
+	return reviewartifact.Opens(strings.ReplaceAll(body, "\r\n", "\n"), architectureRefusalMarker)
+}
+
+// ParseArchitectureRefusal reads a refusal strictly, and says why when it will
+// not.
+//
+// Returns an error rather than a bool because every rejection here has to be
+// reportable: a refusal-shaped comment that is discarded without a stated
+// reason is silence wearing a different mask.
+func ParseArchitectureRefusal(body string) (ArchitectureRefusal, error) {
+	if !ArchitectureRefusalShaped(body) {
+		return ArchitectureRefusal{}, ErrNotAnArchitectureRefusal
+	}
+	binding, id, reason, fields, err := parseArchitectureEnvelope(body, architectureRefusalMarker, false,
+		refusalVocabularyField, refusalStageField)
+	if err != nil {
+		return ArchitectureRefusal{}, err
+	}
+	if fields[refusalVocabularyField] != RefusalStageVocabulary {
+		return ArchitectureRefusal{}, fmt.Errorf(
+			"refusal stage vocabulary is %q and this build reads %q; a stage means only what the "+
+				"vocabulary that defines it says it means",
+			fields[refusalVocabularyField], RefusalStageVocabulary)
+	}
+	stage := RefusalStage(fields[refusalStageField])
+	if !stage.Known() {
+		return ArchitectureRefusal{}, fmt.Errorf(
+			"refusal stage %q is not a member of the closed stage vocabulary %s",
+			stage, RefusalStageVocabulary)
+	}
+	refusal := ArchitectureRefusal{Binding: binding, RequestID: id, Stage: stage, Reason: reason}
+	if verr := refusal.Validate(); verr != nil {
+		return ArchitectureRefusal{}, verr
+	}
+	return refusal, nil
 }

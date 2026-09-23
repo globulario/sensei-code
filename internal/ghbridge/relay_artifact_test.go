@@ -21,11 +21,27 @@ import (
 // comment and any attestation covering that digest would all name an artifact
 // nobody authored -- and an edit made in transit inside that padding would leave
 // no trace.
+//
+// The padding is TRAILING only, and that is the positional framing rule rather
+// than a weakening of this one. Exactness is about what happens to bytes INSIDE
+// an artifact once it is identified; identification itself is the marker at
+// character zero. This fixture used to lead with "\n  ", which quietly asserted
+// that an envelope preceded by padding is still an envelope -- the marker at a
+// nonzero offset, admitted through the one prefix everybody finds harmless.
+// Trailing whitespace proves the same non-normalization property: TrimSpace
+// still changes these bytes, so a tidying relay is still caught.
 func TestTheRelayStoresTheExactBytesItWasGiven(t *testing.T) {
 	f := newRelayFixture(t)
-	padded := "\n  " + artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload) + "\n \n"
+	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	padded := artifact + "\n \n"
 	if _, err := reviewartifact.Parse(padded); err != nil {
 		t.Fatalf("the padded fixture is not a valid artifact, so this proves nothing: %v", err)
+	}
+	// And the direction this fixture must NOT assert: the same artifact pushed
+	// off character zero is not an artifact at all, however little was put in
+	// front of it.
+	if _, err := reviewartifact.Parse("\n  " + artifact); err == nil {
+		t.Fatal("an artifact preceded by whitespace was accepted; protocol identity is position zero")
 	}
 
 	res, err := f.submit(padded)

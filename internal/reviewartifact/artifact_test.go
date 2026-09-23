@@ -61,14 +61,61 @@ func TestACompleteArtifactRoundTrips(t *testing.T) {
 // Raw is the reviewer's bytes, not a normalized re-rendering of them. The
 // artifact here carries leading blank space and CRLF line ends that a repairing
 // parser would quietly drop.
+// Raw is the reviewer's exact bytes, INCLUDING the ones a normalizer would have
+// removed inside the envelope -- here CRLF line endings, which a reviewer posting
+// from a Windows client really produces.
+//
+// The artifact still has to OPEN with its envelope. A previous revision proved
+// exactness by prepending "\n " to the fixture and requiring Parse to accept it,
+// which quietly asserted the opposite rule: that an envelope preceded by padding
+// is still an envelope. Preserving exact bytes is what happens AFTER a
+// position-zero claim; it is not a licence to invent one.
 func TestRawKeepsTheReviewersExactBytes(t *testing.T) {
-	raw := "\n " + strings.ReplaceAll(render(t, complete()), "\n", "\r\n")
+	raw := strings.ReplaceAll(render(t, complete()), "\n", "\r\n")
 	got, err := Parse(raw)
 	if err != nil {
 		t.Fatalf("parsing: %v", err)
 	}
 	if got.Raw != raw {
 		t.Fatalf("Raw is %q, want the exact input bytes %q", got.Raw, raw)
+	}
+}
+
+// LEADING-WHITESPACE CONTROL. Character zero means character zero: an otherwise
+// perfect artifact pushed off position zero by padding has NO protocol identity.
+//
+// This is the control that the old exact-bytes test suppressed. Whitespace is
+// the most persuasive of the harmless prefixes -- it is invisible, it survives
+// copy-paste, and every argument for skipping it ("padding is transport noise")
+// reads as common sense. It is still a prefix. Once identification may advance
+// past one class of bytes, the rule no longer says WHERE an envelope must be,
+// only which prefixes somebody has so far agreed to ignore, and the marker at a
+// nonzero offset -- the entire defect -- is back with an exemption stapled to it.
+//
+// So the property asserted is the strong one: not identified, not parsed, and
+// nothing partly populated on the way out.
+func TestAnEnvelopePushedOffPositionZeroByWhitespaceIsNotAnArtifact(t *testing.T) {
+	body := render(t, complete())
+	for name, pad := range map[string]string{
+		"one leading space":          " ",
+		"one leading tab":            "\t",
+		"a leading newline":          "\n",
+		"a blank line and an indent": "\n  ",
+		"a CRLF blank line":          "\r\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			raw := pad + body
+			if Opens(raw, Marker) {
+				t.Fatalf("%q in front of the marker still opened a review envelope", pad)
+			}
+			got, err := Parse(raw)
+			if err == nil {
+				t.Fatalf("a padded artifact was parsed as a review: %+v", got)
+			}
+			if got != (Artifact{}) {
+				t.Fatalf("a refused body was returned partly populated: %+v", got)
+			}
+		})
 	}
 }
 
@@ -187,21 +234,209 @@ func TestPayloadProseCannotOverrideEnvelopeIdentity(t *testing.T) {
 	}
 }
 
-// One artifact carries one envelope. A second protocol marker anywhere would
-// let one artifact claim two identities, or smuggle a request or a relay
-// receipt through the review path.
-func TestASecondProtocolMarkerIsRefused(t *testing.T) {
+// W8 NO RESCAN. One artifact carries ONE envelope: the one it begins with. The
+// entire remainder belongs to that envelope's grammar and is never rescanned as
+// further mailbox artifacts, however many marker-shaped strings it holds.
+//
+// THIS TEST REPLACES TestASecondProtocolMarkerIsRefused, WHICH CODIFIED THE
+// DEFECT. Parse counted "[sensei-code:" over the whole body and refused any
+// artifact holding more than one, so a marker QUOTED in a finding made the
+// review unreadable. On 2026-09-24 a well formed review from the pinned reviewer
+// principal, with matching bindings and three correct blocking findings, was
+// discarded in transport for exactly that reason -- a protocol that cannot
+// discuss its own vocabulary has made itself undiscussable. The old test's
+// premise, that a marker ANYWHERE means two identities, is what the positional
+// rule refutes: identity is position zero, and text at any other offset is
+// payload.
+//
+// The refused case the old test was really protecting is still refused, and it
+// is the FIRST subtest below: prose in front of the envelope. That is what
+// smuggling looks like; quoting is not.
+func TestMarkerShapedPayloadIsPayloadAndYieldsExactlyOneArtifact(t *testing.T) {
 	full := render(t, complete())
+
+	// The boundary is still closed at the front. A body that does not BEGIN with
+	// the envelope is not an artifact, whatever it contains further down.
 	for name, raw := range map[string]string{
-		"a second review envelope":       full + "\n" + full,
-		"a request envelope in the body": full + "\n[sensei-code:review-request]\nrequest=r-ffffffffffffffff\n",
-		"a relay receipt in the body":    full + "\n[sensei-code:relayed-review]\n",
+		"a review envelope behind prose":  "here is my review\n" + full,
+		"a review envelope behind a list": "- point one\n" + full,
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := Parse(raw); err == nil {
-				t.Fatal("an artifact carrying two protocol envelopes was accepted")
+			if got, err := Parse(raw); err == nil {
+				t.Fatalf("content merely CONTAINING an envelope was read as one: %+v", got)
 			}
 		})
+	}
+
+	// And open behind it. Each payload below holds marker-shaped text that the
+	// whole-body count would have refused.
+	for name, quoted := range map[string]string{
+		"a quoted review envelope":  "a bare " + Marker + " comment is classified as ordinary content",
+		"a quoted request envelope": "the " + requestMarkerForTest + " envelope opens the question",
+		"a quoted relay receipt":    "the " + relayMarkerForTest + " envelope opens the receipt",
+		"a whole second artifact":   "the reviewer quoted an entire artifact:\n" + full,
+		"several markers at once": strings.Join([]string{
+			Marker, requestMarkerForTest, relayMarkerForTest, "[sensei-code:refused]",
+			"[sensei-code:wake]", "[sensei-code:withdrawn]", "[sensei-code:attestation]",
+		}, "\n"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			a := complete()
+			a.Body = payload + "\n\n" + quoted
+			raw := render(t, a)
+			got, err := Parse(raw)
+			if err != nil {
+				t.Fatalf("a review whose payload quotes a protocol marker was refused: %v", err)
+			}
+			// ONE artifact, identified by the envelope at position zero, with
+			// the quoted text intact as payload rather than consumed as a
+			// second artifact's envelope.
+			if got.RequestID != a.RequestID || got.TaskID != a.TaskID ||
+				got.CandidateTree != a.CandidateTree || got.ReviewerProvider != a.ReviewerProvider {
+				t.Errorf("the quoted text rewrote the artifact's identity: %+v", got)
+			}
+			if got.Body != a.Body {
+				t.Errorf("the payload was altered:\n got %q\nwant %q", got.Body, a.Body)
+			}
+			if !strings.Contains(got.Body, quoted) {
+				t.Errorf("the quoted marker text did not survive as payload: %q", got.Body)
+			}
+			if got.Raw != raw || got.Digest != Digest(raw) {
+				t.Error("the artifact no longer names the exact bytes it was given")
+			}
+		})
+	}
+}
+
+// The markers of OTHER protocols, spelled here rather than imported.
+//
+// ghbridge owns them and importing it would invert this package's one dependency
+// rule, so these are literals on purpose: what is being proved is that a
+// marker-shaped STRING in a payload is inert, and a literal is exactly the
+// marker-shaped string a reviewer would type.
+const (
+	requestMarkerForTest = "[sensei-code:review-request]"
+	relayMarkerForTest   = "[sensei-code:relayed-review]"
+)
+
+// W3 CONTROL. Ordinary content that merely contains marker-shaped text later is
+// ORDINARY CONTENT: it is not identified as an artifact of any kind.
+//
+// The other direction of the same rule, and the one that keeps the repair from
+// becoming permissive. Without it, "stop counting markers" could be satisfied by
+// a reader that accepted anything containing one.
+func TestOrdinaryContentContainingAMarkerIsNotAnArtifact(t *testing.T) {
+	for name, body := range map[string]string{
+		"prose naming the review envelope": "I could not apply this: a bare " + Marker +
+			" comment is classified as ordinary content.\n",
+		"a bare marker behind one word": "note " + Marker + "\n",
+		"a marker behind one space":     " x" + Marker + "\ntask=t\n",
+		"a complete artifact behind prose": "quoting the reviewer below:\n" +
+			render(t, complete()),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if Opens(body, Marker) {
+				t.Fatalf("ordinary content was identified as a review envelope: %q", body)
+			}
+			got, err := Parse(body)
+			if err == nil {
+				t.Fatalf("ordinary content was parsed as a review: %+v", got)
+			}
+			if got != (Artifact{}) {
+				t.Fatalf("a refused body was returned partly populated: %+v", got)
+			}
+		})
+	}
+}
+
+// W4 CONTROL, AT THE PARSER. A body whose first bytes claim the review envelope
+// and whose grammar is then wrong REMAINS a failed review artifact: the error
+// names the review rule it broke rather than saying "this is not a review".
+//
+// A7: identification precedes parsing, and the order is what keeps this
+// attributable. A reader that identified an artifact only once it parsed would
+// return the same "not an artifact" answer for a malformed review and for a
+// shopping list, and everything downstream that must tell a bad reviewer from an
+// absent one would lose the distinction.
+func TestAMalformedEnvelopeAtPositionZeroStaysAReviewFailure(t *testing.T) {
+	for name, tc := range map[string]struct{ raw, names string }{
+		// The diagnostic must name the DELIMITER here. It named the missing
+		// reviewer= line instead, which is a rule this fixture also breaks, so
+		// the case passed while the delimiter went unchecked.
+		"no delimiter after the marker": {Marker + " task=t\n\n" + payload, "newline"},
+		"identity missing":              {Marker + "\n\n" + payload, "reviewer"},
+		"base out of shape": {strings.Replace(render(t, complete()),
+			"base=91b475a172bba0257fd2ffd8a55d3edce582e883", "base=nope", 1), "base"},
+		"no payload": {strings.TrimSuffix(render(t, complete()), payload), "payload"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			// IDENTIFIED: these bytes claim the review envelope.
+			if !Opens(tc.raw, Marker) {
+				t.Fatalf("the fixture does not claim the envelope, so it proves nothing: %q", tc.raw)
+			}
+			_, err := Parse(tc.raw)
+			if err == nil {
+				t.Fatal("a malformed review artifact was accepted")
+			}
+			// AND ATTRIBUTABLE: the diagnostic names the review rule broken.
+			if !strings.Contains(err.Error(), tc.names) {
+				t.Errorf("the diagnostic does not name %q, so the failure is not attributable "+
+					"to this envelope's grammar: %v", tc.names, err)
+			}
+		})
+	}
+}
+
+// W4, AT THE DELIMITER, WITH NOTHING ELSE WRONG. The fixture is a complete,
+// valid review artifact with EXACTLY ONE byte removed: the newline between the
+// envelope and the reviewer's identity header. Everything the grammar requires
+// is present, in order, correctly shaped.
+//
+// It is built by deletion from the canonical rendering and the canonical
+// rendering is parsed as a control, so this case cannot pass because some other
+// rule was broken. The earlier no-delimiter fixture carried only task=t and so
+// was refused for a missing reviewer -- the same verdict, reached without ever
+// consulting the delimiter, which is how a parser that had no delimiter rule at
+// all went on satisfying a witness named for one.
+//
+// A REVIEW OF THE CANDIDATE IT NAMES is what this body used to parse as. The
+// header began wherever the first key=value line happened to be, so concatenating
+// a complete header onto the marker produced a fully valid artifact whose
+// envelope had no boundary in it: every identity field, the reviewer, the
+// payload, accepted.
+//
+// Still IDENTIFIED (A4): the refusal names this envelope's own rule, so a
+// malformed review stays a malformed review and does not become content of no
+// kind at all.
+func TestAnEnvelopeConcatenatedToItsHeaderIsRefusedForTheDelimiterAlone(t *testing.T) {
+	canonical := render(t, complete())
+	header := strings.TrimPrefix(canonical, Marker+"\n")
+	if header == canonical {
+		t.Fatalf("the canonical rendering does not open with the envelope and a newline, "+
+			"so removing one proves nothing: %q", canonical)
+	}
+	raw := Marker + header
+
+	if !Opens(raw, Marker) {
+		t.Fatalf("the fixture does not claim the review envelope: %q", raw)
+	}
+	got, err := Parse(raw)
+	if err == nil {
+		t.Fatalf("an artifact whose header is concatenated to its envelope parsed as a review: %+v", got)
+	}
+	if got != (Artifact{}) {
+		t.Fatalf("a refused body was returned partly populated: %+v", got)
+	}
+	if !strings.Contains(err.Error(), "newline") {
+		t.Errorf("the refusal does not name the missing delimiter, so it may be refusing "+
+			"this body for some other reason: %v", err)
+	}
+
+	// CONTROL. The identical header, behind the one byte this fixture removed,
+	// is the review it claims to be.
+	if _, err := Parse(canonical); err != nil {
+		t.Fatalf("the delimited form of the same header was refused (%v), so the refusal "+
+			"above is not attributable to the delimiter", err)
 	}
 }
 
@@ -337,5 +572,78 @@ func TestThisPackageDependsOnNoTransport(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// A SECOND PROTOCOL MARKER IS REFUSED ANY IDENTITY, and refused the review path.
+//
+// THE NAME IS RETAINED DELIBERATELY. An authored invariant,
+// sensei_code.reviewartifact.one_grammar_owns_what_a_review_means, binds this
+// exact function as one of its required tests; renaming it would leave that
+// binding naming nothing, and the awareness corpus is not this change's to edit.
+// The architect owns whether the binding is renamed.
+//
+// WHAT IT PROVED, AND WHAT IT PROVES NOW. Until 2026-09-24 it asserted that Parse
+// counted "[sensei-code:" over the whole body and refused any artifact holding
+// more than one. That rule is refuted: it discarded a correct review for quoting
+// the marker it was explaining. See
+// TestMarkerShapedPayloadIsPayloadAndYieldsExactlyOneArtifact for the positive
+// case.
+//
+// The PROTECTION behind it is unchanged, and is what this asserts now: a second
+// marker cannot give one artifact a second identity, and cannot smuggle another
+// protocol's object through the review path. Counting was one way to get that;
+// position zero is a stronger one, because it also refuses the second marker
+// that a count of one would have allowed through.
+func TestASecondProtocolMarkerIsRefused(t *testing.T) {
+	want := complete()
+	full := render(t, want)
+
+	// REFUSED ANY IDENTITY. The payload states a complete rival envelope with
+	// every field different, and changes nothing: identity is read from position
+	// zero and from nowhere else.
+	rival := Artifact{
+		ReviewerProvider: "someone-else",
+		TaskID:           "task-someone-elses",
+		RequestID:        "r-ffffffffffffffff",
+		BaseSHA:          strings.Repeat("b", 40),
+		CandidateDigest:  "sha256:" + strings.Repeat("0", 64),
+		CandidateTree:    strings.Repeat("a", 40),
+		ReviewCommit:     strings.Repeat("c", 40),
+		Body:             payload,
+	}
+	injected := want
+	injected.Body = payload + "\n\n" + render(t, rival)
+	got, err := Parse(render(t, injected))
+	if err != nil {
+		t.Fatalf("parsing an artifact whose payload quotes a second envelope: %v", err)
+	}
+	for _, f := range []struct{ name, want, got string }{
+		{"reviewer", want.ReviewerProvider, got.ReviewerProvider},
+		{"task", want.TaskID, got.TaskID},
+		{"request", want.RequestID, got.RequestID},
+		{"base", want.BaseSHA, got.BaseSHA},
+		{"candidate_digest", want.CandidateDigest, got.CandidateDigest},
+		{"candidate_tree", want.CandidateTree, got.CandidateTree},
+		{"review_commit", want.ReviewCommit, got.ReviewCommit},
+	} {
+		if f.got != f.want {
+			t.Errorf("a second envelope rewrote %s to %q, want the first envelope's %q",
+				f.name, f.got, f.want)
+		}
+	}
+
+	// REFUSED THE REVIEW PATH. Another protocol's envelope at position zero is
+	// not a review, however much of one follows it. This is the smuggling the
+	// old rule named, and it is closed by position rather than by counting.
+	for name, raw := range map[string]string{
+		"a request envelope opening the comment": requestMarkerForTest + "\nrequest=r-ffffffffffffffff\n\n" + full,
+		"a relay receipt opening the comment":    relayMarkerForTest + "\nrequest=r-ffffffffffffffff\n\n" + full,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Parse(raw); err == nil {
+				t.Fatal("another protocol's object was read as a review")
+			}
+		})
 	}
 }

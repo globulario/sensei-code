@@ -7,6 +7,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 )
 
 // The doorbell exists because the remote actor's wake path and this protocol's
@@ -54,10 +56,27 @@ const WakeMarker = "[sensei-code:wake]"
 
 const wakeField = "request_comment"
 
-var wakeBody = regexp.MustCompile(`^\[sensei-code:wake\]\n` + wakeField + `=([0-9]{1,19})\n?$`)
+// wakeGrammar reads what follows the envelope, and only that. The marker is not
+// part of it: identification already established that these bytes claim to be a
+// wake, and re-testing the marker inside the grammar is how the two steps get
+// confused for one another. It also spelled "[sensei-code:wake]" a second time,
+// so WakeMarker and the parser could disagree about the envelope silently.
+var wakeGrammar = regexp.MustCompile(`^\n` + wakeField + `=([0-9]{1,19})\n?$`)
 
-// ErrNotAWake reports a body that is not a wake signal.
+// ErrNotAWake reports a body that does not CLAIM to be a wake signal: it does
+// not begin with the wake envelope, so it is some other comment entirely.
 var ErrNotAWake = errors.New("not a sensei-code wake signal")
+
+// ErrMalformedWake reports a body that DOES claim the wake envelope at position
+// zero and then breaks its grammar.
+//
+// Distinct from ErrNotAWake on purpose, and the distinction is the point. Both
+// used to be the same "not a wake" answer, which made an absent wake and a
+// broken one indistinguishable to every caller -- the same conflation of absence
+// with malformation that this protocol repair exists to remove, one envelope
+// down. A body that opened with the wake marker and carried a corrupt locator
+// was reported as though no wake had been posted at all.
+var ErrMalformedWake = errors.New("malformed sensei-code wake signal")
 
 // Doorbell rings a wake signal pointing at an already-published request.
 //
@@ -90,15 +109,34 @@ func RenderWake(requestCommentID int64) (string, error) {
 // consumer does with this value is fetch a comment by it — and a locator
 // assembled from a body that also contained something else is a locator whose
 // provenance nobody checked.
+// IDENTIFICATION, THEN GRAMMAR (A7), against the bytes as posted. This used to
+// run strings.TrimSpace over the whole body before an anchored match, which did
+// two wrong things at once: it moved an INDENTED marker to position zero and so
+// handed wake identity to a comment that merely began with padding, and it
+// reported "not a wake" for a body that plainly claimed to be one.
+//
+// Carriage returns are still normalized, and that is not the same concession.
+// CRLF is a line-ending encoding chosen by the client that posts, and rewriting
+// it cannot move the marker: the envelope contains no newline, so a body opening
+// with the marker opens with it either way. Trimming shifts position zero;
+// normalizing line endings does not.
+//
+// Trailing whitespace is tolerated for the same reason it always was -- it is
+// after the artifact, where position-zero identity has already been decided.
 func ParseWake(body string) (int64, error) {
-	normalized := strings.ReplaceAll(strings.TrimSpace(body), "\r\n", "\n") + "\n"
-	m := wakeBody.FindStringSubmatch(normalized)
-	if m == nil {
+	normalized := strings.ReplaceAll(body, "\r\n", "\n")
+	if !reviewartifact.Opens(normalized, WakeMarker) {
 		return 0, ErrNotAWake
+	}
+	rest := strings.TrimRight(normalized[len(WakeMarker):], " \t\n") + "\n"
+	m := wakeGrammar.FindStringSubmatch(rest)
+	if m == nil {
+		return 0, fmt.Errorf("%w: a wake is the envelope and exactly one %s field, and this one continues %q",
+			ErrMalformedWake, wakeField, firstLineOf(strings.TrimPrefix(rest, "\n")))
 	}
 	id, err := strconv.ParseInt(m[1], 10, 64)
 	if err != nil || id <= 0 {
-		return 0, ErrNotAWake
+		return 0, fmt.Errorf("%w: %s=%s does not name a published comment", ErrMalformedWake, wakeField, m[1])
 	}
 	return id, nil
 }

@@ -365,10 +365,6 @@ func relayPublicationOf(ctx context.Context, box Issue, o ReviewObligation, dige
 	var other relayReceipt
 	var found bool
 	for _, c := range comments {
-		head := strings.TrimLeft(c.Body, " \t\r\n")
-		if !strings.HasPrefix(head, relayedReviewMarker) {
-			continue
-		}
 		f, _, ok := fields(c.Body, relayedReviewMarker)
 		if !ok {
 			continue
@@ -498,9 +494,16 @@ func RenderRelayedReview(art reviewartifact.Artifact, verdict roles.ReviewVerdic
 		}
 	}
 	body := b.String()
-	if strings.Contains(body, reviewartifact.Marker) || strings.Contains(body, requestMarker) ||
-		strings.Count(body, "[sensei-code:") != 1 {
-		return "", errors.New("the publication would carry a protocol marker beyond its own envelope, so it is not posted")
+	// The envelope this publication OPENS WITH is the only thing that decides
+	// what it is, so that is what is checked.
+	//
+	// It used to refuse any body containing a marker anywhere, or more than one
+	// "[sensei-code:" in total. The verdict summary and findings this renders are
+	// the REVIEWER'S words: a finding that quoted a protocol marker while
+	// explaining it made the publication unpostable, and a correct review became
+	// undeliverable for describing the protocol it was reviewing.
+	if !reviewartifact.Opens(body, relayedReviewMarker) {
+		return "", errors.New("the publication does not open with its own envelope, so it is not posted")
 	}
 	return body, nil
 }
