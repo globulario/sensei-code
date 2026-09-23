@@ -3,12 +3,13 @@ package roles
 import "testing"
 
 const (
-	architectureBase  = "1111111111111111111111111111111111111111"
-	architectureGraph = "2222222222222222222222222222222222222222"
+	architectureBase      = "1111111111111111111111111111111111111111"
+	architectureGraphRepo = "globulario/sensei"
+	architectureGraph     = "2222222222222222222222222222222222222222"
 )
 
 func TestArchitectureBindingNamesExactObjectiveAndWorld(t *testing.T) {
-	b := BindArchitecture("task-7", "fix exactly this\n", architectureBase, architectureGraph)
+	b := BindArchitecture("task-7", "fix exactly this\n", architectureBase, architectureGraphRepo, architectureGraph)
 	if !b.Valid() {
 		t.Fatalf("binding is not valid: %+v", b)
 	}
@@ -21,12 +22,13 @@ func TestArchitectureBindingNamesExactObjectiveAndWorld(t *testing.T) {
 }
 
 func TestArchitectureBindingRequiresEveryReferent(t *testing.T) {
-	good := BindArchitecture("task-7", "objective", architectureBase, architectureGraph)
+	good := BindArchitecture("task-7", "objective", architectureBase, architectureGraphRepo, architectureGraph)
 	cases := []ArchitectureBinding{
-		{ObjectiveDigest: good.ObjectiveDigest, BaseSHA: architectureBase, GraphBuildCommit: architectureGraph},
-		{TaskID: good.TaskID, BaseSHA: architectureBase, GraphBuildCommit: architectureGraph},
-		{TaskID: good.TaskID, ObjectiveDigest: good.ObjectiveDigest, GraphBuildCommit: architectureGraph},
-		{TaskID: good.TaskID, ObjectiveDigest: good.ObjectiveDigest, BaseSHA: architectureBase},
+		{ObjectiveDigest: good.ObjectiveDigest, BaseSHA: architectureBase, GraphRepository: architectureGraphRepo, GraphBuildCommit: architectureGraph},
+		{TaskID: good.TaskID, BaseSHA: architectureBase, GraphRepository: architectureGraphRepo, GraphBuildCommit: architectureGraph},
+		{TaskID: good.TaskID, ObjectiveDigest: good.ObjectiveDigest, GraphRepository: architectureGraphRepo, GraphBuildCommit: architectureGraph},
+		{TaskID: good.TaskID, ObjectiveDigest: good.ObjectiveDigest, BaseSHA: architectureBase, GraphRepository: architectureGraphRepo},
+		{TaskID: good.TaskID, ObjectiveDigest: good.ObjectiveDigest, BaseSHA: architectureBase, GraphBuildCommit: architectureGraph},
 	}
 	for i, b := range cases {
 		if b.Valid() {

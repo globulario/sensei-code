@@ -110,6 +110,12 @@ func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
 		taskID,
 		e.objective(taskID).Text,
 		e.governedBase(taskID),
+		// The graph repository is CONFIGURED, never derived. The workspace
+		// remote is a different authority domain and answering with it would
+		// route a graph commit into a repository that does not contain it; an
+		// unset value leaves the provenance pair incomplete and the turn refuses
+		// rather than guessing.
+		e.Config.Sensei.Repository,
 		graphBuild,
 	)
 }

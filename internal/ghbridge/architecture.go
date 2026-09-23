@@ -64,6 +64,12 @@ func (r ArchitectureRequest) Marker() (string, error) {
 	fmt.Fprintf(&b, "request=%s\n", r.RequestID)
 	fmt.Fprintf(&b, "objective_digest=%s\n", r.Binding.ObjectiveDigest)
 	fmt.Fprintf(&b, "base=%s\n", r.Binding.BaseSHA)
+	// The graph provenance pair, always together. base is a WORKSPACE object and
+	// graph_build_commit is SENSEI GRAPH provenance: they are resolved in
+	// different repositories, so emitting the commit alone hands the consumer a
+	// routing decision it can only make by guessing. Validate() has already
+	// refused a half pair, which is why both are emitted unconditionally here.
+	fmt.Fprintf(&b, "graph_repository=%s\n", r.Binding.GraphRepository)
 	fmt.Fprintf(&b, "graph_build_commit=%s\n", r.Binding.GraphBuildCommit)
 	// Omitted when unknown rather than asserted empty, so a consumer fails closed
 	// on a missing binding instead of being sent somewhere by a guess.
@@ -112,6 +118,7 @@ func (r ArchitectureResponse) Marker() (string, error) {
 	fmt.Fprintf(&b, "request=%s\n", r.RequestID)
 	fmt.Fprintf(&b, "objective_digest=%s\n", r.Binding.ObjectiveDigest)
 	fmt.Fprintf(&b, "base=%s\n", r.Binding.BaseSHA)
+	fmt.Fprintf(&b, "graph_repository=%s\n", r.Binding.GraphRepository)
 	fmt.Fprintf(&b, "graph_build_commit=%s\n", r.Binding.GraphBuildCommit)
 	b.WriteString("\n")
 	b.WriteString(r.Body)
@@ -148,7 +155,7 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 	}
 	allowed := map[string]bool{
 		"task": true, "request": true, "objective_digest": true,
-		"base": true, "graph_build_commit": true,
+		"base": true, "graph_repository": true, "graph_build_commit": true,
 	}
 	// Routing is accepted but NOT required. A request that predates repository
 	// binding must still parse, so an in-flight exchange keeps matching its
@@ -175,6 +182,20 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 			return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf("unknown architecture header %q", key)
 		}
 	}
+	// The graph provenance pair, refused as a pair and named as one.
+	//
+	// An envelope that predates graph_repository carries graph_build_commit with
+	// no repository that owns it. Refusing it is the CORRECT outcome and is
+	// deliberate: the alternative is to resolve the commit in whatever repository
+	// happens to be at hand, which is how a Sensei graph commit came to be looked
+	// up in the workspace repository that never contained it. The missing half is
+	// never inferred, defaulted, or copied from workspace_repository.
+	if (fields["graph_repository"] == "") != (fields["graph_build_commit"] == "") {
+		return roles.ArchitectureBinding{}, "", "", nil, fmt.Errorf(
+			"architecture graph provenance is half stated (graph_repository=%q graph_build_commit=%q); "+
+				"neither half travels alone and the absent one is never inferred",
+			fields["graph_repository"], fields["graph_build_commit"])
+	}
 	for key := range allowed {
 		if optional[key] {
 			continue
@@ -187,6 +208,7 @@ func parseArchitectureEnvelope(body, marker string, request bool) (roles.Archite
 		TaskID:           fields["task"],
 		ObjectiveDigest:  fields["objective_digest"],
 		BaseSHA:          fields["base"],
+		GraphRepository:  fields["graph_repository"],
 		GraphBuildCommit: fields["graph_build_commit"],
 	}
 	if !binding.Valid() {
@@ -228,4 +250,42 @@ func ParseArchitectureResponse(body string) (ArchitectureResponse, bool) {
 		return ArchitectureResponse{}, false
 	}
 	return ArchitectureResponse{Binding: binding, RequestID: id, Body: answer}, true
+}
+
+// ErrEvidenceHasNoOwningRepository refuses a pinned commit the envelope did not
+// route.
+//
+// There is deliberately no fallback behind it. Trying the workspace repository
+// for a graph commit is exactly how 05feaf64d2694e97ac42b6bb93fbb49b9851a1f1 was
+// looked up in globulario/sensei-code -- which answered "422 no commit found" --
+// while the commit existed in globulario/sensei the whole time. A consumer that
+// must guess which repository a SHA belongs to has already lost the binding.
+var ErrEvidenceHasNoOwningRepository = errors.New("a pinned commit arrived with no repository that owns it")
+
+// ResolvePinnedEvidence resolves every commit this request pins through the ONE
+// repository whose authority owns it, and through no other.
+//
+// The domains do not overlap and are never tried in turn: workspace_repository
+// owns base, graph_repository owns graph_build_commit, and mailbox_repository
+// owns the conversation and nothing pinned here. lookup is called exactly once
+// per identity, with that identity's owning repository. Attempting a second
+// repository and accepting whichever answered would be the same guess wearing a
+// retry, so an unrouted identity is refused rather than searched for.
+func (r ArchitectureRequest) ResolvePinnedEvidence(lookup func(repository, commit string) error) error {
+	if lookup == nil {
+		return errors.New("resolving pinned evidence needs a lookup")
+	}
+	for _, pinned := range []struct{ field, repository, commit string }{
+		{"base", r.WorkspaceRepository, r.Binding.BaseSHA},
+		{"graph_build_commit", r.Binding.GraphRepository, r.Binding.GraphBuildCommit},
+	} {
+		repository := strings.TrimSpace(pinned.repository)
+		if repository == "" {
+			return fmt.Errorf("%w: %s=%s", ErrEvidenceHasNoOwningRepository, pinned.field, pinned.commit)
+		}
+		if err := lookup(repository, pinned.commit); err != nil {
+			return fmt.Errorf("resolving %s %s in %s: %w", pinned.field, pinned.commit, repository, err)
+		}
+	}
+	return nil
 }

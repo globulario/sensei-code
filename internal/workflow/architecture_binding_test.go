@@ -23,6 +23,10 @@ func TestArchitectBindingComesFromWorkflowTruthBeforeResolver(t *testing.T) {
 		"e.objective(taskID).Text",
 		"e.governedBase(taskID)",
 		"graph.Digest",
+		// The graph repository is CONFIGURED. Deriving it from the workspace
+		// remote would send a Sensei graph commit to a repository that never
+		// held it, which is the 422 this binding exists to prevent.
+		"e.Config.Sensei.Repository",
 		"spec.Architecture = e.architectureBinding(spec.TaskID)",
 	} {
 		if !strings.Contains(src, want) {
