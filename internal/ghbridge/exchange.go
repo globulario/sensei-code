@@ -168,6 +168,23 @@ type ExchangeRecord struct {
 	// their historical value is never invented.
 	MailboxRepository   string `json:"mailbox_repository,omitempty"`
 	WorkspaceRepository string `json:"workspace_repository,omitempty"`
+
+	// The architecture provenance an ARCHITECTURE request carried, exactly as it
+	// was published. BaseSHA above completes it.
+	//
+	// GraphRepository and GraphBuildCommit are one pair and are recorded
+	// together: a later process reading half of them would have to decide which
+	// repository owns the commit, which is the decision this record exists to
+	// remove. They are the THIRD routing domain -- mailbox owns the
+	// conversation, workspace owns base, graph owns graph_build_commit -- and
+	// none of the three is derived from either of the others.
+	//
+	// Empty means the record predates the fields. A legacy record's graph
+	// repository is never filled in from WorkspaceRepository or from today's
+	// configuration; that inference is the defect being repaired.
+	ObjectiveDigest  string `json:"objective_digest,omitempty"`
+	GraphRepository  string `json:"graph_repository,omitempty"`
+	GraphBuildCommit string `json:"graph_build_commit,omitempty"`
 }
 
 const (

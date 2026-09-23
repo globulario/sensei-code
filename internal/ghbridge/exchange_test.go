@@ -331,3 +331,137 @@ func TestAWithdrawalIsNotRedirectedToADifferentConversation(t *testing.T) {
 		t.Fatalf("the unreachable record was dropped: %+v", pending)
 	}
 }
+
+// openRecordReader reads the exchange log at the one moment the record is open:
+// the doorbell rings after the request is published and recorded, and before
+// the waiter begins. It reopens the log from disk with a fresh value, as a
+// different process would, so what it sees is the persisted bytes rather than
+// the struct the runner still holds.
+type openRecordReader struct {
+	dir  string
+	seen []ExchangeRecord
+}
+
+func (d *openRecordReader) Ring(_ context.Context, _ int64) error {
+	d.seen, _ = ExchangeLog{Dir: d.dir}.Pending()
+	return nil
+}
+
+// The durable half of self-routing provenance.
+//
+// A process that did not publish this request must be able to say which
+// repository owns each pinned commit. If the record kept only the commit, that
+// process would have to decide the domain from its own configuration -- which
+// is re-derivation, and re-derivation is how a Sensei graph commit came to be
+// looked for in the workspace repository that never held it. So the record
+// carries the provenance and every route exactly as published, and the graph
+// repository is visibly NOT a copy of either of the other two.
+func TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	m, box := newAppMailbox(t, keyPath)
+	log := ExchangeLog{Dir: filepath.Join(t.TempDir(), "exchanges")}
+	binding := architectureBinding()
+
+	bell := &openRecordReader{dir: log.Dir}
+	r := &ArchitectureRunner{
+		Issue:        box,
+		Binding:      binding,
+		NewRequestID: func() string { return "r-provenance" },
+		Poll:         5 * time.Millisecond,
+		Wait:         40 * time.Millisecond,
+		Exchanges:    log,
+		Doorbell:     bell,
+	}
+	if _, err := r.Run(context.Background(),
+		agent.Request{Role: roles.Architect, TaskID: binding.TaskID, Prompt: "p"}, nil); err == nil {
+		t.Fatal("the unanswered turn returned success")
+	}
+	if len(bell.seen) != 1 {
+		t.Fatalf("the open exchange was not persisted at publication time: %+v", bell.seen)
+	}
+	rec := bell.seen[0]
+
+	// The request as it actually went out, read back off the mailbox rather
+	// than assumed, so the record is compared against what a consumer sees.
+	var published ArchitectureRequest
+	for _, c := range m.comments {
+		body, _ := c["body"].(string)
+		if got, ok := ParseArchitectureRequest(body); ok {
+			published = got
+		}
+	}
+	if published.RequestID != "r-provenance" {
+		t.Fatalf("the published request was not found on the mailbox: %+v", published)
+	}
+
+	for _, f := range []struct{ name, got, want string }{
+		{"task", rec.TaskID, binding.TaskID},
+		{"base", rec.BaseSHA, published.Binding.BaseSHA},
+		{"objective_digest", rec.ObjectiveDigest, published.Binding.ObjectiveDigest},
+		{"graph_build_commit", rec.GraphBuildCommit, published.Binding.GraphBuildCommit},
+		{"graph_repository", rec.GraphRepository, published.Binding.GraphRepository},
+		{"mailbox_repository", rec.MailboxRepository, published.MailboxRepository},
+		{"workspace_repository", rec.WorkspaceRepository, published.WorkspaceRepository},
+	} {
+		if f.got != f.want {
+			t.Errorf("the record holds %s = %q, but the request published %q", f.name, f.got, f.want)
+		}
+	}
+	// The pair is recorded whole: half of it would leave the reader guessing
+	// the other half, which is the state being repaired.
+	if rec.GraphRepository == "" || rec.GraphBuildCommit == "" {
+		t.Fatalf("graph provenance was recorded in halves: repository=%q commit=%q",
+			rec.GraphRepository, rec.GraphBuildCommit)
+	}
+	// Three domains, not one value wearing three names. The mailbox here really
+	// is globulario/sensei-code and the graph really is globulario/sensei: a
+	// record that copied one route into another would show them equal.
+	if rec.MailboxRepository != "globulario/sensei-code" {
+		t.Fatalf("mailbox route = %q, want globulario/sensei-code", rec.MailboxRepository)
+	}
+	if rec.GraphRepository == rec.MailboxRepository {
+		t.Fatalf("the graph route is a copy of the mailbox route: %q", rec.GraphRepository)
+	}
+	if rec.GraphRepository == rec.WorkspaceRepository {
+		t.Fatalf("the graph route is a copy of the workspace route: %q", rec.GraphRepository)
+	}
+}
+
+// CONTROL -- a legacy record keeps its gap.
+//
+// A record written before the graph pair existed has no graph repository, and
+// nothing fills one in for it on the way back off disk. An invented domain
+// would be the same guess as before, wearing a durable record's authority.
+func TestALegacyExchangeRecordIsNotGivenAGraphRepository(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "exchanges")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacy := map[string]any{
+		"task_id": "task-1", "request_id": "r-legacy", "conversation": "157",
+		"published_at":         time.Now().UTC().Format(time.RFC3339Nano),
+		"kind":                 ExchangeArchitecture,
+		"base":                 baseSHA,
+		"graph_build_commit":   architectureGraphCommit,
+		"workspace_repository": "globulario/sensei-code",
+		"mailbox_repository":   "globulario/sensei-code",
+	}
+	blob, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "task-1.r-legacy.json"), blob, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pending, err := ExchangeLog{Dir: dir}.Pending()
+	if err != nil || len(pending) != 1 {
+		t.Fatalf("legacy record did not read back: %+v %v", pending, err)
+	}
+	if got := pending[0].GraphRepository; got != "" {
+		t.Fatalf("a graph repository was invented for a legacy record: %q", got)
+	}
+	// The gap is a gap, not a reason to lose everything else the record said.
+	if pending[0].GraphBuildCommit != architectureGraphCommit || pending[0].WorkspaceRepository != "globulario/sensei-code" {
+		t.Fatalf("the legacy record lost the facts it did carry: %+v", pending[0])
+	}
+}

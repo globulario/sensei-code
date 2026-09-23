@@ -68,6 +68,23 @@ type Config struct {
 	Sensei struct {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
+		// Repository is the "owner/name" repository whose commits the awareness
+		// graph is built from -- the authority domain that owns
+		// graph_build_commit.
+		//
+		// It is a DIFFERENT repository from the workspace in every installation
+		// that governs one project with another project's graph, which is this
+		// one: graph commit 05feaf64d2694e97ac42b6bb93fbb49b9851a1f1 lives in
+		// globulario/sensei while the governed workspace is
+		// globulario/sensei-code.
+		//
+		// Stated rather than derived, and deliberately left empty by Default().
+		// There is no honest way to compute it: taking the workspace remote is
+		// the guess that sent a graph commit to a repository that never held it,
+		// and a built-in value would be that same guess frozen into the binary.
+		// Unset means the architecture binding has no graph provenance pair, and
+		// the architect turn refuses before publishing anything.
+		Repository string `json:"repository,omitempty"`
 	} `json:"sensei"`
 	Architect    Agent   `json:"architect"`
 	Implementors []Agent `json:"implementors"`

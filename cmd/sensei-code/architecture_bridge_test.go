@@ -21,6 +21,7 @@ func TestConfiguredBridgeCarriesABoundArchitectTurn(t *testing.T) {
 		"task-arch-compose",
 		"repair exactly the approved objective",
 		"1111111111111111111111111111111111111111",
+		"globulario/sensei",
 		"2222222222222222222222222222222222222222",
 	)
 
