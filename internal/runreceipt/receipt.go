@@ -59,7 +59,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v10"
+const SchemaVersion = "sensei-code.governed-run-receipt/v11"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -143,6 +143,20 @@ const (
 	// resumable. REFUSED names a verdict and this is the end of a budget.
 	// UNREVIEWED is false: every cycle was reviewed.
 	OutcomeNotConverged Outcome = "NOT_CONVERGED"
+	// OutcomeRestorationRefused: a resumed invocation could not re-establish
+	// the authority its own record holds, and refused to execute under
+	// authority it could not verify.
+	//
+	// It exists because every existing word is false here. FAILED is what
+	// destroyed task-1789960053774525922 (2026-09-21): a restoration refusal
+	// recorded as failure is final to FindInterrupted, so the refusal removed
+	// the obligation it was protecting. STOPPED and TIMED_OUT name who ended
+	// it, and neither did. BLOCKED_EXTERNAL names a provider, and no provider
+	// is involved. NOT_CONVERGED names a spent review budget, and no review
+	// happened. So the fact gets its own name: the task stands, its recorded
+	// authority could not be verified by the instrument available to this
+	// resume, and nothing was executed under it.
+	OutcomeRestorationRefused Outcome = "RESTORATION_REFUSED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -155,7 +169,7 @@ func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
-		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeUnknown:
+		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -218,6 +232,14 @@ var vocabularies = map[string][]Outcome{
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged, OutcomeUnknown,
 	},
+	// v11 adds RESTORATION_REFUSED, and the restoration_refusal field it
+	// requires: a resume that could not verify the authority its record holds.
+	"sensei-code.governed-run-receipt/v11": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
+		OutcomeRestorationRefused, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -246,6 +268,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	},
 	// v10 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
 	"sensei-code.governed-run-receipt/v10": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v11 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v11": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
@@ -645,6 +671,15 @@ type Receipt struct {
 	// the task is owed. Required when the outcome is NOT_CONVERGED.
 	NotConverged Value `json:"not_converged"`
 
+	// RestorationRefusal is the authority instrument whose binding a resume
+	// could not read or verify, and what it could not verify about it.
+	//
+	// Required when the outcome is RESTORATION_REFUSED, for the reason
+	// ExternalBlock is: "the recorded authority could not be re-established"
+	// without saying WHICH instrument failed cannot be distinguished from the
+	// diagnosis it is not, and telling those apart is the whole repair.
+	RestorationRefusal Value `json:"restoration_refusal"`
+
 	// ReviewedTree is the content the verdict's envelope named. A receipt that
 	// states a candidate tree and a reviewed digest, while proving nothing about
 	// whether the verdict was bound to THAT tree, sends a later adjudicator back
@@ -708,6 +743,7 @@ func (r Receipt) Fields() []Field {
 	timedOut := r.Outcome == OutcomeTimedOut
 	blocked := r.Outcome == OutcomeBlockedExternal
 	notConverged := r.Outcome == OutcomeNotConverged
+	restorationRefused := r.Outcome == OutcomeRestorationRefused
 	return []Field{
 		{"governor_commit", r.GovernorCommit, Rederivable, true},
 		{"governor_binary_sha256", r.GovernorBinarySHA256, Rederivable, true},
@@ -729,6 +765,7 @@ func (r Receipt) Fields() []Field {
 		{"execution_budget", r.ExecutionBudget, Observed, timedOut},
 		{"external_block", r.ExternalBlock, Observed, blocked},
 		{"not_converged", r.NotConverged, Observed, notConverged},
+		{"restoration_refusal", r.RestorationRefusal, Observed, restorationRefused},
 		{"formatter_mutation", r.FormatterMutationState, Observed, worked},
 		{"terminal", r.Terminal, Observed, true},
 	}

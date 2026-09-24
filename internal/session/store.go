@@ -285,6 +285,16 @@ type Interrupted struct {
 	// re-plan. A later PlanProposed -- the re-plan a resume records -- discharges
 	// it.
 	NotConverged json.RawMessage
+	// RestorationRefused is the WorkflowRestorationRefused payload, byte for
+	// byte: which recorded authority a resume could not re-establish, and which
+	// instrument binding it could not read or verify.
+	//
+	// It is carried as EVIDENCE about the task, not as an obligation that
+	// routes: the task owes exactly what it owed before the refusal, and the
+	// refusal says why the last attempt did not execute. The newest one wins.
+	// Carried at all because a refusal whose reason is unreadable after a
+	// restart is indistinguishable from a task that was never attempted.
+	RestorationRefused json.RawMessage
 }
 
 // blockedRole reads only the role an external-block record names. The workflow
@@ -415,10 +425,10 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// disagreement between the record and the lifecycle.
 			//
 			// The INVOCATION terminals -- stopped, timed out, awaiting review,
-			// awaiting authority, blocked external, not converged -- are
-			// deliberately absent. Each of them ends one process's attempt and
-			// leaves the task owing something, which is precisely the state this
-			// function exists to report.
+			// awaiting authority, blocked external, not converged, restoration
+			// refused -- are deliberately absent. Each of them ends one
+			// process's attempt and leaves the task owing something, which is
+			// precisely the state this function exists to report.
 			p.done = true
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
@@ -489,6 +499,14 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// Emitting this as WorkflowFailed is exactly what made the first
 			// dogfood run (2026-09-18) unrecoverable except as a new task.
 			p.BlockedExternal = e.Payload
+		case event.WorkflowRestorationRefused:
+			// NOT TERMINAL, and this is the whole repair: a resume refused to
+			// execute under authority it could not verify, and the task it
+			// refused must still be here afterwards. Emitted as WorkflowFailed
+			// it was final here, so the safety check permanently destroyed the
+			// obligation it was protecting (task-1789960053774525922,
+			// 2026-09-21).
+			p.RestorationRefused = e.Payload
 		case event.WorkflowNotConverged:
 			// Not terminal: the candidate stands and the task is owed an
 			// architect re-plan. Emitted as WorkflowFailed it was final here while

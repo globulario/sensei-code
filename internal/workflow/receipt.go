@@ -19,6 +19,7 @@ package workflow
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"os"
 	"runtime/debug"
@@ -58,7 +59,10 @@ type receiptFacts struct {
 	// provider condition that blocked it.
 	externalBlock runreceipt.Value
 	// notConverged is who spent which review budget, and what is owed.
-	notConverged                          runreceipt.Value
+	notConverged runreceipt.Value
+	// restorationRefusal is the authority instrument whose binding a resume
+	// could not read or verify.
+	restorationRefusal                    runreceipt.Value
 	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
@@ -112,6 +116,9 @@ func freshFacts() *receiptFacts {
 		executionBudget:  notYet("no execution budget expired"),
 		externalBlock:    notYet("no role turn was blocked externally"),
 		notConverged:     notYet("the run did not end unconverged"),
+		// A run that never resumed anything refused no restoration, and says
+		// so rather than carrying a blank.
+		restorationRefusal: notYet("the run refused no restoration"),
 		// Stated, not defaulted: a candidate that never reached validation has
 		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
 		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
@@ -319,6 +326,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		ExecutionBudget:           facts.executionBudget,
 		ExternalBlock:             facts.externalBlock,
 		NotConverged:              facts.notConverged,
+		RestorationRefusal:        facts.restorationRefusal,
 		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
@@ -628,6 +636,44 @@ func (e *Engine) noteNotConverged(taskID string, n NotConverged) {
 			f.candidateState = runreceipt.CandidateUnattempted
 		}
 	})
+}
+
+// noteRestorationRefusal records which instrument binding a resume could not
+// read or verify.
+//
+// A candidate that holds work at this point was never minted and will not be in
+// this invocation, which is exactly UNATTEMPTED: PRESENT would demand mint
+// evidence that does not exist and make every such receipt INCOMPLETE, and an
+// incomplete receipt for a preserved task is how a preserved task stops looking
+// preserved.
+func (e *Engine) noteRestorationRefusal(taskID string, r RestorationRefusal) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.restorationRefusal = runreceipt.MeasuredValue(r.Describe(),
+			"the authority instrument whose binding this resume could not read or verify")
+		if f.candidateState == runreceipt.CandidatePresent {
+			f.candidateState = runreceipt.CandidateUnattempted
+		}
+	})
+}
+
+// refuseRestoration ends the invocation as RESTORATION_REFUSED when err carries
+// a typed restoration refusal, and reports whether it did.
+//
+// The task is left exactly as it stands: no candidate disposal, no handoff, no
+// authority written, no record repaired. It is terminal for the INVOCATION and
+// not for the TASK, which is the entire point -- the previous terminal for this
+// condition removed the task from resume tooling for ever.
+func (e *Engine) refuseRestoration(taskID string, err error) bool {
+	var r *RestorationRefusal
+	if !errors.As(err, &r) || r == nil {
+		return false
+	}
+	e.noteRestorationRefusal(taskID, *r)
+	e.emitRunTerminal(taskID, event.WorkflowRestorationRefused, event.SourceSystem,
+		runreceipt.OutcomeRestorationRefused, e.candidateStateFor(taskID),
+		"the authority this task recorded could not be re-established: "+r.Describe()+
+			". Nothing was executed and no authority was written; the task is preserved and still resumable", *r)
+	return true
 }
 
 // reviewedTreeFor returns the content identity a DELIVERED VERDICT was bound

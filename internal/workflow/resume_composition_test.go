@@ -140,3 +140,363 @@ func TestAPlanMovesItsWholeScope(t *testing.T) {
 		}
 	}
 }
+
+// DF-24a -- the LIFECYCLE boundary of the restoration containment repair.
+//
+// The predicate halves are in testedit_test.go, beside the comparison that was
+// wrong. These witness what the wrong comparison DID: a restoration refusal was
+// emitted as WorkflowFailed, which FindInterrupted reads as final, so the safety
+// check permanently removed the obligation it was protecting
+// (task-1789960053774525922, 2026-09-21, 0 vs 7). Every witness here therefore
+// drives a real durable session, ends through the ONE terminal classifier
+// terminateRun, and then REOPENS the session as a restarted process would.
+//
+// W3, W4, W5 and W9 are CONTROLS. W2 proves the known
+// 0-DERIVED-versus-recorded-AUTHORED shape is not reported as a DERIVED
+// mismatch.
+
+// W2. LEGACY AUTHORED MISSING-PROVENANCE WITNESS. The parked task refuses with a
+// specific reason, performs no implementation work, writes no authority, and
+// REMAINS PARKED AND VISIBLE.
+func TestW2ALegacyAuthoredRecordRefusesNonDestructivelyAndStaysVisible(t *testing.T) {
+	root := t.TempDir()
+	e, events, store := blockedEngine(t, root, "session-w2")
+	const task = "task-w2"
+	planned := []string{rrS, rrF}
+
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TestEditGranted,
+		"existing-test edit authority recorded from AUTHORED production governance", rrPayload(t, authoredGrant(t))))
+
+	found := reopen(t, root, "session-w2")
+	if len(found) != 1 || len(found[0].TestEditRecord) == 0 {
+		t.Fatalf("premise: a parked task carrying an AUTHORED record: %+v", found)
+	}
+	// The DERIVED instrument authorises NOTHING here: no derived anchor covers
+	// the neighbour. This is the exact measured shape.
+	fresh := rrDerivedRecomputation(t, planned, nil)
+	if len(fresh) != 0 {
+		t.Fatalf("premise: the DERIVED instrument recomputes nothing: %+v", fresh)
+	}
+
+	e.beginReceipt(task)
+	err := e.restoreTestEditGrants(found[0], fresh, planned, teWorld)
+	r := refusalOf(t, err)
+	assertNotTheFalseDiagnosis(t, r, err)
+	if r.Binding != RestorationAuthoredUnverifiable || r.Instrument != RestorationInstrumentAuthored {
+		t.Fatalf("the refusal does not name the AUTHORED instrument it could not verify: %+v", r)
+	}
+	if r.Measured == nil || r.Measured.RecordedAuthored != 1 || r.Measured.RecordedDerived != 0 || r.Measured.RecomputedDerived != 0 {
+		t.Fatalf("the refusal does not state what each instrument measured: %+v", r.Measured)
+	}
+	if !strings.Contains(r.Detail, rrF) {
+		t.Errorf("the refusal does not name the grant it could not verify: %q", r.Detail)
+	}
+
+	// The invocation ends through the SAME classifier Resume uses.
+	e.terminateRun(context.Background(), task, "the objective", err)
+	seen := drainEvents(events)
+	if contains(seen, event.WorkflowFailed) {
+		t.Fatalf("a restoration refusal was recorded as task failure: %v", kinds(seen))
+	}
+	if !contains(seen, event.WorkflowRestorationRefused) {
+		t.Fatalf("no restoration-refusal terminal: %v", kinds(seen))
+	}
+	back, perr := ParseRestorationRefusal(terminalPayload(t, seen, event.WorkflowRestorationRefused))
+	if perr != nil {
+		t.Fatalf("the durable refusal does not read back: %v", perr)
+	}
+	if back.TaskID != task || back.Binding != RestorationAuthoredUnverifiable || back.Subject != restorationSubjectTestEdit {
+		t.Fatalf("the durable refusal says something else: %+v", back)
+	}
+
+	// The receipt is a COMPLETE-able positive claim that names the instrument.
+	rec := receiptFrom(t, seen)
+	if rec.Outcome != runreceipt.OutcomeRestorationRefused {
+		t.Fatalf("receipt outcome %q, want RESTORATION_REFUSED", rec.Outcome)
+	}
+	if rec.RestorationRefusal.State != runreceipt.Known {
+		t.Fatalf("the receipt does not state what could not be restored: %+v", rec.RestorationRefusal)
+	}
+	if _, missing := rec.Completeness(); len(missing) > 0 {
+		for _, m := range missing {
+			if strings.Contains(m, "restoration_refusal") || strings.HasPrefix(m, "candidate_") {
+				t.Fatalf("the refusal receipt is incomplete about its own claim: %s", m)
+			}
+		}
+	}
+
+	// NO IMPLEMENTATION WORK, NO AUTHORITY WRITTEN. The only events the resume
+	// added are its own account of the refusal.
+	after := storeKinds(t, store)
+	for _, k := range after[3:] {
+		switch k {
+		case event.RunReceipt, event.WorkflowRestorationRefused:
+		default:
+			t.Fatalf("the refusing resume did something else: %v", after)
+		}
+	}
+	if len(e.testEditGrants(task)) != 0 {
+		t.Fatal("authority was installed by a resume that refused it")
+	}
+
+	// AND IT IS STILL THERE. The whole repair: the task a refusal protects
+	// must survive the refusal.
+	reopened := reopen(t, root, "session-w2")
+	if len(reopened) != 1 || reopened[0].TaskID != task || !reopened[0].Planned {
+		t.Fatalf("the refusal destroyed the task it was protecting: %+v", reopened)
+	}
+	if len(reopened[0].TestEditRecord) == 0 {
+		t.Fatal("the task lost the record the refusal was about")
+	}
+	if len(reopened[0].RestorationRefused) == 0 {
+		t.Fatal("the task carries no evidence of why the last attempt did not execute")
+	}
+}
+
+// W3. REPEATED LEGACY RESUME CONTROL. The same unchanged task refuses the same
+// way twice: the first attempt wrote nothing that changes the second outcome.
+func TestW3ARepeatedLegacyResumeProducesTheSameRefusal(t *testing.T) {
+	root := t.TempDir()
+	e, _, _ := blockedEngine(t, root, "session-w3")
+	const task = "task-w3"
+	planned := []string{rrS, rrF}
+	record := rrPayload(t, authoredGrant(t))
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TestEditGranted, "recorded", record))
+	fresh := rrDerivedRecomputation(t, planned, nil)
+
+	attempt := func(engine *Engine) *RestorationRefusal {
+		found := reopen(t, root, "session-w3")
+		if len(found) != 1 {
+			t.Fatalf("the task is not resumable: %+v", found)
+		}
+		engine.beginReceipt(task)
+		err := engine.restoreTestEditGrants(found[0], fresh, planned, teWorld)
+		r := refusalOf(t, err)
+		engine.terminateRun(context.Background(), task, "the objective", err)
+		return r
+	}
+
+	first := attempt(e)
+	// A NEW process: nothing carried in memory, only what the first one wrote.
+	second, _, _ := blockedEngine(t, root, "session-w3")
+	again := attempt(second)
+
+	if first.Binding != again.Binding || first.Instrument != again.Instrument || first.Detail != again.Detail {
+		t.Fatalf("the second resume refused differently:\n first: %+v\nsecond: %+v", first, again)
+	}
+	if first.Measured == nil || again.Measured == nil || *first.Measured != *again.Measured {
+		t.Fatalf("the measured quantities moved between two identical resumes: %+v vs %+v", first.Measured, again.Measured)
+	}
+	if len(second.testEditGrants(task)) != 0 {
+		t.Fatal("the second resume was handed authority the first one manufactured")
+	}
+	// The record the second resume read is byte-for-byte the one the first
+	// read: no repair, no rewrite, no promotion.
+	if got := reopen(t, root, "session-w3"); len(got) != 1 || string(got[0].TestEditRecord) != string(record) {
+		t.Fatalf("the grant record changed across two refusing resumes: %s", string(got[0].TestEditRecord))
+	}
+}
+
+// W4, the LIFECYCLE half. A real disagreement inside the DERIVED instrument
+// still refuses execution -- and still preserves the task and names the failed
+// DERIVED binding. The predicate half is
+// TestW4ADerivedMismatchNamesTheDerivedBindingAndInstallsNothing.
+func TestW4ADerivedMismatchRefusesExecutionAndPreservesTheTask(t *testing.T) {
+	root := t.TempDir()
+	e, events, _ := blockedEngine(t, root, "session-w4")
+	const task = "task-w4"
+	planned := []string{teS, teF}
+	forged := derivedGrant(t)
+	forged.BaseHash = "not the bytes at the pinned base"
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TestEditGranted, "recorded", rrPayload(t, forged)))
+
+	found := reopen(t, root, "session-w4")
+	e.beginReceipt(task)
+	err := e.restoreTestEditGrants(found[0], rrDerivedRecomputation(t, planned, teCovered()), planned, teWorld)
+	r := refusalOf(t, err)
+	if r.Binding != RestorationDerivedMismatch || r.Instrument != RestorationInstrumentDerived {
+		t.Fatalf("a DERIVED disagreement was not named as one: %+v", r)
+	}
+	if len(e.testEditGrants(task)) != 0 {
+		t.Fatal("authority was installed over a DERIVED disagreement")
+	}
+
+	e.terminateRun(context.Background(), task, "the objective", err)
+	seen := drainEvents(events)
+	if contains(seen, event.WorkflowFailed) || !contains(seen, event.WorkflowRestorationRefused) {
+		t.Fatalf("a DERIVED mismatch is still a restoration refusal, not a task failure: %v", kinds(seen))
+	}
+	// A LEGITIMATE refusal is non-destructive too: the containment is not
+	// reserved for the AUTHORED case that motivated it.
+	got := reopen(t, root, "session-w4")
+	if len(got) != 1 || got[0].TaskID != task || !got[0].Planned {
+		t.Fatalf("a refused DERIVED restoration destroyed the task: %+v", got)
+	}
+	if len(got[0].RestorationRefused) == 0 {
+		t.Fatal("the preserved task does not carry why the DERIVED restoration was refused")
+	}
+}
+
+// W5. RESUME SIDE-EFFECT-FREE CONTROL. Authority-relevant durable state is
+// measured before and after BOTH a successful DERIVED-only restoration and a
+// failed AUTHORED-containing one. A resume computes and compares; it never
+// records, repairs, rewrites, promotes or backfills authority.
+func TestW5RestorationWritesNoAuthorityWhetherItSucceedsOrRefuses(t *testing.T) {
+	for name, c := range map[string]struct {
+		grants  []testEditGrant
+		planned []string
+		covered []CoverageAnchor
+		refuses bool
+	}{
+		"successful DERIVED-only restoration": {[]testEditGrant{derivedGrant(t)}, []string{teS, teF}, teCovered(), false},
+		"refused AUTHORED-containing record":  {[]testEditGrant{authoredGrant(t)}, []string{rrS, rrF}, nil, true},
+	} {
+		root := t.TempDir()
+		e, _, store := blockedEngine(t, root, "session-w5")
+		const task = "task-w5"
+		e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+		e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+		e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TestEditGranted, "recorded", rrPayload(t, c.grants...)))
+
+		before := authorityEvidence(t, store)
+		found := reopen(t, root, "session-w5")
+		e.beginReceipt(task)
+		err := e.restoreTestEditGrants(found[0], rrDerivedRecomputation(t, c.planned, c.covered), c.planned, teWorld)
+		if c.refuses {
+			refusalOf(t, err)
+			e.terminateRun(context.Background(), task, "the objective", err)
+		} else if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		after := authorityEvidence(t, store)
+		if strings.Join(before, "\n") != strings.Join(after, "\n") {
+			t.Fatalf("%s: the resume mutated authority evidence:\nbefore %v\n after %v", name, before, after)
+		}
+	}
+	// AND AT THE CALLER, not only inside the predicate. Measuring durable state
+	// around restoreTestEditGrants proves the predicate records nothing; a write
+	// placed in the RESTORATION SEGMENT OF RESUME ITSELF would sit above that
+	// measurement and survive it. Resume is the caller whose SECOND invocation
+	// read the first one's write as the run's own record, so the property is
+	// pinned where it was broken: the whole resumed path names no
+	// authority-recording call, on the refusal path or the success path.
+	resume := funcBody(t, "internal/workflow/engine.go", "Resume")
+	for _, recording := range []string{"TestEditGranted", "ProspectiveGranted", "setTestEditGrants(", "setProspectiveGrants("} {
+		if strings.Contains(resume, recording) {
+			t.Errorf("Resume records authority (%s); a resume computes and compares, and a second resume would read this write as the run's own record", recording)
+		}
+	}
+}
+
+// W6, the LIFECYCLE half. A record holding BOTH instruments refuses on the true
+// AUTHORED blocker at the full-resume boundary, and the task survives it. The
+// predicate half -- that DERIVED was checked against recorded DERIVED alone --
+// is TestW6AMixedRecordChecksDerivedOnlyAgainstRecordedDerived.
+func TestW6AMixedRecordRefusesOnTheAuthoredBlockerAndPreservesTheTask(t *testing.T) {
+	root := t.TempDir()
+	e, events, store := blockedEngine(t, root, "session-w6")
+	const task = "task-w6"
+	planned := []string{teS, teF, rrS, rrF}
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TestEditGranted, "recorded",
+		rrPayload(t, derivedGrant(t), authoredGrant(t))))
+
+	found := reopen(t, root, "session-w6")
+	e.beginReceipt(task)
+	err := e.restoreTestEditGrants(found[0], rrDerivedRecomputation(t, planned, teCovered()), planned, teWorld)
+	r := refusalOf(t, err)
+	assertNotTheFalseDiagnosis(t, r, err)
+	if r.Binding != RestorationAuthoredUnverifiable || r.Instrument != RestorationInstrumentAuthored {
+		t.Fatalf("the mixed record refused on something other than its AUTHORED blocker: %+v", r)
+	}
+	if r.Measured == nil || r.Measured.RecordedDerived != 1 || r.Measured.RecomputedDerived != 1 || r.Measured.RecordedAuthored != 1 {
+		t.Fatalf("the two instruments were not counted separately: %+v", r.Measured)
+	}
+
+	e.terminateRun(context.Background(), task, "the objective", err)
+	seen := drainEvents(events)
+	if contains(seen, event.WorkflowFailed) || !contains(seen, event.WorkflowRestorationRefused) {
+		t.Fatalf("a mixed record was not refused non-destructively: %v", kinds(seen))
+	}
+	// Not a successful mixed restoration: nothing is operational, and nothing
+	// about the record moved.
+	if len(e.testEditGrants(task)) != 0 {
+		t.Fatal("a mixed record installed authority")
+	}
+	if got := reopen(t, root, "session-w6"); len(got) != 1 || got[0].TaskID != task || !got[0].Planned {
+		t.Fatalf("a refused mixed restoration destroyed the task: %+v", got)
+	}
+	for _, k := range storeKinds(t, store)[3:] {
+		switch k {
+		case event.RunReceipt, event.WorkflowRestorationRefused:
+		default:
+			t.Fatalf("the refusing resume of a mixed record did something else: %v", storeKinds(t, store))
+		}
+	}
+}
+
+// W9. NO-REDUCED-SET EXECUTION CONTROL. When DERIVED verifies and AUTHORED
+// cannot, execution does not continue with the DERIVED subset.
+func TestW9VerifiedDerivedAuthorityDoesNotExecuteWithoutTheAuthoredPart(t *testing.T) {
+	planned := []string{teS, teF, rrS, rrF}
+	fresh := rrDerivedRecomputation(t, planned, teCovered())
+	derived, authored := derivedGrant(t), authoredGrant(t)
+
+	// The DERIVED half ALONE would have restored: the refusal below is about
+	// the AUTHORED half, not about a broken derived one.
+	control := &Engine{}
+	if err := control.restoreTestEditGrants(rrRecord(t, "t", derived), fresh, planned, teWorld); err != nil {
+		t.Fatalf("premise: the DERIVED half verifies on its own: %v", err)
+	}
+	if len(control.testEditGrants("t")) != 1 {
+		t.Fatal("premise: the DERIVED half installs on its own")
+	}
+
+	e := &Engine{}
+	err := e.restoreTestEditGrants(rrRecord(t, "t", derived, authored), fresh, planned, teWorld)
+	r := refusalOf(t, err)
+	if r.Binding != RestorationAuthoredUnverifiable {
+		t.Fatalf("the refusal is not the AUTHORED one: %+v", r)
+	}
+	if got := e.testEditGrants("t"); len(got) != 0 {
+		t.Fatalf("execution continued under a reduced grant set: %+v", got)
+	}
+	if !strings.Contains(r.Detail, "does not continue under the DERIVED subset") {
+		t.Errorf("the refusal does not say the reduced set was refused: %q", r.Detail)
+	}
+}
+
+// storeKinds is the durable event order, read back from disk.
+func storeKinds(t *testing.T, store *session.Store) []event.Kind {
+	t.Helper()
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return kinds(history)
+}
+
+// authorityEvidence is the authority-relevant durable state: every recorded
+// grant and every recorded authority decision, in order, byte for byte.
+func authorityEvidence(t *testing.T, store *session.Store) []string {
+	t.Helper()
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, ev := range history {
+		switch ev.Kind {
+		case event.TestEditGranted, event.ProspectiveGranted, event.AuthorityRequired, event.AuthorityResolved:
+			out = append(out, string(ev.Kind)+" "+string(ev.Payload))
+		}
+	}
+	return out
+}
