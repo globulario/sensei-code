@@ -52,18 +52,82 @@ func canonicalAnswer(t *testing.T, s Subject, requestID, provider, body string) 
 	return raw
 }
 
+// A request round trips from the envelope it OPENS with, and from nowhere else.
+//
+// The round trip used to run through "preamble\n\n" + marker, because
+// ParseRequest found its marker with strings.Index and would read one sitting
+// anywhere in a comment. That is the whole-body search A5 forbids, and it is the
+// same shape that rejected a correct review on 2026-09-24: a classifier that
+// cannot tell a message from a message ABOUT messages reads quotation as
+// instruction in one direction and refuses it in the other.
+//
+// W3 CONTROL, at this envelope: the cases below are ordinary content that merely
+// CONTAINS a request envelope, and ordinary content is what they stay.
 func TestRequestMarkerRoundTrips(t *testing.T) {
 	in := reqC1()
 	m, err := in.Marker()
 	if err != nil {
 		t.Fatalf("marker: %v", err)
 	}
-	got, ok := ParseRequest("preamble\n\n" + m + "\nplease review")
+	got, ok := ParseRequest(m + "\nplease review")
 	if !ok {
 		t.Fatal("marker did not parse back")
 	}
 	if got != in {
 		t.Errorf("round trip changed the request:\n got %+v\nwant %+v", got, in)
+	}
+
+	for name, body := range map[string]string{
+		"behind a preamble":    "preamble\n\n" + m + "\nplease review",
+		"quoted in a sentence": "a comment opening with " + requestMarker + " is a request\n",
+		"quoted inside a review": artifactFor(t, reqC1().Subject, reqC1().RequestID, "chatgpt",
+			`{"decision":"revise","summary":"s","instructions":"i","findings":[]}`) + "\n" + m,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if req, ok := ParseRequest(body); ok {
+				t.Fatalf("content merely containing a request envelope was read as one: %+v", req)
+			}
+		})
+	}
+}
+
+// W4, AT THE REQUEST ENVELOPE, WITH NOTHING ELSE WRONG. The same delimiter case
+// the canonical review artifact proves, in the other grammar this package reads.
+//
+// The fixture is a complete, valid request with EXACTLY ONE byte removed: the
+// newline between the envelope and its header. It is built by deletion from the
+// rendered marker, and the rendered marker is parsed as a control, so the
+// refusal below cannot be caused by a missing or malformed field.
+//
+// Both readers sliced straight past the marker and read fields from whatever
+// followed, so this body parsed as a complete request -- kind, task, request id,
+// binding, reviewer and all -- with no delimiter in the envelope at all. The
+// boundary of an envelope was decided by whether the next bytes happened to look
+// like a key=value line.
+//
+// Proved here as well as at the artifact because a delimiter rule fixed in one
+// grammar and not the other is the two-readers-one-protocol drift this package's
+// consolidation exists to prevent.
+func TestARequestConcatenatedToItsHeaderIsRefusedForTheDelimiterAlone(t *testing.T) {
+	m, err := reqC1().Marker()
+	if err != nil {
+		t.Fatalf("marker: %v", err)
+	}
+	header := strings.TrimPrefix(m, requestMarker+"\n")
+	if header == m {
+		t.Fatalf("the rendered request does not open with the envelope and a newline, "+
+			"so removing one proves nothing: %q", m)
+	}
+
+	if got, ok := ParseRequest(requestMarker + header); ok {
+		t.Fatalf("a request whose header is concatenated to its envelope parsed: %+v", got)
+	}
+
+	// CONTROL. The identical header, behind the one byte the fixture removed, is
+	// the request it claims to be.
+	if _, ok := ParseRequest(m); !ok {
+		t.Fatal("the delimited form of the same header was refused, so the refusal above " +
+			"is not attributable to the delimiter")
 	}
 }
 

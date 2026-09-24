@@ -295,6 +295,121 @@ func TestATerminalRelayStagesTheExactReviewAndTheAppPublishesItSeparately(t *tes
 	}
 }
 
+// W1 -- THE MEASURED FAILURE, END TO END, AND THE PROOF IT NO LONGER OCCURS.
+//
+// MEASURED 2026-09-24. An independent review of a mailbox-protocol candidate was
+// REJECTED IN TRANSPORT with the diagnostic "the artifact must carry exactly one
+// sensei-code envelope and no other protocol marker". The review was well
+// formed. Its bindings matched exactly. Its author was the pinned reviewer
+// principal. It carried three correct blocking findings. It was discarded
+// because ONE finding quoted a protocol marker while explaining that marker's
+// handling -- the sentence was, in substance, "a bare <refusal marker> comment
+// is classified as ordinary content", and writing that sentence is what made the
+// verdict undeliverable. The transport ate a correct review of the transport,
+// and every future review of this protocol would have hit the same wall.
+//
+// The subtest table below is that review: its findings quote the markers of six
+// protocols, INCLUDING the review envelope itself and a complete second
+// artifact. The assertion is the ABSENCE of the malformed classification -- the
+// relay accepts it, stores the exact bytes, and publishes the verdict -- not
+// merely that something parsed.
+//
+// "a second envelope inside" was a case in the refusal table above until this
+// repair, asserting the defect as if it were the rule. It is here now.
+func TestAReviewQuotingAProtocolMarkerIsStillOneReview(t *testing.T) {
+	quoting := func(claim string) string {
+		return `{"decision":"revise","summary":"the framing rule is not proven",` +
+			`"instructions":"prove it","findings":[{"id":"f1","severity":"blocking",` +
+			`"claim":` + jsonString(claim) + `,"reference":"internal/ghbridge/architecture.go",` +
+			`"reason":"the classifier decides identity by searching the whole body",` +
+			`"correction":"identify at position zero"}]}`
+	}
+	for name, claim := range map[string]string{
+		"the refusal marker":   "a bare [sensei-code:refused] comment is classified as ordinary content",
+		"the review envelope":  "a body opening with " + reviewartifact.Marker + " is a review",
+		"the request envelope": "a body opening with " + requestMarker + " is a request",
+		"the relay receipt":    "a body opening with " + relayedReviewMarker + " is a receipt",
+		"the wake signal":      "a body opening with " + WakeMarker + " is a doorbell",
+		"a whole second artifact": "the reviewer quoted the artifact it reviewed:\n" +
+			artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload),
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRelayFixture(t)
+			artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", quoting(claim))
+
+			// PREMISE: the fixture really does carry marker-shaped text at a
+			// NONZERO offset, so a whole-body classifier would have refused it.
+			if strings.Count(artifact, "[sensei-code:") < 2 {
+				t.Fatalf("the fixture quotes no second marker, so it proves nothing:\n%s", artifact)
+			}
+
+			// NOT MALFORMED. The exact assertion tonight's failure needs: the
+			// canonical parser reads it, and the diagnostic that rejected the
+			// real review is nowhere.
+			art, perr := reviewartifact.Parse(artifact)
+			if perr != nil {
+				t.Fatalf("a review quoting a protocol marker was classified malformed: %v", perr)
+			}
+			if art.RequestID != relayRequest || art.CandidateTree != relaySubject.CandidateTree {
+				t.Fatalf("the quoted text rewrote the review's identity: %+v", art)
+			}
+			// Counted rather than matched whole: the payload is JSON, so a
+			// claim carrying a newline is escaped inside it. What must survive
+			// is every marker the reviewer wrote, uninterpreted.
+			if got, want := strings.Count(art.Body, "[sensei-code:"),
+				strings.Count(claim, "[sensei-code:"); got != want {
+				t.Fatalf("the payload kept %d of the reviewer's %d quoted markers:\n%s", got, want, art.Body)
+			}
+
+			// AND IT IS CONSUMED AS A REVIEW, all the way to publication. A
+			// repair that made the parser permissive while the delivery path
+			// still refused the bytes would pass the assertions above and change
+			// nothing about the failure.
+			res, err := f.submit(artifact)
+			if err != nil {
+				t.Fatalf("a review quoting a protocol marker was refused by the relay: %v", err)
+			}
+			if res.State != RelayPublished || res.ReviewDigest != ReviewDigest(artifact) {
+				t.Fatalf("result state=%s digest=%s", res.State, res.ReviewDigest)
+			}
+			rec, found := f.stored(t)
+			if !found || rec.ArtifactRaw != artifact {
+				t.Fatalf("the reviewer's exact bytes were not stored: found=%v", found)
+			}
+			posted := f.mailbox.posted()
+			if len(posted) != 1 {
+				t.Fatalf("want exactly one publication, got %d", len(posted))
+			}
+			// The reviewer's words reached the conversation, marker and all.
+			if !strings.Contains(posted[0], claim) {
+				t.Fatalf("the finding was dropped from the publication:\n%s", posted[0])
+			}
+			// AND THE RECEIPT IS STILL NOT A REVIEW. Position zero is what says
+			// so, which is why containment no longer has to: the published body
+			// now holds a review marker and is still a receipt.
+			if !reviewartifact.Opens(posted[0], relayedReviewMarker) {
+				t.Fatal("the publication does not open with the relay envelope")
+			}
+			if _, perr := reviewartifact.Parse(posted[0]); perr == nil {
+				t.Fatalf("the publication can be read as a review answer:\n%s", posted[0])
+			}
+		})
+	}
+}
+
+// jsonString quotes a claim for the reviewer payloads above.
+//
+// The findings deliberately contain newlines and brackets, and a hand-built
+// string literal that happened to stay valid JSON today would stop being a
+// fixture and start being a coincidence.
+func jsonString(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		return `""`
+	}
+	return string(b)
+}
+
 // Anything that is not the exact review of the owed request is refused whole:
 // nothing is staged and nothing is published.
 func TestARelayIsRefusedForTheWrongCandidateRequestOrDigest(t *testing.T) {
@@ -308,7 +423,6 @@ func TestARelayIsRefusedForTheWrongCandidateRequestOrDigest(t *testing.T) {
 		"a different task":             artifactFor(t, with(func(s *Subject) { s.TaskID = "task-other" }), relayRequest, "chatgpt", acceptPayload),
 		"no reviewer named":            artifactFor(t, relaySubject, relayRequest, "", acceptPayload),
 		"prose instead of a verdict":   artifactFor(t, relaySubject, relayRequest, "chatgpt", "LGTM, ship it"),
-		"a second envelope inside":     artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload+"\n[sensei-code:review-request]"),
 		"not starting at the envelope": "preface\n" + artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload),
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/governedfile"
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 )
 
 // An architecture request is DURABLE the moment it is published. The waiter for
@@ -47,10 +48,23 @@ const WithdrawnMarker = "[sensei-code:withdrawn]"
 
 const withdrawnField = "request"
 
-var withdrawnBody = regexp.MustCompile(`^\[sensei-code:withdrawn\]\n` + withdrawnField + `=([0-9A-Za-z_.:-]{1,128})\n?$`)
+// withdrawalGrammar reads what follows the envelope, and only that: the marker
+// is identification's business, not the grammar's, and spelling it here a second
+// time let WithdrawnMarker and this parser drift apart without a test noticing.
+var withdrawalGrammar = regexp.MustCompile(`^\n` + withdrawnField + `=([0-9A-Za-z_.:-]{1,128})\n?$`)
 
-// ErrNotAWithdrawal reports a body that is not a withdrawal.
+// ErrNotAWithdrawal reports a body that does not CLAIM to be a withdrawal: it
+// does not begin with the withdrawal envelope.
 var ErrNotAWithdrawal = errors.New("not a sensei-code withdrawal")
+
+// ErrMalformedWithdrawal reports a body that DOES claim the withdrawal envelope
+// at position zero and then breaks its grammar.
+//
+// Kept separate from ErrNotAWithdrawal for the reason a withdrawal exists at
+// all: its claim is negative. "No withdrawal was posted" and "a withdrawal was
+// posted and cannot be read" license opposite actions, and a single error value
+// for both tells a caller the first while the second is true.
+var ErrMalformedWithdrawal = errors.New("malformed sensei-code withdrawal")
 
 // RenderWithdrawal builds the one body a withdrawal may carry.
 func RenderWithdrawal(requestID string) (string, error) {
@@ -61,11 +75,20 @@ func RenderWithdrawal(requestID string) (string, error) {
 }
 
 // ParseWithdrawal reads a withdrawal and returns only the request it retracts.
+// IDENTIFICATION, THEN GRAMMAR (A7), against the bytes as posted, for the same
+// reasons spelled out at ParseWake: TrimSpace over the whole body promoted an
+// indented marker to position zero, and it answered "not a withdrawal" for a
+// body that said it was one and merely said it badly.
 func ParseWithdrawal(body string) (string, error) {
-	normalized := strings.ReplaceAll(strings.TrimSpace(body), "\r\n", "\n") + "\n"
-	m := withdrawnBody.FindStringSubmatch(normalized)
-	if m == nil {
+	normalized := strings.ReplaceAll(body, "\r\n", "\n")
+	if !reviewartifact.Opens(normalized, WithdrawnMarker) {
 		return "", ErrNotAWithdrawal
+	}
+	rest := strings.TrimRight(normalized[len(WithdrawnMarker):], " \t\n") + "\n"
+	m := withdrawalGrammar.FindStringSubmatch(rest)
+	if m == nil {
+		return "", fmt.Errorf("%w: a withdrawal is the envelope and exactly one %s field, and this one continues %q",
+			ErrMalformedWithdrawal, withdrawnField, firstLineOf(strings.TrimPrefix(rest, "\n")))
 	}
 	return m[1], nil
 }
