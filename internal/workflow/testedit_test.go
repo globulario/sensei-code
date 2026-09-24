@@ -338,3 +338,230 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 		t.Fatal("precondition: a written record would have been honoured, which is exactly why resume must not write one")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// PROJECTION: the same refusal, at the entrance.
+//
+// A constraint decidable before work begins must be decided before work
+// begins. The measured run was refused at candidate time for importing
+// "errors" into a test file that did not import it at the pinned base --
+// after the implementer had written 3147 insertions across 23 files. Nothing
+// about the implementation was needed to reach that verdict.
+//
+// W3, W4, W5 and W6 below are controls. W4 is the one that matters: a
+// projection that admits something the late check would refuse has inverted
+// the repair into a hole.
+// ---------------------------------------------------------------------------
+
+// teEditGrants is the pinned-world authority the projector resolves against:
+// one grant over teF (package modfile, //go:build go1.20, imports strings and
+// testing).
+func teEditGrants(t *testing.T) []testEditGrant {
+	t.Helper()
+	grants, _ := testEditGrants(context.Background(), teWorld, []string{teS, teF}, teCovered(), authoredEvidence{}, teRead(teFiles()))
+	if len(grants) != 1 || grants[0].Path != teF {
+		t.Fatalf("premise: one grant over %s, got %+v", teF, grants)
+	}
+	return grants
+}
+
+// teSourceFor is the candidate a declaration DESCRIBES: the file exactly as
+// the plan said it would be after the edit. It is what makes W4 a subset
+// proof rather than an assertion -- the projected fixture is handed to the
+// late checker as the bytes it stands for.
+func teSourceFor(d TestEditDeclaration) string {
+	var b strings.Builder
+	for _, c := range d.BuildConstraints {
+		b.WriteString(c + "\n")
+	}
+	b.WriteString("\npackage " + d.Package + "\n\nimport (\n")
+	for _, imp := range d.Imports {
+		b.WriteString("\t\"" + imp + "\"\n")
+	}
+	b.WriteString(")\n\nfunc TestY(t *testing.T) {}\n")
+	return b.String()
+}
+
+const (
+	teDiffEdited  = "diff --git a/" + teF + " b/" + teF + "\nindex 1..2 100644\n--- a/" + teF + "\n+++ b/" + teF + "\n@@ -9 +9 @@\n-func TestX\n+func TestY\n"
+	teDiffCreated = "diff --git a/" + teF + " b/" + teF + "\nnew file mode 100644\n"
+	teDiffDeleted = "diff --git a/" + teF + " b/" + teF + "\ndeleted file mode 100644\n"
+	teDiffRenamed = "diff --git a/" + teF + " b/modfile/rule2_test.go\nrename from " + teF + "\nrename to modfile/rule2_test.go\n"
+)
+
+// teInsideTheGrant is the declaration of an edit that stays entirely within
+// the pinned world's facts.
+func teInsideTheGrant() TestEditDeclaration {
+	return TestEditDeclaration{Path: teF, Operation: testEditOperationEdit, Package: "modfile",
+		BuildConstraints: []string{"//go:build go1.20"}, Imports: []string{"strings", "testing"}}
+}
+
+// teTheMeasuredCase is the declaration the measured run would have carried:
+// the same edit, plus the "errors" import the file lacks at the pinned base.
+func teTheMeasuredCase() TestEditDeclaration {
+	d := teInsideTheGrant()
+	d.Imports = append(d.Imports, "errors")
+	return d
+}
+
+// W1 -- THE MEASURED CASE, PROJECTED. A plan declaring an edit to an existing
+// test file, where the witness would require an import that file lacks at the
+// pinned base, is refused AT PLAN ADMISSION, naming the file and the novel
+// import -- with no implementer asked for anything.
+func TestTheMeasuredNovelImportIsRefusedAtPlanAdmission(t *testing.T) {
+	err := projectTestEditRefusals([]TestEditDeclaration{teTheMeasuredCase()}, teEditGrants(t))
+	if err == nil {
+		t.Fatal("the novel import the candidate-time check refuses was admitted at plan admission")
+	}
+	for _, want := range []string{"test edit refuted:", teF, `"errors"`, "novel import", roleGoRegressionTestEdit} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the projected refusal does not name %q: %v", want, err)
+		}
+	}
+	// NO IMPLEMENTER WORK WAS REQUESTED. The door is routePlan, which runs in
+	// the architect stage: it asks for no runner, builds no implementation
+	// prompt, and returns the refusal through the plan-admission error path
+	// that execute already fails the task on. The one function that requests
+	// an implementer is runCandidate, and execute never reaches it once
+	// resolveArchitecture has returned an error.
+	body := funcBody(t, "internal/workflow/engine.go", "routePlan")
+	if !strings.Contains(body, "projectTestEditRefusals") {
+		t.Fatal("routePlan no longer projects the decidable test-edit refusals, so the door is gone")
+	}
+	for _, implementerWork := range []string{"resolveRunner", "implementationPrompt", "runCandidate", "Implementer"} {
+		if strings.Contains(body, implementerWork) {
+			t.Errorf("routePlan reaches %s: the projected refusal no longer precedes every request for implementer work", implementerWork)
+		}
+	}
+}
+
+// W2 -- SAME REASON, EARLIER DOOR. Two different sentences for one condition
+// is the defect this project keeps removing: the projected refusal and the
+// candidate-time refusal for the identical situation are the same string,
+// because both come from the same constructor.
+func TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced(t *testing.T) {
+	grants := teEditGrants(t)
+	decl := teTheMeasuredCase()
+	early := projectTestEditRefusals([]TestEditDeclaration{decl}, grants)
+	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(decl)), nil })
+	if early == nil || late == nil {
+		t.Fatalf("premise: both doors refuse this (early=%v late=%v)", early, late)
+	}
+	if early.Error() != late.Error() {
+		t.Fatalf("one condition, two sentences:\n  early: %s\n  late:  %s", early, late)
+	}
+}
+
+// W3 -- LATE CHECK SURVIVES (CONTROL). With no declaration to project from,
+// projection is inapplicable and the candidate-time check refuses exactly as
+// it does today. Projection is not load-bearing for correctness.
+func TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection(t *testing.T) {
+	grants := teEditGrants(t)
+	if err := projectTestEditRefusals(nil, grants); err != nil {
+		t.Fatalf("an undeclared plan was refused early: %v", err)
+	}
+	novel := strings.Replace(teFSrc, "\"strings\"\n", "\"strings\"\n\t\"errors\"\n", 1)
+	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(novel), nil })
+	if late == nil || !strings.Contains(late.Error(), "novel import") {
+		t.Fatalf("the candidate-time check stopped refusing a novel import: %v", late)
+	}
+	// And it is still invoked on the candidate, unchanged, by the one place
+	// that inspects a produced candidate.
+	if !strings.Contains(funcBody(t, "internal/workflow/engine.go", "runCandidate"), "inspectTestEdits") {
+		t.Fatal("the candidate-time inspection is gone from runCandidate: projection became the only enforcement point")
+	}
+}
+
+// W4 -- NOT MORE PERMISSIVE (CONTROL). Every fixture the projector refuses is
+// also refused by the candidate-time checker, on the candidate that fixture's
+// declaration describes, with the identical reason. The projected set is a
+// SUBSET of the late-refused set.
+func TestEveryProjectedRefusalIsAlsoALateRefusal(t *testing.T) {
+	grants := teEditGrants(t)
+	wrongPackage := teInsideTheGrant()
+	wrongPackage.Package = "modfile_test"
+	wrongConstraints := teInsideTheGrant()
+	wrongConstraints.BuildConstraints = []string{"//go:build go1.21"}
+	asCreate, asDelete, asRename := teInsideTheGrant(), teInsideTheGrant(), teInsideTheGrant()
+	asCreate.Operation, asDelete.Operation, asRename.Operation = testEditOperationCreate, testEditOperationDelete, testEditOperationRename
+
+	projected := []struct {
+		name string
+		decl TestEditDeclaration
+		diff string
+	}{
+		{"novel import", teTheMeasuredCase(), teDiffEdited},
+		{"package change", wrongPackage, teDiffEdited},
+		{"build-constraint change", wrongConstraints, teDiffEdited},
+		{"create", asCreate, teDiffCreated},
+		{"delete", asDelete, teDiffDeleted},
+		{"rename", asRename, teDiffRenamed},
+	}
+	for _, c := range projected {
+		early := projectTestEditRefusals([]TestEditDeclaration{c.decl}, grants)
+		if early == nil {
+			t.Errorf("%s: not projected", c.name)
+			continue
+		}
+		late := inspectTestEdits(c.diff, grants, func(string) ([]byte, error) { return []byte(teSourceFor(c.decl)), nil })
+		if late == nil {
+			t.Errorf("%s: PROJECTED BUT NOT LATE-REFUSED -- the projection is no longer a subset: %s", c.name, early)
+			continue
+		}
+		if early.Error() != late.Error() {
+			t.Errorf("%s: two sentences for one condition:\n  early: %s\n  late:  %s", c.name, early, late)
+		}
+	}
+}
+
+// W5 -- UNDECIDABLE IS NOT PROJECTED (CONTROL). What an implementer will
+// write is not decidable from the plan, the pinned world and the role. A
+// declaration that says nothing about imports, and an operation word outside
+// the closed vocabulary, are admitted early and governed by the late check.
+// Absence of a projection is not permission: the late check still refuses.
+func TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate(t *testing.T) {
+	grants := teEditGrants(t)
+	contentDependent := TestEditDeclaration{Path: teF, Operation: testEditOperationEdit}
+	if err := projectTestEditRefusals([]TestEditDeclaration{contentDependent}, grants); err != nil {
+		t.Fatalf("a content-dependent outcome was guessed at plan admission: %v", err)
+	}
+	unknownOperation := teInsideTheGrant()
+	unknownOperation.Operation = "rewrite"
+	if err := projectTestEditRefusals([]TestEditDeclaration{unknownOperation}, grants); err != nil {
+		t.Fatalf("an operation outside the closed vocabulary was read as a violation: %v", err)
+	}
+	// The plan proceeded, the implementer wrote the novel import anyway, and
+	// the candidate-time check -- which is the authority of record -- refused
+	// it.
+	novel := strings.Replace(teFSrc, "\"strings\"\n", "\"strings\"\n\t\"errors\"\n", 1)
+	late := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(novel), nil })
+	if late == nil || !strings.Contains(late.Error(), "novel import") {
+		t.Fatalf("the undeclared novel import was never refused at all: %v", late)
+	}
+}
+
+// W6 -- A PLAN THAT IS FINE IS STILL FINE (CONTROL). A declared edit entirely
+// within the pinned world's facts is admitted, and so is a declaration for a
+// path the world granted no edit: the projection refuses nothing it has no
+// grounds to refuse.
+func TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission(t *testing.T) {
+	grants := teEditGrants(t)
+	fine := teInsideTheGrant()
+	if err := projectTestEditRefusals([]TestEditDeclaration{fine}, grants); err != nil {
+		t.Fatalf("an edit inside the grant was refused at plan admission: %v", err)
+	}
+	// It reaches implementation and the late check agrees.
+	if err := inspectTestEdits(teDiffEdited, grants, func(string) ([]byte, error) { return []byte(teSourceFor(fine)), nil }); err != nil {
+		t.Fatalf("the candidate the admitted declaration describes was refuted late: %v", err)
+	}
+	ungranted := teInsideTheGrant()
+	ungranted.Path = "modfile/other_test.go"
+	ungranted.Package = "somethingelse"
+	ungranted.Imports = []string{"bytes"}
+	if err := projectTestEditRefusals([]TestEditDeclaration{ungranted}, grants); err != nil {
+		t.Fatalf("a path under no test-edit grant was refused by this authority: %v", err)
+	}
+	if err := projectTestEditRefusals([]TestEditDeclaration{fine}, nil); err != nil {
+		t.Fatalf("a declaration with no grants at all was refused: %v", err)
+	}
+}
