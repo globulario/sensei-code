@@ -154,6 +154,52 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 	wctx, cancel := context.WithTimeout(ctx, wait)
 	defer cancel()
 	answer, err := AwaitArchitecture(wctx, r.Issue, request, r.Poll)
+
+	// REFUSED: the consumer replied, and its reply was a rejection of this exact
+	// request.
+	//
+	// SETTLED, not abandoned, so this path is the answered path's sibling rather
+	// than the timeout's. The record is closed because the exchange is over --
+	// leaving it open would have the next startup withdraw a request that has
+	// already been dealt with -- and nothing is withdrawn, because there is
+	// nothing left standing to retract from a consumer that has answered.
+	//
+	// No deadline was reached. That is the entire repair: on 2026-09-24 this same
+	// condition cost two 30-minute waits and an hour of misattributed cause,
+	// because the diagnostic the consumer had computed had nowhere to go.
+	var refused *ArchitectureRefused
+	if errors.As(err, &refused) {
+		if r.Exchanges.Dir != "" {
+			_ = r.Exchanges.Close(req.TaskID, request.RequestID)
+		}
+		if emit != nil {
+			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentFinished,
+				"the remote consumer refused request "+request.RequestID+" at stage "+
+					string(refused.Stage)+": "+refused.Reason,
+				map[string]any{
+					"request_id":         request.RequestID,
+					"request_comment":    requestComment,
+					"objective_digest":   r.Binding.ObjectiveDigest,
+					"base":               r.Binding.BaseSHA,
+					"graph_repository":   r.Binding.GraphRepository,
+					"graph_build_commit": r.Binding.GraphBuildCommit,
+					"outcome":            "refused",
+					"refusal_stage":      string(refused.Stage),
+					"refusal_reason":     refused.Reason,
+					"refusal_comment":    refused.Comment,
+					"github_author":      refused.Author,
+					"github_author_id":   refused.AuthorID,
+					"reason":             err.Error(),
+					"transport":          "github",
+				}))
+		}
+		// No architecture result, and none is possible from here: a refusal
+		// decides nothing, covers nothing, grants nothing and substitutes for no
+		// architect turn. It ends this exchange by its true name and leaves the
+		// objective exactly as unanswered as it was before the request was made.
+		return agent.Result{}, err
+	}
+
 	if err != nil {
 		// An exchange that ENDED must say so where an operator can see it.
 		//
