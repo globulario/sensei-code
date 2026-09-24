@@ -79,7 +79,12 @@ func accepted(t *testing.T, s Store, raw string, ev Evidence) Record {
 // re-rendering store would silently drop.
 func TestCreateThenLoadPreservesTheExactBytesAndDigest(t *testing.T) {
 	s := store(t)
-	raw := "\n " + artifact(t, request, "chatgpt", accept) + "\n"
+	// Trailing padding only: exactness is about bytes inside an identified
+	// artifact, while identification is the envelope at character zero. A
+	// leading "\n " asserted that a padded marker still opens an artifact, and
+	// reviewartifact no longer grants protocol identity at a nonzero offset.
+	// TrimSpace still alters these bytes, so a normalizing store is still caught.
+	raw := artifact(t, request, "chatgpt", accept) + "\n"
 	accepted(t, s, raw, mailboxEvidence())
 
 	got, found, err := s.Load(request)

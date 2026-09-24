@@ -120,11 +120,18 @@ func requestFor(t *testing.T, _ ExchangeLog, m *prMailbox) string {
 // Whitespace the canonical parser admits is part of the artifact. The mailbox
 // stores what was posted, so nothing re-renders the bytes on the way in and the
 // digest keeps naming what the reviewer actually wrote.
+//
+// TRAILING whitespace, because that is the whitespace the canonical parser
+// admits. A leading "\n  " used to open this fixture, which made it assert that
+// an answer whose envelope sits at a nonzero offset is still an answer. Protocol
+// identity is the marker at character zero; byte-exactness is what happens to an
+// artifact after it has been identified, and TrimSpace still alters these bytes,
+// so a normalizing mailbox is still caught here.
 func TestTheMailboxStoresTheExactCommentBytes(t *testing.T) {
 	m, runner, binding, log := reviewRunnerWithLog(t, 5*time.Second)
 	var posted string
 	answerWith(m, func(req Request) string {
-		posted = "\n  " + canonicalAnswer(t, req.Subject, req.RequestID, req.ReviewerProvider, acceptJSON) + "\n \n"
+		posted = canonicalAnswer(t, req.Subject, req.RequestID, req.ReviewerProvider, acceptJSON) + "\n \n"
 		return posted
 	}, "davecourtois", 1697116)
 

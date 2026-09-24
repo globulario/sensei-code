@@ -594,19 +594,31 @@ func TestOnlyATopLevelProtocolObjectIsExcluded(t *testing.T) {
 
 	// Each of these is in-window content from the pinned reviewer principal that
 	// is NOT itself another protocol object. None may disappear.
-	for name, body := range map[string]string{
-		"prose quoting a marker": "LGTM; I saw " + WakeMarker + " in the transcript",
-		"prose quoting a relay receipt": "this looks like the " + relayedReviewMarker +
-			" you posted earlier, which is fine",
-		"a review carrying a second protocol marker": reviewartifact.Marker + "\ntask=" + relaySubject.TaskID +
+	//
+	// WHAT EACH ONE IS differs, and that is the point of naming the wanted kind
+	// rather than expecting MALFORMED for all of them. Prose that quotes a
+	// marker is reviewer content that cannot be read as a review. A VALID
+	// CANONICAL REVIEW whose payload quotes a marker is a review -- it was
+	// expected to be MALFORMED here until 2026-09-24, when a correct verdict was
+	// discarded in transport for quoting the marker it was explaining.
+	for name, tc := range map[string]struct {
+		body string
+		want string
+	}{
+		"prose quoting a marker": {"LGTM; I saw " + WakeMarker + " in the transcript", roles.ObservedMalformed},
+		"prose quoting a relay receipt": {"this looks like the " + relayedReviewMarker +
+			" you posted earlier, which is fine", roles.ObservedMalformed},
+		"a review carrying a second protocol marker": {reviewartifact.Marker + "\ntask=" + relaySubject.TaskID +
 			"\nrequest=" + relayRequest + "\nbase=" + relaySubject.BaseSHA +
 			"\ncandidate_digest=" + relaySubject.CandidateDigest +
 			"\ncandidate_tree=" + relaySubject.CandidateTree +
 			"\nreview_commit=" + relaySubject.ReviewCommit + "\nreviewer=chatgpt\n" +
-			acceptPayload + "\n" + WakeMarker + "\n",
-		"an indented wake inside a reply": "here is what I got back:\n\n    " + WakeMarker + "\n",
+			acceptPayload + "\n" + WakeMarker + "\n", boundCanonical},
+		"an indented wake inside a reply": {"here is what I got back:\n\n    " + WakeMarker + "\n",
+			roles.ObservedMalformed},
 	} {
 		t.Run(name, func(t *testing.T) {
+			body := tc.body
 			c := comment(6701, 1697116, "davecourtois", body)
 			// The precondition: it really does mention a marker, so this case
 			// exercises the boundary rather than ordinary prose.
@@ -628,8 +640,16 @@ func TestOnlyATopLevelProtocolObjectIsExcluded(t *testing.T) {
 			if !ok {
 				t.Fatal("reviewer content that merely mentions a marker was discarded")
 			}
-			if obs.kind != roles.ObservedMalformed {
-				t.Fatalf("classified as %s, want MALFORMED_OR_UNATTRIBUTABLE", obs.kind)
+			if obs.kind != tc.want {
+				t.Fatalf("classified as %s, want %s", obs.kind, tc.want)
+			}
+			if tc.want == boundCanonical {
+				// The review answers, marker and all: the quoted text stayed
+				// payload and the envelope at position zero kept its identity.
+				if obs.artifact == nil || obs.mismatch != "" {
+					t.Fatalf("a review quoting a marker was not read as this obligation's answer: %+v", obs)
+				}
+				return
 			}
 			// And it reaches the waiter as evidence, never as silence.
 			var seen observationSet
@@ -697,5 +717,362 @@ func TestACorrectedReviewIsConsumedUnderTheSameObligationAfterAFault(t *testing.
 	}
 	if owed, _ := f.exchanges.PendingReviews(); len(owed) != 0 {
 		t.Fatalf("the obligation was not discharged: %+v", owed)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// POSITIONAL FRAMING at the review observation.
+//
+// Two dimensions that must not be conflated. FRAMING CORRECTNESS: payload text
+// must not acquire protocol meaning merely by containing marker-shaped text.
+// DIAGNOSTIC HONESTY: when the envelope at position zero IS malformed,
+// attribution and forensic reporting stay precise. A permissive fix satisfies
+// the first while destroying the second, which is what the control below exists
+// to prevent.
+// ---------------------------------------------------------------------------
+
+// reviewQuotingMarkers is a verdict whose finding quotes eight protocol
+// envelopes, including the review envelope itself.
+func reviewQuotingMarkers(t *testing.T) string {
+	t.Helper()
+	claim := "a bare " + architectureRefusalMarker + " comment is classified as ordinary content; " +
+		"the same is true of " + reviewartifact.Marker + ", " + requestMarker + ", " +
+		relayedReviewMarker + ", " + attestationMarker + ", " + WakeMarker + ", " +
+		WithdrawnMarker + " and " + architectureResponseMarker
+	return canonicalFor(t, relaySubject, relayRequest, "chatgpt",
+		`{"decision":"revise","summary":"the framing rule is not proven","instructions":"prove it",`+
+			`"findings":[{"id":"f1","severity":"blocking","claim":"`+claim+`",`+
+			`"reference":"internal/ghbridge/review_observation.go",`+
+			`"reason":"identity is decided by searching the whole body",`+
+			`"correction":"identify at position zero"}]}`)
+}
+
+// POSITIONAL FRAMING W1 AND W8, at the classifier that decides what a reviewer
+// said.
+//
+// The assertion is the ABSENCE of the malformed classification. On 2026-09-24 a
+// review carrying three correct blocking findings was discarded because one
+// finding quoted a protocol marker while explaining it; at this layer that would
+// appear as ObservedMalformed, or -- worse -- as another protocol's object and
+// therefore as no observation at all, which decays into "the reviewer never
+// answered".
+//
+// W8 is the same subtest: eight marker-shaped strings in one payload yield
+// exactly ONE observation. The remainder after the envelope is never rescanned.
+func TestAReviewQuotingProtocolMarkersIsObservedAsAReview(t *testing.T) {
+	o := observedObligation()
+	raw := reviewQuotingMarkers(t)
+	if strings.Count(raw, "[sensei-code:") < 9 {
+		t.Fatalf("the fixture quotes too few markers to prove anything:\n%s", raw)
+	}
+	c := comment(6500, 1697116, "davecourtois", raw)
+
+	// NOT another protocol's object, even though it contains seven of their
+	// markers. That check runs before parsing, so a failure here would discard
+	// the review before anything could say why it was unreadable.
+	if otherProtocolObject(raw) {
+		t.Fatal("a review quoting other protocols' markers was taken for one of them")
+	}
+	obs, ok := classify(o, c)
+	if !ok {
+		t.Fatal("a review quoting protocol markers was discarded as not-a-review")
+	}
+	if obs.kind == roles.ObservedMalformed {
+		t.Fatalf("a review quoting protocol markers was classified MALFORMED: %s", obs.diagnostic)
+	}
+	if obs.kind != boundCanonical || obs.artifact == nil {
+		t.Fatalf("classified as %s, want an exact bound review", obs.kind)
+	}
+	if obs.artifact.RequestID != relayRequest || obs.mismatch != "" {
+		t.Fatalf("the quoted markers rewrote the review's identity: %+v", obs.artifact)
+	}
+	if got, want := strings.Count(obs.artifact.Body, "[sensei-code:"),
+		strings.Count(raw, "[sensei-code:")-1; got != want {
+		t.Fatalf("the payload kept %d of the reviewer's %d quoted markers", got, want)
+	}
+
+	// AND IT DISCHARGES THE WAIT. The classifier agreeing while the waiter still
+	// refused the bytes would leave the measured failure exactly where it was.
+	f := newRelayFixture(t)
+	ob := obligationFrom(soleObligation(t, f.exchanges))
+	ob.RequestComment = 1
+	f.mailbox.add(raw, "davecourtois", 1697116)
+	res, err := waitOn(t, f, ob)
+	if err != nil {
+		t.Fatalf("a review quoting protocol markers did not discharge the obligation: %v", err)
+	}
+	if res.Artifact.Digest != ReviewDigest(raw) {
+		t.Fatalf("returned %s, want the quoted review %s", res.Artifact.Digest, ReviewDigest(raw))
+	}
+}
+
+// POSITIONAL FRAMING W3 AND W4 CONTROLS, at the classifier.
+//
+// W3: ordinary reviewer content that merely CONTAINS a marker is ordinary
+// content. It is not another protocol's object, so it is not silently dropped;
+// it is reviewer-origin content that cannot be read as a review, and it is
+// REPORTED as that.
+//
+// W4: content whose FIRST bytes claim the review envelope and whose grammar is
+// then wrong stays an attributable review failure. It must not be reclassified
+// as ordinary content, and it must settle nothing.
+//
+// A4 and A3 pull in opposite directions and both cases are here on purpose: a
+// permissive reading of A3 would let W4's bodies decay into "not a review", and
+// a strict reading of A4 would let W3's prose acquire an identity it never
+// claimed.
+func TestPositionDecidesWhatReviewerContentIs(t *testing.T) {
+	o := observedObligation()
+	good := canonicalFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+
+	for name, tc := range map[string]struct {
+		body       string
+		wantsOther bool
+		names      string
+	}{
+		// W3: contains a marker, claims nothing.
+		"prose naming the review envelope": {
+			"I could not apply this: a bare " + reviewartifact.Marker + " comment is ordinary content.",
+			false, "envelope",
+		},
+		"prose naming another protocol": {
+			"the " + WakeMarker + " envelope is a doorbell, not an answer", false, "envelope",
+		},
+		"a review quoted behind prose": {"here is what I was sent:\n" + good, false, "envelope"},
+		// W4: claims the review envelope at position zero, grammar wrong.
+		"the envelope with no identity": {reviewartifact.Marker + "\n\n" + acceptPayload, false, "reviewer"},
+		"the envelope with half an identity": {
+			reviewartifact.Marker + "\ntask=" + relaySubject.TaskID + "\n", false, "reviewer",
+		},
+		// Identified by position zero, then refused by the review grammar: the
+		// delimiter is wrong, so no identity line is read and the diagnostic
+		// names the review rule that failed rather than denying this is a review.
+		"the envelope on a shared line": {reviewartifact.Marker + " " + acceptPayload, false, "reviewer"},
+		// The control for the control: a real object of another kind, which
+		// must still be skipped rather than blamed on the reviewer.
+		"an actual wake signal": {WakeMarker + "\nrequest_comment=1\n", true, ""},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c := comment(6600, 1697116, "davecourtois", tc.body)
+			if got := otherProtocolObject(tc.body); got != tc.wantsOther {
+				t.Fatalf("otherProtocolObject = %v, want %v", got, tc.wantsOther)
+			}
+			obs, ok := classify(o, c)
+			if tc.wantsOther {
+				if ok {
+					t.Fatalf("a known object of another kind was classified as a review observation: %+v", obs)
+				}
+				return
+			}
+			if !ok {
+				t.Fatal("reviewer-origin content was discarded rather than reported")
+			}
+			if obs.kind != roles.ObservedMalformed {
+				t.Fatalf("classified as %s, want MALFORMED", obs.kind)
+			}
+			if obs.artifact != nil {
+				t.Fatalf("unreadable bytes were given artifact identity: %+v", obs.artifact)
+			}
+			if !strings.Contains(obs.diagnostic, tc.names) {
+				t.Errorf("the diagnostic does not name %q: %q", tc.names, obs.diagnostic)
+			}
+		})
+	}
+}
+
+// POSITIONAL FRAMING W11 -- EVERY ENVELOPE IN THIS GRAMMAR REACHES IDENTITY AT
+// POSITION ZERO, ENUMERATED.
+//
+// A CENSUS, NOT A SAMPLE, and the difference is the requirement. A witness that
+// covers most kinds proves the rule holds where somebody remembered to look; the
+// kinds nobody remembered are exactly the ones still deciding identity by
+// searching a body. So the manifest below is compared against the package's own
+// marker list in BOTH directions: an envelope added to the grammar and not to
+// this witness fails here, and an envelope removed from the grammar and left
+// here fails here too.
+//
+// WHY THIS CLASSIFIER IS THE PLACE. otherProtocolObject is the one reader that
+// enumerates every envelope Sensei-Code can publish into a mailbox conversation,
+// so it is where "which kind is this" is asked about all of them at once. The
+// wake, the withdrawal, the architecture request, answer and refusal and the
+// review request each additionally have a witness against their OWN parser. The
+// relayed-review receipt and the attestation override have no standalone reader
+// -- they are identified here and guarded at their renderers -- so this census
+// is where their identification rule is pinned, and without it those two kinds
+// would be the "most, not all" the control forbids.
+func TestEveryMailboxEnvelopeIsIdentifiedAtPositionZero(t *testing.T) {
+	// One well formed opening per kind: the envelope, then bytes a real artifact
+	// of that kind continues with.
+	kinds := map[string]string{
+		requestMarker:              "\nkind=review\ntask=" + relaySubject.TaskID + "\n",
+		relayedReviewMarker:        "\nrequest=" + relayRequest + "\n",
+		attestationMarker:          "\nrequest=" + relayRequest + "\n",
+		WithdrawnMarker:            "\nrequest=" + relayRequest + "\n",
+		WakeMarker:                 "\nrequest_comment=5000\n",
+		architectureRequestMarker:  "\ntask=" + relaySubject.TaskID + "\n\n{}",
+		architectureResponseMarker: "\ntask=" + relaySubject.TaskID + "\n\n{}",
+		architectureRefusalMarker:  "\ntask=" + relaySubject.TaskID + "\n\n{}",
+	}
+	if len(kinds) != len(otherProtocolMarkers) {
+		t.Fatalf("this witness enumerates %d envelopes and the grammar carries %d: %v",
+			len(kinds), len(otherProtocolMarkers), otherProtocolMarkers)
+	}
+	for _, marker := range otherProtocolMarkers {
+		if _, ok := kinds[marker]; !ok {
+			t.Fatalf("envelope %s is in the grammar and has no case in this witness", marker)
+		}
+	}
+
+	o := observedObligation()
+	for marker, rest := range kinds {
+		opening := marker + rest
+		t.Run(marker, func(t *testing.T) {
+			// AT ZERO: this is what these bytes ARE.
+			if !otherProtocolObject(opening) {
+				t.Fatalf("an artifact opening with %s was not identified as one", marker)
+			}
+			for name, body := range map[string]string{
+				"one leading space":          " " + opening,
+				"one leading tab":            "\t" + opening,
+				"a blank line and an indent": "\n  " + opening,
+				"quoted behind prose":        "here is what I was sent:\n" + opening,
+				"named mid-sentence":         "a bare " + marker + " comment is ordinary content.",
+			} {
+				t.Run(name, func(t *testing.T) {
+					// AT ANY OTHER OFFSET: this is payload. Padding buys no
+					// partial protocol identity either -- leading whitespace is
+					// not position zero.
+					if otherProtocolObject(body) {
+						t.Fatalf("%s acquired protocol identity from a nonzero offset: %q", marker, body)
+					}
+					// And the consequence for a reader: reviewer-origin content
+					// that merely mentions an envelope is still REPORTED, as
+					// unreadable reviewer content rather than as somebody else's
+					// object. Dropping it here is how mentioning a marker became
+					// indistinguishable from saying nothing.
+					obs, ok := classify(o, comment(6700, 1697116, "davecourtois", body))
+					if !ok {
+						t.Fatal("reviewer content mentioning an envelope was discarded rather than reported")
+					}
+					if obs.kind != roles.ObservedMalformed {
+						t.Fatalf("classified as %s, want MALFORMED", obs.kind)
+					}
+					if obs.artifact != nil {
+						t.Fatalf("content mentioning an envelope was given artifact identity: %+v", obs.artifact)
+					}
+				})
+			}
+		})
+	}
+
+	// THE KIND THIS MAILBOX READS AS ITS OWN, completing the enumeration: the
+	// review envelope is not in otherProtocolMarkers because it is the artifact
+	// this reader is looking for rather than another protocol's object, and the
+	// same positional rule decides it.
+	good := canonicalFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	if otherProtocolObject(good) {
+		t.Fatal("a review was classified as another protocol's object")
+	}
+	if _, err := reviewartifact.Parse(good); err != nil {
+		t.Fatalf("the review fixture is not readable, so the cases below prove nothing: %v", err)
+	}
+	for name, body := range map[string]string{
+		"one leading space":          " " + good,
+		"one leading tab":            "\t" + good,
+		"a blank line and an indent": "\n  " + good,
+		"quoted behind prose":        "here is what I was sent:\n" + good,
+	} {
+		t.Run(reviewartifact.Marker+"/"+name, func(t *testing.T) {
+			if _, err := reviewartifact.Parse(body); err == nil {
+				t.Fatal("a review envelope at a nonzero offset was read as a review")
+			}
+			if otherProtocolObject(body) {
+				t.Fatal("a padded review was classified as another protocol's object")
+			}
+		})
+	}
+}
+
+// POSITIONAL FRAMING W9 -- REPORTING PRESERVED. THE CONTROL THAT BOLTS THE DOOR.
+//
+// The framing repair must not degrade the observability that made the defect
+// findable. What the engine did RIGHT on 2026-09-24, and must keep doing: it
+// reported MALFORMED_OR_UNATTRIBUTABLE with the comment id, the author, the byte
+// count, the body digest and the exact diagnostic; it preserved the candidate;
+// it left the review obligation standing; and it asked no other participant.
+//
+// A permissive fix satisfies framing correctness and destroys every line of
+// that. This is the test it has to pass on the way.
+func TestAMalformedReviewIsStillReportedWithItsFullForensics(t *testing.T) {
+	f := newRelayFixture(t)
+	o := obligationFrom(soleObligation(t, f.exchanges))
+	o.RequestComment = 1
+	// Reviewer-origin content that is genuinely unreadable: the historical
+	// specimen, bare reviewer JSON with no envelope at all.
+	const bad = `{"decision":"accept","summary":"looks fine to me","instructions":"","findings":[]}`
+	f.mailbox.add(bad, "davecourtois", 1697116)
+	before := len(f.mailbox.posted())
+
+	res, err := waitOn(t, f, o)
+
+	var observed *roles.ReviewObservationFault
+	if !errors.As(err, &observed) {
+		t.Fatalf("err = %v, want an observation fault", err)
+	}
+	if errors.Is(err, ErrNoAnswer) {
+		t.Fatalf("observed evidence was reported as nobody answering: %v", err)
+	}
+	if len(observed.Observations) != 1 {
+		t.Fatalf("%d observations reported, want the one malformed comment: %+v", len(observed.Observations), observed.Observations)
+	}
+	got := observed.Observations[0]
+	if got.Kind != roles.ObservedMalformed {
+		t.Fatalf("kind = %s, want MALFORMED", got.Kind)
+	}
+	// THE FIVE FORENSIC FACTS, each asserted by itself so removing any one of
+	// them fails here rather than in six weeks.
+	if got.Comment == 0 {
+		t.Error("the observation does not name the comment it saw")
+	}
+	if got.Author != "davecourtois" || got.AuthorID != 1697116 {
+		t.Errorf("the observation does not name its author: %q/%d", got.Author, got.AuthorID)
+	}
+	if got.Bytes != len(bad) {
+		t.Errorf("bytes = %d, want the exact observed %d", got.Bytes, len(bad))
+	}
+	if got.BodyDigest != bodyDigestOf(bad) {
+		t.Errorf("body_digest = %q, want the digest of the exact bytes", got.BodyDigest)
+	}
+	if strings.TrimSpace(got.Diagnostic) == "" {
+		t.Error("the observation does not say why the bytes could not be read")
+	}
+	// Malformed bytes acquire no semantic field they never proved.
+	if got.ArtifactDigest != "" || got.RequestID != "" || got.Provider != "" {
+		t.Errorf("unreadable bytes were given semantic identity: %+v", got)
+	}
+	// THE CANDIDATE IS PRESERVED: the fault names the exact subject, so the
+	// thing under review is still identified rather than lost with the answer.
+	if observed.Binding.CandidateDigest != relaySubject.CandidateDigest ||
+		observed.Binding.CandidateTree != relaySubject.CandidateTree ||
+		observed.ReviewCommit != relaySubject.ReviewCommit {
+		t.Errorf("the fault does not name the candidate it is about: %+v", observed)
+	}
+	// THE OBLIGATION STANDS: no review was returned, the durable record is still
+	// open, and it still names the same request.
+	if res.Artifact.Digest != "" {
+		t.Errorf("a malformed observation produced a review: %+v", res.Artifact)
+	}
+	if rec := soleObligation(t, f.exchanges); rec.RequestID != o.RequestID {
+		t.Errorf("the obligation record was rewritten: %+v", rec)
+	}
+	if _, stored := f.stored(t); stored {
+		t.Error("a malformed observation staged a review")
+	}
+	// AND NO OTHER PARTICIPANT WAS ASKED: nothing was published to the mailbox,
+	// so no second reviewer, relay or attestation was solicited on the strength
+	// of an unreadable reply.
+	if n := len(f.mailbox.posted()); n != before {
+		t.Fatalf("the mailbox gained %d comment(s) while reporting a malformed reply: %v",
+			n-before, f.mailbox.posted()[before:])
 	}
 }

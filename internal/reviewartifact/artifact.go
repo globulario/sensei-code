@@ -32,10 +32,6 @@ const (
 	// Marker opens the one review envelope. The reviewer writes it.
 	Marker = "[sensei-code:review]"
 
-	// protocolPrefix opens every Sensei-Code protocol envelope. An artifact may
-	// contain exactly one, so that one artifact cannot claim two identities.
-	protocolPrefix = "[sensei-code:"
-
 	// MaxBytes bounds one semantic review artifact. It is a review, not a file.
 	//
 	// This is the artifact bound and nothing else. It is unrelated to the
@@ -56,6 +52,96 @@ var (
 
 	fieldLine = regexp.MustCompile(`^\s*([a-z_]+)\s*=\s*(\S+)\s*$`)
 )
+
+// Opens reports whether body BEGINS with marker, at character zero exactly.
+//
+// THE ONE PLACE THE POSITIONAL FRAMING RULE IS SPELLED, for every Sensei-Code
+// envelope and not only this package's. It lives here because this package sits
+// beneath every transport adapter and imports none of them, so one rule can be
+// shared downward without inverting that dependency.
+//
+// THE RULE. Protocol identity comes from what an artifact BEGINS with and from
+// nothing else. A recognized envelope here selects that envelope's grammar; the
+// entire remainder then belongs to that grammar and is never rescanned for
+// further artifacts. Marker-shaped text at any other offset is ordinary payload
+// data.
+//
+// MEASURED 2026-09-24. A well formed review whose bindings matched exactly, from
+// the pinned reviewer principal, carrying three correct blocking findings, was
+// rejected in transport because ONE finding quoted a protocol marker while
+// explaining how that marker is handled. A classifier that decides identity by
+// searching the whole body cannot tell a message from a message ABOUT messages,
+// so the transport ate a correct review of the transport and every future review
+// of this protocol would have hit the same wall.
+//
+// IDENTIFICATION IS NOT PARSING, and the order is load-bearing. This function
+// answers only "what does this claim to be". Whether the claim is well formed is
+// the caller's strict parse, and a failure there stays ATTRIBUTABLE to this kind
+// rather than collapsing back into anonymous content.
+//
+// CHARACTER ZERO EXACTLY, WITH NOTHING SKIPPED, and that is why there is no
+// offset to return. An earlier revision stepped over leading spaces, tabs and
+// newlines and returned the offset it landed on, reasoning that padding is
+// transport noise rather than content. It thereby handed protocol identity to an
+// indented or blank-line-prefixed marker -- a marker at a NONZERO offset, read
+// as an artifact by every caller, which is precisely what this rule exists to
+// forbid. Whitespace was only the first prefix somebody found harmless, and a
+// positional rule that admits one harmless prefix keeps no principle with which
+// to refuse the next. So identification is a prefix test against the bytes as
+// received: nothing is trimmed, normalized or advanced before it, and a bool is
+// the entire answer.
+//
+// The reviewer's exact bytes are still preserved and digested whole. That is a
+// consequence of a real position-zero claim, never a reason to manufacture one.
+func Opens(body, marker string) bool {
+	return strings.HasPrefix(body, marker)
+}
+
+// DelimitsHeader reports whether after -- the bytes FOLLOWING a marker that
+// Opens has already recognized at position zero -- begins the line break that
+// separates that marker from its identity header.
+//
+// THE SECOND HALF OF THE ENVELOPE, and it is spelled here beside the first for
+// the reason this package exists: a marker and its delimiter are one envelope,
+// and two readers that disagree about where the header may begin accept two
+// different grammars for one artifact.
+//
+// IT IS NOT AN IDENTIFICATION TEST. Opens has already decided what these bytes
+// claim to be; this answers only whether the claim is well formed, and a caller
+// that folds the delimiter back into identification would make an envelope with
+// the wrong delimiter identify as NOTHING and be handed on as ordinary content
+// -- the fallback A4 forbids. So the two are separate calls, and a false here is
+// a MALFORMED artifact of the kind Opens named.
+//
+// MEASURED. Both remaining readers sliced straight past the marker and let the
+// first post-marker bytes match a key=value line. A body formed as the marker
+// concatenated directly to an otherwise complete header therefore parsed as a
+// fully valid artifact with no delimiter present at all, so the envelope's
+// boundary was decided by whether the next bytes happened to look like a field.
+//
+// CRLF is accepted because it is a line-ending encoding chosen by the client
+// that posts, not a prefix inserted before the header: unlike leading spaces or
+// blank lines, it cannot move where the header starts. Nothing else is: a
+// space, a tab or any other filler between the envelope and its header is the
+// same permissiveness C1 removed from Opens, one step further in.
+func DelimitsHeader(after string) bool {
+	return strings.HasPrefix(after, "\n") || strings.HasPrefix(after, "\r\n")
+}
+
+// firstLineOf names what an envelope was actually followed by, bounded so a
+// diagnostic quotes a delimiter rather than reprinting a reviewer's payload.
+//
+// Deliberately not shared with the adapter that spells the same three lines:
+// this shapes a diagnostic, and two readers that format an error message
+// differently still read one grammar. What must not be duplicated is the RULE,
+// which is why DelimitsHeader is exported and this is not.
+func firstLineOf(after string) string {
+	line, _, _ := strings.Cut(after, "\n")
+	if len(line) > 40 {
+		line = line[:40]
+	}
+	return line
+}
 
 // Artifact is one review exactly as its reviewer produced it.
 //
@@ -130,19 +216,28 @@ func Parse(raw string) (Artifact, error) {
 	if len(raw) > MaxBytes {
 		return Artifact{}, fmt.Errorf("the artifact is %d bytes; a review artifact is bounded at %d", len(raw), MaxBytes)
 	}
-	if !strings.HasPrefix(strings.TrimLeft(raw, " \t\r\n"), Marker) {
+	// IDENTIFICATION, and it is the only thing that decides what these bytes
+	// ARE (A7). Everything after it is this envelope's own grammar, parsed
+	// strictly below; a failure there is a failure OF A REVIEW ARTIFACT and is
+	// reported as one, never a demotion back to anonymous content.
+	if !Opens(raw, Marker) {
 		return Artifact{}, errors.New("the artifact must begin with the " + Marker + " envelope the reviewer produced")
 	}
-	// Exactly one envelope and no other protocol marker anywhere: a second
-	// envelope, a request or a relay record inside the payload would make one
-	// artifact say two things about which question it answers.
-	if strings.Count(raw, protocolPrefix) != 1 {
-		return Artifact{}, errors.New("the artifact must carry exactly one sensei-code envelope and no other protocol marker")
+	after := raw[len(Marker):]
+	// THE ENVELOPE IS THE MARKER AND ITS DELIMITER, and this is a failure OF A
+	// REVIEW ARTIFACT: identification above already said what these bytes claim
+	// to be, so the diagnostic names this grammar's rule rather than demoting the
+	// artifact to anonymous content (A4).
+	//
+	// Without it the header began wherever the first key=value line happened to
+	// be, so the marker concatenated directly to an otherwise complete header
+	// parsed as a valid review of the candidate it named.
+	if !DelimitsHeader(after) {
+		return Artifact{}, fmt.Errorf(
+			"the %s envelope must be followed by a newline before the reviewer's identity header, and this one is followed by %q",
+			Marker, firstLineOf(after))
 	}
-	f, body, ok := fields(raw)
-	if !ok {
-		return Artifact{}, errors.New("the artifact must begin with the " + Marker + " envelope the reviewer produced")
-	}
+	f, body := fields(after)
 	a := Artifact{
 		ReviewerProvider: f["reviewer"],
 		TaskID:           f["task"],
@@ -234,7 +329,14 @@ func ResponseContract(want Artifact) (string, error) {
 	var b strings.Builder
 	b.WriteString("Your GitHub reply must be exactly one canonical review artifact: this envelope, " +
 		"then your JSON payload. Post it as a single comment with no prose before the envelope, " +
-		"no second [sensei-code: envelope anywhere in it, and the verdict stated only inside the JSON.\n\n")
+		"no second [sensei-code: envelope opening it, and the verdict stated only inside the JSON.\n\n")
+	// The reviewer is TOLD the framing rule, because a rule a producer does not
+	// know is a rule that silently discards correct work: a verdict quoting a
+	// marker was rejected in transport on 2026-09-24, and until the reader was
+	// repaired the only advice available was "do not write the marker down".
+	b.WriteString("Quote protocol markers freely INSIDE your payload. Identity comes from what this " +
+		"artifact begins with, so marker-shaped text anywhere after the envelope is payload and is " +
+		"read as payload: a finding that reproduces a marker while explaining it is still one review.\n\n")
 	b.WriteString("Copy every identity value below exactly as written. Do not derive any of them from " +
 		"your GitHub login, this repository's current state, a pull request head, another comment, or " +
 		"a standing instruction: they are this request's, and an answer that names different values " +
@@ -275,19 +377,26 @@ func (a Artifact) validateIdentity() error {
 	return nil
 }
 
-// fields reads key=value lines following the marker, stopping at the first line
-// that is not one. Everything after is the body.
+// fields reads key=value lines from the bytes FOLLOWING an already-identified
+// envelope, stopping at the first line that is not one. Everything after is the
+// body.
+//
+// It takes the remainder rather than the whole artifact because it must not
+// search. A reader that found its own marker with strings.Index would identify
+// an artifact from a marker sitting anywhere in the reviewer's payload, which is
+// the whole-body search A5 forbids; the caller has already established position
+// zero and hands over exactly what that envelope owns.
+//
+// The delimiter is already established too, which is what the blank first line
+// below consumes: the caller checked it, so a header line can never be read out
+// of bytes that sat on the envelope's own line.
 //
 // The stop is the header/body boundary and it is load-bearing: once the
 // reviewer's payload has begun, prose containing "candidate_tree=..." is prose.
 // Without the stop, a reviewer could describe one candidate in the envelope and
 // rewrite that identity from inside the text a human reads as commentary.
-func fields(body string) (map[string]string, string, bool) {
-	idx := strings.Index(body, Marker)
-	if idx < 0 {
-		return nil, "", false
-	}
-	lines := strings.Split(body[idx+len(Marker):], "\n")
+func fields(after string) (map[string]string, string) {
+	lines := strings.Split(after, "\n")
 	out := map[string]string{}
 	consumed := 0
 	for i, ln := range lines {
@@ -306,5 +415,5 @@ func fields(body string) (map[string]string, string, bool) {
 	if consumed < len(lines) {
 		rest = strings.TrimSpace(strings.Join(lines[consumed:], "\n"))
 	}
-	return out, rest, true
+	return out, rest
 }
