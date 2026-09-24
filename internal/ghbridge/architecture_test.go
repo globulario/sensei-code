@@ -1410,3 +1410,63 @@ func TestAMalformedRefusalEnvelopeAtZeroIsAttributableNotOrdinary(t *testing.T) 
 		})
 	}
 }
+
+// W6, the transport half. BRIDGE EXHAUSTION IS A FAILURE TO OBTAIN AN ARCHITECT;
+// A BOUND CONSUMER'S REFUSAL IS NOT.
+//
+// The rule that decides whether the engine's architect roster advances lives in
+// workflow, and the errors it reads are produced here. Checking this package's
+// own outcomes against workflow.ArchitectTurnUnobtainable is what keeps the two
+// halves from drifting into separate ideas of the boundary: workflow cannot
+// import this package, so without this each side would assert only its own.
+//
+// Measured 2026-09-24: two 30-minute requests were withdrawn unanswered and the
+// run ended reporting that the architect could not decide. An exhausted exchange
+// must cost a fallback instead. A refusal must not, because the consumer REPLIED
+// -- asking the next provider would be shopping for a different answer to a
+// question that already has one.
+func TestAnExhaustedExchangeAdvancesTheRosterAndARefusalDoesNot(t *testing.T) {
+	// The condition AwaitArchitecture returns when its whole deadline passed with
+	// no answer; await_test.go pins that the real timeout error carries it.
+	if !workflow.ArchitectTurnUnobtainable(ErrNoArchitectureAnswer) {
+		t.Fatal("an exchange that ended unanswered is not a failure to obtain an architect, so the roster would never advance past a silent mailbox")
+	}
+	refused := &ArchitectureRefused{
+		RequestID: "a-1", Binding: architectureBinding(),
+		Stage: RefusalStageAnswerContract, Reason: "the answer contract was not met",
+	}
+	if workflow.ArchitectTurnUnobtainable(refused) {
+		t.Fatalf("a bound consumer's refusal is classified as a provider that could not be obtained, so the roster would shop for a different answer: %v", refused)
+	}
+	if !strings.Contains(refused.Error(), ErrArchitectureRefused.Error()) {
+		t.Fatalf("the refusal no longer states its own condition: %v", refused)
+	}
+}
+
+// W6, continued. An alternate the bridge does not carry is served by the
+// composed fallback, so the roster can actually be walked past an exhausted
+// bridge instead of publishing a second request into the same mailbox.
+//
+// The bridge carries by provider NAME. That is what makes the engine's ladder
+// and this transport compose: narrowing what the bridge accepts is not the
+// forbidden silent fallback, because the engine records which provider it
+// assigned and the answer is attributed to that provider.
+func TestARosterAlternateTheBridgeDoesNotCarryGoesToTheFallback(t *testing.T) {
+	fb := &recordingResolver{}
+	reviewRunner := &Runner{Issue: Issue{Number: "156", ExpectedReviewer: Principal{UserID: 1697116, Login: "davecourtois"}}}
+	res := Resolver{Provider: "chatgpt", Reviewer: reviewRunner, Fallback: fb}
+
+	got, err := res.Resolve(workflow.RunnerSpec{
+		Role: roles.Architect, Agent: config.Agent{Name: "claude"}, TaskID: architectureBinding().TaskID,
+		Architecture: architectureBinding(),
+	})
+	if err != nil {
+		t.Fatalf("the roster alternate was refused rather than served locally: %v", err)
+	}
+	if _, carried := got.Runner.(*ArchitectureRunner); carried {
+		t.Fatal("the bridge captured an architect turn assigned to a provider it does not carry")
+	}
+	if got.Name != "fallback" || len(fb.saw) != 1 || fb.saw[0] != roles.Architect {
+		t.Fatalf("the alternate did not reach the composed fallback: name=%q saw=%v", got.Name, fb.saw)
+	}
+}
