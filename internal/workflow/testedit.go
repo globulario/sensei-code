@@ -258,11 +258,11 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 		}
 		switch {
 		case created[f]:
-			return fmt.Errorf("test edit refuted: %s was granted as an EDIT of an existing file but the candidate creates it", f)
+			return refuteTestEditCreated(f)
 		case deleted[f]:
-			return fmt.Errorf("test edit refuted: %s was granted as an EDIT but the candidate deletes it", f)
+			return refuteTestEditDeleted(f)
 		case renamed[f]:
-			return fmt.Errorf("test edit refuted: %s was granted as an EDIT but the candidate renames it", f)
+			return refuteTestEditRenamed(f)
 		}
 		after, err := candidate(f)
 		if err != nil {
@@ -273,10 +273,10 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 			return fmt.Errorf("test edit refuted: %s could not be read as Go after the edit: %v", f, err)
 		}
 		if facts.Package != g.Facts.Package {
-			return fmt.Errorf("test edit refuted: %s changed its package clause from %q to %q", f, g.Facts.Package, facts.Package)
+			return refuteTestEditPackage(f, g.Facts.Package, facts.Package)
 		}
 		if strings.Join(facts.Constraints, "\n") != strings.Join(g.Facts.Constraints, "\n") {
-			return fmt.Errorf("test edit refuted: %s changed its build constraints (%q -> %q)", f, strings.Join(g.Facts.Constraints, "; "), strings.Join(facts.Constraints, "; "))
+			return refuteTestEditConstraints(f, g.Facts.Constraints, facts.Constraints)
 		}
 		imports := make([]string, 0, len(facts.Imports))
 		for imp := range facts.Imports {
@@ -285,7 +285,227 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 		sort.Strings(imports)
 		for _, imp := range imports {
 			if !g.Facts.Imports[imp] {
-				return fmt.Errorf("test edit refuted: %s imports %q, which it did not import at the pinned world; the %s role admits no novel import", f, imp, roleGoRegressionTestEdit)
+				return refuteTestEditNovelImport(f, imp)
+			}
+		}
+	}
+	return nil
+}
+
+// THE REFUSAL SENTENCES. One condition, one sentence, whichever door it is
+// refused at.
+//
+// These were inline in inspectTestEdits until projection gave the same
+// conditions a second, earlier evaluator. Two evaluators writing their own
+// prose for one condition is how an operator ends up reading two different
+// sentences about one rule and reasoning about them as two rules. They are
+// constructors so the early and the late check cannot drift apart: the
+// projector calls exactly these.
+func refuteTestEditCreated(f string) error {
+	return fmt.Errorf("test edit refuted: %s was granted as an EDIT of an existing file but the candidate creates it", f)
+}
+
+func refuteTestEditDeleted(f string) error {
+	return fmt.Errorf("test edit refuted: %s was granted as an EDIT but the candidate deletes it", f)
+}
+
+func refuteTestEditRenamed(f string) error {
+	return fmt.Errorf("test edit refuted: %s was granted as an EDIT but the candidate renames it", f)
+}
+
+func refuteTestEditPackage(f, was, now string) error {
+	return fmt.Errorf("test edit refuted: %s changed its package clause from %q to %q", f, was, now)
+}
+
+func refuteTestEditConstraints(f string, was, now []string) error {
+	return fmt.Errorf("test edit refuted: %s changed its build constraints (%q -> %q)", f, strings.Join(was, "; "), strings.Join(now, "; "))
+}
+
+func refuteTestEditNovelImport(f, imp string) error {
+	return fmt.Errorf("test edit refuted: %s imports %q, which it did not import at the pinned world; the %s role admits no novel import", f, imp, roleGoRegressionTestEdit)
+}
+
+// TestEditDeclaration is the plan's statement of the STRUCTURAL effects its
+// edit of an ALREADY-EXISTING test file will have: which operation, which
+// package clause, which build constraints, which imports.
+//
+// It exists because a correctly-placed rule was at the wrong door. A governed
+// run was refused at candidate time for importing "errors" into a test file
+// that did not import it at the pinned base -- after the implementer had
+// written 3147 insertions across 23 files. Every fact the refusal needed was
+// already in hand at plan admission: the pinned base, the planned file set,
+// those files' import blocks at that base, and the role's envelope. Only the
+// declaration of intent was missing, and a declaration is the one thing a plan
+// can supply.
+//
+// It is a DECLARATION, never an inference. Nothing here reads prose, guesses
+// what an implementer will write, or predicts an outcome. An OMITTED field
+// declares nothing and is left entirely to the candidate-time check, which is
+// unchanged and still runs. The absence of a projected refusal is not
+// permission for anything.
+//
+// ONE PATH, AT MOST ONE DECLARATION. A file declared twice has no single
+// declared structural outcome, whether the two entries agree or contradict each
+// other, so nothing about it is decidable at plan time. See
+// projectTestEditRefusals.
+//
+// PRESENCE IS NOT THE SAME AS EMPTINESS. "I am not telling you what the build
+// constraints will be" and "I am telling you there will be none" are different
+// statements, and only the second is decidable here. They collapse into one if
+// the field cannot distinguish an absent key from an empty list, which is why
+// BuildConstraints is a pointer: a decidable refusal would otherwise be
+// silently admitted, which is the hole this whole seam exists to close.
+type TestEditDeclaration struct {
+	Path string `json:"path"`
+	// Operation is read by membership from the closed set below. An absent or
+	// unrecognised value declares nothing AT ALL -- not the operation, and not
+	// the package, constraints or imports beside it. See projectTestEditRefusals.
+	Operation string `json:"operation,omitempty"`
+	// Package is the package clause the file will carry after the edit. A Go
+	// file cannot carry an empty package clause, so "" can only mean the field
+	// was not declared, and no pointer is needed to tell the two apart.
+	Package string `json:"package,omitempty"`
+	// BuildConstraints are the //go:build and // +build lines it will carry,
+	// verbatim and in order.
+	//
+	// nil is an ABSENT declaration and projects nothing. A non-nil list --
+	// including an empty one -- is the plan stating the exact set the edited
+	// file will carry, and an empty one therefore states that the file will
+	// carry none, which the pinned world can already refuse when it carries
+	// some.
+	BuildConstraints *[]string `json:"build_constraints,omitempty"`
+	// Imports are the import paths the edited file will need. Each one is
+	// decidable on its own against the pinned world; the set as a whole is
+	// not, because a declaration that lists fewer imports than the file ends
+	// up with says nothing illegal -- dropping an import is admissible.
+	Imports []string `json:"imports,omitempty"`
+}
+
+// The closed operation vocabulary. Only these four are read; anything else is
+// UNRESOLVED, never "probably an edit".
+const (
+	testEditOperationEdit   = "edit"
+	testEditOperationCreate = "create"
+	testEditOperationDelete = "delete"
+	testEditOperationRename = "rename"
+)
+
+// projectTestEditRefusals decides, at plan admission, the subset of
+// inspectTestEdits' refusals that the accepted plan and the pinned world
+// already determine.
+//
+// It is pure: declarations in, grants in, the authority's own refusal out. It
+// reads no candidate, no worktree, and no artifact that does not exist yet --
+// the grants it resolves against were read at the pinned world, and the role
+// they carry is the fixed roleGoRegressionTestEdit envelope.
+//
+// It refuses EARLIER and never more permissively. Every refusal it can return
+// is one inspectTestEdits returns for the candidate the declaration describes,
+// in the same order and through the same constructor, so the operator reads
+// one sentence for one condition. A declared path with no grant, an absent
+// field, an absent or unrecognised operation and every content-dependent
+// outcome return no result at all and are governed by the late check exactly
+// as before.
+//
+// THE OPERATION GATES EVERYTHING BESIDE IT. A declaration whose operation is
+// absent or outside the closed vocabulary does not describe a candidate at
+// all: nothing here knows whether that file will exist afterwards, so its
+// package, constraints and imports describe a shape that may never be
+// inspected. Reading those fields anyway would refuse early on a condition the
+// late check might never reach -- it names deletion before it names an import
+// -- and that is a guess, not a projection.
+//
+// THE BINDING MUST BE UNIQUE BEFORE ANY EFFECT IS READ. One path may carry at
+// most one declaration. Two declarations for one file -- an admissible edit and
+// a novel import, or an edit and a delete -- do not describe one candidate:
+// the accepted plan states no single structural outcome, so no outcome is
+// decidable from it. Reading them in turn and refusing on whichever forbidden
+// one came first would pick a winner by declaration order, and the candidate
+// that followed the other entry would pass the late check a plan was refused
+// for: the projected set would no longer be a subset of the late-refused set.
+// A multiply-declared path is therefore UNDECIDABLE here, exactly like an
+// unreadable operation, and is left wholly to the unchanged candidate-time
+// check. Absence of a projection is not permission.
+func projectTestEditRefusals(declared []TestEditDeclaration, grants []testEditGrant) error {
+	if len(declared) == 0 || len(grants) == 0 {
+		return nil
+	}
+	// Multiplicity is resolved over the whole declaration set before a single
+	// effect is compared, because it is a property of the set and not of any
+	// one entry. Paths are normalized first: two spellings of one file are one
+	// binding, or a duplicate could be hidden by writing it differently.
+	bound := map[string]TestEditDeclaration{}
+	ambiguous := map[string]bool{}
+	for _, d := range declared {
+		p := strings.TrimSpace(d.Path)
+		if p == "" {
+			// A declaration that names no file binds to nothing.
+			continue
+		}
+		p = path.Clean(p)
+		if _, already := bound[p]; already {
+			ambiguous[p] = true
+			continue
+		}
+		bound[p] = d
+	}
+	// The AUTHORITY enumerates, and the plan answers. Walking the grants rather
+	// than the declarations means the early door considers the files in the
+	// order the late door inspects them, so a plan that violates the rule on
+	// two different files is named the same way at both doors.
+	for _, g := range grants {
+		// A path the world granted no edit is not under this authority at all,
+		// so there is nothing here to project. Whatever the candidate does to
+		// it is judged where it always was.
+		p := path.Clean(strings.TrimSpace(g.Path))
+		if ambiguous[p] {
+			continue
+		}
+		d, ok := bound[p]
+		if !ok {
+			continue
+		}
+		// The grant names the file as inspectTestEdits will name it.
+		f := g.Path
+		switch strings.ToLower(strings.TrimSpace(d.Operation)) {
+		case testEditOperationEdit:
+			// The admissible operation. The structural checks below apply.
+		case testEditOperationCreate:
+			return refuteTestEditCreated(f)
+		case testEditOperationDelete:
+			return refuteTestEditDeleted(f)
+		case testEditOperationRename:
+			return refuteTestEditRenamed(f)
+		default:
+			// Absent, or a word this vocabulary does not close over. It is not
+			// read as "edit", it is not read as a violation, and the fields
+			// beside it are not read at all.
+			continue
+		}
+		if pkg := strings.TrimSpace(d.Package); pkg != "" && pkg != g.Facts.Package {
+			return refuteTestEditPackage(f, g.Facts.Package, pkg)
+		}
+		// nil is the field being absent; a non-nil list is the plan declaring
+		// the exact set, and an empty one declares that there will be none. A
+		// plan that says nothing is refused late if it strips a constraint; a
+		// plan that says "none" against a world that has one is refused here,
+		// by the same sentence, because the pinned world already settles it.
+		if d.BuildConstraints != nil && strings.Join(*d.BuildConstraints, "\n") != strings.Join(g.Facts.Constraints, "\n") {
+			return refuteTestEditConstraints(f, g.Facts.Constraints, *d.BuildConstraints)
+		}
+		// Sorted for the same reason inspectTestEdits sorts the candidate's
+		// imports: with two novel imports declared, both doors must name the
+		// same one.
+		imports := make([]string, 0, len(d.Imports))
+		for _, imp := range d.Imports {
+			if t := strings.TrimSpace(imp); t != "" {
+				imports = append(imports, t)
+			}
+		}
+		sort.Strings(imports)
+		for _, imp := range imports {
+			if !g.Facts.Imports[imp] {
+				return refuteTestEditNovelImport(f, imp)
 			}
 		}
 	}
