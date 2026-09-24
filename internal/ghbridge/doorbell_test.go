@@ -480,3 +480,145 @@ func TestAnUnsetDoorbellRepoDoesNotAddressAnyRepository(t *testing.T) {
 		t.Fatalf("an unset Repo still aimed gh at a repository: %q", recorded)
 	}
 }
+
+// blockingDoorbell rings, and on its way through makes the exchange record at
+// path impossible to remove.
+//
+// THE DOORBELL IS THE SEAM, not the subject. The runner opens the exchange
+// record, then rings, then waits: ringing is the one point at which a test can
+// reach a record that has genuinely been written and is about to be closed. What
+// it simulates is a durable store whose close FAILS -- a read-only mount, a
+// revoked permission, an I/O error -- and it does so by replacing the record
+// with a non-empty directory, which os.Remove refuses for every user including
+// root. A chmod would have made this test pass or fail depending on who ran it.
+type blockingDoorbell struct {
+	path string
+	rung int
+}
+
+func (d *blockingDoorbell) Ring(_ context.Context, _ int64) error {
+	d.rung++
+	if err := os.RemoveAll(d.path); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(d.path, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(d.path, "occupied"), []byte("x"), 0o600)
+}
+
+// POSITIONAL FRAMING W7 -- A FAILED EXCHANGE CLOSE IS NOT SETTLEMENT.
+//
+// THE DEFECT. The refused branch discarded the error from closing its durable
+// exchange record, reported outcome=refused and returned the typed refusal. A
+// close that fails leaves the exchange PENDING, and a pending exchange is
+// withdrawn by the next startup -- so this process would say the consumer
+// refused the request while the next one retracted it as though nobody had ever
+// replied. Two durable records, disagreeing, about one exchange.
+//
+// TWO CLAIMS, and both are needed. The failure must be SURFACED, and the typed
+// refusal details must SURVIVE it: a repair that reported the close failure by
+// replacing the refusal with a storage error would lose the consumer's
+// diagnostic, which is the whole thing the refusal envelope exists to carry.
+func TestARefusalWhoseExchangeCannotBeClosedIsNotReportedAsSettled(t *testing.T) {
+	const requestID = "r-00000000feedface"
+	_, refusal := architectureRefusalFixture()
+	refusal.RequestID = requestID
+
+	keyPath, _ := writeTestKey(t)
+	m, box := newPRMailbox(t, keyPath, "157", true)
+	m.onPost = func(body string) []map[string]any {
+		posted, ok := ParseArchitectureRequest(body)
+		if !ok {
+			return nil
+		}
+		wire, rerr := ArchitectureRefusal{
+			Binding: posted.Binding, RequestID: posted.RequestID,
+			Stage: refusal.Stage, Reason: refusal.Reason,
+		}.Marker()
+		if rerr != nil {
+			return nil
+		}
+		return []map[string]any{{
+			"id": float64(7401), "body": wire,
+			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+		}}
+	}
+
+	dir := filepath.Join(t.TempDir(), "exchanges")
+	log := ExchangeLog{Dir: dir}
+	bell := &blockingDoorbell{path: filepath.Join(dir, architectureBinding().TaskID+"."+requestID+".json")}
+	runner := &ArchitectureRunner{
+		Issue: box, Binding: architectureBinding(),
+		NewRequestID: func() string { return requestID },
+		Poll:         10 * time.Millisecond, Wait: 20 * time.Second,
+		Exchanges: log, Doorbell: bell,
+	}
+
+	var summaries []string
+	var closedField, closeErrField any
+	res, err := runner.Run(context.Background(),
+		agent.Request{Role: roles.Architect, TaskID: architectureBinding().TaskID, Prompt: "architect this"},
+		func(e event.Event) {
+			summaries = append(summaries, e.Summary)
+			var fields map[string]any
+			if jerr := json.Unmarshal(e.Payload, &fields); jerr != nil {
+				return
+			}
+			if fields["outcome"] == "refused" {
+				closedField = fields["exchange_closed"]
+				closeErrField = fields["exchange_close_error"]
+			}
+		})
+
+	if bell.rung != 1 {
+		t.Fatalf("the doorbell rang %d times, so the record was never blocked", bell.rung)
+	}
+	// PREMISE: the close really does fail. Without this the test would pass on a
+	// store that closed cleanly and prove nothing about the ignored error.
+	if cerr := log.Close(architectureBinding().TaskID, requestID); cerr == nil {
+		t.Fatal("the exchange record closes cleanly, so this fixture proves nothing")
+	}
+
+	if err == nil {
+		t.Fatalf("a refused request returned success: %+v", res)
+	}
+	if res != (agent.Result{}) {
+		t.Fatalf("a refusal produced an architecture result: %+v", res)
+	}
+	// THE TYPED REFUSAL SURVIVES, with the consumer's own diagnostic.
+	refused, ok := err.(*ArchitectureRefused)
+	if !ok {
+		t.Fatalf("a close failure replaced the typed refusal: %v", err)
+	}
+	if refused.Stage != refusal.Stage || refused.Reason != refusal.Reason ||
+		refused.RequestID != requestID || !refused.Binding.Same(architectureBinding()) {
+		t.Fatalf("the refusal details did not survive the close failure: %+v", refused)
+	}
+	// AND THE CLOSE FAILURE IS SURFACED, on the error and to an operator.
+	if refused.ExchangeCloseErr == nil {
+		t.Fatal("the exchange close error was discarded")
+	}
+	if !strings.Contains(err.Error(), "could not be closed") {
+		t.Errorf("the returned error does not say the record is still open: %v", err)
+	}
+	if closedField != false {
+		t.Errorf("the refused event reported exchange_closed=%v on a failed close", closedField)
+	}
+	if s, _ := closeErrField.(string); strings.TrimSpace(s) == "" {
+		t.Errorf("the refused event carries no exchange_close_error: %v", closeErrField)
+	}
+	var said bool
+	for _, s := range summaries {
+		if strings.Contains(s, "exchange record is still open") {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("no operator-visible event says the exchange is still open: %v", summaries)
+	}
+	// AND THE RECORD REALLY IS STILL THERE, which is what the next startup sees.
+	if _, serr := os.Stat(bell.path); serr != nil {
+		t.Fatalf("the blocked record is gone, so nothing was left open: %v", serr)
+	}
+}

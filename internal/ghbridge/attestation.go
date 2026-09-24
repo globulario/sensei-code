@@ -475,9 +475,12 @@ func RenderAttestation(rec AttestationRecord, box Issue) (string, error) {
 		"adversarial-review obligation this task carries is NOT satisfied and remains on its record.\n",
 		a.RequestID, a.Statement)
 	body := b.String()
-	if strings.Contains(body, reviewartifact.Marker) || strings.Contains(body, requestMarker) ||
-		strings.Count(body, "[sensei-code:") != 1 {
-		return "", errors.New("the publication would carry a protocol marker beyond its own envelope, so it is not posted")
+	// Position zero, for the same reason as the relay receipt: what an artifact
+	// opens with is what it IS. The owner's statement is human prose and may name
+	// a protocol marker; a whole-body scan turned quoting one into a refusal to
+	// publish the override at all.
+	if _, opens := reviewartifact.EnvelopeAt(body, attestationMarker); !opens {
+		return "", errors.New("the publication does not open with its own envelope, so it is not posted")
 	}
 	return body, nil
 }

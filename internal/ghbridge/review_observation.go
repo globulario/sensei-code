@@ -85,6 +85,11 @@ func bodyDigestOf(body string) string {
 var otherProtocolMarkers = []string{
 	requestMarker, relayedReviewMarker, attestationMarker,
 	WithdrawnMarker, WakeMarker, architectureRequestMarker, architectureResponseMarker,
+	// A refusal is one of those known objects too. Without it a consumer's
+	// refusal posted to this conversation would be read as the reviewer
+	// answering badly -- a reviewer fault manufactured out of another
+	// protocol's correct reply.
+	architectureRefusalMarker,
 }
 
 // otherProtocolObject reports whether a comment IS one of those objects.
@@ -101,9 +106,8 @@ var otherProtocolMarkers = []string{
 // is reviewer content, and if it cannot be read as a review that is a malformed
 // observation rather than an absence.
 func otherProtocolObject(body string) bool {
-	head := strings.TrimLeft(body, " \t\r\n")
 	for _, marker := range otherProtocolMarkers {
-		if strings.HasPrefix(head, marker) {
+		if _, ok := reviewartifact.EnvelopeAt(body, marker); ok {
 			return true
 		}
 	}

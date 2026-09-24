@@ -250,3 +250,68 @@ func TestAnAttestationIsRefusedUnlessItOverridesAPublishedAccept(t *testing.T) {
 		})
 	}
 }
+
+// POSITIONAL FRAMING at the override publication: what this body IS, is decided
+// by the envelope it OPENS with.
+//
+// The same rule the relay receipt and the review parser now use, so no artifact
+// kind is left deciding its own identity by scanning itself. RenderAttestation
+// previously refused any body containing a review or request marker, or holding
+// more than one "[sensei-code:" in total.
+//
+// THE REACH OF THIS WITNESS, STATED. roles.Attestation.Statement is fixed text
+// by design -- an override says one thing, and a free-text field would let it
+// say something weaker or stronger than what it is -- and every other field this
+// renders is shape-constrained. So no reachable override can carry a quoted
+// marker today, and the scan this replaces could not misclassify one. This is a
+// FORWARD GUARD on the rule, not a reproduction of a reachable defect: it pins
+// the renderer to position zero against the day any of that text stops being
+// fixed, and it keeps one rule spelled one way across every envelope. The
+// reachable half -- an override is still not a review -- is asserted first.
+func TestTheOverridePublicationIsDecidedByTheEnvelopeItOpensWith(t *testing.T) {
+	f := newRelayFixture(t)
+	store := attestStore(t)
+	artifact := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
+	relayed, err := f.submit(artifact)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec, err := f.attest(store, relayRequest, relayed.ReviewDigest, true)
+	if err != nil {
+		t.Fatalf("the override was refused: %v", err)
+	}
+
+	body, err := RenderAttestation(rec, f.box)
+	if err != nil {
+		t.Fatalf("a valid override did not render: %v", err)
+	}
+	// REACHABLE: it opens with its own envelope and nothing reading the mailbox
+	// can take it for an answer.
+	if _, opens := reviewartifact.EnvelopeAt(body, attestationMarker); !opens {
+		t.Fatalf("the override does not open with its own envelope:\n%s", body)
+	}
+	if _, perr := reviewartifact.Parse(body); perr == nil {
+		t.Fatalf("the override can be read as a review answer:\n%s", body)
+	}
+
+	// FORWARD GUARD: a statement that quotes protocol markers is text. It does
+	// not make the override a second artifact, and it does not make the override
+	// unpublishable -- which is what the whole-body scan would have done to it.
+	quoting := rec
+	quoting.Attestation.Statement = "Overriding: the reviewer said a bare " +
+		architectureRefusalMarker + " comment is classified as ordinary content, and quoted " +
+		reviewartifact.Marker + ", " + requestMarker + " and " + relayedReviewMarker + " to explain it."
+	quoted, err := RenderAttestation(quoting, f.box)
+	if err != nil {
+		t.Fatalf("an override whose statement quotes protocol markers was not published: %v", err)
+	}
+	if !strings.Contains(quoted, quoting.Attestation.Statement) {
+		t.Fatalf("the statement was dropped from the publication:\n%s", quoted)
+	}
+	if _, opens := reviewartifact.EnvelopeAt(quoted, attestationMarker); !opens {
+		t.Fatal("the quoted markers changed which envelope the override opens with")
+	}
+	if _, perr := reviewartifact.Parse(quoted); perr == nil {
+		t.Fatalf("an override quoting the review marker became readable as a review:\n%s", quoted)
+	}
+}

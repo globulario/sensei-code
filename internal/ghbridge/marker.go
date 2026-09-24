@@ -33,6 +33,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
@@ -230,15 +231,22 @@ func (r Request) Marker() (string, error) {
 
 var fieldLine = regexp.MustCompile(`^\s*([a-z_]+)\s*=\s*(\S+)\s*$`)
 
-// fields reads key=value lines following a marker, stopping at the first line
-// that is not one. Everything after is the body. Prose therefore cannot inject
-// an identity field by containing "candidate_tree=..." further down.
+// fields identifies a POSITION-ZERO envelope and then reads the key=value lines
+// following it, stopping at the first line that is not one. Everything after is
+// the body. Prose therefore cannot inject an identity field by containing
+// "candidate_tree=..." further down.
+//
+// Identification is reviewartifact.EnvelopeAt, the one place the positional rule
+// is spelled. It replaced strings.Index, which found a marker ANYWHERE and so
+// let text that merely quotes an envelope be read as one -- the whole-body
+// search A5 forbids. ok=false now means "these bytes do not claim this
+// envelope", which is a statement about position and not about well-formedness.
 func fields(body, marker string) (map[string]string, string, bool) {
-	idx := strings.Index(body, marker)
-	if idx < 0 {
+	at, ok := reviewartifact.EnvelopeAt(body, marker)
+	if !ok {
 		return nil, "", false
 	}
-	lines := strings.Split(body[idx+len(marker):], "\n")
+	lines := strings.Split(body[at+len(marker):], "\n")
 	out := map[string]string{}
 	consumed := 0
 	for i, ln := range lines {
