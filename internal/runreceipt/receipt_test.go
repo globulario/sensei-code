@@ -176,6 +176,7 @@ func completeReceipt() Receipt {
 		DeferredQuestion:          UnknownValue("no authority question was deferred"),
 		ExternalBlock:             UnknownValue("no role turn was blocked externally"),
 		NotConverged:              UnknownValue("the run did not end unconverged"),
+		RestorationRefusal:        UnknownValue("the run refused no restoration"),
 		PlanState:                 PlanPresent,
 		CandidateState:            CandidatePresent,
 		CandidateCommit:           MeasuredValue("cccccccccccccccccccccccccccccccccccccccc", "git rev-parse refs/heads/sensei-code/task-1"),
@@ -592,13 +593,14 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v10"
+	const version = "sensei-code.governed-run-receipt/v11"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
 	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
-		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged, OutcomeUnknown}
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
+		OutcomeRestorationRefused, OutcomeUnknown}
 	for _, o := range outcomes {
 		if !o.Valid() {
 			t.Errorf("%q is enumerated here but not Valid()", o)
@@ -611,7 +613,7 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 			t.Errorf("%q is valid but not pinned by this test", candidate)
 		}
 	}
-	if len(outcomes) != 11 {
+	if len(outcomes) != 12 {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
 	}
 }
@@ -736,6 +738,37 @@ func TestANotConvergedRunIsACompleteRecordOfARealOutcome(t *testing.T) {
 	}
 	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v9", OutcomeNotConverged); err == nil {
 		t.Fatal("v9 + NOT_CONVERGED must be invalid: NOT_CONVERGED was added in v10")
+	}
+}
+
+// A refused restoration is a complete record of a real outcome, and it must say
+// WHICH instrument binding it could not verify -- the fact that distinguishes it
+// from the DERIVED mismatch it is not.
+func TestARestorationRefusalIsACompleteRecordThatNamesItsInstrument(t *testing.T) {
+	if !OutcomeRestorationRefused.SufficientForComplete() {
+		t.Fatal("RESTORATION_REFUSED must be sufficient for a complete record")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomeRestorationRefused
+	rec.CandidateState = CandidateUnattempted
+	rec.CandidateCommit = UnknownValue("never minted")
+	rec.CandidateTree = UnknownValue("never minted")
+	rec.CandidateFirstParent = UnknownValue("never minted")
+	rec.CandidateDigest = UnknownValue("never minted")
+	rec.CandidateCommitDiffDigest = UnknownValue("never minted")
+	rec.RestorationRefusal = MeasuredValue(
+		"test-edit authority: the AUTHORED instrument cannot be verified by this resume",
+		"the instrument binding the resume could not verify")
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / RESTORATION_REFUSED must be representable: %v", missing)
+	}
+	rec.RestorationRefusal = UnknownValue("not recorded")
+	if state, missing := rec.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, " "), "restoration_refusal") {
+		t.Fatalf("a refusal that does not name what it could not verify must be incomplete: state=%s missing=%v", state, missing)
+	}
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v10", OutcomeRestorationRefused); err == nil {
+		t.Fatal("v10 + RESTORATION_REFUSED must be invalid: RESTORATION_REFUSED was added in v11")
 	}
 }
 
