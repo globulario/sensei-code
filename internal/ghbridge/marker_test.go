@@ -52,18 +52,42 @@ func canonicalAnswer(t *testing.T, s Subject, requestID, provider, body string) 
 	return raw
 }
 
+// A request round trips from the envelope it OPENS with, and from nowhere else.
+//
+// The round trip used to run through "preamble\n\n" + marker, because
+// ParseRequest found its marker with strings.Index and would read one sitting
+// anywhere in a comment. That is the whole-body search A5 forbids, and it is the
+// same shape that rejected a correct review on 2026-09-24: a classifier that
+// cannot tell a message from a message ABOUT messages reads quotation as
+// instruction in one direction and refuses it in the other.
+//
+// W3 CONTROL, at this envelope: the cases below are ordinary content that merely
+// CONTAINS a request envelope, and ordinary content is what they stay.
 func TestRequestMarkerRoundTrips(t *testing.T) {
 	in := reqC1()
 	m, err := in.Marker()
 	if err != nil {
 		t.Fatalf("marker: %v", err)
 	}
-	got, ok := ParseRequest("preamble\n\n" + m + "\nplease review")
+	got, ok := ParseRequest(m + "\nplease review")
 	if !ok {
 		t.Fatal("marker did not parse back")
 	}
 	if got != in {
 		t.Errorf("round trip changed the request:\n got %+v\nwant %+v", got, in)
+	}
+
+	for name, body := range map[string]string{
+		"behind a preamble":    "preamble\n\n" + m + "\nplease review",
+		"quoted in a sentence": "a comment opening with " + requestMarker + " is a request\n",
+		"quoted inside a review": artifactFor(t, reqC1().Subject, reqC1().RequestID, "chatgpt",
+			`{"decision":"revise","summary":"s","instructions":"i","findings":[]}`) + "\n" + m,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if req, ok := ParseRequest(body); ok {
+				t.Fatalf("content merely containing a request envelope was read as one: %+v", req)
+			}
+		})
 	}
 }
 
