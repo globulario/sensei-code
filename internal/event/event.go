@@ -180,6 +180,18 @@ const (
 	// called the same work resumable (DF-6, 2026-09-19). The payload is
 	// workflow.NotConverged; a resume has the architect re-plan the candidate.
 	WorkflowNotConverged Kind = "workflow.not_converged"
+	// WorkflowRestorationRefused is a resumed invocation that could not
+	// RE-ESTABLISH the authority its record holds, and refused rather than
+	// execute.
+	//
+	// Terminal for the INVOCATION and not for the TASK, like
+	// WorkflowBlockedExternal. Emitted as WorkflowFailed it destroyed the very
+	// obligation the refusal was protecting: task-1789960053774525922
+	// (2026-09-21) left the resumable set permanently because a restoration
+	// check refused it. The payload is workflow.RestorationRefusal, which names
+	// the authority instrument whose binding could not be read or verified, so
+	// the refusal can be told apart from a DERIVED mismatch it is not.
+	WorkflowRestorationRefused Kind = "workflow.restoration_refused"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record

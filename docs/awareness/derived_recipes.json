@@ -124,6 +124,30 @@
         "written_at": "2026-09-13T23:40:00Z",
         "written_by": "operator_authorized"
       }
+    },
+    {
+      "kind": "field_access_under_lock",
+      "dir": "internal/workflow",
+      "type": "Engine",
+      "field": "testEdits",
+      "lock": "mu",
+      "why": "Engine.testEdits holds existing-test EDIT AUTHORITY per task. It is the state DF-24 is about: routing writes it from two instruments, resume recomputes and compares it, and a refusal built on a torn read would refuse or admit authority the run never had. Whether every access is serialized under Engine.mu is mechanically checkable and worth rechecking on every change. This is also the only derived question that covers internal/workflow/testedit.go, the file the restoration predicate lives in."
+    },
+    {
+      "kind": "field_access_under_lock",
+      "dir": "internal/workflow",
+      "type": "Engine",
+      "field": "supplied",
+      "lock": "mu",
+      "why": "Engine.supplied holds the SUPPLIED PLAN per task -- the bound a resume must re-register so every path that refuses to revise a supplied plan still refuses after a restart. A race here would let one task observe another's plan source. Covers internal/workflow/suppliedplan.go."
+    },
+    {
+      "kind": "field_access_under_lock",
+      "dir": "internal/workflow",
+      "type": "Engine",
+      "field": "objectives",
+      "lock": "mu",
+      "why": "Engine.objectives holds the OBJECTIVE TEXT whose digest is the architecture binding's identity. A torn read would let an answer be matched against an objective the run is not executing. Covers internal/workflow/engine.go."
     }
   ]
 }
