@@ -1536,6 +1536,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				strings.Join(guidance, "\n"), nil))
 		}
 		report := ""
+		// responded is whether an implementer answered in this cycle. Only an
+		// answer can account for the open findings; a cycle that called no
+		// worker has nothing to reconcile.
+		responded := false
 		// A resumed awaiting-review task reviews the candidate it already has
 		// before anything touches it. Only the first cycle: if that review asks
 		// for a revision, the ordinary loop resumes and cycle two calls a worker
@@ -1571,6 +1575,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 			}
 			report = strings.TrimSpace(result.Text)
+			responded = true
 		}
 
 		candidate := gitx.Repo{Root: workspace}
@@ -1786,6 +1791,52 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			}
 		}
 
+		// CONVERGENCE IS PER FINDING. Every outstanding finding of the open
+		// review is accounted for by id, against the class its record carries,
+		// before this candidate goes back to review. A finding answered with a
+		// response of another class, pointed at nothing, or not answered at
+		// all is still open, and the worker has not converged however the diff
+		// moved. The identical-diff check below is only a backstop for a cycle
+		// with no typed findings to account for.
+		accounted := false
+		if outstanding := e.outstandingFindings(taskID); responded && len(outstanding) != 0 {
+			open, _ := e.openReview(taskID)
+			responses, perr := parseFindingResponses(report)
+			acct := reconcileFindings(outstanding, responses, perr, changedSince(open.Files, diff))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				"review finding accounting: "+acct.diagnosis(), acct))
+			e.recordDischarges(taskID, acct)
+			var escalated architectureDecision
+			if len(acct.disputed()) != 0 {
+				// A disagreement is a route, not a licence: it goes to the
+				// architect, and the finding stays open under its own class.
+				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task,
+					classDisputePrompt(task, plan, lastAudit, open, acct), "the implementer disputes a finding's class: "+acct.diagnosis())
+				if err != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+						"the review findings are not discharged: %s; escalating the class disagreement failed: %w", acct.diagnosis(), err)
+				}
+				if strings.TrimSpace(revised.Plan) == "" {
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+						"the review findings are not discharged: %s; the architect returned no revised plan for the class disagreement", acct.diagnosis())
+				}
+				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+				escalated = revised
+			}
+			if len(acct.unanswered()) != 0 {
+				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+					"the review findings were not each accounted for, so %s has not converged: %s",
+					config.DisplayName(worker.Name), acct.diagnosis())
+			}
+			if len(acct.disputed()) != 0 {
+				plan = escalated.Plan
+				feedback = "The architect answered a class disagreement. The disputed finding keeps its class and is still open.\n" +
+					renderFindings(e.outstandingFindings(taskID)) + findingResponseContract(e.outstandingFindings(taskID))
+				continue
+			}
+			accounted = true
+		}
+
 		auditArgs := map[string]any{"diff": diff, "task": task}
 		// Scope the audit to the domain the start gate certified, so the audit
 		// evaluates this candidate against this repository's rules rather than
@@ -1904,8 +1955,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// real run did exactly that, three times, before timing out with no
 		// diagnosis. Stop and say so, so the next worker gets the candidate
 		// while there is still budget to do something with it.
+		//
+		// It decides nothing when the findings were accounted for: an evidence
+		// finding discharged by evidence leaves the diff unchanged, correctly.
 		if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
-			if digest == previousDiffDigest {
+			if digest == previousDiffDigest && !accounted {
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 					"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 						"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
@@ -2120,8 +2174,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
 			return candidateAccepted, plan, lastReview, lastAudit, nil
 		case roles.Revise:
-			e.setOpenReview(taskID, openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID))
-			feedback = review.Instruction()
+			open := openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID)
+			open.Files = diffFileDigests(diff)
+			e.setOpenReview(taskID, open)
+			feedback = review.Instruction() + findingResponseContract(open.outstanding())
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case roles.Escalate:
 			// The architect's resolution is the adjudication; nothing stays open.
@@ -4447,12 +4503,18 @@ Sensei's evidence is still a REVISE.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+ "findings":[{"id":"f1","class":"code"|"evidence"|"scope","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
 
 Every blocking finding must name something a worker can open. A finding with
 nowhere to point cannot be acted on, and a cycle spent on one produces an
 identical diff and consumes the budget for nothing. Do not return ACCEPT while
 recording a blocking finding.
+
+Every finding must carry a class, and a finding without one is refused: "code"
+is a defect in the candidate and only a change to it discharges the finding;
+"evidence" means the proof record is insufficient and only execution evidence
+discharges it; "scope" means the change is outside its bound. The class binds
+the response, and the worker cannot change it.
 
 CANDIDATE REVISION: %s
 This verdict is bound to that revision. If the worker changes the candidate,
@@ -4543,7 +4605,9 @@ ESCALATE only for a genuine architectural-authority question.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+ "findings":[{"id":"f1","class":"code"|"evidence"|"scope","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+
+Every finding must carry a class ("code", "evidence" or "scope"); a finding without one is refused.
 
 CONVERSATION WITH THE HUMAN:
 %s
@@ -5198,8 +5262,11 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			state.Evidence = tc.EvidenceSnapshot
 			state.OpenFindings(openFindings(review, audit, err))
 			_ = state.Save(e.Repo.Root)
+			// The typed findings travel with their own ids and classes; the
+			// prose the state carries is context around them, not their record.
+			typed := e.outstandingFindings(taskID)
 			handoff := handoffPacket(state, roles.Binding{TaskID: taskID, BaseSHA: identity.BaseSHA},
-				config.DisplayName(worker.Name), start.GraphBuildCommit(), e.Config.Workflow.ReviewCycles, e.Config.Workflow.ReviewCycles)
+				config.DisplayName(worker.Name), start.GraphBuildCommit(), e.Config.Workflow.ReviewCycles, e.Config.Workflow.ReviewCycles, typed...)
 			if err := handoff.Continuity(roles.Binding{TaskID: taskID, BaseSHA: identity.BaseSHA}); err != nil {
 				// A handoff that does not continue this task would start the
 				// next worker over on the same branch, which looks like progress
@@ -5207,7 +5274,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				fail(fmt.Errorf("the candidate could not be handed on: %w", err))
 				return
 			}
-			carried = handoff.Render()
+			carried = handoff.Render() + findingResponseContract(typed)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.HandoffCreated,
 				config.DisplayName(worker.Name)+" did not converge; the candidate and its unanswered findings pass to the next bounded worker",
 				handoff))

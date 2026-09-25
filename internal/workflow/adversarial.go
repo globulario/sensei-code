@@ -117,14 +117,30 @@ func inspectionPacket(tc taskContext, binding roles.Binding, start certifiedStar
 // The findings travel with it. A worker that inherits a candidate without the
 // objections nobody answered will re-derive them, differently, and undo the
 // previous worker's fix on its way past.
-func handoffPacket(state taskstate.State, binding roles.Binding, previous string, graphBuildCommit string, cyclesUsed, cyclesAllowed int) roles.WorkerHandoffPacket {
-	findings := make([]roles.Finding, 0, len(state.Open))
-	for i, f := range state.Open {
+//
+// typed are the open review's own findings, carried as they were raised: their
+// ids and their classes are the reviewer's, and no prose about them replaces
+// them. The prose notes the state holds follow, numbered around the typed ids.
+func handoffPacket(state taskstate.State, binding roles.Binding, previous string, graphBuildCommit string, cyclesUsed, cyclesAllowed int, typed ...roles.Finding) roles.WorkerHandoffPacket {
+	findings := make([]roles.Finding, 0, len(typed)+len(state.Open))
+	taken := map[string]bool{}
+	for _, f := range typed {
+		findings = append(findings, f)
+		taken[f.ID] = true
+	}
+	n := 0
+	for _, f := range state.Open {
+		id := ""
+		for id == "" || taken[id] {
+			n++
+			id = fmt.Sprintf("f%d", n)
+		}
+		taken[id] = true
 		// Carried at major rather than blocking. These are objections the
 		// previous cycle did not answer, not fresh ratings, and promoting them
 		// would let an unanswered note refuse the next candidate on its own.
 		findings = append(findings, roles.Finding{
-			ID:        fmt.Sprintf("f%d", i+1),
+			ID:        id,
 			Severity:  roles.Major,
 			Claim:     f.Detail,
 			Reference: f.Source,

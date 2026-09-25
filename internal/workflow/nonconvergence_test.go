@@ -23,7 +23,12 @@ import (
 // reviseForever is the gate harness with a reviewer that never accepts.
 func reviseForever(t *testing.T) *gateHarness {
 	t.Helper()
-	return newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Fresh, "revise")
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Fresh, "revise")
+	// A finding carries its class, and a verdict whose finding does not is
+	// refused; the shared harness's revise payload predates the class.
+	h.engine.Runners = &scriptedReviews{verdicts: []string{`{"decision":"revise","summary":"the proof is missing",
+ "findings":[{"id":"1","class":"evidence","severity":"blocking","claim":"the test does not fail without the fix","reference":"main.go","reason":"no mutation"}]}`}}
+	return h
 }
 
 func runImplement(h *gateHarness) (error, []event.Event) {
@@ -271,5 +276,298 @@ func TestTheOpenFindingsReachTheOwedReplan(t *testing.T) {
 	prompt := replanPrompt("objective", "the plan", why, found[0].Review)
 	if !strings.Contains(prompt, "the change is not proven") || strings.Contains(prompt, "(the record carries no review text)") {
 		t.Fatalf("the re-plan prompt does not carry the finding that prevented convergence:\n%s", prompt)
+	}
+}
+
+// FINDING-OWNED CONVERGENCE (measured 2026-09-25 on the DF-19 resume): a review
+// returned a CODE finding and an EVIDENCE finding, the implementer answered the
+// evidence one and called the whole review evidence-only, and the code defect
+// was carried forward as answered. The engine caught it only because the diff
+// happened not to move. These witnesses drive the REAL candidate loop.
+
+// scriptedReviews answers each review turn with the next verdict in order and
+// every other role with the configured command line. It counts the review
+// turns it served, so a witness can say whether the reviewer was ever reached.
+type scriptedReviews struct {
+	verdicts []string
+	asked    int
+	// roles is every role a runner was resolved for, in order.
+	roles []roles.Role
+	// architect, when set, answers every architect turn.
+	architect string
+}
+
+func (s *scriptedReviews) Resolve(spec RunnerSpec) (Resolved, error) {
+	s.roles = append(s.roles, spec.Role)
+	if spec.Role == roles.Architect && s.architect != "" {
+		return Resolved{Runner: answeringRunner{text: s.architect}, Name: "chatgpt", Label: "ChatGPT"}, nil
+	}
+	if spec.Role != roles.Reviewer {
+		return CLIResolved(spec, "session-1"), nil
+	}
+	text := s.verdicts[len(s.verdicts)-1]
+	if s.asked < len(s.verdicts) {
+		text = s.verdicts[s.asked]
+	}
+	s.asked++
+	return Resolved{Runner: answeringRunner{text: text, mode: roles.Fresh}, Name: "remote:abc", Label: "remote:abc"}, nil
+}
+
+// codeAndEvidenceReview is the measured DF-19 shape: one CODE finding about a
+// fail-open path and one EVIDENCE finding about missing failing-first history.
+const codeAndEvidenceReview = `{"decision":"revise","summary":"a CREATE that cannot bind does not refuse the plan, and the failing-first history is missing",
+ "findings":[
+  {"id":"f1","class":"code","severity":"blocking","claim":"a CREATE declaration that cannot be bound refuses the plan","reference":"internal/workflow/route.go","reason":"routePlan emits each createRefusal as an event and continues","correction":"return a typed routing refusal whenever a CREATE entry fails to bind"},
+  {"id":"f2","class":"evidence","severity":"major","claim":"W4, W5 and W6 failed before the repair","reference":"the witness record","reason":"no failing-first output was supplied","proof_gap":"run the witnesses against the pre-repair implementation"}]}`
+
+const acceptingReview = `{"decision":"accept","summary":"the candidate stands"}`
+
+// unrelatedEditor is an implementer that edits ONE UNRELATED LINE of main.go --
+// a comment -- and prints whatever response it is given. With moves, the line
+// carries a cycle counter, so every diff differs from the last; without, every
+// cycle writes the same bytes. It never touches what a finding names.
+func unrelatedEditor(t *testing.T, response string, moves bool) config.Agent {
+	t.Helper()
+	counter := t.TempDir() + "/cycles"
+	script := `cat >/dev/null
+n=$(cat "$1" 2>/dev/null || echo 0); n=$((n+1)); echo "$n" > "$1"
+[ "$3" = moves ] || n=same
+printf 'package main\n\n// unrelated edit %s\nfunc main() {}\n' "$n" > main.go
+printf '%s\n' "$2"`
+	mode := "still"
+	if moves {
+		mode = "moves"
+	}
+	return config.Agent{Name: "claude", Graph: "none", Command: "/bin/sh", Args: []string{"-c", script, "sh", counter, response, mode}}
+}
+
+// findingsHarness is the gate harness with a scripted reviewer sequence and the
+// unrelated-line implementer, given enough cycles to be asked twice.
+func findingsHarness(t *testing.T, response string, moves bool, verdicts ...string) (*gateHarness, *scriptedReviews) {
+	t.Helper()
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Fresh, "accept")
+	reviews := &scriptedReviews{verdicts: verdicts}
+	h.engine.Runners = reviews
+	h.worker = unrelatedEditor(t, response, moves)
+	h.engine.Config.Implementors = []config.Agent{h.worker}
+	h.engine.Config.Workflow.ReviewCycles = 3
+	return h, reviews
+}
+
+func runFindings(h *gateHarness) (candidateOutcome, error) {
+	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
+	return outcome, err
+}
+
+// W3 THE PROXY IS NOT THE CHECK -- CRITICAL CONTROL. The second cycle changes an
+// unrelated line, so the diff differs and the identical-diff check passes, while
+// the CODE finding is never addressed. The next reviewer would accept; the run
+// must not converge on that, and must name the finding.
+//
+// Fails if: convergence is decided by diff movement (the pre-repair loop
+// accepted here), or the accounting stops naming the open finding by id.
+func TestFindingW3AnUnrelatedDiffChangeDoesNotDischargeACodeFinding(t *testing.T) {
+	h, reviews := findingsHarness(t, "changed a comment", true, codeAndEvidenceReview, acceptingReview)
+	outcome, err := runFindings(h)
+
+	if outcome == candidateAccepted {
+		t.Fatalf("an unrelated line change carried an unaddressed CODE finding to acceptance (reviews asked: %d)", reviews.asked)
+	}
+	if err == nil || !strings.Contains(err.Error(), "f1") {
+		t.Fatalf("the non-convergence does not name the open CODE finding f1: %v", err)
+	}
+	if strings.Contains(err.Error(), "identical diff") {
+		t.Fatalf("the run was stopped by the diff backstop, not by the finding accounting: %v", err)
+	}
+	if reviews.asked != 1 {
+		t.Fatalf("the unaccounted finding reached %d review turns; the accounting must stop the cycle before a second review", reviews.asked)
+	}
+}
+
+// accountingEvents are the per-cycle finding accounting records the run emitted.
+func accountingEvents(h *gateHarness) []string {
+	var out []string
+	for _, ev := range drainEvents(h.events) {
+		if strings.HasPrefix(ev.Summary, "review finding accounting: ") {
+			out = append(out, ev.Summary)
+		}
+	}
+	return out
+}
+
+// W1 THE MEASURED CASE. One CODE and one EVIDENCE finding, answered with
+// evidence alone and the diff left as it was. The run does not converge and the
+// diagnosis names the unaddressed CODE finding by id -- not merely "the
+// candidate did not change".
+//
+// Fails if: the evidence answer is read as covering the review; the diagnosis
+// stops naming f1; or the identical-diff backstop decides instead of the
+// accounting (it would fire here too, which is why its message is excluded).
+func TestFindingW1AnEvidenceAnswerDoesNotDischargeTheCodeFinding(t *testing.T) {
+	h, reviews := findingsHarness(t,
+		`FINDING-RESPONSES: {"responses":[{"id":"f2","response":"evidence","evidence":"go test -run TestW4 against the pre-repair tree: FAIL"}]}`,
+		false, codeAndEvidenceReview, acceptingReview)
+	outcome, err := runFindings(h)
+
+	if outcome == candidateAccepted {
+		t.Fatal("a review with a CODE finding converged on an evidence-only answer")
+	}
+	if err == nil || !strings.Contains(err.Error(), "[f1] code finding silent") {
+		t.Fatalf("the diagnosis does not name the unaddressed CODE finding f1 by id: %v", err)
+	}
+	if strings.Contains(err.Error(), "[f2]") {
+		t.Fatalf("the evidence finding answered with evidence is still reported open: %v", err)
+	}
+	if strings.Contains(err.Error(), "did not change between review cycles") {
+		t.Fatalf("the diff backstop decided, not the finding accounting: %v", err)
+	}
+	if reviews.asked != 1 {
+		t.Fatalf("the half-answered review reached %d review turns", reviews.asked)
+	}
+}
+
+// W2 RECLASSIFICATION IS REFUSED, in the loop. The implementer answers the CODE
+// finding as evidence-only. The class the loop judges by is the finding's.
+//
+// Fails if: a response's kind is allowed to stand in for the finding's class.
+func TestFindingW2ACodeFindingAnsweredAsEvidenceIsNotDischarged(t *testing.T) {
+	h, _ := findingsHarness(t,
+		`FINDING-RESPONSES: {"responses":[{"id":"f1","response":"evidence","evidence":"the refusal is reported as status","claimed_class":"evidence"},{"id":"f2","response":"evidence","evidence":"go test: FAIL before, PASS after"}]}`,
+		true, codeAndEvidenceReview, acceptingReview)
+	outcome, err := runFindings(h)
+
+	if outcome == candidateAccepted {
+		t.Fatal("a CODE finding answered as evidence-only was discharged")
+	}
+	if err == nil || !strings.Contains(err.Error(), "[f1] code finding reclassification_refused") ||
+		!strings.Contains(err.Error(), "the finding record says code") {
+		t.Fatalf("the refusal does not take f1's class from the finding record: %v", err)
+	}
+}
+
+// W4 EVIDENCE FINDING DISCHARGED BY EVIDENCE. An evidence-only review answered
+// with execution evidence and no code change is discharged, and the unchanged
+// diff does not end the run: the candidate goes back to review each cycle.
+//
+// Fails if: evidence cannot discharge an evidence finding, or the identical-diff
+// backstop still decides after every finding was accounted for.
+func TestFindingW4AnEvidenceFindingIsDischargedByEvidence(t *testing.T) {
+	const evidenceOnly = `{"decision":"revise","summary":"the failing-first history is missing",
+ "findings":[{"id":"f2","class":"evidence","severity":"major","claim":"W4 failed before the repair","reference":"the witness record","reason":"no output","proof_gap":"run it against the pre-repair tree"}]}`
+	h, reviews := findingsHarness(t,
+		`FINDING-RESPONSES: {"responses":[{"id":"f2","response":"evidence","evidence":"go test -run TestW4 at the pinned base: FAIL; at the candidate: PASS"}]}`,
+		false, evidenceOnly)
+	outcome, err := runFindings(h)
+	seen := accountingEvents(h)
+
+	if err == nil || strings.Contains(err.Error(), "did not change between review cycles") || strings.Contains(err.Error(), "not each accounted for") {
+		t.Fatalf("an evidence finding answered with evidence did not go back to review: outcome=%q err=%v", outcome, err)
+	}
+	if !strings.Contains(err.Error(), "review cycles") {
+		t.Fatalf("want the budget spent on reviews, got: %v", err)
+	}
+	if reviews.asked != 3 {
+		t.Fatalf("the discharged candidate reached %d review turns, want one per cycle (3)", reviews.asked)
+	}
+	if len(seen) != 2 || !strings.Contains(seen[0], "all 1 outstanding finding(s) are discharged") {
+		t.Fatalf("the accounting did not discharge the evidence finding each cycle: %q", seen)
+	}
+}
+
+// W5 PARTIAL ANSWER IS NOT CONVERGENCE -- CONTROL. Two outstanding findings, the
+// CODE one answered by a real change to the file it names, the other silent.
+// The run does not converge and names the one still open, and only that one.
+//
+// Fails if: one discharge is read as the cycle converging, or the diagnosis
+// names the wrong finding.
+func TestFindingW5APartialAnswerNamesTheFindingStillOpen(t *testing.T) {
+	h, reviews := findingsHarness(t,
+		`FINDING-RESPONSES: {"responses":[{"id":"f1","response":"code","paths":["main.go"]}]}`,
+		true, codeAndEvidenceReview, acceptingReview)
+	outcome, err := runFindings(h)
+
+	if outcome == candidateAccepted {
+		t.Fatal("a cycle that answered one of two findings converged")
+	}
+	if err == nil || !strings.Contains(err.Error(), "1 of 2 outstanding finding(s) are still open") ||
+		!strings.Contains(err.Error(), "[f2] evidence finding silent") {
+		t.Fatalf("the diagnosis does not name the one finding still open: %v", err)
+	}
+	if strings.Contains(err.Error(), "[f1]") {
+		t.Fatalf("the CODE finding answered by a change to main.go is reported open: %v", err)
+	}
+	if reviews.asked != 1 {
+		t.Fatalf("the partly answered review reached %d review turns", reviews.asked)
+	}
+	if left := h.engine.outstandingFindings("task-1"); len(left) != 1 || left[0].ID != "f2" {
+		t.Fatalf("the discharge was not kept on the open review: %+v", left)
+	}
+}
+
+// W6 DISAGREEMENT IS A ROUTE, NOT A LICENCE -- CONTROL. The implementer disputes
+// f1's class and answers f2. The disagreement goes to the architect, f1 keeps
+// its class and stays open, and nothing reaches the reviewer again. (The
+// architect answers here; routing its plan then needs a certifiable Sensei
+// preflight the stub does not serve, so the run ends on that -- after the
+// architect turn this witness is about.)
+//
+// Fails if: a dispute discharges the finding, is dropped without escalation, or
+// lets the candidate back into review.
+func TestFindingW6ADisputedClassIsEscalatedAndNotDischarged(t *testing.T) {
+	h, reviews := findingsHarness(t,
+		`FINDING-RESPONSES: {"responses":[{"id":"f1","response":"disagree","claimed_class":"evidence","reason":"the plan said demonstrate"},{"id":"f2","response":"evidence","evidence":"go test: FAIL before, PASS after"}]}`,
+		true, codeAndEvidenceReview, acceptingReview)
+	reviews.architect = `{"decision":"proceed","summary":"f1 stands as a code finding","plan":"Return a typed routing refusal for an unbindable CREATE."}`
+	h.engine.Config.Architect = config.Agent{Name: "chatgpt", Command: "chatgpt", Graph: "none"}
+	outcome, err := runFindings(h)
+
+	if outcome == candidateAccepted {
+		t.Fatal("a disputed CODE finding was discharged by the dispute")
+	}
+	if err == nil || !strings.Contains(err.Error(), "[f1] code finding disputed") ||
+		!strings.Contains(err.Error(), "escalating the class disagreement") {
+		t.Fatalf("the disagreement was not routed as an escalation of f1: %v", err)
+	}
+	architect := false
+	for _, r := range reviews.roles {
+		architect = architect || r == roles.Architect
+	}
+	if !architect {
+		t.Fatalf("the escalation never reached the architect's turn: %v (%v)", reviews.roles, err)
+	}
+	if reviews.asked != 1 {
+		t.Fatalf("the disputed candidate reached %d review turns", reviews.asked)
+	}
+	left := h.engine.outstandingFindings("task-1")
+	if len(left) != 1 || left[0].ID != "f1" || left[0].Class != roles.ClassCode {
+		t.Fatalf("f1 did not stay open under its own class: %+v", left)
+	}
+}
+
+// The typed open findings travel through the handoff with the reviewer's ids
+// and classes; the responder's prose does not replace them.
+//
+// Fails if: the handoff carries only the prose notes, or renumbers or
+// reclassifies the reviewer's findings.
+func TestFindingTheHandoffCarriesTheTypedOpenFindings(t *testing.T) {
+	h, _ := findingsHarness(t,
+		`FINDING-RESPONSES: {"responses":[{"id":"f1","response":"evidence","evidence":"it is only evidence","claimed_class":"evidence"}]}`,
+		true, codeAndEvidenceReview, acceptingReview)
+	_, seen := runImplement(h)
+
+	var handoff roles.WorkerHandoffPacket
+	if err := json.Unmarshal(terminalPayload(t, seen, event.HandoffCreated), &handoff); err != nil {
+		t.Fatalf("the handoff does not read back: %v", err)
+	}
+	classes := map[string]roles.Class{}
+	for _, f := range handoff.OpenFindings {
+		if _, dup := classes[f.ID]; dup {
+			t.Fatalf("two handoff findings share id %q: %+v", f.ID, handoff.OpenFindings)
+		}
+		classes[f.ID] = f.Class
+	}
+	if classes["f1"] != roles.ClassCode || classes["f2"] != roles.ClassEvidence {
+		t.Fatalf("the handoff did not carry the reviewer's findings under their own classes: %+v", handoff.OpenFindings)
 	}
 }

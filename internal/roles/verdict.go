@@ -22,6 +22,35 @@ const (
 
 func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Minor }
 
+// Class is what KIND of thing a finding says is wrong, and therefore what kind
+// of response can make it right. It is owned by the finding: the reviewer that
+// raised it sets it, and nothing downstream -- least of all the implementer
+// asked to satisfy it -- may change it.
+//
+// Measured 2026-09-25 on the DF-19 resume: a review returned a code finding and
+// an evidence finding, the implementer answered the evidence one and declared
+// the whole review "evidence-only", and nothing objected, because nothing
+// carried a finding's kind through to its response.
+//
+// It is a closed vocabulary read by membership, and it is never inferred: a
+// finding whose class is absent is refused, not guessed from its severity, its
+// wording or its position.
+type Class string
+
+const (
+	// ClassCode is a defect in the candidate. Only a change to the candidate
+	// discharges it.
+	ClassCode Class = "code"
+	// ClassEvidence says the proof record is insufficient. It is discharged by
+	// execution evidence, and not by an unrelated code change.
+	ClassEvidence Class = "evidence"
+	// ClassScope says the change is outside its bound. It is discharged by a
+	// change that brings the candidate back inside it.
+	ClassScope Class = "scope"
+)
+
+func (c Class) Valid() bool { return c == ClassCode || c == ClassEvidence || c == ClassScope }
+
 // Finding is one concrete objection, attributable to something a person can go
 // and look at.
 //
@@ -33,6 +62,8 @@ func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Mino
 type Finding struct {
 	ID       string   `json:"id"`
 	Severity Severity `json:"severity"`
+	// Class is set by the reviewer and binds the class of the response.
+	Class Class `json:"class"`
 	// Claim is what the finding challenges: the assertion the candidate or its
 	// evidence makes that the reviewer believes is not established.
 	Claim string `json:"claim"`
@@ -51,7 +82,11 @@ func (f Finding) Line() string {
 		b.WriteString("[" + f.ID + "] ")
 	}
 	if f.Severity != "" {
-		b.WriteString(string(f.Severity) + ": ")
+		b.WriteString(string(f.Severity))
+		if f.Class != "" {
+			b.WriteString(" " + string(f.Class) + " finding")
+		}
+		b.WriteString(": ")
 	}
 	b.WriteString(strings.TrimSpace(f.Claim))
 	if f.Reference != "" {
@@ -66,6 +101,18 @@ func (f Finding) Line() string {
 		b.WriteString(" → missing proof: " + g)
 	}
 	return b.String()
+}
+
+// classifiedFindings refuses any finding with no valid class. The class is not
+// guessed: a finding that does not say what kind of thing is wrong cannot say
+// what kind of response would make it right.
+func classifiedFindings(findings []Finding) error {
+	for i, f := range findings {
+		if !f.Class.Valid() {
+			return fmt.Errorf("finding %d (%q) has class %q, which is not code, evidence, or scope; a finding's class is never inferred", i+1, f.ID, f.Class)
+		}
+	}
+	return nil
 }
 
 // Decision is the reviewer's bounded conclusion.
@@ -162,7 +209,9 @@ func (v ReviewVerdict) Validate(b Binding, implementer string) error {
 		// resolved silently in favour of the softer half.
 		return fmt.Errorf("review accepted while recording %d blocking finding(s)", len(v.Blocking()))
 	}
-	return nil
+	// Last, so every earlier refusal is still reached by the input that names
+	// it rather than pre-empted by this one.
+	return classifiedFindings(v.Findings)
 }
 
 // Instruction renders what the next implementer cycle must reconcile. Findings
