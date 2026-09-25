@@ -1898,16 +1898,28 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			previousDiffDigest = digest
 		}
 
+		// The audit's required-test observations are OBSERVATIONS: each one is
+		// satisfied only by the broker executing that same test, by id, and it
+		// passing against this exact candidate. The observation stays in the
+		// audit and in what the reviewer reads either way.
+		requiredRuns, requiredCorrelated := e.requiredTestEvidence(ctx, taskID, envelope, candidate, diff, audit)
+		reviewedValidation := reviewValidationEvidence(evidence.Render(), requiredRuns, requiredCorrelated, taskID, validation.Digest(diff))
+		if len(requiredCorrelated) != 0 {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				renderRequiredTestEvidence(requiredCorrelated, taskID, validation.Digest(diff)), requiredRuns))
+		}
+
 		// Snapshot the position so a handover states what the candidate holds
 		// rather than describing it in prose the next worker has to re-derive.
 		tc.EvidenceSnapshot = taskstate.Evidence{
 			DiffBytes: len(diff),
 			// The capture's exact path set, not a re-parse of the diff text:
 			// the authoritative set is already in hand here.
-			ChangedPaths:  capture.Paths,
-			AuditVerdict:  string(verdict.Decision),
-			AuditDetail:   verdict.Diagnostic(),
-			RequiredTests: tc.EvidenceSnapshot.RequiredTests,
+			ChangedPaths:        capture.Paths,
+			AuditVerdict:        string(verdict.Decision),
+			AuditDetail:         verdict.Diagnostic(),
+			RequiredTests:       tc.EvidenceSnapshot.RequiredTests,
+			RequiredTestResults: requiredTestResults(requiredCorrelated),
 		}
 
 		// The candidate revision is the identity every cross-agent artifact from
@@ -1958,7 +1970,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		e.classifyForDarkRun(sc, start, taskID, tc, diff)
 
 		standing, err := e.resolveReview(ctx, taskID, assignment,
-			reviewPacket(*tc, binding, start, plan, diff, lastAudit, evidence.Render()), worker.Name)
+			reviewPacket(*tc, binding, start, plan, diff, lastAudit, reviewedValidation), worker.Name)
 		if err != nil {
 			if errors.Is(err, roles.ErrReviewUnanswered) {
 				// The candidate stands, validated and audited, and the review it
@@ -2031,7 +2043,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
 						{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
 					},
-					Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
+					Canonical: reconciliationEvidence(lastAudit, reviewedValidation, revised),
 					Decision:  revised.Plan,
 					Authority: roles.ArchitectAuthority,
 					Remaining: revised.Consequences,
@@ -2116,7 +2128,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
 					{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
 				},
-				Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
+				Canonical: reconciliationEvidence(lastAudit, reviewedValidation, revised),
 				Decision:  revised.Plan,
 				Authority: roles.ArchitectAuthority,
 				Remaining: revised.Consequences,
@@ -5875,25 +5887,7 @@ func oneLine(s string) string {
 // different boundary would return a diff the caller's own capture of the same
 // worktree disagrees with, over a file both of them are right about.
 func (e *Engine) validate(ctx context.Context, taskID, base string, envelope broker.Envelope, repo gitx.Repo, diff string, intended []string) (validation.Bundle, string, error) {
-	permits := func(kind validation.CheckKind) (bool, string) {
-		var capability broker.Capability
-		switch kind {
-		case validation.Format:
-			capability = broker.RunFormatters
-		case validation.Build:
-			capability = broker.RunBuilds
-		case validation.Vet:
-			capability = broker.RunBuilds
-		case validation.Test:
-			capability = broker.RunTests
-		default:
-			return false, "unknown check kind " + string(kind)
-		}
-		if err := envelope.Require(capability); err != nil {
-			return false, err.Error()
-		}
-		return true, ""
-	}
+	permits := validationPermits(envelope)
 	// The baseline is created lazily and only when a check has already failed:
 	// attribution costs a second checkout and a second execution, and is worth
 	// paying only for a result something is about to act on.
@@ -5950,6 +5944,59 @@ func (e *Engine) validate(ctx context.Context, taskID, base string, envelope bro
 	checks = append(checks, checksOf(validation.Build, e.Config.Validation.Build)...)
 	checks = append(checks, checksOf(validation.Test, e.Config.Validation.Test)...)
 	return runner.Run(ctx, taskID, validation.Digest(diff), checks), diff, nil
+}
+
+// validationPermits maps a kind of check onto the capability the envelope must
+// grant before the broker may run it.
+func validationPermits(envelope broker.Envelope) func(validation.CheckKind) (bool, string) {
+	return func(kind validation.CheckKind) (bool, string) {
+		var capability broker.Capability
+		switch kind {
+		case validation.Format:
+			capability = broker.RunFormatters
+		case validation.Build:
+			capability = broker.RunBuilds
+		case validation.Vet:
+			capability = broker.RunBuilds
+		case validation.Test:
+			capability = broker.RunTests
+		default:
+			return false, "unknown check kind " + string(kind)
+		}
+		if err := envelope.Require(capability); err != nil {
+			return false, err.Error()
+		}
+		return true, ""
+	}
+}
+
+// requiredTestEvidence executes, by name, every required test the diff audit
+// observed for this candidate, and correlates each observation with the
+// broker's record of that same test at this exact candidate content.
+//
+// The ids come from the audit, which is Sensei's reading of the required-test
+// bindings for the files this candidate touches. The broker runs them itself:
+// a green suite does not discharge a named test, and neither does a party
+// reporting that it passed. No baseline is taken -- a failing named test is
+// outstanding whoever caused it.
+//
+// The observations are read from the audit result Sensei returned, through
+// auditObservationsOf, so the path from the payload's own field names to the
+// correlation is one a witness can drive end to end. An audit that does not
+// decode yields no correlation, which satisfies nothing.
+func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string, audit sensei.ToolResult) ([]requiredTestRun, []correlatedRequiredTest) {
+	findings, err := auditObservationsOf(audit)
+	if err != nil {
+		return nil, nil
+	}
+	ids := requiredTestIDs(findings)
+	digest := validation.Digest(diff)
+	var runs []requiredTestRun
+	if len(ids) != 0 {
+		runner := validation.Runner{Workspace: repo.Root, Permits: validationPermits(envelope)}
+		runs = runner.RunRequiredTests(ctx, taskID, digest, ids)
+	}
+	return runs, correlateRequiredTests(findings, runs, taskID, digest)
 }
 
 // certifiedAgainstCapture refuses unless the validation evidence and the diff

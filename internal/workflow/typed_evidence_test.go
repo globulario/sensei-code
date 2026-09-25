@@ -198,3 +198,345 @@ func TestTheTestGovernanceGapIsDisposedWithItsOwnScopeAndRemedy(t *testing.T) {
 		t.Errorf("the source remedy changed: %s", src)
 	}
 }
+
+// ── Required-test observations correlated with broker execution ──────────────
+//
+// LAW: a required test is discharged by being EXECUTED and PASSING against the
+// exact candidate, not by appearing in its diff. The diff audit's "omitted from
+// the supplied diff" finding is an OBSERVATION, preserved as reported; it is
+// satisfied only by the broker's record under the SAME required-test id, for
+// the SAME candidate content.
+
+const (
+	rtCandidate = "task-rt"
+	rtDigest    = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	rtFile      = "internal/workflow/governed_record_coverage_test.go"
+	rtAudit     = rtFile + ":TestTheAuditRecordCarriesItsRequest"
+	rtCallSites = rtFile + ":TestEveryGovernedCallSiteIsClassified"
+)
+
+// omittedObservation is the finding the diff audit emits for a required test
+// whose file the candidate did not touch, in the audit's own field names.
+func omittedObservation(id string) auditObservation {
+	return auditObservation{
+		RecordID: id, RecordClass: "required_test", Disposition: "review", FilePath: rtFile,
+		Explanation: "required test " + id + " (defined in " + rtFile + ") is omitted from the supplied diff",
+	}
+}
+
+// brokerRecord is a broker record of one named test. passed also sets the
+// command's outcome, so a record is consistent unless a test says otherwise.
+func brokerRecord(id string, executed, passed bool, candidateID, digest string) requiredTestRun {
+	r := requiredTestRun{ID: id, CandidateID: candidateID, DiffDigest: digest, Executed: executed, Passed: passed}
+	r.Evidence.Kind = "test"
+	r.Evidence.Command = "go"
+	r.Evidence.ExecutedBy = "sensei-code execution broker"
+	r.Evidence.CandidateID = candidateID
+	r.Evidence.DiffDigest = digest
+	r.Evidence.Outcome = "candidate-failure"
+	if passed {
+		r.Evidence.Outcome = "passed"
+	}
+	return r
+}
+
+// W1 THE MEASURED CASE. The candidate touched engine.go, both bound required
+// tests were omitted from its diff, and the broker executed both by name and
+// they passed at this exact candidate. Both observations are preserved AND
+// recorded satisfied, and the reviewer's evidence says so.
+//
+// Fails if: correlation does not happen at all (the pre-repair behaviour), the
+// observation is replaced rather than preserved, or the review evidence does
+// not carry the satisfied state.
+func TestW1AnOmittedRequiredTestProvenPassingIsSatisfiedInReviewEvidence(t *testing.T) {
+	findings := []auditObservation{omittedObservation(rtAudit), omittedObservation(rtCallSites)}
+	runs := []requiredTestRun{
+		brokerRecord(rtAudit, true, true, rtCandidate, rtDigest),
+		brokerRecord(rtCallSites, true, true, rtCandidate, rtDigest),
+	}
+	got := correlateRequiredTests(findings, runs, rtCandidate, rtDigest)
+	if len(got) != 2 {
+		t.Fatalf("every required-test observation must be correlated, got %d: %+v", len(got), got)
+	}
+	for i, c := range got {
+		if c.ID != findings[i].RecordID {
+			t.Errorf("observation %d correlated under %q, want %q", i, c.ID, findings[i].RecordID)
+		}
+		if !c.Satisfied {
+			t.Errorf("%s executed and passed at this candidate and was not satisfied: %+v", c.ID, c)
+		}
+		if c.Observation != findings[i] {
+			t.Errorf("the audit observation was not preserved as reported: %+v", c.Observation)
+		}
+		if c.Run == nil || c.Run.ID != c.ID {
+			t.Errorf("%s is satisfied without carrying the broker record that satisfied it", c.ID)
+		}
+	}
+	text := reviewValidationEvidence("VALIDATION EVIDENCE for candidate "+rtCandidate, runs, got, rtCandidate, rtDigest)
+	for _, want := range []string{"SATISFIED", rtAudit, rtCallSites, findings[0].Explanation, "VALIDATION EVIDENCE"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the review evidence does not carry %q:\n%s", want, text)
+		}
+	}
+	for _, p := range requiredTestResults(got) {
+		if !p.Satisfied || !p.Executed || !p.Passed {
+			t.Errorf("the task-evidence projection lost the result: %+v", p)
+		}
+	}
+
+	// Drive it to the terminal: the packet the engine hands the independent
+	// reviewer, and the prompt that reviewer actually reads. Both the broker's
+	// per-test records and the correlation must arrive there, beside the audit
+	// observations still reported as the audit made them.
+	audit := "SENSEI DIFF AUDIT decision: review\n- [review] " + findings[0].Explanation + "\n- [review] " + findings[1].Explanation
+	packet := reviewPacket(taskContext{}, reviewBinding(), certifiedStart{}, "the plan", "a diff", audit, text)
+	if packet.Validation != text {
+		t.Fatalf("the review packet does not carry the correlated validation evidence:\n%s", packet.Validation)
+	}
+	prompt := reviewPrompt(packet)
+	for _, want := range []string{
+		"REQUIRED TESTS executed by name by the execution broker",
+		rtAudit + " — executed, PASSED", rtCallSites + " — executed, PASSED",
+		"SATISFIED    " + rtAudit, "SATISFIED    " + rtCallSites,
+		findings[0].Explanation, findings[1].Explanation,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the reviewer's prompt does not carry %q", want)
+		}
+	}
+}
+
+// liveAuditPayload is the structured result awareness_audit_diff returned on
+// 2026-09-25 for a one-hunk diff of internal/workflow/engine.go at base
+// 0121e93a, verbatim: the bytes the real audit sends, not a fixture shaped to
+// fit the decoder.
+const liveAuditPayload = `{"schema":"awareness.diff_audit/v1","digest":"7f6d0c5251df33c488bcc829dda187b6ef22da070a9d2f58c169fc016d41239d","input_diff_digest":"2108c36735f7fd062d667e74a2e0e6b79f832c3793426314879aa4c3ca2b7e64","input_trust":"caller_supplied","availability":"available","decision":"review","expected_head":"0121e93abb8dc8093697994a657c2735f1e824b2","domain":"github.com/globulario/sensei-code","graph_commit":"39a8d2809ef239f203d5365d7f6e170349186cc4","changed_files":[{"path":"internal/workflow/engine.go","old_path":"internal/workflow/engine.go","kind":"modify","hunk_count":1,"lines_added":11,"lines_deleted":0}],"findings":[{"record_id":"internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified","record_class":"required_test","disposition":"review","file_path":"internal/workflow/governed_record_coverage_test.go","explanation":"required test internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified (defined in internal/workflow/governed_record_coverage_test.go) is omitted from the supplied diff"},{"record_id":"internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest","record_class":"required_test","disposition":"review","file_path":"internal/workflow/governed_record_coverage_test.go","explanation":"required test internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest (defined in internal/workflow/governed_record_coverage_test.go) is omitted from the supplied diff"}],"implicated_tests":["internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified","internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest"]}`
+
+// W1 AT THE BOUNDARY. The measured case, starting from the audit's real
+// payload rather than from constructed observations: the engine's own decoding
+// path (auditObservationsOf, requiredTestIDs) must find both required tests by
+// their canonical ids and class, and those observations become satisfied only
+// from the broker's records under the same ids.
+//
+// Fails if: the decoder's field names do not match what the audit emits
+// (record_id, record_class), so no id reaches the broker; the extraction
+// filters on anything but the required-test class; or a satisfied marking
+// arrives for a test the broker did not pass.
+func TestW1TheLiveAuditPayloadReachesTheCorrelation(t *testing.T) {
+	findings, err := auditObservationsOf(result(t, "", liveAuditPayload))
+	if err != nil {
+		t.Fatalf("the live audit payload does not decode: %v", err)
+	}
+	ids := requiredTestIDs(findings)
+	if len(ids) != 2 || ids[0] != rtCallSites || ids[1] != rtAudit {
+		t.Fatalf("the live audit's required-test observations did not decode to their canonical ids: %q", ids)
+	}
+	for _, f := range findings {
+		if f.RecordClass != "required_test" || f.FilePath != rtFile ||
+			!strings.HasSuffix(f.Explanation, "is omitted from the supplied diff") {
+			t.Errorf("a live observation lost a field in decoding: %+v", f)
+		}
+	}
+
+	runs := []requiredTestRun{
+		brokerRecord(rtAudit, true, true, rtCandidate, rtDigest),
+		brokerRecord(rtCallSites, true, true, rtCandidate, rtDigest),
+	}
+	got := correlateRequiredTests(findings, runs, rtCandidate, rtDigest)
+	if len(got) != 2 {
+		t.Fatalf("both live observations must be correlated, got %d: %+v", len(got), got)
+	}
+	for i, c := range got {
+		if c.ID != ids[i] || !c.Satisfied || c.Observation != findings[i] {
+			t.Errorf("live observation %d was not satisfied under its own id with the observation preserved: %+v", i, c)
+		}
+	}
+
+	// Controls on the same bytes: only the test the broker passed is satisfied,
+	// and with no broker record nothing is.
+	partial := correlateRequiredTests(findings, runs[:1], rtCandidate, rtDigest)
+	if partial[0].Satisfied || !partial[1].Satisfied {
+		t.Errorf("only %s passed, the correlation says otherwise: %+v", rtAudit, partial)
+	}
+	for _, c := range correlateRequiredTests(findings, nil, rtCandidate, rtDigest) {
+		if c.Satisfied || c.State != requiredTestUnproven {
+			t.Errorf("a live observation with no broker record is marked satisfied: %+v", c)
+		}
+	}
+}
+
+// W2 CONTROL. A required test that did not run leaves the observation
+// outstanding -- whether the broker has no record at all, or recorded a zero
+// exit in which the named test itself never ran. Asserts the ABSENCE of any
+// satisfied marking.
+//
+// Fails if: a missing record, or Executed=false under a zero exit, is read as
+// satisfied anywhere -- in the typed result, the projection or the text.
+func TestW2AnUnexecutedRequiredTestIsNotDischarged(t *testing.T) {
+	findings := []auditObservation{omittedObservation(rtAudit), omittedObservation(rtCallSites)}
+	notRun := brokerRecord(rtAudit, false, false, rtCandidate, rtDigest)
+	notRun.Evidence.Outcome = "passed" // the command exited zero; the named test did not run
+	got := correlateRequiredTests(findings, []requiredTestRun{notRun}, rtCandidate, rtDigest)
+	if len(got) != 2 {
+		t.Fatalf("an observation with no execution record must still be reported, got %d", len(got))
+	}
+	for _, c := range got {
+		if c.Satisfied {
+			t.Errorf("%s did not execute and was satisfied: %+v", c.ID, c)
+		}
+		if c.Observation.Disposition != "review" {
+			t.Errorf("the audit observation was altered: %+v", c.Observation)
+		}
+	}
+	if got[1].Run != nil {
+		t.Errorf("an observation with no broker record was given one: %+v", got[1].Run)
+	}
+	text := reviewValidationEvidence("", []requiredTestRun{notRun}, got, rtCandidate, rtDigest)
+	if strings.Contains(text, "SATISFIED") {
+		t.Fatalf("an unexecuted required test is marked satisfied in the review evidence:\n%s", text)
+	}
+	if !strings.Contains(text, "OUTSTANDING") {
+		t.Fatalf("the unexecuted required test is not reported outstanding:\n%s", text)
+	}
+	for _, p := range requiredTestResults(got) {
+		if p.Satisfied {
+			t.Errorf("the task-evidence projection marks an unexecuted test satisfied: %+v", p)
+		}
+	}
+}
+
+// W3 CONTROL. A required test that ran and FAILED is not discharged by having
+// executed, and the observation stays exactly as the audit reported it -- this
+// repair gives the candidate nothing for merely running something.
+//
+// Fails if: Executed alone discharges, or a record claiming Passed over a
+// failed command outcome is believed.
+func TestW3AFailingRequiredTestIsNotDischarged(t *testing.T) {
+	findings := []auditObservation{omittedObservation(rtAudit)}
+	failed := brokerRecord(rtAudit, true, false, rtCandidate, rtDigest)
+	got := correlateRequiredTests(findings, []requiredTestRun{failed}, rtCandidate, rtDigest)
+	if len(got) != 1 || got[0].Satisfied {
+		t.Fatalf("a required test that ran and failed was discharged: %+v", got)
+	}
+	if got[0].Observation != findings[0] {
+		t.Fatalf("the audit observation did not survive a failing run: %+v", got[0].Observation)
+	}
+	if !strings.Contains(strings.ToLower(got[0].Reason), "fail") {
+		t.Errorf("the outstanding reason does not say the test failed: %q", got[0].Reason)
+	}
+
+	// A record that says Passed while the command that ran it failed is not a pass.
+	inconsistent := brokerRecord(rtAudit, true, true, rtCandidate, rtDigest)
+	inconsistent.Evidence.Outcome = "candidate-failure"
+	if c := correlateRequiredTests(findings, []requiredTestRun{inconsistent}, rtCandidate, rtDigest); c[0].Satisfied {
+		t.Fatal("a Passed flag over a failed execution discharged the required test")
+	}
+}
+
+// W4 THE CORRELATION IS BY IDENTITY, NOT BY COUNT. The audit named one test and
+// the broker passed a different one: equal counts, same file, wrong id. Nor
+// does the right id at other candidate content discharge anything.
+//
+// Fails if: correlation is by count, position, file, or ignores the binding.
+func TestW4CorrelationIsByRequiredTestIdNotByCount(t *testing.T) {
+	findings := []auditObservation{omittedObservation(rtAudit)}
+	other := brokerRecord(rtCallSites, true, true, rtCandidate, rtDigest) // same file, different test
+	got := correlateRequiredTests(findings, []requiredTestRun{other}, rtCandidate, rtDigest)
+	if len(got) != 1 || got[0].Satisfied {
+		t.Fatalf("a different required test's pass discharged the named one: %+v", got)
+	}
+	if got[0].Run != nil {
+		t.Fatalf("the named test was correlated with another test's record: %+v", got[0].Run)
+	}
+
+	// Same count, swapped positions: each must still find its own record.
+	findings = []auditObservation{omittedObservation(rtAudit), omittedObservation(rtCallSites)}
+	runs := []requiredTestRun{
+		brokerRecord(rtCallSites, true, true, rtCandidate, rtDigest),
+		brokerRecord(rtAudit, true, false, rtCandidate, rtDigest),
+	}
+	got = correlateRequiredTests(findings, runs, rtCandidate, rtDigest)
+	if got[0].ID != rtAudit || got[0].Satisfied {
+		t.Errorf("the failing %s was satisfied by position: %+v", rtAudit, got[0])
+	}
+	if got[1].ID != rtCallSites || !got[1].Satisfied {
+		t.Errorf("the passing %s was not matched by its own id: %+v", rtCallSites, got[1])
+	}
+
+	// The graph's class-qualified form is the same test; the canonical id matches it.
+	qualified := omittedObservation("test:" + rtAudit)
+	if c := correlateRequiredTests([]auditObservation{qualified}, []requiredTestRun{brokerRecord(rtAudit, true, true, rtCandidate, rtDigest)}, rtCandidate, rtDigest); !c[0].Satisfied {
+		t.Errorf("the class-qualified id did not match the canonical record: %+v", c[0])
+	}
+
+	// The right id at other bytes, or for another candidate, proves nothing here.
+	for _, stale := range []requiredTestRun{
+		brokerRecord(rtAudit, true, true, rtCandidate, "sha256:other"),
+		brokerRecord(rtAudit, true, true, "task-other", rtDigest),
+	} {
+		if c := correlateRequiredTests([]auditObservation{omittedObservation(rtAudit)}, []requiredTestRun{stale}, rtCandidate, rtDigest); c[0].Satisfied {
+			t.Errorf("a record bound to %s at %s discharged the test for this candidate", stale.CandidateID, stale.DiffDigest)
+		}
+	}
+}
+
+// W5 THE TWO STATES RENDER DIFFERENTLY. "not edited but proven passing" and
+// "not edited and not proven" are different typed states and different text.
+//
+// Fails if: both states share a State value, or render to the same line.
+func TestW5ProvenAndUnprovenOmissionsRenderDifferently(t *testing.T) {
+	proven := correlateRequiredTests([]auditObservation{omittedObservation(rtAudit)},
+		[]requiredTestRun{brokerRecord(rtAudit, true, true, rtCandidate, rtDigest)}, rtCandidate, rtDigest)[0]
+	unproven := correlateRequiredTests([]auditObservation{omittedObservation(rtAudit)}, nil, rtCandidate, rtDigest)[0]
+	if proven.State == "" || unproven.State == "" || proven.State == unproven.State {
+		t.Fatalf("the two states are not distinct typed values: %q vs %q", proven.State, unproven.State)
+	}
+	a := renderRequiredTestEvidence([]correlatedRequiredTest{proven}, rtCandidate, rtDigest)
+	b := renderRequiredTestEvidence([]correlatedRequiredTest{unproven}, rtCandidate, rtDigest)
+	if a == b {
+		t.Fatalf("proven and unproven omissions render identically:\n%s", a)
+	}
+	if !strings.Contains(a, "not edited, proven passing") || strings.Contains(a, "not proven") {
+		t.Errorf("the proven omission does not read as proven passing:\n%s", a)
+	}
+	if !strings.Contains(b, "not edited, not proven") || strings.Contains(b, "SATISFIED") {
+		t.Errorf("the unproven omission does not read as not proven:\n%s", b)
+	}
+	// Both keep the audit's observation in view.
+	for _, s := range []string{a, b} {
+		if !strings.Contains(s, "is omitted from the supplied diff") {
+			t.Errorf("the rendering dropped the audit observation:\n%s", s)
+		}
+	}
+}
+
+// W6 CONTROL. Editing the required test is still not required. Correlation
+// takes no diff and no changed paths, so an untouched test file cannot be held
+// against the candidate; and nothing tells anyone to edit the test to clear it.
+//
+// Fails if: the unproven remedy steers toward editing the test file, or the
+// review evidence stops saying that editing it is not required.
+func TestW6EditingTheRequiredTestIsNotRequired(t *testing.T) {
+	proven := correlateRequiredTests([]auditObservation{omittedObservation(rtAudit)},
+		[]requiredTestRun{brokerRecord(rtAudit, true, true, rtCandidate, rtDigest)}, rtCandidate, rtDigest)
+	unproven := correlateRequiredTests([]auditObservation{omittedObservation(rtCallSites)}, nil, rtCandidate, rtDigest)
+	if !proven[0].Satisfied {
+		t.Fatal("a proven-passing test whose file the candidate never touched was penalised")
+	}
+	text := renderRequiredTestEvidence(append(proven, unproven...), rtCandidate, rtDigest)
+	if !strings.Contains(text, "editing the required test's file is not required") {
+		t.Errorf("the review evidence does not state that editing the test is not required:\n%s", text)
+	}
+	low := strings.ToLower(unproven[0].Reason + "\n" + text)
+	for _, incentive := range []string{"edit the test", "modify the test", "add the test file", "touch the test"} {
+		if strings.Contains(low, incentive) {
+			t.Errorf("the evidence creates an incentive to edit a required test (%q):\n%s", incentive, text)
+		}
+	}
+	// Observations of other classes are not required-test observations and are
+	// neither correlated nor altered.
+	other := auditObservation{RecordID: "invariant:x", RecordClass: "invariant", Disposition: "block", FilePath: "internal/workflow/engine.go"}
+	if c := correlateRequiredTests([]auditObservation{other}, nil, rtCandidate, rtDigest); len(c) != 0 {
+		t.Errorf("a non-required-test observation was correlated: %+v", c)
+	}
+}
