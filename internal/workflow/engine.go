@@ -2200,6 +2200,13 @@ type architectureDecision struct {
 	// against the covering surface's bytes at the pinned world; an undeclared
 	// new file is uncovered exactly as before.
 	ProspectiveSurfaces []ProspectiveSurface `json:"prospective_surfaces,omitempty"`
+	// TestEdits declares, for each ALREADY-EXISTING test file the plan edits,
+	// the structural effects of that edit: operation, package clause, build
+	// constraints, imports. It carries no authority; it lets the authority
+	// that already governs those files decide, at admission, the refusals the
+	// pinned world already determines rather than after a worker has spent its
+	// budget. See TestEditDeclaration.
+	TestEdits []TestEditDeclaration `json:"test_edits,omitempty"`
 	// PremiseResolutions are the closure round's answers to the premise
 	// receipts it was asked about. See premise.go.
 	PremiseResolutions []PremiseResolution `json:"premise_resolutions,omitempty"`
@@ -3094,6 +3101,20 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 					strings.Join(operationalFiles(extra), ", "), testEditRecord{World: extra[0].World, Grants: extra}))
 		}
 	}
+	// THE SAME REFUSAL, AT THE ENTRANCE.
+	//
+	// Every test-edit grant this plan will operate under is now assembled --
+	// the derived ones with the coverage computation above, the authored ones
+	// in the block just finished -- and no implementer has been asked for
+	// anything. So the subset of inspectTestEdits' refusals that the accepted
+	// plan and the pinned world already determine is decided here, through the
+	// authority's own sentences and the plan-admission error path this
+	// function already has. It is an additional door, not a moved one:
+	// inspectTestEdits still runs on the candidate, unchanged, and is the
+	// authority of record.
+	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
 	routing := routeAuthorityForAction(scoped, d.Claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
@@ -3904,6 +3925,7 @@ Return ONLY JSON in this exact shape:
   "mode": "modify" | "inspect",
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
   "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]}],
+  "test_edits": [{"path":"pkg/y_test.go","operation":"edit","package":"y","build_constraints":[],"imports":["testing","strings"]}],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
@@ -3913,6 +3935,23 @@ Return ONLY JSON in this exact shape:
 Declare every file the plan CREATES under "prospective_surfaces" (the only role is
 go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
 imports and "testing"); an undeclared new file stays uncovered.
+Declare every ALREADY-EXISTING test file the plan EDITS under "test_edits", with the
+structural effects of that edit: "operation", the "package" clause it will still carry,
+its "build_constraints", and the "imports" it will need. Those files may only be edited in
+place, may not change package or build constraints, and may import nothing they do not
+already import at the pinned base. Declaring it is how that is checked NOW instead of
+after the work is done: read the file's import block before you plan the witness.
+  "operation" is EXACTLY one of edit, create, delete, rename -- lower case, no
+    surrounding space. Anything else, including "Edit" or " edit ", and an absent
+    operation, declares NOTHING -- the other fields beside it are not read either.
+  "build_constraints" omitted declares nothing; ["..."] declares the exact lines the
+    edited file will carry, and [] declares that it will carry none.
+  Declaring one path twice is only read when the entries say the SAME thing. Entries
+    that disagree state no single outcome and are not read here at all; that file is
+    checked only once the candidate exists.
+An omitted field declares nothing and is checked only once the candidate exists. Nothing
+here grants anything: a declaration inside the pinned facts is admitted, and the
+candidate-time check still judges the file that is actually produced.
 MODE IS REQUIRED WHENEVER YOU PROCEED.
   modify   - the plan edits this repository. A worker is expected to produce a diff.
   inspect  - the plan reads and reports and changes nothing: an audit, an
