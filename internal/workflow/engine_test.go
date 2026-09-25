@@ -1114,19 +1114,12 @@ func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
 func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
 	// Read the bytes, scoped to this function: funcBody collects identifiers
 	// only, so an assignment like `attempt = 0` never appears in it.
-	// resolveArchitectureIn holds the loop; resolveArchitecture is a wrapper
-	// that supplies the governed checkout as the working directory. The
-	// observation lane calls the same loop with a disposable workspace, so the
-	// ceiling being asserted here covers both lanes.
+	// askArchitect holds the loop, and resolveArchitectureIn walks the architect
+	// roster over it; resolveArchitecture is a wrapper that supplies the governed
+	// checkout as the working directory. The observation lane calls the same loop
+	// with a disposable workspace, so the ceiling asserted here covers both lanes.
 	src := rawSource(t, "internal/workflow/engine.go")
-	start := strings.Index(src, "func (e *Engine) resolveArchitectureIn")
-	if start < 0 {
-		t.Fatal("resolveArchitectureIn is gone")
-	}
-	rest := src[start:]
-	if next := strings.Index(rest[1:], "\nfunc "); next > 0 {
-		rest = rest[:next]
-	}
+	rest := sourceOfFunc(t, src, "func (e *Engine) askArchitect")
 
 	resets := strings.Count(rest, "attempt = 0")
 	guards := strings.Count(rest, "newRound(")
@@ -1138,14 +1131,115 @@ func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
 	if guards != resets {
 		t.Fatalf("%d reset(s) but %d guarded: every reset must be counted", resets, guards)
 	}
-	if !strings.Contains(rest, "newRound := func") {
-		t.Fatal("the round counter is gone")
+	// The counter is the one the roster walk owns, not one this turn made for
+	// itself. A per-entry counter would give every fallback architect a fresh
+	// budget of rounds, and the ceiling would bound nothing.
+	if !strings.Contains(rest, "newRound := rounds.begin") {
+		t.Fatal("the round counter is gone, or is no longer the shared one the roster walk owns")
 	}
-	if !strings.Contains(rest, "maxRounds") {
+	walk := sourceOfFunc(t, src, "func (e *Engine) resolveArchitectureIn")
+	if strings.Count(walk, "rounds := &resolutionRounds{}") != 1 {
+		t.Fatal("the resolution rounds are not created once for the whole roster walk")
+	}
+	if at := strings.Index(walk, "rounds := &resolutionRounds{}"); at > strings.Index(walk, "for position, cfg := range roster") {
+		t.Fatal("the round counter is created inside the roster loop, so each architect gets a fresh budget")
+	}
+	ceiling := sourceOfFunc(t, src, "func (r *resolutionRounds) begin")
+	if !strings.Contains(ceiling, "maxResolutionRounds") {
 		t.Fatal("there is no overall ceiling on resolution rounds")
 	}
-	if !strings.Contains(rest, "did not settle after") {
+	if !strings.Contains(ceiling, "did not settle after") {
 		t.Fatal("exhausting the rounds does not say what happened")
+	}
+}
+
+// sourceOfFunc is one function's bytes, from its declaration to the next one.
+func sourceOfFunc(t *testing.T, src, decl string) string {
+	t.Helper()
+	start := strings.Index(src, decl)
+	if start < 0 {
+		t.Fatalf("%s is gone", decl)
+	}
+	rest := src[start:]
+	if next := strings.Index(rest[1:], "\nfunc "); next > 0 {
+		rest = rest[:next]
+	}
+	return rest
+}
+
+// W3's REMAINING HALF -- a control, and not optional. A bounded decision the run
+// does not like ends the turn on the entry that produced it: a human question, a
+// human stop, a condition the human already declined, a gap disposal that limits
+// the plan, an escalation whose authority the router cannot establish. The roster
+// MUST NOT advance past any of them. A ladder that walks on a legitimate refusal
+// is shopping for a provider that says yes.
+//
+// Asserted on the source rather than by driving the turn, and the reason is a
+// limit worth stating rather than hiding: every human-owned route is decided
+// INSIDE routePlan's answer, and reaching one behaviourally needs a preflight
+// that vouches for its own graph. No test surface in this package can supply one
+// -- the stub Sensei here refuses certifiability well before the router reaches a
+// consequence or an approval gate -- so a "behavioural" version of this witness
+// would prove the routing refusal and not the human boundary.
+//
+// So the property is asserted where it is decided. architectNotObtained is the
+// ONLY thing the roster may advance past, it is constructed in exactly the two
+// places that ended WITHOUT an answer, and every human-owned and governance
+// return between them hands back its own error unwrapped.
+func TestOnlyAnUnansweredArchitectTurnIsFallbackEligible(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	ask := sourceOfFunc(t, src, "func (e *Engine) askArchitect")
+
+	// Two, and only two: the provider that PROVED it cannot serve now, and the
+	// turn that spent its whole attempt budget without an answer.
+	if got := strings.Count(ask, "&architectNotObtained{"); got != 2 {
+		t.Fatalf("askArchitect makes %d of its returns fallback-eligible, want exactly the two that produced no answer", got)
+	}
+	proven := strings.Index(ask, "if blocked := roleUnavailable(")
+	first := strings.Index(ask, "&architectNotObtained{")
+	if proven < 0 || first < proven {
+		t.Fatal("the first fallback-eligible return is no longer the one a provider proved")
+	}
+	if last := strings.LastIndex(ask, "&architectNotObtained{"); !strings.Contains(ask[last:], "lastErr") {
+		t.Fatal("the last fallback-eligible return is no longer the exhausted attempt budget")
+	}
+
+	// THE CONTROL. Each human-owned or governance outcome is followed by a
+	// refusal that is returned as ITSELF. Wrapping any one of them would hand a
+	// legitimate refusal to the next architect on the roster, and would fire here.
+	for _, site := range []string{
+		"e.awaitHuman(",               // a human question, and a human stop
+		"e.applyAnsweredCondition(",   // a condition the human already declined
+		"e.disposeUnclosedGap(",       // a disposal that limits what may be done
+		"cannot establish authority ", // an escalation the router refuses
+	} {
+		rest, found := ask, 0
+		for {
+			at := strings.Index(rest, site)
+			if at < 0 {
+				break
+			}
+			found++
+			rest = rest[at+len(site):]
+			next := strings.Index(rest, "return architectureDecision{}")
+			if next < 0 {
+				t.Fatalf("%s is no longer followed by a refusal this turn returns", site)
+			}
+			stmt := rest[next:min(next+140, len(rest))]
+			if strings.Contains(stmt, "architectNotObtained") {
+				t.Fatalf("the refusal following %s is handed to the next roster entry: %s", site, stmt)
+			}
+		}
+		if found == 0 {
+			t.Fatalf("%s is gone from the architect turn, so this control no longer covers it", site)
+		}
+	}
+
+	// And the walk consults exactly one predicate to decide whether to advance,
+	// so no second rule can grow beside it.
+	walk := sourceOfFunc(t, src, "func (e *Engine) resolveArchitectureIn")
+	if got := strings.Count(walk, "errors.As(err, &notObtained)"); got != 1 {
+		t.Fatalf("the roster walk decides advancement in %d places, want one", got)
 	}
 }
 

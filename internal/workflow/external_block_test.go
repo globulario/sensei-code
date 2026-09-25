@@ -72,17 +72,37 @@ func TestAProvenUnavailableArchitectEndsTheTurnTypedAndUnretried(t *testing.T) {
 	}
 }
 
-// 6. A runner failure the adapter did not classify stays a failure, even when
-// its text is the usage-limit sentence word for word. Text proves nothing.
+// 6. A runner failure the adapter did not classify is never laundered into a
+// PROVIDER'S PROOF, even when its text is the usage-limit sentence word for
+// word. Text proves nothing, and that is the property this witness is named for.
+//
+// What deliberately changed on 2026-09-24: the TERMINAL for an exhausted roster
+// no longer depends on the shape its entries failed in. No architect answer was
+// obtained here, which is one condition however it arrived, so the turn ends as
+// external execution state and the task is preserved rather than declared done.
+//
+// The laundering this refuses is unaffected, and is now asserted on the durable
+// record itself: no RoleUnavailable, no provider.ErrUnavailable, the reason is
+// this ENGINE's own code rather than a provider's, and the retry time is UNKNOWN.
+// A sentence still buys no reset, so nothing can wake up on a moment nobody
+// published.
 func TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock(t *testing.T) {
 	sentence := errors.New("codex exited 1: You've hit your usage limit. ... try again at Sep 19th, 2026 7:10 AM.")
 	architect, err := resolveWithArchitect(t, architectTurn{err: sentence}, architectTurn{err: sentence})
 	var blocked *RoleUnavailable
 	if errors.As(err, &blocked) || errors.Is(err, provider.ErrUnavailable) {
-		t.Fatalf("an unclassified runner failure became an external block: %v", err)
+		t.Fatalf("an unclassified runner failure became a provider's proof: %v", err)
 	}
-	if !strings.Contains(err.Error(), "could not produce a bounded decision") || len(architect.prompts) != 2 {
+	var chain *roles.ArchitectUnobtainable
+	if !errors.As(err, &chain) || len(architect.prompts) != 2 {
 		t.Fatalf("the ordinary failure path changed: prompts=%d err=%v", len(architect.prompts), err)
+	}
+	record := rosterBlock("task-1", chain)
+	if record.Reason != ReasonNoArchitectObtained {
+		t.Fatalf("the record's reason is %q; a sentence must not become a provider's code", record.Reason)
+	}
+	if record.RetryAtState != RetryAtUnknown || record.RetryAt != "" {
+		t.Fatalf("a reset time was read out of a message: %+v", record)
 	}
 
 	// And a provider proof that NO role site claimed is not classified either:
@@ -465,6 +485,11 @@ func TestAnArchitectBlockedMidCycleIsNotHandedToAnotherImplementor(t *testing.T)
 	down := &unavailableRunner{cause: quota()}
 	next := &unavailableRunner{cause: quota()}
 	h.engine.Config.Implementors = []config.Agent{h.worker, {Name: "codex", Command: "false", Graph: "none"}}
+	// The roster names one configured architect; the resolver substitutes the
+	// answering runner, exactly as the configured reviewer is treated above. A
+	// roster of one is walked and exhausted, which is what makes this a block
+	// rather than a fallback.
+	h.engine.Config.Architect = config.Agent{Name: "chatgpt", Command: "true", Graph: "none"}
 	h.engine.Runners = implementerResolver{implementers: map[string]agent.Runner{"codex": next}, architect: down,
 		reviewer: answeringRunner{text: `{"decision":"escalate","summary":"the plan needs an architectural answer"}`, mode: roles.Unverified},
 		session:  "session-1"}
@@ -486,5 +511,582 @@ func TestAnArchitectBlockedMidCycleIsNotHandedToAnotherImplementor(t *testing.T)
 	}
 	if contains(seen, event.HandoffCreated) {
 		t.Fatalf("an architect block created an implementer handoff: %v", kinds(seen))
+	}
+}
+
+// AN UNAVAILABLE ARCHITECT COSTS A FALLBACK, THEN AN HONEST EXTERNAL BLOCK.
+//
+// Measured 2026-09-24: requests r-e25830e22588e77d and r-36348ba82230e65a each
+// waited 30 minutes and were withdrawn unanswered, and the run then ended
+// INCOMPLETE/FAILED reporting that the architect "could not produce a bounded
+// decision". The architect had never been reached -- the account's pool was
+// exhausted with a published reset 49 minutes later. The witnesses below are
+// W1-W7 of that repair. W3, W4 and W7 are its controls: they prove the ladder
+// does NOT advance where advancing would be shopping for a different answer.
+
+// architectEntry is one roster entry and what its transport does.
+type architectEntry struct {
+	provider string
+	turns    []architectTurn
+	// resolverRefusal makes resolving this entry's adapter fail, which is the
+	// shape a bridge refusal and an unestablished graph binding both arrive in.
+	resolverRefusal error
+}
+
+// rosterResolver hands each roster entry its OWN transport, so a witness reads
+// WHICH entry answered out of the record instead of inferring it from a count.
+type rosterResolver struct {
+	byProvider map[string]*scriptedArchitect
+	refuse     map[string]error
+	// resolved is every provider an adapter was asked for, in order. An entry
+	// the walk never reached does not appear here at all.
+	resolved []string
+}
+
+func (r *rosterResolver) Resolve(spec RunnerSpec) (Resolved, error) {
+	if spec.Role != roles.Architect {
+		return CLIResolved(spec, "sess-roster"), nil
+	}
+	r.resolved = append(r.resolved, spec.Agent.Name)
+	if err, ok := r.refuse[spec.Agent.Name]; ok {
+		return Resolved{}, err
+	}
+	runner, ok := r.byProvider[spec.Agent.Name]
+	if !ok {
+		return Resolved{}, fmt.Errorf("no scripted architect for %q", spec.Agent.Name)
+	}
+	return Resolved{Runner: runner, Name: spec.Agent.Name, Label: config.DisplayName(spec.Agent.Name)}, nil
+}
+
+// architectRoster is an engine over a real session directory whose architect
+// roster is exactly these entries.
+//
+// One entry sets Architect and leaves Architects empty, which is the singleton
+// compatibility path a deployment with no alternate runs on (W4). More than one
+// states the roster.
+func architectRoster(t *testing.T, entries ...architectEntry) (*Engine, *rosterResolver, <-chan event.Event, string) {
+	t.Helper()
+	root := t.TempDir()
+	store, err := session.New(root, "sess-roster")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Default()
+	cfg.Architect = config.Agent{Name: entries[0].provider, Command: "true", Graph: "none"}
+	cfg.Architects = nil
+	res := &rosterResolver{byProvider: map[string]*scriptedArchitect{}, refuse: map[string]error{}}
+	for _, ent := range entries {
+		if len(entries) > 1 {
+			cfg.Architects = append(cfg.Architects, config.Agent{Name: ent.provider, Command: "true", Graph: "none"})
+		}
+		if ent.resolverRefusal != nil {
+			res.refuse[ent.provider] = ent.resolverRefusal
+			continue
+		}
+		res.byProvider[ent.provider] = &scriptedArchitect{turns: ent.turns}
+	}
+	bus := event.NewBus()
+	events, cancel := bus.Subscribe(256)
+	t.Cleanup(cancel)
+	e := New(gitx.Repo{Root: root}, cfg, bus, store, "sess-roster")
+	e.Runners = res
+	e.emit(event.New(e.SessionID, "task-1", event.SourceSystem, event.TaskCreated, "the objective", nil))
+	e.beginReceipt("task-1")
+	return e, res, events, root
+}
+
+// askRoster takes the architect turn over the whole roster.
+func askRoster(t *testing.T, e *Engine) (architectureDecision, error) {
+	t.Helper()
+	return e.resolveArchitectureIn(context.Background(), nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
+}
+
+// asked is how many turns one entry's transport actually took.
+func (r *rosterResolver) asked(provider string) int {
+	if runner, ok := r.byProvider[provider]; ok {
+		return len(runner.prompts)
+	}
+	return 0
+}
+
+// W1. A first architect that cannot be obtained costs a fallback: the next
+// roster entry is tried and the run proceeds on ITS answer.
+//
+// Every shape internal/roles/unobtainable.go names is walked, because "no answer
+// was obtained" arrives from as many places as there are transports and the
+// ladder must not advance on only the one that was measured.
+func TestAnUnobtainableArchitectCostsAFallbackAndTheRunProceeds(t *testing.T) {
+	unreachable := errors.New("dial tcp 127.0.0.1:1: connect: connection refused")
+	for name, first := range map[string][]architectTurn{
+		// Proven unavailability answers once: it must not spend the retry
+		// budget on transport state before the roster advances.
+		"out of quota":       {{err: quota()}},
+		"could not connect":  {{err: unreachable}, {err: unreachable}},
+		"timed out":          {{err: context.DeadlineExceeded}, {err: context.DeadlineExceeded}},
+		"exited non-zero":    {{err: errors.New("codex exited 1")}, {err: errors.New("codex exited 1")}},
+		"unparseable output": {{text: "I think we should proceed."}, {text: "still not json"}},
+		"empty output":       {{text: " "}, {text: ""}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			e, res, _, _ := architectRoster(t,
+				architectEntry{provider: "chatgpt", turns: first},
+				architectEntry{provider: "claude", turns: []architectTurn{{text: replyDecision}}})
+			d, err := askRoster(t, e)
+			if err != nil {
+				t.Fatalf("the roster did not advance past an architect that could not be obtained: %v", err)
+			}
+			if d.Decision != "reply" || d.Message != "hello" {
+				t.Fatalf("the run did not proceed on the second entry's answer: %+v", d)
+			}
+			if got := res.asked("chatgpt"); got != len(first) {
+				t.Fatalf("the first entry took %d turns, want its whole attempt budget of %d", got, len(first))
+			}
+			if got := res.asked("claude"); got != 1 {
+				t.Fatalf("the second entry was asked %d times, want once", got)
+			}
+		})
+	}
+}
+
+// W2. The answering agent is RECORDED, and the decision is attributed to it --
+// not to the first roster entry, and not to "the architect" generically.
+func TestTheDecisionIsAttributedToTheEntryThatAnsweredIt(t *testing.T) {
+	e, _, events, _ := architectRoster(t,
+		architectEntry{provider: "chatgpt", turns: []architectTurn{{err: quota()}}},
+		architectEntry{provider: "claude", turns: []architectTurn{{text: replyDecision}}})
+	if _, err := askRoster(t, e); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.architectAnswered("task-1"); got != "claude" {
+		t.Fatalf("the answering provider was recorded as %q, want claude", got)
+	}
+	if got := e.architectLabel("task-1"); got != "Claude" {
+		t.Fatalf("the decision is attributed to %q, want the party that answered", got)
+	}
+	authority := e.decisionAuthority("task-1", certifiedStart{})
+	if authority.DecidedBy != "Claude" || strings.Contains(authority.DecidedBy, "ChatGPT") {
+		t.Fatalf("the decision authority names the wrong architect: %+v", authority)
+	}
+	// And the plan record carries it across a restart, which is the only place a
+	// resumed run can learn which entry decided.
+	record, err := json.Marshal(proposedPlan{
+		architectureDecision: architectureDecision{Decision: "proceed", Plan: "do the work"},
+		PlanSource:           PlanByArchitect,
+		Architect:            e.architectAnswered("task-1"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(record), `"architect":"claude"`) {
+		t.Fatalf("the plan record does not name the architect that wrote it: %s", record)
+	}
+	restarted := &Engine{}
+	if _, err := restarted.restorePlanBound(session.Interrupted{TaskID: "task-1",
+		PlanSource: string(PlanByArchitect), PlanRecord: record, PlanEventSource: event.SourceArchitect}); err != nil {
+		t.Fatalf("the recorded plan did not restore: %v", err)
+	}
+	if got := restarted.architectAnswered("task-1"); got != "claude" {
+		t.Fatalf("a restart read the deciding architect back as %q, want claude", got)
+	}
+	// Each entry is named in the assignment record, in the order tried, so the
+	// walk itself is legible and not only its outcome.
+	var assigned []string
+	for _, ev := range drainEvents(events) {
+		if ev.Kind != event.RoleAssigned {
+			continue
+		}
+		var body struct {
+			Role     string `json:"role"`
+			Provider string `json:"provider"`
+		}
+		if err := json.Unmarshal(ev.Payload, &body); err != nil {
+			t.Fatal(err)
+		}
+		if body.Role == string(roles.Architect) {
+			assigned = append(assigned, body.Provider)
+		}
+	}
+	if len(assigned) != 2 || assigned[0] != "chatgpt" || assigned[1] != "claude" {
+		t.Fatalf("the architect assignments recorded were %v, want chatgpt then claude", assigned)
+	}
+}
+
+// W3, THE CONTROL THAT MATTERS MOST. An architect that IS reached and returns a
+// bounded decision the run does not like ends the turn on that decision. The
+// roster MUST NOT advance: a ladder that walks on a legitimate refusal is
+// shopping for a provider that says yes.
+//
+// The second entry is scripted with an answer that would visibly succeed, so if
+// the roster advanced the turn would return ITS answer and every assertion below
+// fires. It answers in kind rather than with a plan, so an advance is caught by
+// the assertions and not by a later component failing on a half-built turn.
+//
+// W3 is proven across three places, because its cases are decided in three:
+// here for the answers that need no router; in
+// TestABoundedDecisionTheRunRefusesIsNeitherAFallbackNorExternal for a parseable
+// escalation, which enters routePlan over a live Sensei transport; and in
+// engine_test.go's TestOnlyAnUnansweredArchitectTurnIsFallbackEligible for the
+// human-owned boundaries, which no stub in this package can reach.
+func TestABoundedRefusalDoesNotAdvanceTheRoster(t *testing.T) {
+	alternate := `{"decision":"reply","message":"the next architect would have answered"}`
+	cases := map[string]struct {
+		first architectTurn
+		// cancelled stops the run before the turn, which is the caller's
+		// decision and not a provider that could not be obtained.
+		cancelled bool
+		wants     string
+	}{
+		"a conversational answer instead of a plan": {first: architectTurn{text: replyDecision}, wants: ""},
+		"a bound party refusing the request": {
+			first: architectTurn{err: fmt.Errorf("request r-1 was refused at stage answer-contract: %w", roles.ErrArchitectRefusal)},
+			wants: roles.ErrArchitectRefusal.Error(),
+		},
+		"the caller stopping the turn": {
+			first:     architectTurn{err: context.Canceled},
+			cancelled: true,
+			wants:     "stopped by its caller",
+		},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			e, res, _, _ := architectRoster(t,
+				architectEntry{provider: "chatgpt", turns: []architectTurn{tc.first}},
+				architectEntry{provider: "claude", turns: []architectTurn{{text: alternate}}})
+			ctx := context.Background()
+			if tc.cancelled {
+				stopped, cancel := context.WithCancel(ctx)
+				cancel()
+				ctx = stopped
+			}
+			d, err := e.resolveArchitectureIn(ctx, nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
+
+			if tc.wants == "" {
+				if err != nil {
+					t.Fatalf("a bounded decision was not returned: %v", err)
+				}
+				// The FIRST entry's answer, distinguishable from the second's:
+				// asserting only that a reply arrived would pass on either.
+				if d.Decision != "reply" || d.Message != "hello" {
+					t.Fatalf("the turn did not end on the first entry's decision: %+v", d)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tc.wants) {
+					t.Fatalf("the refusal was not returned as itself: %v", err)
+				}
+				if d.Plan != "" {
+					t.Fatalf("a refused turn produced a plan: %+v", d)
+				}
+			}
+			// THE PROOF OF NON-ADVANCEMENT: the second entry was never resolved
+			// and never asked. Not "it produced no answer" -- it was not
+			// consulted at all.
+			if got := res.asked("claude"); got != 0 {
+				t.Fatalf("the roster advanced past a bounded refusal: the next entry was asked %d times", got)
+			}
+			if len(res.resolved) != 1 || res.resolved[0] != "chatgpt" {
+				t.Fatalf("adapters were resolved for %v; only the entry that answered may be consulted", res.resolved)
+			}
+			if got := e.architectAnswered("task-1"); tc.wants == "" && got != "chatgpt" {
+				t.Fatalf("the answer was attributed to %q, want the entry that gave it", got)
+			}
+		})
+	}
+}
+
+// W4, A CONTROL. A configuration naming only the single Architect still walks a
+// bounded roster of ONE and behaves exactly as it does today. Exhaustion has to
+// be of a bounded set rather than of nothing.
+func TestAConfigurationWithNoAlternateStillWalksARosterOfOne(t *testing.T) {
+	if got := config.Default().ArchitectRoster(); len(got) != 1 || got[0].Name != config.Default().Architect.Name {
+		t.Fatalf("the shipped default is not a roster of one: %+v", got)
+	}
+	if got := (config.Config{}).ArchitectRoster(); len(got) != 0 {
+		t.Fatalf("a configuration naming no architect produced a roster: %+v", got)
+	}
+	// Stating a roster replaces the singleton; stating only the architect does
+	// not leave the singleton unreachable, which is the defect #355 cost a
+	// governed review to find on the reviewer side.
+	stated := config.Config{Architect: config.Agent{Name: "chatgpt"}, Architects: []config.Agent{{Name: "claude"}}}
+	if got := stated.ArchitectRoster(); len(got) != 1 || got[0].Name != "claude" {
+		t.Fatalf("an explicit roster did not take precedence: %+v", got)
+	}
+
+	// And the turn on a roster of one is the turn as it is today: one entry, its
+	// own two-attempt budget, and a decision returned from it.
+	e, res, _, _ := architectRoster(t, architectEntry{provider: "chatgpt",
+		turns: []architectTurn{{text: "not json"}, {text: replyDecision}}})
+	if got := e.Config.ArchitectRoster(); len(got) != 1 {
+		t.Fatalf("the engine's roster is %+v, want one entry", got)
+	}
+	if len(e.Config.Architects) != 0 {
+		t.Fatalf("the singleton path was not exercised: %+v", e.Config.Architects)
+	}
+	d, err := askRoster(t, e)
+	if err != nil || d.Decision != "reply" {
+		t.Fatalf("a roster of one no longer resolves as it does today: %+v %v", d, err)
+	}
+	if got := res.asked("chatgpt"); got != 2 {
+		t.Fatalf("the single entry took %d turns, want its two-attempt budget", got)
+	}
+}
+
+// W5. With EVERY roster entry unobtainable the run ends BLOCKED_EXTERNAL with its
+// durable record, carrying a reset time when one is known -- and NOT
+// INCOMPLETE/FAILED. The absence of the failed terminal is asserted, not only
+// the presence of the blocked one.
+func TestAnExhaustedArchitectRosterIsExternalAndNotFailed(t *testing.T) {
+	reset := time.Date(2026, 9, 25, 0, 0, 26, 0, time.UTC)
+	late := quota()
+	late.RetryAt = reset
+	e, _, events, root := architectRoster(t,
+		architectEntry{provider: "chatgpt", turns: []architectTurn{{err: quota()}}},
+		architectEntry{provider: "claude", turns: []architectTurn{{err: late}}})
+
+	_, err := askRoster(t, e)
+	var chain *roles.ArchitectUnobtainable
+	if !errors.As(err, &chain) {
+		t.Fatalf("an exhausted roster was not reported as the exhausted chain: %v", err)
+	}
+	if got := chain.Providers(); len(got) != 2 || got[0] != "chatgpt" || got[1] != "claude" {
+		t.Fatalf("the chain does not name every entry in the order tried: %v", got)
+	}
+	// THE ABSENT FINDING. "No provider was available" must not be reported as
+	// the architect failing to decide; that conflation is the whole defect.
+	if strings.Contains(err.Error(), "could not produce a bounded decision") {
+		t.Fatalf("an unavailable roster was reported as the architect failing to decide: %v", err)
+	}
+	if !errors.Is(err, provider.ErrUnavailable) {
+		t.Fatal("the adapters' proof was lost on the way up")
+	}
+
+	if !e.blockExternally("task-1", err) {
+		t.Fatalf("an exhausted architect roster did not reach the external terminal: %v", err)
+	}
+	seen := drainEvents(events)
+	if contains(seen, event.WorkflowFailed) {
+		t.Fatalf("the exhausted roster was also reported as a failure: %v", kinds(seen))
+	}
+	if !contains(seen, event.WorkflowBlockedExternal) {
+		t.Fatalf("no BLOCKED_EXTERNAL terminal: %v", kinds(seen))
+	}
+	if rec := receiptFrom(t, seen); rec.Outcome != runreceipt.OutcomeBlockedExternal {
+		t.Fatalf("receipt outcome %q, want BLOCKED_EXTERNAL", rec.Outcome)
+	}
+	found := reopen(t, root, "sess-roster")
+	if len(found) != 1 || found[0].TaskID != "task-1" {
+		t.Fatalf("the blocked task is not resumable as itself: %+v", found)
+	}
+	block, err := ParseExternalBlock(found[0].BlockedExternal)
+	if err != nil {
+		t.Fatalf("the durable block did not read back: %v", err)
+	}
+	// The reset time a provider PUBLISHED is carried, and it is carried whichever
+	// entry published it: a known time must not be lost because the entry that
+	// knew none happened to be configured first.
+	if block.RetryAtState != RetryAtKnown {
+		t.Fatalf("a published reset time was recorded as UNKNOWN: %+v", block)
+	}
+	if got, _ := time.Parse(time.RFC3339, block.RetryAt); !got.Equal(reset) {
+		t.Fatalf("the durable block states reset %q, want %v", block.RetryAt, reset)
+	}
+	if block.Role != string(roles.Architect) || block.Provider != "claude" {
+		t.Fatalf("the durable block does not name the turn and the provider it is waiting on: %+v", block)
+	}
+}
+
+// W5, THE UNPARSEABLE ROSTER. The request classifies output it cannot parse as
+// a failure to OBTAIN an architect, and this witness holds it to that at both
+// ends of the walk.
+//
+// The first draft of this repair advanced the roster past unparseable output --
+// treating it as unobtainability -- and then reported the exhausted roster of it
+// as the architect failing to decide. One condition cannot be unobtainability
+// during traversal and a failed decision at exhaustion; that split is what the
+// review at cycle 1 refused. Nothing was REACHED here in any useful sense: every
+// entry was asked, none answered, and no architect was obtained.
+//
+// So the terminal is external and FAILED is absent -- and because nobody proved
+// anything about themselves, the record says so: this engine's own reason code
+// and a retry time of UNKNOWN. An exhausted roster is preserved for a person to
+// resume; it is never woken on a moment nobody published.
+func TestAnExhaustedRosterOfUnparseableAnswersIsStillExternalAndNotFailed(t *testing.T) {
+	e, _, events, root := architectRoster(t,
+		architectEntry{provider: "chatgpt", turns: []architectTurn{{text: "not json"}, {text: "still not json"}}},
+		architectEntry{provider: "claude", turns: []architectTurn{{text: "nor this"}, {text: " "}}})
+	_, err := askRoster(t, e)
+	var chain *roles.ArchitectUnobtainable
+	if !errors.As(err, &chain) {
+		t.Fatalf("an exhausted roster of unparseable answers was not reported as the exhausted chain: %v", err)
+	}
+	if got := chain.Providers(); len(got) != 2 || got[0] != "chatgpt" || got[1] != "claude" {
+		t.Fatalf("the chain does not name every entry in the order tried: %v", got)
+	}
+	// THE ABSENT FINDING, at the error and at the terminal. "No architect could
+	// be obtained" must not be reported as the architect failing to decide.
+	if strings.Contains(err.Error(), "could not produce a bounded decision") {
+		t.Fatalf("an unobtainable roster was reported as the architect failing to decide: %v", err)
+	}
+	// And nothing was laundered in the other direction either: no entry proved a
+	// temporary unavailability, so no proof may appear in the chain.
+	if errors.Is(err, provider.ErrUnavailable) {
+		t.Fatalf("unparseable output was laundered into provider unavailability: %v", err)
+	}
+
+	if !e.blockExternally("task-1", err) {
+		t.Fatalf("an exhausted roster of unparseable answers did not reach the external terminal: %v", err)
+	}
+	seen := drainEvents(events)
+	if contains(seen, event.WorkflowFailed) {
+		t.Fatalf("the exhausted roster was also reported as a failure: %v", kinds(seen))
+	}
+	if !contains(seen, event.WorkflowBlockedExternal) {
+		t.Fatalf("no BLOCKED_EXTERNAL terminal: %v", kinds(seen))
+	}
+	if rec := receiptFrom(t, seen); rec.Outcome != runreceipt.OutcomeBlockedExternal {
+		t.Fatalf("receipt outcome %q, want BLOCKED_EXTERNAL", rec.Outcome)
+	}
+	found := reopen(t, root, "sess-roster")
+	if len(found) != 1 || found[0].TaskID != "task-1" {
+		t.Fatalf("the blocked task is not resumable as itself: %+v", found)
+	}
+	block, err := ParseExternalBlock(found[0].BlockedExternal)
+	if err != nil {
+		t.Fatalf("the durable block did not read back: %v", err)
+	}
+	if block.Reason != ReasonNoArchitectObtained {
+		t.Fatalf("the record's reason is %q; nobody published anything, so it must be this engine's own code", block.Reason)
+	}
+	if block.RetryAtState != RetryAtUnknown || block.RetryAt != "" {
+		t.Fatalf("a reset time nobody published was recorded: %+v", block)
+	}
+	if block.Role != string(roles.Architect) || block.Provider != "claude" {
+		t.Fatalf("the record does not name the turn and the entry that exhausted the roster: %+v", block)
+	}
+}
+
+// W5's negative control, AND the second half of W3. A bounded decision the run
+// REFUSES is neither a fallback nor an external block.
+//
+// The architect is reached, returns a parseable ESCALATION, and the escalation
+// enters its real routing path: routePlan is called over a live Sensei transport
+// and the authority it needs cannot be established. That refusal is the turn's
+// outcome. It must not advance the roster -- asking the next entry would be
+// shopping for a provider whose plan the router happens to accept -- and it must
+// not be parked as external state, which would map a genuine governance refusal
+// onto a terminal meaning "come back later": the mirror image of the defect.
+//
+// The second entry is scripted with an answer that would visibly succeed, so an
+// advance is caught here rather than by some later component.
+func TestABoundedDecisionTheRunRefusesIsNeitherAFallbackNorExternal(t *testing.T) {
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius local with approval gate none"}, roles.Unverified, "accept")
+	escalation := `{"decision":"escalate","summary":"this needs an authority answer","files":["internal/workflow/engine.go"]}`
+	e, res, events, _ := architectRoster(t,
+		architectEntry{provider: "chatgpt", turns: []architectTurn{{text: escalation}}},
+		architectEntry{provider: "claude", turns: []architectTurn{{text: replyDecision}}})
+
+	d, err := e.resolveArchitectureIn(context.Background(), h.sc, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
+	if err == nil {
+		t.Fatalf("the escalation's routing refusal was not returned: %+v", d)
+	}
+	if !strings.Contains(err.Error(), "preflight") {
+		t.Fatalf("the refusal returned was not the routing one: %v", err)
+	}
+	if d.Plan != "" || d.Decision != "" {
+		t.Fatalf("a refused escalation produced a decision: %+v", d)
+	}
+	// NOT the exhausted-roster condition: the architect was reached and its
+	// decision was routed. Nothing here says no provider was available.
+	var chain *roles.ArchitectUnobtainable
+	if errors.As(err, &chain) {
+		t.Fatalf("a governance refusal was reported as no architect being obtainable: %v", err)
+	}
+	// THE PROOF OF NON-ADVANCEMENT: the next entry was never resolved and never
+	// asked. Not "it produced no answer" -- it was not consulted at all.
+	if got := res.asked("claude"); got != 0 {
+		t.Fatalf("the roster advanced past a bounded decision: the next entry was asked %d times", got)
+	}
+	if len(res.resolved) != 1 || res.resolved[0] != "chatgpt" {
+		t.Fatalf("adapters were resolved for %v; only the entry that answered may be consulted", res.resolved)
+	}
+	if e.blockExternally("task-1", err) {
+		t.Fatalf("a governance refusal was parked as external state: %v", err)
+	}
+	seen := drainEvents(events)
+	if contains(seen, event.WorkflowBlockedExternal) {
+		t.Fatal("a governance refusal emitted the external terminal")
+	}
+	// The escalation really entered its routing path rather than failing short of
+	// it: routePlan records the question it asked before it decodes the answer,
+	// so this event is the proof that the router ran on this decision.
+	if !contains(seen, event.SenseiResult) {
+		t.Fatalf("the escalation never reached the router: %v", kinds(seen))
+	}
+}
+
+// W6, the engine half. When the transport carrying the architect turn exhausts
+// its bounded wait, the roster is walked afterwards: bridge exhaustion does not
+// end the run.
+//
+// The error is the shape internal/ghbridge returns when its request went
+// unanswered for its whole deadline (see AwaitArchitecture, and the ghbridge
+// witness beside TestResolverCarriesOnlyBoundArchitectForItsProvider, which
+// checks that exact error against ArchitectTurnUnobtainable). This package
+// cannot import ghbridge -- ghbridge imports it -- so the rule is exported and
+// each side proves its own half against the same predicate.
+func TestAnExhaustedCarriedArchitectTurnWalksTheRosterAfterwards(t *testing.T) {
+	unanswered := errors.New("no architecture answer answering that request was posted: context deadline exceeded")
+	if !ArchitectTurnUnobtainable(unanswered) {
+		t.Fatal("an exchange that ended unanswered is not classified as a failure to obtain an architect")
+	}
+	e, res, _, _ := architectRoster(t,
+		architectEntry{provider: "chatgpt", turns: []architectTurn{{err: unanswered}, {err: unanswered}}},
+		architectEntry{provider: "claude", turns: []architectTurn{{text: replyDecision}}})
+	d, err := askRoster(t, e)
+	if err != nil {
+		t.Fatalf("an exhausted carried turn ended the run instead of costing a fallback: %v", err)
+	}
+	if d.Decision != "reply" || res.asked("claude") != 1 {
+		t.Fatalf("the roster was not walked after the carried turn was exhausted: %+v, claude asked %d", d, res.asked("claude"))
+	}
+	if got := e.architectAnswered("task-1"); got != "claude" {
+		t.Fatalf("the answer after a carried exhaustion was attributed to %q", got)
+	}
+}
+
+// W7, A CONTROL. A roster entry that is reachable but whose graph binding cannot
+// be established is REFUSED rather than run unbound, and the roster does not
+// advance past it.
+//
+// Advancing would be wrong twice over. The binding is a property of the
+// QUESTION, so every later entry would be refused for the same reason, and the
+// run would end reporting that nobody could be reached while the real condition
+// sat in the first entry's error. "Unbound must never look like bound" survives
+// the roster, and it must not be allowed to look like unavailable either.
+func TestAnUnboundArchitectIsRefusedAndTheRosterDoesNotAdvance(t *testing.T) {
+	// The shape ghbridge.Resolver returns for a real task whose objective/base/
+	// graph binding is missing; its own witness pins that text.
+	unbound := errors.New("no exact objective/world binding for architect turn: task \"task-1\"")
+	e, res, _, _ := architectRoster(t,
+		architectEntry{provider: "chatgpt", resolverRefusal: unbound},
+		architectEntry{provider: "claude", turns: []architectTurn{{text: replyDecision}}})
+	d, err := askRoster(t, e)
+	if err == nil || !strings.Contains(err.Error(), "no exact objective/world binding") {
+		t.Fatalf("an unbound architect turn was not refused: %v %+v", err, d)
+	}
+	if d.Decision != "" {
+		t.Fatalf("a refused unbound turn produced a decision: %+v", d)
+	}
+	if got := res.asked("claude"); got != 0 {
+		t.Fatalf("an unbound turn was handed to the next entry, which ran %d times", got)
+	}
+	if len(res.resolved) != 1 {
+		t.Fatalf("adapters were resolved for %v; the refusal must end the walk", res.resolved)
+	}
+	var chain *roles.ArchitectUnobtainable
+	if errors.As(err, &chain) {
+		t.Fatalf("a binding refusal was reported as no architect being obtainable: %v", err)
+	}
+	if e.blockExternally("task-1", err) {
+		t.Fatal("a binding refusal was parked as external state")
 	}
 }

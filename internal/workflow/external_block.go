@@ -33,6 +33,19 @@ import (
 //     the missing semantic; the implementer uses the same type and terminal. The
 //     reviewer keeps its own #180 path (WAITING_REVIEW), which already preserves
 //     the candidate and treats availability as transport state.
+//
+// AN EXHAUSTED ROLE ROSTER IS THE SECOND WAY IN, and it is established
+// STRUCTURALLY rather than from any provider's words. The roster walk puts one
+// condition in roles.ArchitectUnobtainable: every entry was asked and none
+// produced an architect answer. A bounded decision, a refusal from a party that
+// was reached, a resolver refusal and a caller stop all return from the entry
+// that produced them and never reach that type, so its arrival here is proof of
+// the condition without anything reading a message to decide it.
+//
+// The two ways in are kept apart where it matters. Only an adapter mints a
+// provider.Unavailable, so only a PROVEN refusal carries a reset time; a roster
+// that merely produced nothing usable records its retry time as UNKNOWN, which
+// is what stops a time nobody stated from becoming a moment to wake up on.
 
 // RoleUnavailable is a role turn the task is owed and that no authorized
 // provider could serve, because each one tried proved it was unavailable.
@@ -67,6 +80,16 @@ const (
 	RetryAtUnknown = "UNKNOWN"
 )
 
+// ReasonNoArchitectObtained is the reason code for an exhausted architect
+// roster in which no entry published anything about itself.
+//
+// It is THIS ENGINE's code, not a provider's, and it is deliberately not
+// spelled like one. No adapter emits it, no provider.Unavailable carries it, and
+// nothing derives a retry time from it: a roster recorded under this reason
+// always states its retry time as UNKNOWN, because nobody said when they would
+// serve again and a moment nobody stated must not be invented.
+const ReasonNoArchitectObtained = "ENGINE_NO_ARCHITECT_OBTAINED"
+
 // ExternalBlock is the durable record of a WorkflowBlockedExternal terminal: the
 // payload FindInterrupted carries back byte for byte, so a later process retries
 // the same turn of the same task.
@@ -74,12 +97,20 @@ type ExternalBlock struct {
 	TaskID   string `json:"task_id"`
 	Role     string `json:"role"`
 	Provider string `json:"provider"`
-	// Reason is the provider's own structured code, verbatim.
+	// Reason is a structured code, never a paraphrase and never prose.
+	//
+	// It is the PROVIDER's own code whenever a provider proved it cannot serve
+	// now. It is ReasonNoArchitectObtained when nothing was proven and the
+	// condition is the one this engine established itself: the roster ran out.
+	// The two are distinguishable on the record, which is the point -- a reader
+	// can tell a published refusal from an engine finding without reading Detail.
 	Reason string `json:"reason"`
 	// RetryAtState is KNOWN or UNKNOWN; RetryAt is present only when KNOWN.
 	RetryAtState string `json:"retry_at_state"`
 	RetryAt      string `json:"retry_at,omitempty"`
-	// Detail is the provider's message, for people. Nothing reads it.
+	// Detail is for people: the provider's own message, or for an exhausted
+	// roster the ordered account of every entry and its reason. Nothing reads it,
+	// and no decision is ever taken from it.
 	Detail string `json:"detail,omitempty"`
 }
 
@@ -142,22 +173,119 @@ func ParseExternalBlock(raw json.RawMessage) (ExternalBlock, error) {
 	return b, nil
 }
 
-// blockExternally ends the invocation as BLOCKED_EXTERNAL when err carries a
-// role-attributed provider unavailability, and reports whether it did.
+// blockExternally ends the invocation as BLOCKED_EXTERNAL when err carries an
+// external execution condition, and reports whether it did.
 //
 // The task is left exactly as it stands: no candidate disposal, no handoff, no
 // new identity. It is the one terminal both run and resume reach for this
 // condition, so a resumed task that is blocked again says so the same way.
 func (e *Engine) blockExternally(taskID string, err error) bool {
-	var ru *RoleUnavailable
-	if !errors.As(err, &ru) || ru == nil || ru.Cause == nil {
+	role, b, ok := externalBlockFor(taskID, err)
+	if !ok {
 		return false
 	}
-	b := ru.Block(taskID)
 	e.noteExternalBlock(taskID, b)
 	e.emitRunTerminal(taskID, event.WorkflowBlockedExternal, event.SourceSystem,
 		runreceipt.OutcomeBlockedExternal, e.candidateStateFor(taskID),
-		"the "+ru.Role.Label()+" turn this task is owed could not be served: "+b.Describe()+
+		"the "+role.Label()+" turn this task is owed could not be served: "+b.Describe()+
 			". The task is preserved; resume it to retry that turn", b)
 	return true
+}
+
+// externalBlockFor is the durable record a terminal reports for err, and the
+// role it is owed to, or ok=false when err carries no external condition.
+//
+// An exhausted role roster is checked FIRST, because it carries one cause per
+// provider and errors.As would answer with whichever happens to come first in
+// the chain. Which entry the record names is a decision, not an accident: see
+// rosterBlock.
+func externalBlockFor(taskID string, err error) (roles.Role, ExternalBlock, bool) {
+	var chain *roles.ArchitectUnobtainable
+	if errors.As(err, &chain) && chain != nil && len(chain.Attempted) > 0 {
+		return roles.Architect, rosterBlock(taskID, chain), true
+	}
+	var ru *RoleUnavailable
+	if errors.As(err, &ru) && ru != nil && ru.Cause != nil {
+		return ru.Role, ru.Block(taskID), true
+	}
+	return "", ExternalBlock{}, false
+}
+
+// rosterBlock is the durable record for an exhausted architect roster.
+//
+// EVERY entry in the chain failed to obtain an architect answer -- an entry that
+// could not be reached, one that exhausted its quota, one that timed out or
+// exited non-zero, one that never produced parseable output inside its attempt
+// budget. That is the only condition the roster walk puts in this chain: a
+// bounded decision, a refusal from a party that WAS reached, a resolver refusal
+// and a caller stop each return from the entry that produced them and never
+// arrive here. So the whole chain is one finding -- no architect was available
+// -- and it is reported as external execution state rather than as the architect
+// failing to decide. They are different findings and must not share a terminal.
+//
+// Which entry the record NAMES is chosen rather than taken, in this order:
+//
+//   - the provider that PROVED a temporary unavailability and stated the
+//     EARLIEST reset time, because that is the first moment the turn this task
+//     is owed can be served again. Preferring a stated time over an unknown one
+//     is what keeps "the reset time is known" from depending on which provider
+//     happened to be configured first;
+//   - with none stated, the last refusal that proved one -- the one that
+//     exhausted the roster;
+//   - with nothing proven at all, the last entry tried, and the retry time is
+//     UNKNOWN. Nobody published a reset, so there is none to carry, and this is
+//     the case that must never be auto-resumed on an invented time.
+func rosterBlock(taskID string, chain *roles.ArchitectUnobtainable) ExternalBlock {
+	if proven := provenRosterRefusal(chain.Attempted); proven != nil {
+		return proven.Block(taskID)
+	}
+	// The last entry tried, which is the one that exhausted the roster. A roster
+	// entry the configuration left unnamed cannot be named here either; the
+	// record refuses itself on read rather than inventing a party, and the
+	// terminal is still the right one.
+	last := chain.Attempted[len(chain.Attempted)-1]
+	for i := len(chain.Attempted) - 1; i >= 0; i-- {
+		if strings.TrimSpace(chain.Attempted[i].Provider) != "" {
+			last = chain.Attempted[i]
+			break
+		}
+	}
+	return ExternalBlock{
+		TaskID:       taskID,
+		Role:         string(roles.Architect),
+		Provider:     last.Provider,
+		Reason:       ReasonNoArchitectObtained,
+		RetryAtState: RetryAtUnknown,
+		// Every entry and its own reason, for the person who has to decide what
+		// to do about a roster that answered nothing. Nothing reads it.
+		Detail: chain.Error(),
+	}
+}
+
+// provenRosterRefusal is the adapter-proven unavailability an exhausted roster
+// reports, or nil when no entry proved one.
+//
+// Only an ADAPTER mints a provider.Unavailable, so only a path through here can
+// carry a published reset time. Nothing above synthesizes one: an engine finding
+// that dressed itself as a provider's proof would make the record say a party
+// published something it never said.
+func provenRosterRefusal(attempted []roles.ArchitectAttemptFailure) *RoleUnavailable {
+	var best *RoleUnavailable
+	for _, a := range attempted {
+		var ru *RoleUnavailable
+		if !errors.As(a.Cause, &ru) || ru == nil || ru.Cause == nil {
+			continue
+		}
+		switch {
+		case best == nil:
+			best = ru
+		case best.Cause.RetryAt.IsZero():
+			// Nothing stated so far, so a later refusal is the more current
+			// account of it -- and any stated time replaces an unknown one.
+			best = ru
+		case !ru.Cause.RetryAt.IsZero() && ru.Cause.RetryAt.Before(best.Cause.RetryAt):
+			best = ru
+		}
+	}
+	return best
 }

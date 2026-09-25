@@ -81,13 +81,28 @@ func TestAnArchitectRetryNamesTheFailureItFollows(t *testing.T) {
 }
 
 // The guidance follows the latest failure, and the budget stays two attempts.
+//
+// What the attempt budget buys is unchanged by the roster: an entry is asked
+// twice and no more. What EXHAUSTING it means changed on 2026-09-24. A roster
+// entry that answered nothing parseable inside its budget produced no architect
+// answer, so the sole entry of a roster of one exhausts the roster, and an
+// exhausted roster is external execution state -- named here as the condition
+// rather than as the architect failing to decide, which is the finding it was
+// previously reported as. The durable BLOCKED_EXTERNAL projection of that
+// condition is proven by the W5 witnesses; this one holds the budget and the
+// fail-closed exit that reaches it.
 func TestArchitectRetryBudgetIsUnchanged(t *testing.T) {
 	architect, err := resolveWithArchitect(t,
 		architectTurn{err: context.DeadlineExceeded},
 		architectTurn{text: "not json"},
 	)
-	if err == nil || !strings.Contains(err.Error(), "could not produce a bounded decision") {
-		t.Fatalf("two failed attempts must fail closed, got %v", err)
+	if err == nil || !strings.Contains(err.Error(), "no authorized architect could be obtained") {
+		t.Fatalf("two failed attempts must fail closed on the exhausted roster, got %v", err)
+	}
+	// The entry that was spent is named, so the exhausted chain stays
+	// attributable to the party that failed rather than to "the architect".
+	if !strings.Contains(err.Error(), "claude") {
+		t.Fatalf("the exhausted roster does not name the entry it spent: %v", err)
 	}
 	if len(architect.prompts) != 2 {
 		t.Fatalf("architect ran %d times, want 2", len(architect.prompts))

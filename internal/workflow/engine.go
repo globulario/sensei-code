@@ -85,6 +85,12 @@ type Engine struct {
 	// a user's global config could substitute. The first foreign-repository run
 	// had the engine on one graph and the architect on another, silently.
 	graphs map[string]*agent.GraphBinding
+	// architects records, per task, the provider that actually supplied the
+	// architecture answer -- which with a fallback roster is not necessarily the
+	// configured first entry. Every record that names the deciding party reads
+	// it, so a roster walk cannot leave a plan attributed to a party that did
+	// not write it.
+	architects map[string]string
 	// findings holds what each observation established, so a caller may open
 	// repair work from it. Holding evidence is not holding authority: a repair
 	// opened from one enters the ordinary governed path with nothing carried
@@ -1093,7 +1099,8 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// taxed every run.
 	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
 		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)),
-		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID)}))
+		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID),
+			Architect: e.architectAnswered(taskID)}))
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -1356,7 +1363,7 @@ func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision
 	// recorded, not from which agent is configured. A supplied plan was decided
 	// by nobody in the run, and a headless submission was granted by nobody a
 	// person is established to be.
-	decidedBy := config.DisplayName(e.Config.Architect.Name)
+	decidedBy := e.architectLabel(taskID)
 	if p, ok := e.suppliedPlan(taskID); ok {
 		decidedBy = "supplied plan sha256 " + p.Digest + " (not architect-produced)"
 	}
@@ -1426,6 +1433,14 @@ type proposedPlan struct {
 	architectureDecision
 	PlanSource PlanSource `json:"plan_source,omitempty"`
 	PlanDigest string     `json:"plan_digest,omitempty"`
+	// Architect is the provider that actually answered, which with a fallback
+	// roster is not necessarily the configured first entry.
+	//
+	// It lives here and not on architectureDecision for the same reason
+	// PlanSource does: the decision struct is decoded from the model's own
+	// output, so a field on it would be something an agent could state. A plan
+	// that could name its own author could name somebody else.
+	Architect string `json:"architect,omitempty"`
 }
 
 // planEventSource is who the PlanProposed event is attributed to. A supplied
@@ -1671,7 +1686,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						Disputed: "the reviewer raised an architectural boundary about the findings: " + review.Summary,
 						Inputs: []roles.Claim{
 							{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
-							{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+							{Agent: e.architectLabel(taskID), Role: roles.Architect, Position: revised.Summary},
 						},
 						Canonical: reconciliationEvidence("", "", revised),
 						Decision:  revised.Plan,
@@ -2029,7 +2044,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					Inputs: []roles.Claim{
 						{Agent: open.Reviewer, Role: roles.Reviewer, Position: open.Summary},
 						{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
-						{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+						{Agent: e.architectLabel(taskID), Role: roles.Architect, Position: revised.Summary},
 					},
 					Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
 					Decision:  revised.Plan,
@@ -2114,7 +2129,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				Disputed: "the reviewer raised an architectural boundary: " + review.Summary,
 				Inputs: []roles.Claim{
 					{Agent: review.Provenance.Provider, Role: roles.Reviewer, Position: review.Summary},
-					{Agent: config.DisplayName(e.Config.Architect.Name), Role: roles.Architect, Position: revised.Summary},
+					{Agent: e.architectLabel(taskID), Role: roles.Architect, Position: revised.Summary},
 				},
 				Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
 				Decision:  revised.Plan,
@@ -2312,39 +2327,256 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 // resolveArchitectureIn is resolveArchitecture with an explicit working
 // directory, so the observation lane can run the architect somewhere the
 // governed checkout is not.
+//
+// It walks the configured architect roster, and ONLY A FAILURE TO OBTAIN AN
+// ARCHITECT ANSWER advances it: a provider that proved it cannot serve now, one
+// that could not be reached, one that timed out or exited non-zero, one that
+// never produced parseable output inside its attempt budget. A bounded decision
+// -- reply, proceed, escalate -- and every outcome that follows from one return
+// from the entry that gave it. A ladder that advanced on a legitimate refusal
+// would not be a fallback ladder; it would be shopping for a provider that says
+// yes, and the plan it produced would carry an authority nobody granted.
 func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt, workspace string) (architectureDecision, error) {
-	architect, err := e.resolveRunner(RunnerSpec{
-		Role: roles.Architect, Agent: e.Config.Architect, Source: event.SourceArchitect, TaskID: taskID,
-	})
-	if err != nil {
-		return architectureDecision{}, err
+	roster := e.Config.ArchitectRoster()
+	if len(roster) == 0 {
+		return architectureDecision{}, errors.New("no architect is configured, so this turn cannot be asked of anyone")
 	}
-	var lastErr error
-	// rounds bounds the whole resolution, which attempt does not.
-	//
-	// attempt budgets malformed JSON, and four paths legitimately reset it to
-	// start a fresh question: a human answer, and an escalation into a region
-	// Sensei certifies. The certified path needs no person, rebuilds the prompt
-	// by nesting the previous one inside certifiedResolutionPrompt, and comes
-	// straight back here -- so an architect that keeps escalating loops with no
-	// ceiling, spending a provider turn and growing the prompt every round,
-	// until the context is cancelled.
-	//
-	// The limit is generous because a real run resolves in one or two rounds
-	// and the human-answered paths are already bounded by a person's patience.
-	// It exists to end a loop, not to ration ordinary work.
-	rounds := 0
-	const maxRounds = 8
-	newRound := func(reason string) error {
-		rounds++
-		if rounds > maxRounds {
-			return fmt.Errorf(
-				"the architect did not settle after %d resolution rounds; the last was %s. "+
-					"Each round consumes a provider turn and nests the previous prompt, so this is stopped rather than left to run",
-				maxRounds, reason)
+	rounds := &resolutionRounds{}
+	// Every entry that failed to produce an architect answer, in the order
+	// tried. Collected rather than reduced to a last error, because an exhausted
+	// roster is a different condition from any one failure in it -- and because
+	// the reset time a proven refusal carries is the evidence that lets the task
+	// be preserved instead of declared failed.
+	var attempted []roles.ArchitectAttemptFailure
+	for position, cfg := range roster {
+		architect, err := e.resolveRunner(RunnerSpec{
+			Role: roles.Architect, Agent: cfg, Source: event.SourceArchitect, TaskID: taskID,
+		})
+		if err != nil {
+			// A RESOLVER REFUSAL IS NOT A PROVIDER THAT COULD NOT BE REACHED.
+			//
+			// It says that no adapter may serve this turn AS ASKED -- most often
+			// that the exact objective/base/graph binding is not established,
+			// which is a property of the question and not of the provider. Every
+			// later entry would be refused for the identical reason, so advancing
+			// would spend the whole roster and then report that nobody could be
+			// reached while the real condition sat in the first entry's error.
+			// Unbound must never look like bound, and it must not be allowed to
+			// look like unavailable either.
+			return architectureDecision{}, err
 		}
-		return nil
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.RoleAssigned,
+			fmt.Sprintf("%s takes the architect role", architect.Label),
+			map[string]any{
+				"role": roles.Architect, "provider": architect.Name,
+				"roster_position": position + 1, "roster_size": len(roster),
+			}))
+		d, err := e.askArchitect(ctx, sc, start, taskID, task, prompt, workspace, architect, position, rounds)
+		if err == nil {
+			// WHO ANSWERED, recorded at the moment it did. Every later record
+			// that names the deciding party -- the proposed plan, a
+			// reconciliation, the decision authority -- reads this rather than
+			// the configured first entry, so walking the roster cannot produce a
+			// plan attributed to a party that did not write it.
+			e.noteArchitectAnswered(taskID, architect.Name)
+			return d, nil
+		}
+		var notObtained *architectNotObtained
+		if !errors.As(err, &notObtained) {
+			// A bounded decision's own outcome, or a refusal no other provider
+			// may reinterpret. The turn ends here, on this entry's answer.
+			return architectureDecision{}, err
+		}
+		// A resolution round may have rewritten the question before this entry
+		// failed. The next entry answers the question as it now stands, not the
+		// one the task started with.
+		prompt = notObtained.prompt
+		attempted = append(attempted, roles.ArchitectAttemptFailure{Provider: architect.Name, Cause: notObtained.cause})
+		if position+1 < len(roster) {
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				architect.Label+" could not be obtained for the architect turn; trying the next architect on the roster",
+				map[string]string{"error": notObtained.cause.Error()}))
+		}
 	}
+	// THE ROSTER IS EXHAUSTED: every entry was asked and NO ARCHITECT ANSWER WAS
+	// OBTAINED from any of them. That is ONE condition however the entries
+	// failed, and it is external execution state -- the task is preserved and
+	// retried rather than declared failed.
+	//
+	// It does not matter here whether an entry published a proof of itself.
+	// "Out of quota" and "returned nothing parseable for its whole attempt
+	// budget" are the same finding at this point -- no architect was available --
+	// and the first draft of this repair split them, advancing the roster past
+	// unparseable output and then reporting the exhausted roster of it as the
+	// architect failing to decide. One condition cannot be unobtainability
+	// during the walk and a failed decision at the end of it.
+	//
+	// What the proof changes is the RECORD, not the terminal: a published reset
+	// time is carried and an absent one is stated as UNKNOWN. That is
+	// rosterBlock's decision, made where the durable record is written.
+	//
+	// A bounded decision never reaches this line. Every recognised reply,
+	// proceed and escalation -- and every governance outcome that follows from
+	// one, including a refusal by a party that was reached, a resolver refusal
+	// and a caller stop -- returned above from the entry that produced it. That
+	// is what keeps "no provider was available" and "the architect could not
+	// decide" on different terminals, which is the whole point of the repair.
+	return architectureDecision{}, &roles.ArchitectUnobtainable{Attempted: attempted}
+}
+
+// resolutionRounds bounds the WHOLE resolution of one architectural question,
+// which the per-entry attempt budget does not.
+//
+// A round is a FRESH question: a human answer, a closed knowledge gap, or an
+// escalation into a region Sensei certifies. The certified path needs no person,
+// rebuilds the prompt by nesting the previous one inside
+// certifiedResolutionPrompt, and comes straight back -- so without a ceiling an
+// architect that keeps escalating loops, spending a provider turn and growing
+// the prompt every round, until the context is cancelled.
+//
+// It is shared across the roster deliberately. Moving to the next entry is not a
+// new question and must not hand the task a fresh budget of rounds.
+//
+// The limit is generous because a real run resolves in one or two rounds and the
+// human-answered paths are already bounded by a person's patience. It exists to
+// end a loop, not to ration ordinary work.
+type resolutionRounds struct{ n int }
+
+const maxResolutionRounds = 8
+
+func (r *resolutionRounds) begin(reason string) error {
+	r.n++
+	if r.n > maxResolutionRounds {
+		return fmt.Errorf(
+			"the architect did not settle after %d resolution rounds; the last was %s. "+
+				"Each round consumes a provider turn and nests the previous prompt, so this is stopped rather than left to run",
+			maxResolutionRounds, reason)
+	}
+	return nil
+}
+
+func (r *resolutionRounds) count() int { return r.n }
+
+// architectNotObtained marks the one thing the roster may advance past: no
+// architect answer was obtained from this entry, so another entry may be asked
+// the same question.
+//
+// A wrapper rather than a bool beside the error, so that every refusal inside
+// askArchitect stays an ordinary returned error and keeps its meaning without
+// being restated. Only the paths that end WITHOUT an answer are wrapped, which
+// is what makes advancing the narrow case and refusing the default.
+type architectNotObtained struct {
+	cause error
+	// prompt is the question as it stands, which a resolution round may have
+	// rewritten before this entry failed.
+	prompt string
+}
+
+func (a *architectNotObtained) Error() string { return a.cause.Error() }
+
+func (a *architectNotObtained) Unwrap() error { return a.cause }
+
+// ArchitectTurnUnobtainable reports whether a failed architect turn is one a
+// roster may advance past: the question went out and no answer was obtained.
+//
+// Exported because the rule has two halves in two packages. A transport decides
+// HOW a turn fails -- an exchange that ended unanswered, a consumer that replied
+// refusing the request -- and this package decides what each failure means for
+// the ladder. Exporting it lets a transport's own tests check the exact errors it
+// produces against the exact predicate that will read them, rather than each
+// side asserting its own idea of where the boundary is.
+//
+// It NAMES the condition that must never advance and treats everything else as a
+// failure to obtain an answer, and that direction is deliberate. A provider that
+// could not be reached, exhausted its quota, timed out or exited non-zero
+// arrives in as many shapes as there are transports and process failures, so a
+// closed list of those would report a real outage as the architect failing to
+// decide -- the exact confusion this repairs. A refusal is the opposite: it is
+// answered, typed and small, so it is the half that is enumerated.
+//
+// It does not speak for a resolver refusal or a caller stop. No turn was taken
+// in the first case and the caller ended it in the second;
+// resolveArchitectureIn and askArchitect refuse both before consulting this.
+func ArchitectTurnUnobtainable(err error) bool {
+	return err != nil && !errors.Is(err, roles.ErrArchitectRefusal)
+}
+
+// noteArchitectAnswered records which provider actually supplied this task's
+// architecture answer.
+//
+// The last answer wins, because a revision supersedes the plan it revises and
+// the party that decided is the one that decided LAST. It is kept on the engine
+// rather than on architectureDecision so that no provider can state it: the
+// decision struct is decoded from a model's own output, and an agent that could
+// write this field could name a different party as the author of its plan.
+func (e *Engine) noteArchitectAnswered(taskID, provider string) {
+	if strings.TrimSpace(provider) == "" {
+		return
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.architects == nil {
+		e.architects = map[string]string{}
+	}
+	e.architects[taskID] = provider
+}
+
+// architectAnswered is the provider that answered as the architect, or "".
+func (e *Engine) architectAnswered(taskID string) string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.architects[taskID]
+}
+
+// architectLabel names the party a decision is attributed to.
+//
+// The RECORDED answer wins over the configured one. With a roster the configured
+// first entry may not be the one that answered, and naming it then would
+// attribute a plan to a party that did not write it -- which is the failure
+// resolveRunner refuses for a delegated architect and which a fallback ladder
+// must not reintroduce. A resumed task restores the recorded name from its own
+// plan record, so the attribution survives a restart.
+//
+// The configured first entry is named only when NOTHING was recorded, which
+// means no architect turn was taken in this task at all: the party the turn was
+// addressed to is then the most that can honestly be said, and a decision
+// authority for a task with no architect answer is decided elsewhere (a supplied
+// plan and a human answer both have their own branch above).
+func (e *Engine) architectLabel(taskID string) string {
+	if name := e.architectAnswered(taskID); strings.TrimSpace(name) != "" {
+		return config.DisplayName(name)
+	}
+	return config.DisplayName(e.Config.Architect.Name)
+}
+
+// architectRosterIdentity tells an entry the request was not addressed to who it
+// is.
+//
+// The request is rendered before any entry is tried, so its stated identity is
+// the one the turn was first addressed to. A provider told that it is a different
+// party may answer as that party, and the party that answered is the one every
+// record has to name.
+//
+// Appended rather than substituted, because a resolution round may already have
+// rewritten the prompt and the text above is the question's history. Only an
+// entry the roster walked PAST the first one receives it, so a turn that never
+// falls back carries exactly the bytes it carries today.
+func architectRosterIdentity(label string) string {
+	return "\n\nYou are answering as " + label + ", taking the architect role for this turn. " +
+		"Any identity stated above names the provider this request was first addressed to, " +
+		"which could not be obtained. Answer as yourself."
+}
+
+// askArchitect takes one roster entry's turn at one architectural question.
+//
+// An error wrapped in architectNotObtained means no answer was obtained and the
+// roster may advance. Every other error is this turn's outcome, and no other
+// provider may be asked to reinterpret it.
+func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start certifiedStart,
+	taskID, task, prompt, workspace string, architect Resolved, position int, rounds *resolutionRounds,
+) (architectureDecision, error) {
+	var lastErr error
+	newRound := rounds.begin
 	// retryNote is what the second attempt says about the first, and it is set
 	// by every path that fails an attempt. A timeout or a blank result is not a
 	// malformed response: telling the architect its JSON was invalid when it
@@ -2355,15 +2587,36 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		if attempt > 1 {
 			p += retryNote
 		}
+		if position > 0 {
+			p += architectRosterIdentity(architect.Label)
+		}
 		result, err := architect.Runner.Run(ctx, agent.Request{Role: roles.Architect, TaskID: taskID, Workspace: workspace, Prompt: p, Graph: e.graphFor(taskID)}, e.emit)
 		if err != nil {
+			// A CALLER STOP IS NOT PERMISSION TO ASK SOMEBODY ELSE.
+			//
+			// Read off the PARENT context, not off the error: a provider that
+			// timed out on its own bound reports the same value, and that is
+			// real unobtainability. Ending this turn is what the caller asked
+			// for; the question remains unanswered and is not handed on.
+			if cerr := ctx.Err(); cerr != nil {
+				return architectureDecision{}, fmt.Errorf("the architect turn was stopped by its caller: %w", cerr)
+			}
+			// THE PARTY THIS REACHED REPLIED, and its reply refused this exact
+			// request. Nothing is owed an answer and nothing was decided, but
+			// the question WAS put to a bound party and answered. Asking the
+			// next entry would be asking a different provider for a different
+			// answer to a question that already has one.
+			if errors.Is(err, roles.ErrArchitectRefusal) {
+				return architectureDecision{}, err
+			}
 			// A provider that PROVED it cannot serve now produced no answer, so
 			// there is nothing to retry against: a second turn would meet the
 			// same refusal, and telling it "no response was received" would
-			// spend the retry budget on transport state. The architect has no
-			// authorized alternate, so the task waits on this provider.
+			// spend the retry budget on transport state. The roster advances
+			// immediately instead, with this provider's own proof -- its reason
+			// and the time it said it would serve again -- carried whole.
 			if blocked := roleUnavailable(roles.Architect, architect.Name, err); blocked != nil {
-				return architectureDecision{}, blocked
+				return architectureDecision{}, &architectNotObtained{cause: blocked, prompt: prompt}
 			}
 			lastErr = err
 			retryNote = architectRetryNoAnswer
@@ -2452,7 +2705,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				// disposeUnclosedGap's decision and not this switch's.
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
+				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count())
 				var limited error
 				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
 					return architectureDecision{}, limited
@@ -2486,7 +2739,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 							// it open is the human's, asked once and honoured.
 							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 								"the knowledge gap did not close; escalating with it open: "+gap.Condition, nil))
-							e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds)
+							e.recordClosureQuestion(taskID, gap.Condition, d, start, architect.Label, rounds.count())
 							stillOpen := gap
 							stillOpen.Route = RouteHuman
 							stillOpen.Condition = "a bounded knowledge gap was not closed by investigation: " + gap.Condition
@@ -2578,7 +2831,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds)
+				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count())
 				var limited error
 				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
 					return architectureDecision{}, limited
@@ -2612,7 +2865,12 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 			retryNote = architectRetryMalformed
 		}
 	}
-	return architectureDecision{}, fmt.Errorf("architect could not produce a bounded decision: %w", lastErr)
+	if lastErr == nil {
+		// Defensive: every failing path above states a reason, and a cause that
+		// cannot be named is not evidence the next entry may act on.
+		lastErr = errors.New("the architect turn ended without an answer and without a stated reason")
+	}
+	return architectureDecision{}, &architectNotObtained{cause: lastErr, prompt: prompt}
 }
 
 // The two things a failed architect attempt can have been. They are kept apart
@@ -5643,7 +5901,8 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				// obligation (FindInterrupted) and binds every later resume.
 				e.emit(event.New(e.SessionID, task.TaskID, planEventSource(e.planSource(task.TaskID)), event.PlanProposed,
 					planSummaryFrom(revised, e.planSource(task.TaskID), e.planDigest(task.TaskID)),
-					proposedPlan{architectureDecision: revised, PlanSource: e.planSource(task.TaskID), PlanDigest: e.planDigest(task.TaskID)}))
+					proposedPlan{architectureDecision: revised, PlanSource: e.planSource(task.TaskID), PlanDigest: e.planDigest(task.TaskID),
+						Architect: e.architectAnswered(task.TaskID)}))
 				plan = revised.Plan
 				// The WHOLE scope moves to the revised plan -- files and prospective
 				// surfaces included. Moving only the prose left the resumed candidate
