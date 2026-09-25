@@ -329,3 +329,116 @@ func TestACheckThatReportsByPrintingIsNotASilentPass(t *testing.T) {
 		t.Fatalf("a verifier that found nothing was recorded as %q", quiet.Checks[0].Outcome)
 	}
 }
+
+// requiredTestModule writes a tiny Go module into the runner's workspace whose
+// package holds one passing test, one failing test and one skipped test, so a
+// required test is executed for real rather than simulated.
+func requiredTestModule(t *testing.T, r Runner) {
+	t.Helper()
+	dir := filepath.Join(r.Workspace, "pkg")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		filepath.Join(r.Workspace, "go.mod"): "module example.com/required\n\ngo 1.21\n",
+		filepath.Join(dir, "x_test.go"): "package pkg\n\nimport \"testing\"\n\n" +
+			"func TestPasses(t *testing.T) { t.Run(\"sub\", func(t *testing.T) {}) }\n\n" +
+			"func TestFails(t *testing.T) { t.Fatal(\"required behaviour broken\") }\n\n" +
+			"func TestSkips(t *testing.T) { t.Skip(\"not here\") }\n",
+	}
+	for path, body := range files {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// A named required test is executed on its own, recorded under its canonical
+// id, and bound to the exact candidate content it ran against. Fails if the
+// broker records the suite instead of the named test, keeps the class prefix,
+// or lets the record certify other bytes or another candidate.
+func TestARequiredTestIsExecutedByNameAndBoundToTheCandidate(t *testing.T) {
+	r := runner(t, nil)
+	requiredTestModule(t, r)
+	got := r.RunRequiredTests(context.Background(), "task-1", Digest("diff A"),
+		[]string{"test:pkg/x_test.go:TestPasses", "pkg/x_test.go:TestPasses"})
+	if len(got) != 1 {
+		t.Fatalf("one named test given twice must yield one record, got %d: %+v", len(got), got)
+	}
+	rec := got[0]
+	if rec.ID != "pkg/x_test.go:TestPasses" {
+		t.Fatalf("the record is not keyed by the canonical id: %q", rec.ID)
+	}
+	if !rec.Executed || !rec.Passed {
+		t.Fatalf("a passing named test was not recorded executed and passing: %+v", rec)
+	}
+	if !strings.Contains(strings.Join(rec.Evidence.Args, " "), "^TestPasses$") {
+		t.Fatalf("the broker did not run the named test on its own: %v", rec.Evidence.Args)
+	}
+	if !strings.Contains(rec.Evidence.ExecutedBy, "broker") {
+		t.Fatalf("the record does not name the broker as executor: %q", rec.Evidence.ExecutedBy)
+	}
+	if !rec.Discharges("test:pkg/x_test.go:TestPasses", "task-1", Digest("diff A")) {
+		t.Fatal("an executed, passing named test did not discharge itself for its own candidate")
+	}
+	if rec.Discharges("pkg/x_test.go:TestPasses", "task-1", Digest("diff B")) {
+		t.Fatal("the record discharged the test for different candidate content")
+	}
+	if rec.Discharges("pkg/x_test.go:TestPasses", "task-2", Digest("diff A")) {
+		t.Fatal("the record discharged the test for a different candidate")
+	}
+	if rec.Discharges("pkg/x_test.go:TestFails", "task-1", Digest("diff A")) {
+		t.Fatal("a record for one test discharged a different test id")
+	}
+}
+
+// A required test that did not run is not discharged, even when the command
+// that was asked to run it exited zero. Fails if a zero exit, a skip, a denied
+// capability or a malformed id is ever read as the named test having passed.
+func TestAnUnexecutedRequiredTestIsNotDischarged(t *testing.T) {
+	r := runner(t, nil)
+	requiredTestModule(t, r)
+	got := r.RunRequiredTests(context.Background(), "task-1", Digest("diff A"),
+		[]string{"pkg/x_test.go:TestAbsent", "pkg/x_test.go:TestSkips", "not-a-test-id"})
+	if len(got) != 3 {
+		t.Fatalf("every named test must be recorded, even unrun ones; got %d: %+v", len(got), got)
+	}
+	if got[0].Evidence.Outcome != Passed {
+		t.Fatalf("precondition: `go test -run` over a missing test exits zero; got %+v", got[0].Evidence)
+	}
+	for _, rec := range got {
+		if rec.Executed || rec.Passed {
+			t.Errorf("%s was recorded executed/passed without its own verdict line: %+v", rec.ID, rec)
+		}
+		if rec.Discharges(rec.ID, "task-1", Digest("diff A")) {
+			t.Errorf("%s was discharged without being executed", rec.ID)
+		}
+	}
+
+	denied := runner(t, func(CheckKind) (bool, string) { return false, "run_tests not granted" })
+	requiredTestModule(t, denied)
+	rec := denied.RunRequiredTests(context.Background(), "task-1", Digest("diff A"), []string{"pkg/x_test.go:TestPasses"})[0]
+	if rec.Evidence.Outcome != NotPermitted || rec.Executed || rec.Discharges(rec.ID, "task-1", Digest("diff A")) {
+		t.Fatalf("a required test the envelope did not permit was discharged or recorded as run: %+v", rec)
+	}
+}
+
+// A required test that ran and failed is not discharged by having executed.
+// Fails if Executed alone, or a non-zero exit, is ever treated as satisfying it.
+func TestAFailingRequiredTestIsNotDischarged(t *testing.T) {
+	r := runner(t, nil)
+	requiredTestModule(t, r)
+	rec := r.RunRequiredTests(context.Background(), "task-1", Digest("diff A"), []string{"pkg/x_test.go:TestFails"})[0]
+	if !rec.Executed {
+		t.Fatalf("a failing named test was not recorded as executed: %+v", rec)
+	}
+	if rec.Passed || rec.Evidence.Outcome == Passed {
+		t.Fatalf("a failing named test was recorded as passing: %+v", rec)
+	}
+	if rec.Discharges(rec.ID, "task-1", Digest("diff A")) {
+		t.Fatal("a required test that ran and failed was discharged")
+	}
+	if !strings.Contains(RenderRequiredTests([]RequiredTest{rec}), "FAILED") {
+		t.Fatalf("the rendering does not say the required test failed:\n%s", RenderRequiredTests([]RequiredTest{rec}))
+	}
+}

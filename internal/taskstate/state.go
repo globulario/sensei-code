@@ -80,6 +80,20 @@ type Evidence struct {
 	AuditVerdict  string   `json:"audit_verdict,omitempty"`
 	AuditDetail   string   `json:"audit_detail,omitempty"`
 	RequiredTests []string `json:"required_tests,omitempty"`
+	// RequiredTestResults is each required-test observation the diff audit
+	// made, read against the execution broker's record of that same test at
+	// this candidate. It sits beside RequiredTests rather than replacing it:
+	// the obligation stands, and this says whether it has been discharged.
+	RequiredTestResults []RequiredTestResult `json:"required_test_results,omitempty"`
+}
+
+// RequiredTestResult is one required test's discharge state for a candidate.
+type RequiredTestResult struct {
+	ID        string `json:"id"`
+	Executed  bool   `json:"executed"`
+	Passed    bool   `json:"passed"`
+	Satisfied bool   `json:"satisfied"`
+	State     string `json:"state"`
 }
 
 // Finding is something a reviewer or an audit raised that is still open.
@@ -313,6 +327,13 @@ func (s State) Handover(previousWorker string, currentGraphBuildCommit string) s
 	}
 	if len(s.Evidence.RequiredTests) != 0 {
 		b.WriteString("  tests that must pass: " + strings.Join(s.Evidence.RequiredTests, ", ") + "\n")
+	}
+	for _, r := range s.Evidence.RequiredTestResults {
+		mark := "OUTSTANDING"
+		if r.Satisfied {
+			mark = "SATISFIED"
+		}
+		b.WriteString("  required test " + r.ID + ": " + mark + " (" + r.State + ")\n")
 	}
 
 	b.WriteString("\nSTILL OPEN (this is your work)\n")
