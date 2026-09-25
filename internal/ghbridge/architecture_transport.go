@@ -293,7 +293,16 @@ func (e *ArchitectureRefused) Error() string {
 	return out
 }
 
-func (e *ArchitectureRefused) Unwrap() error { return ErrArchitectureRefused }
+// Unwrap carries the transport's own condition AND the role-level one.
+//
+// roles.ErrArchitectRefusal is what a fallback ladder reads: the consumer
+// REPLIED, so this request is answered and no other provider may be asked the
+// same question. Stating it here rather than leaving the engine to recognise
+// this package's sentinel keeps the ladder from having to import a transport to
+// tell a refusal from a provider it could not reach.
+func (e *ArchitectureRefused) Unwrap() []error {
+	return []error{ErrArchitectureRefused, roles.ErrArchitectRefusal}
+}
 
 // renderRejected states refusal-shaped comments that could not settle a request.
 //
