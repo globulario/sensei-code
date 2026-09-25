@@ -164,7 +164,10 @@ func TestAnAdvisorySelfReviewIsStillRefused(t *testing.T) {
 func TestAnAdvisoryReviseStillCarriesItsInstructions(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{
 		"decision": "revise", "summary": "not proven",
-		"findings": []map[string]any{{"id": "1", "severity": "blocking",
+		// CODE: a test that cannot fail is a defect in the candidate, and only
+		// an edit to a_test.go repairs it. The class is what lets this finding
+		// cross into a ReviewResult and act with full standing.
+		"findings": []map[string]any{{"id": "1", "severity": "blocking", "class": "code",
 			"claim": "the test does not fail without the fix", "reference": "a_test.go", "reason": "no mutation"}},
 	})
 	e, _ := reviewEngine(t, answeringRunner{text: string(raw), mode: roles.Unverified}, "remote:abc")

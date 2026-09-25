@@ -1536,6 +1536,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				strings.Join(guidance, "\n"), nil))
 		}
 		report := ""
+		// workerRan says whether this cycle produced a response at all. A
+		// resumed review with no worker turn has nothing to account for.
+		workerRan := false
 		// A resumed awaiting-review task reviews the candidate it already has
 		// before anything touches it. Only the first cycle: if that review asks
 		// for a revision, the ordinary loop resumes and cycle two calls a worker
@@ -1571,6 +1574,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 			}
 			report = strings.TrimSpace(result.Text)
+			workerRan = true
 		}
 
 		candidate := gitx.Repo{Root: workspace}
@@ -1898,14 +1902,90 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, auditEvidence(audit.Structured)))
 		}
-		// A candidate that is byte-identical to the previous cycle means the
+		// CONVERGENCE IS PER-FINDING ACCOUNTING. Every finding the last review
+		// left open is owed a response of the class the reviewer recorded on it,
+		// by id. A cycle that answered some and was silent on others has not
+		// converged however the diff moved, and it stops here, before a reviewer
+		// can accept the moved candidate over a finding nobody answered.
+		accounted := false
+		if open, ok := e.openReview(taskID); ok && workerRan {
+			if outstanding := outstandingFindings(open); len(outstanding) != 0 {
+				responses, perr := parseFindingResponses(report)
+				// Which files moved since the findings were raised, file by
+				// file: a change is bound to a finding through the files it
+				// touched, never through the digest of the whole candidate.
+				moved, merr := movedPathsSince(ctx, candidate, tc.Identity.BaseSHA, open.CandidateTree, diff)
+				account := accountForFindings(outstanding, responses, moved, evidence)
+				if len(account.Disputes) != 0 {
+					// A classification disagreement is a ROUTE, not a licence:
+					// it goes to the architect by the same escalation a
+					// reviewer's boundary takes, and it discharges nothing. The
+					// open review is kept exactly as the reviewer wrote it, so
+					// the disputed finding stays owed under the reviewer's
+					// class; the architect's answer revises the plan, never the
+					// finding.
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						"the worker disputes the class of a review finding; the dispute is escalated to the architect and the reviewer's class stands",
+						map[string]any{"classification_disputes": account.Disputes, "open_findings": account.Open}))
+					revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task,
+						disputeEscalationPrompt(task, plan, lastAudit, account), "the worker disputed a finding's class")
+					if err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
+					if strings.TrimSpace(revised.Plan) == "" {
+						return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan for the classification dispute")
+					}
+					disputed := make([]string, 0, len(account.Disputes))
+					for _, d := range account.Disputes {
+						disputed = append(disputed, fmt.Sprintf("[%s] as %s: %s", d.ID, d.DisputesClass, d.Reason))
+					}
+					e.recordReconciliation(taskID, roles.Binding{
+						TaskID: taskID, BaseSHA: tc.Identity.BaseSHA,
+						CandidateDigest: candidateRevision(diff), CandidateTree: capture.Tree,
+					}, roles.Reconciliation{
+						Disputed: "the worker disputed the class of a review finding: " + strings.Join(disputed, "; "),
+						Inputs: []roles.Claim{
+							{Agent: worker.Name, Role: roles.Implementer, Position: strings.Join(disputed, "; ")},
+							{Agent: e.architectLabel(taskID), Role: roles.Architect, Position: revised.Summary},
+						},
+						Canonical: reconciliationEvidence(lastAudit, evidence.Render(), revised),
+						Decision:  revised.Plan,
+						Authority: roles.ArchitectAuthority,
+						Remaining: revised.Consequences,
+					})
+					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					plan = revised.Plan
+					feedback = "The architect resolved the classification dispute. The reviewer's class stands and every finding below is still owed a response of that class: " +
+						account.Diagnosis() + "\n\nReconcile the current candidate with the revised plan."
+					continue
+				}
+				if !account.Settled() {
+					diagnosis := account.Diagnosis()
+					if perr != nil {
+						diagnosis += " (" + perr.Error() + ")"
+					}
+					if merr != nil {
+						diagnosis += " (" + merr.Error() + ")"
+					}
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+						"the candidate did not converge: %s", diagnosis)
+				}
+				accounted = true
+			}
+		}
+		// THE BACKSTOP, not the decider. A candidate that is byte-identical to
+		// the previous cycle, with no finding accounting to say why, means the
 		// worker read the feedback and produced the same thing again. Running
 		// the remaining cycles will produce it a third and fourth time: one
 		// real run did exactly that, three times, before timing out with no
 		// diagnosis. Stop and say so, so the next worker gets the candidate
 		// while there is still budget to do something with it.
+		//
+		// A cycle whose every outstanding finding was discharged is not
+		// judged by it: an EVIDENCE finding is discharged by evidence, and a
+		// candidate that did not move is then exactly right.
 		if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
-			if digest == previousDiffDigest {
+			if digest == previousDiffDigest && !accounted {
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 					"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 						"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
@@ -3097,8 +3177,18 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 				lastErr = err
 				continue
 			}
+			// The class boundary is asked first, so a refused verdict never
+			// reaches the override lookup and is never reported as an override
+			// that "does not cover" it.
+			if refused := advisoryReview(advisory).Refused(); refused != nil {
+				return ReviewResult{}, fmt.Errorf("%w: %v", errReviewRefused, refused)
+			}
 			// Advisory unless a recorded human override covers this exact review.
-			return e.attestedOrAdvisory(taskID, advisory, result.ReviewDigest), nil
+			standing := e.attestedOrAdvisory(taskID, advisory, result.ReviewDigest)
+			if refused := standing.Refused(); refused != nil {
+				return ReviewResult{}, fmt.Errorf("%w: %v", errReviewRefused, refused)
+			}
+			return standing, nil
 		}
 		if err := verdict.Validate(binding, implementer); err != nil {
 			if reviewIsInadmissible(verdict, binding, implementer) {
@@ -3107,7 +3197,14 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 			lastErr = err
 			continue
 		}
-		return independentReview(verdict), nil
+		// A classless finding is a verdict this workflow will not give
+		// standing to from any provider: it is refused, never installed as
+		// repair state and never assigned a class here.
+		standing, err := independentReview(verdict)
+		if err != nil {
+			return ReviewResult{}, fmt.Errorf("%w: %v", errReviewRefused, err)
+		}
+		return standing, nil
 	}
 	return ReviewResult{}, lastErr
 }
@@ -3225,6 +3322,312 @@ func numberFindings(findings []roles.Finding) []roles.Finding {
 		}
 		out = append(out, f)
 	}
+	return out
+}
+
+// A FINDING'S CLASS BINDS THE CLASS OF ITS RESPONSE.
+//
+// Measured on the DF-19 resume, 2026-09-25: a review carried a blocking CODE
+// finding and a major EVIDENCE finding; the worker answered the evidence one,
+// called the cycle "evidence-only", and never touched the code defect. Only the
+// identical-diff check noticed, and it is a proxy -- one unrelated edit would
+// have carried the blocking finding forward as answered.
+//
+// So convergence is accounted per finding, by id, against the class the
+// REVIEWER recorded. The worker's reply is input: it says which findings it
+// answered and how, and it may dispute a class, but nothing it writes can
+// change what kind of thing a finding says is wrong.
+
+// findingResponse is the worker's account of one outstanding finding.
+//
+// It deliberately has no field that sets the finding's class. AnsweredBy is
+// what the worker CLAIMS to have done, and is checked against the class on the
+// reviewer's finding; DisputesClass is a disagreement, which is escalated and
+// never acted on.
+//
+// A claim is not enough on its own, and matching the class is not enough
+// either: an id paired with the right class plus ANY movement or ANY passing
+// check is the whole-diff proxy again, one level down. So a code or scope
+// answer names the files it changed FOR THIS FINDING, and an evidence answer
+// names the executed check that meets THIS FINDING's stated proof gap.
+type findingResponse struct {
+	ID string `json:"id"`
+	// AnsweredBy is the kind of response the worker claims to have given.
+	AnsweredBy roles.FindingClass `json:"answered_by,omitempty"`
+	// Paths are the files a code or scope answer changed to repair this
+	// finding. Each must have moved since the finding was raised, and one of
+	// them must be where the reviewer's reference points.
+	Paths []string `json:"paths,omitempty"`
+	// Evidence is the full command line of the executed check an evidence
+	// answer rests on. It must have passed on this candidate and be the check
+	// the finding's proof gap asks for.
+	Evidence string `json:"evidence,omitempty"`
+	// DisputesClass is the class the worker believes the finding should have.
+	DisputesClass roles.FindingClass `json:"disputes_class,omitempty"`
+	Reason        string             `json:"reason,omitempty"`
+}
+
+// findingResponsesKey is the one field a worker's accounting is found by.
+const findingResponsesKey = `"finding_responses"`
+
+// parseFindingResponses reads the worker's accounting out of its report.
+//
+// The report is prose around one JSON object, so the object is located by its
+// key rather than by the first brace: a report that quotes code would otherwise
+// decode the code. No accounting is not an error here -- it is an account of
+// nothing, and every outstanding finding stays open.
+func parseFindingResponses(report string) ([]findingResponse, error) {
+	at := strings.Index(report, findingResponsesKey)
+	if at < 0 {
+		return nil, nil
+	}
+	start := strings.LastIndex(report[:at], "{")
+	if start < 0 {
+		return nil, errors.New("the finding accounting is not inside a JSON object")
+	}
+	var payload struct {
+		Responses []findingResponse `json:"finding_responses"`
+	}
+	if err := json.NewDecoder(strings.NewReader(report[start:])).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("the finding accounting does not decode: %w", err)
+	}
+	return payload.Responses, nil
+}
+
+// openFinding is an outstanding finding the cycle did not discharge, and why.
+type openFinding struct {
+	ID    string             `json:"id"`
+	Class roles.FindingClass `json:"class"`
+	Why   string             `json:"why"`
+}
+
+// findingAccount is what one cycle's accounting concluded.
+type findingAccount struct {
+	// Outstanding is how many findings the cycle had to account for.
+	Outstanding int `json:"outstanding"`
+	// Open are the findings still owed a response of their own class.
+	Open []openFinding `json:"open,omitempty"`
+	// Disputes are classification disagreements, escalated rather than acted
+	// on. Every disputed finding is also in Open.
+	Disputes []findingResponse `json:"disputes,omitempty"`
+}
+
+// Settled reports that every outstanding finding was discharged by a response
+// of its own class. Nothing about the diff enters this.
+func (a findingAccount) Settled() bool { return len(a.Open) == 0 }
+
+// Diagnosis names every open finding by id and class.
+func (a findingAccount) Diagnosis() string {
+	parts := make([]string, 0, len(a.Open))
+	for _, o := range a.Open {
+		parts = append(parts, fmt.Sprintf("[%s] %s finding: %s", o.ID, o.Class, o.Why))
+	}
+	msg := fmt.Sprintf("%d of %d outstanding review finding(s) were not discharged: %s",
+		len(a.Open), a.Outstanding, strings.Join(parts, "; "))
+	if len(a.Disputes) != 0 {
+		ids := make([]string, 0, len(a.Disputes))
+		for _, d := range a.Disputes {
+			ids = append(ids, d.ID)
+		}
+		msg += fmt.Sprintf(". The worker disputed the class of %s; a dispute is escalated, and the reviewer's class stands until someone with that authority changes it",
+			strings.Join(ids, ", "))
+	}
+	return msg
+}
+
+// outstandingFindings are the findings of an open review that a cycle owes a
+// response to: everything the worker was instructed to reconcile. A minor
+// finding "does not affect the decision" and is not in the instruction, so it
+// is not owed one.
+func outstandingFindings(open openReview) []roles.Finding {
+	var out []roles.Finding
+	for _, f := range open.Findings {
+		if f.Severity != roles.Minor {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// accountForFindings decides, finding by finding, whether this cycle
+// discharged what the last review raised.
+//
+// moved is the set of files whose content changed between the candidate the
+// findings were raised on and this one, or nil when that cannot be measured;
+// evidence is this cycle's executed validation. The class of each finding is
+// read from the finding and nowhere else, and the discharge is bound to the
+// finding itself, not merely to its class:
+//
+//	code     a code answer naming the files changed for it: every one moved,
+//	         and one of them is where the finding's reference points
+//	scope    the same, as a scope answer
+//	evidence an evidence answer naming, by full command line, a check that ran
+//	         on this candidate and passed AND that the finding's proof gap
+//	         names; a code change, or an unrelated passing check, does not
+//
+// A missing, mismatched or disputed response leaves the finding open. A finding
+// with no valid class cannot be discharged at all: nothing in the record says
+// what would discharge it, and guessing is the thing refused here.
+func accountForFindings(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle) findingAccount {
+	byID := make(map[string]findingResponse, len(responses))
+	for _, r := range responses {
+		id := strings.TrimSpace(r.ID)
+		if _, seen := byID[id]; !seen {
+			byID[id] = r
+		}
+	}
+	account := findingAccount{Outstanding: len(outstanding)}
+	for _, f := range outstanding {
+		open := func(why string) {
+			account.Open = append(account.Open, openFinding{ID: f.ID, Class: f.Class, Why: why})
+		}
+		r, answered := byID[strings.TrimSpace(f.ID)]
+		switch {
+		case !f.Class.Valid():
+			open(fmt.Sprintf("the finding carries no valid class (%q), so nothing says what would discharge it", f.Class))
+		case !answered:
+			open("no response accounted for it")
+		case r.DisputesClass != "":
+			account.Disputes = append(account.Disputes, r)
+			open(fmt.Sprintf("the worker disputes its class as %q; a dispute is an escalation, not a discharge", r.DisputesClass))
+		case r.AnsweredBy != f.Class:
+			open(fmt.Sprintf("answered as %q, and the reviewer recorded it as %q", r.AnsweredBy, f.Class))
+		case f.Class == roles.EvidenceFinding:
+			if why := unmetProof(f, r, evidence); why != "" {
+				open(why)
+			}
+		default:
+			if why := unboundChange(f, r, moved); why != "" {
+				open(why)
+			}
+		}
+	}
+	return account
+}
+
+// unboundChange says why a code or scope answer is not bound to its finding,
+// or "" when it is. The binding is two facts the worker cannot phrase into
+// existence: the files it names actually moved since the finding was raised,
+// and the finding's own reference -- the reviewer's, not the worker's -- points
+// at one of them. An edit elsewhere is not a repair of THIS finding, however
+// the whole candidate moved.
+func unboundChange(f roles.Finding, r findingResponse, moved map[string]bool) string {
+	if moved == nil {
+		return "the candidate it was raised on cannot be compared file by file, so no change can be bound to it"
+	}
+	var named []string
+	for _, p := range r.Paths {
+		if p = strings.TrimSpace(p); p != "" {
+			named = append(named, p)
+		}
+	}
+	if len(named) == 0 {
+		return "answered as a change, and the answer names no file changed to repair it"
+	}
+	for _, p := range named {
+		if !moved[p] {
+			return fmt.Sprintf("answered as a change to %q, and that file did not change since the finding was raised", p)
+		}
+	}
+	for _, p := range named {
+		if strings.Contains(f.Reference, p) {
+			return ""
+		}
+	}
+	return fmt.Sprintf("the finding points at %q, and the change named for it (%s) touches none of it",
+		f.Reference, strings.Join(named, ", "))
+}
+
+// unmetProof says why an evidence answer does not meet its finding's proof gap,
+// or "" when it does. The cited check must have run on this candidate and
+// passed, and it must be the proof the REVIEWER asked for: the finding's proof
+// gap or correction names it. A check that passed but proves something else --
+// gofmt, against a demand for failing-first history -- meets nothing.
+func unmetProof(f roles.Finding, r findingResponse, b validation.Bundle) string {
+	cite := strings.TrimSpace(r.Evidence)
+	if !citesPassingCheck(b, cite) {
+		return fmt.Sprintf("the evidence cited (%q) names no check that ran on this candidate and passed", r.Evidence)
+	}
+	required := strings.TrimSpace(f.ProofGap + " " + f.Correction)
+	if required == "" {
+		return "the finding states no proof requirement, so no executed check can be shown to meet it"
+	}
+	if !strings.Contains(required, cite) {
+		return fmt.Sprintf("the check cited (%q) passed, but it is not the proof the finding asks for (%q)", cite, required)
+	}
+	return ""
+}
+
+// citesPassingCheck reports whether cite is the full command line of a check in
+// this cycle's bundle that passed. Only the full line: a kind ("test") or a bare
+// command ("go") names every check of its sort, and so names no particular one.
+func citesPassingCheck(b validation.Bundle, cite string) bool {
+	cite = strings.TrimSpace(cite)
+	if cite == "" {
+		return false
+	}
+	for _, c := range b.Checks {
+		if c.Outcome != validation.Passed {
+			continue
+		}
+		if cite == strings.TrimSpace(c.Command+" "+strings.Join(c.Args, " ")) {
+			return true
+		}
+	}
+	return false
+}
+
+// movedPathsSince is the set of files whose content differs between the
+// candidate a review was raised on (its recorded tree) and this cycle's
+// canonical diff, both against the same base. It fails rather than guessing
+// when the earlier candidate was not recorded as a tree.
+func movedPathsSince(ctx context.Context, repo gitx.Repo, base, raisedTree, diff string) (map[string]bool, error) {
+	if strings.TrimSpace(raisedTree) == "" {
+		return nil, errors.New("the open review recorded no candidate tree to compare against")
+	}
+	earlier, err := repo.RenderCandidateDiff(ctx, base, raisedTree)
+	if err != nil {
+		return nil, fmt.Errorf("render the candidate the review was raised on: %w", err)
+	}
+	before, after := diffSections(earlier), diffSections(diff)
+	moved := map[string]bool{}
+	for p, sec := range after {
+		if before[p] != sec {
+			moved[p] = true
+		}
+	}
+	for p := range before {
+		if _, still := after[p]; !still {
+			moved[p] = true
+		}
+	}
+	return moved, nil
+}
+
+// diffSections splits a unified diff into its per-file sections, keyed by the
+// post-image path of each "diff --git a/X b/Y" header.
+func diffSections(diff string) map[string]string {
+	out := map[string]string{}
+	var path string
+	var sec strings.Builder
+	flush := func() {
+		if path != "" {
+			out[path] = sec.String()
+		}
+		sec.Reset()
+	}
+	for _, line := range strings.SplitAfter(diff, "\n") {
+		if strings.HasPrefix(line, "diff --git ") {
+			flush()
+			header := strings.TrimRight(line, "\n")
+			path = ""
+			if at := strings.LastIndex(header, " b/"); at >= 0 {
+				path = header[at+len(" b/"):]
+			}
+		}
+		sec.WriteString(line)
+	}
+	flush()
 	return out
 }
 
@@ -4307,6 +4710,21 @@ func orNone(value, absent string) string {
 	return value
 }
 
+// findingAccountingInstruction tells the worker how its response to review
+// findings is accounted. It is the only channel the accounting reads.
+const findingAccountingInstruction = `
+
+ACCOUNT FOR EVERY REVIEW FINDING, BY ID. End your output with one JSON object:
+{"finding_responses":[{"id":"f1","answered_by":"code"|"evidence"|"scope","paths":["the files you changed to repair THIS finding, for a code or scope answer"],"evidence":"the full command line of the validation check this rests on, for an evidence answer","disputes_class":"only if you believe the reviewer misclassified it","reason":"..."}]}
+Each finding's class was set by the reviewer and is not yours to change. A code
+or scope finding is discharged only by a change to the files you name for it,
+which must have changed this cycle and include where the finding's reference
+points; an evidence finding only by a validation check that ran on this
+candidate, passed, and is the check its proof gap names. A finding you do not
+answer stays open and the cycle does not converge. If you believe a class is
+wrong, say so in disputes_class: that escalates the disagreement and does not
+discharge the finding.`
+
 func implementationPrompt(tc taskContext, plan, feedback string, cycle int, guidance []string, grants string) string {
 	extra := ""
 	if strings.TrimSpace(grants) != "" {
@@ -4322,7 +4740,7 @@ so the architect can decide. Widening the envelope is the architect's decision, 
 ` + grants
 	}
 	if strings.TrimSpace(feedback) != "" {
-		extra += "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback
+		extra += "\n\nREVIEW FEEDBACK TO RECONCILE:\n" + feedback + findingAccountingInstruction
 	}
 	if len(guidance) != 0 {
 		extra += "\n\nGUIDANCE FROM THE HUMAN ARCHITECT, sent while you were working:\n- " +
@@ -4447,12 +4865,21 @@ Sensei's evidence is still a REVISE.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
 
 Every blocking finding must name something a worker can open. A finding with
 nowhere to point cannot be acted on, and a cycle spent on one produces an
 identical diff and consumes the budget for nothing. Do not return ACCEPT while
 recording a blocking finding.
+
+Every finding must carry a class, and a verdict with a finding that lacks one is
+refused: "code" is a defect in the candidate and only a code change discharges
+it; "evidence" is a proof record that does not establish its claim and only
+executed evidence discharges it; "scope" is a change outside its declared bound.
+The class is yours to set. The worker cannot change it. A code or scope finding
+is discharged only by a change to a file its reference names, so name the file.
+An evidence finding is discharged only by a check whose full command line its
+proof_gap names, so name the check that would establish the missing proof.
 
 CANDIDATE REVISION: %s
 This verdict is bound to that revision. If the worker changes the candidate,
@@ -4543,7 +4970,11 @@ ESCALATE only for a genuine architectural-authority question.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+
+Every finding must carry a class ("code", "evidence" or "scope"); a verdict with
+a finding that lacks one is refused. An evidence finding is discharged only by a
+check whose full command line its proof_gap names.
 
 CONVERSATION WITH THE HUMAN:
 %s
@@ -4594,6 +5025,32 @@ REVIEWER:
 %s
 
 Return ONLY the same architecture JSON contract as before.`, task, plan, audit, review.Summary, review.Instruction())
+}
+
+// disputeEscalationPrompt puts a worker's classification dispute to the
+// architect. It says outright that the finding's class is the reviewer's and
+// is not the thing being decided: the architect answers with a revised plan,
+// and the disputed finding stays owed under the class it was raised with.
+func disputeEscalationPrompt(task, plan, audit string, account findingAccount) string {
+	disputes, _ := json.MarshalIndent(account.Disputes, "", "  ")
+	return fmt.Sprintf(`The bounded implementer disputes the class of one or more review findings. A finding's class is recorded by the reviewer and binds the class of its response; the dispute does not discharge the finding and does not change its class. Resolve the disagreement using your architectural authority. Escalate to the human only if the decision changes human-owned intent/policy/contract/trust authority. Otherwise issue a revised bounded plan under which the implementer can answer every open finding with a response of the reviewer's class.
+
+TASK:
+%s
+
+CURRENT PLAN:
+%s
+
+SENSEI AUDIT:
+%s
+
+CLASSIFICATION DISPUTES:
+%s
+
+OPEN FINDINGS:
+%s
+
+Return ONLY the same architecture JSON contract as before.`, task, plan, audit, disputes, account.Diagnosis())
 }
 
 // humanResolutionPrompt continues an architect whose question a person just
