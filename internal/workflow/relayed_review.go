@@ -37,6 +37,7 @@ func ValidateReviewBody(body string, binding roles.Binding, provider string) (ro
 		Summary:      strings.TrimSpace(d.Summary),
 		Instructions: d.Instructions,
 		Findings:     numberFindings(d.Findings),
+		Resolved:     d.Resolved,
 	}
 	if err := roles.NewAdvisory(verdict).Validate(binding, ""); err != nil {
 		return roles.ReviewVerdict{}, err

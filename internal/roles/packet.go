@@ -121,6 +121,13 @@ type IndependentReviewPacket struct {
 	// still a question a second agent has to answer, which is the whole reason
 	// the reviewer is independent.
 	Report string `json:"report,omitempty"`
+	// Answered renders the findings a previous review raised that the worker
+	// has since answered, as the reviewer raised them -- ids and classes
+	// intact.
+	// They carry no word of the worker's about them: whether the candidate
+	// now answers each one is this reviewer's to say, by id, and a finding it
+	// does not name as resolved stays open.
+	Answered string `json:"answered,omitempty"`
 }
 
 // Inspection reports whether this packet is about findings rather than a change.
