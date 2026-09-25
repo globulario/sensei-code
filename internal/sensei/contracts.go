@@ -371,6 +371,13 @@ type AuditFinding struct {
 	Disposition string `json:"disposition"`
 	Detail      string `json:"detail"`
 	Message     string `json:"message"`
+	// RecordID, RecordClass, FilePath and Explanation are the names the diff
+	// audit actually emits. A required-test observation is correlated with its
+	// execution by RecordID alone, so it has to survive decoding.
+	RecordID    string `json:"record_id,omitempty"`
+	RecordClass string `json:"record_class,omitempty"`
+	FilePath    string `json:"file_path,omitempty"`
+	Explanation string `json:"explanation,omitempty"`
 }
 
 // DiffAuditDecision is the typed form of awareness_audit_diff.
