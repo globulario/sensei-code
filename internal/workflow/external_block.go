@@ -149,8 +149,8 @@ func ParseExternalBlock(raw json.RawMessage) (ExternalBlock, error) {
 // new identity. It is the one terminal both run and resume reach for this
 // condition, so a resumed task that is blocked again says so the same way.
 func (e *Engine) blockExternally(taskID string, err error) bool {
-	var ru *RoleUnavailable
-	if !errors.As(err, &ru) || ru == nil || ru.Cause == nil {
+	ru := externalBlockCause(err)
+	if ru == nil {
 		return false
 	}
 	b := ru.Block(taskID)
@@ -160,4 +160,59 @@ func (e *Engine) blockExternally(taskID string, err error) bool {
 		"the "+ru.Role.Label()+" turn this task is owed could not be served: "+b.Describe()+
 			". The task is preserved; resume it to retry that turn", b)
 	return true
+}
+
+// externalBlockCause is the proven, role-attributed unavailability a terminal
+// reports, or nil when err carries none.
+//
+// An exhausted role roster is checked FIRST, because it carries one cause per
+// provider and errors.As would answer with whichever happens to come first in
+// the chain. Which entry the record names is a decision, not an accident: see
+// rosterBlock.
+func externalBlockCause(err error) *RoleUnavailable {
+	var chain *roles.ArchitectUnobtainable
+	if errors.As(err, &chain) && chain != nil {
+		return rosterBlock(chain.Attempted)
+	}
+	var ru *RoleUnavailable
+	if errors.As(err, &ru) && ru != nil && ru.Cause != nil {
+		return ru
+	}
+	return nil
+}
+
+// rosterBlock is the proven unavailability an exhausted roster reports, or nil
+// when no entry proved one.
+//
+// Its absence is as load-bearing as its presence. A roster every entry of which
+// was REACHED and simply produced nothing usable proved no unavailability, and
+// must not be recorded as the outside world being unavailable: that would map a
+// genuine failure to decide onto a terminal that means "come back later", which
+// is the mirror image of the bug this repairs.
+//
+// When there is one, which entry the record names is chosen rather than taken:
+// the EARLIEST known reset time, because that is the first moment the turn this
+// task is owed can be served again. With none known it is the last refusal, the
+// one that exhausted the roster. Preferring a stated time over an unknown one is
+// what keeps "the reset time is known" from depending on which provider happened
+// to be configured first.
+func rosterBlock(attempted []roles.ArchitectAttemptFailure) *RoleUnavailable {
+	var best *RoleUnavailable
+	for _, a := range attempted {
+		var ru *RoleUnavailable
+		if !errors.As(a.Cause, &ru) || ru == nil || ru.Cause == nil {
+			continue
+		}
+		switch {
+		case best == nil:
+			best = ru
+		case best.Cause.RetryAt.IsZero():
+			// Nothing stated so far, so a later refusal is the more current
+			// account of it -- and any stated time replaces an unknown one.
+			best = ru
+		case !ru.Cause.RetryAt.IsZero() && ru.Cause.RetryAt.Before(best.Cause.RetryAt):
+			best = ru
+		}
+	}
+	return best
 }

@@ -195,6 +195,10 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 	if !recorded {
 		return resumedBound{}, fmt.Errorf("the session record for %s holds no plan to resume under", task.TaskID)
 	}
+	// WHO DECIDED travels with the plan across the restart. A resumed run that
+	// records a decision must name the party that actually answered, and after a
+	// restart this record is the only place that knows which roster entry it was.
+	e.noteArchitectAnswered(task.TaskID, rec.Architect)
 	return resumedBound{
 		Source:       e.planSource(task.TaskID),
 		Files:        rec.Files,

@@ -1114,19 +1114,12 @@ func TestAnAnswerIsRememberedAgainstThePlanItWasGivenFor(t *testing.T) {
 func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
 	// Read the bytes, scoped to this function: funcBody collects identifiers
 	// only, so an assignment like `attempt = 0` never appears in it.
-	// resolveArchitectureIn holds the loop; resolveArchitecture is a wrapper
-	// that supplies the governed checkout as the working directory. The
-	// observation lane calls the same loop with a disposable workspace, so the
-	// ceiling being asserted here covers both lanes.
+	// askArchitect holds the loop, and resolveArchitectureIn walks the architect
+	// roster over it; resolveArchitecture is a wrapper that supplies the governed
+	// checkout as the working directory. The observation lane calls the same loop
+	// with a disposable workspace, so the ceiling asserted here covers both lanes.
 	src := rawSource(t, "internal/workflow/engine.go")
-	start := strings.Index(src, "func (e *Engine) resolveArchitectureIn")
-	if start < 0 {
-		t.Fatal("resolveArchitectureIn is gone")
-	}
-	rest := src[start:]
-	if next := strings.Index(rest[1:], "\nfunc "); next > 0 {
-		rest = rest[:next]
-	}
+	rest := sourceOfFunc(t, src, "func (e *Engine) askArchitect")
 
 	resets := strings.Count(rest, "attempt = 0")
 	guards := strings.Count(rest, "newRound(")
@@ -1138,15 +1131,40 @@ func TestTheArchitectResolutionLoopIsBounded(t *testing.T) {
 	if guards != resets {
 		t.Fatalf("%d reset(s) but %d guarded: every reset must be counted", resets, guards)
 	}
-	if !strings.Contains(rest, "newRound := func") {
-		t.Fatal("the round counter is gone")
+	// The counter is the one the roster walk owns, not one this turn made for
+	// itself. A per-entry counter would give every fallback architect a fresh
+	// budget of rounds, and the ceiling would bound nothing.
+	if !strings.Contains(rest, "newRound := rounds.begin") {
+		t.Fatal("the round counter is gone, or is no longer the shared one the roster walk owns")
 	}
-	if !strings.Contains(rest, "maxRounds") {
+	walk := sourceOfFunc(t, src, "func (e *Engine) resolveArchitectureIn")
+	if strings.Count(walk, "rounds := &resolutionRounds{}") != 1 {
+		t.Fatal("the resolution rounds are not created once for the whole roster walk")
+	}
+	if at := strings.Index(walk, "rounds := &resolutionRounds{}"); at > strings.Index(walk, "for position, cfg := range roster") {
+		t.Fatal("the round counter is created inside the roster loop, so each architect gets a fresh budget")
+	}
+	ceiling := sourceOfFunc(t, src, "func (r *resolutionRounds) begin")
+	if !strings.Contains(ceiling, "maxResolutionRounds") {
 		t.Fatal("there is no overall ceiling on resolution rounds")
 	}
-	if !strings.Contains(rest, "did not settle after") {
+	if !strings.Contains(ceiling, "did not settle after") {
 		t.Fatal("exhausting the rounds does not say what happened")
 	}
+}
+
+// sourceOfFunc is one function's bytes, from its declaration to the next one.
+func sourceOfFunc(t *testing.T, src, decl string) string {
+	t.Helper()
+	start := strings.Index(src, decl)
+	if start < 0 {
+		t.Fatalf("%s is gone", decl)
+	}
+	rest := src[start:]
+	if next := strings.Index(rest[1:], "\nfunc "); next > 0 {
+		rest = rest[:next]
+	}
+	return rest
 }
 
 // Between "you may" and "you may not" about the same work, the refusal governs.
