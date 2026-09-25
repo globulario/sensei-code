@@ -1,0 +1,24 @@
+# Agent-proposed awareness entry — AWAITING REVIEW.
+# Written by the awareness feedback write-path (Propose RPC / awg onboard); NOT a
+# live graph node. Promote by moving the entry into the canonical corpus file
+# after verifying the contract.
+proposal:
+    status: awaiting_review
+    proposed_by: agent
+    kind: contract_unknown
+    id: contract_unknown.sensei_code.task_1789906213161993885_human_authority_resolution_a_bounde
+    title: 'task-1789906213161993885 human authority resolution: a bounded knowledge gap was not closed by investigation: graph coverage is absent for the'
+    description: |-
+        Level-3 authority resolution.
+        Question: Should Sensei promote the three stated forbidden fixes and the refined reviewer-terminal law, repair the task binding, and rerun governance with the proposed mechanical coverage recipe before implementation is planned?
+        Certifiability condition: a bounded knowledge gap was not closed by investigation: graph coverage is absent for the planned files: no direct anchors and no examined files — task-only request without graph evidence
+        Chosen: Promote then rerun (option 1)
+        Task: task-1789906213161993885
+        Decided at: 2026-09-20T12:51:56Z
+    evidence:
+        - sensei-code task task-1789906213161993885
+        - session session-20260920T121013.161793693Z
+        - 'certifiability condition: a bounded knowledge gap was not closed by investigation: graph coverage is absent for the planned files: no direct anchors and no examined files — task-only request without graph evidence'
+        - base commit 96e32cc48899e78351a82c8f81f4aa2f24f28669
+    domain: github.com/globulario/sensei-code
+    proposed_contract: 'When a bounded knowledge gap was not closed by investigation: graph coverage is absent for the planned files: no direct anchors and no examined files — task-only request without graph evidence, the human authority for this repository decided: Promote then rerun.'
