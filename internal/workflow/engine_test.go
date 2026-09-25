@@ -1327,3 +1327,221 @@ func TestAReadOnlyWorkerIsToldToReconcileItsOwnFindings(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// W1, ENGINE LEVEL -- the projected refusal is what PLAN ADMISSION returns,
+// and nothing downstream of it is reached.
+//
+// The measured run was refused at candidate time for importing "errors" into
+// a test file that did not import it at the pinned base, after the implementer
+// had written 3147 insertions across 23 files. The refusal was correct; the
+// door was in the wrong place. The declaration half of this witness is in
+// testedit_test.go. This half binds it to the admission path: the sentence the
+// projector produces is the sentence routePlan returns, and a plan refused
+// there cannot reach the point where an implementer is asked for anything.
+// ---------------------------------------------------------------------------
+
+// funcDeclIn parses one top-level function or method out of a source file, so
+// a witness can assert the SHAPE of a control-flow guard rather than the
+// presence of a token. A token scan cannot tell a returned error from an
+// ignored one, and it is the return that makes a check a door.
+func funcDeclIn(t *testing.T, rel, name string) *ast.FuncDecl {
+	t.Helper()
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, "../../"+rel, nil, 0)
+	if err != nil {
+		t.Fatalf("parse %s: %v", rel, err)
+	}
+	for _, d := range f.Decls {
+		if fn, ok := d.(*ast.FuncDecl); ok && fn.Name.Name == name && fn.Body != nil {
+			return fn
+		}
+	}
+	t.Fatalf("%s declares no %s", rel, name)
+	return nil
+}
+
+// callsIn maps each function name called anywhere under n to where it is
+// first called.
+func callsIn(n ast.Node) map[string]token.Pos {
+	out := map[string]token.Pos{}
+	note := func(name string, pos token.Pos) {
+		if _, seen := out[name]; !seen {
+			out[name] = pos
+		}
+	}
+	ast.Inspect(n, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		switch fn := call.Fun.(type) {
+		case *ast.Ident:
+			note(fn.Name, call.Pos())
+		case *ast.SelectorExpr:
+			note(fn.Sel.Name, call.Pos())
+		}
+		return true
+	})
+	return out
+}
+
+// errIsNotNil reports whether cond is exactly `err != nil`.
+func errIsNotNil(cond ast.Expr) bool {
+	b, ok := cond.(*ast.BinaryExpr)
+	if !ok || b.Op != token.NEQ {
+		return false
+	}
+	lhs, lok := b.X.(*ast.Ident)
+	rhs, rok := b.Y.(*ast.Ident)
+	return lok && rok && lhs.Name == "err" && rhs.Name == "nil"
+}
+
+// returnsErr reports whether the statement list returns, carrying err.
+func returnsErr(body *ast.BlockStmt) bool {
+	for _, stmt := range body.List {
+		ret, ok := stmt.(*ast.ReturnStmt)
+		if !ok {
+			continue
+		}
+		for _, r := range ret.Results {
+			if id, ok := r.(*ast.Ident); ok && id.Name == "err" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// selectorNamed reports whether e is a selector expression ending in name.
+func selectorNamed(e ast.Expr, name string) bool {
+	sel, ok := e.(*ast.SelectorExpr)
+	return ok && sel.Sel.Name == name
+}
+
+func TestPlanAdmissionReturnsTheProjectedRefusalBeforeAnyImplementerIsReached(t *testing.T) {
+	// 1. THE REFUSAL, from the plan as the architect actually emits it. The
+	// engine's own decoder reads the declaration out of the architect's JSON,
+	// and the projector resolves it against the pinned grant.
+	plan, err := json.Marshal(architectureDecision{
+		Decision: "proceed", Summary: "edit the regression beside its subject", Plan: "add the witness",
+		Files: []string{teS, teF}, TestEdits: []TestEditDeclaration{teTheMeasuredCase()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var d architectureDecision
+	if err := decodeModelJSON(string(plan), &d); err != nil {
+		t.Fatalf("the architect's plan did not decode: %v", err)
+	}
+	refusal := projectTestEditRefusals(d.TestEdits, teEditGrants(t))
+	if refusal == nil {
+		t.Fatal("the measured plan was admitted")
+	}
+	if refusal.Error() != refuteTestEditNovelImport(teF, "errors").Error() {
+		t.Fatalf("plan admission would refuse with a sentence of its own: %v", refusal)
+	}
+
+	// 2. THAT ERROR IS WHAT routePlan RETURNS. Asserted on the guard's shape:
+	// the projector is called on the ACCEPTED PLAN's declarations and the
+	// PINNED grants, and its error is returned rather than logged, warned
+	// about, or dropped.
+	routePlan := funcDeclIn(t, "internal/workflow/engine.go", "routePlan")
+	var guarded bool
+	var projectedAt token.Pos
+	ast.Inspect(routePlan.Body, func(n ast.Node) bool {
+		branch, ok := n.(*ast.IfStmt)
+		if !ok {
+			return true
+		}
+		assign, ok := branch.Init.(*ast.AssignStmt)
+		if !ok || len(assign.Rhs) != 1 {
+			return true
+		}
+		call, ok := assign.Rhs[0].(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		if fn, ok := call.Fun.(*ast.Ident); !ok || fn.Name != "projectTestEditRefusals" {
+			return true
+		}
+		if !errIsNotNil(branch.Cond) || !returnsErr(branch.Body) {
+			t.Fatal("routePlan calls the projector without returning what it says; a refusal that is not returned is not a door")
+		}
+		if len(call.Args) != 2 || !selectorNamed(call.Args[0], "TestEdits") {
+			t.Fatalf("the projection does not read the accepted plan's declarations: %d arg(s)", len(call.Args))
+		}
+		grants, ok := call.Args[1].(*ast.CallExpr)
+		if !ok || !selectorNamed(grants.Fun, "testEditGrants") {
+			t.Fatal("the projection does not resolve against the pinned test-edit grants")
+		}
+		guarded, projectedAt = true, call.Pos()
+		return false
+	})
+	if !guarded {
+		t.Fatal("plan admission no longer projects the decidable test-edit refusals: the door at the entrance is gone")
+	}
+
+	// 3. AND IT PROJECTS AGAINST THE COMPLETE GRANT SET. The authored grants
+	// are merged into the task's authority after the derived ones, so a
+	// projection placed before that block would resolve against a smaller
+	// authority than the candidate-time check will use -- and would silently
+	// stop projecting for every authored-governed file.
+	inRoutePlan := callsIn(routePlan.Body)
+	authored, ok := inRoutePlan["authoredTestEditGrants"]
+	if !ok {
+		t.Fatal("routePlan no longer assembles the authored test-edit grants, so this ordering proves nothing")
+	}
+	if projectedAt < authored {
+		t.Fatal("the projection reads the grants before the authored ones are merged: it would resolve against a partial authority")
+	}
+
+	// 4. NO IMPLEMENTER WORK IS REQUESTED AT THAT DOOR. routePlan resolves no
+	// runner, builds no implementation prompt and runs no candidate loop, so a
+	// plan refused here is refused before anyone is asked to spend a budget.
+	for _, implementerWork := range []string{"resolveRunner", "implementationPrompt", "runCandidate", "implement"} {
+		if _, reached := inRoutePlan[implementerWork]; reached {
+			t.Errorf("routePlan reaches %s: the projected refusal no longer precedes every request for implementer work", implementerWork)
+		}
+	}
+
+	// 5. AND THE CALLER STOPS ON IT. execute resolves the architecture, returns
+	// on its error, and only then reaches the implementation. A refusal from
+	// plan admission therefore ends the run with no worker selected -- which is
+	// the whole point of moving this refusal earlier.
+	execute := callsIn(funcDeclIn(t, "internal/workflow/engine.go", "execute").Body)
+	admission, ok := execute["resolveArchitecture"]
+	if !ok {
+		t.Fatal("execute no longer resolves an architecture")
+	}
+	if supplied, ok := execute["resolveSuppliedPlan"]; ok && supplied < admission {
+		admission = supplied
+	}
+	implementation, ok := execute["implement"]
+	if !ok {
+		t.Fatal("execute no longer implements anything, so this ordering proves nothing")
+	}
+	if admission > implementation {
+		t.Fatal("execute selects an implementer before the plan is admitted")
+	}
+	var stops bool
+	ast.Inspect(funcDeclIn(t, "internal/workflow/engine.go", "execute").Body, func(n ast.Node) bool {
+		branch, ok := n.(*ast.IfStmt)
+		if !ok || branch.Pos() < admission || branch.Pos() > implementation || !errIsNotNil(branch.Cond) {
+			return true
+		}
+		guard := callsIn(branch.Body)
+		if _, fails := guard["fail"]; !fails {
+			return true
+		}
+		for _, stmt := range branch.Body.List {
+			if _, returns := stmt.(*ast.ReturnStmt); returns {
+				stops = true
+			}
+		}
+		return true
+	})
+	if !stops {
+		t.Fatal("a refused plan does not end the run between admission and implementation: the refusal would be survivable")
+	}
+}
