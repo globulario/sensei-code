@@ -74,6 +74,10 @@ type Engine struct {
 	// the post-creation inspection checks the created file against the same
 	// facts about the covering surface that authorized it.
 	prospective map[string][]prospectiveGrant
+	// creates holds, per task, the PLANNED_CREATE dispositions the router
+	// derived, so the candidate-time inspection checks the candidate against
+	// the same declarations routing read.
+	creates map[string][]plannedCreate
 	// unprovenScope marks tasks whose durable authority question predates scope
 	// preservation, so the rendezvous refuses to let it authorize work.
 	unprovenScope map[string]bool
@@ -706,6 +710,9 @@ type taskContext struct {
 	// Prospective is the plan's declared new surfaces. See
 	// architectureDecision.ProspectiveSurfaces.
 	Prospective []ProspectiveSurface
+	// Creates is the plan's exact-path CREATE disposition. See
+	// architectureDecision.Creates.
+	Creates []string
 	// PlanSource and PlanDigest say who authored the bound. See PlanSource.
 	PlanSource PlanSource
 	PlanDigest string
@@ -1748,6 +1755,22 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		capture, diff = reviewed, reviewed.Diff
 
+		// Post-creation inspection of EVERY path the candidate added, against
+		// the bound CREATE dispositions. Unconditional, and first: a declared
+		// future artifact must actually have been created, at exactly the
+		// declared path -- that is what ends its temporary status and hands it
+		// to validation and review as an ordinary artifact -- and a path the
+		// candidate created that no CREATE binding names is refused here,
+		// because it has no identity, no declaration and no binding, and the
+		// run must not discover it in review.
+		//
+		// It does not become conditional on the bound set being non-empty. A
+		// task with zero bound creates that creates a file is exactly the case
+		// that must be refused, and guarding the call on the set's length
+		// skipped the inspection precisely then.
+		if err := inspectPlannedCreates(diff, e.plannedCreatesFor(taskID), tc.Prospective); err != nil {
+			return candidateNotConverged, plan, lastReview, lastAudit, err
+		}
 		// Post-creation inspection of every declared prospective surface
 		// (sensei#312). The authorization was for a shape; a candidate whose
 		// created file has another shape is refuted here, before any review
@@ -2200,6 +2223,20 @@ type architectureDecision struct {
 	// against the covering surface's bytes at the pinned world; an undeclared
 	// new file is uncovered exactly as before.
 	ProspectiveSurfaces []ProspectiveSurface `json:"prospective_surfaces,omitempty"`
+	// Creates declares the EXACT paths this plan will create, as a disposition
+	// rather than as a shape: a file that does not exist at the pinned base
+	// cannot already carry a graph identity, and demanding one made writing a
+	// new governed artifact impossible (02a, terminal KNOWLEDGE_LIMITED).
+	//
+	// It is a claim, and it grants nothing by itself. The engine binds it to
+	// this task, its objective digest and its pinned base, and only for a path
+	// the plan touches and the base provably lacks (see plannedCreates). The
+	// binding exempts that one path from the pre-existence identity checks and
+	// from nothing else; the existing files whose evidence decides the new
+	// artifact's CONTENTS stay under ordinary coverage. It is also the ONLY
+	// creation authority there is: a prospective surface declaration shapes a
+	// creation this disposition authorizes, and never authorizes one itself.
+	Creates []string `json:"creates,omitempty"`
 	// PremiseResolutions are the closure round's answers to the premise
 	// receipts it was asked about. See premise.go.
 	PremiseResolutions []PremiseResolution `json:"premise_resolutions,omitempty"`
@@ -3042,6 +3079,23 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
+	// The exact paths this plan declared it will CREATE and the pinned base
+	// provably lacks. Carried beside coverage and never inside it: it answers
+	// only the pre-existence identity question for those exact paths.
+	creates, createRefusals := e.bindPlannedCreates(ctx, taskID, d.Files, d.Creates)
+	action.PlannedCreates = plannedCreatePaths(creates)
+	// Stated as its own kind, never as coverage: what the run bound, and what
+	// it refused to bind. A declared create the base already holds, or one the
+	// plan does not touch, is refused here and says so.
+	if len(creates) != 0 {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"CREATE disposition bound to this task at base "+shortWorldID(strings.TrimSpace(e.governedBase(taskID)))+
+				" for "+strings.Join(action.PlannedCreates, ", ")+
+				" (a declared future artifact: no graph anchor, no derived coverage, exempt only from the pre-existence identity check)", nil))
+	}
+	for _, r := range createRefusals {
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no CREATE disposition: "+r, nil))
+	}
 	// Which planned files the graph has NOT examined, established per file.
 	// The scoped answer cannot say: it is one verdict for the region, proven
 	// the moment one planned file carries anchors, so an ungrounded file
@@ -3603,14 +3657,19 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 			surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
 		}
 	}
+	// SHAPE AUTHORITY, NOT COVERAGE. The grants are returned; their anchors are
+	// NOT added to the coverage over the planned files.
+	//
+	// They were, and that was a neighbouring production file becoming an
+	// imaginary anchor for a file nobody has ever observed: S's derivation
+	// answered a question about S's bytes, and a file that does not exist has
+	// no bytes for it to have answered about. What the declaration legitimately
+	// establishes is the created file's SHAPE -- its package and its import
+	// envelope, both checked against S at the pinned world by
+	// inspectProspectiveSurfaces after the candidate creates it -- and that is
+	// an operational constraint, like an existing-test edit grant, which
+	// testedit.go keeps out of coverage for the same reason.
 	grants := prospectiveAnchors(ctx, world, missing, declarations, surfaces, read)
-	for _, g := range grants {
-		if len(g.Anchors) == 0 {
-			out = append(out, g.Anchor)
-			continue
-		}
-		out = append(out, g.Anchors...)
-	}
 	return grants, out
 }
 
@@ -3623,6 +3682,55 @@ func (e *Engine) setProspectiveGrants(taskID string, grants []prospectiveGrant) 
 		e.prospective = make(map[string][]prospectiveGrant)
 	}
 	e.prospective[taskID] = grants
+}
+
+// bindPlannedCreates derives this plan's CREATE dispositions at the task's
+// pinned base and records them for the candidate-time inspection.
+//
+// Deliberately NOT part of the coverage computation, even though both read the
+// pinned world. A create is a disposition about a PATH; coverage is a fact
+// about a FILE, and coverageAtWorld computes nothing at all when the
+// repository holds no derivation recipes -- folding this in would have made
+// the ability to create a governed artifact depend on a recipe file, which has
+// nothing to do with whether the path exists.
+//
+// Side-effect free with respect to the record: it writes no event and mints
+// nothing. The disposition is a function of the recorded plan and the pinned
+// base, so a resume re-derives it rather than restoring it.
+func (e *Engine) bindPlannedCreates(ctx context.Context, taskID string, planned, declared []string) ([]plannedCreate, []string) {
+	// No governed base means no pinned base to prove absence AT, and the
+	// observation lane issues no authority of any kind. The recorded set is
+	// emptied rather than left as it was, so the candidate-time inspection
+	// refuses every added path instead of reading a stale binding.
+	world := strings.TrimSpace(e.governedBase(taskID))
+	if world == "" {
+		e.setPlannedCreates(taskID, nil)
+		return nil, nil
+	}
+	creates, reasons := plannedCreates(ctx, createBinding{
+		TaskID:          taskID,
+		ObjectiveDigest: e.architectureBinding(taskID).ObjectiveDigest,
+		Base:            world,
+	}, planned, declared, gitShowAt(e.Repo.Root))
+	e.setPlannedCreates(taskID, creates)
+	return creates, reasons
+}
+
+// setPlannedCreates records which paths this task's plan bound as CREATE, and
+// plannedCreatesFor returns them for the candidate-time inspection.
+func (e *Engine) setPlannedCreates(taskID string, creates []plannedCreate) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.creates == nil {
+		e.creates = make(map[string][]plannedCreate)
+	}
+	e.creates[taskID] = creates
+}
+
+func (e *Engine) plannedCreatesFor(taskID string) []plannedCreate {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.creates[taskID]
 }
 
 func (e *Engine) prospectiveGrants(taskID string) []prospectiveGrant {
@@ -3904,15 +4012,23 @@ Return ONLY JSON in this exact shape:
   "mode": "modify" | "inspect",
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
   "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]}],
+  "creates": ["docs/evidence/exact-path-this-plan-writes.md"],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
   "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference","gap":"only the receipt id of an unsettled premise this claim continues"}],
   "premise_resolutions": [{"gap":"receipt id you were asked to answer","outcome":"established|refuted|unresolved","evidence":"..."}]
 }
-Declare every file the plan CREATES under "prospective_surfaces" (the only role is
-go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
-imports and "testing"); an undeclared new file stays uncovered.
+Declare every file the plan CREATES under "creates", by its exact path, and also under
+"files". A path that does not exist yet cannot already carry a graph identity, so declaring
+it is what lets the plan proceed without pretending one exists; it grants nothing else, and
+the files whose evidence decides the new artifact's contents still need ordinary coverage.
+A created path you did not declare is refused when the candidate is inspected, and so is a
+created path declared ONLY as a prospective surface: a surface constrains a creation, it
+never authorizes one.
+A NEW Go test file additionally needs its shape declared under "prospective_surfaces" (the
+only role is go-regression-test: a *_test.go beside a covered file, importing nothing beyond
+that file's imports and "testing"). It needs BOTH entries; either alone is refused.
 MODE IS REQUIRED WHENEVER YOU PROCEED.
   modify   - the plan edits this repository. A worker is expected to produce a diff.
   inspect  - the plan reads and reports and changes nothing: an audit, an
@@ -5086,7 +5202,9 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 }
 
 func isProspectiveSurfaceRefutation(err error) bool {
-	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") || strings.HasPrefix(err.Error(), "test edit refuted:"))
+	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") ||
+		strings.HasPrefix(err.Error(), "test edit refuted:") ||
+		strings.HasPrefix(err.Error(), "planned create refuted:"))
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
@@ -5527,6 +5645,11 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// Recording here minted authority on a SECOND resume, which read the
 		// first resume's write as the run's own record.
 		recomputed, _ := e.coverageAtWorld(ctx, task.TaskID, bound.Files, bound.Prospective)
+		// The CREATE disposition is RE-DERIVED, not restored: it is a function
+		// of the recorded plan and the candidate's pinned base, both of which
+		// this resume already holds, and a path the base now holds is no
+		// longer a create however the interrupted run read it.
+		e.bindPlannedCreates(ctx, task.TaskID, bound.Files, bound.Creates)
 		if err := e.restoreTestEditGrants(task, recomputed.edits, bound.Files, identity.BaseSHA); err != nil {
 			fail(err)
 			return
@@ -5549,6 +5672,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			Consequences:    bound.Consequences,
 			Invariants:      bound.Invariants,
 			Prospective:     bound.Prospective,
+			Creates:         bound.Creates,
 			PlanSource:      bound.Source,
 			PlanDigest:      task.PlanDigest,
 			AwaitingReview:  task.AwaitingReview,
@@ -5645,6 +5769,7 @@ func applyPlanScope(tc *taskContext, d architectureDecision) {
 	tc.Consequences = d.Consequences
 	tc.Invariants = d.Invariants
 	tc.Prospective = d.ProspectiveSurfaces
+	tc.Creates = d.Creates
 }
 
 // scopeSummary names the files and prospective surfaces a candidate is bound
@@ -5657,6 +5782,9 @@ func scopeSummary(tc taskContext) string {
 	var surfaces []string
 	for _, p := range tc.Prospective {
 		surfaces = append(surfaces, p.Path)
+	}
+	if len(tc.Creates) != 0 {
+		files += "; creates " + strings.Join(tc.Creates, ", ")
 	}
 	if len(surfaces) == 0 {
 		return files

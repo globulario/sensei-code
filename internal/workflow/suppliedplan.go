@@ -151,6 +151,10 @@ type resumedBound struct {
 	Consequences string
 	Invariants   []string
 	Prospective  []ProspectiveSurface
+	// Creates is the plan's exact-path CREATE disposition, carried through the
+	// same durable bound as the files it belongs to. A resume that lost it
+	// would ask a path the base provably lacks for an identity again.
+	Creates []string
 }
 
 // restorePlanBound re-establishes, from the session record, both who authored a
@@ -205,5 +209,6 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 		Consequences: rec.Consequences,
 		Invariants:   rec.Invariants,
 		Prospective:  rec.ProspectiveSurfaces,
+		Creates:      rec.Creates,
 	}, nil
 }

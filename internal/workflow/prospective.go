@@ -444,3 +444,217 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
+
+// --- PLANNED_CREATE: representing an artifact that does not exist yet -------------
+//
+// Governance must be able to represent a file a task declares it will CREATE.
+// Requiring such a file to already carry a graph identity is requiring the
+// premise of the task to be false: 02a's whole job was to write
+// docs/evidence/operator-actions-inventory.md, and the run ended
+// KNOWLEDGE_LIMITED because no invariant is known for a path that does not
+// exist and no actor reachable from a governed run can examine one. Both
+// guards are individually right; together they made creating a governed
+// artifact impossible, and no retry could succeed.
+//
+// What this adds is NOT coverage. A PLANNED_CREATE contributes no graph anchor
+// and no derived anchor, is never covered by its neighbour, its parent
+// directory or a pattern match, and is subtracted from exactly two questions:
+// "has the graph examined this file" and "what invariant protects this
+// document". Its authority is exact-path task binding -- task identity,
+// objective digest, pinned base, path, CREATE -- and nothing else.
+//
+// It is also temporary. It survives only until the candidate creates the file;
+// inspectPlannedCreates then requires that the declared path was created
+// exactly as declared, after which it is an ordinary artifact for validation
+// and review, and normal graph identity is owed once it lands.
+//
+// AND IT IS THE ONLY CREATION AUTHORITY THERE IS. A prospective surface
+// declaration constrains the SHAPE of a creation; it never authorizes one.
+// The first reading of this repair built the authorized set from both sources,
+// so a path declared only as a surface could be created with no exact-path
+// CREATE disposition at all, and skipped the whole inspection when the bound
+// CREATE set was empty. Both readings turned a constraint into a licence.
+
+// dispositionCreate is the one disposition this binding expresses. Recorded on
+// every plannedCreate so a reader never has to infer what the binding was for.
+const dispositionCreate = "CREATE"
+
+// createBinding is the exact identity a PLANNED_CREATE is bound to.
+//
+// All three referents are required. A binding missing any of them names no
+// task, no question, or no world, and an exemption from the pre-existence
+// check that could not say which task and which objective it belonged to would
+// be an exemption for any path anyone declared.
+type createBinding struct {
+	TaskID          string `json:"task_id"`
+	ObjectiveDigest string `json:"objective_digest"`
+	Base            string `json:"base"`
+}
+
+// complete reports whether the binding names all three referents.
+func (b createBinding) complete() bool {
+	return strings.TrimSpace(b.TaskID) != "" &&
+		strings.TrimSpace(b.ObjectiveDigest) != "" &&
+		strings.TrimSpace(b.Base) != ""
+}
+
+// plannedCreate is one exact path a task declared it will create and that was
+// POSITIVELY PROVEN ABSENT at that task's pinned base.
+type plannedCreate struct {
+	Path        string        `json:"path"`
+	Disposition string        `json:"disposition"`
+	Bound       createBinding `json:"bound"`
+}
+
+// plannedCreates derives the PLANNED_CREATE disposition for a plan's declared
+// creates, and returns the reasons every refused declaration was refused.
+//
+// Three clauses, each of which fails closed:
+//
+//	A. the binding names a task, an objective digest and a pinned base;
+//	B. the declared path is part of the plan -- a path the plan does not touch
+//	   is not this plan's future artifact;
+//	C. the path is positively proven ABSENT at that base, which only a read
+//	   wrapping errNotAtWorld establishes. A path that exists there is an
+//	   ordinary existing file and keeps every requirement an existing file has;
+//	   a read that failed for any other reason establishes neither presence nor
+//	   absence, and an unanswered read must never become authority to treat a
+//	   path as future.
+func plannedCreates(ctx context.Context, bound createBinding, planned, declared []string, read worldReader) ([]plannedCreate, []string) {
+	if len(declared) == 0 || read == nil {
+		return nil, nil
+	}
+	if !bound.complete() {
+		return nil, []string{"no CREATE disposition was derived: the run could not name the task, the objective digest and the pinned base this declaration would be bound to"}
+	}
+	isPlanned := map[string]bool{}
+	for _, p := range planned {
+		isPlanned[path.Clean(strings.TrimSpace(p))] = true
+	}
+	var out []plannedCreate
+	var reasons []string
+	seen := map[string]bool{}
+	for _, raw := range declared {
+		f := path.Clean(strings.TrimSpace(raw))
+		if f == "." || seen[f] {
+			continue
+		}
+		seen[f] = true
+		if !isPlanned[f] {
+			reasons = append(reasons, f+": declared as a create but not part of the plan's files")
+			continue
+		}
+		if _, err := read(ctx, bound.Base, f); !confirmedMissing(err) {
+			if err == nil {
+				reasons = append(reasons, f+": already exists at the pinned base, so it is an ordinary existing file and carries an existing file's requirements")
+				continue
+			}
+			reasons = append(reasons, f+": absence at the pinned base could not be established, and an unanswered read is not absence")
+			continue
+		}
+		out = append(out, plannedCreate{Path: f, Disposition: dispositionCreate, Bound: bound})
+	}
+	return out, reasons
+}
+
+// plannedCreatePaths are the exact paths a derived set of dispositions covers,
+// for the router. Nothing else about the binding reaches routing: the router
+// asks only whether THIS path is this task's declared future artifact.
+func plannedCreatePaths(creates []plannedCreate) []string {
+	var out []string
+	for _, c := range creates {
+		out = append(out, c.Path)
+	}
+	return out
+}
+
+// governedRoleFor names the governed role whose path shape f matches, if one
+// does. The closed role table is consulted in a fixed name order so a refusal
+// names the same role on every run rather than whichever key iterated first.
+func governedRoleFor(f string) (string, bool) {
+	names := make([]string, 0, len(prospectiveRoles))
+	for n := range prospectiveRoles {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		if matched, err := path.Match(prospectiveRoles[n].pathGlob, path.Base(f)); err == nil && matched {
+			return n, true
+		}
+	}
+	return "", false
+}
+
+// inspectPlannedCreates is the candidate-time half, and it is what keeps
+// PLANNED_CREATE temporary. It is TWO GATES, in this order, and the order is
+// the contract.
+//
+// GATE 1 -- CREATION AUTHORITY, and the only source of it. Every path the
+// candidate added must hold an exact-path CREATE binding, and every bound
+// create must actually have been created at exactly the path declared. A path
+// the candidate created that no binding names is refused: it has no identity,
+// no declaration and no binding, and the run must not discover it in review.
+//
+// GATE 2 -- SHAPE, and never authority. A created path whose base name matches
+// a governed prospective role additionally needs a prospective surface
+// declaration, whose package and import envelope inspectProspectiveSurfaces
+// then checks against the covering surface's bytes at the pinned world. A new
+// Go test file therefore needs BOTH the binding and the declaration, and
+// neither alone admits it.
+//
+// surfaces is read HERE ONLY as gate 2's requirement. It is never added to
+// gate 1's authorized set, and gate 1 is never skipped because the bound
+// CREATE set happens to be empty: both were the defect this function exists to
+// not repeat, and either one turns a shape constraint into a general licence
+// to create.
+//
+// The first mismatch is returned as an error beginning "planned create
+// refuted:", which is terminal in the same way a prospective refutation is.
+func inspectPlannedCreates(diff string, creates []plannedCreate, surfaces []ProspectiveSurface) error {
+	created := addedFiles(diff)
+
+	// Gate 1. The authorized set is the bound CREATE dispositions and nothing
+	// else.
+	authorized := map[string]bool{}
+	for _, c := range creates {
+		authorized[c.Path] = true
+	}
+	for _, c := range creates {
+		if _, ok := created[c.Path]; !ok {
+			return fmt.Errorf("planned create refuted: %s was declared as a %s for task %s but the candidate did not create it",
+				c.Path, c.Disposition, c.Bound.TaskID)
+		}
+	}
+	var unbound []string
+	for f := range created {
+		if !authorized[f] {
+			unbound = append(unbound, f)
+		}
+	}
+	if len(unbound) != 0 {
+		sort.Strings(unbound)
+		return fmt.Errorf("planned create refuted: the candidate created %s, which this task holds no CREATE disposition for; a created path with no exact-path CREATE binding has no identity of any kind, and a prospective surface declaration constrains a creation it does not authorize",
+			strings.Join(unbound, ", "))
+	}
+
+	// Gate 2, reached only by paths gate 1 already authorized.
+	declaredShape := map[string]bool{}
+	for _, s := range surfaces {
+		declaredShape[path.Clean(strings.TrimSpace(s.Path))] = true
+	}
+	var unshaped []string
+	for f := range created {
+		if declaredShape[f] {
+			continue
+		}
+		if role, governed := governedRoleFor(f); governed {
+			unshaped = append(unshaped, f+" ("+role+")")
+		}
+	}
+	if len(unshaped) != 0 {
+		sort.Strings(unshaped)
+		return fmt.Errorf("planned create refuted: the candidate created %s, whose shape a governed role constrains, and no prospective surface declaration states that shape; the CREATE disposition authorizes the path and the declaration constrains it, and both are required",
+			strings.Join(unshaped, ", "))
+	}
+	return nil
+}
