@@ -22,6 +22,37 @@ const (
 
 func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Minor }
 
+// FindingClass is what KIND of thing a finding says is wrong, and so what kind
+// of response can make it right. It is a closed vocabulary set by the reviewer
+// on the finding record and by nobody else: the party asked to satisfy a
+// finding does not get to decide which kind of answer satisfies it.
+//
+// Measured on the DF-19 resume: a review returned one CODE finding and one
+// EVIDENCE finding, the implementer answered the evidence one and declared the
+// cycle "evidence-only", and nothing objected, because nothing carried a
+// finding's class through to its response.
+//
+// There is no default. A class is never inferred from severity, wording, the
+// shape of the correction, or position in the list; a finding without one is
+// refused.
+type FindingClass string
+
+const (
+	// ClassCode is a defect in the candidate. Only a change to the candidate
+	// discharges it.
+	ClassCode FindingClass = "code"
+	// ClassEvidence is a proof record that does not establish what it claims.
+	// Only evidence discharges it; an unrelated code change does not.
+	ClassEvidence FindingClass = "evidence"
+	// ClassScope is a change outside its bound. It is neither of the others,
+	// and is answered only by a response about scope.
+	ClassScope FindingClass = "scope"
+)
+
+// Valid reads by membership. Nothing is normalised first: "Code" is not
+// "code", and a reviewer that wrote something else wrote something else.
+func (c FindingClass) Valid() bool { return c == ClassCode || c == ClassEvidence || c == ClassScope }
+
 // Finding is one concrete objection, attributable to something a person can go
 // and look at.
 //
@@ -33,6 +64,9 @@ func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Mino
 type Finding struct {
 	ID       string   `json:"id"`
 	Severity Severity `json:"severity"`
+	// Class is what kind of response discharges this finding. It comes from
+	// the finding record, never from the party responding to it.
+	Class FindingClass `json:"class"`
 	// Claim is what the finding challenges: the assertion the candidate or its
 	// evidence makes that the reviewer believes is not established.
 	Claim string `json:"claim"`
@@ -51,7 +85,13 @@ func (f Finding) Line() string {
 		b.WriteString("[" + f.ID + "] ")
 	}
 	if f.Severity != "" {
-		b.WriteString(string(f.Severity) + ": ")
+		b.WriteString(string(f.Severity))
+		if f.Class != "" {
+			b.WriteString(" " + string(f.Class))
+		}
+		b.WriteString(": ")
+	} else if f.Class != "" {
+		b.WriteString(string(f.Class) + ": ")
 	}
 	b.WriteString(strings.TrimSpace(f.Claim))
 	if f.Reference != "" {
@@ -66,6 +106,18 @@ func (f Finding) Line() string {
 		b.WriteString(" → missing proof: " + g)
 	}
 	return b.String()
+}
+
+// check refuses an absent or unknown class rather than guessing one: whichever
+// class a guess picked would be the one the responding party found easiest.
+func (c FindingClass) check(i int, id string) error {
+	if c.Valid() {
+		return nil
+	}
+	if strings.TrimSpace(string(c)) == "" {
+		return fmt.Errorf("finding %d (%q) carries no class; it must be code, evidence, or scope, and the class is not inferred", i+1, id)
+	}
+	return fmt.Errorf("finding %d (%q) has class %q, which is not code, evidence, or scope", i+1, id, c)
 }
 
 // Decision is the reviewer's bounded conclusion.
@@ -151,6 +203,9 @@ func (v ReviewVerdict) Validate(b Binding, implementer string) error {
 		}
 		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
 			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
+		}
+		if err := f.Class.check(i, f.ID); err != nil {
+			return err
 		}
 	}
 	if v.Decision == Revise && strings.TrimSpace(v.Instructions) == "" && len(v.Findings) == 0 {
@@ -257,6 +312,9 @@ func (a Advisory) Validate(b Binding, implementer string) error {
 		}
 		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
 			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
+		}
+		if err := f.Class.check(i, f.ID); err != nil {
+			return err
 		}
 	}
 	if a.Decision == Revise && strings.TrimSpace(a.Instructions) == "" && len(a.Findings) == 0 {

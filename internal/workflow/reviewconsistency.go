@@ -48,6 +48,10 @@ type openReview struct {
 	CandidateDigest  string          `json:"candidate_digest"`
 	CandidateTree    string          `json:"candidate_tree,omitempty"`
 	EvidenceIdentity string          `json:"evidence_identity"`
+	// Discharged is the per-finding accounting so far, keyed by finding id:
+	// what discharged each finding that has been answered. A finding absent
+	// from it is still outstanding, across cycles and across a handoff.
+	Discharged map[string]string `json:"discharged,omitempty"`
 }
 
 // evidenceIdentity names the evidence a verdict was reached on: every executed
@@ -86,6 +90,243 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 	}
 }
 
+// Per-finding accounting.
+//
+// LAW: the class of a finding binds the class of its response. Measured on the
+// DF-19 resume: a review returned a blocking CODE finding and a major EVIDENCE
+// finding; the implementer answered the evidence one, declared the cycle
+// "evidence-only", and nothing objected. The identical-diff check caught the
+// symptom, but it is a proxy -- one unrelated changed line would have carried
+// the code defect forward as answered.
+//
+// So convergence is decided here, per finding and by id, before any reviewer
+// is asked again:
+//   - the class is the finding record's, never the respondent's;
+//   - a CODE finding is discharged only by a code response on a candidate
+//     whose content actually changed; an EVIDENCE finding only by an evidence
+//     response carrying the evidence; a SCOPE finding only by a scope response;
+//   - a finding no response names is outstanding, whatever the diff did;
+//   - a respondent that disagrees with a finding's class says so, and the
+//     disagreement is routed for adjudication. It discharges nothing.
+
+// responseKind is what a respondent claims its answer to one finding is.
+type responseKind string
+
+const (
+	respondCode     responseKind = "code"
+	respondEvidence responseKind = "evidence"
+	respondScope    responseKind = "scope"
+	// respondDisagree is the respondent saying the finding is wrong or
+	// misclassified. It is input for adjudication, never a discharge.
+	respondDisagree responseKind = "disagree"
+)
+
+// responsePrefix opens one accounting line in the respondent's report:
+//
+//	RESPONSE <finding id> <code|evidence|scope|disagree>: <what answers it>
+const responsePrefix = "RESPONSE "
+
+// findingResponse is one accounting line, exactly as the respondent wrote it.
+type findingResponse struct {
+	ID     string
+	Kind   responseKind
+	Detail string
+}
+
+// parseFindingResponses reads the accounting lines out of a respondent's
+// report. The kind is kept as written; whether it is a known kind, and whether
+// it can discharge the finding it names, is decided by account, not here.
+func parseFindingResponses(report string) []findingResponse {
+	var out []findingResponse
+	for _, line := range strings.Split(report, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, responsePrefix) {
+			continue
+		}
+		head, detail, _ := strings.Cut(strings.TrimPrefix(line, responsePrefix), ":")
+		fields := strings.Fields(head)
+		if len(fields) != 2 {
+			continue
+		}
+		out = append(out, findingResponse{ID: fields[0], Kind: responseKind(fields[1]), Detail: strings.TrimSpace(detail)})
+	}
+	return out
+}
+
+// outstandingFinding is a finding this response did not discharge, and why.
+type outstandingFinding struct {
+	Finding roles.Finding `json:"finding"`
+	Why     string        `json:"why"`
+}
+
+// findingAccounting is one response set against every outstanding finding.
+type findingAccounting struct {
+	// Discharged is the accounting after this response: every earlier
+	// discharge plus the ones this response established.
+	Discharged map[string]string `json:"discharged,omitempty"`
+	// Answered counts the findings this response discharged.
+	Answered int `json:"answered"`
+	// Open are findings no compatible response discharged.
+	Open []outstandingFinding `json:"open,omitempty"`
+	// Disputed are findings the respondent disagreed with. They are routed
+	// for adjudication and remain outstanding.
+	Disputed []outstandingFinding `json:"disputed,omitempty"`
+}
+
+// converged is true only when every outstanding finding was discharged.
+func (a findingAccounting) converged() bool { return len(a.Open) == 0 && len(a.Disputed) == 0 }
+
+// owed reports whether a finding must be accounted for. A minor finding "does
+// not affect the decision" and is not sent to the implementer to reconcile, so
+// it is not owed a response; every other finding is.
+func owed(f roles.Finding) bool { return f.Severity != roles.Minor }
+
+// account sets one response against every finding the open review holds.
+//
+// candidateTree is the content identity of the candidate the response
+// produced. A code response discharges a CODE finding only if that content
+// differs from the content the finding was raised against: a code answer that
+// changed nothing is not a code answer.
+//
+// The class read is the finding record's. The respondent's kind is compared
+// with it and never substituted for it.
+func (o openReview) account(responses []findingResponse, candidateTree string) findingAccounting {
+	acct := findingAccounting{Discharged: map[string]string{}}
+	for id, how := range o.Discharged {
+		acct.Discharged[id] = how
+	}
+	byID := map[string][]findingResponse{}
+	for _, r := range responses {
+		byID[r.ID] = append(byID[r.ID], r)
+	}
+	for _, f := range o.Findings {
+		if !owed(f) {
+			continue
+		}
+		if _, done := acct.Discharged[f.ID]; done {
+			continue
+		}
+		rs := byID[f.ID]
+		if len(rs) == 0 {
+			acct.Open = append(acct.Open, outstandingFinding{Finding: f, Why: "no response named it"})
+			continue
+		}
+		if r, ok := firstOfKind(rs, respondDisagree); ok {
+			// Checked before any discharge: a respondent that disagrees and
+			// also claims an answer has not settled which it means.
+			acct.Disputed = append(acct.Disputed, outstandingFinding{Finding: f,
+				Why: "the respondent disagrees with this " + string(f.Class) + " finding (" + orNone(r.Detail, "no reason stated") + "); a disagreement is escalated and discharges nothing"})
+			continue
+		}
+		how, why := discharge(f, rs, o.CandidateTree, candidateTree)
+		if how == "" {
+			acct.Open = append(acct.Open, outstandingFinding{Finding: f, Why: why})
+			continue
+		}
+		acct.Discharged[f.ID] = how
+		acct.Answered++
+	}
+	return acct
+}
+
+// discharge decides whether any of the responses naming a finding is one its
+// class accepts. It returns how the finding was discharged, or why it was not.
+func discharge(f roles.Finding, rs []findingResponse, raisedOn, now string) (string, string) {
+	why := ""
+	for _, r := range rs {
+		switch {
+		case r.Kind != respondCode && r.Kind != respondEvidence && r.Kind != respondScope:
+			why = fmt.Sprintf("the response kind %q is not code, evidence, scope, or disagree", r.Kind)
+		case string(r.Kind) != string(f.Class):
+			// The reclassification refusal. The finding record says what kind
+			// of answer it needs; the respondent's reading is not authority.
+			why = fmt.Sprintf("a %s response does not discharge a %s finding; the class is the finding's, not the respondent's", r.Kind, orNone(string(f.Class), "no class"))
+		case r.Detail == "":
+			why = fmt.Sprintf("the %s response states nothing that answers it", r.Kind)
+		case r.Kind == respondCode && (strings.TrimSpace(raisedOn) == "" || strings.TrimSpace(now) == ""):
+			why = "a code response cannot be checked: the candidate's content identity is not known on both sides"
+		case r.Kind == respondCode && raisedOn == now:
+			why = "a code response on a candidate whose content did not change since the finding was raised"
+		default:
+			return string(r.Kind) + ": " + r.Detail, ""
+		}
+	}
+	return "", why
+}
+
+func firstOfKind(rs []findingResponse, k responseKind) (findingResponse, bool) {
+	for _, r := range rs {
+		if r.Kind == k {
+			return r, true
+		}
+	}
+	return findingResponse{}, false
+}
+
+// describe names every finding still outstanding, by id, with why.
+func (a findingAccounting) describe() string {
+	var parts []string
+	for _, o := range a.Open {
+		parts = append(parts, fmt.Sprintf("[%s] %s: %s", o.Finding.ID, orNone(string(o.Finding.Class), "no class"), o.Why))
+	}
+	for _, o := range a.Disputed {
+		parts = append(parts, fmt.Sprintf("[%s] %s: %s", o.Finding.ID, orNone(string(o.Finding.Class), "no class"), o.Why))
+	}
+	return fmt.Sprintf("%d review finding(s) are not accounted for, so the cycle has not converged: %s",
+		len(a.Open)+len(a.Disputed), strings.Join(parts, "; "))
+}
+
+// responseContract is what the respondent is told it owes: each outstanding
+// finding with the class its record carries, and the one grammar an answer is
+// read in.
+func (o openReview) responseContract() string {
+	var b strings.Builder
+	for _, f := range o.Findings {
+		if !owed(f) {
+			continue
+		}
+		if _, done := o.Discharged[f.ID]; done {
+			continue
+		}
+		b.WriteString("  - [" + f.ID + "] class " + string(f.Class) + ": " + oneLine(f.Claim) + "\n")
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return `FINDING ACCOUNTING -- every finding below must be answered by id, in your final message, one line each:
+  RESPONSE <id> <code|evidence|scope|disagree>: <what answers it>
+The class is the finding's and it decides which answer discharges it: a code finding only by a change to
+the candidate, an evidence finding only by the evidence itself, a scope finding only by a scope answer.
+If you believe a finding is wrong or misclassified, answer "disagree" with your reason: that is escalated
+for adjudication and does NOT discharge the finding. A finding you do not name is still open.
+Outstanding:
+` + strings.TrimRight(b.String(), "\n")
+}
+
+// disputePrompt routes a respondent's disagreement with findings to the
+// architect. The architect may revise the plan; nothing it says discharges a
+// finding, because a finding is discharged only by a response of its class.
+func disputePrompt(task, plan, audit string, o openReview, disputed []outstandingFinding) string {
+	var b strings.Builder
+	for _, d := range disputed {
+		b.WriteString("  " + d.Finding.Line() + "\n    respondent: " + d.Why + "\n")
+	}
+	return fmt.Sprintf(`The implementer disagrees with review findings raised by %s (attempt %d). A disagreement is an escalation, not a discharge: each finding below stays open, with the class its record carries, until a response of that class answers it. Using your architectural authority, issue a revised bounded plan that says how each disputed finding is to be answered. Escalate to the human only if the decision changes human-owned intent/policy/contract/trust authority.
+
+TASK:
+%s
+
+CURRENT PLAN:
+%s
+
+SENSEI AUDIT:
+%s
+
+DISPUTED FINDINGS:
+%s
+Return ONLY the same architecture JSON contract as before.`, o.Reviewer, o.Attempt, task, plan, audit, b.String())
+}
+
 // contradicts reports whether an accepting verdict on this candidate and
 // evidence contradicts the open review rather than answering it.
 //
@@ -94,12 +335,11 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 // match makes this predicate mean what its own "exact candidate" language
 // claims.
 //
-// The candidate or the evidence changing at all is taken as the mechanical
-// resolution: the finding was raised against bytes and outcomes that no longer
-// exist, and the new verdict is about new facts. That is a deliberately coarse
-// reading -- a one-character edit clears a proof-gap finding -- and it is the
-// conservative side: this check refuses to let a verdict flip on NOTHING, and
-// does not try to judge whether a change was enough.
+// This is not what answers a finding. Whether each finding was answered is
+// decided by account, per finding and by class, before the reviewer is asked
+// again; a changed candidate or changed evidence answers nothing by itself.
+// This check only refuses a verdict that flips on NOTHING when no accounting
+// has closed the open review.
 func (o openReview) contradicts(accepting roles.ReviewVerdict, candidateDigest, evidenceID string) bool {
 	return accepting.Accepts() &&
 		o.CandidateDigest != "" && o.CandidateDigest == candidateDigest &&
