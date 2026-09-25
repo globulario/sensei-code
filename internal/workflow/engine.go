@@ -5407,6 +5407,15 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.resumeUnplannedArchitecture(ctx, task)
 			return
 		}
+		// The objective is the recorded one, restored here, once, before
+		// anything below can reach an owed architect re-plan -- exactly as the
+		// unplanned continuation restores it. Without it a restarted process
+		// held no objective, the re-plan's binding carried no objective
+		// identity, and the turn this resume exists to take was refused
+		// (task-1790353318851268310, 2026-09-25). A process that still holds
+		// the submission's objective keeps it and its provenance; an absent
+		// objective stays absent and BindArchitecture mints no digest for it.
+		e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
 		// A resumed invocation is a run, and it owes its own receipt. Without
 		// one every fact it measured -- the world it re-certified, the plan it
 		// carried, the tree an ACCEPT was bound to -- was recorded into nothing,

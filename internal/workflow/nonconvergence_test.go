@@ -273,3 +273,222 @@ func TestTheOpenFindingsReachTheOwedReplan(t *testing.T) {
 		t.Fatalf("the re-plan prompt does not carry the finding that prevented convergence:\n%s", prompt)
 	}
 }
+
+// OBJECTIVE IDENTITY ACROSS THE RESUME BOUNDARY. Measured 2026-09-25 on the
+// resume of task-1790353318851268310: a planned task that ended NOT_CONVERGED
+// was resumed at its owed architect re-plan and refused one second later with
+// "no adapter took the architect role: no exact objective/world binding" --
+// ObjectiveDigest empty, every other referent present. The planned resume never
+// restored the objective the durable record holds, so the one turn the engine
+// said was owed could not be taken.
+//
+// These drive the REAL Engine.Resume over a durable candidate record. Sensei is
+// unstartable, so the invocation ends at its first step; what is measured is
+// the objective the process holds after crossing the resume boundary, and the
+// binding the one architect edge (resolveRunner) mints from it once the start
+// gate's world is in place. Sensei certification cannot be driven here, so the
+// graph commit the gate would record is placed where bindGraph puts it.
+
+// measuredGraphCommit is the graph build commit the measured refusal carried.
+const measuredGraphCommit = "05feaf64d2694e97ac42b6bb93fbb49b9851a1f1"
+
+// emptyInputDigest is sha256(""). It must never appear as an objective
+// identity: an absent objective is not the objective "".
+const emptyInputDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+// unboundRefusal is the refusal the GitHub architecture bridge returns for an
+// incomplete binding (ghbridge.ErrUnboundArchitecture's text).
+type unboundRefusal struct{}
+
+func (unboundRefusal) Error() string { return "no exact objective/world binding for architect turn" }
+
+// capturingResolver records the spec the architect edge hands a resolver, and
+// refuses an incomplete binding exactly as the bridge does.
+type capturingResolver struct{ saw *RunnerSpec }
+
+func (r capturingResolver) Resolve(spec RunnerSpec) (Resolved, error) {
+	*r.saw = spec
+	if spec.Role == roles.Architect && !spec.Architecture.Valid() {
+		return Resolved{}, unboundRefusal{}
+	}
+	return CLIResolved(spec, "session-r"), nil
+}
+
+// notConvergedResume is the measured record: a planned task owed an architect
+// re-plan after spending its review cycles.
+func notConvergedResume(t *testing.T) (*Engine, <-chan event.Event, session.Interrupted) {
+	t.Helper()
+	e, events, task := resumeHarness(t, true)
+	e.Config.Sensei.Repository = "globulario/sensei"
+	nc, _ := json.Marshal(NotConverged{TaskID: task.TaskID, Implementers: []string{"claude"}, ReviewCycles: 3, Owed: OwedArchitectReplan})
+	task.NotConverged = nc
+	if _, owed, err := owedReplan(task.NotConverged, task.BlockedExternal, task.TaskID); err != nil || !owed {
+		t.Fatalf("the fixture does not owe an architect re-plan, so it would witness nothing: owed=%v err=%v", owed, err)
+	}
+	return e, events, task
+}
+
+// architectTurnAfter drives Resume to settlement, puts the start gate's graph
+// commit where bindGraph records it, and asks the one architect edge for the
+// turn. It returns the binding the resolver saw and the edge's answer.
+func architectTurnAfter(t *testing.T, e *Engine, events <-chan event.Event, task session.Interrupted) (roles.ArchitectureBinding, error) {
+	t.Helper()
+	e.Resume(context.Background(), task)
+	settleResume(t, events)
+	bindStartGraph(e, task.TaskID)
+	return bindArchitectTurn(e, task.TaskID)
+}
+
+func bindStartGraph(e *Engine, taskID string) {
+	e.bindGraph(taskID, certifiedStart{})
+	e.graphFor(taskID).Digest = measuredGraphCommit
+}
+
+func bindArchitectTurn(e *Engine, taskID string) (roles.ArchitectureBinding, error) {
+	var saw RunnerSpec
+	e.Runners = capturingResolver{saw: &saw}
+	_, err := e.resolveRunner(RunnerSpec{Role: roles.Architect, TaskID: taskID, Agent: e.Config.Architect})
+	return saw.Architecture, err
+}
+
+// W1. THE MEASURED CASE. The resumed planned task binds its owed architect
+// re-plan to the objective its durable record holds.
+func TestW1APlannedTaskResumedAtItsOwedReplanBindsTheRecordedObjective(t *testing.T) {
+	e, events, task := notConvergedResume(t)
+	got, err := architectTurnAfter(t, e, events, task)
+	if err != nil {
+		t.Fatalf("the owed architect re-plan could not be taken: %v", err)
+	}
+	if !got.Valid() {
+		t.Fatalf("the resumed re-plan's architecture binding is not valid: %+v", got)
+	}
+	want := roles.BindArchitecture(task.TaskID, task.Task, "", "", "").ObjectiveDigest
+	if want == "" || got.ObjectiveDigest != want {
+		t.Fatalf("objective identity %q does not name the recorded objective %q (%s)", got.ObjectiveDigest, task.Task, want)
+	}
+}
+
+// W2. THE TWO MECHANISMS AGREE. A fresh run of the task and a resume of the
+// same record, in a restarted process, mint the same binding on every referent.
+func TestW2AFreshRunAndAResumeMintTheSameArchitectureBinding(t *testing.T) {
+	resumed, events, task := notConvergedResume(t)
+
+	fresh := New(resumed.Repo, config.Default(), event.NewBus(), nil, "session-fresh")
+	fresh.Config.Sensei.Command = "/nonexistent/awareness-mcp"
+	fresh.Config.Sensei.Repository = resumed.Config.Sensei.Repository
+	fresh.run(context.Background(), task.TaskID, task.Task, RequestedByHuman)
+	bindStartGraph(fresh, task.TaskID)
+	a, err := bindArchitectTurn(fresh, task.TaskID)
+	if err != nil {
+		t.Fatalf("the fresh run's architect turn could not be bound: %v", err)
+	}
+
+	b, err := architectTurnAfter(t, resumed, events, task)
+	if err != nil {
+		t.Fatalf("the resumed architect turn could not be bound: %v", err)
+	}
+	for _, f := range []struct{ name, fresh, resumed string }{
+		{"task id", a.TaskID, b.TaskID},
+		{"objective digest", a.ObjectiveDigest, b.ObjectiveDigest},
+		{"base sha", a.BaseSHA, b.BaseSHA},
+		{"graph repository", a.GraphRepository, b.GraphRepository},
+		{"graph build commit", a.GraphBuildCommit, b.GraphBuildCommit},
+	} {
+		if f.fresh == "" || f.fresh != f.resumed {
+			t.Errorf("%s: fresh %q, resumed %q", f.name, f.fresh, f.resumed)
+		}
+	}
+}
+
+// W3. CONTROL: AN ABSENT OBJECTIVE STILL REFUSES. A record carrying no
+// objective text yields no identity -- not a digest, and not the digest of an
+// empty input -- and the architect turn is refused.
+func TestW3AResumedRecordWithNoObjectiveProducesNoIdentity(t *testing.T) {
+	e, events, task := notConvergedResume(t)
+	task.Task = ""
+	got, err := architectTurnAfter(t, e, events, task)
+	if got.ObjectiveDigest != "" {
+		t.Fatalf("an absent objective produced an identity %q", got.ObjectiveDigest)
+	}
+	if got.ObjectiveDigest == emptyInputDigest {
+		t.Fatal("an absent objective was turned into the digest of an empty input")
+	}
+	if got.Valid() {
+		t.Fatalf("a binding with no objective reads as valid: %+v", got)
+	}
+	if err == nil {
+		t.Fatal("the architect turn was taken with no objective identity")
+	}
+}
+
+// W4. THE DIAGNOSIS NAMES THE MISSING REFERENT. An incomplete binding is
+// reported as the referent it lacks, never as an absent adapter.
+func TestW4AnIncompleteBindingNamesItsMissingReferentNotAnAdapter(t *testing.T) {
+	e, events, task := notConvergedResume(t)
+	task.Task = ""
+	_, err := architectTurnAfter(t, e, events, task)
+	if err == nil {
+		t.Fatal("an incomplete binding was not refused")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "no adapter took") || strings.Contains(msg, "no resolver for") {
+		t.Fatalf("an incomplete binding was reported as an absent adapter: %s", msg)
+	}
+	if !strings.Contains(msg, "objective identity") {
+		t.Fatalf("the refusal does not name the missing objective identity: %s", msg)
+	}
+	for _, present := range []string{"task id", "candidate base", "graph repository", "graph build commit"} {
+		if strings.Contains(msg, "missing "+present) || strings.Contains(msg, ", "+present) {
+			t.Errorf("the refusal names %s as missing, but it is present: %s", present, msg)
+		}
+	}
+
+	// A different missing referent is named as itself.
+	e.Config.Sensei.Repository = ""
+	e.recordObjective(task.TaskID, Objective{Text: "the objective", Provenance: ResumedGoverned})
+	_, err = bindArchitectTurn(e, task.TaskID)
+	if err == nil || !strings.Contains(err.Error(), "graph repository") || strings.Contains(err.Error(), "objective identity") ||
+		strings.Contains(err.Error(), "no adapter took") {
+		t.Fatalf("an unconfigured graph repository was not named as the missing referent: %v", err)
+	}
+}
+
+// W5. CONTROL: PROVENANCE IS NOT OVERWRITTEN. A process that still holds the
+// submission's objective keeps it, provenance included, across a resume.
+func TestW5AResumeDoesNotReplaceAHeldObjectiveOrItsProvenance(t *testing.T) {
+	e, events, task := notConvergedResume(t)
+	held := Objective{Text: task.Task, Provenance: RequestedByHuman}
+	e.recordObjective(task.TaskID, held)
+	if _, err := architectTurnAfter(t, e, events, task); err != nil {
+		t.Fatalf("the resumed architect turn could not be bound: %v", err)
+	}
+	if got := e.objective(task.TaskID); got != held {
+		t.Fatalf("the resume replaced the held objective %+v with %+v", held, got)
+	}
+	// And a restarted process, which holds nothing, claims only the
+	// resumption's own provenance: it does not promote itself to a human.
+	restarted, events2, task2 := notConvergedResume(t)
+	restarted.Resume(context.Background(), task2)
+	settleResume(t, events2)
+	if got := restarted.objective(task2.TaskID); got.Text != task2.Task || got.Provenance != ResumedGoverned || got.HumanAuthorized() {
+		t.Fatalf("a restarted resume claimed provenance it cannot establish: %+v", got)
+	}
+}
+
+// W6. CONTROL: THE PATH THAT ALREADY WORKED. An unplanned task's resume binds
+// its architect turn to the recorded objective, as before.
+func TestW6AnUnplannedResumeStillBindsItsArchitectTurn(t *testing.T) {
+	e, events, task := resumeHarness(t, false)
+	e.Config.Sensei.Repository = "globulario/sensei"
+	task.Planned = false
+	got, err := architectTurnAfter(t, e, events, task)
+	if err != nil || !got.Valid() {
+		t.Fatalf("the unplanned resume's architect turn is no longer bound: %+v %v", got, err)
+	}
+	if want := roles.BindArchitecture(task.TaskID, task.Task, "", "", "").ObjectiveDigest; got.ObjectiveDigest != want {
+		t.Fatalf("objective identity %q, want %q", got.ObjectiveDigest, want)
+	}
+	if o := e.objective(task.TaskID); o.Provenance != ResumedGoverned {
+		t.Fatalf("the unplanned resume's provenance changed: %+v", o)
+	}
+}

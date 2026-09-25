@@ -120,6 +120,46 @@ func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
 	)
 }
 
+// incompleteArchitecture names the referents an architecture binding lacks, or
+// returns nil when it is complete.
+//
+// Valid stays the one predicate; this only says which part failed it. The
+// objective digest is empty exactly when no objective is held (BindArchitecture
+// mints nothing for absence), the graph pair has its own exported predicate,
+// and the base is named only when it is empty or is the one referent left.
+func incompleteArchitecture(b roles.ArchitectureBinding) error {
+	if b.Valid() {
+		return nil
+	}
+	var missing []string
+	if strings.TrimSpace(b.TaskID) == "" {
+		missing = append(missing, "task id")
+	}
+	if b.ObjectiveDigest == "" {
+		missing = append(missing, "objective identity (no objective is held for this task)")
+	}
+	if b.BaseSHA == "" {
+		missing = append(missing, "candidate base")
+	}
+	if !b.GraphProvenanceValid() {
+		switch {
+		case b.GraphRepository == "" && b.GraphBuildCommit == "":
+			missing = append(missing, "graph repository", "graph build commit")
+		case b.GraphRepository == "":
+			missing = append(missing, "graph repository (sensei.repository is not configured)")
+		case b.GraphBuildCommit == "":
+			missing = append(missing, "graph build commit")
+		default:
+			missing = append(missing, "graph provenance (not canonical)")
+		}
+	}
+	if len(missing) == 0 {
+		missing = append(missing, "candidate base (not a canonical commit)")
+	}
+	return fmt.Errorf("the architect turn for task %q has an incomplete objective/world binding: missing %s",
+		b.TaskID, strings.Join(missing, ", "))
+}
+
 // resolveRunner returns the adapter that serves this turn.
 //
 // With no resolver configured it is the provider command line, which is every
@@ -136,14 +176,22 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	// choose a transport. Call sites do not supply it and a resolver cannot
 	// substitute it. For a governed task, candidate.Establish has already pinned
 	// the base and bindGraph has already recorded the start gate's graph.
+	var unbound error
 	if spec.Role == roles.Architect {
 		spec.Architecture = e.architectureBinding(spec.TaskID)
+		unbound = incompleteArchitecture(spec.Architecture)
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil
 	}
 	resolved, err := e.Runners.Resolve(spec)
 	if err != nil {
+		// A refusal of an incomplete binding is about the binding, not the
+		// roster. Saying "no adapter took the role" sent the reader to the
+		// adapters when the missing thing was a referent.
+		if unbound != nil {
+			return Resolved{}, fmt.Errorf("%w; the resolver refused the turn: %w", unbound, err)
+		}
 		return Resolved{}, fmt.Errorf("no adapter took the %s role: %w", spec.Role.Label(), err)
 	}
 	if resolved.Runner == nil {
