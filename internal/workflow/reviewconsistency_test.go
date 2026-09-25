@@ -130,3 +130,363 @@ func TestTheContradictionPromptAsksForTheAdjudication(t *testing.T) {
 		t.Fatal("the prompt must ask for the closed adjudication answer")
 	}
 }
+
+// W1-W6: THE CLASS OF A FINDING BINDS THE CLASS OF ITS RESPONSE.
+//
+// Measured 2026-09-25 on the DF-19 resume. An independent review returned a
+// BLOCKING finding about a code path that reported a CREATE refusal as status
+// and continued, and a MAJOR finding about a failing-first history that was
+// never retained. The implementer answered the second one and closed the cycle:
+// "the review finding was evidence-only, so no code changed". ONE finding,
+// singular. The blocking code defect was absorbed into the evidence-only reading
+// of its neighbour, and nothing objected -- because nothing tracked a finding's
+// class through to its response.
+//
+// The engine did refuse that cycle, on the identical diff. That is a PROXY: one
+// unrelated line would have moved the diff and let it through. W3 is the control
+// that proves convergence is no longer decided that way.
+
+// dfNineteenReview is the measured review: one CODE finding, one EVIDENCE
+// finding, each carrying its own class.
+func dfNineteenReview() roles.ReviewVerdict {
+	return roles.ReviewVerdict{
+		Provenance: roles.Provenance{Provider: "codex"},
+		Decision:   roles.Revise,
+		Summary:    "a CREATE refusal is reported without refusing the plan, and the failing-first history is not established",
+		Findings: []roles.Finding{
+			{ID: "f1", Severity: roles.Blocking, Class: roles.ClassCode,
+				Claim:      "a CREATE declaration that cannot be bound refuses the plan",
+				Reference:  "internal/workflow/authority.go",
+				Reason:     "routePlan emits each createRefusal as an event and continues, and Resume discards the returned reasons",
+				Correction: "return a typed routing refusal whenever a supplied CREATE entry fails to bind"},
+			{ID: "f2", Severity: roles.Major, Class: roles.ClassEvidence,
+				Claim:     "the supplied evidence establishes the required failing-first history",
+				Reference: "the run's retained evidence",
+				Reason:    "no output from the pre-repair implementation is retained",
+				ProofGap:  "the witnesses executed against the preserved pre-repair implementation"},
+		},
+	}
+}
+
+// twoCodeFindingReview is two outstanding findings of the same class, so a
+// partial answer cannot be explained away by a class difference.
+func twoCodeFindingReview() roles.ReviewVerdict {
+	return roles.ReviewVerdict{
+		Provenance: roles.Provenance{Provider: "codex"},
+		Decision:   roles.Revise,
+		Summary:    "two code defects",
+		Findings: []roles.Finding{
+			{ID: "f3", Severity: roles.Blocking, Class: roles.ClassCode, Claim: "the guard refuses before the durable step", Reference: "internal/workflow/engine.go", Reason: "it warns and continues", Correction: "refuse"},
+			{ID: "f4", Severity: roles.Blocking, Class: roles.ClassCode, Claim: "the resolver fails closed", Reference: "internal/workflow/authority.go", Reason: "a nil error falls back to cwd", Correction: "return the error"},
+		},
+	}
+}
+
+func accountFor(t *testing.T, acc findingAccounting, id string) findingAccount {
+	t.Helper()
+	for _, a := range acc.Accounts {
+		if a.Finding.ID == id {
+			return a
+		}
+	}
+	t.Fatalf("no account for finding %q; the accounting is per finding id", id)
+	return findingAccount{}
+}
+
+// W1 THE MEASURED CASE. One CODE finding and one EVIDENCE finding, answered
+// with evidence alone, does not converge, and the diagnosis names the
+// unaddressed CODE finding BY ID. "The candidate did not change" is a statement
+// about bytes and does not satisfy this.
+func TestW1AnEvidenceAnswerLeavesTheCodeFindingNamedAndOpen(t *testing.T) {
+	open := openReviewFrom(dfNineteenReview(), 1, "sha256:reviewed", "sha256:evidence")
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "the witnesses were run against the preserved pre-repair implementation and the failing output is retained"},
+	}, nil)
+
+	if acc.converged() {
+		t.Fatal("a review carrying a CODE finding and an EVIDENCE finding, answered with evidence alone, must not converge")
+	}
+	d := acc.diagnose()
+	if !strings.Contains(d, "f1") {
+		t.Fatalf("the diagnosis must name the unaddressed CODE finding by id; got: %s", d)
+	}
+	if strings.Contains(d, "f2") {
+		t.Fatalf("a finding answered in its own class must not be reported as open; got: %s", d)
+	}
+	if a := accountFor(t, acc, "f1"); a.Status != findingUnanswered {
+		t.Fatalf("the CODE finding nobody named is unanswered, got %q: %s", a.Status, a.Detail)
+	}
+	if a := accountFor(t, acc, "f2"); !a.discharged() {
+		t.Fatalf("the EVIDENCE finding was answered with retained evidence and is discharged, got %q: %s", a.Status, a.Detail)
+	}
+}
+
+// W2 RECLASSIFICATION IS REFUSED. An implementer response asserting that a CODE
+// finding was evidence-only does not discharge it, and the class the accounting
+// reads is the one on the finding record.
+func TestW2TheClassComesFromTheFindingNotFromThePartyAnsweringIt(t *testing.T) {
+	open := openReviewFrom(dfNineteenReview(), 1, "sha256:reviewed", "sha256:evidence")
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f1", Discharge: dischargeEvidence, ClaimedClass: roles.ClassEvidence,
+			Evidence: "the finding is evidence-only; the failing output is retained"},
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "retained beside it"},
+	}, []string{"docs/implementation-status.md"})
+
+	if acc.converged() {
+		t.Fatal("an implementer that reads a CODE finding as evidence-only has not discharged it")
+	}
+	a := accountFor(t, acc, "f1")
+	if a.Finding.Class != roles.ClassCode {
+		t.Fatalf("the class must be taken from the finding record, got %q", a.Finding.Class)
+	}
+	if a.Status != findingWrongClass {
+		t.Fatalf("an evidence answer to a code finding is a class mismatch, got %q: %s", a.Status, a.Detail)
+	}
+	if a.Claimed != roles.ClassEvidence {
+		t.Fatalf("the implementer's own reading is recorded as input, got %q", a.Claimed)
+	}
+	if !strings.Contains(acc.diagnose(), "f1") {
+		t.Fatalf("the diagnosis must name the finding that was reclassified: %s", acc.diagnose())
+	}
+}
+
+// W3 THE PROXY IS NOT THE CHECK -- CRITICAL CONTROL. A cycle that changes an
+// unrelated line, so the diff differs and the identical-diff backstop cannot
+// fire, while leaving a CODE finding unaddressed, still does not converge.
+func TestW3AMovedDiffDoesNotAnswerAnUnaddressedCodeFinding(t *testing.T) {
+	open := openReviewFrom(dfNineteenReview(), 1, "sha256:reviewed", "sha256:evidence")
+	// The candidate moved: one unrelated file changed. Nothing names f1.
+	moved := []string{"docs/implementation-status.md"}
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "the failing output is retained"},
+	}, moved)
+
+	if acc.converged() {
+		t.Fatal("a cycle that moved the diff elsewhere and left a CODE finding unaddressed must not converge: the identical-diff check is a backstop, not the deciding predicate")
+	}
+	if a := accountFor(t, acc, "f1"); a.Status != findingUnanswered {
+		t.Fatalf("f1 was never named by a response, so it is unanswered, got %q: %s", a.Status, a.Detail)
+	}
+	if !strings.Contains(acc.diagnose(), "f1") {
+		t.Fatalf("the diagnosis must name the unaddressed CODE finding by id; got: %s", acc.diagnose())
+	}
+	// The same responses against a candidate that did not move at all reach the
+	// same verdict. Whether the diff moved is not part of this answer.
+	unmoved := accountFindings(open, []findingResponse{
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "the failing output is retained"},
+	}, nil)
+	if unmoved.converged() != acc.converged() || unmoved.diagnose() != acc.diagnose() {
+		t.Fatalf("convergence must not depend on whether the diff moved:\nmoved:   %s\nunmoved: %s", acc.diagnose(), unmoved.diagnose())
+	}
+	// Nor does CLAIMING a code change discharge one. The paths a response names
+	// must be paths the candidate actually changed.
+	claimed := accountFindings(open, []findingResponse{
+		{ID: "f1", Discharge: dischargeCode, ChangedFiles: []string{"internal/workflow/authority.go"}},
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "the failing output is retained"},
+	}, moved)
+	if claimed.converged() {
+		t.Fatal("a claimed code change naming a path the candidate never changed is not a code change")
+	}
+	if a := accountFor(t, claimed, "f1"); a.Status != findingUnsubstantiated {
+		t.Fatalf("a code answer with nothing behind it is unsubstantiated, got %q: %s", a.Status, a.Detail)
+	}
+}
+
+// W4 EVIDENCE FINDING DISCHARGED BY EVIDENCE. An EVIDENCE-only finding answered
+// with retained execution evidence is discharged, with no code change required.
+func TestW4AnEvidenceFindingIsDischargedByRetainedEvidenceAlone(t *testing.T) {
+	v := dfNineteenReview()
+	v.Findings = v.Findings[1:] // the EVIDENCE finding alone
+	open := openReviewFrom(v, 1, "sha256:reviewed", "sha256:evidence")
+
+	// No changed paths at all: the candidate is tree-identical to the reviewed one.
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "go test -run TestW3 against the pre-repair implementation; output retained in the cycle record"},
+	}, nil)
+
+	if !acc.converged() {
+		t.Fatalf("an EVIDENCE finding answered with retained evidence is discharged and requires no code change: %s", acc.diagnose())
+	}
+	if d := acc.diagnose(); d != "" {
+		t.Fatalf("a converged accounting diagnoses nothing, got: %s", d)
+	}
+	// The control on the other side: a claim of retained evidence that retains
+	// none is not evidence, so the finding stays open.
+	empty := accountFindings(open, []findingResponse{{ID: "f2", Discharge: dischargeEvidence}}, nil)
+	if empty.converged() {
+		t.Fatal("a claim of retained evidence that names none does not discharge an evidence finding")
+	}
+	if a := accountFor(t, empty, "f2"); a.Status != findingUnsubstantiated {
+		t.Fatalf("an evidence answer with nothing behind it is unsubstantiated, got %q: %s", a.Status, a.Detail)
+	}
+}
+
+// W5 PARTIAL ANSWER IS NOT CONVERGENCE -- CONTROL. Two outstanding findings, one
+// answered: the cycle does not converge and names the one still open.
+func TestW5APartialAnswerIsNotConvergence(t *testing.T) {
+	open := openReviewFrom(twoCodeFindingReview(), 1, "sha256:reviewed", "sha256:evidence")
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f3", Discharge: dischargeCode, ChangedFiles: []string{"internal/workflow/engine.go"}},
+	}, []string{"internal/workflow/engine.go"})
+
+	if acc.converged() {
+		t.Fatal("a cycle that answers one of two outstanding findings has not converged")
+	}
+	d := acc.diagnose()
+	if !strings.Contains(d, "f4") {
+		t.Fatalf("the diagnosis must name the finding still open; got: %s", d)
+	}
+	if strings.Contains(d, "f3") {
+		t.Fatalf("the answered finding must not be reported as open; got: %s", d)
+	}
+	stillOpen := acc.openFindings()
+	if len(stillOpen) != 1 || stillOpen[0].ID != "f4" {
+		t.Fatalf("exactly the unanswered finding travels to the next cycle, got %+v", stillOpen)
+	}
+	// And it survives a later review that says nothing about it.
+	carried := carryForwardOpenFindings([]roles.Finding{{ID: "f9", Severity: roles.Major, Class: roles.ClassCode, Claim: "something else"}}, stillOpen)
+	if len(carried) != 2 || carried[1].ID != "f4" {
+		t.Fatalf("a finding nobody discharged is not retired by the next review's silence, got %+v", carried)
+	}
+}
+
+// W6 DISAGREEMENT IS A ROUTE, NOT A LICENCE -- CONTROL. An implementer that
+// believes a finding is misclassified can say so, and saying so does not
+// discharge it.
+func TestW6ADisagreementRoutesTheFindingAndLeavesItOpen(t *testing.T) {
+	open := openReviewFrom(dfNineteenReview(), 1, "sha256:reviewed", "sha256:evidence")
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f1", Discharge: dischargeDisagreement, ClaimedClass: roles.ClassEvidence,
+			Disagreement: "the refusal is already reported as an event, so what is missing is the proof, not the code"},
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "the failing output is retained"},
+	}, []string{"internal/workflow/authority.go"})
+
+	if acc.converged() {
+		t.Fatal("a disagreement is an escalation, not a discharge")
+	}
+	if !acc.routed() {
+		t.Fatal("a disputed finding is routed to the architect rather than dropped")
+	}
+	a := accountFor(t, acc, "f1")
+	if a.Status != findingDisputed {
+		t.Fatalf("the disagreement must be represented as a disputed finding, got %q: %s", a.Status, a.Detail)
+	}
+	if !strings.Contains(acc.diagnose(), "f1") {
+		t.Fatalf("a disputed finding stays named and open; got: %s", acc.diagnose())
+	}
+	if stillOpen := acc.openFindings(); len(stillOpen) != 1 || stillOpen[0].ID != "f1" {
+		t.Fatalf("the disputed finding travels on rather than being dropped, got %+v", stillOpen)
+	}
+}
+
+// A finding that names no class cannot be discharged by guessing at one. It is
+// refused and routed to the party that can re-state it -- never inferred from
+// severity, wording, or position in the list.
+func TestAFindingWithNoClassIsRefusedRatherThanGuessed(t *testing.T) {
+	v := dfNineteenReview()
+	v.Findings[0].Class = ""
+	open := openReviewFrom(v, 1, "sha256:reviewed", "sha256:evidence")
+	acc := accountFindings(open, []findingResponse{
+		{ID: "f1", Discharge: dischargeCode, ChangedFiles: []string{"internal/workflow/authority.go"}},
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "retained"},
+	}, []string{"internal/workflow/authority.go"})
+
+	if acc.converged() {
+		t.Fatal("a finding with no class states no kind of answer, so no answer discharges it")
+	}
+	if a := accountFor(t, acc, "f1"); a.Status != findingUnusable {
+		t.Fatalf("an unclassified finding is refused, got %q: %s", a.Status, a.Detail)
+	}
+	if !acc.routed() {
+		t.Fatal("an unclassified finding is the reviewer's to re-state, so it routes rather than looping the implementer")
+	}
+}
+
+// W6 CONTROL, CONTINUED: THE ARCHITECT'S RULING DECIDES A DISPUTED FINDING.
+//
+// Cycle 3 review: the route reached the architect and nothing came back from it
+// but a plan, so a ruling that the finding was misclassified could not close it
+// and a ruling that it stood was indistinguishable from silence. Both branches:
+// a finding the architect upholds stays open in its ORIGINAL class; a finding
+// the architect withdraws leaves the record, and only through that ruling.
+func TestW6TheArchitectsRulingDecidesADisputedFinding(t *testing.T) {
+	open := openReviewFrom(dfNineteenReview(), 1, "sha256:reviewed", "sha256:evidence")
+	disputed := accountFindings(open, []findingResponse{
+		{ID: "f1", Discharge: dischargeDisagreement, ClaimedClass: roles.ClassEvidence,
+			Disagreement: "the refusal is already reported as an event, so what is missing is the proof"},
+		{ID: "f2", Discharge: dischargeEvidence, Evidence: "the failing output is retained"},
+	}, []string{"internal/workflow/authority.go"})
+	if !disputed.routed() {
+		t.Fatal("precondition: f1 is disputed and routed to the architect")
+	}
+
+	// Branch 1: the finding STANDS. It stays open, in the class the finding
+	// was raised with, not the one the implementer claimed.
+	stands, withdrawn, err := applyFindingRulings(disputed, []findingRuling{{ID: "f1", Ruling: rulingStands, Reason: "the refusal must stop the plan"}})
+	if err != nil {
+		t.Fatalf("a ruling that the finding stands is a valid ruling: %v", err)
+	}
+	if len(withdrawn) != 0 {
+		t.Fatalf("an upheld finding is not withdrawn, got %+v", withdrawn)
+	}
+	if stands.converged() {
+		t.Fatal("a finding the architect upheld is still owed an answer; the cycle has not converged")
+	}
+	a := accountFor(t, stands, "f1")
+	if a.closed() || a.Finding.Class != roles.ClassCode {
+		t.Fatalf("an upheld finding stays open in its original class, got status %q class %q", a.Status, a.Finding.Class)
+	}
+	if !strings.Contains(stands.diagnose(), "f1") {
+		t.Fatalf("an upheld finding stays named in the diagnosis: %s", stands.diagnose())
+	}
+	if got := withoutFindings(open, withdrawn); len(got.Findings) != len(open.Findings) {
+		t.Fatalf("nothing leaves the open record when nothing was withdrawn, got %+v", got.Findings)
+	}
+
+	// Silence from the authority is not a withdrawal: an unruled finding stands.
+	silent, withdrawn, err := applyFindingRulings(disputed, nil)
+	if err != nil || len(withdrawn) != 0 || silent.converged() {
+		t.Fatalf("a disputed finding the architect did not rule on stands: err=%v withdrawn=%+v converged=%v", err, withdrawn, silent.converged())
+	}
+
+	// Branch 2: the architect WITHDRAWS it. It leaves the record on that ruling,
+	// and convergence may proceed.
+	ruled, withdrawn, err := applyFindingRulings(disputed, []findingRuling{{ID: "f1", Ruling: rulingWithdrawn, Reason: "the refusal is enforced elsewhere; the finding does not apply"}})
+	if err != nil {
+		t.Fatalf("a withdrawal with a reason is a valid ruling: %v", err)
+	}
+	if len(withdrawn) != 1 || withdrawn[0].ID != "f1" {
+		t.Fatalf("exactly the withdrawn finding is returned, got %+v", withdrawn)
+	}
+	if !ruled.converged() {
+		t.Fatalf("with f1 withdrawn by the architect and f2 discharged in its class, convergence may proceed: %s", ruled.diagnose())
+	}
+	if a := accountFor(t, ruled, "f1"); a.Status != findingWithdrawn {
+		t.Fatalf("the withdrawal is represented as such, not as a discharge, got %q", a.Status)
+	}
+	rest := withoutFindings(open, withdrawn)
+	if len(rest.Findings) != 1 || rest.Findings[0].ID != "f2" {
+		t.Fatalf("only the withdrawn finding leaves the open record, got %+v", rest.Findings)
+	}
+
+	// The ruling is refused rather than read when it is not an explicit answer
+	// about a finding that was actually put to the architect.
+	for name, bad := range map[string][]findingRuling{
+		"withdrawal without a reason":     {{ID: "f1", Ruling: rulingWithdrawn}},
+		"a finding nobody disputed":       {{ID: "f2", Ruling: rulingWithdrawn, Reason: "not needed"}},
+		"a ruling outside the vocabulary": {{ID: "f1", Ruling: "evidence", Reason: "it is really an evidence finding"}},
+		"a ruling that names no id":       {{Ruling: rulingWithdrawn, Reason: "none"}},
+	} {
+		if _, _, err := applyFindingRulings(disputed, bad); err == nil {
+			t.Fatalf("%s must be refused", name)
+		}
+	}
+	// And a finding that was merely unanswered cannot be withdrawn through the
+	// route at all: only a dispute opens it.
+	unanswered := accountFindings(open, []findingResponse{
+		{ID: "f1", Discharge: dischargeDisagreement, Disagreement: "misclassified"},
+	}, nil)
+	if _, _, err := applyFindingRulings(unanswered, []findingRuling{{ID: "f2", Ruling: rulingWithdrawn, Reason: "not needed"}}); err == nil {
+		t.Fatal("an unanswered finding that was never disputed cannot be withdrawn through the dispute route")
+	}
+}
