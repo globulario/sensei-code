@@ -193,6 +193,28 @@ func reconciliationEvidence(audit, validation string, revised architectureDecisi
 // auditObservation is one diff-audit finding exactly as Sensei reported it.
 type auditObservation = sensei.AuditFinding
 
+// auditObservationsOf decodes the diff audit's findings from the result Sensei
+// returned, through the same published contract the verdict is weighed by.
+func auditObservationsOf(audit sensei.ToolResult) ([]auditObservation, error) {
+	verdict, err := sensei.DecodeDiffAudit(audit)
+	if err != nil {
+		return nil, err
+	}
+	return verdict.Findings, nil
+}
+
+// requiredTestIDs is the id of every required-test observation the audit made,
+// in the audit's order. These are the tests the broker must run by name.
+func requiredTestIDs(findings []auditObservation) []string {
+	var ids []string
+	for _, f := range findings {
+		if f.RecordClass == "required_test" {
+			ids = append(ids, f.RecordID)
+		}
+	}
+	return ids
+}
+
 // requiredTestRun is the execution broker's record of one named required test.
 type requiredTestRun = validation.RequiredTest
 

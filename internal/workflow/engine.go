@@ -1902,7 +1902,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// satisfied only by the broker executing that same test, by id, and it
 		// passing against this exact candidate. The observation stays in the
 		// audit and in what the reviewer reads either way.
-		requiredRuns, requiredCorrelated := e.requiredTestEvidence(ctx, taskID, envelope, candidate, diff, verdict)
+		requiredRuns, requiredCorrelated := e.requiredTestEvidence(ctx, taskID, envelope, candidate, diff, audit)
 		reviewedValidation := reviewValidationEvidence(evidence.Render(), requiredRuns, requiredCorrelated, taskID, validation.Digest(diff))
 		if len(requiredCorrelated) != 0 {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
@@ -5979,20 +5979,24 @@ func validationPermits(envelope broker.Envelope) func(validation.CheckKind) (boo
 // a green suite does not discharge a named test, and neither does a party
 // reporting that it passed. No baseline is taken -- a failing named test is
 // outstanding whoever caused it.
-func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string, verdict sensei.DiffAuditDecision) ([]requiredTestRun, []correlatedRequiredTest) {
-	var ids []string
-	for _, f := range verdict.Findings {
-		if f.RecordClass == "required_test" {
-			ids = append(ids, f.RecordID)
-		}
+//
+// The observations are read from the audit result Sensei returned, through
+// auditObservationsOf, so the path from the payload's own field names to the
+// correlation is one a witness can drive end to end. An audit that does not
+// decode yields no correlation, which satisfies nothing.
+func (e *Engine) requiredTestEvidence(ctx context.Context, taskID string, envelope broker.Envelope, repo gitx.Repo, diff string, audit sensei.ToolResult) ([]requiredTestRun, []correlatedRequiredTest) {
+	findings, err := auditObservationsOf(audit)
+	if err != nil {
+		return nil, nil
 	}
+	ids := requiredTestIDs(findings)
 	digest := validation.Digest(diff)
 	var runs []requiredTestRun
 	if len(ids) != 0 {
 		runner := validation.Runner{Workspace: repo.Root, Permits: validationPermits(envelope)}
 		runs = runner.RunRequiredTests(ctx, taskID, digest, ids)
 	}
-	return runs, correlateRequiredTests(verdict.Findings, runs, taskID, digest)
+	return runs, correlateRequiredTests(findings, runs, taskID, digest)
 }
 
 // certifiedAgainstCapture refuses unless the validation evidence and the diff

@@ -306,6 +306,65 @@ func TestW1AnOmittedRequiredTestProvenPassingIsSatisfiedInReviewEvidence(t *test
 	}
 }
 
+// liveAuditPayload is the structured result awareness_audit_diff returned on
+// 2026-09-25 for a one-hunk diff of internal/workflow/engine.go at base
+// 0121e93a, verbatim: the bytes the real audit sends, not a fixture shaped to
+// fit the decoder.
+const liveAuditPayload = `{"schema":"awareness.diff_audit/v1","digest":"7f6d0c5251df33c488bcc829dda187b6ef22da070a9d2f58c169fc016d41239d","input_diff_digest":"2108c36735f7fd062d667e74a2e0e6b79f832c3793426314879aa4c3ca2b7e64","input_trust":"caller_supplied","availability":"available","decision":"review","expected_head":"0121e93abb8dc8093697994a657c2735f1e824b2","domain":"github.com/globulario/sensei-code","graph_commit":"39a8d2809ef239f203d5365d7f6e170349186cc4","changed_files":[{"path":"internal/workflow/engine.go","old_path":"internal/workflow/engine.go","kind":"modify","hunk_count":1,"lines_added":11,"lines_deleted":0}],"findings":[{"record_id":"internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified","record_class":"required_test","disposition":"review","file_path":"internal/workflow/governed_record_coverage_test.go","explanation":"required test internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified (defined in internal/workflow/governed_record_coverage_test.go) is omitted from the supplied diff"},{"record_id":"internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest","record_class":"required_test","disposition":"review","file_path":"internal/workflow/governed_record_coverage_test.go","explanation":"required test internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest (defined in internal/workflow/governed_record_coverage_test.go) is omitted from the supplied diff"}],"implicated_tests":["internal/workflow/governed_record_coverage_test.go:TestEveryGovernedCallSiteIsClassified","internal/workflow/governed_record_coverage_test.go:TestTheAuditRecordCarriesItsRequest"]}`
+
+// W1 AT THE BOUNDARY. The measured case, starting from the audit's real
+// payload rather than from constructed observations: the engine's own decoding
+// path (auditObservationsOf, requiredTestIDs) must find both required tests by
+// their canonical ids and class, and those observations become satisfied only
+// from the broker's records under the same ids.
+//
+// Fails if: the decoder's field names do not match what the audit emits
+// (record_id, record_class), so no id reaches the broker; the extraction
+// filters on anything but the required-test class; or a satisfied marking
+// arrives for a test the broker did not pass.
+func TestW1TheLiveAuditPayloadReachesTheCorrelation(t *testing.T) {
+	findings, err := auditObservationsOf(result(t, "", liveAuditPayload))
+	if err != nil {
+		t.Fatalf("the live audit payload does not decode: %v", err)
+	}
+	ids := requiredTestIDs(findings)
+	if len(ids) != 2 || ids[0] != rtCallSites || ids[1] != rtAudit {
+		t.Fatalf("the live audit's required-test observations did not decode to their canonical ids: %q", ids)
+	}
+	for _, f := range findings {
+		if f.RecordClass != "required_test" || f.FilePath != rtFile ||
+			!strings.HasSuffix(f.Explanation, "is omitted from the supplied diff") {
+			t.Errorf("a live observation lost a field in decoding: %+v", f)
+		}
+	}
+
+	runs := []requiredTestRun{
+		brokerRecord(rtAudit, true, true, rtCandidate, rtDigest),
+		brokerRecord(rtCallSites, true, true, rtCandidate, rtDigest),
+	}
+	got := correlateRequiredTests(findings, runs, rtCandidate, rtDigest)
+	if len(got) != 2 {
+		t.Fatalf("both live observations must be correlated, got %d: %+v", len(got), got)
+	}
+	for i, c := range got {
+		if c.ID != ids[i] || !c.Satisfied || c.Observation != findings[i] {
+			t.Errorf("live observation %d was not satisfied under its own id with the observation preserved: %+v", i, c)
+		}
+	}
+
+	// Controls on the same bytes: only the test the broker passed is satisfied,
+	// and with no broker record nothing is.
+	partial := correlateRequiredTests(findings, runs[:1], rtCandidate, rtDigest)
+	if partial[0].Satisfied || !partial[1].Satisfied {
+		t.Errorf("only %s passed, the correlation says otherwise: %+v", rtAudit, partial)
+	}
+	for _, c := range correlateRequiredTests(findings, nil, rtCandidate, rtDigest) {
+		if c.Satisfied || c.State != requiredTestUnproven {
+			t.Errorf("a live observation with no broker record is marked satisfied: %+v", c)
+		}
+	}
+}
+
 // W2 CONTROL. A required test that did not run leaves the observation
 // outstanding -- whether the broker has no record at all, or recorded a zero
 // exit in which the named test itself never ran. Asserts the ABSENCE of any
