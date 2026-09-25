@@ -164,7 +164,7 @@ func TestAnAdvisorySelfReviewIsStillRefused(t *testing.T) {
 func TestAnAdvisoryReviseStillCarriesItsInstructions(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{
 		"decision": "revise", "summary": "not proven",
-		"findings": []map[string]any{{"id": "1", "severity": "blocking",
+		"findings": []map[string]any{{"id": "1", "severity": "blocking", "class": "evidence",
 			"claim": "the test does not fail without the fix", "reference": "a_test.go", "reason": "no mutation"}},
 	})
 	e, _ := reviewEngine(t, answeringRunner{text: string(raw), mode: roles.Unverified}, "remote:abc")

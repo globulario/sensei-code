@@ -223,7 +223,7 @@ func TestTheReconstructedInstructionReachesTheResumedWorkersPrompt(t *testing.T)
 		Decision:   roles.Revise,
 		Summary:    "proof incomplete",
 		Findings: []roles.Finding{{
-			ID: "f1", Severity: roles.Blocking,
+			ID: "f1", Severity: roles.Blocking, Class: roles.ClassEvidence,
 			Claim:      "mutation witness absent",
 			Reference:  "internal/workflow/reviewgate_test.go",
 			Reason:     "the test passes against the unrepaired code",

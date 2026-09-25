@@ -123,7 +123,7 @@ func TestHandoffPreservesTheTaskRatherThanRestartingIt(t *testing.T) {
 			BaseSHA: "abc123", SessionMode: Fresh},
 		PreviousWorker: "claude",
 		State:          "TASK IDENTITY\n  task: task-1\n",
-		OpenFindings:   []Finding{{ID: "f1", Severity: Blocking, Claim: "no test covers the refusal", Reference: "internal/x.go", Reason: "r", Correction: "add one"}},
+		OpenFindings:   []Finding{{ID: "f1", Severity: Blocking, Class: ClassCode, Claim: "no test covers the refusal", Reference: "internal/x.go", Reason: "r", Correction: "add one"}},
 		CyclesUsed:     3, CyclesAllowed: 3,
 	}
 	if err := h.Continuity(candidateBinding()); err != nil {
@@ -305,7 +305,7 @@ func TestAdversarialRolesStartFresh(t *testing.T) {
 // would resolve the contradiction silently in favour of the softer half.
 func TestAVerdictCannotAcceptOverItsOwnBlockingFinding(t *testing.T) {
 	v := acceptingVerdict()
-	v.Findings = []Finding{{ID: "f1", Severity: Blocking, Claim: "the guard is unreachable", Reference: "internal/x.go", Reason: "r", Correction: "c"}}
+	v.Findings = []Finding{{ID: "f1", Severity: Blocking, Class: ClassCode, Claim: "the guard is unreachable", Reference: "internal/x.go", Reason: "r", Correction: "c"}}
 	if err := v.Validate(candidateBinding(), ""); err == nil {
 		t.Fatal("a verdict accepted while recording a blocking finding")
 	}
@@ -315,7 +315,7 @@ func TestABlockingFindingMustPointAtSomething(t *testing.T) {
 	v := acceptingVerdict()
 	v.Decision = Revise
 	v.Instructions = "fix it"
-	v.Findings = []Finding{{ID: "f1", Severity: Blocking, Claim: "something is wrong", Reason: "r"}}
+	v.Findings = []Finding{{ID: "f1", Severity: Blocking, Class: ClassCode, Claim: "something is wrong", Reason: "r"}}
 	if err := v.Validate(candidateBinding(), ""); err == nil {
 		t.Fatal("a blocking finding with nothing to open was accepted")
 	}
@@ -432,7 +432,7 @@ func TestAnAdvisoryVerdictKeepsEveryOtherRule(t *testing.T) {
 		t.Fatal("an advisory review with no summary was accepted")
 	}
 	accepting := ReviewVerdict{Provenance: base, Decision: Accept, Summary: "s",
-		Findings: []Finding{{ID: "1", Severity: Blocking, Claim: "c", Reference: "a.go", Reason: "r"}}}
+		Findings: []Finding{{ID: "1", Severity: Blocking, Class: ClassCode, Claim: "c", Reference: "a.go", Reason: "r"}}}
 	if err := NewAdvisory(accepting).Validate(binding, ""); err == nil {
 		t.Fatal("an advisory verdict accepted over its own blocking finding")
 	}

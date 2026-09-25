@@ -76,7 +76,7 @@ func TestReviseProducesBoundedInstructionsAndAnotherReview(t *testing.T) {
 		Provenance: roles.Provenance{TaskID: "t", Role: roles.Reviewer, Provider: "codex", SessionMode: roles.Fresh},
 		Decision:   roles.Revise,
 		Summary:    "the guard is unreachable",
-		Findings: []roles.Finding{{ID: "f1", Severity: roles.Blocking, Claim: "the guard cannot fire",
+		Findings: []roles.Finding{{ID: "f1", Severity: roles.Blocking, Class: roles.ClassCode, Claim: "the guard cannot fire",
 			Reference: "internal/broker/broker.go", Reason: "the branch above returns first", Correction: "move the guard"}},
 	}
 	instruction := v.Instruction()

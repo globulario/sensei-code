@@ -203,7 +203,7 @@ func TestAnAttestationIsRefusedUnlessItOverridesAPublishedAccept(t *testing.T) {
 	accept := artifactFor(t, relaySubject, relayRequest, "chatgpt", acceptPayload)
 	revise := artifactFor(t, relaySubject, relayRequest, "chatgpt",
 		`{"decision":"revise","summary":"the ledger invariant is not proven","instructions":"prove it",`+
-			`"findings":[{"id":"f1","severity":"blocking","claim":"the invariant holds","reference":"ledger.go",`+
+			`"findings":[{"id":"f1","severity":"blocking","class":"code","claim":"the invariant holds","reference":"ledger.go",`+
 			`"reason":"no test covers position 0","correction":"add the test"}]}`)
 
 	for name, c := range map[string]struct {
