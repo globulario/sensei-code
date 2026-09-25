@@ -1937,6 +1937,25 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		policy := e.policyFor(taskID)
 
+		// PER-FINDING ACCOUNTING, computed before the review is asked.
+		//
+		// The findings a previous review left open are answered by the WORKER,
+		// one at a time, each in the class the FINDING carries. That accounting
+		// decides whether this cycle converged. The identical-diff check further
+		// up stays exactly where it is and decides nothing: it catches a worker
+		// repeating itself, and a cycle that touches one unrelated line walks
+		// straight past it while leaving a blocking code defect unanswered --
+		// measured on the DF-19 resume, 2026-09-25.
+		open, hadOpen := e.openReview(taskID)
+		responses, responseErr := parseFindingResponses(report)
+		account := accountFindings(open, responses, capture.Paths)
+		if responseErr != nil && hadOpen {
+			// Absent and malformed are different facts about the same silence.
+			// Both discharge nothing; the record says which one happened.
+			e.emit(event.New(e.SessionID, taskID, sourceFor(worker.Name), event.Status,
+				"the worker's per-finding accounting could not be read, so it discharges nothing: "+responseErr.Error(), nil))
+		}
+
 		// The implementer is excluded by construction, not by instruction. An
 		// author reviewing its own work has already decided the question, and
 		// its agreement carries no information about whether the work is right.
@@ -2015,7 +2034,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// contradiction goes to the architect on the record. Observed on
 			// B3 N2b, where a handoff swapped worker and reviewer and the
 			// second review accepted what the first had refused, unchanged.
-			if open, ok := e.openReview(taskID); ok && open.contradicts(review, evidence.DiffDigest, evidenceID) {
+			//
+			// stands is an architect's ruling that the earlier findings do not
+			// apply. It is the one authority that closes a finding without a
+			// response to it, and it belongs to the architect, never to the
+			// party being asked to answer it.
+			stands := false
+			if hadOpen && open.contradicts(review, evidence.DiffDigest, evidenceID) {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ReviewContradiction, open.describe(review), open))
 				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, contradictionPrompt(task, plan, lastAudit, open, review), "two reviews of the unchanged candidate disagree: "+oneLine(open.Summary))
 				if err != nil {
@@ -2038,10 +2063,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				})
 				e.clearOpenReview(taskID)
 				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
-				stands, err := adjudicationStands(revised)
+				adjudicated, err := adjudicationStands(revised)
 				if err != nil {
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
+				stands = adjudicated
 				if !stands {
 					plan = revised.Plan
 					feedback = "The architect adjudicated a contradiction between two reviews of this candidate. Reconcile the current candidate with the revised plan."
@@ -2052,7 +2078,41 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// edit is owed, so none is manufactured -- forcing a worker
 				// cycle here produced an identical diff and a failed run on
 				// the last implementor (review of #111).
-			} else {
+			}
+			// CONVERGENCE IS PER-FINDING ACCOUNTING.
+			//
+			// Every finding this cycle was asked to answer must be accounted for
+			// BY ID, with an answer of the finding's own class. An ACCEPT does not
+			// discharge a finding either: a fresh reviewer that never saw the
+			// earlier objection has not answered it, and the implementer's own
+			// reading of a finding's class is input rather than authority.
+			//
+			// A finding leaves this record by being discharged in its own class,
+			// or withdrawn by the architect. Not by the diff moving.
+			if hadOpen && !stands {
+				if !account.converged() {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+						"the review was accepted with findings still outstanding, so the candidate has not converged: "+account.diagnose(), account))
+					if account.routed() {
+						// A disputed class, or a finding that cannot be answered
+						// as written, is the architect's to settle. Routing it is
+						// not discharging it: the finding stays open until an
+						// answer of its class arrives or the architect withdraws it.
+						why := "a review finding was disputed rather than discharged: " + oneLine(account.diagnose())
+						revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task,
+							replanPrompt(task, plan, why, account.diagnose()), why)
+						if err != nil {
+							return candidateNotConverged, plan, lastReview, lastAudit, err
+						}
+						if strings.TrimSpace(revised.Plan) == "" {
+							return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan for the disputed finding")
+						}
+						e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+						plan = revised.Plan
+					}
+					feedback = account.diagnose() + findingResponseContract(open)
+					continue
+				}
 				e.clearOpenReview(taskID)
 			}
 			// Sensei owns this transition. A reviewer that accepts over a
@@ -2093,8 +2153,16 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
 			return candidateAccepted, plan, lastReview, lastAudit, nil
 		case roles.Revise:
-			e.setOpenReview(taskID, openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID))
-			feedback = review.Instruction()
+			// A finding nobody discharged is not retired by the next review's
+			// silence about it. This reviewer is a fresh session that may object
+			// to something else entirely, and letting its verdict REPLACE the
+			// open one is how the first finding disappeared.
+			next := openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID)
+			if hadOpen {
+				next.Findings = carryForwardOpenFindings(review.Findings, account.openFindings())
+			}
+			e.setOpenReview(taskID, next)
+			feedback = review.Instruction() + findingResponseContract(next)
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case roles.Escalate:
 			// The architect's resolution is the adjudication; nothing stays open.
@@ -4138,7 +4206,15 @@ Sensei's evidence is still a REVISE.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+
+EVERY FINDING MUST STATE ITS CLASS, because the class decides what can answer it:
+  "code"     a defect in the candidate. Only a change to the candidate discharges it.
+  "evidence" the proof record does not establish what it claims. Retained execution evidence discharges it.
+  "scope"    the change reaches outside the bound it was given.
+The class is yours to state and the implementer's to satisfy: it may not reclassify a finding into the
+kind that is cheaper to answer. A finding whose class you leave out cannot be discharged at all, and
+goes back to you to re-state rather than being guessed at from its severity or its wording.
 
 Every blocking finding must name something a worker can open. A finding with
 nowhere to point cannot be acted on, and a cycle spent on one produces an
@@ -4234,7 +4310,11 @@ ESCALATE only for a genuine architectural-authority question.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+
+Every finding states its class: "code" for a defect in the candidate, "evidence" for a proof record that
+does not establish what it claims, "scope" for work outside the bound. The class decides what can answer
+the finding, and the party answering it may not restate it as a class that is cheaper to satisfy.
 
 CONVERSATION WITH THE HUMAN:
 %s
