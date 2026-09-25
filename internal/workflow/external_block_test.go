@@ -468,6 +468,11 @@ func TestAnArchitectBlockedMidCycleIsNotHandedToAnotherImplementor(t *testing.T)
 	h.engine.Runners = implementerResolver{implementers: map[string]agent.Runner{"codex": next}, architect: down,
 		reviewer: answeringRunner{text: `{"decision":"escalate","summary":"the plan needs an architectural answer"}`, mode: roles.Unverified},
 		session:  "session-1"}
+	base, err := h.engine.Repo.Head(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	bindArchitectTurn(t, h.engine, "task-1", base)
 
 	var failed error
 	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,

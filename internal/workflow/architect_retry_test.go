@@ -38,6 +38,9 @@ func resolveWithArchitect(t *testing.T, turns ...architectTurn) (*scriptedArchit
 	t.Helper()
 	architect := &scriptedArchitect{turns: turns}
 	e := New(gitx.Repo{Root: t.TempDir()}, config.Default(), event.NewBus(), nil, "sess-1")
+	// The turn is bound before it is attempted; what these witnesses test is
+	// what happens to a bound turn's attempts.
+	bindArchitectTurn(t, e, "task-1", witnessBaseSHA)
 	e.Runners = &fixedResolver{runner: architect, name: "claude"}
 	_, err := e.resolveArchitectureIn(context.Background(), nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
 	return architect, err

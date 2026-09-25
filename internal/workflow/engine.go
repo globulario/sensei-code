@@ -5394,6 +5394,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
+		// THE OBJECTIVE IS RESTORED HERE, ONCE, FROM THE DURABLE RECORD, before
+		// any branch below can reach an architect turn. Only the unplanned branch
+		// used to restore it, so a planned task owed its re-plan minted the
+		// architect binding with an empty objective digest while every other
+		// referent survived the restart (task-1790353318851268310, 2026-09-25).
+		// If-absent, exactly as the unplanned branch does: a process that still
+		// holds the submission's objective keeps it and its provenance.
+		e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
 		if len(task.AwaitingAuthority) != 0 {
 			e.resumeAuthority(ctx, task)
 			return

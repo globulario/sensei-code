@@ -120,6 +120,32 @@ func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
 	)
 }
 
+// architectureDefect names what an invalid binding lacks. Validity itself is
+// roles' predicate and is not restated here; this only says which referent a
+// reader should go and look for.
+func architectureDefect(b roles.ArchitectureBinding) string {
+	var missing []string
+	if strings.TrimSpace(b.TaskID) == "" {
+		missing = append(missing, "task id")
+	}
+	if b.ObjectiveDigest == "" {
+		missing = append(missing, "objective digest (no objective is recorded for this task)")
+	}
+	if b.BaseSHA == "" {
+		missing = append(missing, "candidate base")
+	}
+	if b.GraphRepository == "" {
+		missing = append(missing, "graph repository (sensei.repository is not configured)")
+	}
+	if b.GraphBuildCommit == "" {
+		missing = append(missing, "graph build commit (no certified start recorded one)")
+	}
+	if len(missing) == 0 {
+		return "a referent is present but not in canonical form"
+	}
+	return "missing " + strings.Join(missing, ", ")
+}
+
 // resolveRunner returns the adapter that serves this turn.
 //
 // With no resolver configured it is the provider command line, which is every
@@ -138,6 +164,15 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	// the base and bindGraph has already recorded the start gate's graph.
 	if spec.Role == roles.Architect {
 		spec.Architecture = e.architectureBinding(spec.TaskID)
+		// An incomplete binding is refused HERE, before either the default
+		// command line or a resolver is chosen, and named as the referent it is
+		// missing. Letting it reach a resolver produced "no adapter took the
+		// architect role" for a turn whose objective was simply absent, which
+		// sends the reader to the roster instead of to the record.
+		if !spec.Architecture.Valid() {
+			return Resolved{}, fmt.Errorf("the %s turn cannot be bound to its exact objective and world: %s: %+v",
+				spec.Role.Label(), architectureDefect(spec.Architecture), spec.Architecture)
+		}
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil
