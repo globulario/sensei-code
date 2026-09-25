@@ -86,7 +86,22 @@ type Config struct {
 		// the architect turn refuses before publishing anything.
 		Repository string `json:"repository,omitempty"`
 	} `json:"sensei"`
+	// Architect is the first architectural authority, and Architects is the
+	// bounded set to fall back through when it cannot be obtained.
+	//
+	// The architect role draws the same pool that empties: its Command is the
+	// authenticated ChatGPT transport, so when that account is out of quota the
+	// role has nowhere to go. Measured 2026-09-24: two bounded waits and a whole
+	// governed run were spent on an account whose seven-day pool was exhausted
+	// with a published reset 49 minutes later. The alternates exist for the same
+	// reason the reviewer's do -- an architect that is out of quota, unreachable
+	// or returning unparseable output should cost a fallback rather than a run.
+	//
+	// They are a roster of ARCHITECTS, not a reuse of Implementors: an
+	// implementor is configured with write capability, and the architect stage
+	// proposes without editing.
 	Architect    Agent   `json:"architect"`
+	Architects   []Agent `json:"architects,omitempty"`
 	Implementors []Agent `json:"implementors"`
 	// Reviewer is the first independent reviewer, and Reviewers is the bounded
 	// set to fall back through when it cannot do the job.
@@ -230,6 +245,24 @@ func (c Config) ReviewRoster() []Agent {
 	return []Agent{c.Reviewer}
 }
 
+// ArchitectRoster is the bounded set of architects, in fallback order.
+//
+// Deliberately identical in shape to ReviewRoster, including its stated
+// property: a configuration naming only the single Architect still gets a
+// roster of ONE rather than an empty one. A deployment with no alternate is a
+// real and supportable state, and when no architect can be obtained it should
+// end by exhausting a bounded set rather than by finding no set at all --
+// exhaustion of nothing cannot be reported as exhaustion.
+func (c Config) ArchitectRoster() []Agent {
+	if len(c.Architects) != 0 {
+		return c.Architects
+	}
+	if strings.TrimSpace(c.Architect.Name) == "" {
+		return nil
+	}
+	return []Agent{c.Architect}
+}
+
 // Command is one executable check.
 type Command struct {
 	Command string   `json:"command"`
@@ -299,6 +332,15 @@ func Load(repo string) (Config, error) {
 	}
 	if stated["reviewer"] && !stated["reviewers"] {
 		c.Reviewers = nil
+	}
+	// The same precedence for the architect roster, stated rather than left to
+	// depend on what Default() happens to populate. Default() names no
+	// alternate architect today, so a stated single architect already yields a
+	// roster of one -- but that is an accident of the default, and the rule
+	// #355 cost a governed review to learn belongs to both rosters, not to
+	// whichever one was written first.
+	if stated["architect"] && !stated["architects"] {
+		c.Architects = nil
 	}
 	// Migrate only the exact old built-in architect. A deliberately customized
 	// architect remains user-owned configuration and is never rewritten.

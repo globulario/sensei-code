@@ -95,3 +95,82 @@ func (u *ReviewUnobtainable) Excludes(participant string) bool {
 	}
 	return false
 }
+
+// ErrArchitectUnobtainable reports that every authorized architect was tried for
+// one exact architectural question and none produced a bounded decision.
+//
+// It is the architect's companion to ErrReviewUnobtainable, and it exists for
+// the same reason: "no provider could be obtained" and "the role decided
+// against this" are different findings, and nothing decided what holds once
+// every provider in a finite roster has been tried and failed. Without a name
+// for the exhausted chain that case fell through to the ordinary role-failure
+// branch and was reported as the ARCHITECT failing to decide.
+//
+// Observed 2026-09-24: requests r-e25830e22588e77d and r-36348ba82230e65a each
+// waited 30 minutes and were withdrawn unanswered, and the run then ended
+// INCOMPLETE/FAILED saying "architect could not produce a bounded decision".
+// The account's pool was exhausted with a published reset 49 minutes later. The
+// architect had not failed to decide; it was never reached. Availability became
+// a verdict.
+var ErrArchitectUnobtainable = errors.New("no authorized architect could be obtained for this turn")
+
+// ErrArchitectRefusal reports that a party the request DID reach refused it.
+//
+// Its own condition, owned here rather than by a transport, because it is the
+// one thing a fallback ladder must never reinterpret: a refused request is
+// answered, and asking the next provider the same question would be shopping
+// for a different answer rather than costing a fallback. A transport that can
+// carry a bound refusal marks it with this so the ladder does not have to read
+// a message to tell a refusal from an unreachable provider.
+var ErrArchitectRefusal = errors.New("the architect request was refused by the party it reached")
+
+// ArchitectAttemptFailure is one roster entry's failure to produce an architect
+// answer, kept so the exhausted chain can name each party and its reason.
+type ArchitectAttemptFailure struct {
+	Provider string
+	Cause    error
+}
+
+// ArchitectUnobtainable is the exhausted architect roster.
+//
+// The causes are kept in the order they were tried, and kept whole rather than
+// reduced to a last error: a proven temporary unavailability carries the time
+// its provider said it would serve again, and that evidence is what lets the
+// task be preserved and retried instead of declared failed.
+type ArchitectUnobtainable struct {
+	Attempted []ArchitectAttemptFailure
+}
+
+func (u *ArchitectUnobtainable) Error() string {
+	tried := make([]string, 0, len(u.Attempted))
+	for _, a := range u.Attempted {
+		if a.Cause == nil {
+			tried = append(tried, a.Provider)
+			continue
+		}
+		tried = append(tried, a.Provider+": "+a.Cause.Error())
+	}
+	return fmt.Sprintf("%v: tried %s", ErrArchitectUnobtainable, strings.Join(tried, "; "))
+}
+
+// Unwrap exposes the condition and every attempt's cause, so errors.Is matches
+// ErrArchitectUnobtainable while each provider's own proof -- a typed
+// unavailability with its reset time included -- stays reachable.
+func (u *ArchitectUnobtainable) Unwrap() []error {
+	out := []error{ErrArchitectUnobtainable}
+	for _, a := range u.Attempted {
+		if a.Cause != nil {
+			out = append(out, a.Cause)
+		}
+	}
+	return out
+}
+
+// Providers names the parties that were tried, in order.
+func (u *ArchitectUnobtainable) Providers() []string {
+	out := make([]string, 0, len(u.Attempted))
+	for _, a := range u.Attempted {
+		out = append(out, a.Provider)
+	}
+	return out
+}
