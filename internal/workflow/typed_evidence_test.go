@@ -283,6 +283,27 @@ func TestW1AnOmittedRequiredTestProvenPassingIsSatisfiedInReviewEvidence(t *test
 			t.Errorf("the task-evidence projection lost the result: %+v", p)
 		}
 	}
+
+	// Drive it to the terminal: the packet the engine hands the independent
+	// reviewer, and the prompt that reviewer actually reads. Both the broker's
+	// per-test records and the correlation must arrive there, beside the audit
+	// observations still reported as the audit made them.
+	audit := "SENSEI DIFF AUDIT decision: review\n- [review] " + findings[0].Explanation + "\n- [review] " + findings[1].Explanation
+	packet := reviewPacket(taskContext{}, reviewBinding(), certifiedStart{}, "the plan", "a diff", audit, text)
+	if packet.Validation != text {
+		t.Fatalf("the review packet does not carry the correlated validation evidence:\n%s", packet.Validation)
+	}
+	prompt := reviewPrompt(packet)
+	for _, want := range []string{
+		"REQUIRED TESTS executed by name by the execution broker",
+		rtAudit + " — executed, PASSED", rtCallSites + " — executed, PASSED",
+		"SATISFIED    " + rtAudit, "SATISFIED    " + rtCallSites,
+		findings[0].Explanation, findings[1].Explanation,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the reviewer's prompt does not carry %q", want)
+		}
+	}
 }
 
 // W2 CONTROL. A required test that did not run leaves the observation
