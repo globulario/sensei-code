@@ -313,12 +313,17 @@ func (r Runner) Run(ctx context.Context, candidateID, diffDigest string, checks 
 	}
 	bundle := Bundle{CandidateID: candidateID, DiffDigest: diffDigest}
 	for _, check := range checks {
-		bundle.Checks = append(bundle.Checks, r.one(ctx, candidateID, diffDigest, check, now))
+		e, _ := r.one(ctx, candidateID, diffDigest, check, now)
+		bundle.Checks = append(bundle.Checks, e)
 	}
 	return bundle
 }
 
-func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check Check, now func() time.Time) Evidence {
+// one executes a single check. It also returns the full captured output, which
+// Evidence keeps only a bounded prefix of: a named required test's own verdict
+// line can sit past the bound, and reading it from the truncated copy would
+// report a test that ran as one that did not.
+func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check Check, now func() time.Time) (Evidence, string) {
 	e := Evidence{
 		Kind: check.Kind, Command: check.Command, Args: check.Args,
 		RequestedBy: "sensei-code workflow", ExecutedBy: "sensei-code execution broker",
@@ -331,7 +336,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 			e.Outcome = NotPermitted
 			e.ExitStatus = -1
 			e.Detail = reason
-			return e
+			return e, ""
 		}
 	}
 
@@ -343,6 +348,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 	e.FinishedAt = now().UTC()
 
 	body := out.String()
+	full := body
 	sum := sha256.Sum256([]byte(body))
 	e.OutputDigest = "sha256:" + hex.EncodeToString(sum[:])
 	if len(body) > maxOutput {
@@ -355,7 +361,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		// Exited zero but reported a problem on stdout.
 		e.Outcome = Failed
 		e.Detail = "the check exited zero but reported output, which this check treats as failure"
-		return r.attribute(ctx, check, e)
+		return r.attribute(ctx, check, e), full
 	case err == nil:
 		e.Outcome = Passed
 	default:
@@ -363,7 +369,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		if ok := asExitError(err, &exitErr); ok {
 			e.ExitStatus = exitErr.ExitCode()
 			e.Outcome = Failed
-			return r.attribute(ctx, check, e)
+			return r.attribute(ctx, check, e), full
 		}
 		// Could not run at all: missing binary, deadline, permission. Not a
 		// failure of the candidate and definitely not a pass.
@@ -371,7 +377,7 @@ func (r Runner) one(ctx context.Context, candidateID, diffDigest string, check C
 		e.Outcome = Errored
 		e.Detail = err.Error()
 	}
-	return e
+	return e, full
 }
 
 func asExitError(err error, target **exec.ExitError) bool {
@@ -416,4 +422,162 @@ func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence
 	}
 	e.Attribution = "candidate"
 	return e
+}
+
+// RequiredTest is the broker's record of one NAMED required test, executed on
+// its own against one exact candidate.
+//
+// A green suite is not this record. "go test ./... exited zero" says nothing a
+// reader can hold a named test to: the package may not have been selected, the
+// test may have been skipped by name, or it may not exist at all. So the broker
+// runs the named test by itself and reads that test's own verdict line, and a
+// required test is discharged only by that line -- never by the suite, by the
+// diff, or by anyone reporting it.
+type RequiredTest struct {
+	// ID is the canonical required-test id, "path/to/file_test.go:TestName".
+	// It is the only key anything may correlate on.
+	ID string `json:"id"`
+
+	CandidateID string `json:"candidate_id"`
+	DiffDigest  string `json:"diff_digest"`
+
+	// Executed records that the named test itself ran: its own verdict line
+	// was observed. A command that exited zero having run nothing ("no tests to
+	// run") did not execute it.
+	Executed bool `json:"executed"`
+	// Passed records that the named test ran and its own verdict was PASS, and
+	// the command that ran it passed as a whole.
+	Passed bool `json:"passed"`
+
+	// Evidence is the execution that produced this record.
+	Evidence Evidence `json:"evidence"`
+}
+
+// Discharges reports whether this record proves the named test executed and
+// passed against exactly this candidate content. Every leg is checked here
+// rather than trusted from Passed alone, so a record assembled anywhere but
+// the broker, or bound to other bytes, discharges nothing.
+func (t RequiredTest) Discharges(id, candidateID, diffDigest string) bool {
+	return t.ID != "" && t.ID == CanonicalRequiredTestID(id) &&
+		t.CandidateID == candidateID && t.DiffDigest != "" && t.DiffDigest == diffDigest &&
+		t.Executed && t.Passed &&
+		t.Evidence.Outcome == Passed && t.Evidence.Kind == Test &&
+		t.Evidence.Certifies(candidateID, diffDigest)
+}
+
+// CanonicalRequiredTestID reduces a required-test id to its canonical form.
+//
+// The graph names a test class-qualified ("test:path:Name") and the corpus
+// names it bare ("path:Name"); both denote one test. Only that class prefix and
+// surrounding space are removed -- nothing else is normalized, so two ids that
+// differ in any other way stay two tests.
+func CanonicalRequiredTestID(id string) string {
+	return strings.TrimPrefix(strings.TrimSpace(id), "test:")
+}
+
+// requiredTestTarget splits a canonical id into the package directory and the
+// test function, refusing anything that is not exactly one Go test in one
+// repository-relative test file.
+func requiredTestTarget(id string) (dir, name string, ok bool) {
+	path, name, found := strings.Cut(id, ":")
+	if !found || !strings.HasSuffix(path, "_test.go") || strings.HasPrefix(path, "/") ||
+		strings.Contains(path, "..") || !strings.HasPrefix(name, "Test") {
+		return "", "", false
+	}
+	for _, r := range name {
+		if !(r == '_' || r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z') {
+			return "", "", false
+		}
+	}
+	dir = "."
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		dir = "./" + path[:i]
+	}
+	return dir, name, true
+}
+
+// RunRequiredTests executes each named required test on its own against the
+// candidate and records, per id, whether it executed and whether it passed.
+//
+// Ids are canonicalized and deduplicated; the result is in the order given. A
+// malformed id, a check the envelope does not permit, or a test that did not
+// run is recorded as not executed -- never dropped, because a required test
+// with no record would read as one nobody asked about.
+func (r Runner) RunRequiredTests(ctx context.Context, candidateID, diffDigest string, ids []string) []RequiredTest {
+	now := r.Now
+	if now == nil {
+		now = time.Now
+	}
+	var out []RequiredTest
+	seen := map[string]bool{}
+	for _, raw := range ids {
+		id := CanonicalRequiredTestID(raw)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		rec := RequiredTest{ID: id, CandidateID: candidateID, DiffDigest: diffDigest}
+		dir, name, ok := requiredTestTarget(id)
+		if !ok {
+			at := now().UTC()
+			rec.Evidence = Evidence{
+				Kind: Test, RequestedBy: "sensei-code workflow", ExecutedBy: "sensei-code execution broker",
+				CandidateID: candidateID, DiffDigest: diffDigest, StartedAt: at, FinishedAt: at,
+				ExitStatus: -1, Outcome: Errored,
+				Detail: "not a canonical required-test id (path/to/file_test.go:TestName), so nothing was run",
+			}
+			out = append(out, rec)
+			continue
+		}
+		check := Check{Kind: Test, Command: "go", Args: []string{"test", "-count=1", "-v", "-run", "^" + name + "$", dir}}
+		e, full := r.one(ctx, candidateID, diffDigest, check, now)
+		rec.Evidence = e
+		rec.Executed, rec.Passed = namedVerdict(full, name)
+		rec.Passed = rec.Passed && e.Outcome == Passed
+		if e.Outcome == Passed && !rec.Executed {
+			rec.Evidence.Detail = "the command exited zero but " + name + " reported no verdict of its own, so it did not execute"
+		}
+		out = append(out, rec)
+	}
+	return out
+}
+
+// namedVerdict reads the named top-level test's own verdict line from
+// `go test -v` output. Subtest lines are indented and never match.
+func namedVerdict(output, name string) (executed, passed bool) {
+	for _, line := range strings.Split(output, "\n") {
+		switch {
+		case strings.HasPrefix(line, "--- PASS: "+name+" ("):
+			executed, passed = true, true
+		case strings.HasPrefix(line, "--- FAIL: "+name+" ("):
+			return true, false
+		case strings.HasPrefix(line, "--- SKIP: "+name+" ("):
+			// A skipped test did not run its assertions.
+			return false, false
+		}
+	}
+	return executed, passed
+}
+
+// RenderRequiredTests writes the per-test records for a reviewer.
+func RenderRequiredTests(tests []RequiredTest) string {
+	if len(tests) == 0 {
+		return ""
+	}
+	var sb strings.Builder
+	sb.WriteString("REQUIRED TESTS executed by name by the execution broker, not reported by the worker:\n")
+	for _, t := range tests {
+		state := "NOT EXECUTED"
+		switch {
+		case t.Executed && t.Passed:
+			state = "executed, PASSED"
+		case t.Executed:
+			state = "executed, FAILED"
+		}
+		fmt.Fprintf(&sb, "  %s — %s (candidate %s at diff %s)\n", t.ID, state, t.CandidateID, short(t.DiffDigest))
+		if t.Evidence.Detail != "" {
+			fmt.Fprintf(&sb, "      %s\n", t.Evidence.Detail)
+		}
+	}
+	return strings.TrimRight(sb.String(), "\n")
 }
