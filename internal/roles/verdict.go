@@ -22,6 +22,39 @@ const (
 
 func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Minor }
 
+// FindingClass is the KIND of thing a finding says is wrong, and therefore the
+// kind of answer that can put it right.
+//
+// It belongs to the FINDING. The party raising the objection says what kind it
+// is; the party being asked to satisfy it never does, because that party is the
+// one with an interest in a class that is cheaper to discharge.
+//
+// Observed 2026-09-25 on the DF-19 resume. One review returned two findings: a
+// BLOCKING one about a fail-open code path, and a MAJOR one about missing
+// execution evidence. The implementer answered the evidence one thoroughly and
+// closed the cycle with "the review finding was evidence-only, so no code
+// changed" -- singular. A blocking code defect had been absorbed into the
+// evidence-only reading of its neighbour. Nothing objected, because nothing
+// carried the first finding's class through to the response.
+//
+// The vocabulary is closed and read by membership. Severity, wording and
+// position in the list are not evidence of class: a finding that states none is
+// refused rather than sorted into the nearest one.
+type FindingClass string
+
+const (
+	// ClassCode is a defect in the candidate itself. Only a change to the
+	// candidate discharges it.
+	ClassCode FindingClass = "code"
+	// ClassEvidence is a proof record that does not establish what it claims.
+	// Retained execution evidence discharges it, and no code change does.
+	ClassEvidence FindingClass = "evidence"
+	// ClassScope is a change that reaches outside the bound it was given.
+	ClassScope FindingClass = "scope"
+)
+
+func (c FindingClass) Valid() bool { return c == ClassCode || c == ClassEvidence || c == ClassScope }
+
 // Finding is one concrete objection, attributable to something a person can go
 // and look at.
 //
@@ -33,6 +66,11 @@ func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Mino
 type Finding struct {
 	ID       string   `json:"id"`
 	Severity Severity `json:"severity"`
+	// Class is the kind of thing that is wrong, and so the kind of response
+	// that can discharge this finding. It is the finding's own property and no
+	// responding party may set or change it. Absent is refused where the answer
+	// is accounted for, never guessed at from the rest of the finding.
+	Class FindingClass `json:"class,omitempty"`
 	// Claim is what the finding challenges: the assertion the candidate or its
 	// evidence makes that the reviewer believes is not established.
 	Claim string `json:"claim"`
@@ -50,8 +88,17 @@ func (f Finding) Line() string {
 	if f.ID != "" {
 		b.WriteString("[" + f.ID + "] ")
 	}
-	if f.Severity != "" {
+	// Severity and class are rendered together because the responding party
+	// reads this line and owes an answer of the finding's class. A line that
+	// showed only "blocking" invited the reading that got a code defect closed
+	// as evidence-only.
+	switch {
+	case f.Severity != "" && f.Class != "":
+		b.WriteString(string(f.Severity) + " " + string(f.Class) + ": ")
+	case f.Severity != "":
 		b.WriteString(string(f.Severity) + ": ")
+	case f.Class != "":
+		b.WriteString(string(f.Class) + ": ")
 	}
 	b.WriteString(strings.TrimSpace(f.Claim))
 	if f.Reference != "" {
@@ -148,6 +195,13 @@ func (v ReviewVerdict) Validate(b Binding, implementer string) error {
 	for i, f := range v.Findings {
 		if !f.Severity.Valid() {
 			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
+		}
+		if f.Class != "" && !f.Class.Valid() {
+			// Read by membership. A class outside the vocabulary is not
+			// normalised into the nearest one: the finding would then be
+			// dischargeable by whatever kind of answer the normalisation
+			// happened to pick.
+			return fmt.Errorf("finding %d states class %q, which is not code, evidence, or scope", i+1, f.Class)
 		}
 		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
 			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
@@ -254,6 +308,13 @@ func (a Advisory) Validate(b Binding, implementer string) error {
 	for i, f := range a.Findings {
 		if !f.Severity.Valid() {
 			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
+		}
+		if f.Class != "" && !f.Class.Valid() {
+			// Read by membership. A class outside the vocabulary is not
+			// normalised into the nearest one: the finding would then be
+			// dischargeable by whatever kind of answer the normalisation
+			// happened to pick.
+			return fmt.Errorf("finding %d states class %q, which is not code, evidence, or scope", i+1, f.Class)
 		}
 		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
 			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
