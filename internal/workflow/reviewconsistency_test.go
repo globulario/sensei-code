@@ -146,6 +146,11 @@ var (
 	movedReferenced = map[string]bool{"internal/workflow/engine.go": true}
 	movedUnrelated  = map[string]bool{"README.md": true}
 	movedNothing    = map[string]bool{}
+
+	// readBackAll holds a durable record for BOTH findings, so every negative
+	// assertion here holds even where a record was read back: what refuses is
+	// the rule under test, never the absence of a record.
+	readBackAll = map[string]string{"f1": "sha256:record-f1", "f2": "sha256:record-f2"}
 )
 
 func openIDs(a findingAccount) []string {
@@ -172,7 +177,7 @@ func TestW2AnImplementerCannotReclassifyACodeFindingAsEvidence(t *testing.T) {
 		t.Fatalf("the accounting did not parse: %v %+v", err, responses)
 	}
 	for _, moved := range []map[string]bool{movedNothing, movedReferenced} {
-		a := accountForFindings([]roles.Finding{classedCode}, responses, moved, b)
+		a := accountForFindings([]roles.Finding{classedCode}, responses, moved, b, readBackAll)
 		if a.Settled() || len(a.Open) != 1 || a.Open[0].ID != "f1" {
 			t.Fatalf("moved %v: a CODE finding answered as evidence was discharged: %+v", moved, a)
 		}
@@ -192,21 +197,21 @@ func TestW2AnImplementerCannotReclassifyACodeFindingAsEvidence(t *testing.T) {
 func TestW3UnrelatedMovementDoesNotDischargeAClaimedCodeFinding(t *testing.T) {
 	b := n2bBundle("ok")
 	claimsUnrelated := findingResponse{ID: "f1", AnsweredBy: roles.CodeFinding, Paths: []string{"README.md"}}
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{claimsUnrelated}, movedUnrelated, b); a.Settled() ||
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{claimsUnrelated}, movedUnrelated, b, readBackAll); a.Settled() ||
 		!strings.Contains(a.Diagnosis(), "touches none of it") {
 		t.Fatalf("an unrelated edit, claimed for the CODE finding, discharged it: %s", a.Diagnosis())
 	}
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, movedUnrelated, b); a.Settled() ||
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, movedUnrelated, b, readBackAll); a.Settled() ||
 		!strings.Contains(a.Diagnosis(), "did not change since the finding was raised") {
 		t.Fatalf("a claim to have changed the referenced file, which did not move, discharged it: %s", a.Diagnosis())
 	}
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{{ID: "f1", AnsweredBy: roles.CodeFinding}}, movedReferenced, b); a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{{ID: "f1", AnsweredBy: roles.CodeFinding}}, movedReferenced, b, readBackAll); a.Settled() {
 		t.Fatal("a code answer naming no file discharged the CODE finding")
 	}
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, nil, b); a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, nil, b, readBackAll); a.Settled() {
 		t.Fatal("a code answer was bound to a finding whose candidate could not be compared file by file")
 	}
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, movedReferenced, b); !a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, movedReferenced, b, readBackAll); !a.Settled() {
 		t.Fatalf("control: a change to the referenced file did not discharge the CODE finding: %s", a.Diagnosis())
 	}
 }
@@ -221,31 +226,31 @@ func TestW4AnEvidenceFindingIsDischargedOnlyByExecutedEvidence(t *testing.T) {
 	answer := func(cite string) []findingResponse {
 		return []findingResponse{{ID: "f2", AnsweredBy: roles.EvidenceFinding, Evidence: cite}}
 	}
-	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("go test ./..."), movedNothing, b); !a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("go test ./..."), movedNothing, b, readBackAll); !a.Settled() {
 		t.Fatalf("the check the proof gap names, which ran and passed, did not discharge it: %s", a.Diagnosis())
 	}
-	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("gofmt -l cmd internal"), movedNothing, b); a.Settled() ||
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("gofmt -l cmd internal"), movedNothing, b, readBackAll); a.Settled() ||
 		!strings.Contains(a.Diagnosis(), "not the proof the finding asks for") {
 		t.Fatalf("a passing but irrelevant check discharged an EVIDENCE finding: %s", a.Diagnosis())
 	}
 	for _, cite := range []string{"gofmt -l cmd internal", "go test ./..."} {
-		if a := accountForFindings([]roles.Finding{measuredEvidence}, answer(cite), movedNothing, b); a.Settled() {
+		if a := accountForFindings([]roles.Finding{measuredEvidence}, answer(cite), movedNothing, b, readBackAll); a.Settled() {
 			t.Fatalf("the measured failing-first demand was discharged by %q, which does not establish it", cite)
 		}
 	}
-	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("go vet ./..."), movedNothing, b); a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("go vet ./..."), movedNothing, b, readBackAll); a.Settled() {
 		t.Fatal("evidence naming a check that never ran discharged an EVIDENCE finding")
 	}
-	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("test"), movedNothing, b); a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("test"), movedNothing, b, readBackAll); a.Settled() {
 		t.Fatal("a bare check kind, which names no particular check, discharged an EVIDENCE finding")
 	}
 	failed := n2bBundle("FAIL")
 	failed.Checks[1].Outcome = validation.Failed
-	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("go test ./..."), movedNothing, failed); a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer("go test ./..."), movedNothing, failed, readBackAll); a.Settled() {
 		t.Fatal("a check that failed discharged an EVIDENCE finding")
 	}
 	byCode := accountForFindings([]roles.Finding{classedEvidence},
-		[]findingResponse{{ID: "f2", AnsweredBy: roles.CodeFinding, Paths: []string{"internal/workflow/engine.go"}}}, movedReferenced, b)
+		[]findingResponse{{ID: "f2", AnsweredBy: roles.CodeFinding, Paths: []string{"internal/workflow/engine.go"}}}, movedReferenced, b, readBackAll)
 	if byCode.Settled() {
 		t.Fatal("a code change discharged an EVIDENCE finding")
 	}
@@ -255,7 +260,7 @@ func TestW4AnEvidenceFindingIsDischargedOnlyByExecutedEvidence(t *testing.T) {
 // own class: the account is open and names exactly the one still open.
 func TestW5APartialAnswerNamesTheFindingStillOpen(t *testing.T) {
 	b := n2bBundle("ok")
-	a := accountForFindings([]roles.Finding{classedCode, classedEvidence}, []findingResponse{codeAnswer}, movedReferenced, b)
+	a := accountForFindings([]roles.Finding{classedCode, classedEvidence}, []findingResponse{codeAnswer}, movedReferenced, b, readBackAll)
 	if a.Settled() {
 		t.Fatal("a cycle that answered one of two findings converged")
 	}
@@ -266,7 +271,7 @@ func TestW5APartialAnswerNamesTheFindingStillOpen(t *testing.T) {
 		t.Fatalf("the diagnosis does not name the one still open: %s", d)
 	}
 	// The same code answer on an UNMOVED candidate discharges nothing.
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, movedNothing, b); a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{codeAnswer}, movedNothing, b, readBackAll); a.Settled() {
 		t.Fatal("a CODE finding was discharged by a code answer with no code change")
 	}
 }
@@ -279,7 +284,7 @@ func TestW6ADisputeIsRecordedAndDischargesNothing(t *testing.T) {
 	b := n2bBundle("ok")
 	disputed := codeAnswer
 	disputed.DisputesClass, disputed.Reason = roles.EvidenceFinding, "proof only"
-	a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{disputed}, movedReferenced, b)
+	a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{disputed}, movedReferenced, b, readBackAll)
 	if a.Settled() || len(a.Disputes) != 1 || a.Disputes[0].ID != "f1" {
 		t.Fatalf("a disputed finding was discharged or its dispute dropped: %+v", a)
 	}
@@ -288,7 +293,7 @@ func TestW6ADisputeIsRecordedAndDischargesNothing(t *testing.T) {
 	}
 	undisputed := disputed
 	undisputed.DisputesClass = ""
-	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{undisputed}, movedReferenced, b); !a.Settled() {
+	if a := accountForFindings([]roles.Finding{classedCode}, []findingResponse{undisputed}, movedReferenced, b, readBackAll); !a.Settled() {
 		t.Fatalf("control: the same response without the dispute did not discharge: %s", a.Diagnosis())
 	}
 }
@@ -304,8 +309,86 @@ func TestAClasslessOutstandingFindingIsNeverDischargedByGuess(t *testing.T) {
 		{ID: "f1", AnsweredBy: roles.EvidenceFinding, Evidence: "go test ./..."},
 		{ID: "f1", AnsweredBy: ""},
 	} {
-		if a := accountForFindings([]roles.Finding{classless}, []findingResponse{r}, movedReferenced, b); a.Settled() {
+		if a := accountForFindings([]roles.Finding{classless}, []findingResponse{r}, movedReferenced, b, readBackAll); a.Settled() {
 			t.Fatalf("a classless finding was discharged by %+v", r)
 		}
+	}
+}
+
+// RETAINED EVIDENCE IS PART OF WHAT A REVIEW JUDGED. An EVIDENCE finding is
+// answered on unchanged bytes, so a review raised before the proof was retained
+// and an ACCEPT after it are about different evidence: new proof, not a
+// reviewer-only flip. The same retained proof written twice, or listed in
+// another order, is not new; and with no retained proof the N2b contradiction
+// still stands.
+//
+// Fails if retained identities stop entering the identity (the first check),
+// or if duplicates or order perturb it (the contradiction is then lost).
+func TestRetainedEvidenceEntersTheReviewIdentityAndDuplicatesDoNot(t *testing.T) {
+	b := n2bBundle("ok")
+	const proof, other = "sha256:retained-f2", "sha256:retained-f3"
+	open := openReviewFrom(revise("codex"), 1, b.DiffDigest, evidenceIdentity(b, n2bAudit))
+
+	if open.contradicts(accept("claude"), b.DiffDigest, evidenceIdentity(b, n2bAudit, proof)) {
+		t.Fatal("an ACCEPT after the demanded proof was retained was read as a reviewer-only contradiction")
+	}
+	if !open.contradicts(accept("claude"), b.DiffDigest, evidenceIdentity(b, n2bAudit)) {
+		t.Fatal("control: with nothing retained, the ACCEPT on the unchanged candidate must still contradict")
+	}
+
+	once := evidenceIdentity(b, n2bAudit, proof, other)
+	for name, got := range map[string]string{
+		"duplicate write": evidenceIdentity(b, n2bAudit, proof, other, proof),
+		"reordered":       evidenceIdentity(b, n2bAudit, other, proof),
+		"blank entries":   evidenceIdentity(b, n2bAudit, "", proof, " ", other),
+	} {
+		if got != once {
+			t.Fatalf("%s perturbed the evidence identity", name)
+		}
+	}
+	retainedOpen := openReviewFrom(revise("codex"), 2, b.DiffDigest, once)
+	if !retainedOpen.contradicts(accept("claude"), b.DiffDigest, evidenceIdentity(b, n2bAudit, other, proof, proof)) {
+		t.Fatal("the same retained proof written again was read as new evidence")
+	}
+}
+
+// At the predicate: the executed check the proof gap names does not discharge
+// an EVIDENCE finding until a record of it was read back; a failing run meets a
+// finding that asks for one, and not one that asks for a passing run.
+func TestAnEvidenceFindingNeedsARecordReadBack(t *testing.T) {
+	b := n2bBundle("ok")
+	answer := []findingResponse{{ID: "f2", AnsweredBy: roles.EvidenceFinding, Evidence: "go test ./..."}}
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer, movedNothing, b, nil); a.Settled() ||
+		!strings.Contains(a.Diagnosis(), "no retained record") {
+		t.Fatalf("a response naming the executed check discharged the finding without a record read back: %s", a.Diagnosis())
+	}
+	if a := accountForFindings([]roles.Finding{classedEvidence}, answer, movedNothing, b, map[string]string{"f2": "sha256:k"}); !a.Settled() ||
+		len(a.Evidenced) != 1 || a.Evidenced[0] != "f2" {
+		t.Fatalf("control: the record read back did not discharge it: %+v", a)
+	}
+
+	failingFirst := classedEvidence
+	failingFirst.ProofGap = "the failing-first run of go test ./..."
+	red := n2bBundle("FAIL")
+	red.Checks[1].Outcome, red.Checks[1].ExitStatus, red.Checks[1].Attribution = validation.Failed, 1, "candidate"
+	if a := accountForFindings([]roles.Finding{failingFirst}, answer, movedNothing, red, readBackAll); !a.Settled() {
+		t.Fatalf("the failing run a failing-first finding asks for was refused: %s", a.Diagnosis())
+	}
+	// A failure the base shares, or one never compared with the base, is not
+	// this candidate's red phase, whatever record is claimed read back for it.
+	for name, attribute := range map[string]func(*validation.Evidence){
+		"pre-existing": func(c *validation.Evidence) { c.Outcome, c.Attribution = validation.Infrastructure, "pre-existing" },
+		"unattributed": func(c *validation.Evidence) { c.Attribution = "unattributed" },
+	} {
+		notOurs := n2bBundle("FAIL")
+		notOurs.Checks[1].Outcome, notOurs.Checks[1].ExitStatus = validation.Failed, 1
+		attribute(&notOurs.Checks[1])
+		if a := accountForFindings([]roles.Finding{failingFirst}, answer, movedNothing, notOurs, readBackAll); a.Settled() ||
+			!strings.Contains(a.Diagnosis(), "is not this candidate's") {
+			t.Fatalf("%s: a failure that is not the candidate's met a failing-first finding: %s", name, a.Diagnosis())
+		}
+	}
+	if a := accountForFindings([]roles.Finding{failingFirst}, answer, movedNothing, b, readBackAll); a.Settled() {
+		t.Fatal("a passing run met a finding that asks for the failing run")
 	}
 }
