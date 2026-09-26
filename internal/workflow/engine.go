@@ -1908,6 +1908,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// converged however the diff moved, and it stops here, before a reviewer
 		// can accept the moved candidate over a finding nobody answered.
 		accounted := false
+		// unchanged is the identical-diff fact, measured once so the accounting
+		// below can tell a silent unchanged cycle from one that answered.
+		unchanged := strings.TrimSpace(verdict.InputDiffDigest) != "" && strings.TrimSpace(verdict.InputDiffDigest) == previousDiffDigest
+		// retained are the durable evidence records this cycle's accounting
+		// rests on; they enter the evidence identity the review is bound to.
+		var retained []RetainedEvidence
 		if open, ok := e.openReview(taskID); ok && workerRan {
 			if outstanding := outstandingFindings(open); len(outstanding) != 0 {
 				responses, perr := parseFindingResponses(report)
@@ -1915,7 +1921,12 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// file: a change is bound to a finding through the files it
 				// touched, never through the digest of the whole candidate.
 				moved, merr := movedPathsSince(ctx, candidate, tc.Identity.BaseSHA, open.CandidateTree, diff)
-				account := accountForFindings(outstanding, responses, moved, evidence)
+				// Evidence already retained for this exact candidate is read
+				// back from the durable record, so a handoff or a repeated
+				// cycle is not asked for the same proof again. An unreadable
+				// record credits nothing.
+				prior, rerr := e.retainedEvidence(taskID, capture.Tree)
+				account := accountForFindingsWith(outstanding, responses, moved, evidence, prior)
 				if len(account.Disputes) != 0 {
 					// A classification disagreement is a ROUTE, not a licence:
 					// it goes to the architect by the same escalation a
@@ -1959,7 +1970,37 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						account.Diagnosis() + "\n\nReconcile the current candidate with the revised plan."
 					continue
 				}
-				if !account.Settled() {
+				// Evidence is retained BEFORE anything is credited, and a
+				// discharge that cannot be made durable fails the cycle closed.
+				if len(account.Evidence) != 0 && rerr != nil && !errors.Is(rerr, errNoDurableRecord) {
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+						"the candidate did not converge: the evidence retained for this candidate could not be read back, so none is credited: %w", rerr)
+				}
+				kept, werr := e.retainDischarges(taskID, open, candidateRevision(diff), capture.Tree, account)
+				if werr != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("the candidate did not converge: %w", werr)
+				}
+				retained = kept
+				// A cycle that said nothing about any finding and did not move
+				// the candidate produced no durable response at all. That is
+				// the identical-diff backstop's case, and it keeps its own
+				// diagnosis below.
+				silent := len(responses) == 0 && perr == nil && len(retained) == 0
+				switch {
+				case account.Settled():
+					accounted = true
+				case silent && unchanged:
+				case len(retained) != 0:
+					// PRODUCED EVIDENCE, NOT CODE. Its own sentence and its own
+					// typed record: this is not "produced nothing", and the
+					// evidence stays retained for the cycle that makes the change.
+					diagnosis := producedEvidenceNotCode + ": " + account.Diagnosis()
+					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, diagnosis, map[string]any{
+						"non_convergence": "evidence_produced_change_owed", "retained_evidence": retained, "open_findings": account.Open,
+					}))
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+						"the candidate did not converge: %s", diagnosis)
+				default:
 					diagnosis := account.Diagnosis()
 					if perr != nil {
 						diagnosis += " (" + perr.Error() + ")"
@@ -1970,7 +2011,6 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 						"the candidate did not converge: %s", diagnosis)
 				}
-				accounted = true
 			}
 		}
 		// THE BACKSTOP, not the decider. A candidate that is byte-identical to
@@ -1985,7 +2025,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// judged by it: an EVIDENCE finding is discharged by evidence, and a
 		// candidate that did not move is then exactly right.
 		if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
-			if digest == previousDiffDigest && !accounted {
+			if unchanged && !accounted {
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 					"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 						"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
@@ -2098,7 +2138,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		review := standing.Verdict()
 		lastReview = review.Summary
-		evidenceID := evidenceIdentity(evidence, verdict)
+		evidenceID := withRetainedEvidence(evidenceIdentity(evidence, verdict), retained)
 		switch review.Decision {
 		case roles.Accept:
 			// The gate. A review that established no independence may accept
@@ -3410,6 +3450,19 @@ type findingAccount struct {
 	// Disputes are classification disagreements, escalated rather than acted
 	// on. Every disputed finding is also in Open.
 	Disputes []findingResponse `json:"disputes,omitempty"`
+	// Evidence are the EVIDENCE findings discharged by executed evidence, each
+	// with the check that discharged it. Nothing else can appear here: a code
+	// or scope finding is never discharged by evidence, retained or fresh.
+	Evidence []evidenceDischarge `json:"evidence,omitempty"`
+}
+
+// evidenceDischarge is one EVIDENCE finding and the executed check that met its
+// proof gap. Retained is set when the check was recovered from a durable
+// record of an earlier cycle rather than cited this cycle.
+type evidenceDischarge struct {
+	Finding  roles.Finding       `json:"finding"`
+	Check    validation.Evidence `json:"check"`
+	Retained *RetainedEvidence   `json:"retained,omitempty"`
 }
 
 // Settled reports that every outstanding finding was discharged by a response
@@ -3469,6 +3522,15 @@ func outstandingFindings(open openReview) []roles.Finding {
 // with no valid class cannot be discharged at all: nothing in the record says
 // what would discharge it, and guessing is the thing refused here.
 func accountForFindings(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle) findingAccount {
+	return accountForFindingsWith(outstanding, responses, moved, evidence, nil)
+}
+
+// accountForFindingsWith is accountForFindings with the evidence already
+// retained for THIS candidate. A retained record discharges only the EVIDENCE
+// finding it was bound to -- the same finding content, a check its proof gap
+// names -- so a handoff or a repeated cycle is not asked for proof it already
+// produced. It is never consulted for a code or scope finding.
+func accountForFindingsWith(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle, retained []RetainedEvidence) findingAccount {
 	byID := make(map[string]findingResponse, len(responses))
 	for _, r := range responses {
 		id := strings.TrimSpace(r.ID)
@@ -3482,19 +3544,24 @@ func accountForFindings(outstanding []roles.Finding, responses []findingResponse
 			account.Open = append(account.Open, openFinding{ID: f.ID, Class: f.Class, Why: why})
 		}
 		r, answered := byID[strings.TrimSpace(f.ID)]
+		prior, recovered := retainedFor(f, retained)
 		switch {
 		case !f.Class.Valid():
 			open(fmt.Sprintf("the finding carries no valid class (%q), so nothing says what would discharge it", f.Class))
-		case !answered:
-			open("no response accounted for it")
-		case r.DisputesClass != "":
+		case answered && r.DisputesClass != "":
 			account.Disputes = append(account.Disputes, r)
 			open(fmt.Sprintf("the worker disputes its class as %q; a dispute is an escalation, not a discharge", r.DisputesClass))
+		case recovered:
+			account.Evidence = append(account.Evidence, evidenceDischarge{Finding: f, Check: prior.Check, Retained: &prior})
+		case !answered:
+			open("no response accounted for it")
 		case r.AnsweredBy != f.Class:
 			open(fmt.Sprintf("answered as %q, and the reviewer recorded it as %q", r.AnsweredBy, f.Class))
 		case f.Class == roles.EvidenceFinding:
 			if why := unmetProof(f, r, evidence); why != "" {
 				open(why)
+			} else if check, ok := passingCheck(evidence, r.Evidence); ok {
+				account.Evidence = append(account.Evidence, evidenceDischarge{Finding: f, Check: check})
 			}
 		default:
 			if why := unboundChange(f, r, moved); why != "" {
@@ -3562,19 +3629,30 @@ func unmetProof(f roles.Finding, r findingResponse, b validation.Bundle) string 
 // this cycle's bundle that passed. Only the full line: a kind ("test") or a bare
 // command ("go") names every check of its sort, and so names no particular one.
 func citesPassingCheck(b validation.Bundle, cite string) bool {
+	_, ok := passingCheck(b, cite)
+	return ok
+}
+
+// passingCheck is the passed check in b whose full command line is cite.
+func passingCheck(b validation.Bundle, cite string) (validation.Evidence, bool) {
 	cite = strings.TrimSpace(cite)
 	if cite == "" {
-		return false
+		return validation.Evidence{}, false
 	}
 	for _, c := range b.Checks {
 		if c.Outcome != validation.Passed {
 			continue
 		}
-		if cite == strings.TrimSpace(c.Command+" "+strings.Join(c.Args, " ")) {
-			return true
+		if cite == commandLine(c) {
+			return c, true
 		}
 	}
-	return false
+	return validation.Evidence{}, false
+}
+
+// commandLine is the full command line a check is cited by.
+func commandLine(c validation.Evidence) string {
+	return strings.TrimSpace(c.Command + " " + strings.Join(c.Args, " "))
 }
 
 // movedPathsSince is the set of files whose content differs between the
