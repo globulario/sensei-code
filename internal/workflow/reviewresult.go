@@ -1,6 +1,10 @@
 package workflow
 
 import (
+	"errors"
+	"fmt"
+	"strings"
+
 	"github.com/globulario/sensei-code/internal/roles"
 )
 
@@ -33,6 +37,10 @@ type ReviewResult struct {
 	// verdict without also reaching what it is worth. It never implies
 	// independence -- see SatisfiesAdversarialObligation, which still says no.
 	attested *attestedVerdict
+	// refused is why a verdict was NOT given standing. A result carrying it has
+	// no standing field set, so it answers no to every question that grants
+	// anything; askReviewer reads it and routes the verdict as a review refusal.
+	refused error
 }
 
 type attestedVerdict struct {
@@ -40,16 +48,64 @@ type attestedVerdict struct {
 	attestation roles.Attestation
 }
 
+// errUnclassifiedFinding marks a verdict refused standing because a finding
+// it carries does not say what kind of thing is wrong.
+var errUnclassifiedFinding = errors.New("a governed review finding carries no valid class")
+
+// admitFindings is THE class requirement, and this file is the only place it
+// is enforced.
+//
+// A finding admitted into a ReviewResult can become outstanding repair state,
+// and what discharges it is decided by its class. So every finding crossing
+// here must carry a valid class set by the reviewer. An absent or invented
+// one is refused, never inferred: guessing from severity, wording or position
+// would hand the class to whoever wrote the guess.
+//
+// Deliberately NOT in roles.Finding, ReviewVerdict.Validate or any decoder. A
+// classless finding stays legal to decode, store, render and replay; what it
+// may not do is acquire governing force.
+func admitFindings(v roles.ReviewVerdict) error {
+	var bad []string
+	for i, f := range v.Findings {
+		if !f.Class.Valid() {
+			id := strings.TrimSpace(f.ID)
+			if id == "" {
+				id = fmt.Sprintf("#%d", i+1)
+			}
+			bad = append(bad, fmt.Sprintf("%s (class %q)", id, f.Class))
+		}
+	}
+	if len(bad) != 0 {
+		return fmt.Errorf("%w: %s; the class must be one of %s, %s or %s and comes from the reviewer",
+			errUnclassifiedFinding, strings.Join(bad, ", "), roles.CodeFinding, roles.EvidenceFinding, roles.ScopeFinding)
+	}
+	return nil
+}
+
 // independentReview is a verdict from a session this project opened and
-// observed.
-func independentReview(v roles.ReviewVerdict) ReviewResult {
-	return ReviewResult{independent: &v}
+// observed. It refuses a verdict carrying a finding with no valid class.
+func independentReview(v roles.ReviewVerdict) (ReviewResult, error) {
+	if err := admitFindings(v); err != nil {
+		return ReviewResult{}, err
+	}
+	return ReviewResult{independent: &v}, nil
 }
 
 // advisoryReview is a verdict from a context this project could not observe.
+//
+// It refuses exactly as independentReview does. The refusal travels inside the
+// result rather than beside it because this constructor has callers that pick
+// among advisory standings (attestedOrAdvisory); a refused result has no
+// standing set, and Refused says why.
 func advisoryReview(a roles.Advisory) ReviewResult {
+	if err := admitFindings(a.ReviewVerdict); err != nil {
+		return ReviewResult{refused: err}
+	}
 	return ReviewResult{advisory: &a}
 }
+
+// Refused is why this verdict was not given standing, or nil if it was.
+func (r ReviewResult) Refused() error { return r.refused }
 
 // attestedReview is an advisory verdict a local operator overrode, on their own
 // authority, for this exact candidate.
@@ -59,6 +115,9 @@ func advisoryReview(a roles.Advisory) ReviewResult {
 // review, and an unchecked one would be exactly the manufactured authority this
 // whole design refuses.
 func attestedReview(a roles.Advisory, att roles.Attestation, reviewDigest string) (ReviewResult, error) {
+	if err := admitFindings(a.ReviewVerdict); err != nil {
+		return ReviewResult{}, err
+	}
 	if err := att.Covers(a.Provenance.Binding(), reviewDigest); err != nil {
 		return ReviewResult{}, err
 	}

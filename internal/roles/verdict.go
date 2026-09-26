@@ -22,6 +22,32 @@ const (
 
 func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Minor }
 
+// FindingClass is what KIND of thing a finding says is wrong, and so what kind
+// of response can discharge it. It is closed for the same reason Severity is: a
+// class the responding party could phrase for itself is a class it could phrase
+// into whichever one is easiest to satisfy.
+//
+// The class belongs to the finding and is set by the reviewer who raised it.
+// It is optional on the wire -- a finding recorded before classes existed still
+// decodes, validates and renders -- and it is required only where a verdict
+// acquires governing standing, which is workflow.ReviewResult construction.
+type FindingClass string
+
+const (
+	// CodeFinding is a defect in the candidate. Only a code change discharges it.
+	CodeFinding FindingClass = "code"
+	// EvidenceFinding is a proof record that does not establish its claim. It
+	// is discharged by executed evidence, not by an unrelated code change.
+	EvidenceFinding FindingClass = "evidence"
+	// ScopeFinding is a change outside its declared bound.
+	ScopeFinding FindingClass = "scope"
+)
+
+// Valid reads by membership, so an absent or invented class is not valid.
+func (c FindingClass) Valid() bool {
+	return c == CodeFinding || c == EvidenceFinding || c == ScopeFinding
+}
+
 // Finding is one concrete objection, attributable to something a person can go
 // and look at.
 //
@@ -33,6 +59,9 @@ func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Mino
 type Finding struct {
 	ID       string   `json:"id"`
 	Severity Severity `json:"severity"`
+	// Class is the reviewer's statement of what kind of thing is wrong. Absence
+	// is representable here on purpose; see FindingClass.
+	Class FindingClass `json:"class,omitempty"`
 	// Claim is what the finding challenges: the assertion the candidate or its
 	// evidence makes that the reviewer believes is not established.
 	Claim string `json:"claim"`
@@ -51,7 +80,11 @@ func (f Finding) Line() string {
 		b.WriteString("[" + f.ID + "] ")
 	}
 	if f.Severity != "" {
-		b.WriteString(string(f.Severity) + ": ")
+		b.WriteString(string(f.Severity))
+		if f.Class != "" {
+			b.WriteString(" " + string(f.Class))
+		}
+		b.WriteString(": ")
 	}
 	b.WriteString(strings.TrimSpace(f.Claim))
 	if f.Reference != "" {

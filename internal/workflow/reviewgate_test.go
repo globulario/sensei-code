@@ -81,7 +81,10 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 		// a cycle spent on an unactionable objection produces a byte-identical
 		// diff. The point of this case is the ROUTE, so give it a real finding.
 		payload["summary"] = "the proof is missing"
-		payload["findings"] = []map[string]any{{"id": "1", "severity": "blocking",
+		// CODE, because a test that cannot fail is a defect only an edit
+		// repairs, and a classless finding is refused standing at ReviewResult
+		// construction before it could drive anything.
+		payload["findings"] = []map[string]any{{"id": "1", "severity": "blocking", "class": "code",
 			"claim": "the test does not fail without the fix", "reference": "main.go", "reason": "no mutation"}}
 	}
 	verdict, _ := json.Marshal(payload)
