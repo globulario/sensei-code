@@ -1536,6 +1536,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				strings.Join(guidance, "\n"), nil))
 		}
 		report := ""
+		// implemented is whether a worker was asked this cycle. Only then is
+		// there an account of the open review's findings to reconcile.
+		implemented := false
 		// A resumed awaiting-review task reviews the candidate it already has
 		// before anything touches it. Only the first cycle: if that review asks
 		// for a revision, the ordinary loop resumes and cycle two calls a worker
@@ -1550,7 +1553,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				"resuming at the review boundary: the candidate stands and owes an independent review, "+
 					"so it is reviewed before any worker is called", nil))
 		} else {
-			prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
+			// An open review is answered finding by finding, so the worker is
+			// asked for that account by id, with each finding's class.
+			accounting := ""
+			if open, ok := e.openReview(taskID); ok {
+				accounting = open.responsesPrompt()
+			}
+			implemented = true
+			prompt := implementationPrompt(*tc, plan, feedback+accounting, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
 			impl, err := e.resolveRunner(RunnerSpec{
 				Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
 			})
@@ -1898,14 +1908,89 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		if note := sensei.Discrepancy("diff audit", lastAudit, string(verdict.Decision), sensei.AuditDecisionTokens()); note != "" {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, note, auditEvidence(audit.Structured)))
 		}
+		// CONVERGENCE IS PER-FINDING ACCOUNTING, NOT A DIFF COMPARISON.
+		//
+		// Measured on the DF-19 resume: a review carried a blocking CODE finding
+		// and a major EVIDENCE finding, the worker answered the evidence one and
+		// called the review evidence-only. The identical-diff check below caught
+		// it only because nothing changed; one unrelated edited line would have
+		// carried the code defect forward as answered. So every outstanding
+		// finding is accounted for here, by id, against the class the FINDING
+		// records, before the diff is compared at all.
+		accounted := false
+		if open, ok := e.openReview(taskID); ok && implemented {
+			responses, derr := decodeFindingResponses(report)
+			if derr != nil {
+				// Malformed is reported, and grants nothing: every finding stays
+				// open by id rather than being guessed at.
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+					"the worker's per-finding account could not be read, so no finding is discharged by it: "+derr.Error(), nil))
+			}
+			acct := open.reconcile(responses, evidence.DiffDigest, evidence)
+			if !acct.Converged() {
+				diagnosis := "review findings still open after cycle " + fmt.Sprint(cycle) + ": " + acct.describe()
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, diagnosis,
+					map[string]any{"open_findings": acct.OpenIDs(), "discharged_findings": acct.Discharged, "cycle": cycle}))
+				// The backstop, after the accounting and never instead of it: an
+				// unchanged candidate with findings still open will not move by
+				// asking again.
+				if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
+					if digest == previousDiffDigest {
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+							"the candidate did not change between review cycles and %s; %s did not account for them. The last review asked for: %s",
+							diagnosis, config.DisplayName(worker.Name), oneLine(lastReview))
+					}
+					previousDiffDigest = digest
+				}
+				if len(acct.Disputed) != 0 {
+					// A disagreement is a route, not a licence: it goes to the
+					// architect and the finding stays open.
+					revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task,
+						disagreementPrompt(task, plan, lastAudit, open, acct.Disputed), "the worker disputes review findings: "+acct.describe())
+					if err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
+					if strings.TrimSpace(revised.Plan) == "" {
+						return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan for the disputed findings")
+					}
+					inputs := []roles.Claim{{Agent: open.Reviewer, Role: roles.Reviewer, Position: open.Summary}}
+					for _, r := range acct.Disputed {
+						inputs = append(inputs, roles.Claim{Agent: worker.Name, Role: roles.Implementer, Position: r.FindingID + ": " + r.Disagreement})
+					}
+					inputs = append(inputs, roles.Claim{Agent: e.architectLabel(taskID), Role: roles.Architect, Position: revised.Summary})
+					e.recordReconciliation(taskID, roles.Binding{TaskID: taskID, BaseSHA: tc.Identity.BaseSHA, CandidateDigest: candidateRevision(diff), CandidateTree: capture.Tree}, roles.Reconciliation{
+						Disputed:  "the worker disputes review findings, which remain open: " + acct.describe(),
+						Inputs:    inputs,
+						Canonical: reconciliationEvidence(lastAudit, "", revised),
+						Decision:  revised.Plan,
+						Authority: roles.ArchitectAuthority,
+						Remaining: revised.Consequences,
+					})
+					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					plan = revised.Plan
+				}
+				feedback = "The review findings below are still open and each must be accounted for by id: " + acct.describe() +
+					"\n\n" + roles.ReviewVerdict{Summary: open.Summary, Findings: open.Findings}.Instruction()
+				continue
+			}
+			e.clearOpenReview(taskID)
+			accounted = true
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+				"every outstanding review finding was accounted for by id: "+strings.Join(acct.Discharged, ", "),
+				map[string]any{"discharged_findings": acct.Discharged, "cycle": cycle}))
+		}
 		// A candidate that is byte-identical to the previous cycle means the
 		// worker read the feedback and produced the same thing again. Running
 		// the remaining cycles will produce it a third and fourth time: one
 		// real run did exactly that, three times, before timing out with no
 		// diagnosis. Stop and say so, so the next worker gets the candidate
 		// while there is still budget to do something with it.
+		//
+		// This is the backstop, not the convergence predicate. A cycle whose
+		// every finding was accounted for above may leave the diff where it was:
+		// an EVIDENCE finding answered by evidence has nothing to change.
 		if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
-			if digest == previousDiffDigest {
+			if digest == previousDiffDigest && !accounted {
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 					"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 						"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
@@ -4447,7 +4532,12 @@ Sensei's evidence is still a REVISE.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+
+Every finding must carry its class, and a finding without one is refused: "code" is a
+defect in the candidate and is answered only by a code change; "evidence" is a proof record
+that is insufficient and is answered only by execution evidence; "scope" is a change outside
+its bound. The class is yours to set and the worker's to answer, never the worker's to change.
 
 Every blocking finding must name something a worker can open. A finding with
 nowhere to point cannot be acted on, and a cycle spent on one produces an
@@ -4543,7 +4633,7 @@ ESCALATE only for a genuine architectural-authority question.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
 
 CONVERSATION WITH THE HUMAN:
 %s

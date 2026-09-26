@@ -3,6 +3,8 @@ package workflow
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -94,17 +96,226 @@ func openReviewFrom(v roles.ReviewVerdict, attempt int, candidateDigest, evidenc
 // match makes this predicate mean what its own "exact candidate" language
 // claims.
 //
-// The candidate or the evidence changing at all is taken as the mechanical
-// resolution: the finding was raised against bytes and outcomes that no longer
-// exist, and the new verdict is about new facts. That is a deliberately coarse
-// reading -- a one-character edit clears a proof-gap finding -- and it is the
-// conservative side: this check refuses to let a verdict flip on NOTHING, and
-// does not try to judge whether a change was enough.
+// This is NOT how an open review is answered. It used to be: the candidate or
+// the evidence changing at all was taken as the mechanical resolution, so a
+// one-line unrelated edit released a blocking code finding nobody had touched.
+// An open review is now answered finding by finding (see reconcile), and this
+// predicate is only the refusal to let a verdict flip on NOTHING.
 func (o openReview) contradicts(accepting roles.ReviewVerdict, candidateDigest, evidenceID string) bool {
 	return accepting.Accepts() &&
 		o.CandidateDigest != "" && o.CandidateDigest == candidateDigest &&
 		o.EvidenceIdentity != "" && o.EvidenceIdentity == evidenceID &&
 		o.CandidateTree == accepting.Provenance.CandidateTree
+}
+
+// findingAccounting is the per-finding answer to an open review: which
+// findings the implementer's responses discharged, which are still open and
+// why, and which the implementer disputed.
+type findingAccounting struct {
+	Discharged []string
+	Open       []openFinding
+	// Disputed are the disagreements the implementer raised. Every disputed
+	// finding is also in Open: a disagreement is a route, not a discharge.
+	Disputed []roles.FindingResponse
+}
+
+// openFinding is one finding the accounting could not close, named by id.
+type openFinding struct {
+	ID     string
+	Class  roles.FindingClass
+	Reason string
+}
+
+// Converged is the convergence predicate: every outstanding finding was
+// individually accounted for. It is decided here, per finding, and never by
+// whether the candidate's diff moved.
+func (a findingAccounting) Converged() bool { return len(a.Open) == 0 }
+
+// OpenIDs names what is still owed, in finding order.
+func (a findingAccounting) OpenIDs() []string {
+	ids := make([]string, 0, len(a.Open))
+	for _, f := range a.Open {
+		ids = append(ids, f.ID)
+	}
+	return ids
+}
+
+// describe states every open finding by id, class and reason.
+func (a findingAccounting) describe() string {
+	parts := make([]string, 0, len(a.Open))
+	for _, f := range a.Open {
+		parts = append(parts, fmt.Sprintf("[%s] %s: %s", f.ID, strings.ToUpper(string(f.Class)), f.Reason))
+	}
+	return strings.Join(parts, "; ")
+}
+
+// reconcile accounts for every outstanding finding of the open review against
+// the implementer's per-finding responses, on the candidate and evidence the
+// cycle actually produced.
+//
+// The class compared is ALWAYS the finding's. Beyond the response naming that
+// class, each class is discharged only by work of its own kind:
+//
+//   - CODE and SCOPE need the candidate to have changed since the finding was
+//     raised. A code defect is not answered by a paragraph, and a change out of
+//     bound is not brought back inside it without changing the change.
+//   - EVIDENCE needs execution evidence bound to this candidate. It does NOT
+//     need a code change: a proof gap answered by proof leaves the diff exactly
+//     where it was, and that is the correct shape.
+//
+// Minor findings are not outstanding; they do not affect the decision.
+// A finding answered more than once is open: two accounts of one finding are
+// not an account of it.
+func (o openReview) reconcile(responses []roles.FindingResponse, candidateDigest string, evidence validation.Bundle) findingAccounting {
+	byID := map[string][]roles.FindingResponse{}
+	for _, r := range responses {
+		id := strings.TrimSpace(r.FindingID)
+		byID[id] = append(byID[id], r)
+	}
+	var a findingAccounting
+	for _, f := range o.Findings {
+		if f.Severity == roles.Minor {
+			continue
+		}
+		stillOpen := func(reason string) { a.Open = append(a.Open, openFinding{ID: f.ID, Class: f.Class, Reason: reason}) }
+		answers := byID[strings.TrimSpace(f.ID)]
+		switch {
+		case len(answers) == 0:
+			stillOpen("no response accounts for it")
+			continue
+		case len(answers) > 1:
+			stillOpen(fmt.Sprintf("answered %d times; one finding takes one account", len(answers)))
+			continue
+		}
+		r := answers[0]
+		if r.Response == roles.ResponseDisagree {
+			a.Disputed = append(a.Disputed, r)
+			stillOpen("disputed by the implementer and escalated; a disagreement does not discharge it: " + oneLine(r.Disagreement))
+			continue
+		}
+		if err := r.Discharges(f); err != nil {
+			stillOpen(err.Error())
+			continue
+		}
+		switch f.Class {
+		case roles.ClassCode, roles.ClassScope:
+			if o.CandidateDigest == "" || candidateDigest == "" || o.CandidateDigest == candidateDigest {
+				stillOpen("declared answered, but the candidate did not change since the finding was raised")
+				continue
+			}
+		case roles.ClassEvidence:
+			if !executedFor(evidence, candidateDigest) {
+				stillOpen("declared answered by evidence, but no executed check is bound to this candidate")
+				continue
+			}
+		}
+		a.Discharged = append(a.Discharged, f.ID)
+	}
+	return a
+}
+
+// executedFor reports whether the bundle holds a check that actually ran and
+// passed against exactly this candidate.
+func executedFor(b validation.Bundle, candidateDigest string) bool {
+	if candidateDigest == "" || b.DiffDigest != candidateDigest {
+		return false
+	}
+	for _, c := range b.Checks {
+		if c.Outcome == validation.Passed {
+			return true
+		}
+	}
+	return false
+}
+
+// findingResponsesKey is the one field the implementer's accounting arrives
+// under. The decoder looks for it by name rather than taking the first JSON
+// object in the message, because an implementer's report quotes code.
+const findingResponsesKey = "finding_responses"
+
+// decodeFindingResponses reads the implementer's per-finding accounting from
+// its final message: the LAST object carrying finding_responses.
+//
+// Absent is not malformed, and neither is an empty answer: both return no
+// responses, and reconcile holds every outstanding finding open by id.
+func decodeFindingResponses(text string) ([]roles.FindingResponse, error) {
+	at := strings.LastIndex(text, `"`+findingResponsesKey+`"`)
+	if at < 0 {
+		return nil, nil
+	}
+	start := strings.LastIndex(text[:at], "{")
+	if start < 0 {
+		return nil, errors.New("the implementer's finding_responses is not inside a JSON object")
+	}
+	var wire struct {
+		Responses []roles.FindingResponse `json:"finding_responses"`
+	}
+	if err := json.NewDecoder(strings.NewReader(text[start:])).Decode(&wire); err != nil {
+		return nil, fmt.Errorf("decode the implementer's finding_responses: %w", err)
+	}
+	for i := range wire.Responses {
+		r := &wire.Responses[i]
+		r.Response = roles.ResponseKind(strings.ToLower(strings.TrimSpace(string(r.Response))))
+		r.Class = roles.FindingClass(strings.ToLower(strings.TrimSpace(string(r.Class))))
+	}
+	return wire.Responses, nil
+}
+
+// responsesPrompt asks the implementer to account for every outstanding
+// finding by id. The finding's class is printed and the implementer is told it
+// is not theirs to change.
+func (o openReview) responsesPrompt() string {
+	var b strings.Builder
+	for _, f := range o.Findings {
+		if f.Severity == roles.Minor {
+			continue
+		}
+		b.WriteString("  - " + f.ID + " (" + strings.ToUpper(string(f.Class)) + ")\n")
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return `
+
+FINDING ACCOUNTING -- every outstanding finding must be answered by id:
+` + b.String() + `Each finding's class is fixed by the finding. A CODE finding is answered only by a code change,
+an EVIDENCE finding only by execution evidence you name, a SCOPE finding only by bringing the change
+back inside its bound. If you believe a finding is wrong or misclassified, answer it with
+"disagree" and say why: that is escalated, and the finding stays open. Do not answer a finding
+as a different class; that answer is refused. A finding you do not answer stays open.
+End your final message with exactly one JSON object, and nothing after it:
+{"` + findingResponsesKey + `":[{"finding_id":"f1","response":"discharge"|"disagree","class":"code"|"evidence"|"scope","account":"what you changed, or the command you ran and its outcome","disagreement":"why the finding does not stand as recorded, only for disagree"}]}`
+}
+
+// disagreementPrompt puts an implementer's dispute of recorded findings to the
+// architect. The findings stay open whatever the architect answers: a revised
+// plan may say what is still owed, and the next cycle must account for it.
+func disagreementPrompt(task, plan, audit string, o openReview, disputed []roles.FindingResponse) string {
+	var b strings.Builder
+	for _, r := range disputed {
+		for _, f := range o.Findings {
+			if f.ID == r.FindingID {
+				b.WriteString("  " + f.Line() + "\n    implementer disputes it: " + oneLine(r.Disagreement) + "\n")
+			}
+		}
+	}
+	return fmt.Sprintf(`The implementer disputes review findings instead of answering them. A dispute is not a discharge: the findings remain open, with the class the finding records. Resolve the dispute using your architectural authority and issue a revised bounded plan that says what the candidate still owes for each disputed finding. Escalate to the human only if the decision changes human-owned intent/policy/contract/trust authority.
+
+TASK:
+%s
+
+CURRENT PLAN:
+%s
+
+SENSEI AUDIT:
+%s
+
+REVIEW (%s):
+%s
+
+DISPUTED FINDINGS:
+%s
+Return ONLY the same architecture JSON contract as before.`, task, plan, audit, o.Reviewer, o.Summary, b.String())
 }
 
 // describe is the contradiction stated once, for the event and the receipt.

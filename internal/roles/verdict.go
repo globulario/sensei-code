@@ -22,6 +22,32 @@ const (
 
 func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Minor }
 
+// FindingClass is what KIND of thing a finding says is wrong, and so what kind
+// of thing can make it right. It is a closed vocabulary and it belongs to the
+// finding, never to the party answering it.
+//
+// Measured on the DF-19 resume: a review returned a blocking CODE finding and a
+// major EVIDENCE finding, and the implementer answered the evidence one and
+// declared the review "evidence-only". Nothing tracked a finding's class through
+// to its response, so nothing objected to the reclassification. A finding that
+// carries its own class removes the question of who gets to decide it.
+type FindingClass string
+
+const (
+	// ClassCode is a defect in the candidate. Only a code change discharges it.
+	ClassCode FindingClass = "code"
+	// ClassEvidence is a proof record that is insufficient. Only execution
+	// evidence discharges it; an unrelated code change does not.
+	ClassEvidence FindingClass = "evidence"
+	// ClassScope is a change outside its bound.
+	ClassScope FindingClass = "scope"
+)
+
+// Valid is read by membership. An absent class is not valid, and nothing may
+// infer one from a finding's severity, wording or position: a class that was
+// guessed is a class somebody chose, and the easiest one to satisfy wins.
+func (c FindingClass) Valid() bool { return c == ClassCode || c == ClassEvidence || c == ClassScope }
+
 // Finding is one concrete objection, attributable to something a person can go
 // and look at.
 //
@@ -33,6 +59,10 @@ func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Mino
 type Finding struct {
 	ID       string   `json:"id"`
 	Severity Severity `json:"severity"`
+	// Class is authoritative here, at the record. A response states the class
+	// it believes it answered; that statement is compared against this one and
+	// never replaces it.
+	Class FindingClass `json:"class"`
 	// Claim is what the finding challenges: the assertion the candidate or its
 	// evidence makes that the reviewer believes is not established.
 	Claim string `json:"claim"`
@@ -51,7 +81,13 @@ func (f Finding) Line() string {
 		b.WriteString("[" + f.ID + "] ")
 	}
 	if f.Severity != "" {
-		b.WriteString(string(f.Severity) + ": ")
+		b.WriteString(string(f.Severity))
+		if f.Class != "" {
+			b.WriteString(" " + strings.ToUpper(string(f.Class)))
+		}
+		b.WriteString(": ")
+	} else if f.Class != "" {
+		b.WriteString(strings.ToUpper(string(f.Class)) + ": ")
 	}
 	b.WriteString(strings.TrimSpace(f.Claim))
 	if f.Reference != "" {
@@ -149,6 +185,9 @@ func (v ReviewVerdict) Validate(b Binding, implementer string) error {
 		if !f.Severity.Valid() {
 			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
 		}
+		if !f.Class.Valid() {
+			return fmt.Errorf("finding %d has class %q, which is not code, evidence, or scope; a finding without its own class cannot bind what answers it", i+1, f.Class)
+		}
 		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
 			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
 		}
@@ -183,6 +222,67 @@ func (v ReviewVerdict) Instruction() string {
 		return strings.TrimSpace(v.Summary)
 	}
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// ResponseKind is how an implementer answered one finding. Closed, and read by
+// membership: an answer that is neither a discharge nor a disagreement is not
+// an answer.
+type ResponseKind string
+
+const (
+	// ResponseDischarge claims the finding was answered by work of its class.
+	ResponseDischarge ResponseKind = "discharge"
+	// ResponseDisagree says the implementer believes the finding is wrong or
+	// misclassified. It is an escalation, never a discharge: the finding stays
+	// open until somebody with authority over it decides.
+	ResponseDisagree ResponseKind = "disagree"
+)
+
+func (k ResponseKind) Valid() bool { return k == ResponseDischarge || k == ResponseDisagree }
+
+// FindingResponse is the implementer's account of one finding, keyed by the
+// finding's id.
+//
+// Class is the class the implementer SAYS its answer was. It is input: it is
+// compared against the class on the finding record and can refuse a discharge,
+// but it can never make one. A responder that could state the class of what it
+// was asked to fix would choose the class easiest to satisfy.
+type FindingResponse struct {
+	FindingID string       `json:"finding_id"`
+	Response  ResponseKind `json:"response"`
+	Class     FindingClass `json:"class"`
+	// Account is what was done: the change made, the command executed and its
+	// outcome, or the scope correction.
+	Account string `json:"account"`
+	// Disagreement is why the implementer believes the finding does not stand
+	// as recorded. Required for a disagreement, meaningless otherwise.
+	Disagreement string `json:"disagreement,omitempty"`
+}
+
+// Discharges reports why this response does NOT discharge the recorded
+// finding, or nil when, as far as the response itself goes, it does. The class
+// compared is the finding's; the response's class only ever narrows.
+func (r FindingResponse) Discharges(f Finding) error {
+	if strings.TrimSpace(r.FindingID) != strings.TrimSpace(f.ID) {
+		return fmt.Errorf("response is about %q, not finding %q", r.FindingID, f.ID)
+	}
+	if !f.Class.Valid() {
+		return fmt.Errorf("finding %s carries no valid class, so nothing can be checked as answering it", f.ID)
+	}
+	switch r.Response {
+	case ResponseDisagree:
+		return fmt.Errorf("finding %s was disputed, not answered: a disagreement is escalated and the finding stays open", f.ID)
+	case ResponseDischarge:
+	default:
+		return fmt.Errorf("finding %s was answered with %q, which is neither %q nor %q", f.ID, r.Response, ResponseDischarge, ResponseDisagree)
+	}
+	if r.Class != f.Class {
+		return fmt.Errorf("finding %s is a %s finding and the response answered it as %q; the class is the finding's, not the responder's", f.ID, strings.ToUpper(string(f.Class)), r.Class)
+	}
+	if strings.TrimSpace(r.Account) == "" {
+		return fmt.Errorf("finding %s was declared answered without saying how", f.ID)
+	}
+	return nil
 }
 
 func roleOrUnknown(r Role) string {
@@ -254,6 +354,9 @@ func (a Advisory) Validate(b Binding, implementer string) error {
 	for i, f := range a.Findings {
 		if !f.Severity.Valid() {
 			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
+		}
+		if !f.Class.Valid() {
+			return fmt.Errorf("finding %d has class %q, which is not code, evidence, or scope; a finding without its own class cannot bind what answers it", i+1, f.Class)
 		}
 		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
 			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
