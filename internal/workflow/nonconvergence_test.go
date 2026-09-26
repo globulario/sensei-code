@@ -327,6 +327,13 @@ func scriptedLoop(t *testing.T, findings string, moves bool, answer string) (h *
 	h.engine.Config.Reviewer = config.Agent{Name: "codex", Command: "sh", Args: []string{reviewerScript}, Graph: "none"}
 	h.engine.Config.Workflow.ReviewCycles = 2
 	h.engine.Runners = nil
+	// A durable session record, as every production engine has: evidence a
+	// review demanded is retained there, and nowhere else.
+	store, err := session.New(dir+"/record", h.engine.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.engine.Store = store
 	return h, reviews
 }
 
@@ -416,11 +423,9 @@ func TestW3AMovedDiffDoesNotDischargeAnUnaddressedCodeFinding(t *testing.T) {
 // control cites gofmt, which also ran and passed but is not the proof asked
 // for: the finding stays open and the reviewer is never asked again.
 //
-// What happens after the discharge is not this witness's: an ACCEPT on the
-// same bytes and the same evidence identity meets the existing contradiction
-// rule (reviewconsistency.go), because this engine has no durable place yet for
-// the evidence a review demanded. That is the companion evidence-durability
-// objective, so the assertion stops at the discharge.
+// What happens after the discharge is not this witness's: whether the evidence
+// is retained, and what the second review makes of it, are the retained-
+// evidence witnesses below, so the assertion stops at the discharge.
 //
 // Fails if the backstop decides over a settled account, if the check the proof
 // gap names stops discharging it, or if any passing check does.
@@ -613,4 +618,395 @@ func TestW7AClasslessFindingIsValidWireDataAndRefusedOnlyAtTheBoundary(t *testin
 			t.Fatalf("%s: a refused verdict still carried findings into repair state: %+v", mode, res.Verdict())
 		}
 	}
+}
+
+// RETAINED EVIDENCE: the loop-level witnesses.
+//
+// Measured on the DF-19 resume, 2026-09-25: an EVIDENCE finding was answered
+// with exactly the executed proof it asked for, the diff was rightly unchanged,
+// and the run ended "the candidate did not change between review cycles". The
+// proof lived only in a transcript. These drive the REAL candidate loop for two
+// cycles; the durable record is read back from a freshly opened session store,
+// never from the events the run published.
+
+// evidenceLoop is scriptedLoop with the check the EVIDENCE finding's proof gap
+// names configured, so an answer citing it is backed by an executed pass.
+func evidenceLoop(t *testing.T, findings, answer string) (*gateHarness, string) {
+	t.Helper()
+	h, reviews := scriptedLoop(t, findings, false, answer)
+	h.engine.Config.Permissions.RunTests = true
+	h.engine.Config.Validation.Test = []config.Command{{Command: "test", Args: []string{"-s", "main.go"}}}
+	return h, reviews
+}
+
+const answersEvidence = `{"finding_responses":[{"id":"f2","answered_by":"evidence","evidence":"test -s main.go"}]}`
+
+// durableEvidence reads every retained record for the harness's task from a
+// NEW store opened on the same session record: what survives the run.
+func durableEvidence(t *testing.T, reviews string) []RetainedEvidence {
+	t.Helper()
+	store, err := session.New(strings.TrimSuffix(reviews, "/reviews")+"/record", "session-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, err := store.Load()
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatalf("the durable record does not read back: %v", err)
+	}
+	var out []RetainedEvidence
+	for _, ev := range events {
+		if ev.Kind != event.FindingEvidenceRetained {
+			continue
+		}
+		r, err := ParseRetainedEvidence(ev.Payload)
+		if err != nil {
+			t.Fatalf("a retained evidence record does not parse: %v", err)
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+// RETAINED W1 AN EVIDENCE-ONLY CYCLE CONVERGES. The worker changes nothing and
+// answers the EVIDENCE finding with the executed check its proof gap names. The
+// run is NOT reported as "the candidate did not change": the diagnosis is
+// absent, the reviewer is asked again, and its ACCEPT stands -- the retained
+// evidence is the evidence changing, so it is not read as a contradiction on
+// an unchanged candidate.
+//
+// Fails if the identical-diff backstop decides over a settled account, or if
+// retained evidence does not reach the evidence identity the second review is
+// bound to (the ACCEPT then goes to the architect as a contradiction).
+func TestRetainedW1AnEvidenceOnlyCycleIsNotReportedAsUnchanged(t *testing.T) {
+	h, reviews := evidenceLoop(t, evidenceFinding, answersEvidence)
+	outcome, err := h.runTwoCycles()
+
+	if err != nil && strings.Contains(err.Error(), "did not change between review cycles") {
+		t.Fatalf("an evidence-only cycle was reported as producing nothing: %v", err)
+	}
+	if err != nil || !outcome.Accepted() {
+		t.Fatalf("an evidence-only cycle answered with the proof it asked for did not converge: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, reviews); got != "2" {
+		t.Fatalf("the reviewer was asked %s times; the discharged finding goes back to the reviewer", got)
+	}
+	for _, ev := range drainEvents(h.events) {
+		if ev.Kind == event.ReviewContradiction {
+			t.Fatalf("the ACCEPT after retained evidence was read as a contradiction on nothing: %s", ev.Summary)
+		}
+	}
+}
+
+// RETAINED W2 THE EVIDENCE IS DURABLE. After the run, a new store on the same
+// session record holds exactly one record, bound to the task, the finding (by
+// id, class and content), the candidate the review was raised on, the candidate
+// the check ran on, and the executed check itself.
+//
+// The control is the same cycle with no durable record: the evidence cannot be
+// retained, so it is not credited -- the run stops before the reviewer, naming
+// the retention, rather than converging on proof that exists nowhere.
+//
+// Fails if the record is written anywhere but the durable session record, if
+// any binding field is missing, or if an unretainable discharge is credited.
+func TestRetainedW2TheEvidenceIsReadableFromDurableState(t *testing.T) {
+	h, reviews := evidenceLoop(t, evidenceFinding, answersEvidence)
+	if _, err := h.runTwoCycles(); err != nil {
+		t.Fatalf("the evidence-only run failed: %v", err)
+	}
+	records := durableEvidence(t, reviews)
+	if len(records) != 1 {
+		t.Fatalf("want exactly one retained record, found %d: %+v", len(records), records)
+	}
+	var f roles.Finding
+	if err := json.Unmarshal([]byte(evidenceFinding), &f); err != nil {
+		t.Fatal(err)
+	}
+	r := records[0]
+	if r.TaskID != "task-1" || r.FindingID != "f2" || r.FindingClass != roles.EvidenceFinding || r.FindingDigest != findingDigest(f) {
+		t.Fatalf("the record is not bound to the finding it answers: %+v", r)
+	}
+	if r.CandidateTree == "" || r.CandidateDigest == "" || r.ReviewedTree != r.CandidateTree || r.ReviewedDigest == "" {
+		t.Fatalf("the record is not bound to the reviewed candidate: %+v", r)
+	}
+	if commandLine(r.Check) != "test -s main.go" || r.Check.Outcome != "passed" || r.Check.ExecutedBy == "" {
+		t.Fatalf("the record does not carry the executed check: %+v", r.Check)
+	}
+
+	control, controlReviews := evidenceLoop(t, evidenceFinding, answersEvidence)
+	control.engine.Store = nil
+	outcome, err := control.runTwoCycles()
+	if outcome.Accepted() || err == nil || !strings.Contains(err.Error(), "could not be retained durably") || !strings.Contains(err.Error(), "f2") {
+		t.Fatalf("control: evidence with nowhere durable to go was credited: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, controlReviews); got != "1" {
+		t.Fatalf("control: the reviewer was asked %s times over unretained evidence", got)
+	}
+}
+
+// RETAINED W3 PRODUCED NOTHING STILL FAILS -- CONTROL. The worker changes
+// nothing and says nothing. That is still non-convergence, and it still ends
+// with the existing identical-diff diagnosis -- not the per-finding one, and not
+// the evidence one -- and nothing is retained.
+//
+// Fails if the reorder lets a silent unchanged cycle through, or routes it to
+// any diagnosis other than the identical-diff backstop's.
+func TestRetainedW3ACycleThatProducedNothingKeepsItsDiagnosis(t *testing.T) {
+	h, reviews := evidenceLoop(t, evidenceFinding, `nothing to report`)
+	outcome, err := h.runTwoCycles()
+
+	if outcome.Accepted() || err == nil {
+		t.Fatalf("a cycle that produced nothing converged: outcome %q err %v", outcome, err)
+	}
+	if !strings.Contains(err.Error(), "did not change between review cycles") || !strings.Contains(err.Error(), "The last review asked for") {
+		t.Fatalf("the produced-nothing cycle lost its identical-diff diagnosis: %v", err)
+	}
+	if strings.Contains(err.Error(), producedEvidenceNotCode) {
+		t.Fatalf("a cycle that produced nothing was diagnosed as producing evidence: %v", err)
+	}
+	if got := reviewCalls(t, reviews); got != "1" {
+		t.Fatalf("the reviewer was asked %s times", got)
+	}
+	if records := durableEvidence(t, reviews); len(records) != 0 {
+		t.Fatalf("a cycle that produced nothing retained evidence: %+v", records)
+	}
+}
+
+// RETAINED W3b A MALFORMED OR UNRELATED REPORT IS STILL PRODUCED NOTHING --
+// CONTROL. The worker changes nothing and prints a finding accounting that
+// does not decode, or one that decodes but names no outstanding finding.
+// Neither is a durable response to anything, so each still ends with the
+// existing identical-diff diagnosis -- not the per-finding one -- and nothing
+// is retained. Whether the report happened to parse must not decide which
+// non-convergence it is.
+//
+// Fails if produced-nothing is keyed on the report parsing cleanly rather than
+// on the absence of any durable response: the malformed case then ends in the
+// per-finding diagnosis, before the backstop.
+func TestRetainedW3bAMalformedReportStillReachesTheIdenticalDiffDiagnosis(t *testing.T) {
+	for name, answer := range map[string]string{
+		"malformed": `{"finding_responses":[{"id":"f2","answered_by":"evidence",`,
+		"unrelated": `{"finding_responses":[{"id":"f9","answered_by":"evidence","evidence":"test -s main.go"}]}`,
+	} {
+		h, reviews := evidenceLoop(t, evidenceFinding, answer)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil {
+			t.Fatalf("%s: a cycle that produced nothing converged: outcome %q err %v", name, outcome, err)
+		}
+		if !strings.Contains(err.Error(), "did not change between review cycles") || !strings.Contains(err.Error(), "The last review asked for") {
+			t.Fatalf("%s: the produced-nothing cycle lost its identical-diff diagnosis: %v", name, err)
+		}
+		if strings.Contains(err.Error(), producedEvidenceNotCode) || strings.Contains(err.Error(), "[f2]") {
+			t.Fatalf("%s: a cycle that produced nothing reached a per-finding diagnosis: %v", name, err)
+		}
+		if got := reviewCalls(t, reviews); got != "1" {
+			t.Fatalf("%s: the reviewer was asked %s times", name, got)
+		}
+		if records := durableEvidence(t, reviews); len(records) != 0 {
+			t.Fatalf("%s: a cycle that produced nothing retained evidence: %+v", name, records)
+		}
+	}
+}
+
+// RETAINED W2b RECOVERY IS BOUND TO THE EXACT REVIEWED CANDIDATE -- CONTROL. A
+// record retained by one run is seeded into a fresh run whose worker says
+// nothing: same task, same finding, same candidate, same check. Seeded as
+// written, it is recovered and the cycle converges -- so the seeding itself is
+// sound. Seeded with any other reviewed candidate, or any other candidate
+// digest, it is NOT recovered: the silent cycle ends with the identical-diff
+// diagnosis and the reviewer is never asked again. A record whose reviewed
+// candidate is absent does not read back at all.
+//
+// Fails if recovery matches on anything less than the whole identity: the
+// forged record then discharges the finding and the second review accepts.
+func TestRetainedW2bARecordFromAnotherReviewedCandidateIsNotRecovered(t *testing.T) {
+	source, sourceReviews := evidenceLoop(t, evidenceFinding, answersEvidence)
+	if outcome, err := source.runTwoCycles(); err != nil || !outcome.Accepted() {
+		t.Fatalf("the source run did not converge: outcome %q err %v", outcome, err)
+	}
+	records := durableEvidence(t, sourceReviews)
+	if len(records) != 1 {
+		t.Fatalf("want one source record, found %d", len(records))
+	}
+	seeded := func(r RetainedEvidence) (candidateOutcome, error, string) {
+		t.Helper()
+		h, reviews := evidenceLoop(t, evidenceFinding, `nothing to report`)
+		if err := h.engine.Store.Append(event.New(h.engine.SessionID, "task-1", event.SourceSystem,
+			event.FindingEvidenceRetained, r.Describe(), r)); err != nil {
+			t.Fatal(err)
+		}
+		outcome, err := h.runTwoCycles()
+		return outcome, err, reviewCalls(t, reviews)
+	}
+
+	if outcome, err, calls := seeded(records[0]); err != nil || !outcome.Accepted() || calls != "2" {
+		t.Fatalf("positive control: the exact record was not recovered: outcome %q err %v reviews %s", outcome, err, calls)
+	}
+	for name, mutate := range map[string]func(*RetainedEvidence){
+		"another reviewed digest":  func(r *RetainedEvidence) { r.ReviewedDigest = "sha256:another-review" },
+		"another reviewed tree":    func(r *RetainedEvidence) { r.ReviewedTree = "another-reviewed-tree" },
+		"another candidate digest": func(r *RetainedEvidence) { r.CandidateDigest = "sha256:another-candidate" },
+	} {
+		forged := records[0]
+		mutate(&forged)
+		outcome, err, calls := seeded(forged)
+		if outcome.Accepted() || err == nil || calls != "1" {
+			t.Fatalf("%s: a record bound elsewhere discharged the finding: outcome %q err %v reviews %s", name, outcome, err, calls)
+		}
+		if !strings.Contains(err.Error(), "did not change between review cycles") {
+			t.Fatalf("%s: the silent cycle did not reach the identical-diff diagnosis: %v", name, err)
+		}
+	}
+
+	unbound := records[0]
+	unbound.ReviewedDigest, unbound.ReviewedTree = "", ""
+	raw, _ := json.Marshal(unbound)
+	if _, err := ParseRetainedEvidence(raw); err == nil || !strings.Contains(err.Error(), "reviewed candidate") {
+		t.Fatalf("a record with no reviewed candidate was read back: %v", err)
+	}
+}
+
+// RETAINED W4 A CODE-REQUIRING FINDING STILL BLOCKS -- CONTROL. The worker
+// retains exactly the proof the EVIDENCE finding asked for and changes nothing
+// for the CODE finding -- first silently, then by claiming the same check
+// answers it. Neither converges: the reviewer is never asked again, the
+// diagnosis names the code finding, and the evidence is kept for the cycle
+// that makes the change. A retained record forged to match a CODE finding, one
+// whose proof gap even names the check, discharges nothing.
+//
+// Fails if evidence -- fresh or retained -- discharges a code obligation: the
+// loop would then reach the second review, which accepts.
+func TestRetainedW4EvidenceNeverDischargesACodeObligation(t *testing.T) {
+	for name, answer := range map[string]string{
+		"silent on the code finding": answersEvidence,
+		"code answered by evidence":  `{"finding_responses":[{"id":"f1","answered_by":"evidence","evidence":"test -s main.go"},{"id":"f2","answered_by":"evidence","evidence":"test -s main.go"}]}`,
+	} {
+		h, reviews := evidenceLoop(t, codeFinding+","+evidenceFinding, answer)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil {
+			t.Fatalf("%s: evidence discharged a CODE finding: outcome %q err %v", name, outcome, err)
+		}
+		if !strings.Contains(err.Error(), "[f1] code finding") {
+			t.Fatalf("%s: the diagnosis does not name the outstanding code finding: %v", name, err)
+		}
+		if got := reviewCalls(t, reviews); got != "1" {
+			t.Fatalf("%s: the reviewer was asked %s times; an owed code change stops the cycle before review", name, got)
+		}
+		records := durableEvidence(t, reviews)
+		if len(records) != 1 || records[0].FindingID != "f2" {
+			t.Fatalf("%s: want the f2 evidence retained and nothing for f1: %+v", name, records)
+		}
+	}
+
+	var code roles.Finding
+	if err := json.Unmarshal([]byte(codeFinding), &code); err != nil {
+		t.Fatal(err)
+	}
+	code.ProofGap = "a passing run of test -s main.go on this candidate"
+	forged := RetainedEvidence{TaskID: "task-1", FindingID: code.ID, FindingClass: roles.EvidenceFinding,
+		FindingDigest: findingDigest(code), CandidateDigest: "d", CandidateTree: "t"}
+	forged.Check.Command, forged.Check.Args, forged.Check.Outcome = "test", []string{"-s", "main.go"}, "passed"
+	if a := accountForFindingsWith([]roles.Finding{code}, nil, map[string]bool{}, noChecks(accountForFindingsWith), []RetainedEvidence{forged}); a.Settled() || len(a.Evidence) != 0 {
+		t.Fatalf("a retained record discharged a CODE finding: %+v", a)
+	}
+	raw, _ := json.Marshal(RetainedEvidence{TaskID: "task-1", FindingID: "f1", FindingClass: roles.CodeFinding,
+		FindingDigest: "x", CandidateDigest: "d", CandidateTree: "t", Check: forged.Check})
+	if _, err := ParseRetainedEvidence(raw); err == nil {
+		t.Fatal("a retained record for a CODE finding was read back as evidence")
+	}
+}
+
+// noChecks is an empty validation bundle, typed from the accounting function
+// itself: the forged-record check above must be decided by the retained record
+// alone, with no executed check this cycle to discharge anything.
+func noChecks[B any](func([]roles.Finding, []findingResponse, map[string]bool, B, []RetainedEvidence) findingAccount) (empty B) {
+	return empty
+}
+
+// RETAINED W5 THE TWO DIAGNOSES DIFFER. "Produced nothing" and "produced
+// evidence, not code" end in the same terminal and must not share a sentence:
+// each carries its own text, neither carries the other's, and only the second
+// states itself as a typed record an operator can select on.
+//
+// Fails if the two are collapsed into one sentence, or if the evidence case
+// stops recording its typed non-convergence reason.
+func TestRetainedW5TheTwoDiagnosesAreDistinguishable(t *testing.T) {
+	nothing, _ := evidenceLoop(t, evidenceFinding, `nothing to report`)
+	_, nothingErr := nothing.runTwoCycles()
+	produced, _ := evidenceLoop(t, codeFinding+","+evidenceFinding, answersEvidence)
+	_, producedErr := produced.runTwoCycles()
+	if nothingErr == nil || producedErr == nil {
+		t.Fatalf("both cycles must fail to converge: nothing=%v produced=%v", nothingErr, producedErr)
+	}
+
+	const unchanged = "did not change between review cycles"
+	if !strings.Contains(nothingErr.Error(), unchanged) || strings.Contains(nothingErr.Error(), producedEvidenceNotCode) {
+		t.Fatalf("produced nothing: %v", nothingErr)
+	}
+	if !strings.Contains(producedErr.Error(), producedEvidenceNotCode) || strings.Contains(producedErr.Error(), unchanged) {
+		t.Fatalf("produced evidence, not code: %v", producedErr)
+	}
+
+	typed := func(events []event.Event) bool {
+		for _, ev := range events {
+			if strings.Contains(string(ev.Payload), `"non_convergence":"evidence_produced_change_owed"`) {
+				return true
+			}
+		}
+		return false
+	}
+	if !typed(drainEvents(produced.events)) {
+		t.Fatal("produced evidence, not code: no typed non-convergence record")
+	}
+	if typed(drainEvents(nothing.events)) {
+		t.Fatal("produced nothing was recorded as producing evidence")
+	}
+}
+
+// RETAINED W6 IDEMPOTENCE -- CONTROL. The same evidence-only cycle is run again
+// against the unchanged durable record, first answering again and then saying
+// nothing at all. Both reach the same outcome, and the record still holds one
+// retained record: both reruns recover the binding already written rather than
+// writing it again, and the silent one is credited by reading it back rather
+// than by being asked for the proof again.
+//
+// Fails if a fresh answer is preferred over the retained record (a duplicate is
+// appended), or if retained evidence is not read back at all.
+func TestRetainedW6RerunningTheSameCycleAddsNoDuplicateRecord(t *testing.T) {
+	h, reviews := evidenceLoop(t, evidenceFinding, answersEvidence)
+	if outcome, err := h.runTwoCycles(); err != nil || !outcome.Accepted() {
+		t.Fatalf("the first run did not converge: outcome %q err %v", outcome, err)
+	}
+	rerun := func(name string) {
+		t.Helper()
+		for _, counter := range []string{reviews, strings.TrimSuffix(reviews, "reviews") + "cycles"} {
+			if err := os.WriteFile(counter, []byte("0\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		outcome, err := h.runTwoCycles()
+		if err != nil || !outcome.Accepted() {
+			t.Fatalf("%s: the same cycle against the same durable state reached a different outcome: %q %v", name, outcome, err)
+		}
+		if got := reviewCalls(t, reviews); got != "2" {
+			t.Fatalf("%s: the reviewer was asked %s times", name, got)
+		}
+		if records := durableEvidence(t, reviews); len(records) != 1 {
+			t.Fatalf("%s: the rerun accumulated retained records: %d", name, len(records))
+		}
+	}
+	rerun("answering again")
+
+	script := h.worker.Args[0]
+	body, err := os.ReadFile(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	silent := strings.Replace(string(body), answersEvidence, "nothing to report", 1)
+	if silent == string(body) {
+		t.Fatal("the worker script does not carry the answer, so the silent rerun would test nothing")
+	}
+	if err := os.WriteFile(script, []byte(silent), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rerun("silent, credited from the durable record")
 }

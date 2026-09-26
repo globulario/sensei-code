@@ -203,6 +203,13 @@ const (
 	// read (M2.2): operational, never coverage. Restored on resume and
 	// inspected against after the candidate is produced.
 	TestEditGranted Kind = "testedit.granted"
+	// FindingEvidenceRetained records executed evidence that discharged a
+	// reviewer-owned EVIDENCE finding, bound to the task, the finding, the
+	// candidate the review was raised on and the candidate the check ran on.
+	// A cycle's durable output is not only its diff: without this record the
+	// proof a review demanded lived only in a transcript, and the next cycle
+	// had to produce it again. The payload is workflow.RetainedEvidence.
+	FindingEvidenceRetained Kind = "finding.evidence_retained"
 )
 
 type Event struct {
