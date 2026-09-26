@@ -319,7 +319,7 @@ func TestATerminalRelayStagesTheExactReviewAndTheAppPublishesItSeparately(t *tes
 func TestAReviewQuotingAProtocolMarkerIsStillOneReview(t *testing.T) {
 	quoting := func(claim string) string {
 		return `{"decision":"revise","summary":"the framing rule is not proven",` +
-			`"instructions":"prove it","findings":[{"id":"f1","severity":"blocking",` +
+			`"instructions":"prove it","findings":[{"id":"f1","severity":"blocking","class":"code",` +
 			`"claim":` + jsonString(claim) + `,"reference":"internal/ghbridge/architecture.go",` +
 			`"reason":"the classifier decides identity by searching the whole body",` +
 			`"correction":"identify at position zero"}]}`

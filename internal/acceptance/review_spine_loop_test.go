@@ -128,7 +128,7 @@ const (
 	loopReviewerID    = 1697116
 	loopAccept        = `{"decision":"accept","summary":"the repair carries the isolating assertion the finding asked for","instructions":"","findings":[]}`
 	loopRevise        = `{"decision":"revise","summary":"the change is not shown to be necessary","instructions":"add the proof",` +
-		`"findings":[{"id":"f1","severity":"blocking","claim":"the appended line is required","reference":"internal/report/report.go",` +
+		`"findings":[{"id":"f1","severity":"blocking","class":"code","claim":"the appended line is required","reference":"internal/report/report.go",` +
 		`"reason":"nothing fails without it","correction":"state the reason the line exists"}]}`
 )
 

@@ -1500,6 +1500,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 	// artifact is findings rather than a diff. Without it a worker that returns
 	// the same report every cycle spends the whole budget re-asserting it.
 	var previousReportRevision string
+	// lastAccounting is the most recent per-finding account that kept a cycle
+	// from review, so a spent budget names the findings it was spent on.
+	var lastAccounting string
 
 	// Candidate isolation is the blast-radius boundary, so it is checked rather
 	// than assumed: the workspace is a string threaded through several call
@@ -1536,6 +1539,9 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				strings.Join(guidance, "\n"), nil))
 		}
 		report := ""
+		// implemented: an implementer turn ran this cycle, so its answers to the
+		// outstanding findings are owed and are read below.
+		implemented := false
 		// A resumed awaiting-review task reviews the candidate it already has
 		// before anything touches it. Only the first cycle: if that review asks
 		// for a revision, the ordinary loop resumes and cycle two calls a worker
@@ -1550,7 +1556,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				"resuming at the review boundary: the candidate stands and owes an independent review, "+
 					"so it is reviewed before any worker is called", nil))
 		} else {
-			prompt := implementationPrompt(*tc, plan, feedback, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
+			owed := feedback
+			if open, ok := e.openReview(taskID); ok && tc.Mode != ModeInspect && len(open.Outstanding) != 0 {
+				// Every outstanding finding is owed an answer by id, whoever this
+				// worker is and however it arrived: a revise, a handoff or a resume.
+				owed = strings.TrimSpace(feedback + "\n\n" + open.responseInstructions())
+			}
+			prompt := implementationPrompt(*tc, plan, owed, cycle, guidance, joinGrants(renderProspectiveGrants(e.prospectiveGrants(taskID)), renderTestEditGrants(e.testEditGrants(taskID))))
 			impl, err := e.resolveRunner(RunnerSpec{
 				Role: roles.Implementer, Agent: worker, Source: sourceFor(worker.Name), TaskID: taskID, Env: guardEnv,
 			})
@@ -1571,6 +1583,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("implementor cycle %d: %w", cycle, err)
 			}
 			report = strings.TrimSpace(result.Text)
+			implemented = true
 		}
 
 		candidate := gitx.Repo{Root: workspace}
@@ -1716,6 +1729,46 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				len(changedPaths(diff)), strings.Join(changedPaths(diff), ", "))
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceGit, event.CandidateChanged, fmt.Sprintf("candidate diff %d bytes · cycle %d", len(diff), cycle), map[string]int{"cycle": cycle, "review_attempt": e.reviewAttempt(taskID) + 1}))
+
+		// PER-FINDING ACCOUNTING, before anything else is spent on the cycle.
+		//
+		// Every outstanding finding must be answered by id, in the kind its
+		// recorded class requires. Convergence is decided here and by the next
+		// review's resolutions, not by whether the diff moved: a cycle that
+		// changes an unrelated line and leaves a code finding unanswered has not
+		// converged, and a cycle that answers an evidence finding with evidence
+		// alone has not failed to respond.
+		evidenceOnly := false
+		if open, ok := e.openReview(taskID); ok && implemented && len(open.Outstanding) != 0 {
+			responses, parseErr := parseFindingResponses(report)
+			acct := open.account(responses, parseErr, capture.Tree, candidateRevision(diff))
+			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, acct.describe(), acct))
+			if len(acct.Disagreements) != 0 {
+				// A disagreement is a route, not a licence. The architect decides
+				// whether the plan changes; the finding stays in the ledger either
+				// way, because only an independent review resolves it.
+				lastAccounting = acct.describe()
+				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, disagreementPrompt(task, plan, open, acct.Disagreements),
+					"the implementer disagrees with outstanding finding(s): "+lastAccounting)
+				if err != nil {
+					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("%s: %w", lastAccounting, err)
+				}
+				if strings.TrimSpace(revised.Plan) == "" {
+					return candidateNotConverged, plan, lastReview, lastAudit, errors.New("architect did not return a revised bounded plan for the disputed findings")
+				}
+				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+				plan = revised.Plan
+				feedback = "The architect ruled on your disagreement and the plan above is the result. The disputed finding(s) are still open, " +
+					"with the class their reviewer recorded, until an independent review resolves them."
+				continue
+			}
+			if !acct.accounted() {
+				lastAccounting = acct.describe()
+				feedback = lastAccounting + "\n\n" + lastInstruction(lastReview, open)
+				continue
+			}
+			evidenceOnly = acct.EvidenceOnly
+		}
 
 		// The missing edge: worker → change → validation → typed evidence →
 		// reviewer. Without it the reviewer correctly refuses to accept on
@@ -1904,8 +1957,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// real run did exactly that, three times, before timing out with no
 		// diagnosis. Stop and say so, so the next worker gets the candidate
 		// while there is still budget to do something with it.
+		//
+		// It is a BACKSTOP. It runs after the per-finding accounting, and a cycle
+		// the accounting found to have answered only evidence findings, each with
+		// evidence, owes no change to the candidate: an unchanged diff is then the
+		// correct answer, not a worker ignoring its feedback.
 		if digest := strings.TrimSpace(verdict.InputDiffDigest); digest != "" {
-			if digest == previousDiffDigest {
+			if digest == previousDiffDigest && !evidenceOnly {
 				return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 					"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
 						"The last review asked for: %s", config.DisplayName(worker.Name), oneLine(lastReview))
@@ -1984,8 +2042,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// conditions that were never true.
 		e.classifyForDarkRun(sc, start, taskID, tc, diff)
 
-		standing, err := e.resolveReview(ctx, taskID, assignment,
-			reviewPacket(*tc, binding, start, plan, diff, lastAudit, reviewedValidation), worker.Name)
+		packet := reviewPacket(*tc, binding, start, plan, diff, lastAudit, reviewedValidation)
+		prior, hadPrior := e.openReview(taskID)
+		if hadPrior {
+			// The review is owed an answer to every outstanding finding by id.
+			packet.OutstandingFindings = prior.rendered()
+		}
+		standing, err := e.resolveReview(ctx, taskID, assignment, packet, worker.Name)
 		if err != nil {
 			if errors.Is(err, roles.ErrReviewUnanswered) {
 				// The candidate stands, validated and audited, and the review it
@@ -2042,7 +2105,17 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			// contradiction goes to the architect on the record. Observed on
 			// B3 N2b, where a handoff swapped worker and reviewer and the
 			// second review accepted what the first had refused, unchanged.
-			if open, ok := e.openReview(taskID); ok && open.contradicts(review, evidence.DiffDigest, evidenceID) {
+			next, refused := prior.advance(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID)
+			for _, r := range refused {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "a resolution closed nothing: "+r, nil))
+			}
+			if hadPrior && prior.contradicts(review, evidence.DiffDigest, evidenceID) {
+				open := next
+				if len(open.Outstanding) == 0 {
+					// The identity rule fired on a review with no id to answer:
+					// the record is the review that was contradicted.
+					open = prior
+				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ReviewContradiction, open.describe(review), open))
 				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, taskID, task, contradictionPrompt(task, plan, lastAudit, open, review), "two reviews of the unchanged candidate disagree: "+oneLine(open.Summary))
 				if err != nil {
@@ -2063,11 +2136,19 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					Authority: roles.ArchitectAuthority,
 					Remaining: revised.Consequences,
 				})
-				e.clearOpenReview(taskID)
 				e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
 				stands, err := adjudicationStands(revised)
 				if err != nil {
 					return candidateNotConverged, plan, lastReview, lastAudit, err
+				}
+				if stands {
+					// The architect ruled the earlier findings do not apply. That is
+					// adjudication by the party that owns the plan, on the record --
+					// not a responder reclassifying what it was asked to answer.
+					e.clearOpenReview(taskID)
+				} else {
+					// The earlier findings apply: they stay outstanding, by id.
+					e.setOpenReview(taskID, open)
 				}
 				if !stands {
 					plan = revised.Plan
@@ -2120,12 +2201,23 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			e.recordDecision(ctx, taskID, tc, start, changedPaths(diff))
 			return candidateAccepted, plan, lastReview, lastAudit, nil
 		case roles.Revise:
-			e.setOpenReview(taskID, openReviewFrom(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID))
+			next, refused := prior.advance(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID)
+			for _, r := range refused {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "a resolution closed nothing: "+r, nil))
+			}
+			e.setOpenReview(taskID, next)
 			feedback = review.Instruction()
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "review requested bounded revision; continuing autonomously", map[string]int{"cycle": cycle}))
 		case roles.Escalate:
-			// The architect's resolution is the adjudication; nothing stays open.
-			e.clearOpenReview(taskID)
+			// The architect's resolution adjudicates the escalation. It does not
+			// resolve findings earlier reviews left outstanding: those stay in the
+			// ledger, less whatever this review itself resolved, and the next
+			// review is still owed an answer to each.
+			if next, _ := prior.advance(review, e.reviewAttempt(taskID), evidence.DiffDigest, evidenceID); len(next.Outstanding) != 0 {
+				e.setOpenReview(taskID, next)
+			} else {
+				e.clearOpenReview(taskID)
+			}
 			// The reviewer reaches the architect, never the human. A reviewer
 			// that could interrupt a person directly would let one nervous
 			// model manufacture a Level-3 event, which is the mirror image of
@@ -2155,7 +2247,33 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("unsupported review decision %q", review.Decision)
 		}
 	}
-	return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("%w after %d review cycles", errReviewCyclesExhausted, e.Config.Workflow.ReviewCycles)
+	return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf("%w after %d review cycles%s", errReviewCyclesExhausted, e.Config.Workflow.ReviewCycles, e.outstandingSuffix(taskID, lastAccounting))
+}
+
+// outstandingSuffix names, for a spent budget, what the budget was spent on:
+// the last per-finding account that kept a cycle from review, and every finding
+// still outstanding.
+func (e *Engine) outstandingSuffix(taskID, lastAccounting string) string {
+	var parts []string
+	if lastAccounting != "" {
+		parts = append(parts, lastAccounting)
+	}
+	if open, ok := e.openReview(taskID); ok && len(open.Outstanding) != 0 {
+		parts = append(parts, "outstanding findings: "+open.outstandingIDs())
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "; " + strings.Join(parts, "; ")
+}
+
+// lastInstruction is what the last review asked for, re-stated for a cycle the
+// accounting sent back without a review.
+func lastInstruction(lastReview string, open openReview) string {
+	if r := strings.TrimSpace(lastReview); r != "" {
+		return "The last review said: " + r
+	}
+	return "Outstanding: " + open.outstandingIDs()
 }
 
 // planMode normalises the architect's declaration.
@@ -2245,10 +2363,11 @@ type architectureDecision struct {
 // here rather than asked for, because an artifact that states its own identity
 // can state a convenient one.
 type reviewDecision struct {
-	Decision     string          `json:"decision"`
-	Summary      string          `json:"summary"`
-	Instructions string          `json:"instructions,omitempty"`
-	Findings     []roles.Finding `json:"findings,omitempty"`
+	Decision     string             `json:"decision"`
+	Summary      string             `json:"summary"`
+	Instructions string             `json:"instructions,omitempty"`
+	Findings     []roles.Finding    `json:"findings,omitempty"`
+	Resolutions  []roles.Resolution `json:"resolutions,omitempty"`
 }
 
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
@@ -3082,6 +3201,7 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 			Summary:      strings.TrimSpace(d.Summary),
 			Instructions: d.Instructions,
 			Findings:     numberFindings(d.Findings),
+			Resolutions:  d.Resolutions,
 		}
 		// A turn this project did not open cannot be certified as isolated, so
 		// it takes the advisory path -- every other rule, none of the standing.
@@ -4447,13 +4567,21 @@ Sensei's evidence is still a REVISE.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"specific repair instructions when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"what the candidate or its evidence asserts that you do not accept","reference":"file, component, or piece of evidence","reason":"why","correction":"the repair required","proof_gap":"the proof that is missing, if that is the issue"}]%s}
 
 Every blocking finding must name something a worker can open. A finding with
 nowhere to point cannot be acted on, and a cycle spent on one produces an
 identical diff and consumes the budget for nothing. Do not return ACCEPT while
 recording a blocking finding.
 
+Every finding needs a unique id and a class, and the class decides what may
+discharge it: "code" is a defect in the candidate and only a change to the
+candidate discharges it; "evidence" is a proof record that does not establish
+what it must, and evidence discharges it with no change to the candidate;
+"scope" is work outside the plan's bound, discharged by changing the candidate.
+State the class yourself. A finding without one is refused, and nobody else
+may supply or change it.
+%s
 CANDIDATE REVISION: %s
 This verdict is bound to that revision. If the worker changes the candidate,
 your verdict no longer applies to it and will not be carried forward.
@@ -4488,8 +4616,37 @@ and proves nothing.
 %s
 
 CANDIDATE DIFF:
-%s`, shortDigest(p.Provenance.CandidateDigest), conversationOrNone(p.Conversation), intentOrNone(p.ArchitectIntent),
+%s`, resolutionsSchema(p), outstandingSection(p), shortDigest(p.Provenance.CandidateDigest), conversationOrNone(p.Conversation), intentOrNone(p.ArchitectIntent),
 		p.WorkspaceAuthority, p.Preflight, p.Task, planSourceLabel(p), p.Plan, p.Audit, p.Validation, p.Diff)
+}
+
+// resolutionsSchema is the resolutions member of the verdict contract, asked
+// for only when earlier findings are outstanding.
+func resolutionsSchema(p roles.IndependentReviewPacket) string {
+	if strings.TrimSpace(p.OutstandingFindings) == "" {
+		return ""
+	}
+	return `,
+ "resolutions":[{"finding_id":"the outstanding finding's id","outcome":"resolved"|"open","basis":"what in this candidate or its evidence the answer rests on"}]`
+}
+
+// outstandingSection puts the findings earlier reviews left unresolved before
+// the reviewer, as the reviewers recorded them. It carries nothing the
+// implementer said about them.
+func outstandingSection(p roles.IndependentReviewPacket) string {
+	if strings.TrimSpace(p.OutstandingFindings) == "" {
+		return ""
+	}
+	return `
+OUTSTANDING FINDINGS FROM EARLIER REVIEWS -- answer every one by id in "resolutions":
+` + p.OutstandingFindings + `
+
+Resolve a finding only when THIS candidate and its evidence establish that it no longer holds.
+A code or scope finding is resolved only by a change that repairs it; an unrelated change does
+not resolve it. An evidence finding is resolved only by evidence that establishes what it asked
+for. A finding you do not resolve stays open, and so does one you do not mention. If a finding
+still holds, answer "open" for it; do not raise it again under a new id.
+`
 }
 
 // planSourceLabel qualifies the plan heading a reviewer reads. An architect's
@@ -4543,7 +4700,11 @@ ESCALATE only for a genuine architectural-authority question.
 
 `+ReviewPayloadHeading+`
 {"decision":"accept"|"revise"|"escalate","summary":"...","instructions":"what the inspection must add or establish when revise/escalate",
- "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+ "findings":[{"id":"f1","severity":"blocking"|"major"|"minor","class":"code"|"evidence"|"scope","claim":"the assertion in the report you do not accept as established","reference":"the finding or section","reason":"why","correction":"the evidence or coverage required","proof_gap":"what is missing"}]}
+
+Every finding needs a unique id and a class, stated by you: "evidence" when a finding lacks the
+support to stand, "scope" when the plan's scope was not covered, "code" when the report is wrong
+about the code. A finding without a class is refused.
 
 CONVERSATION WITH THE HUMAN:
 %s
@@ -5200,6 +5361,15 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			_ = state.Save(e.Repo.Root)
 			handoff := handoffPacket(state, roles.Binding{TaskID: taskID, BaseSHA: identity.BaseSHA},
 				config.DisplayName(worker.Name), start.GraphBuildCommit(), e.Config.Workflow.ReviewCycles, e.Config.Workflow.ReviewCycles)
+			if open, ok := e.openReview(taskID); ok && len(open.Outstanding) != 0 {
+				// The ledger travels as the reviewers recorded it -- ids and
+				// classes intact -- ahead of the handover's own notes, whose
+				// positional ids are renamed so no two entries share a name.
+				for i := range handoff.OpenFindings {
+					handoff.OpenFindings[i].ID = "note-" + handoff.OpenFindings[i].ID
+				}
+				handoff.OpenFindings = append(open.findings(), handoff.OpenFindings...)
+			}
 			if err := handoff.Continuity(roles.Binding{TaskID: taskID, BaseSHA: identity.BaseSHA}); err != nil {
 				// A handoff that does not continue this task would start the
 				// next worker over on the same branch, which looks like progress
@@ -5375,10 +5545,14 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	if len(failures) > 0 && len(exhausted) == len(failures) && len(unavailable) == 0 {
 		state.Phase = taskstate.Revising
 		_ = state.Save(e.Repo.Root)
-		e.endNotConverged(taskID, NotConverged{
+		n := NotConverged{
 			TaskID: taskID, Implementers: exhausted,
 			ReviewCycles: e.Config.Workflow.ReviewCycles, Owed: OwedArchitectReplan,
-		})
+		}
+		if open, ok := e.openReview(taskID); ok {
+			n.Outstanding = open.Outstanding
+		}
+		e.endNotConverged(taskID, n)
 		return
 	}
 	if len(failures) == 0 && len(ineligible) > 0 {
@@ -5893,11 +6067,20 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				fail(fmt.Errorf("the task cannot be resumed at its owed re-plan: %w", err))
 				return
 			}
+			// The finding ledger the record carried is restored before anything
+			// else runs: the re-plan is asked about it, and every later cycle
+			// and review is owed an answer to each id in it.
+			if carriedFindings := outstandingFrom(task.NotConverged); len(carriedFindings) != 0 {
+				e.setOpenReview(task.TaskID, openReview{
+					Summary:     "restored from the non-convergence record",
+					Outstanding: carriedFindings,
+				})
+			}
 			if owed {
 				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 					"resuming the same task at the architect re-plan it is owed: "+why, nil))
 				revised, err := e.resolveArchitectureForRevision(ctx, sc, start, task.TaskID, task.Task,
-					replanPrompt(task.Task, plan, why, task.Review), why)
+					replanPrompt(task.Task, plan, why, withOutstanding(task.Review, e, task.TaskID)), why)
 				if err != nil {
 					fail(err)
 					return
@@ -5942,6 +6125,16 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		e.implement(ctx, sc, start, task.TaskID, &tc, plan, carried, fail)
 	}()
 	return task.TaskID
+}
+
+// withOutstanding adds the restored finding ledger, with ids and classes, to
+// the review text a re-plan is asked about.
+func withOutstanding(review string, e *Engine, taskID string) string {
+	open, ok := e.openReview(taskID)
+	if !ok || len(open.Outstanding) == 0 {
+		return review
+	}
+	return strings.TrimSpace(review + "\n\nOUTSTANDING BY ID (class as each reviewer recorded it):\n" + open.rendered())
 }
 
 // applyPlanScope is the one mapping from a plan to the scope a candidate is

@@ -121,6 +121,16 @@ type IndependentReviewPacket struct {
 	// still a question a second agent has to answer, which is the whole reason
 	// the reviewer is independent.
 	Report string `json:"report,omitempty"`
+	// OutstandingFindings are the findings earlier reviews raised that no
+	// review has yet resolved, one Finding.Line per finding, each carrying its
+	// id and the class its reviewer gave it. The reviewer must answer every one
+	// by id. They are the reviewers' own record, not the implementer's account
+	// of them: what the implementer said it did about a finding has no field
+	// here, for the same reason its reasoning has none.
+	//
+	// Rendered rather than a slice so the packet stays a comparable value; the
+	// structured ledger they are rendered from is the engine's.
+	OutstandingFindings string `json:"outstanding_findings,omitempty"`
 }
 
 // Inspection reports whether this packet is about findings rather than a change.
