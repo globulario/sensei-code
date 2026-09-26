@@ -434,15 +434,15 @@ func TestLoadingV1WritesNothing(t *testing.T) {
 // how a future shape gets read as a present one, so it is refused.
 func TestUnknownFutureVersionIsRefusedNotUpgraded(t *testing.T) {
 	dir := t.TempDir()
-	writeV1(t, dir, "t-v3", `{"version":3,"task_id":"t-v3","session_id":"s"}`)
-	_, ok, err := Load(dir, "t-v3")
+	writeV1(t, dir, "t-v4", `{"version":4,"task_id":"t-v4","session_id":"s"}`)
+	_, ok, err := Load(dir, "t-v4")
 	if err == nil {
 		t.Fatal("a future version was accepted")
 	}
 	if ok {
 		t.Fatal("a future version reported a usable state")
 	}
-	if !strings.Contains(err.Error(), "version 3") {
+	if !strings.Contains(err.Error(), "version 4") {
 		t.Fatalf("refusal does not name the version it refused: %v", err)
 	}
 }
@@ -986,5 +986,163 @@ func TestRunScopedObservationCannotCarryACandidateIdentity(t *testing.T) {
 	}
 	if loaded.Observations[0].Candidate != (CandidateIdentity{}) {
 		t.Fatalf("a persisted run-scoped observation kept its candidate: %+v", loaded.Observations[0].Candidate)
+	}
+}
+
+// failingFirst is the artifact the DF-19 review asked for: the witness run
+// against the preserved implementation, FAILING, with its output retained.
+func failingFirst() RetainedEvidence {
+	return RetainedEvidence{
+		Candidate: candidateA(), FindingID: "f2", FindingClass: "evidence",
+		Command: "go test ./internal/workflow -run TestW4", Outcome: EvidenceFailed, ExitStatus: 1,
+		Attribution:  "candidate",
+		Output:       "--- FAIL: TestASurfaceDeclarationAloneDoesNotAuthorizeACreation\nFAIL github.com/globulario/sensei-code/internal/workflow\n",
+		OutputDigest: "sha256:4f2a0c7d9e1b3a5c",
+		Producer:     "sensei-code execution broker", Source: "validation bundle", Cycle: 2,
+		RetainedAt: time.Date(2026, 9, 25, 12, 0, 0, 0, time.UTC),
+	}
+}
+
+// W2 THE EVIDENCE IS DURABLE. What a cycle retained is read back from the file,
+// not from anything the run kept in memory: its candidate and finding binding,
+// its FAILING outcome and exit status, its output and digest. It answers only
+// the candidate it ran against, and a later Save from a projection that never
+// saw it -- the shape of every engine write of task state -- does not erase it.
+// Non-execution is refused before it is written.
+//
+// Fails if the record is not serialized, if a field of the binding or the
+// execution is lost on the round trip, if a failing run is not retainable, if
+// it answers another candidate, or if Save overwrites rather than keeps it.
+func TestW2RetainedEvidenceSurvivesSaveAndLoadBoundToItsCandidateAndFinding(t *testing.T) {
+	dir := t.TempDir()
+	want := failingFirst()
+	if err := RetainEvidence(dir, "task-9", want); err != nil {
+		t.Fatalf("failing-first evidence was not retained: %v", err)
+	}
+
+	// A later write by a holder that never saw the record.
+	projection := sample()
+	projection.Phase = Revising
+	if err := projection.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	loaded, ok, err := Load(dir, "task-9")
+	if err != nil || !ok {
+		t.Fatalf("load: %v ok=%v", err, ok)
+	}
+	if loaded.Phase != Revising {
+		t.Fatalf("the later Save did not land: %q", loaded.Phase)
+	}
+	got := loaded.RetainedFor(candidateA())
+	if len(got) != 1 {
+		t.Fatalf("the retained evidence was not read back for its candidate: %+v", loaded.Retained)
+	}
+	r := got[0]
+	if !r.Candidate.Equal(want.Candidate) || r.FindingID != "f2" || r.FindingClass != "evidence" ||
+		r.Command != want.Command || r.Outcome != EvidenceFailed || r.ExitStatus != 1 ||
+		r.Output != want.Output || r.OutputDigest != want.OutputDigest || r.Attribution != "candidate" ||
+		r.Producer == "" || r.Source == "" || r.Cycle != 2 || !r.RetainedAt.Equal(want.RetainedAt) {
+		t.Fatalf("the round trip lost part of the record:\n got %+v\nwant %+v", r, want)
+	}
+	if r.Key() != want.Key() || r.Identity() != want.Identity() {
+		t.Fatal("the record's identity changed across the round trip")
+	}
+	if other := loaded.RetainedFor(candidateB()); len(other) != 0 {
+		t.Fatalf("evidence about one candidate answered another: %+v", other)
+	}
+	if out := loaded.Handover("", loaded.GraphBuildCommit); !strings.Contains(out, "RETAINED EVIDENCE") ||
+		!strings.Contains(out, "[f2] FAILED exit 1: "+want.Command) {
+		t.Fatalf("the handover does not render the retained evidence:\n%s", out)
+	}
+
+	// Non-execution, and a record that answers a code finding, are refused.
+	for name, mutate := range map[string]func(*RetainedEvidence){
+		"not permitted": func(r *RetainedEvidence) { r.Outcome = "NOT_PERMITTED" },
+		"no outcome":    func(r *RetainedEvidence) { r.Outcome = "" },
+		"code finding":  func(r *RetainedEvidence) { r.FindingClass = "code" },
+		"no candidate":  func(r *RetainedEvidence) { r.Candidate = CandidateIdentity{} },
+		"no digest":     func(r *RetainedEvidence) { r.OutputDigest = "" },
+		"unsourced":     func(r *RetainedEvidence) { r.Producer = "" },
+	} {
+		bad := failingFirst()
+		bad.FindingID = "f-" + strings.ReplaceAll(name, " ", "-")
+		mutate(&bad)
+		if err := RetainEvidence(dir, "task-9", bad); err == nil {
+			t.Fatalf("%s: a record that is not executed evidence for an evidence finding was retained", name)
+		}
+	}
+	after, _, _ := Load(dir, "task-9")
+	if len(after.Retained) != 1 {
+		t.Fatalf("a refused record reached the file: %+v", after.Retained)
+	}
+}
+
+// Versions 1 and 2 predate retained evidence and are upgraded holding none.
+func TestOlderVersionsUpgradeWithoutInventingRetainedEvidence(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-v1", `{"version":1,"task_id":"t-v1","session_id":"s","evidence":{"audit_verdict":"pass"}}`)
+	writeV1(t, dir, "t-v2", `{"version":2,"task_id":"t-v2","session_id":"s","phase":"revising"}`)
+	for _, id := range []string{"t-v1", "t-v2"} {
+		s, ok, err := Load(dir, id)
+		if err != nil || !ok {
+			t.Fatalf("%s did not load: %v", id, err)
+		}
+		if s.Version != Version || len(s.Retained) != 0 {
+			t.Fatalf("%s: version %d, retained %+v", id, s.Version, s.Retained)
+		}
+	}
+}
+
+// W6 IDEMPOTENCE -- CONTROL. The same execution retained again, through the
+// store or by a later Save carrying it, is one record; a second run that
+// reports another outcome for the same execution does not rewrite the first.
+// A retention time is not part of what the record is.
+//
+// Fails if retaining appends by call rather than by key, if Save's merge
+// duplicates a record both sides hold, or if a later outcome replaces an
+// earlier one.
+func TestW6RetainingTheSameEvidenceTwiceHoldsOneRecordAndOneOutcome(t *testing.T) {
+	dir := t.TempDir()
+	first := failingFirst()
+	again := failingFirst()
+	again.RetainedAt = first.RetainedAt.Add(time.Hour)
+	again.Cycle = 3
+	for _, r := range []RetainedEvidence{first, again} {
+		if err := RetainEvidence(dir, "task-9", r); err != nil {
+			t.Fatalf("the same record retained again was refused: %v", err)
+		}
+	}
+	held, _, err := Load(dir, "task-9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Both sides of a Save hold it.
+	if err := held.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	var s State
+	if added, err := s.Retain(first); err != nil || !added {
+		t.Fatalf("first retain: added=%v err=%v", added, err)
+	}
+	if added, err := s.Retain(again); err != nil || added {
+		t.Fatalf("a duplicate was appended in memory: added=%v err=%v", added, err)
+	}
+
+	flipped := failingFirst()
+	flipped.Outcome, flipped.ExitStatus = EvidencePassed, 0
+	if err := RetainEvidence(dir, "task-9", flipped); err == nil {
+		t.Fatal("a second run changed the outcome of a retained execution")
+	}
+
+	loaded, _, err := Load(dir, "task-9")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Retained) != 1 {
+		t.Fatalf("the same evidence accumulated %d records: %+v", len(loaded.Retained), loaded.Retained)
+	}
+	if r := loaded.Retained[0]; r.Outcome != EvidenceFailed || r.ExitStatus != 1 || r.Cycle != 2 {
+		t.Fatalf("the retained record was rewritten: %+v", r)
 	}
 }

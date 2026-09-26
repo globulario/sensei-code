@@ -58,10 +58,23 @@ type openReview struct {
 // two runs of the same checks on the same bytes produce different output and
 // would read as different evidence. What a reviewer is entitled to change its
 // mind on is an outcome, not a millisecond count.
-func evidenceIdentity(b validation.Bundle, audit sensei.DiffAuditDecision) string {
-	lines := make([]string, 0, len(b.Checks)+1)
+//
+// retained are the stable identities of the evidence retained for findings on
+// this candidate (taskstate.RetainedEvidence.Identity). An EVIDENCE finding is
+// answered on unchanged bytes, so without them a review accepting the proof it
+// demanded would read as a reviewer-only flip. They are a set: a duplicate
+// write, or the same proof retained again, is not new evidence.
+func evidenceIdentity(b validation.Bundle, audit sensei.DiffAuditDecision, retained ...string) string {
+	lines := make([]string, 0, len(b.Checks)+1+len(retained))
 	for _, c := range b.Checks {
 		lines = append(lines, strings.Join([]string{string(c.Kind), c.Command, strings.Join(c.Args, " "), string(c.Outcome), fmt.Sprint(c.ExitStatus)}, "\x1f"))
+	}
+	seen := map[string]bool{}
+	for _, id := range retained {
+		if id = strings.TrimSpace(id); id != "" && !seen[id] {
+			seen[id] = true
+			lines = append(lines, "retained\x1f"+id)
+		}
 	}
 	sort.Strings(lines)
 	lines = append(lines, "audit\x1f"+string(audit.Decision)+"\x1f"+string(audit.Availability)+"\x1f"+audit.Digest)
