@@ -4273,12 +4273,12 @@ code_references:
     to_name: Config
     file: cmd/sensei-code/assist.go
   - from: cmd/sensei-code/assist.go:runContext
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: cmd/sensei-code/assist.go
   - from: cmd/sensei-code/assist.go:runContext
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: cmd/sensei-code/assist.go
   - from: cmd/sensei-code/assist.go:runContext
     to_id: internal/config/config.go:Config.Sensei
@@ -4602,11 +4602,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -5689,12 +5689,12 @@ code_references:
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:controlDomain
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:controlDomain
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:controlDomain
     to_id: internal/config/config.go:Config.Sensei
@@ -6102,11 +6102,11 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6172,11 +6172,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6184,11 +6184,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7499,11 +7499,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7931,11 +7931,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -8226,12 +8226,12 @@ code_references:
     to_name: Config
     file: cmd/sensei-code/mcp.go
   - from: cmd/sensei-code/mcp.go:runMCP
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: cmd/sensei-code/mcp.go
   - from: cmd/sensei-code/mcp.go:runMCP
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: cmd/sensei-code/mcp.go
   - from: cmd/sensei-code/mcp.go:runMCP
     to_id: internal/config/config.go:Config.Sensei
@@ -15747,12 +15747,12 @@ code_references:
     to_name: Config
     file: cmd/sensei-code/routine.go
   - from: cmd/sensei-code/routine.go:runRoutineScan
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: cmd/sensei-code/routine.go
   - from: cmd/sensei-code/routine.go:runRoutineScan
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: cmd/sensei-code/routine.go
   - from: cmd/sensei-code/routine.go:runRoutineScan
     to_id: internal/config/config.go:Config.Sensei
@@ -16169,11 +16169,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -17844,11 +17844,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -24624,17 +24624,17 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_name: Config
-    file: internal/behavioral/behavioral.go
-  - from: internal/behavioral/behavioral.go:New
     to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_name: Config.InsecureSkipVerify
+    to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
     to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
+    to_name: Config.InsecureSkipVerify
+    file: internal/behavioral/behavioral.go
+  - from: internal/behavioral/behavioral.go:New
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -28020,20 +28020,20 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
-    to_name: Config
-    file: internal/config/config.go
-  - from: internal/config/config.go:Default
     to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config~type
+    to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
+    file: internal/config/config.go
+  - from: internal/config/config.go:Default
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/config/config.go
   - from: internal/config/config.go:Default
     to_id: internal/config/config.go:Config.Architect
@@ -30473,11 +30473,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -32145,15 +32145,15 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: internal/control/control_test.go
-  - from: internal/control/control_test.go:newHarness
     to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
     to_id: internal/session/store.go:New
+    to_name: New
+    file: internal/control/control_test.go
+  - from: internal/control/control_test.go:newHarness
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -44506,12 +44506,12 @@ code_references:
     to_name: Config
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
     to_id: internal/config/config.go:Config.Sensei
@@ -44603,11 +44603,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -44680,8 +44680,8 @@ code_references:
     to_name: Config
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:configuredCommands
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:configuredCommands
     to_id: internal/config/config.go:Config.Architect
@@ -48620,6 +48620,10 @@ code_references:
     to_name: ArchitectureBinding.GraphBuildCommit
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
     to_name: ArchitectureBinding.ObjectiveDigest
     file: internal/ghbridge/architecture.go
@@ -48678,6 +48682,52 @@ code_references:
     to_name: fmt
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
+    to_name: strings
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
+    to_name: ArchitectureBinding.BaseSHA
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_id: internal/ghbridge/architecture.go:ErrEvidenceHasNoOwningRepository
+    to_name: ErrEvidenceHasNoOwningRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: Errorf
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: New
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: TrimSpace
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: errors
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: fmt
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
     to_name: strings
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureRequest.Validate
@@ -48760,6 +48810,10 @@ code_references:
   - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
     to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
     to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
@@ -48943,6 +48997,10 @@ code_references:
     to_name: ArchitectureBinding.GraphBuildCommit
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:parseArchitectureEnvelope
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:parseArchitectureEnvelope
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
     to_name: ArchitectureBinding.ObjectiveDigest
     file: internal/ghbridge/architecture.go
@@ -49016,6 +49074,10 @@ code_references:
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
     to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
@@ -49159,6 +49221,10 @@ code_references:
     to_name: ExchangeRecord
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.BaseSHA
+    to_name: ExchangeRecord.BaseSHA
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/ghbridge/exchange.go:ExchangeRecord.Conversation
     to_name: ExchangeRecord.Conversation
     file: internal/ghbridge/architecture_runner.go
@@ -49167,8 +49233,24 @@ code_references:
     to_name: ExchangeRecord.Deadline
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.GraphBuildCommit
+    to_name: ExchangeRecord.GraphBuildCommit
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.GraphRepository
+    to_name: ExchangeRecord.GraphRepository
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/ghbridge/exchange.go:ExchangeRecord.Kind
     to_name: ExchangeRecord.Kind
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.MailboxRepository
+    to_name: ExchangeRecord.MailboxRepository
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.ObjectiveDigest
+    to_name: ExchangeRecord.ObjectiveDigest
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/ghbridge/exchange.go:ExchangeRecord.PublishedAt
@@ -49185,6 +49267,10 @@ code_references:
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/ghbridge/exchange.go:ExchangeRecord.TaskID
     to_name: ExchangeRecord.TaskID
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.WorkspaceRepository
+    to_name: ExchangeRecord.WorkspaceRepository
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_name: FormatInt
@@ -49350,6 +49436,175 @@ code_references:
   - from: internal/ghbridge/architecture_test.go:TestALegacyArchitectureRequestStillParses
     to_name: testing
     file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.MailboxRepository
+    to_name: ArchitectureRequest.MailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
+    to_name: ArchitectureRequest.Marker
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Prompt
+    to_name: ArchitectureRequest.Prompt
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: Contains
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureRequest
+    to_name: ParseArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: Replace
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: T
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture_test.go:architectureBinding
+    to_name: architectureBinding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphCommit
+    to_name: architectureGraphCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphRepository
+    to_name: architectureGraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture_test.go:architectureMailboxRepository
+    to_name: architectureMailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_id: internal/ghbridge/architecture_test.go:architectureWorkspaceRepository
+    to_name: architectureWorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: common.Fatal
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: common.Fatalf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: strings
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestALegacyEnvelopeDoesNotHaveItsGraphRepositoryInferred
+    to_name: testing
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
+    to_name: ArchitectureBinding.BaseSHA
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:ArchitectureBinding.Same
+    to_name: ArchitectureBinding.Same
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.MailboxRepository
+    to_name: ArchitectureRequest.MailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
+    to_name: ArchitectureRequest.Marker
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Prompt
+    to_name: ArchitectureRequest.Prompt
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/roles/architecture.go:BindArchitecture
+    to_name: BindArchitecture
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: Contains
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureRequest
+    to_name: ParseArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: T
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphCommit
+    to_name: architectureGraphCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_id: internal/ghbridge/marker_test.go:baseSHA
+    to_name: baseSHA
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: common.Errorf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: common.Fatal
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: common.Fatalf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: strings
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAThreeRouteEnvelopeRoundTripsWithEveryBindingFieldUnchanged
+    to_name: testing
+    file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:TestAnArchitectureRequestNamesBothRepositories
     to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
     to_name: ArchitectureRequest
@@ -49402,6 +49657,107 @@ code_references:
     to_name: strings
     file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:TestAnArchitectureRequestNamesBothRepositories
+    to_name: testing
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.MailboxRepository
+    to_name: ArchitectureRequest.MailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Prompt
+    to_name: ArchitectureRequest.Prompt
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: ArchitectureRequest.ResolvePinnedEvidence
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_name: Contains
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture.go:ErrEvidenceHasNoOwningRepository
+    to_name: ErrEvidenceHasNoOwningRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_name: T
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_name: T.Run
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:architectureBinding
+    to_name: architectureBinding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphCommit
+    to_name: architectureGraphCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphRepository
+    to_name: architectureGraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:architectureMailboxRepository
+    to_name: architectureMailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:architectureWorkspaceRepository
+    to_name: architectureWorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/marker_test.go:baseSHA
+    to_name: baseSHA
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_name: common.Fatal
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_name: common.Fatalf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup~type
+    to_name: recordingLookup
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
+    to_name: recordingLookup.attempted
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.holds
+    to_name: recordingLookup.holds
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_name: recordingLookup.resolve
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.tried
+    to_name: recordingLookup.tried
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
+    to_name: strings
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestAnUnroutedPinnedCommitIsRefusedRatherThanSearchedFor
     to_name: testing
     file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRefusesAmbiguousIdentityHeaders
@@ -49461,6 +49817,10 @@ code_references:
   - from: internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRoundTripsExactSubject
     to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
     to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRoundTripsExactSubject
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
     file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:TestArchitectureEnvelopeRoundTripsExactSubject
     to_id: internal/roles/architecture.go:ArchitectureBinding.Same
@@ -49669,6 +50029,201 @@ code_references:
   - from: internal/ghbridge/architecture_test.go:TestArchitectureRunnerRefusesWrongRoleBeforeTransport
     to_name: testing
     file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.MailboxRepository
+    to_name: ArchitectureRequest.MailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Prompt
+    to_name: ArchitectureRequest.Prompt
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.ResolvePinnedEvidence
+    to_name: ArchitectureRequest.ResolvePinnedEvidence
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_name: T
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:architectureBinding
+    to_name: architectureBinding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphCommit
+    to_name: architectureGraphCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphRepository
+    to_name: architectureGraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:architectureMailboxRepository
+    to_name: architectureMailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:architectureWorkspaceRepository
+    to_name: architectureWorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/marker_test.go:baseSHA
+    to_name: baseSHA
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_name: common.Errorf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_name: common.Fatal
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_name: common.Fatalf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup~type
+    to_name: recordingLookup
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
+    to_name: recordingLookup.attempted
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.holds
+    to_name: recordingLookup.holds
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_name: recordingLookup.resolve
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.tried
+    to_name: recordingLookup.tried
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestEachPinnedCommitIsResolvedOnlyInTheRepositoryThatOwnsIt
+    to_name: testing
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.MailboxRepository
+    to_name: ArchitectureRequest.MailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
+    to_name: ArchitectureRequest.Marker
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Prompt
+    to_name: ArchitectureRequest.Prompt
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: Contains
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureRequest
+    to_name: ParseArchitectureRequest
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureResponse
+    to_name: ParseArchitectureResponse
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: Replace
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: T
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: T.Run
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture_test.go:architectureBinding
+    to_name: architectureBinding
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphCommit
+    to_name: architectureGraphCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphRepository
+    to_name: architectureGraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture_test.go:architectureMailboxRepository
+    to_name: architectureMailboxRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_id: internal/ghbridge/architecture_test.go:architectureWorkspaceRepository
+    to_name: architectureWorkspaceRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: common.Fatal
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: common.Fatalf
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: strings
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:TestGraphProvenanceTravelsAsAnInseparablePair
+    to_name: testing
+    file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:TestResolverCarriesOnlyBoundArchitectForItsProvider
     to_id: internal/config/config.go:Agent~type
     to_name: Agent
@@ -49837,11 +50392,59 @@ code_references:
     to_name: architectureGraphCommit
     file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:architectureBinding
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphRepository
+    to_name: architectureGraphRepository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:architectureBinding
     to_id: internal/ghbridge/marker_test.go:baseSHA
     to_name: baseSHA
     file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_test.go:architectureBinding
     to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:noSuchCommit.Error
+    to_id: internal/ghbridge/architecture_test.go:noSuchCommit~type
+    to_name: noSuchCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:noSuchCommit.Error
+    to_id: internal/ghbridge/architecture_test.go:noSuchCommit.commit
+    to_name: noSuchCommit.commit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:noSuchCommit.Error
+    to_id: internal/ghbridge/architecture_test.go:noSuchCommit.repository
+    to_name: noSuchCommit.repository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_id: internal/ghbridge/architecture_test.go:noSuchCommit~type
+    to_name: noSuchCommit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_id: internal/ghbridge/architecture_test.go:noSuchCommit.commit
+    to_name: noSuchCommit.commit
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_id: internal/ghbridge/architecture_test.go:noSuchCommit.repository
+    to_name: noSuchCommit.repository
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup~type
+    to_name: recordingLookup
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
+    to_name: recordingLookup.attempted
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.resolve
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.holds
+    to_name: recordingLookup.holds
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.tried
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup~type
+    to_name: recordingLookup
+    file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_test.go:recordingLookup.tried
+    to_id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
+    to_name: recordingLookup.attempted
     file: internal/ghbridge/architecture_test.go
   - from: internal/ghbridge/architecture_transport.go:Architectures
     to_id: internal/ghbridge/apiclient.go:AppClient.Configured
@@ -56686,6 +57289,93 @@ code_references:
   - from: internal/ghbridge/exchange_test.go:TestAFailedWithdrawalKeepsTheRecordForTheNextStartup
     to_name: time
     file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeArchitecture
+    to_name: ExchangeArchitecture
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeLog~type
+    to_name: ExchangeLog
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Dir
+    to_name: ExchangeLog.Dir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Pending
+    to_name: ExchangeLog.Pending
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.GraphBuildCommit
+    to_name: ExchangeRecord.GraphBuildCommit
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.GraphRepository
+    to_name: ExchangeRecord.GraphRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.WorkspaceRepository
+    to_name: ExchangeRecord.WorkspaceRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: Join
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: Marshal
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: MkdirAll
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: Now
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: RFC3339Nano
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: T
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: Time.Format
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: Time.UTC
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: WriteFile
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/architecture_test.go:architectureGraphCommit
+    to_name: architectureGraphCommit
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_id: internal/ghbridge/marker_test.go:baseSHA
+    to_name: baseSHA
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: common.Fatal
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: common.Fatalf
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: common.TempDir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: encoding/json
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: os
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: path/filepath
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: testing
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestALegacyExchangeRecordIsNotGivenAGraphRepository
+    to_name: time
+    file: internal/ghbridge/exchange_test.go
   - from: internal/ghbridge/exchange_test.go:TestAPendingExchangeSurvivesTheProcessThatOpenedIt
     to_id: internal/ghbridge/exchange.go:ExchangeLog~type
     to_name: ExchangeLog
@@ -56769,6 +57459,212 @@ code_references:
     file: internal/ghbridge/exchange_test.go
   - from: internal/ghbridge/exchange_test.go:TestAPendingExchangeSurvivesTheProcessThatOpenedIt
     to_name: time
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/roles/roles.go:Architect
+    to_name: Architect
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
+    to_name: ArchitectureBinding.BaseSHA
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.MailboxRepository
+    to_name: ArchitectureRequest.MailboxRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.WorkspaceRepository
+    to_name: ArchitectureRequest.WorkspaceRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner~type
+    to_name: ArchitectureRunner
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Binding
+    to_name: ArchitectureRunner.Binding
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Doorbell
+    to_name: ArchitectureRunner.Doorbell
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Exchanges
+    to_name: ArchitectureRunner.Exchanges
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Issue
+    to_name: ArchitectureRunner.Issue
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.NewRequestID
+    to_name: ArchitectureRunner.NewRequestID
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Poll
+    to_name: ArchitectureRunner.Poll
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_name: ArchitectureRunner.Run
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Wait
+    to_name: ArchitectureRunner.Wait
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: Background
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeLog~type
+    to_name: ExchangeLog
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Dir
+    to_name: ExchangeLog.Dir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.BaseSHA
+    to_name: ExchangeRecord.BaseSHA
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.GraphBuildCommit
+    to_name: ExchangeRecord.GraphBuildCommit
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.GraphRepository
+    to_name: ExchangeRecord.GraphRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.MailboxRepository
+    to_name: ExchangeRecord.MailboxRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.ObjectiveDigest
+    to_name: ExchangeRecord.ObjectiveDigest
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.TaskID
+    to_name: ExchangeRecord.TaskID
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange.go:ExchangeRecord.WorkspaceRepository
+    to_name: ExchangeRecord.WorkspaceRepository
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: Join
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: Millisecond
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureRequest
+    to_name: ParseArchitectureRequest
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/agent/agent.go:Request~type
+    to_name: Request
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/agent/agent.go:Request.Prompt
+    to_name: Request.Prompt
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/agent/agent.go:Request.Role
+    to_name: Request.Role
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/agent/agent.go:Request.TaskID
+    to_name: Request.TaskID
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: T
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/apiclient_test.go:appMailbox.comments
+    to_name: appMailbox.comments
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/architecture_test.go:architectureBinding
+    to_name: architectureBinding
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: common.Errorf
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: common.Fatal
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: common.Fatalf
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: common.TempDir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: context
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/apiclient_test.go:newAppMailbox
+    to_name: newAppMailbox
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange_test.go:openRecordReader~type
+    to_name: openRecordReader
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange_test.go:openRecordReader.dir
+    to_name: openRecordReader.dir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/exchange_test.go:openRecordReader.seen
+    to_name: openRecordReader.seen
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: path/filepath
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: testing
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_name: time
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:TestAPublishedArchitectureRequestRecordsItsProvenanceAndItsRoutes
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
     file: internal/ghbridge/exchange_test.go
   - from: internal/ghbridge/exchange_test.go:TestATimedOutTurnWithdrawsTheRequestItPublished
     to_id: internal/roles/roles.go:Architect
@@ -57510,6 +58406,36 @@ code_references:
     file: internal/ghbridge/exchange_test.go
   - from: internal/ghbridge/exchange_test.go:TestTheResolverCarriesTheExchangeLogIntoTheArchitectTurn
     to_name: testing
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_name: Context
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_id: internal/ghbridge/exchange.go:ExchangeLog~type
+    to_name: ExchangeLog
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Dir
+    to_name: ExchangeLog.Dir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Pending
+    to_name: ExchangeLog.Pending
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_name: context
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_id: internal/ghbridge/exchange_test.go:openRecordReader~type
+    to_name: openRecordReader
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_id: internal/ghbridge/exchange_test.go:openRecordReader.dir
+    to_name: openRecordReader.dir
+    file: internal/ghbridge/exchange_test.go
+  - from: internal/ghbridge/exchange_test.go:openRecordReader.Ring
+    to_id: internal/ghbridge/exchange_test.go:openRecordReader.seen
+    to_name: openRecordReader.seen
     file: internal/ghbridge/exchange_test.go
   - from: internal/ghbridge/exchange_test.go:withdrawalsIn
     to_id: internal/ghbridge/exchange.go:ParseWithdrawal
@@ -79011,10 +79937,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -84582,17 +85508,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -116493,6 +117419,10 @@ code_references:
     to_name: ArchitectureBinding.GraphBuildCommit
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:ArchitectureBinding.CheckObjective
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.CheckObjective
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
     to_name: ArchitectureBinding.ObjectiveDigest
     file: internal/roles/architecture.go
@@ -116510,6 +117440,29 @@ code_references:
   - from: internal/roles/architecture.go:ArchitectureBinding.CheckObjective
     to_name: fmt
     file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_id: internal/roles/architecture.go:ArchitectureBinding~type
+    to_name: ArchitectureBinding
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_name: Regexp.MatchString
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_id: internal/roles/architecture.go:lowerHex40
+    to_name: lowerHex40
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_id: internal/roles/architecture.go:repositoryPath
+    to_name: repositoryPath
+    file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:ArchitectureBinding.Same
     to_id: internal/roles/architecture.go:ArchitectureBinding~type
     to_name: ArchitectureBinding
@@ -116523,8 +117476,8 @@ code_references:
     to_name: ArchitectureBinding.BaseSHA
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:ArchitectureBinding.Valid
-    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
-    to_name: ArchitectureBinding.GraphBuildCommit
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphProvenanceValid
+    to_name: ArchitectureBinding.GraphProvenanceValid
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:ArchitectureBinding.Valid
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
@@ -116562,6 +117515,10 @@ code_references:
   - from: internal/roles/architecture.go:BindArchitecture
     to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
     to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/roles/architecture.go
+  - from: internal/roles/architecture.go:BindArchitecture
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:BindArchitecture
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
@@ -116613,6 +117570,10 @@ code_references:
     to_name: architectureGraph
     file: internal/roles/architecture_test.go
   - from: internal/roles/architecture_test.go:TestArchitectureBindingNamesExactObjectiveAndWorld
+    to_id: internal/roles/architecture_test.go:architectureGraphRepo
+    to_name: architectureGraphRepo
+    file: internal/roles/architecture_test.go
+  - from: internal/roles/architecture_test.go:TestArchitectureBindingNamesExactObjectiveAndWorld
     to_name: common.Fatal
     file: internal/roles/architecture_test.go
   - from: internal/roles/architecture_test.go:TestArchitectureBindingNamesExactObjectiveAndWorld
@@ -116632,6 +117593,10 @@ code_references:
   - from: internal/roles/architecture_test.go:TestArchitectureBindingRequiresEveryReferent
     to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
     to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/roles/architecture_test.go
+  - from: internal/roles/architecture_test.go:TestArchitectureBindingRequiresEveryReferent
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
     file: internal/roles/architecture_test.go
   - from: internal/roles/architecture_test.go:TestArchitectureBindingRequiresEveryReferent
     to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
@@ -116659,6 +117624,10 @@ code_references:
   - from: internal/roles/architecture_test.go:TestArchitectureBindingRequiresEveryReferent
     to_id: internal/roles/architecture_test.go:architectureGraph
     to_name: architectureGraph
+    file: internal/roles/architecture_test.go
+  - from: internal/roles/architecture_test.go:TestArchitectureBindingRequiresEveryReferent
+    to_id: internal/roles/architecture_test.go:architectureGraphRepo
+    to_name: architectureGraphRepo
     file: internal/roles/architecture_test.go
   - from: internal/roles/architecture_test.go:TestArchitectureBindingRequiresEveryReferent
     to_name: common.Errorf
@@ -130763,12 +131732,12 @@ code_references:
     to_name: Config
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:InspectRepository
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:InspectRepository
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:InspectRepository
     to_id: internal/config/config.go:Config.Sensei
@@ -130893,8 +131862,8 @@ code_references:
     to_name: Config
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:graphAddr
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:graphAddr
     to_id: internal/config/config.go:Config.Sensei
@@ -130936,12 +131905,12 @@ code_references:
     to_name: Config
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:mcpCheck
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:mcpCheck
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/setup/inspect.go
   - from: internal/setup/inspect.go:mcpCheck
     to_id: internal/config/config.go:Config.Sensei
@@ -136108,12 +137077,12 @@ code_references:
     to_name: Command
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
     to_id: internal/config/config.go:Config.Sensei
@@ -136207,11 +137176,11 @@ code_references:
     to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/provider/provider.go:Label
+    to_id: internal/mcpconfig/mcpconfig.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/mcpconfig/mcpconfig.go:Label
+    to_id: internal/provider/provider.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -136616,8 +137585,8 @@ code_references:
     to_name: workerStyle
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.View
     to_id: internal/config/config.go:Config.Sensei
@@ -137005,12 +137974,12 @@ code_references:
     to_name: Command.Name
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.senseiCommand
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.senseiCommand
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.senseiCommand
     to_id: internal/config/config.go:Config.Sensei
@@ -138173,12 +139142,12 @@ code_references:
     to_name: Client.Close
     file: internal/tui/model.go
   - from: internal/tui/model.go:senseiDomain
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/tui/model.go
   - from: internal/tui/model.go:senseiDomain
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/tui/model.go
   - from: internal/tui/model.go:senseiDomain
     to_id: internal/config/config.go:Config.Sensei
@@ -143737,12 +144706,12 @@ code_references:
     to_name: Client.Close
     file: internal/workflow/assisted.go
   - from: internal/workflow/assisted.go:Engine.runAssisted
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/assisted.go
   - from: internal/workflow/assisted.go:Engine.runAssisted
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/assisted.go
   - from: internal/workflow/assisted.go:Engine.runAssisted
     to_id: internal/config/config.go:Config.Architect
@@ -153208,6 +154177,22 @@ code_references:
     to_id: internal/workflow/consequence.go:ConsequenceBounded
     to_name: ConsequenceBounded
     file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:clause.asserted
+    to_name: clause.asserted
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:clause.text
+    to_name: clause.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:occurrencesOf
+    to_name: occurrencesOf
+    file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:classifyArtifact
     to_name: Clean
     file: internal/workflow/consequence.go
@@ -153243,6 +154228,493 @@ code_references:
   - from: internal/workflow/consequence.go:classifyArtifact
     to_name: strings
     file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_name: clause.frontedNegativeAdverbial
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause.mentioned
+    to_name: clause.mentioned
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause.negatedPredicate
+    to_name: clause.negatedPredicate
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause.negativeSubject
+    to_name: clause.negativeSubject
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause.postposed
+    to_name: clause.postposed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.asserted
+    to_id: internal/workflow/consequence.go:clause.span
+    to_name: clause.span
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:clause.compound
+    to_name: clause.compound
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:clause.predicateMaterial
+    to_name: clause.predicateMaterial
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:negatingVerb
+    to_name: negatingVerb
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.cancelled
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.compound
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.compound
+    to_id: internal/workflow/consequence.go:clause.text
+    to_name: clause.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.compound
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.compound
+    to_id: internal/workflow/consequence.go:word.end
+    to_name: word.end
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.compound
+    to_id: internal/workflow/consequence.go:word.start
+    to_name: word.start
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:clause.compound
+    to_name: clause.compound
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_name: clause.newPredicateBefore
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:conjunctions
+    to_name: conjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:disjunctions
+    to_name: disjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:adverbials
+    to_name: adverbials
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:conjunctions
+    to_name: conjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:determiners
+    to_name: determiners
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:disjunctions
+    to_name: disjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:negatingVerb
+    to_name: negatingVerb
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:permissionVerbs
+    to_name: permissionVerbs
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:pronouns
+    to_name: pronouns
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.functionWord
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_name: Count
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_name: HasPrefix
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_name: Index
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_name: LastIndex
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_name: TrimSpace
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_id: internal/workflow/consequence.go:clause.text
+    to_name: clause.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.mentioned
+    to_name: strings
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:clause.cancelled
+    to_name: clause.cancelled
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:clause.compound
+    to_name: clause.compound
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_name: clause.negatorBeforeDisjunct
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:clause.predicateMaterial
+    to_name: clause.predicateMaterial
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:disjunctions
+    to_name: disjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:negatingVerb
+    to_name: negatingVerb
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:permissionVerbs
+    to_name: permissionVerbs
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatedPredicate
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:clause.compound
+    to_name: clause.compound
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:clause.predicateMaterial
+    to_name: clause.predicateMaterial
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:conjunctions
+    to_name: conjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:disjunctions
+    to_name: disjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:subjectNegators
+    to_name: subjectNegators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negativeSubject
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:clause.compound
+    to_name: clause.compound
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:conjunctions
+    to_name: conjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:disjunctions
+    to_name: disjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:pronouns
+    to_name: pronouns
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.negatorBeforeDisjunct
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:clause.functionWord
+    to_name: clause.functionWord
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:clause.inOp
+    to_name: clause.inOp
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:determiners
+    to_name: determiners
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:pronouns
+    to_name: pronouns
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.newPredicateBefore
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:adverbials
+    to_name: adverbials
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:clause.compound
+    to_name: clause.compound
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:clause.inOp
+    to_name: clause.inOp
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:conjunctions
+    to_name: conjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:determiners
+    to_name: determiners
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:disjunctions
+    to_name: disjunctions
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:negatingVerb
+    to_name: negatingVerb
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:negators
+    to_name: negators
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:permissionVerbs
+    to_name: permissionVerbs
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.postposed
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:adverbials
+    to_name: adverbials
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:auxiliaries
+    to_name: auxiliaries
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:clause.inOp
+    to_name: clause.inOp
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:determiners
+    to_name: determiners
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:permissionVerbs
+    to_name: permissionVerbs
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.predicateMaterial
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.span
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.span
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.span
+    to_id: internal/workflow/consequence.go:word.end
+    to_name: word.end
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.span
+    to_id: internal/workflow/consequence.go:word.start
+    to_name: word.start
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clausesOf
+    to_name: ReplaceAll
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clausesOf
+    to_name: Split
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clausesOf
+    to_id: internal/workflow/consequence.go:clauseBreaks
+    to_name: clauseBreaks
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clausesOf
+    to_name: strings
+    file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:cleanPlannedPath
     to_name: Clean
     file: internal/workflow/consequence.go
@@ -153256,20 +154728,11 @@ code_references:
     to_name: strings
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:containsWord
-    to_name: Index
-    file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:containsWord
-    to_id: internal/workflow/consequence.go:isWordByte
-    to_name: isWordByte
-    file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:containsWord
-    to_name: strings
+    to_id: internal/workflow/consequence.go:occurrencesOf
+    to_name: occurrencesOf
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:declaredOutwardActions
-    to_name: Contains
-    file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
-    to_name: Join
+    to_name: ReplaceAll
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:declaredOutwardActions
     to_name: ToLower
@@ -153278,8 +154741,16 @@ code_references:
     to_name: TrimSpace
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:declaredOutwardActions
-    to_id: internal/workflow/consequence.go:containsWord
-    to_name: containsWord
+    to_id: internal/workflow/consequence.go:assertedIn
+    to_name: assertedIn
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActions
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActions
+    to_id: internal/workflow/consequence.go:clausesOf
+    to_name: clausesOf
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:declaredOutwardActions
     to_id: internal/workflow/consequence.go:outwardPhrases
@@ -153290,7 +154761,91 @@ code_references:
     to_name: outwardVerbs
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:declaredOutwardActions
+    to_id: internal/workflow/consequence.go:readClause
+    to_name: readClause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActions
     to_name: strings
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:negatingVerb
+    to_name: HasPrefix
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:negatingVerb
+    to_id: internal/workflow/consequence.go:negatorStems
+    to_name: negatorStems
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:negatingVerb
+    to_name: strings
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:negatingVerb
+    to_id: internal/workflow/consequence.go:verbEndings
+    to_name: verbEndings
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:occurrencesOf
+    to_name: Index
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:occurrencesOf
+    to_name: strings
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:occurrencesOf
+    to_id: internal/workflow/consequence.go:wordAt
+    to_name: wordAt
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:clause.inOp
+    to_name: clause.inOp
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:clause.span
+    to_name: clause.span
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:clause.text
+    to_name: clause.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:clause.words
+    to_name: clause.words
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:isWordByte
+    to_name: isWordByte
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:occurrencesOf
+    to_name: occurrencesOf
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:outwardPhrases
+    to_name: outwardPhrases
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:outwardVerbs
+    to_name: outwardVerbs
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:word~type
+    to_name: word
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:word.end
+    to_name: word.end
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:word.start
+    to_name: word.start
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:readClause
+    to_id: internal/workflow/consequence.go:word.text
+    to_name: word.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:wordAt
+    to_id: internal/workflow/consequence.go:isWordByte
+    to_name: isWordByte
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence_structural_test.go:TestConsequencesAreAssessedForEveryRoutedAction
     to_id: internal/workflow/consequence.go:Action~type
@@ -153623,6 +155178,71 @@ code_references:
   - from: internal/workflow/consequence_test.go:TestArchitecturalFilesSubtractAGrantWhateverThePlanSpelling
     to_name: testing
     file: internal/workflow/consequence_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:Action.DeclaredSteps
+    to_name: Action.DeclaredSteps
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:AssessConsequences
+    to_name: AssessConsequences
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:ConsequenceBounded
+    to_name: ConsequenceBounded
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:ConsequenceResult~type
+    to_name: ConsequenceResult
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    to_name: ConsequenceUnacceptable
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_name: T
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_name: common.Errorf
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAFrontedProhibitionStopsAtANewPredicate
+    to_name: testing
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAQuotationIsNotSuppression
+    to_name: T
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAQuotationIsNotSuppression
+    to_name: T.Run
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAQuotationIsNotSuppression
+    to_name: common.Fatalf
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAQuotationIsNotSuppression
+    to_id: internal/workflow/consequence.go:declaredOutwardActions
+    to_name: declaredOutwardActions
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestAQuotationIsNotSuppression
+    to_name: testing
+    file: internal/workflow/consequence_words_test.go
   - from: internal/workflow/consequence_words_test.go:TestASemaphorePlanIsNotADeployment
     to_id: internal/workflow/consequence.go:Action~type
     to_name: Action
@@ -153679,6 +155299,192 @@ code_references:
   - from: internal/workflow/consequence_words_test.go:TestASemaphorePlanIsNotADeployment
     to_name: testing
     file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:Action.DeclaredSteps
+    to_name: Action.DeclaredSteps
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:AssessConsequences
+    to_name: AssessConsequences
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:ConsequenceBounded
+    to_name: ConsequenceBounded
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:ConsequenceResult~type
+    to_name: ConsequenceResult
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    to_name: ConsequenceUnacceptable
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_name: T
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_name: common.Errorf
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestASubjectIsAnythingTheClassifierDoesNotKnow
+    to_name: testing
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:Action.DeclaredSteps
+    to_name: Action.DeclaredSteps
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:AssessConsequences
+    to_name: AssessConsequences
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:ConsequenceBounded
+    to_name: ConsequenceBounded
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:ConsequenceResult~type
+    to_name: ConsequenceResult
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    to_name: ConsequenceUnacceptable
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_name: T
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_name: common.Errorf
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestNegationParityAndCoordinatedPredicates
+    to_name: testing
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:Action.DeclaredSteps
+    to_name: Action.DeclaredSteps
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:Action.Files
+    to_name: Action.Files
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:AssessConsequences
+    to_name: AssessConsequences
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:ConsequenceBounded
+    to_name: ConsequenceBounded
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:ConsequenceResult~type
+    to_name: ConsequenceResult
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    to_name: ConsequenceUnacceptable
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/authority.go:Route~type
+    to_name: Route
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/authority.go:RouteArchitectural
+    to_name: RouteArchitectural
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/authority.go:RouteHuman
+    to_name: RouteHuman
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/authority.go:Routing.Route
+    to_name: Routing.Route
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_name: T
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_name: T.Run
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_name: common.Fatalf
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence.go:containsWord
+    to_name: containsWord
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/consequence_structural_test.go:okBody
+    to_name: okBody
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/authority.go:routeAuthorityForAction
+    to_name: routeAuthorityForAction
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_id: internal/workflow/authority_test.go:scopedPreflight
+    to_name: scopedPreflight
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestOutwardActionIntentContexts
+    to_name: testing
+    file: internal/workflow/consequence_words_test.go
   - from: internal/workflow/consequence_words_test.go:TestOutwardActionsAreReadFromDeclaredActionsNotScaryWords
     to_name: T
     file: internal/workflow/consequence_words_test.go
@@ -153690,6 +155496,102 @@ code_references:
     to_name: declaredOutwardActions
     file: internal/workflow/consequence_words_test.go
   - from: internal/workflow/consequence_words_test.go:TestOutwardActionsAreReadFromDeclaredActionsNotScaryWords
+    to_name: testing
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:Action.DeclaredSteps
+    to_name: Action.DeclaredSteps
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:Action.Files
+    to_name: Action.Files
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:AssessConsequences
+    to_name: AssessConsequences
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Boundary
+    to_name: ConsequenceAssessment.Boundary
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:ConsequenceBounded
+    to_name: ConsequenceBounded
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:ConsequenceResult~type
+    to_name: ConsequenceResult
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    to_name: ConsequenceUnacceptable
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority.go:Route~type
+    to_name: Route
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority.go:RouteArchitectural
+    to_name: RouteArchitectural
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority.go:RouteHuman
+    to_name: RouteHuman
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority.go:Routing.Condition
+    to_name: Routing.Condition
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority.go:Routing.Route
+    to_name: Routing.Route
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_name: T
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_name: T.Run
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_name: common.Fatalf
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence.go:containsWord
+    to_name: containsWord
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/consequence_structural_test.go:okBody
+    to_name: okBody
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority.go:routeAuthorityForAction
+    to_name: routeAuthorityForAction
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
+    to_id: internal/workflow/authority_test.go:scopedPreflight
+    to_name: scopedPreflight
+    file: internal/workflow/consequence_words_test.go
+  - from: internal/workflow/consequence_words_test.go:TestTheSameOutwardOperationIsClassifiedByWhatThePlanAsserts
     to_name: testing
     file: internal/workflow/consequence_words_test.go
   - from: internal/workflow/coverageverdict_test.go:TestADegradedCoverageGapIsBoundedWork
@@ -155097,12 +156999,12 @@ code_references:
     to_name: Client.ServingPID
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
     to_id: internal/config/config.go:Config.Sensei
@@ -156594,12 +158496,12 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/behavioral
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.bindGraph
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.bindGraph
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.bindGraph
     to_id: internal/config/config.go:Config.Sensei
@@ -156709,12 +158611,12 @@ code_references:
     to_name: strings
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.bindGraphDomainOnly
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.bindGraphDomainOnly
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.bindGraphDomainOnly
     to_id: internal/config/config.go:Config.Sensei
@@ -157467,12 +159369,12 @@ code_references:
     to_name: Client.ServingPID
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
     to_id: internal/config/config.go:Config.Architect
@@ -158705,10 +160607,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -160958,12 +162860,12 @@ code_references:
     to_name: Client.Close
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
     to_id: internal/config/config.go:Config.Sensei
@@ -161833,8 +163735,8 @@ code_references:
     to_name: Client.CallTool
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Args
-    to_name: Config.$anon_92cc5b11686d51ee.Args
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/config/config.go:Config.Architect
@@ -162128,10 +164030,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -163594,19 +165496,19 @@ code_references:
     to_name: Evidence
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditDetail
-    to_name: Evidence.AuditDetail
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
-    to_name: Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditDetail
+    to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_name: Evidence.AuditVerdict
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -163614,19 +165516,19 @@ code_references:
     to_name: Evidence.BaseSHA
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
-    to_name: Evidence.ChangedPaths
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
-    to_name: Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
+    to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_name: Evidence.DiffBytes
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -164871,11 +166773,11 @@ code_references:
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -168980,8 +170882,8 @@ code_references:
     to_name: Background
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestResumingAnUnplannedBlockedTaskReentersTheSameTask
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestResumingAnUnplannedBlockedTaskReentersTheSameTask
     to_id: internal/config/config.go:Config.Sensei
@@ -169164,11 +171066,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -182791,8 +184693,8 @@ code_references:
     to_name: Bus.Subscribe
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/config/config.go:Config.$anon_92cc5b11686d51ee.Command
-    to_name: Config.$anon_92cc5b11686d51ee.Command
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Command
+    to_name: Config.$anon_c8be6179330fcb50.Command
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
     to_id: internal/config/config.go:Config.Sensei
@@ -190088,8 +191990,20 @@ code_references:
     to_name: BindArchitecture
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Repository
+    to_name: Config.$anon_c8be6179330fcb50.Repository
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.architectureBinding
+    to_id: internal/config/config.go:Config.Sensei
+    to_name: Config.Sensei
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.architectureBinding
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.architectureBinding
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
     to_id: internal/workflow/engine.go:Engine.governedBase
