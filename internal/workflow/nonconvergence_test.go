@@ -614,3 +614,180 @@ func TestW7AClasslessFindingIsValidWireDataAndRefusedOnlyAtTheBoundary(t *testin
 		}
 	}
 }
+
+// OBJECTIVE IDENTITY ON RESUME: a resumed invocation holds exactly the identity
+// its task record holds.
+//
+// Measured 2026-09-25 on the resume of task-1790353318851268310: the owed
+// architect re-plan was announced and then refused one second later with every
+// referent present except ObjectiveDigest. The objective reached the binding
+// only through a process's memory, and the restarted process held none.
+//
+// These witnesses cut at the process boundary. One engine records the task and
+// its NOT_CONVERGED ending; a second engine, over the same durable session and
+// holding nothing in memory, reconstructs it and is asked what its architect
+// turn is bound to. Sensei is unstartable, so each resume ends at its first step
+// -- after whatever it restores from the record, before anything else.
+
+// objectiveGraphCommit is the graph build the measured refusal named. Bound on
+// both engines, standing in for the start gate the unstartable Sensei cannot
+// run, so the objective is the only referent a resume can lose.
+const objectiveGraphCommit = "05feaf64d2694e97ac42b6bb93fbb49b9851a1f1"
+
+// restartedAtOwedReplan records a planned task ending NOT_CONVERGED through the
+// submitting engine -- which holds its objective exactly as run records it --
+// and returns that engine beside a restarted one that has only the record.
+func restartedAtOwedReplan(t *testing.T, objective string) (submitted, restarted *Engine, task session.Interrupted, events <-chan event.Event) {
+	t.Helper()
+	submitted, _, _ = resumeHarness(t, true)
+	const id = "task-r"
+	var start certifiedStart
+	start.preflight.Authority.GraphBuildCommit = objectiveGraphCommit
+	submitted.emit(event.New(submitted.SessionID, id, event.SourceSystem, event.TaskCreated, objective, nil))
+	submitted.recordObjective(id, Objective{Text: objective, Provenance: RequestedByHuman})
+	submitted.Config.Sensei.Repository = "globulario/sensei"
+	submitted.bindGraph(id, start)
+	submitted.emit(event.New(submitted.SessionID, id, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	submitted.beginReceipt(id)
+	submitted.endNotConverged(id, NotConverged{TaskID: id, Implementers: []string{"claude"}, ReviewCycles: 3, Owed: OwedArchitectReplan})
+
+	found := reopen(t, submitted.Repo.Root, "session-r")
+	if len(found) != 1 || found[0].TaskID != id || !found[0].Planned || found[0].Task != objective {
+		t.Fatalf("premise: the restart finds the planned task carrying its recorded objective: %+v", found)
+	}
+	if _, owed, err := owedReplan(found[0].NotConverged, found[0].BlockedExternal, id); err != nil || !owed {
+		t.Fatalf("premise: the restarted task owes its architect re-plan: owed=%v err=%v", owed, err)
+	}
+
+	store, err := session.New(submitted.Repo.Root, "session-r")
+	if err != nil {
+		t.Fatal(err)
+	}
+	bus := event.NewBus()
+	events, cancel := bus.Subscribe(128)
+	t.Cleanup(cancel)
+	restarted = New(submitted.Repo, config.Default(), bus, store, "session-r")
+	restarted.Config.Sensei.Command = "/nonexistent/awareness-mcp"
+	restarted.Config.Sensei.Repository = "globulario/sensei"
+	restarted.bindGraph(id, start)
+	return submitted, restarted, found[0], events
+}
+
+// architectTurnBinding asks the one runner edge for an architect turn with a
+// resolver that only records, and returns the binding it was handed and
+// whether it was asked at all.
+func architectTurnBinding(e *Engine, taskID string) (roles.ArchitectureBinding, bool, error) {
+	asked := &stubResolver{}
+	previous := e.Runners
+	e.Runners = asked
+	defer func() { e.Runners = previous }()
+	_, err := e.resolveRunner(RunnerSpec{Role: roles.Architect, TaskID: taskID, Source: event.SourceArchitect,
+		Agent: config.Agent{Name: "chatgpt", Command: "chatgpt"}})
+	if len(asked.seen) == 0 {
+		return roles.ArchitectureBinding{}, false, err
+	}
+	return asked.seen[0].Architecture, true, err
+}
+
+// objectiveDigestOf is the identity the given objective text mints.
+func objectiveDigestOf(text string) string {
+	return roles.BindArchitecture("", text, "", "", "").ObjectiveDigest
+}
+
+// W1, THE MEASURED CASE. A planned task resumed at its owed re-plan binds a
+// VALID architect turn whose objective identity is the one its durable record
+// holds. Fails if the planned resume path does not restore the objective from
+// the record: the restarted engine then binds an empty ObjectiveDigest, exactly
+// as measured.
+func TestObjectiveW1APlannedTaskResumedAtItsOwedReplanBindsTheRecordedObjective(t *testing.T) {
+	_, restarted, task, events := restartedAtOwedReplan(t, "the objective")
+	restarted.Resume(context.Background(), task)
+	settleResume(t, events)
+
+	got, asked, err := architectTurnBinding(restarted, task.TaskID)
+	if !asked {
+		t.Fatalf("the owed architect turn never reached resolver selection: %v", err)
+	}
+	want := objectiveDigestOf(task.Task)
+	if want == "" || got.ObjectiveDigest != want {
+		t.Fatalf("the resumed architect turn is bound to objective %q; the durable record's objective is %q: %+v",
+			got.ObjectiveDigest, want, got)
+	}
+	if !got.Valid() {
+		t.Fatalf("the resumed architect binding is not valid: %+v", got)
+	}
+}
+
+// emptyInputDigest is sha256 of zero bytes: what an absent objective would
+// become if absence were ever hashed instead of refused.
+const emptyInputDigest = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+// W3, CONTROL. A record that genuinely carries no objective text yields no
+// identity after a resume. Fails if a resume fills absence in: records an
+// objective for the task, or lets the binding carry any digest -- the digest of
+// an empty input above all.
+func TestObjectiveW3AnAbsentRecordedObjectiveYieldsNoIdentity(t *testing.T) {
+	_, restarted, task, events := restartedAtOwedReplan(t, "")
+	restarted.Resume(context.Background(), task)
+	settleResume(t, events)
+
+	if o, held := restarted.heldObjective(task.TaskID); held {
+		t.Fatalf("a resume filled in an objective the record does not hold: %+v", o)
+	}
+	b := restarted.architectureBinding(task.TaskID)
+	if b.ObjectiveDigest == emptyInputDigest {
+		t.Fatalf("an absent objective became the digest of an empty input: %+v", b)
+	}
+	if b.ObjectiveDigest != "" {
+		t.Fatalf("an absent objective produced an identity: %+v", b)
+	}
+	if b.Valid() {
+		t.Fatalf("a binding with no objective is valid, so the turn would not refuse: %+v", b)
+	}
+}
+
+// W4, SCOPED. A task that holds an objective record but whose binding carries
+// no objective digest is refused at the runner edge, naming the objective
+// referent, before EITHER adapter path. Fails if the guard is absent or sits
+// after resolver selection: the recording resolver is then asked, and the
+// test fails on that alone, whatever it would have answered.
+//
+// The empty-text record is the only state that reaches the guard once resumes
+// reconcile from the record; it is constructed directly because the guard is
+// the subject here, not how a task came to hold it.
+func TestObjectiveW4AMissingObjectiveReferentIsNamedBeforeAnyResolverIsAsked(t *testing.T) {
+	_, restarted, task, _ := restartedAtOwedReplan(t, "the objective")
+	restarted.recordObjective(task.TaskID, Objective{Text: "", Provenance: RequestedByHuman})
+
+	_, asked, err := architectTurnBinding(restarted, task.TaskID)
+	if asked {
+		t.Fatal("the resolver was consulted for an architect turn with no objective referent")
+	}
+	if err == nil {
+		t.Fatal("an architect turn with no objective referent was not refused")
+	}
+	if strings.Contains(err.Error(), "no adapter") {
+		t.Fatalf("the missing objective was reported as an absent adapter: %v", err)
+	}
+	if !strings.Contains(err.Error(), "objective referent is missing") {
+		t.Fatalf("the refusal does not name the objective referent: %v", err)
+	}
+	// The command-line path is behind the same guard.
+	restarted.Runners = nil
+	if r, err := restarted.resolveRunner(RunnerSpec{Role: roles.Architect, TaskID: task.TaskID, Source: event.SourceArchitect,
+		Agent: config.Agent{Name: "claude", Command: "claude"}}); err == nil || r.Runner != nil {
+		t.Fatalf("the provider command line took an architect turn with no objective referent: %+v %v", r, err)
+	}
+
+	// SCOPE CONTROLS. A task holding no objective record -- the assisted lane --
+	// resolves exactly as before, and so does one whose only missing referent
+	// is the optional graph repository.
+	if _, asked, err := architectTurnBinding(restarted, "task-assisted"); !asked || err != nil && strings.Contains(err.Error(), "objective referent") {
+		t.Fatalf("a task with no objective record was refused by the objective guard: asked=%v %v", asked, err)
+	}
+	restarted.recordObjective(task.TaskID, Objective{Text: "the objective", Provenance: RequestedByHuman})
+	restarted.Config.Sensei.Repository = ""
+	if b, asked, err := architectTurnBinding(restarted, task.TaskID); !asked || b.GraphRepository != "" || err != nil && strings.Contains(err.Error(), "objective referent") {
+		t.Fatalf("a binding missing only a non-objective referent was refused by the objective guard: asked=%v %+v %v", asked, b, err)
+	}
+}

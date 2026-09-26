@@ -799,18 +799,49 @@ func (e *Engine) recordObjective(taskID string, o Objective) {
 	e.objectives[taskID] = o
 }
 
-// recordObjectiveIfAbsent records an objective only when this process holds
-// none for the task, so a resume never replaces what the submission recorded.
-func (e *Engine) recordObjectiveIfAbsent(taskID string, o Objective) {
+// heldObjective reports the objective this process holds for a task, and
+// whether it holds one at all. objective answers "unestablished" for both an
+// absent record and an empty one; this is the question that tells them apart.
+func (e *Engine) heldObjective(taskID string) (Objective, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if _, ok := e.objectives[taskID]; ok {
-		return
+	o, ok := e.objectives[taskID]
+	return o, ok
+}
+
+// reconcileObjective makes a resumed task hold exactly the objective its
+// durable record holds, before any turn of the resume can read it.
+//
+// The record is the source and what a process holds is a cache. A restarted
+// process holds nothing, and gets the recorded text under the resumption's own
+// provenance, which establishes no human (the safe direction, as in
+// TestAResumedTaskDoesNotInventHumanAuthority). A process that still holds the
+// objective -- the TUI that took the /run -- keeps it and its provenance
+// exactly; overwriting it would quietly demote a task a human asked for. A
+// held objective that DISAGREES with the record is refused and left as it is:
+// nothing tolerates a disagreement in objective identity, and neither side is
+// the one a resume may pick.
+//
+// A record carrying no objective text records nothing. Absence is not filled
+// in, and an empty objective must never become the digest of an empty input.
+func (e *Engine) reconcileObjective(task session.Interrupted) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if held, ok := e.objectives[task.TaskID]; ok {
+		if held.Text != task.Task {
+			return fmt.Errorf("the objective this process holds for task %s does not match the one its record holds; "+
+				"the resume is refused and neither is replaced", task.TaskID)
+		}
+		return nil
+	}
+	if task.Task == "" {
+		return nil
 	}
 	if e.objectives == nil {
 		e.objectives = make(map[string]Objective)
 	}
-	e.objectives[taskID] = o
+	e.objectives[task.TaskID] = Objective{Text: task.Task, Provenance: ResumedGoverned}
+	return nil
 }
 
 // observes reports whether a task entered through the observation lane.
@@ -6036,6 +6067,14 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 			"the deferred authority question carried no options, so there is nothing to answer", nil)
 		return
 	}
+	// The objective the answered question continues under is the recorded one
+	// (reconcileObjective), restored before anything is started.
+	if err := e.reconcileObjective(task); err != nil {
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the deferred authority question cannot be resumed: "+err.Error(), nil)
+		return
+	}
 
 	// The record must be about the task being resumed, and this is checked
 	// BEFORE anything is started: a binding mismatch must cost nothing.
@@ -6140,12 +6179,13 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 		}
 		owed, record = block.Describe(), block
 	}
-	// The objective is the recorded one. A process that still holds it -- the
-	// TUI that took the /run -- keeps its provenance exactly; overwriting it
-	// would quietly demote a task a human asked for. A restarted process holds
-	// nothing, and gets the resumption's own provenance, which establishes no
-	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
-	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	// The objective is the recorded one (reconcileObjective).
+	if err := e.reconcileObjective(task); err != nil {
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the task cannot be resumed at its owed turn: "+err.Error(), nil)
+		return
+	}
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"resuming the same task at the turn it is owed ("+owed+"); the objective, task identity and "+
 			"candidate base are the recorded ones", record))
@@ -6193,6 +6233,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// The same classifier execute uses: blocked stays blocked, a deferred
 		// question stays deferred, a stop is a stop, and only a failure fails.
 		fail := func(err error) { e.terminateRun(ctx, task.TaskID, task.Task, err) }
+		// The objective an owed re-plan is bound to is the recorded one
+		// (reconcileObjective). This path used to restore none, so a restarted
+		// process bound its architect turn with no objective digest and the
+		// owed re-plan could never be taken (task-1790353318851268310).
+		if err := e.reconcileObjective(task); err != nil {
+			fail(err)
+			return
+		}
 		sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
 		if err == nil {
 			pid, ok := sc.ServingPID()

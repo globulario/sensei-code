@@ -500,3 +500,95 @@ func authorityEvidence(t *testing.T, store *session.Store) []string {
 	}
 	return out
 }
+
+// OBJECTIVE IDENTITY ON RESUME -- the composition witnesses. The measured case
+// (W1), the absent-objective control (W3) and the runner-edge guard (W4) are in
+// nonconvergence_test.go beside restartedAtOwedReplan.
+
+// W2. The fresh-run path and the resume path of ONE task record mint the same
+// architect binding, referent by referent. Fails if any referent survives the
+// process boundary differently -- the objective digest was the one that did not.
+func TestObjectiveW2AFreshRunAndItsResumeMintTheSameArchitectBinding(t *testing.T) {
+	submitted, restarted, task, events := restartedAtOwedReplan(t, "the objective")
+	fresh, asked, err := architectTurnBinding(submitted, task.TaskID)
+	if !asked || !fresh.Valid() {
+		t.Fatalf("premise: the fresh run binds a valid architect turn: asked=%v %+v %v", asked, fresh, err)
+	}
+	restarted.Resume(context.Background(), task)
+	settleResume(t, events)
+	resumed, asked, err := architectTurnBinding(restarted, task.TaskID)
+	if !asked {
+		t.Fatalf("the resumed architect turn never reached resolver selection: %v", err)
+	}
+	for _, f := range []struct{ name, fresh, resumed string }{
+		{"TaskID", fresh.TaskID, resumed.TaskID},
+		{"ObjectiveDigest", fresh.ObjectiveDigest, resumed.ObjectiveDigest},
+		{"BaseSHA", fresh.BaseSHA, resumed.BaseSHA},
+		{"GraphRepository", fresh.GraphRepository, resumed.GraphRepository},
+		{"GraphBuildCommit", fresh.GraphBuildCommit, resumed.GraphBuildCommit},
+	} {
+		if f.fresh != f.resumed {
+			t.Errorf("%s: the fresh run binds %q and its resume binds %q", f.name, f.fresh, f.resumed)
+		}
+	}
+}
+
+// W5, CONTROL. A process that already holds the objective keeps it, with its
+// original provenance, across a resume; one that holds a DIFFERENT objective is
+// refused, and neither the held text nor its provenance is replaced. Fails if a
+// resume overwrites a held objective, demotes its provenance, or proceeds past
+// a disagreement to anything the resume would do next.
+func TestObjectiveW5AResumeKeepsAHeldObjectiveAndRefusesADisagreeingOne(t *testing.T) {
+	held := Objective{Text: "the objective", Provenance: RequestedByHuman}
+	e, events, task := resumeHarness(t, true)
+	e.recordObjective(task.TaskID, held)
+	e.Resume(context.Background(), task)
+	settleResume(t, events)
+	if got := e.objective(task.TaskID); got.Text != held.Text || got.Provenance != held.Provenance {
+		t.Fatalf("a resume replaced the objective this process held: %+v, want %+v", got, held)
+	}
+
+	other := Objective{Text: "a different objective", Provenance: RequestedByHuman}
+	e, events, task = resumeHarness(t, true)
+	e.recordObjective(task.TaskID, other)
+	e.Resume(context.Background(), task)
+	seen := settleResume(t, events)
+	refused := false
+	for _, ev := range seen {
+		if strings.Contains(ev.Summary, "start Sensei") {
+			t.Fatalf("a resume with a disagreeing objective continued past the reconciliation: %s", ev.Summary)
+		}
+		if ev.Kind == event.WorkflowFailed && strings.Contains(ev.Summary, "does not match the one its record holds") {
+			refused = true
+		}
+	}
+	if !refused {
+		t.Fatalf("a disagreeing objective was not refused by name: %v", kinds(seen))
+	}
+	if got := e.objective(task.TaskID); got.Text != other.Text || got.Provenance != other.Provenance {
+		t.Fatalf("a refused resume replaced the held objective: %+v, want %+v", got, other)
+	}
+}
+
+// W6, CONTROL. The resume of an UNPLANNED task binds its architect turn as it
+// did before: the recorded objective under the resumption's provenance, and a
+// valid binding naming it. Fails if moving the reconciliation cost the path
+// that already worked.
+func TestObjectiveW6AnUnplannedResumeStillBindsItsArchitectTurn(t *testing.T) {
+	e, events, task := resumeHarness(t, false)
+	task.Planned = false
+	var start certifiedStart
+	start.preflight.Authority.GraphBuildCommit = objectiveGraphCommit
+	e.Config.Sensei.Repository = "globulario/sensei"
+	e.bindGraph(task.TaskID, start)
+	e.Resume(context.Background(), task)
+	settleResume(t, events)
+
+	if got := e.objective(task.TaskID); got.Text != task.Task || got.Provenance != ResumedGoverned {
+		t.Fatalf("the unplanned resume did not carry the recorded objective: %+v", got)
+	}
+	b, asked, err := architectTurnBinding(e, task.TaskID)
+	if !asked || !b.Valid() || b.ObjectiveDigest != objectiveDigestOf(task.Task) {
+		t.Fatalf("the unplanned resume no longer binds its architect turn: asked=%v %+v %v", asked, b, err)
+	}
+}

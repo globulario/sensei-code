@@ -138,6 +138,17 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	// the base and bindGraph has already recorded the start gate's graph.
 	if spec.Role == roles.Architect {
 		spec.Architecture = e.architectureBinding(spec.TaskID)
+		// A task that holds an objective record and still binds no objective
+		// digest is refused here, before either adapter path, and named as the
+		// missing referent it is. Past this point it would read as an absent
+		// adapter and send the reader to the roster. Only the objective, and
+		// only for a task that recorded one: the assisted lane records none by
+		// design, and the other referents keep today's optional behaviour.
+		if _, held := e.heldObjective(spec.TaskID); held && spec.Architecture.ObjectiveDigest == "" {
+			return Resolved{}, fmt.Errorf("the %s turn for task %s cannot be bound: its objective referent is missing "+
+				"(the task holds an objective record, but the binding carries no objective digest)",
+				spec.Role.Label(), spec.TaskID)
+		}
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil
