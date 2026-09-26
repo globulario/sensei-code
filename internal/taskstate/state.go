@@ -20,7 +20,10 @@
 package taskstate
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -127,6 +130,11 @@ type State struct {
 	// candidate it describes, and none of them is derived from another.
 	Observations []Observation `json:"observations,omitempty"`
 
+	// Retained is the executed evidence a cycle produced for a review finding,
+	// append-only. See the retained-evidence section below: a cycle's durable
+	// output is not only its diff.
+	Retained []RetainedEvidence `json:"retained_evidence,omitempty"`
+
 	// Workers is who has already worked on this task, in order.
 	Workers []string `json:"workers,omitempty"`
 
@@ -139,8 +147,14 @@ type State struct {
 }
 
 // Version is bumped when the shape changes incompatibly. Version 2 added the
-// run-dimension observations; a version 1 state is projected into it on read.
-const Version = 2
+// run-dimension observations; version 3 added retained finding evidence. Older
+// states are projected into this one on read, and nothing is invented for them:
+// a state written before evidence could be retained holds none.
+//
+// Version 3 is a bump rather than an optional field because an older build
+// that loaded and re-saved a version 3 state would silently drop its retained
+// evidence; refusing the unknown version is what keeps that from happening.
+const Version = 3
 
 func path(repoRoot, taskID string) string {
 	name := strings.TrimSpace(taskID)
@@ -151,7 +165,27 @@ func path(repoRoot, taskID string) string {
 }
 
 // Save writes the state.
+//
+// Retained evidence is append-only across writers, not only within one value:
+// the engine holds a projection of the task that never saw the evidence a cycle
+// retained while it ran, and a Save from that projection must not erase it. So
+// the records already on disk are kept and this value's are added to them. A
+// file that exists and cannot be read is not overwritten: what it holds may be
+// exactly the evidence this merge exists to keep.
 func (s State) Save(repoRoot string) error {
+	held, found, err := Load(repoRoot, s.TaskID)
+	if err != nil {
+		return fmt.Errorf("task state for %s is not overwritten, because the record on disk cannot be read and may hold retained evidence: %w", s.TaskID, err)
+	}
+	if found {
+		merged := append([]RetainedEvidence(nil), held.Retained...)
+		for _, r := range s.Retained {
+			if !containsKey(merged, r.Key()) {
+				merged = append(merged, r)
+			}
+		}
+		s.Retained = merged
+	}
 	s.Version = Version
 	s.UpdatedAt = time.Now().UTC()
 	target := path(repoRoot, s.TaskID)
@@ -179,11 +213,18 @@ func Load(repoRoot, taskID string) (State, bool, error) {
 	if err := json.Unmarshal(body, &s); err != nil {
 		return State{}, false, fmt.Errorf("task state for %s is unreadable: %w", taskID, err)
 	}
-	// Exactly version 1 is upgraded, and only in memory. Any other version --
-	// including one from a future build -- is refused rather than guessed at:
-	// an unrecognized shape is not an old shape, and reading must never write.
+	// Exactly versions 1 and 2 are upgraded, and only in memory. Any other
+	// version -- including one from a future build -- is refused rather than
+	// guessed at: an unrecognized shape is not an old shape, and reading must
+	// never write.
 	switch s.Version {
 	case Version:
+		return normalizePersisted(s), true, nil
+	case 2:
+		// Version 2 predates retained evidence, so it holds none, and none is
+		// invented: a record that was never written cannot be read back.
+		s.Version = Version
+		s.Retained = nil
 		return normalizePersisted(s), true, nil
 	case 1:
 		return normalizePersisted(upgradeFromV1(s)), true, nil
@@ -334,6 +375,19 @@ func (s State) Handover(previousWorker string, currentGraphBuildCommit string) s
 			mark = "SATISFIED"
 		}
 		b.WriteString("  required test " + r.ID + ": " + mark + " (" + r.State + ")\n")
+	}
+
+	if len(s.Retained) != 0 {
+		b.WriteString("\nRETAINED EVIDENCE (executed by the broker, bound to a candidate and a finding)\n")
+		for _, r := range s.Retained {
+			if err := r.Validate(); err != nil {
+				b.WriteString("  - [" + r.FindingID + "] NOT EVIDENCE: " + err.Error() + "\n")
+				continue
+			}
+			b.WriteString(fmt.Sprintf("  - [%s] %s exit %d: %s (candidate %s/%s, output %s)\n",
+				r.FindingID, r.Outcome, r.ExitStatus, r.Command,
+				shortID(r.Candidate.BaseSHA), shortID(r.Candidate.DiffDigest), shortID(r.OutputDigest)))
+		}
 	}
 
 	b.WriteString("\nSTILL OPEN (this is your work)\n")
@@ -784,6 +838,7 @@ var legacyAuditVerdicts = map[string]AuditState{
 // Nothing is inferred from prose and nothing defaults to success.
 func upgradeFromV1(s State) State {
 	s.Version = Version
+	s.Retained = nil
 	verdict := strings.TrimSpace(s.Evidence.AuditVerdict)
 	if verdict == "" {
 		return s
@@ -802,4 +857,179 @@ func upgradeFromV1(s State) State {
 	}
 	s.Observations = append(s.Observations, o)
 	return s
+}
+
+// ---------------------------------------------------------------------------
+// Retained finding evidence.
+//
+// A review may demand proof rather than code: "run the witness against the
+// preserved implementation and RETAIN the failing output". Measured on the
+// DF-19 resume, 2026-09-25: the implementer produced exactly that proof, the
+// diff was correctly unchanged, and the run ended "the candidate did not change
+// between review cycles" -- the proof existed only in a transcript, and the next
+// cycle started without it.
+//
+// So a cycle's durable output is not only its diff. What the execution broker
+// ran for an EVIDENCE finding is retained here, bound to the candidate it ran
+// against and the finding it answers, and only a record that was written and
+// read back can say the finding was answered. A worker's report that it
+// answered something is input that locates the record, never the record.
+//
+// Both outcomes are evidence. A review that asks for failing-first history is
+// asking for a FAILED run, and a store that kept only passes would discard the
+// exact artifact it was asked for. What is not evidence is a check that never
+// executed: not permitted, errored, or unreported has no outcome to retain.
+// ---------------------------------------------------------------------------
+
+// EvidenceOutcome is what an executed check did. The vocabulary is closed and
+// read by membership; it has no member for "did not run", because a check that
+// did not run produced nothing to retain.
+type EvidenceOutcome string
+
+const (
+	EvidencePassed EvidenceOutcome = "PASSED"
+	EvidenceFailed EvidenceOutcome = "FAILED"
+)
+
+// evidenceFindingClass is the one finding class a retained record may answer.
+// The string is the reviewer vocabulary's, copied rather than imported so this
+// package keeps no dependency on that one. A code or scope finding is
+// discharged by a change, never by evidence, so a record naming one is refused.
+const evidenceFindingClass = "evidence"
+
+// RetainedEvidence is one executed check retained as the answer to one review
+// finding, bound to the candidate it ran against.
+type RetainedEvidence struct {
+	Candidate CandidateIdentity `json:"candidate"`
+	FindingID string            `json:"finding_id"`
+	// FindingClass is the REVIEWER's class for the finding, copied from the
+	// finding and never from the party answering it.
+	FindingClass string          `json:"finding_class"`
+	Command      string          `json:"command"`
+	Outcome      EvidenceOutcome `json:"outcome"`
+	ExitStatus   int             `json:"exit_status"`
+	// Attribution is the broker's account of a non-zero exit, kept verbatim.
+	Attribution string `json:"attribution,omitempty"`
+	// Output is the broker's bounded capture; OutputDigest covers the full one.
+	Output       string    `json:"output,omitempty"`
+	OutputDigest string    `json:"output_digest"`
+	Producer     string    `json:"producer"`
+	Source       string    `json:"source"`
+	Cycle        int       `json:"cycle,omitempty"`
+	RetainedAt   time.Time `json:"retained_at"`
+}
+
+// Validate refuses a record that is not executed evidence for an evidence
+// finding about a known candidate.
+func (r RetainedEvidence) Validate() error {
+	switch {
+	case !r.Candidate.Known():
+		return errors.New("retained evidence names no candidate")
+	case strings.TrimSpace(r.FindingID) == "":
+		return errors.New("retained evidence names no finding")
+	case r.FindingClass != evidenceFindingClass:
+		return fmt.Errorf("retained evidence answers only an evidence finding, and finding %s is class %q", r.FindingID, r.FindingClass)
+	case strings.TrimSpace(r.Command) == "":
+		return errors.New("retained evidence names no command")
+	case r.Outcome != EvidencePassed && r.Outcome != EvidenceFailed:
+		return fmt.Errorf("retained evidence has outcome %q, which is not an execution", r.Outcome)
+	case !strings.HasPrefix(r.OutputDigest, "sha256:") || len(r.OutputDigest) == len("sha256:"):
+		return errors.New("retained evidence carries no output digest")
+	case strings.TrimSpace(r.Producer) == "" || strings.TrimSpace(r.Source) == "":
+		return errors.New("retained evidence does not say what produced it")
+	}
+	return nil
+}
+
+// Key is the record's storage identity: candidate, finding, command and output
+// digest. The same execution retained twice is one record.
+func (r RetainedEvidence) Key() string {
+	return digestOf(r.Candidate.BaseSHA, r.Candidate.DiffDigest, r.FindingID, r.Command, r.OutputDigest)
+}
+
+// Identity is what a reviewer may change its mind on: which check answered
+// which finding on which candidate, and what it did. Output is excluded -- test
+// output carries timings, and a re-run that only printed different
+// milliseconds is not new proof.
+func (r RetainedEvidence) Identity() string {
+	return digestOf(r.Candidate.BaseSHA, r.Candidate.DiffDigest, r.FindingID, r.FindingClass,
+		r.Command, string(r.Outcome), strconv.Itoa(r.ExitStatus))
+}
+
+func digestOf(parts ...string) string {
+	sum := sha256.Sum256([]byte(strings.Join(parts, "\x1f")))
+	return "sha256:" + hex.EncodeToString(sum[:])
+}
+
+func containsKey(records []RetainedEvidence, key string) bool {
+	for _, r := range records {
+		if r.Key() == key {
+			return true
+		}
+	}
+	return false
+}
+
+// Retain appends a record unless the same record is already held. A record
+// with the same key and a different outcome is refused and the held one kept:
+// the same output cannot have come from two different executions' results, and
+// a second run must not rewrite what the first one retained.
+func (s *State) Retain(r RetainedEvidence) (bool, error) {
+	if err := r.Validate(); err != nil {
+		return false, err
+	}
+	if r.RetainedAt.IsZero() {
+		r.RetainedAt = time.Now()
+	}
+	r.RetainedAt = r.RetainedAt.UTC()
+	for _, held := range s.Retained {
+		if held.Key() != r.Key() {
+			continue
+		}
+		if held.Outcome != r.Outcome || held.ExitStatus != r.ExitStatus {
+			return false, fmt.Errorf("finding %s already retained %s exit %d for this execution; %s exit %d does not replace it",
+				r.FindingID, held.Outcome, held.ExitStatus, r.Outcome, r.ExitStatus)
+		}
+		return false, nil
+	}
+	s.Retained = append(s.Retained, r)
+	return true, nil
+}
+
+// RetainedFor is the valid evidence retained for this exact candidate. A record
+// about another candidate stays in the file as history and answers nothing
+// here; an invalid one answers nothing anywhere.
+func (s State) RetainedFor(candidate CandidateIdentity) []RetainedEvidence {
+	var out []RetainedEvidence
+	for _, r := range s.Retained {
+		if r.Validate() == nil && r.Candidate.Equal(candidate) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// RetainEvidence writes one record into the task's durable state at once. It
+// is a read-modify-write of the governed file, through the same Save as every
+// other write of it.
+func RetainEvidence(repoRoot, taskID string, r RetainedEvidence) error {
+	s, found, err := Load(repoRoot, taskID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		s = State{TaskID: taskID}
+	}
+	if _, err := s.Retain(r); err != nil {
+		return err
+	}
+	return s.Save(repoRoot)
+}
+
+func shortID(id string) string {
+	id = strings.TrimPrefix(strings.TrimSpace(id), "sha256:")
+	if len(id) > 12 {
+		return id[:12]
+	}
+	return id
 }

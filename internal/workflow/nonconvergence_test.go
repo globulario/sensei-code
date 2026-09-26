@@ -614,3 +614,248 @@ func TestW7AClasslessFindingIsValidWireDataAndRefusedOnlyAtTheBoundary(t *testin
 		}
 	}
 }
+
+// RETAINED EVIDENCE IS A CYCLE OUTPUT: the loop-level witnesses.
+//
+// Measured on the DF-19 resume, 2026-09-25: a review demanded failing-first
+// history as EVIDENCE, the implementer produced exactly that, the diff was
+// correctly unchanged -- and the run ended "the candidate did not change between
+// review cycles", because the proof lived only in a transcript. These drive the
+// REAL candidate loop for two cycles. The broker executes a check that FAILS
+// (the red phase the finding asks for), and what is asserted is what the loop
+// concluded and what durable task state holds afterwards.
+
+const (
+	// failingFirstFinding demands a failing run, retained.
+	failingFirstFinding = `{"id":"f2","severity":"major","class":"evidence","claim":"the failing-first history is established","reference":"main.go","reason":"comments describing the old bypass are not execution evidence","proof_gap":"the failing-first run of ls witness_test.go, with its output retained"}`
+	// secondEvidenceFinding demands a check this harness never executes.
+	secondEvidenceFinding = `{"id":"f3","severity":"major","class":"evidence","claim":"the second witness has a red phase","reference":"main.go","reason":"no run","proof_gap":"the failing-first run of ls other_test.go"}`
+	answerF2WithTheRun    = `{"id":"f2","answered_by":"evidence","evidence":"ls witness_test.go"}`
+
+	producedNothing         = "the candidate did not change between review cycles"
+	producedNothingSame     = "produced an identical diff after being asked to revise"
+	producedEvidenceNotCode = "produced evidence, not code"
+)
+
+// evidenceLoop is scriptedLoop with the broker executing the failing check.
+func evidenceLoop(t *testing.T, findings, responses string) (*gateHarness, string) {
+	t.Helper()
+	h, reviews := scriptedLoop(t, findings, false, `{"finding_responses":[`+responses+`]}`)
+	h.engine.Config.Permissions.RunTests = true
+	h.engine.Config.Validation.Test = []config.Command{{Command: "ls", Args: []string{"witness_test.go"}}}
+	return h, reviews
+}
+
+// durableRecord is the retained-evidence shape as it sits in the task-state
+// FILE, decoded independently of the package that wrote it.
+type durableRecord struct {
+	Candidate struct {
+		BaseSHA    string `json:"base_sha"`
+		DiffDigest string `json:"diff_digest"`
+	} `json:"candidate"`
+	FindingID    string `json:"finding_id"`
+	FindingClass string `json:"finding_class"`
+	Command      string `json:"command"`
+	Outcome      string `json:"outcome"`
+	ExitStatus   int    `json:"exit_status"`
+	Output       string `json:"output"`
+	OutputDigest string `json:"output_digest"`
+}
+
+// durableEvidence reads what the task-state file holds after the run: the
+// durable state a later cycle or process reads, not the transcript.
+func durableEvidence(t *testing.T, h *gateHarness) []durableRecord {
+	t.Helper()
+	raw, err := os.ReadFile(h.engine.Repo.Root + "/.sensei-code/tasks/task-1.json")
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("the task-state file cannot be read: %v", err)
+	}
+	var file struct {
+		Retained []durableRecord `json:"retained_evidence"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("the task-state file does not decode: %v", err)
+	}
+	return file.Retained
+}
+
+// W1 EVIDENCE-ONLY CYCLE CONVERGES. The only finding is EVIDENCE; the worker
+// changes nothing and locates the failing run the finding asks for; the broker
+// executed it. The cycle is NOT "the candidate did not change": the record is
+// in the task-state file, bound to this candidate and f2, FAILED with its
+// output and digest; and the candidate goes back to the reviewer.
+//
+// The control breaks only the durable write (the task-state directory is a
+// file): the same response and the same broker run then answer nothing, and
+// the reviewer is never asked again. So what carried the cycle is the record
+// read back, not the response naming f2.
+//
+// Fails if a failing run is not retainable, if the discharge stops requiring a
+// record read back from task state, or if the record loses its binding. That
+// the review identity carries the record is pinned in reviewconsistency_test.go:
+// in this harness the second review is not reached as a contradiction either
+// way, so this witness does not decide it.
+func TestW1PersistedEvidenceCarriesAnUnchangedEvidenceOnlyCycle(t *testing.T) {
+	h, reviews := evidenceLoop(t, failingFirstFinding, answerF2WithTheRun)
+	outcome, err := h.runTwoCycles()
+	if err != nil && strings.Contains(err.Error(), producedNothing) {
+		t.Fatalf("an evidence-only cycle that retained the proof it was asked for was reported as unchanged: %v", err)
+	}
+	if err != nil || !outcome.Accepted() {
+		t.Fatalf("the evidence-only cycle did not converge: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, reviews); got != "2" {
+		t.Fatalf("the reviewer was asked %s times; a durably answered finding goes back to the reviewer", got)
+	}
+	records := durableEvidence(t, h)
+	if len(records) != 1 {
+		t.Fatalf("the task-state file holds %d retained records, want the one the cycle produced: %+v", len(records), records)
+	}
+	r := records[0]
+	if r.FindingID != "f2" || r.FindingClass != "evidence" || r.Command != "ls witness_test.go" ||
+		r.Outcome != "FAILED" || r.ExitStatus == 0 || !strings.Contains(r.Output, "witness_test.go") ||
+		!strings.HasPrefix(r.OutputDigest, "sha256:") ||
+		r.Candidate.BaseSHA != h.tc.Identity.BaseSHA || !strings.HasPrefix(r.Candidate.DiffDigest, "sha256:") {
+		t.Fatalf("the durable record is not the failing run bound to this candidate and f2: %+v", r)
+	}
+
+	control, controlReviews := evidenceLoop(t, failingFirstFinding, answerF2WithTheRun)
+	if err := os.MkdirAll(control.engine.Repo.Root+"/.sensei-code", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(control.engine.Repo.Root+"/.sensei-code/tasks", []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err = control.runTwoCycles()
+	if outcome.Accepted() || err == nil || !strings.Contains(err.Error(), "f2") || !strings.Contains(err.Error(), "could not be retained") {
+		t.Fatalf("control: evidence that never reached durable state answered the finding: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, controlReviews); got != "1" {
+		t.Fatalf("control: the reviewer was asked %s times", got)
+	}
+}
+
+// W3 PRODUCED NOTHING STILL FAILS -- CONTROL. The diff is unchanged and nothing
+// durable was produced, however the worker describes its turn: silence, a
+// claim naming f2 with a check that never executed, or an empty artifact. Each
+// keeps the existing identical-diff diagnosis, is never the evidence diagnosis,
+// retains nothing, and never reaches the reviewer again.
+//
+// Fails if naming a finding, or answering it with nothing, counts as producing
+// something -- the run would converge, or leave the produced-nothing sentence.
+func TestW3ATranscriptClaimOrEmptyArtifactStillProducedNothing(t *testing.T) {
+	for name, responses := range map[string]string{
+		"silence":          ``,
+		"transcript claim": `{"id":"f2","answered_by":"evidence","evidence":"go test ./internal/workflow -run TestW4"}`,
+		"empty artifact":   `{"id":"f2","answered_by":"evidence","evidence":""}`,
+	} {
+		h, reviews := evidenceLoop(t, failingFirstFinding, responses)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil {
+			t.Fatalf("%s: a cycle that produced nothing converged: outcome %q err %v", name, outcome, err)
+		}
+		if !strings.Contains(err.Error(), producedNothing) || !strings.Contains(err.Error(), producedNothingSame) {
+			t.Fatalf("%s: the produced-nothing diagnosis was not kept: %v", name, err)
+		}
+		if strings.Contains(err.Error(), producedEvidenceNotCode) {
+			t.Fatalf("%s: a cycle that retained nothing was reported as producing evidence: %v", name, err)
+		}
+		if got := reviewCalls(t, reviews); got != "1" {
+			t.Fatalf("%s: the reviewer was asked %s times", name, got)
+		}
+		if records := durableEvidence(t, h); len(records) != 0 {
+			t.Fatalf("%s: a claim became a durable record: %+v", name, records)
+		}
+	}
+}
+
+// W4 CODE-REQUIRING FINDING STILL BLOCKS -- CONTROL. A CODE finding beside the
+// failing-first EVIDENCE finding. The worker retains the proof for f2 and
+// answers f1 either by claiming code it did not change or by citing the same
+// executed check as "evidence". The cycle does not converge, the diagnosis is
+// the evidence-not-code one naming f1, and the task-state file holds a record
+// for f2 only: no execution is ever retained for a finding the reviewer classed
+// code.
+//
+// The predicate half removes the class-mismatch guard from the path: f1 is
+// answered AS CODE and a durable record for f1 is present, on a candidate that
+// did not move. It stays open, so the refusal is the class rule, not the
+// response's wording.
+//
+// Fails if evidence discharges a code finding, if a record is retained for one,
+// or if produced-evidence is treated as convergence.
+func TestW4RetainedEvidenceNeverDischargesACodeFinding(t *testing.T) {
+	for _, f1 := range []string{
+		`{"id":"f1","answered_by":"evidence","evidence":"ls witness_test.go"}`,
+		`{"id":"f1","answered_by":"code","paths":["main.go"]}`,
+	} {
+		h, reviews := evidenceLoop(t, codeFinding+","+failingFirstFinding, f1+","+answerF2WithTheRun)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil {
+			t.Fatalf("%s: evidence carried a cycle with an open CODE finding: outcome %q err %v", f1, outcome, err)
+		}
+		if !strings.Contains(err.Error(), producedEvidenceNotCode) || !strings.Contains(err.Error(), "[f1] code finding") {
+			t.Fatalf("%s: the diagnosis does not say evidence was produced and f1 still owes code: %v", f1, err)
+		}
+		if got := reviewCalls(t, reviews); got != "1" {
+			t.Fatalf("%s: the reviewer was asked %s times", f1, got)
+		}
+		records := durableEvidence(t, h)
+		if len(records) != 1 || records[0].FindingID != "f2" {
+			t.Fatalf("%s: the durable records are not exactly f2's: %+v", f1, records)
+		}
+	}
+
+	var code roles.Finding
+	if err := json.Unmarshal([]byte(codeFinding), &code); err != nil {
+		t.Fatal(err)
+	}
+	a := accountForFindings([]roles.Finding{code},
+		[]findingResponse{{ID: "f1", AnsweredBy: roles.CodeFinding, Paths: []string{"main.go"}}},
+		map[string]bool{}, n2bBundle("ok"), map[string]string{"f1": "sha256:forged"})
+	if a.Settled() || len(a.Evidenced) != 0 {
+		t.Fatalf("a durable record discharged a CODE finding on an unmoved candidate: %+v", a)
+	}
+}
+
+// W5 THE TWO DIAGNOSES DIFFER. Produced-nothing and produced-evidence-not-code,
+// from the real loop, are different sentences an operator can tell apart, each
+// carrying its own marker and not the other's. The third outcome -- evidence
+// retained for one EVIDENCE finding while another EVIDENCE finding is open --
+// is neither: it names the finding still open.
+//
+// Fails if the diagnoses collapse into one sentence, or if one retained record
+// reports "evidence, not code" while evidence is still owed.
+func TestW5ProducedNothingAndProducedEvidenceNotCodeAreDistinctDiagnoses(t *testing.T) {
+	run := func(findings, responses string) string {
+		t.Helper()
+		h, _ := evidenceLoop(t, findings, responses)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil {
+			t.Fatalf("%s: converged: %q", responses, outcome)
+		}
+		return err.Error()
+	}
+	nothing := run(failingFirstFinding, ``)
+	notCode := run(codeFinding+","+failingFirstFinding, answerF2WithTheRun)
+
+	if nothing == notCode {
+		t.Fatalf("the two diagnoses are the same sentence: %s", nothing)
+	}
+	if !strings.Contains(nothing, producedNothing) || strings.Contains(nothing, producedEvidenceNotCode) {
+		t.Fatalf("produced-nothing does not read as its own diagnosis: %s", nothing)
+	}
+	if !strings.Contains(notCode, producedEvidenceNotCode) || strings.Contains(notCode, producedNothing) ||
+		!strings.Contains(notCode, "answers f2") {
+		t.Fatalf("produced-evidence-not-code does not read as its own diagnosis: %s", notCode)
+	}
+
+	partial := run(failingFirstFinding+","+secondEvidenceFinding, answerF2WithTheRun)
+	if strings.Contains(partial, producedEvidenceNotCode) || strings.Contains(partial, producedNothing) ||
+		!strings.Contains(partial, "[f3]") || strings.Contains(partial, "[f2]") {
+		t.Fatalf("with evidence still owed, the diagnosis must name the open finding only: %s", partial)
+	}
+}

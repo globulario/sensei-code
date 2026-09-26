@@ -1915,7 +1915,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// file: a change is bound to a finding through the files it
 				// touched, never through the digest of the whole candidate.
 				moved, merr := movedPathsSince(ctx, candidate, tc.Identity.BaseSHA, open.CandidateTree, diff)
-				account := accountForFindings(outstanding, responses, moved, evidence)
+				// The response LOCATES evidence; it does not establish it. What
+				// the broker executed for an EVIDENCE finding is retained now,
+				// and only the record read back from task state answers it.
+				readBack, rerr := e.retainFindingEvidence(taskID, cycle, retainedCandidate(tc.Identity.BaseSHA, evidence), outstanding, responses, evidence)
+				account := accountForFindings(outstanding, responses, moved, evidence, readBack)
 				if len(account.Disputes) != 0 {
 					// A classification disagreement is a ROUTE, not a licence:
 					// it goes to the architect by the same escalation a
@@ -1961,11 +1965,26 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				}
 				if !account.Settled() {
 					diagnosis := account.Diagnosis()
-					if perr != nil {
-						diagnosis += " (" + perr.Error() + ")"
+					for _, err := range []error{perr, merr, rerr} {
+						if err != nil {
+							diagnosis += " (" + err.Error() + ")"
+						}
 					}
-					if merr != nil {
-						diagnosis += " (" + merr.Error() + ")"
+					// Two different failures, never one sentence. A cycle that
+					// changed nothing and retained nothing PRODUCED NOTHING, and
+					// keeps the identical-diff diagnosis. A cycle that retained
+					// evidence while a code or scope finding stays open PRODUCED
+					// EVIDENCE, NOT CODE: evidence never discharges a change.
+					unchanged := strings.TrimSpace(verdict.InputDiffDigest) != "" && verdict.InputDiffDigest == previousDiffDigest
+					switch {
+					case unchanged && len(account.Evidenced) == 0 && !account.OwesChange():
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+							"the candidate did not change between review cycles: %s produced an identical diff after being asked to revise. "+
+								"The last review asked for: %s. Nothing durable answers it: %s", config.DisplayName(worker.Name), oneLine(lastReview), diagnosis)
+					case len(account.Evidenced) != 0 && account.OnlyChangesOpen():
+						return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
+							"the candidate did not converge: %s produced evidence, not code. Its retained evidence answers %s, and evidence never discharges a finding that requires a change: %s",
+							config.DisplayName(worker.Name), strings.Join(account.Evidenced, ", "), diagnosis)
 					}
 					return candidateNotConverged, plan, lastReview, lastAudit, fmt.Errorf(
 						"the candidate did not converge: %s", diagnosis)
@@ -2098,7 +2117,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		review := standing.Verdict()
 		lastReview = review.Summary
-		evidenceID := evidenceIdentity(evidence, verdict)
+		evidenceID := evidenceIdentity(evidence, verdict, e.retainedIdentities(taskID, retainedCandidate(tc.Identity.BaseSHA, evidence))...)
 		switch review.Decision {
 		case roles.Accept:
 			// The gate. A review that established no independence may accept
@@ -3410,6 +3429,31 @@ type findingAccount struct {
 	// Disputes are classification disagreements, escalated rather than acted
 	// on. Every disputed finding is also in Open.
 	Disputes []findingResponse `json:"disputes,omitempty"`
+	// Evidenced are the EVIDENCE findings this cycle answered with a record
+	// read back from durable task state -- what it produced that is not a diff.
+	Evidenced []string `json:"evidenced,omitempty"`
+}
+
+// OwesChange reports whether a finding still open requires a change: its
+// reviewer class is code or scope.
+func (a findingAccount) OwesChange() bool {
+	for _, o := range a.Open {
+		if o.Class == roles.CodeFinding || o.Class == roles.ScopeFinding {
+			return true
+		}
+	}
+	return false
+}
+
+// OnlyChangesOpen reports that something is open and every open finding
+// requires a change: no evidence finding is left unanswered beside it.
+func (a findingAccount) OnlyChangesOpen() bool {
+	for _, o := range a.Open {
+		if o.Class != roles.CodeFinding && o.Class != roles.ScopeFinding {
+			return false
+		}
+	}
+	return len(a.Open) != 0
 }
 
 // Settled reports that every outstanding finding was discharged by a response
@@ -3454,7 +3498,9 @@ func outstandingFindings(open openReview) []roles.Finding {
 //
 // moved is the set of files whose content changed between the candidate the
 // findings were raised on and this one, or nil when that cannot be measured;
-// evidence is this cycle's executed validation. The class of each finding is
+// evidence is this cycle's executed validation; readBack maps an EVIDENCE
+// finding's id to the key of the record retained for it on this candidate, as
+// read back from durable task state. The class of each finding is
 // read from the finding and nowhere else, and the discharge is bound to the
 // finding itself, not merely to its class:
 //
@@ -3462,13 +3508,14 @@ func outstandingFindings(open openReview) []roles.Finding {
 //	         and one of them is where the finding's reference points
 //	scope    the same, as a scope answer
 //	evidence an evidence answer naming, by full command line, a check that ran
-//	         on this candidate and passed AND that the finding's proof gap
-//	         names; a code change, or an unrelated passing check, does not
+//	         on this candidate -- passing or failing -- AND that the finding's
+//	         proof gap names, retained and READ BACK as a durable record; a
+//	         code change, an unrelated check, or a naming alone does not
 //
 // A missing, mismatched or disputed response leaves the finding open. A finding
 // with no valid class cannot be discharged at all: nothing in the record says
 // what would discharge it, and guessing is the thing refused here.
-func accountForFindings(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle) findingAccount {
+func accountForFindings(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle, readBack map[string]string) findingAccount {
 	byID := make(map[string]findingResponse, len(responses))
 	for _, r := range responses {
 		id := strings.TrimSpace(r.ID)
@@ -3495,8 +3542,14 @@ func accountForFindings(outstanding []roles.Finding, responses []findingResponse
 		case f.Class == roles.EvidenceFinding:
 			if why := unmetProof(f, r, evidence); why != "" {
 				open(why)
+			} else if readBack[strings.TrimSpace(f.ID)] == "" {
+				open("the check it cites ran, and no retained record of it was read back from durable task state, so nothing durable answers it")
+			} else {
+				account.Evidenced = append(account.Evidenced, f.ID)
 			}
 		default:
+			// A code or scope finding never reads readBack: evidence does not
+			// discharge a change.
 			if why := unboundChange(f, r, moved); why != "" {
 				open(why)
 			}
@@ -3539,42 +3592,160 @@ func unboundChange(f roles.Finding, r findingResponse, moved map[string]bool) st
 }
 
 // unmetProof says why an evidence answer does not meet its finding's proof gap,
-// or "" when it does. The cited check must have run on this candidate and
-// passed, and it must be the proof the REVIEWER asked for: the finding's proof
-// gap or correction names it. A check that passed but proves something else --
-// gofmt, against a demand for failing-first history -- meets nothing.
+// or "" when it does. The cited check must have EXECUTED on this candidate, and
+// it must be the proof the REVIEWER asked for: the finding's proof gap or
+// correction names it. A check that ran but proves something else -- gofmt,
+// against a demand for failing-first history -- meets nothing.
+//
+// Passing and failing are both executions. A review that asks for the red
+// phase is asking for a failing run, and refusing it would discard the exact
+// artifact demanded. Which one meets the finding is the REVIEWER's to say: a
+// failed run meets it only when its requirement asks for a failing run, and a
+// passing run only when it does not.
 func unmetProof(f roles.Finding, r findingResponse, b validation.Bundle) string {
 	cite := strings.TrimSpace(r.Evidence)
-	if !citesPassingCheck(b, cite) {
-		return fmt.Sprintf("the evidence cited (%q) names no check that ran on this candidate and passed", r.Evidence)
+	c, ok := citedExecution(b, cite)
+	if !ok {
+		return fmt.Sprintf("the evidence cited (%q) names no check that executed on this candidate", r.Evidence)
 	}
 	required := strings.TrimSpace(f.ProofGap + " " + f.Correction)
 	if required == "" {
 		return "the finding states no proof requirement, so no executed check can be shown to meet it"
 	}
 	if !strings.Contains(required, cite) {
-		return fmt.Sprintf("the check cited (%q) passed, but it is not the proof the finding asks for (%q)", cite, required)
+		return fmt.Sprintf("the check cited (%q) ran, but it is not the proof the finding asks for (%q)", cite, required)
+	}
+	outcome, _ := retainedOutcome(c.Outcome)
+	if wantsFailing := strings.Contains(strings.ToLower(required), "failing"); wantsFailing != (outcome == taskstate.EvidenceFailed) {
+		return fmt.Sprintf("the check cited (%q) %s, and the finding asks for %q", cite, strings.ToLower(string(outcome)), required)
 	}
 	return ""
 }
 
-// citesPassingCheck reports whether cite is the full command line of a check in
-// this cycle's bundle that passed. Only the full line: a kind ("test") or a bare
-// command ("go") names every check of its sort, and so names no particular one.
-func citesPassingCheck(b validation.Bundle, cite string) bool {
+// citedExecution is the check in this cycle's bundle whose full command line is
+// cite, if it executed. Only the full line: a kind ("test") or a bare command
+// ("go") names every check of its sort, and so names no particular one. A check
+// that was not permitted or could not start did not execute and is not evidence.
+func citedExecution(b validation.Bundle, cite string) (validation.Evidence, bool) {
 	cite = strings.TrimSpace(cite)
 	if cite == "" {
-		return false
+		return validation.Evidence{}, false
 	}
 	for _, c := range b.Checks {
-		if c.Outcome != validation.Passed {
+		if _, executed := retainedOutcome(c.Outcome); !executed {
 			continue
 		}
-		if cite == strings.TrimSpace(c.Command+" "+strings.Join(c.Args, " ")) {
-			return true
+		if cite == commandLine(c) {
+			return c, true
 		}
 	}
-	return false
+	return validation.Evidence{}, false
+}
+
+func commandLine(c validation.Evidence) string {
+	return strings.TrimSpace(c.Command + " " + strings.Join(c.Args, " "))
+}
+
+// retainedOutcome maps a broker outcome to what a retained record may say, by
+// membership. Infrastructure failures ran to an exit status and are kept with
+// their attribution; not-permitted and errored checks never ran.
+func retainedOutcome(o validation.Outcome) (taskstate.EvidenceOutcome, bool) {
+	switch o {
+	case validation.Passed:
+		return taskstate.EvidencePassed, true
+	case validation.Failed, validation.Infrastructure:
+		return taskstate.EvidenceFailed, true
+	}
+	return "", false
+}
+
+// retainedCandidate is the identity retained evidence is bound to: the base
+// and the digest of the exact diff the broker executed against.
+func retainedCandidate(base string, b validation.Bundle) taskstate.CandidateIdentity {
+	return taskstate.CandidateIdentity{BaseSHA: strings.TrimSpace(base), DiffDigest: b.DiffDigest}
+}
+
+// retainFindingEvidence persists the executed evidence this cycle produced for
+// its outstanding EVIDENCE findings, reads task state back, and returns, per
+// finding id, the key of a record that was read back.
+//
+// The worker's response is only a locator: it names a finding and a command.
+// The record is built from the broker's execution of that command on this
+// candidate, and from the reviewer's finding -- its id and its class -- never
+// from the worker's account of either. A record is built only for a finding the
+// reviewer classed EVIDENCE, and only for a check its proof gap names. Then the
+// store is read back, and a finding is answered only by what the read found.
+// A write that did not land answers nothing, however well the response read.
+func (e *Engine) retainFindingEvidence(taskID string, cycle int, cand taskstate.CandidateIdentity, outstanding []roles.Finding, responses []findingResponse, b validation.Bundle) (map[string]string, error) {
+	byID := make(map[string]findingResponse, len(responses))
+	for _, r := range responses {
+		if id := strings.TrimSpace(r.ID); id != "" {
+			if _, seen := byID[id]; !seen {
+				byID[id] = r
+			}
+		}
+	}
+	wanted := map[string]string{}
+	var failed error
+	for _, f := range outstanding {
+		id := strings.TrimSpace(f.ID)
+		r, ok := byID[id]
+		if !ok || f.Class != roles.EvidenceFinding || r.AnsweredBy != roles.EvidenceFinding || r.DisputesClass != "" || unmetProof(f, r, b) != "" {
+			continue
+		}
+		c, _ := citedExecution(b, r.Evidence)
+		outcome, _ := retainedOutcome(c.Outcome)
+		rec := taskstate.RetainedEvidence{
+			Candidate: cand, FindingID: id, FindingClass: string(f.Class),
+			Command: commandLine(c), Outcome: outcome, ExitStatus: c.ExitStatus, Attribution: c.Attribution,
+			Output: c.Output, OutputDigest: c.OutputDigest,
+			Producer: c.ExecutedBy, Source: "validation bundle " + shortDigest(b.DiffDigest), Cycle: cycle,
+		}
+		if err := taskstate.RetainEvidence(e.Repo.Root, taskID, rec); err != nil {
+			if failed == nil {
+				failed = fmt.Errorf("the evidence for %s could not be retained: %w", id, err)
+			}
+			continue
+		}
+		wanted[id] = rec.Key()
+	}
+	readBack := map[string]string{}
+	if len(wanted) == 0 {
+		return readBack, failed
+	}
+	held, err := e.retainedEvidence(taskID, cand)
+	if err != nil {
+		return readBack, fmt.Errorf("the retained evidence could not be read back: %w", err)
+	}
+	for _, r := range held {
+		if key, ok := wanted[r.FindingID]; ok && r.Key() == key && r.FindingClass == string(roles.EvidenceFinding) {
+			readBack[r.FindingID] = key
+		}
+	}
+	return readBack, failed
+}
+
+// retainedEvidence is the valid evidence durable task state holds for this
+// candidate, read from the file.
+func (e *Engine) retainedEvidence(taskID string, cand taskstate.CandidateIdentity) ([]taskstate.RetainedEvidence, error) {
+	state, found, err := taskstate.Load(e.Repo.Root, taskID)
+	if err != nil || !found {
+		return nil, err
+	}
+	return state.RetainedFor(cand), nil
+}
+
+// retainedIdentities are the review-identity contributions of the evidence
+// retained for this candidate. A store that cannot be read contributes
+// nothing, which is the conservative side: an unchanged identity makes a
+// reviewer-only flip a contradiction rather than an answer.
+func (e *Engine) retainedIdentities(taskID string, cand taskstate.CandidateIdentity) []string {
+	held, _ := e.retainedEvidence(taskID, cand)
+	ids := make([]string, 0, len(held))
+	for _, r := range held {
+		ids = append(ids, r.Identity())
+	}
+	return ids
 }
 
 // movedPathsSince is the set of files whose content differs between the
@@ -4720,7 +4891,9 @@ Each finding's class was set by the reviewer and is not yours to change. A code
 or scope finding is discharged only by a change to the files you name for it,
 which must have changed this cycle and include where the finding's reference
 points; an evidence finding only by a validation check that ran on this
-candidate, passed, and is the check its proof gap names. A finding you do not
+candidate (passing or failing) and is the check its proof gap names -- the
+engine retains that execution and reads it back, and your saying you answered
+a finding is not the answer. A finding you do not
 answer stays open and the cycle does not converge. If you believe a class is
 wrong, say so in disputes_class: that escalates the disagreement and does not
 discharge the finding.`
