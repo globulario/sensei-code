@@ -273,3 +273,304 @@ func TestTheOpenFindingsReachTheOwedReplan(t *testing.T) {
 		t.Fatalf("the re-plan prompt does not carry the finding that prevented convergence:\n%s", prompt)
 	}
 }
+
+// FINDING CLASS BINDS ITS RESPONSE: the loop-level witnesses.
+//
+// Measured on the DF-19 resume, 2026-09-25: a review returned a CODE finding
+// and an EVIDENCE finding, the implementer answered the evidence one and called
+// the cycle closed, and only the identical-diff proxy noticed. These drive the
+// REAL candidate loop for two cycles with a scripted worker and a scripted
+// reviewer, so what is asserted is what the loop concluded.
+
+const (
+	codeFinding     = `{"id":"f1","severity":"blocking","class":"code","claim":"a CREATE that cannot be bound does not refuse the plan","reference":"main.go","reason":"routePlan emits the refusal and continues"}`
+	evidenceFinding = `{"id":"f2","severity":"major","class":"evidence","claim":"the failing-first history is established","reference":"main.go","reason":"no retained run of the check","proof_gap":"a passing run of test -s main.go on this candidate"}`
+	// strayFinding points at a file the worker never touches, so a moved
+	// main.go is, for it, an unrelated edit.
+	strayFinding = `{"id":"f1","severity":"blocking","class":"code","claim":"a CREATE that cannot be bound does not refuse the plan","reference":"plan.go","reason":"routePlan emits the refusal and continues"}`
+)
+
+// scriptedLoop is the gate harness with a shell worker and a shell reviewer.
+//
+// The reviewer returns REVISE with findings on its first call and ACCEPT on
+// every later one, and counts its calls in reviews. The worker writes main.go
+// (moving an unrelated line each cycle when moves is set) and, from its second
+// cycle on, prints answer as its report.
+func scriptedLoop(t *testing.T, findings string, moves bool, answer string) (h *gateHarness, reviews string) {
+	t.Helper()
+	h = newGateHarness(t, roles.Policy{Reason: "blast radius file with approval gate none"}, roles.Fresh, "accept")
+	dir := t.TempDir()
+	cycles, reviews := dir+"/cycles", dir+"/reviews"
+	line := `println(1)`
+	if moves {
+		// An UNRELATED line: the value printed, not anything a finding names.
+		line = `println($n)`
+	}
+	worker := "cat >/dev/null\n" +
+		"n=$(cat '" + cycles + "' 2>/dev/null || echo 0); n=$((n+1)); echo \"$n\" > '" + cycles + "'\n" +
+		"printf \"package main\\n\\nfunc main() { " + line + " }\\n\" > main.go\n" +
+		"if [ \"$n\" -gt 1 ]; then cat <<'ANSWER'\n" + answer + "\nANSWER\nfi\n"
+	reviewer := "cat >/dev/null\n" +
+		"n=$(cat '" + reviews + "' 2>/dev/null || echo 0); n=$((n+1)); echo \"$n\" > '" + reviews + "'\n" +
+		"if [ \"$n\" -eq 1 ]; then cat <<'VERDICT'\n" +
+		`{"decision":"revise","summary":"the plan is not refused","findings":[` + findings + `]}` +
+		"\nVERDICT\nelse echo '{\"decision\":\"accept\",\"summary\":\"the candidate stands\"}'; fi\n"
+	workerScript, reviewerScript := dir+"/worker.sh", dir+"/reviewer.sh"
+	if err := os.WriteFile(workerScript, []byte(worker), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(reviewerScript, []byte(reviewer), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.worker = config.Agent{Name: "claude", Command: "sh", Args: []string{workerScript}, Graph: "none"}
+	h.engine.Config.Implementors = []config.Agent{h.worker}
+	h.engine.Config.Reviewer = config.Agent{Name: "codex", Command: "sh", Args: []string{reviewerScript}, Graph: "none"}
+	h.engine.Config.Workflow.ReviewCycles = 2
+	h.engine.Runners = nil
+	return h, reviews
+}
+
+func reviewCalls(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the reviewer was never called: %v", err)
+	}
+	return strings.TrimSpace(string(raw))
+}
+
+func (h *gateHarness) runTwoCycles() (candidateOutcome, error) {
+	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
+	return outcome, err
+}
+
+// W1 THE MEASURED CASE. One CODE finding and one EVIDENCE finding, answered with
+// evidence alone: the run does not converge, and the diagnosis names the
+// unaddressed CODE finding by id -- not merely that the candidate did not move.
+//
+// Fails if the accounting stops running before the identical-diff backstop, or
+// stops naming an unanswered finding by id.
+func TestW1ACodeFindingAnsweredWithEvidenceAloneDoesNotConverge(t *testing.T) {
+	h, reviews := scriptedLoop(t, codeFinding+","+evidenceFinding, false,
+		`{"finding_responses":[{"id":"f2","answered_by":"evidence","evidence":"gofmt"}]}`)
+	outcome, err := h.runTwoCycles()
+
+	if outcome.Accepted() || err == nil {
+		t.Fatalf("a CODE finding answered only with evidence converged: outcome %q err %v", outcome, err)
+	}
+	if !strings.Contains(err.Error(), "f1") {
+		t.Fatalf("the diagnosis does not name the unaddressed CODE finding by id: %v", err)
+	}
+	if strings.Contains(err.Error(), "did not change between review cycles") {
+		t.Fatalf("the identical-diff proxy decided, not the per-finding accounting: %v", err)
+	}
+	if got := reviewCalls(t, reviews); got != "1" {
+		t.Fatalf("the reviewer was asked %s times; an unaccounted finding must stop the cycle before review", got)
+	}
+}
+
+// W3 THE PROXY IS NOT THE CHECK -- CRITICAL CONTROL. The worker moves an
+// UNRELATED line, so the diff differs, and says nothing about the CODE finding.
+// A reviewer that would accept the moved candidate is never reached: the cycle
+// has not accounted for f1, whatever the diff did.
+//
+// Against diff movement as the predicate this converges (the second review
+// accepts). Fails if convergence is decided by the diff again.
+func TestW3AMovedDiffDoesNotDischargeAnUnaddressedCodeFinding(t *testing.T) {
+	h, reviews := scriptedLoop(t, codeFinding, true, `nothing to report`)
+	outcome, err := h.runTwoCycles()
+
+	if outcome.Accepted() {
+		t.Fatal("an unrelated edit carried a blocking CODE finding forward as answered")
+	}
+	if err == nil || !strings.Contains(err.Error(), "f1") {
+		t.Fatalf("the diagnosis does not name the unaddressed CODE finding: %v", err)
+	}
+	if got := reviewCalls(t, reviews); got != "1" {
+		t.Fatalf("the reviewer was asked %s times; the accounting must refuse before the reviewer can accept", got)
+	}
+
+	// One level down: the worker pairs the id with the right class and the
+	// candidate moved, but not where the finding points. Naming the file it
+	// changed, or the file it should have changed, discharges nothing.
+	for answer, want := range map[string]string{
+		`{"finding_responses":[{"id":"f1","answered_by":"code","paths":["main.go"]}]}`: "touches none of it",
+		`{"finding_responses":[{"id":"f1","answered_by":"code","paths":["plan.go"]}]}`: "did not change since the finding was raised",
+	} {
+		h, reviews := scriptedLoop(t, strayFinding, true, answer)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil || !strings.Contains(err.Error(), "f1") || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: an unrelated movement discharged a claimed CODE finding: outcome %q err %v", answer, outcome, err)
+		}
+		if got := reviewCalls(t, reviews); got != "1" {
+			t.Fatalf("%s: the reviewer was asked %s times", answer, got)
+		}
+	}
+}
+
+// W4 EVIDENCE FINDING DISCHARGED BY EVIDENCE, in the loop. The worker changes
+// nothing and cites, by full command line, the check the finding's proof gap
+// names, which ran and passed; the finding is discharged, the identical-diff
+// backstop does not decide, and the candidate goes back to the reviewer. The
+// control cites gofmt, which also ran and passed but is not the proof asked
+// for: the finding stays open and the reviewer is never asked again.
+//
+// What happens after the discharge is not this witness's: an ACCEPT on the
+// same bytes and the same evidence identity meets the existing contradiction
+// rule (reviewconsistency.go), because this engine has no durable place yet for
+// the evidence a review demanded. That is the companion evidence-durability
+// objective, so the assertion stops at the discharge.
+//
+// Fails if the backstop decides over a settled account, if the check the proof
+// gap names stops discharging it, or if any passing check does.
+func TestW4AnEvidenceFindingIsDischargedByEvidenceWithNoCodeChange(t *testing.T) {
+	loop := func(cite string) (*gateHarness, string) {
+		h, reviews := scriptedLoop(t, evidenceFinding, false,
+			`{"finding_responses":[{"id":"f2","answered_by":"evidence","evidence":"`+cite+`"}]}`)
+		h.engine.Config.Permissions.RunTests = true
+		h.engine.Config.Validation.Test = []config.Command{{Command: "test", Args: []string{"-s", "main.go"}}}
+		return h, reviews
+	}
+
+	h, reviews := loop("test -s main.go")
+	_, err := h.runTwoCycles()
+	if err != nil && (strings.Contains(err.Error(), "were not discharged") || strings.Contains(err.Error(), "did not change between review cycles")) {
+		t.Fatalf("an EVIDENCE finding answered with the executed check its proof gap names was not discharged: %v", err)
+	}
+	if got := reviewCalls(t, reviews); got != "2" {
+		t.Fatalf("the reviewer was asked %s times; a discharged finding goes back to the reviewer", got)
+	}
+
+	control, controlReviews := loop("gofmt -l main.go")
+	outcome, err := control.runTwoCycles()
+	if outcome.Accepted() || err == nil || !strings.Contains(err.Error(), "f2") || !strings.Contains(err.Error(), "not the proof the finding asks for") {
+		t.Fatalf("control: a passing but irrelevant check discharged the EVIDENCE finding: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, controlReviews); got != "1" {
+		t.Fatalf("control: the reviewer was asked %s times", got)
+	}
+}
+
+// W6 DISAGREEMENT IS A ROUTE, NOT A LICENCE -- CONTROL, in the loop. The worker
+// moves the candidate, answers the CODE finding as code, and disputes its class.
+// The dispute is escalated on the record and the finding stays open. The control
+// half is the same cycle without the dispute, which converges: so what held the
+// finding open is the dispute, not anything else about the cycle.
+func TestW6ADisputedClassIsEscalatedAndDoesNotDischargeTheFinding(t *testing.T) {
+	h, reviews := scriptedLoop(t, codeFinding, true,
+		`{"finding_responses":[{"id":"f1","answered_by":"code","paths":["main.go"],"disputes_class":"evidence","reason":"this is proof only"}]}`)
+	outcome, err := h.runTwoCycles()
+
+	if outcome.Accepted() || err == nil {
+		t.Fatalf("a disputed finding was discharged: outcome %q err %v", outcome, err)
+	}
+	if !strings.Contains(err.Error(), "f1") || !strings.Contains(err.Error(), "disput") {
+		t.Fatalf("the diagnosis does not carry the disputed finding: %v", err)
+	}
+	if got := reviewCalls(t, reviews); got != "1" {
+		t.Fatalf("the reviewer was asked %s times after a dispute", got)
+	}
+	escalated := false
+	for _, ev := range drainEvents(h.events) {
+		if strings.Contains(string(ev.Payload), "classification_disputes") && strings.Contains(string(ev.Payload), `"disputes_class":"evidence"`) {
+			escalated = true
+		}
+	}
+	if !escalated {
+		t.Fatal("the classification dispute was not escalated on the record")
+	}
+
+	control, controlReviews := scriptedLoop(t, codeFinding, true,
+		`{"finding_responses":[{"id":"f1","answered_by":"code","paths":["main.go"]}]}`)
+	if outcome, err := control.runTwoCycles(); err != nil || !outcome.Accepted() {
+		t.Fatalf("control: the same cycle without the dispute did not converge: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, controlReviews); got != "2" {
+		t.Fatalf("control: the reviewer was asked %s times", got)
+	}
+}
+
+// W7 THE BOUNDARY IS THE BOUNDARY -- CRITICAL CONTROL.
+//
+// One classless finding. It decodes, validates as an ordinary ReviewVerdict and
+// round-trips through serialization with its absence intact -- and it is
+// refused at ReviewResult construction, by every constructor, and by the engine
+// ingress that calls them. The classed control proves the refusal is the class
+// and nothing else about the verdict.
+//
+// Fails if the class requirement moves into decoding or ReviewVerdict.Validate
+// (the first half breaks), or leaves the constructors (the second half does).
+func TestW7AClasslessFindingIsValidWireDataAndRefusedOnlyAtTheBoundary(t *testing.T) {
+	const wire = `{"provenance":{"task_id":"task-1","role":"reviewer","provider":"codex","session_mode":"fresh","base_sha":"abc","candidate_digest":"cccc"},` +
+		`"decision":"revise","summary":"not proven","findings":[{"id":"f1","severity":"blocking","claim":"the plan is not refused","reference":"main.go","reason":"it continues"}]}`
+	binding := roles.Binding{TaskID: "task-1", BaseSHA: "abc", CandidateDigest: "cccc"}
+
+	// The wire format stays permissive: no decode, validity or round-trip error.
+	var v roles.ReviewVerdict
+	if err := json.Unmarshal([]byte(wire), &v); err != nil {
+		t.Fatalf("a classless finding no longer decodes: %v", err)
+	}
+	if v.Findings[0].Class != "" {
+		t.Fatalf("decoding invented a class: %q", v.Findings[0].Class)
+	}
+	if err := v.Validate(binding, "claude"); err != nil {
+		t.Fatalf("a classless finding is no longer a valid ReviewVerdict: %v", err)
+	}
+	if err := roles.NewAdvisory(v).Validate(binding, "claude"); err == nil {
+		t.Fatal("the advisory copy must fail on its fresh provenance, or it is not the same verdict under test")
+	}
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("a classless finding no longer serializes: %v", err)
+	}
+	var back roles.ReviewVerdict
+	if err := json.Unmarshal(raw, &back); err != nil || back.Findings[0].Class != "" || strings.Contains(string(raw), `"class"`) {
+		t.Fatalf("the round trip did not preserve the absence: %s (%v)", raw, err)
+	}
+
+	// The membrane refuses it, at every constructor, naming the finding.
+	if _, err := independentReview(v); err == nil || !strings.Contains(err.Error(), errUnclassifiedFinding.Error()) || !strings.Contains(err.Error(), "f1") {
+		t.Fatalf("independentReview admitted a classless finding: %v", err)
+	}
+	unverified := v
+	unverified.Provenance.SessionMode = roles.Unverified
+	refused := advisoryReview(roles.NewAdvisory(unverified))
+	if refused.Refused() == nil || refused.Advisory() || refused.SatisfiesAdversarialObligation() || refused.Decision() != "" {
+		t.Fatalf("advisoryReview gave a classless finding standing: refused=%v decision=%q", refused.Refused(), refused.Decision())
+	}
+	if _, err := attestedReview(roles.NewAdvisory(unverified), roles.Attestation{}, ""); err == nil || !strings.Contains(err.Error(), errUnclassifiedFinding.Error()) {
+		t.Fatalf("attestedReview did not refuse the class before anything else: %v", err)
+	}
+	// An invented class is refused as surely as an absent one.
+	invented := v
+	invented.Findings = []roles.Finding{v.Findings[0]}
+	invented.Findings[0].Class = "severe"
+	if _, err := independentReview(invented); err == nil {
+		t.Fatal("an invented class crossed the boundary")
+	}
+
+	// The control: the same verdict with a reviewer-owned class is admitted.
+	classed := v
+	classed.Findings = []roles.Finding{v.Findings[0]}
+	classed.Findings[0].Class = roles.CodeFinding
+	if res, err := independentReview(classed); err != nil || res.Decision() != roles.Revise {
+		t.Fatalf("the classed control was refused, so the refusal above is not about the class: %v", err)
+	}
+	if res := advisoryReview(roles.NewAdvisory(classed)); res.Refused() != nil || !res.Advisory() {
+		t.Fatalf("the classed advisory control was refused: %v", res.Refused())
+	}
+
+	// And the engine ingress routes it as a review refusal, never as a verdict.
+	for _, mode := range []roles.Session{roles.Fresh, roles.Unverified} {
+		e, _ := reviewEngine(t, answeringRunner{text: wire, mode: mode}, "codex")
+		res, err := e.resolveReview(context.Background(), "task-1",
+			roles.Assignment{Role: roles.Reviewer, Provider: "codex"}, packetFor(reviewBinding()), "claude")
+		if err == nil || !strings.Contains(err.Error(), "review refused") || !strings.Contains(err.Error(), errUnclassifiedFinding.Error()) {
+			t.Fatalf("%s: a classless verdict crossed the engine ingress: %v", mode, err)
+		}
+		if res.Decision() != "" || len(res.Verdict().Findings) != 0 {
+			t.Fatalf("%s: a refused verdict still carried findings into repair state: %+v", mode, res.Verdict())
+		}
+	}
+}
