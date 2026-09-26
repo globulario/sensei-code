@@ -216,7 +216,14 @@ func Latest(repo string) (string, bool, error) {
 type Interrupted struct {
 	TaskID string
 	Task   string
-	Plan   string
+	// Mode is the lane the task was recorded as running in: the mode of the
+	// FIRST mode.selected event after its creation, "assisted" or "governed".
+	// A resume announces its own mode.selected, and that is a record about the
+	// invocation, not about the task, so it never redefines the lane. Empty when
+	// no recognised mode was recorded, which predates the field or means nothing
+	// was said; it is not read as either lane.
+	Mode string
+	Plan string
 	// PlanSource and PlanDigest say who authored the plan, read from the
 	// PlanProposed payload the engine wrote. PlanRecord is that payload, byte
 	// for byte, for the same reason AwaitingAuthority is: a supplied plan is
@@ -378,6 +385,23 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// identity was still on disk.
 			p.created = true
 			p.Task = e.Summary
+		case event.ModeSelected:
+			// The task's lane is what its submission recorded. Only a mode stated
+			// after creation, and only the first one, is the task's own; a closed
+			// vocabulary read by membership, so an unrecognised value names no
+			// lane rather than becoming one.
+			if !p.created || p.Mode != "" {
+				break
+			}
+			var m struct {
+				Mode string `json:"mode"`
+			}
+			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &m) == nil {
+				switch m.Mode {
+				case "assisted", "governed":
+					p.Mode = m.Mode
+				}
+			}
 		case event.PlanProposed:
 			// A bounded plan is what makes a task resumable: /resume re-enters
 			// implementation with it, and a task that never got one has nothing

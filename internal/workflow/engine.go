@@ -67,6 +67,14 @@ type Engine struct {
 	// property of how the task was submitted, and a plan that could set it
 	// would be making a claim rather than carrying a fact.
 	objectives map[string]Objective
+	// durableTasks holds, per task, the task as its durable session record
+	// reconstructs it (session.FindInterrupted). The record is the source; this
+	// is a cache of it, installed once by a resume from the reconstruction it
+	// was handed, or read once from the Store by durableTask. Policy that must
+	// not depend on what a process happens to remember -- which lane a task was
+	// recorded in, and whether its record holds an objective -- reads this, not
+	// objectives.
+	durableTasks map[string]session.Interrupted
 	// supplied holds the plan handed in for tasks that entered through
 	// SubmitGovernedWithPlan. Absence means the architect authored the bound.
 	supplied map[string]SuppliedPlan
@@ -799,18 +807,77 @@ func (e *Engine) recordObjective(taskID string, o Objective) {
 	e.objectives[taskID] = o
 }
 
-// recordObjectiveIfAbsent records an objective only when this process holds
-// none for the task, so a resume never replaces what the submission recorded.
-func (e *Engine) recordObjectiveIfAbsent(taskID string, o Objective) {
+// restoreDurableTask installs the task a resume was handed -- the one
+// reconstruction of its durable record -- and reconciles this process's
+// objective with it. Resume calls it once, before any branch is dispatched, so
+// every path that can reach an architect turn holds the same identity the
+// record holds.
+//
+// What a process holds is verified against the record, never the reverse. A
+// process that took the submission keeps its objective byte for byte, provenance
+// included: overwriting it would quietly demote a task a human asked for. A
+// process that holds a DIFFERENT objective for the task is refused by name and
+// neither side is replaced. A restarted process holds nothing, and gets the
+// record's objective with the resumption's own provenance, which establishes no
+// human (TestAResumedTaskDoesNotInventHumanAuthority). A record with no usable
+// objective yields none: absence is not filled in.
+func (e *Engine) restoreDurableTask(task session.Interrupted) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if _, ok := e.objectives[taskID]; ok {
-		return
+	if held, ok := e.objectives[task.TaskID]; ok && held.Text != task.Task {
+		return fmt.Errorf("cannot resume %s: this process holds a different objective for the task than its durable record; "+
+			"the recorded objective is the task's identity and neither is replaced", task.TaskID)
+	}
+	if e.durableTasks == nil {
+		e.durableTasks = make(map[string]session.Interrupted)
+	}
+	e.durableTasks[task.TaskID] = task
+	if _, ok := e.objectives[task.TaskID]; ok || !task.ObjectiveUsable() {
+		return nil
 	}
 	if e.objectives == nil {
 		e.objectives = make(map[string]Objective)
 	}
-	e.objectives[taskID] = o
+	e.objectives[task.TaskID] = Objective{Text: task.Task, Provenance: ResumedGoverned}
+	return nil
+}
+
+// durableTask returns the task as its durable record reconstructs it: the
+// snapshot a resume installed, or -- for a fresh turn, where nothing was
+// installed -- the one session.FindInterrupted reconstructs from the Store,
+// cached so it is read once. ok is false when there is no record of the task to
+// read: no Store, or a task the record does not hold as begun and not ended.
+// An unreadable record is an error, not an absence.
+func (e *Engine) durableTask(taskID string) (session.Interrupted, bool, error) {
+	e.mu.Lock()
+	task, ok := e.durableTasks[taskID]
+	e.mu.Unlock()
+	if ok {
+		return task, true, nil
+	}
+	if e.Store == nil || strings.TrimSpace(taskID) == "" {
+		return session.Interrupted{}, false, nil
+	}
+	history, err := e.Store.Load()
+	if err != nil {
+		return session.Interrupted{}, false, fmt.Errorf("the durable record of task %s cannot be read: %w", taskID, err)
+	}
+	for _, found := range session.FindInterrupted(history) {
+		if found.TaskID != taskID {
+			continue
+		}
+		e.mu.Lock()
+		defer e.mu.Unlock()
+		if installed, ok := e.durableTasks[taskID]; ok {
+			return installed, true, nil
+		}
+		if e.durableTasks == nil {
+			e.durableTasks = make(map[string]session.Interrupted)
+		}
+		e.durableTasks[taskID] = found
+		return found, true, nil
+	}
+	return session.Interrupted{}, false, nil
 }
 
 // observes reports whether a task entered through the observation lane.
@@ -6323,12 +6390,8 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 		}
 		owed, record = block.Describe(), block
 	}
-	// The objective is the recorded one. A process that still holds it -- the
-	// TUI that took the /run -- keeps its provenance exactly; overwriting it
-	// would quietly demote a task a human asked for. A restarted process holds
-	// nothing, and gets the resumption's own provenance, which establishes no
-	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
-	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	// The objective is the recorded one, restored once at Resume entry for
+	// this branch and every other; this branch restores nothing of its own.
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"resuming the same task at the turn it is owed ("+owed+"); the objective, task identity and "+
 			"candidate base are the recorded ones", record))
@@ -6340,6 +6403,16 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 // stage with the reviewer's last findings rather than re-deciding the plan.
 func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 	go func() {
+		// THE ONE RESTORATION, before anything is announced or dispatched. The
+		// objective identity every branch below can reach an architect turn with
+		// is the one the durable record holds; no branch restores its own.
+		// A refusal ends through the same classifier as every other resumed
+		// ending, under a receipt of its own.
+		if err := e.restoreDurableTask(task); err != nil {
+			e.beginReceipt(task.TaskID)
+			e.terminateRun(ctx, task.TaskID, task.Task, err)
+			return
+		}
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(task.TaskID, governedMode(ResumedGoverned))

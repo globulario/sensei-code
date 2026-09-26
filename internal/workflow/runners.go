@@ -138,6 +138,9 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	// the base and bindGraph has already recorded the start gate's graph.
 	if spec.Role == roles.Architect {
 		spec.Architecture = e.architectureBinding(spec.TaskID)
+		if err := e.refuseUnboundObjective(spec); err != nil {
+			return Resolved{}, err
+		}
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil
@@ -159,4 +162,33 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 		resolved.Label = resolved.Name
 	}
 	return resolved, nil
+}
+
+// refuseUnboundObjective refuses an architect turn whose binding lost the
+// objective its task record holds, before any adapter is chosen.
+//
+// Reported as the missing referent it is. Letting it reach a resolver produced
+// "no adapter took the architect role" (task-1790353318851268310, 2026-09-25),
+// which sends the reader to the roster when the roster was never the reason.
+//
+// Scoped to the OBJECTIVE of a task RECORDED as governed, and decided from the
+// durable record alone -- never from the process's objective cache, which is
+// exactly what went missing, and never from a flag a call site could pass. The
+// assisted lane records no objective by design and keeps asking as it does
+// today; the other referents keep their existing policy, so an installation
+// without sensei.repository still plans. A record with no usable objective is
+// not refused here: absence produces no identity, and nothing is invented.
+func (e *Engine) refuseUnboundObjective(spec RunnerSpec) error {
+	if spec.Architecture.ObjectiveDigest != "" {
+		return nil
+	}
+	task, ok, err := e.durableTask(spec.TaskID)
+	if err != nil {
+		return fmt.Errorf("the architect turn for task %s carries no objective identity, and whether its record holds one cannot be read: %w", spec.TaskID, err)
+	}
+	if !ok || task.Mode != string(Governed) || !task.ObjectiveUsable() {
+		return nil
+	}
+	return fmt.Errorf("the architect turn for governed task %s is not bound to its objective: the task's durable record holds "+
+		"an objective, and the binding minted for this turn carries no objective digest", spec.TaskID)
 }

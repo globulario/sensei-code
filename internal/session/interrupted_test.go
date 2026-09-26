@@ -267,3 +267,54 @@ func TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable(t *testing.T) {
 		t.Fatalf("a completed task with no objective is still active: %+v", ended)
 	}
 }
+
+// THE RECONSTRUCTION CARRIES THE TASK'S RECORDED LANE, AND ITS OBJECTIVE ONLY
+// FROM ITS CREATION.
+//
+// A resume announces its own mode.selected; that is a record about the
+// invocation, not about the task, and it must not redefine the lane the
+// submission recorded. The objective is the task.created text and nothing else
+// -- not a plan, not a status line, not a later mode's description.
+//
+// Fails if: Mode is read from the latest mode.selected (the resume's), from one
+// written before the task was created, or from an unrecognised value; or Task
+// is taken from anything but task.created.
+func TestTheReconstructionCarriesTheRecordedLaneAndTheCreatedObjective(t *testing.T) {
+	mode := func(taskID, m string) event.Event {
+		return event.New("s", taskID, event.SourceSystem, event.ModeSelected, "mode "+m, map[string]string{"mode": m, "provenance": "p"})
+	}
+	got := FindInterrupted([]event.Event{
+		mode("t1", "governed"), // before creation: about nothing yet
+		ev("t1", event.SourceSystem, event.TaskCreated, "the objective"),
+		mode("t1", "not-a-lane"),
+		mode("t1", "assisted"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+		mode("t1", "governed"), // a resume's announcement
+		ev("t1", event.SourceReviewer, event.Status, "REVISE: something"),
+	})
+	if len(got) != 1 {
+		t.Fatalf("found %d tasks, want 1", len(got))
+	}
+	if got[0].Task != "the objective" {
+		t.Fatalf("the objective was not taken from task.created: %q", got[0].Task)
+	}
+	if got[0].Mode != "assisted" {
+		t.Fatalf("the recorded lane is %q, want the first recognised mode after creation (assisted)", got[0].Mode)
+	}
+
+	// The measured shape: governed at submission, governed again on resume.
+	governed := FindInterrupted([]event.Event{
+		ev("t2", event.SourceSystem, event.TaskCreated, "a governed objective"),
+		mode("t2", "governed"),
+		mode("t2", "assisted"),
+	})
+	if len(governed) != 1 || governed[0].Mode != "governed" || governed[0].Task != "a governed objective" {
+		t.Fatalf("a later mode.selected replaced the task's lane: %+v", governed)
+	}
+
+	// No mode recorded is no lane -- not either one.
+	legacy := FindInterrupted([]event.Event{ev("t3", event.SourceSystem, event.TaskCreated, "legacy")})
+	if len(legacy) != 1 || legacy[0].Mode != "" {
+		t.Fatalf("a task with no recorded mode was given one: %+v", legacy)
+	}
+}

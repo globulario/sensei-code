@@ -213,3 +213,108 @@ func TestTheDefaultResolverIsTheOnlyPlaceAnAdapterIsConstructed(t *testing.T) {
 			strings.Join(offenders, "\n  "))
 	}
 }
+
+// architectSpec is the architect turn a governed task takes, as the re-plan and
+// execute call sites ask for it.
+func architectSpec(taskID string) RunnerSpec {
+	spec := specFor(roles.Architect)
+	spec.TaskID = taskID
+	return spec
+}
+
+// pinGraph stands in for the start gate's bindGraph, so a witness can compare
+// every referent of a binding rather than only the ones that survive without
+// a Sensei process. Both sides of a comparison are pinned identically.
+func pinGraph(e *Engine, taskID, commit string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.graphs == nil {
+		e.graphs = map[string]*agent.GraphBinding{}
+	}
+	e.graphs[taskID] = &agent.GraphBinding{Digest: commit}
+}
+
+// W4 THE DIAGNOSIS NAMES THE MISSING REFERENT, AND THE RESOLVER IS NEVER
+// CONSULTED -- SCOPED to the objective of a task whose durable record holds one
+// and records the governed lane.
+//
+// The task record is real: task.created and mode.selected are in a durable
+// session. Only the process objective cache is perturbed. The recording
+// resolver FAILS the witness if it is asked at all: a refusal it produced would
+// be "no adapter took the architect role", which is the false diagnosis this
+// guard exists to replace.
+//
+// Fails if: the guard is removed or moved after either adapter choice (the
+// resolver is asked, or the CLI adapter is built); the guard reads the process
+// cache instead of the record (it would find nothing to require); or its
+// reason names the roster rather than the objective.
+func TestW4AGovernedTurnThatLostItsObjectiveIsRefusedBeforeAnyAdapterIsChosen(t *testing.T) {
+	record := func(t *testing.T, lane TaskMode) *Engine {
+		t.Helper()
+		e, _, _ := blockedEngine(t, t.TempDir(), "session-w4")
+		e.emit(event.New(e.SessionID, "task-w4", event.SourceSystem, event.TaskCreated, "the objective", nil))
+		e.announceMode("task-w4", lane)
+		return e
+	}
+
+	for name, useResolver := range map[string]bool{"configured resolver": true, "provider command line": false} {
+		t.Run(name, func(t *testing.T) {
+			e := record(t, governedMode(RequestedByHuman))
+			// The perturbation: this process holds no objective for the task,
+			// as a restarted process whose resume path did not restore one.
+			if e.objective("task-w4").Text != "" {
+				t.Fatal("premise: the process cache holds no objective")
+			}
+			resolver := &stubResolver{resolved: Resolved{Runner: &stubRunner{}, Name: "remote-architect"}}
+			if useResolver {
+				e.Runners = resolver
+			}
+			got, err := e.resolveRunner(architectSpec("task-w4"))
+			if len(resolver.seen) != 0 {
+				t.Fatalf("the resolver was consulted for a turn that had lost its objective: %+v", resolver.seen)
+			}
+			if err == nil || got.Runner != nil {
+				t.Fatalf("an architect turn with no objective identity was served: %T", got.Runner)
+			}
+			if !strings.Contains(err.Error(), "not bound to its objective") || !strings.Contains(err.Error(), "objective digest") {
+				t.Fatalf("the refusal does not name the objective referent: %v", err)
+			}
+			if strings.Contains(err.Error(), "no adapter") || strings.Contains(err.Error(), "returned no adapter") {
+				t.Fatalf("the refusal blames the roster: %v", err)
+			}
+		})
+	}
+
+	// CONTROL: the assisted lane records no objective by design and keeps
+	// asking exactly as it does today. The exemption is the recorded lane.
+	t.Run("assisted lane is asked as today", func(t *testing.T) {
+		e := record(t, assistedMode())
+		resolver := &stubResolver{resolved: Resolved{Runner: &stubRunner{}, Name: "remote-architect"}}
+		e.Runners = resolver
+		if _, err := e.resolveRunner(architectSpec("task-w4")); err != nil {
+			t.Fatalf("an assisted architect turn was refused: %v", err)
+		}
+		if len(resolver.seen) != 1 || resolver.seen[0].Architecture.ObjectiveDigest != "" {
+			t.Fatalf("the assisted turn did not reach its resolver unchanged: %+v", resolver.seen)
+		}
+	})
+
+	// CONTROL: sensei.repository is optional. A governed turn that holds its
+	// objective but no graph repository still runs, on either adapter path.
+	t.Run("an incomplete graph referent keeps its policy", func(t *testing.T) {
+		e := record(t, governedMode(RequestedByHuman))
+		e.recordObjective("task-w4", Objective{Text: "the objective", Provenance: RequestedByHuman})
+		e.Config.Sensei.Repository = ""
+		if got, err := e.resolveRunner(architectSpec("task-w4")); err != nil || got.Runner == nil {
+			t.Fatalf("a local architect without sensei.repository was refused: %v", err)
+		}
+		resolver := &stubResolver{resolved: Resolved{Runner: &stubRunner{}, Name: "remote-architect"}}
+		e.Runners = resolver
+		if _, err := e.resolveRunner(architectSpec("task-w4")); err != nil || len(resolver.seen) != 1 {
+			t.Fatalf("an incomplete graph referent was refused before the resolver: %v", err)
+		}
+		if b := resolver.seen[0].Architecture; b.ObjectiveDigest == "" || b.GraphRepository != "" {
+			t.Fatalf("premise: objective bound, graph repository absent: %+v", b)
+		}
+	})
+}
