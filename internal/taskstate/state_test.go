@@ -434,15 +434,16 @@ func TestLoadingV1WritesNothing(t *testing.T) {
 // how a future shape gets read as a present one, so it is refused.
 func TestUnknownFutureVersionIsRefusedNotUpgraded(t *testing.T) {
 	dir := t.TempDir()
-	writeV1(t, dir, "t-v4", `{"version":4,"task_id":"t-v4","session_id":"s"}`)
-	_, ok, err := Load(dir, "t-v4")
+	// Version 4 is now this build's; the first unknown one is 5.
+	writeV1(t, dir, "t-v5", `{"version":5,"task_id":"t-v5","session_id":"s"}`)
+	_, ok, err := Load(dir, "t-v5")
 	if err == nil {
 		t.Fatal("a future version was accepted")
 	}
 	if ok {
 		t.Fatal("a future version reported a usable state")
 	}
-	if !strings.Contains(err.Error(), "version 4") {
+	if !strings.Contains(err.Error(), "version 5") {
 		t.Fatalf("refusal does not name the version it refused: %v", err)
 	}
 }
@@ -1144,5 +1145,177 @@ func TestW6RetainingTheSameEvidenceTwiceHoldsOneRecordAndOneOutcome(t *testing.T
 	}
 	if r := loaded.Retained[0]; r.Outcome != EvidenceFailed || r.ExitStatus != 1 || r.Cycle != 2 {
 		t.Fatalf("the retained record was rewritten: %+v", r)
+	}
+}
+
+// preRepairWitness is a pre-repair witness as the broker produces one: the
+// named test PASSED on candidate A at its diff and FAILED on A's recorded base.
+func preRepairWitness() RetainedPreRepairWitness {
+	c := candidateA()
+	cmd := "go test -count=1 -v -run ^TestW1$ ./internal/workflow"
+	started := time.Date(2026, 9, 26, 12, 0, 0, 0, time.UTC)
+	return RetainedPreRepairWitness{
+		CandidateID: "task-9", Candidate: c, Purpose: "pre-repair",
+		FindingID: "f3", FindingClass: "evidence",
+		SubjectKind: "named-go-test", Subject: "internal/workflow/nonconvergence_test.go:TestW1",
+		CandidateLeg: PreRepairLeg{
+			Target: "candidate", TargetIdentity: c.DiffDigest, Command: cmd, Executed: true,
+			Outcome: EvidencePassed, ExitStatus: 0, Output: "--- PASS: TestW1 (0.01s)\n", OutputDigest: "sha256:1c0a",
+			ExecutedBy: "sensei-code execution broker", StartedAt: started, FinishedAt: started.Add(time.Second),
+		},
+		BaseLeg: PreRepairLeg{
+			Target: "recorded-base", TargetIdentity: c.BaseSHA, Command: cmd, Executed: true,
+			Outcome: EvidenceFailed, ExitStatus: 1, Output: "--- FAIL: TestW1 (0.01s)\n", OutputDigest: "sha256:2d1b",
+			ExecutedBy: "sensei-code execution broker", StartedAt: started.Add(2 * time.Second), FinishedAt: started.Add(3 * time.Second),
+		},
+		Producer: "sensei-code execution broker", Source: "pre-repair witness", Cycle: 2,
+		RetainedAt: time.Date(2026, 9, 26, 12, 1, 0, 0, time.UTC),
+	}
+}
+
+// W7 A PRE-REPAIR WITNESS IS DURABLE, IDEMPOTENT AND NOT REWRITABLE. It round
+// trips through the file with its task, base, diff, purpose, finding and test
+// identities and both legs exact; it answers only its own task and candidate;
+// a later Save from a projection that never saw it keeps it; retaining the same
+// logical witness again holds one record; a contradicting one under the same
+// key is refused and the held one kept; and nothing that is not the contrast is
+// retainable at all. It lives beside RetainedEvidence and never inside it.
+//
+// Fails if a field is lost on the round trip, if Save drops the collection, if
+// retaining appends by call, if a later write replaces the first, or if a base
+// failure alone, a failure on both sides, or a leg aimed at the wrong target is
+// accepted.
+func TestW7APreRepairWitnessSurvivesSaveAndLoadAndCannotBeRewritten(t *testing.T) {
+	dir := t.TempDir()
+	want := preRepairWitness()
+	if err := RetainPreRepairEvidence(dir, "task-9", want); err != nil {
+		t.Fatalf("a valid pre-repair witness was not retained: %v", err)
+	}
+	projection := sample()
+	projection.Phase = Revising
+	if err := projection.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	loaded, ok, err := Load(dir, "task-9")
+	if err != nil || !ok {
+		t.Fatalf("load: %v ok=%v", err, ok)
+	}
+	if loaded.Phase != Revising {
+		t.Fatalf("the later Save did not land: %q", loaded.Phase)
+	}
+	got := loaded.RetainedPreRepairFor("task-9", candidateA())
+	if len(got) != 1 {
+		t.Fatalf("the stale projection's Save erased the witness, or it was not read back: %+v", loaded.PreRepair)
+	}
+	w := got[0]
+	if w.CandidateID != want.CandidateID || !w.Candidate.Equal(want.Candidate) || w.Candidate.BaseSHA != want.Candidate.BaseSHA ||
+		w.Purpose != want.Purpose || w.FindingID != want.FindingID || w.FindingClass != want.FindingClass ||
+		w.SubjectKind != want.SubjectKind || w.Subject != want.Subject ||
+		w.Producer != want.Producer || w.Source != want.Source || w.Cycle != want.Cycle || !w.RetainedAt.Equal(want.RetainedAt) {
+		t.Fatalf("the round trip lost part of the binding:\n got %+v\nwant %+v", w, want)
+	}
+	for name, pair := range map[string][2]PreRepairLeg{"candidate": {w.CandidateLeg, want.CandidateLeg}, "base": {w.BaseLeg, want.BaseLeg}} {
+		g, x := pair[0], pair[1]
+		if g.Target != x.Target || g.TargetIdentity != x.TargetIdentity || g.Command != x.Command || g.Executed != x.Executed ||
+			g.Outcome != x.Outcome || g.ExitStatus != x.ExitStatus || g.Output != x.Output || g.OutputDigest != x.OutputDigest ||
+			g.ExecutedBy != x.ExecutedBy || !g.StartedAt.Equal(x.StartedAt) || !g.FinishedAt.Equal(x.FinishedAt) {
+			t.Fatalf("the %s leg was not preserved exactly:\n got %+v\nwant %+v", name, g, x)
+		}
+	}
+	if w.Key() != want.Key() || w.Identity() != want.Identity() {
+		t.Fatal("the witness's identity changed across the round trip")
+	}
+	if len(loaded.Retained) != 0 || len(loaded.RetainedFor(candidateA())) != 0 {
+		t.Fatalf("a pre-repair witness leaked into ordinary retained evidence: %+v", loaded.Retained)
+	}
+	for name, other := range map[string]func() []RetainedPreRepairWitness{
+		"another diff": func() []RetainedPreRepairWitness { return loaded.RetainedPreRepairFor("task-9", candidateB()) },
+		"another base": func() []RetainedPreRepairWitness {
+			return loaded.RetainedPreRepairFor("task-9", CandidateIdentity{BaseSHA: "0000", DiffDigest: candidateA().DiffDigest})
+		},
+		"another task": func() []RetainedPreRepairWitness { return loaded.RetainedPreRepairFor("task-8", candidateA()) },
+	} {
+		if held := other(); len(held) != 0 {
+			t.Fatalf("%s: a witness answered a candidate it was not produced for: %+v", name, held)
+		}
+	}
+
+	// The same logical witness again -- a later cycle, a later time, a re-run
+	// whose output differs only in timing -- is one record.
+	again := preRepairWitness()
+	again.Cycle, again.RetainedAt = 3, want.RetainedAt.Add(time.Hour)
+	again.CandidateLeg.Output, again.CandidateLeg.OutputDigest = "--- PASS: TestW1 (0.02s)\n", "sha256:3e2c"
+	if err := RetainPreRepairEvidence(dir, "task-9", again); err != nil {
+		t.Fatalf("the same witness retained again was refused: %v", err)
+	}
+	held, _, _ := Load(dir, "task-9")
+	if err := held.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	// A contradiction under the same key is refused.
+	contradicting := preRepairWitness()
+	contradicting.BaseLeg.ExitStatus = 2
+	if err := RetainPreRepairEvidence(dir, "task-9", contradicting); err == nil {
+		t.Fatal("a contradicting witness replaced the held one under the same key")
+	}
+	after, _, _ := Load(dir, "task-9")
+	if len(after.PreRepair) != 1 || after.PreRepair[0].Cycle != 2 || after.PreRepair[0].BaseLeg.ExitStatus != 1 ||
+		after.PreRepair[0].CandidateLeg.OutputDigest != "sha256:1c0a" {
+		t.Fatalf("the held witness was duplicated or rewritten: %+v", after.PreRepair)
+	}
+
+	// Nothing but the contrast is retainable.
+	for name, mutate := range map[string]func(*RetainedPreRepairWitness){
+		"base passed": func(w *RetainedPreRepairWitness) { w.BaseLeg.Outcome, w.BaseLeg.ExitStatus = EvidencePassed, 0 },
+		"candidate failed too": func(w *RetainedPreRepairWitness) {
+			w.CandidateLeg.Outcome, w.CandidateLeg.ExitStatus = EvidenceFailed, 1
+		},
+		"base leg on candidate":   func(w *RetainedPreRepairWitness) { w.BaseLeg.Target = "candidate" },
+		"base leg at HEAD":        func(w *RetainedPreRepairWitness) { w.BaseLeg.TargetIdentity = "HEAD" },
+		"candidate leg elsewhere": func(w *RetainedPreRepairWitness) { w.CandidateLeg.TargetIdentity = candidateB().DiffDigest },
+		"base not executed":       func(w *RetainedPreRepairWitness) { w.BaseLeg.Executed = false },
+		"different commands":      func(w *RetainedPreRepairWitness) { w.BaseLeg.Command = "sh -c exit 1" },
+		"code finding":            func(w *RetainedPreRepairWitness) { w.FindingClass = "code" },
+		"no purpose":              func(w *RetainedPreRepairWitness) { w.Purpose = "" },
+		"worker subject":          func(w *RetainedPreRepairWitness) { w.SubjectKind = "worker-command" },
+		"no base digest":          func(w *RetainedPreRepairWitness) { w.BaseLeg.OutputDigest = "" },
+		"unsourced":               func(w *RetainedPreRepairWitness) { w.Producer = "" },
+		"another task's witness":  func(w *RetainedPreRepairWitness) { w.CandidateID = "task-8" },
+	} {
+		bad := preRepairWitness()
+		bad.FindingID = "f-" + strings.ReplaceAll(name, " ", "-")
+		mutate(&bad)
+		if err := RetainPreRepairEvidence(dir, "task-9", bad); err == nil {
+			t.Fatalf("%s: something other than the contrast was retained", name)
+		}
+	}
+	final, _, _ := Load(dir, "task-9")
+	if len(final.PreRepair) != 1 {
+		t.Fatalf("a refused witness reached the file: %+v", final.PreRepair)
+	}
+}
+
+// Version 3 predates pre-repair witnesses and is upgraded holding none, as are
+// the versions before it: a contrast that was never executed is not invented.
+func TestOlderVersionsUpgradeWithoutInventingPreRepairWitnesses(t *testing.T) {
+	dir := t.TempDir()
+	writeV1(t, dir, "t-v3", `{"version":3,"task_id":"t-v3","session_id":"s","retained_evidence":[]}`)
+	writeV1(t, dir, "t-v2", `{"version":2,"task_id":"t-v2","session_id":"s"}`)
+	writeV1(t, dir, "t-v1", `{"version":1,"task_id":"t-v1","session_id":"s"}`)
+	for _, id := range []string{"t-v3", "t-v2", "t-v1"} {
+		s, ok, err := Load(dir, id)
+		if err != nil || !ok {
+			t.Fatalf("%s did not load: %v", id, err)
+		}
+		if s.Version != Version || Version != 4 || len(s.PreRepair) != 0 {
+			t.Fatalf("%s: version %d, pre-repair %+v", id, s.Version, s.PreRepair)
+		}
+	}
+	// A version 3 file that somehow carries the new key still holds none: the
+	// shape it claims predates the collection.
+	writeV1(t, dir, "t-v3-forged", `{"version":3,"task_id":"t-v3-forged","session_id":"s","pre_repair_witnesses":[{"candidate_id":"t-v3-forged"}]}`)
+	s, _, err := Load(dir, "t-v3-forged")
+	if err != nil || len(s.PreRepair) != 0 {
+		t.Fatalf("a version 3 file invented a pre-repair witness: %v %+v", err, s.PreRepair)
 	}
 }

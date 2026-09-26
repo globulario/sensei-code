@@ -135,6 +135,11 @@ type State struct {
 	// output is not only its diff.
 	Retained []RetainedEvidence `json:"retained_evidence,omitempty"`
 
+	// PreRepair are the pre-repair witnesses the broker produced for an
+	// evidence finding, append-only. See the pre-repair section below: each is
+	// a contrast of two executions, never an execution on the candidate.
+	PreRepair []RetainedPreRepairWitness `json:"pre_repair_witnesses,omitempty"`
+
 	// Workers is who has already worked on this task, in order.
 	Workers []string `json:"workers,omitempty"`
 
@@ -147,14 +152,17 @@ type State struct {
 }
 
 // Version is bumped when the shape changes incompatibly. Version 2 added the
-// run-dimension observations; version 3 added retained finding evidence. Older
+// run-dimension observations; version 3 added retained finding evidence;
+// version 4 added retained pre-repair witnesses. Older
 // states are projected into this one on read, and nothing is invented for them:
 // a state written before evidence could be retained holds none.
 //
 // Version 3 is a bump rather than an optional field because an older build
 // that loaded and re-saved a version 3 state would silently drop its retained
 // evidence; refusing the unknown version is what keeps that from happening.
-const Version = 3
+// Version 4 is a bump for the same reason: a version 3 build would drop the
+// pre-repair witnesses on its next Save.
+const Version = 4
 
 func path(repoRoot, taskID string) string {
 	name := strings.TrimSpace(taskID)
@@ -185,6 +193,13 @@ func (s State) Save(repoRoot string) error {
 			}
 		}
 		s.Retained = merged
+		witnesses := append([]RetainedPreRepairWitness(nil), held.PreRepair...)
+		for _, w := range s.PreRepair {
+			if !containsPreRepairKey(witnesses, w.Key()) {
+				witnesses = append(witnesses, w)
+			}
+		}
+		s.PreRepair = witnesses
 	}
 	s.Version = Version
 	s.UpdatedAt = time.Now().UTC()
@@ -213,24 +228,31 @@ func Load(repoRoot, taskID string) (State, bool, error) {
 	if err := json.Unmarshal(body, &s); err != nil {
 		return State{}, false, fmt.Errorf("task state for %s is unreadable: %w", taskID, err)
 	}
-	// Exactly versions 1 and 2 are upgraded, and only in memory. Any other
+	// Exactly versions 1, 2 and 3 are upgraded, and only in memory. Any other
 	// version -- including one from a future build -- is refused rather than
 	// guessed at: an unrecognized shape is not an old shape, and reading must
 	// never write.
 	switch s.Version {
 	case Version:
 		return normalizePersisted(s), true, nil
+	case 3:
+		// Version 3 predates pre-repair witnesses, so it holds none, and none
+		// is invented: a contrast that was never executed cannot be read back.
+		s.Version = Version
+		s.PreRepair = nil
+		return normalizePersisted(s), true, nil
 	case 2:
 		// Version 2 predates retained evidence, so it holds none, and none is
 		// invented: a record that was never written cannot be read back.
 		s.Version = Version
 		s.Retained = nil
+		s.PreRepair = nil
 		return normalizePersisted(s), true, nil
 	case 1:
 		return normalizePersisted(upgradeFromV1(s)), true, nil
 	default:
 		return State{}, false, fmt.Errorf(
-			"task state for %s is version %d, which this build does not support (it understands %d, and upgrades 1)",
+			"task state for %s is version %d, which this build does not support (it understands %d, and upgrades 1 to 3)",
 			taskID, s.Version, Version)
 	}
 }
@@ -839,6 +861,7 @@ var legacyAuditVerdicts = map[string]AuditState{
 func upgradeFromV1(s State) State {
 	s.Version = Version
 	s.Retained = nil
+	s.PreRepair = nil
 	verdict := strings.TrimSpace(s.Evidence.AuditVerdict)
 	if verdict == "" {
 		return s
@@ -1032,4 +1055,212 @@ func shortID(id string) string {
 		return id[:12]
 	}
 	return id
+}
+
+// ---------------------------------------------------------------------------
+// Retained pre-repair witnesses.
+//
+// A review may demand the red phase of a witness on a candidate that already
+// repaired what the witness catches. On that candidate the witness passes, and
+// its failure exists only on the recorded base -- where a failure ordinarily
+// means the environment is broken. So a base failure is NEVER retained as
+// RetainedEvidence: there, "candidate" means where the check ran, and a base
+// execution did not run on the candidate.
+//
+// What is retained instead is a CONTRAST, in its own type: the broker ran the
+// same check on the candidate at its exact diff, where it PASSED, and on the
+// candidate's recorded base, where it FAILED. Neither leg alone is proof of
+// anything; the witness is. It is bound to the task, the candidate identity,
+// the reviewer's evidence finding and the broker-owned check identity, and it
+// answers nothing about any other candidate.
+// ---------------------------------------------------------------------------
+
+// Pre-repair vocabularies, copied from the broker's rather than imported so
+// this package keeps no dependency on it. Each is read by membership.
+const (
+	preRepairPurpose     = "pre-repair"
+	legOnCandidate       = "candidate"
+	legOnRecordedBase    = "recorded-base"
+	subjectNamedGoTest   = "named-go-test"
+	subjectAdmittedCheck = "admitted-check"
+)
+
+// PreRepairLeg is one broker execution inside a pre-repair witness, with the
+// target it executed against stated explicitly.
+type PreRepairLeg struct {
+	// Target is "candidate" or "recorded-base"; TargetIdentity is the diff
+	// digest or the base commit it names.
+	Target         string          `json:"target"`
+	TargetIdentity string          `json:"target_identity"`
+	Command        string          `json:"command"`
+	Executed       bool            `json:"executed"`
+	Outcome        EvidenceOutcome `json:"outcome"`
+	ExitStatus     int             `json:"exit_status"`
+	Output         string          `json:"output,omitempty"`
+	OutputDigest   string          `json:"output_digest"`
+	ExecutedBy     string          `json:"executed_by"`
+	StartedAt      time.Time       `json:"started_at"`
+	FinishedAt     time.Time       `json:"finished_at"`
+}
+
+func (l PreRepairLeg) validate(target, identity string, outcome EvidenceOutcome) error {
+	switch {
+	case l.Target != target:
+		return fmt.Errorf("the %s leg is recorded as executing on %q", target, l.Target)
+	case strings.TrimSpace(l.TargetIdentity) == "" || l.TargetIdentity != identity:
+		return fmt.Errorf("the %s leg executed against %q, not %q", target, l.TargetIdentity, identity)
+	case strings.TrimSpace(l.Command) == "":
+		return fmt.Errorf("the %s leg names no command", target)
+	case !l.Executed:
+		return fmt.Errorf("the %s leg did not execute", target)
+	case l.Outcome != outcome:
+		return fmt.Errorf("the %s leg %s, and a pre-repair witness needs it %s", target, l.Outcome, outcome)
+	case outcome == EvidencePassed && l.ExitStatus != 0, outcome == EvidenceFailed && l.ExitStatus == 0:
+		return fmt.Errorf("the %s leg exited %d, which is not %s", target, l.ExitStatus, outcome)
+	case !strings.HasPrefix(l.OutputDigest, "sha256:") || len(l.OutputDigest) == len("sha256:"):
+		return fmt.Errorf("the %s leg carries no output digest", target)
+	case strings.TrimSpace(l.ExecutedBy) == "":
+		return fmt.Errorf("the %s leg does not say who executed it", target)
+	}
+	return nil
+}
+
+// RetainedPreRepairWitness is one broker-produced contrast retained as the
+// answer to one evidence finding that asked for a failing-first run.
+type RetainedPreRepairWitness struct {
+	// CandidateID is the task the candidate belongs to; Candidate is the exact
+	// content. Both bind: a witness is never carried to other bytes.
+	CandidateID string            `json:"candidate_id"`
+	Candidate   CandidateIdentity `json:"candidate"`
+	Purpose     string            `json:"purpose"`
+	FindingID   string            `json:"finding_id"`
+	// FindingClass is the REVIEWER's class, copied from the finding.
+	FindingClass string `json:"finding_class"`
+	// SubjectKind and Subject are the broker-owned identity of what executed:
+	// a canonical named-test id, or an admitted check's command line.
+	SubjectKind  string       `json:"subject_kind"`
+	Subject      string       `json:"subject"`
+	CandidateLeg PreRepairLeg `json:"candidate_leg"`
+	BaseLeg      PreRepairLeg `json:"base_leg"`
+	Producer     string       `json:"producer"`
+	Source       string       `json:"source"`
+	Cycle        int          `json:"cycle,omitempty"`
+	RetainedAt   time.Time    `json:"retained_at"`
+}
+
+// Validate refuses anything that is not the contrast: candidate PASSED at its
+// diff, recorded base FAILED at its commit, the same command on both, for an
+// evidence finding about a known candidate.
+func (w RetainedPreRepairWitness) Validate() error {
+	switch {
+	case strings.TrimSpace(w.CandidateID) == "":
+		return errors.New("the pre-repair witness names no task")
+	case !w.Candidate.Known():
+		return errors.New("the pre-repair witness names no candidate")
+	case w.Purpose != preRepairPurpose:
+		return fmt.Errorf("the pre-repair witness has purpose %q", w.Purpose)
+	case strings.TrimSpace(w.FindingID) == "":
+		return errors.New("the pre-repair witness names no finding")
+	case w.FindingClass != evidenceFindingClass:
+		return fmt.Errorf("a pre-repair witness answers only an evidence finding, and finding %s is class %q", w.FindingID, w.FindingClass)
+	case w.SubjectKind != subjectNamedGoTest && w.SubjectKind != subjectAdmittedCheck:
+		return fmt.Errorf("the pre-repair witness subject kind %q is not a broker-owned check", w.SubjectKind)
+	case strings.TrimSpace(w.Subject) == "":
+		return errors.New("the pre-repair witness names no check")
+	case strings.TrimSpace(w.Producer) == "" || strings.TrimSpace(w.Source) == "":
+		return errors.New("the pre-repair witness does not say what produced it")
+	}
+	if err := w.CandidateLeg.validate(legOnCandidate, w.Candidate.DiffDigest, EvidencePassed); err != nil {
+		return err
+	}
+	if err := w.BaseLeg.validate(legOnRecordedBase, w.Candidate.BaseSHA, EvidenceFailed); err != nil {
+		return err
+	}
+	if w.CandidateLeg.Command != w.BaseLeg.Command {
+		return fmt.Errorf("the two legs ran different commands (%q, %q), so they contrast nothing", w.CandidateLeg.Command, w.BaseLeg.Command)
+	}
+	return nil
+}
+
+// Key is the witness's logical storage identity: which check witnessed which
+// finding on which exact candidate of which task, and why.
+func (w RetainedPreRepairWitness) Key() string {
+	return digestOf("pre-repair", w.CandidateID, w.Candidate.BaseSHA, w.Candidate.DiffDigest,
+		w.FindingID, w.Purpose, w.SubjectKind, w.Subject)
+}
+
+// Identity is what a reviewer may change its mind on: the key plus what each
+// leg did. Output is excluded -- test output carries timings.
+func (w RetainedPreRepairWitness) Identity() string {
+	return digestOf(w.Key(), w.FindingClass,
+		w.CandidateLeg.Target, w.CandidateLeg.TargetIdentity, w.CandidateLeg.Command, string(w.CandidateLeg.Outcome), strconv.Itoa(w.CandidateLeg.ExitStatus),
+		w.BaseLeg.Target, w.BaseLeg.TargetIdentity, w.BaseLeg.Command, string(w.BaseLeg.Outcome), strconv.Itoa(w.BaseLeg.ExitStatus))
+}
+
+func containsPreRepairKey(witnesses []RetainedPreRepairWitness, key string) bool {
+	for _, w := range witnesses {
+		if w.Key() == key {
+			return true
+		}
+	}
+	return false
+}
+
+// RetainPreRepair appends a witness unless the same logical witness is already
+// held. One under the same key that contradicts the held one -- another
+// command, outcome or exit status on either leg -- is refused and the held one
+// kept: a later run must not rewrite what the first one retained.
+func (s *State) RetainPreRepair(w RetainedPreRepairWitness) (bool, error) {
+	if err := w.Validate(); err != nil {
+		return false, err
+	}
+	if w.RetainedAt.IsZero() {
+		w.RetainedAt = time.Now()
+	}
+	w.RetainedAt = w.RetainedAt.UTC()
+	for _, held := range s.PreRepair {
+		if held.Key() != w.Key() {
+			continue
+		}
+		if held.Identity() != w.Identity() {
+			return false, fmt.Errorf("finding %s already holds a pre-repair witness for %s on this candidate (candidate %s exit %d, base %s exit %d); a contradicting one does not replace it",
+				w.FindingID, w.Subject, held.CandidateLeg.Outcome, held.CandidateLeg.ExitStatus, held.BaseLeg.Outcome, held.BaseLeg.ExitStatus)
+		}
+		return false, nil
+	}
+	s.PreRepair = append(s.PreRepair, w)
+	return true, nil
+}
+
+// RetainedPreRepairFor is the valid pre-repair witnesses retained for this
+// exact task and candidate. One about other bytes stays in the file as history
+// and answers nothing here.
+func (s State) RetainedPreRepairFor(candidateID string, candidate CandidateIdentity) []RetainedPreRepairWitness {
+	var out []RetainedPreRepairWitness
+	for _, w := range s.PreRepair {
+		if w.Validate() == nil && w.CandidateID == strings.TrimSpace(candidateID) && w.Candidate.Equal(candidate) {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// RetainPreRepairEvidence writes one pre-repair witness into the task's durable
+// state, through the same Save as every other write of it. A witness naming
+// another task is refused: it would sit in this task's file answering nothing.
+func RetainPreRepairEvidence(repoRoot, taskID string, w RetainedPreRepairWitness) error {
+	if w.CandidateID != strings.TrimSpace(taskID) {
+		return fmt.Errorf("a pre-repair witness for task %q is not retained in task %q", w.CandidateID, taskID)
+	}
+	s, found, err := Load(repoRoot, taskID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		s = State{TaskID: taskID}
+	}
+	if _, err := s.RetainPreRepair(w); err != nil {
+		return err
+	}
+	return s.Save(repoRoot)
 }

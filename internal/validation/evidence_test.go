@@ -442,3 +442,258 @@ func TestAFailingRequiredTestIsNotDischarged(t *testing.T) {
 		t.Fatalf("the rendering does not say the required test failed:\n%s", RenderRequiredTests([]RequiredTest{rec}))
 	}
 }
+
+// PRE-REPAIR WITNESSES: the broker-level witnesses and controls.
+//
+// Each fixture is a real Go module in the candidate workspace and another in a
+// separate "recorded base" directory. The named test reads its package's
+// state.txt and passes only when it says "repaired"; every run also leaves a
+// ran.txt marker in the workspace it executed in, so a control can assert which
+// legs were actually reached rather than inferring it from a refusal.
+
+const witnessTestID = "w/w_test.go:TestWitness"
+
+func witnessModule(t *testing.T, dir, state string) {
+	t.Helper()
+	pkg := filepath.Join(dir, "w")
+	if err := os.MkdirAll(pkg, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		filepath.Join(dir, "go.mod"):    "module example.com/witness\n\ngo 1.21\n",
+		filepath.Join(pkg, "state.txt"): state,
+		filepath.Join(pkg, "w_test.go"): "package w\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\n" +
+			"func TestWitness(t *testing.T) {\n\tos.WriteFile(\"ran.txt\", []byte(\"x\"), 0o644)\n" +
+			"\tb, _ := os.ReadFile(\"state.txt\")\n\tif string(b) != \"repaired\" {\n\t\tt.Fatal(\"the behaviour is broken\")\n\t}\n}\n",
+	}
+	for path, body := range files {
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func ranIn(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "w", "ran.txt"))
+	return err == nil
+}
+
+// brokerCalls records what the runner's downstream doubles were asked.
+type brokerCalls struct {
+	permits  []CheckKind
+	baseline int
+}
+
+// witnessRunner is a runner over a candidate module in state cand and a base
+// module in state base. The Test permit is granted when allow is set; when
+// mustNotReach is set, reaching either double fails the test, so a control
+// proves the refusal happened BEFORE production.
+func witnessRunner(t *testing.T, cand, base string, allow, mustNotReach bool) (Runner, string, *brokerCalls) {
+	t.Helper()
+	calls := &brokerCalls{}
+	r := runner(t, func(k CheckKind) (bool, string) {
+		calls.permits = append(calls.permits, k)
+		if mustNotReach {
+			t.Errorf("the capability check was reached for a request that must be refused before production")
+		}
+		if !allow {
+			return false, "run_tests not granted"
+		}
+		return true, ""
+	})
+	baseDir := t.TempDir()
+	witnessModule(t, r.Workspace, cand)
+	witnessModule(t, baseDir, base)
+	r.Baseline = func() (string, error) {
+		calls.baseline++
+		if mustNotReach {
+			t.Errorf("the recorded base was checked out for a request that must be refused before production")
+		}
+		return baseDir, nil
+	}
+	return r, baseDir, calls
+}
+
+func witnessRequest(testID string) PreRepairRequest {
+	return PreRepairRequest{
+		CandidateID: "task-1", BaseSHA: "base-sha-1", DiffDigest: Digest("diff A"),
+		FindingID: "f2", FindingClass: "evidence",
+		Subject: PreRepairSubject{Kind: NamedGoTest, TestID: testID},
+	}
+}
+
+// W1 THE CONTRAST. The named test PASSES on the repaired candidate and FAILS on
+// the recorded base, for its own assertion: the broker returns one witness
+// holding both executions, the base leg naming the recorded base as what it
+// executed against, bound to the task, the diff and the finding.
+//
+// Fails if either leg is not the named test's own verdict, if the base leg
+// names the candidate, or if the witness contrasts any other candidate,
+// base, diff or finding.
+func TestW1APreRepairWitnessIsTheContrastOfTwoBrokerExecutions(t *testing.T) {
+	r, baseDir, calls := witnessRunner(t, "repaired", "broken", true, false)
+	w, ok, why := r.RunPreRepairWitness(context.Background(), witnessRequest("test:"+witnessTestID))
+	if !ok {
+		t.Fatalf("a test passing on the candidate and failing on the base produced no witness: %s", why)
+	}
+	if len(calls.permits) != 1 || calls.permits[0] != Test || calls.baseline != 1 || !ranIn(r.Workspace) || !ranIn(baseDir) {
+		t.Fatalf("the witness was not produced by executing on both sides under the Test permit: %+v", calls)
+	}
+	if w.Purpose != PreRepair || w.SubjectKind != NamedGoTest || w.Subject != witnessTestID ||
+		w.CandidateID != "task-1" || w.BaseSHA != "base-sha-1" || w.DiffDigest != Digest("diff A") ||
+		w.FindingID != "f2" || w.FindingClass != "evidence" {
+		t.Fatalf("the witness is not bound to its request: %+v", w)
+	}
+	want := "go test -count=1 -v -run ^TestWitness$ ./w"
+	if w.Candidate.Command != want || w.Base.Command != want {
+		t.Fatalf("the argv was not synthesized from the identity: %q / %q", w.Candidate.Command, w.Base.Command)
+	}
+	c, b := w.Candidate, w.Base
+	if c.Target != OnCandidate || c.TargetIdentity != Digest("diff A") || !c.Executed || c.Outcome != LegPassed || c.ExitStatus != 0 ||
+		!strings.Contains(c.Output, "--- PASS: TestWitness") || !strings.HasPrefix(c.OutputDigest, "sha256:") {
+		t.Fatalf("the candidate leg is not the named test passing on the candidate: %+v", c)
+	}
+	if b.Target != OnRecordedBase || b.TargetIdentity != "base-sha-1" || !b.Executed || b.Outcome != LegFailed || b.ExitStatus == 0 ||
+		!strings.Contains(b.Output, "--- FAIL: TestWitness") || !strings.HasPrefix(b.OutputDigest, "sha256:") {
+		t.Fatalf("the base leg is not the named test failing on the recorded base: %+v", b)
+	}
+	if !w.Contrasts("task-1", "base-sha-1", Digest("diff A"), "f2") {
+		t.Fatal("the witness does not contrast its own candidate")
+	}
+	for name, args := range map[string][4]string{
+		"another diff":    {"task-1", "base-sha-1", Digest("diff B"), "f2"},
+		"another base":    {"task-1", "base-sha-2", Digest("diff A"), "f2"},
+		"another task":    {"task-2", "base-sha-1", Digest("diff A"), "f2"},
+		"another finding": {"task-1", "base-sha-1", Digest("diff A"), "f3"},
+	} {
+		if w.Contrasts(args[0], args[1], args[2], args[3]) {
+			t.Fatalf("%s: a witness transferred to other bytes or another finding", name)
+		}
+	}
+}
+
+// W2 ENVIRONMENTAL CONTROL -- THE TRAP. The named test fails on the candidate
+// AND on the base. Both legs are reached and executed, and there is no witness:
+// a failure the base shares is an environment problem, not a red phase. The
+// same failure through Run is still Infrastructure / pre-existing (W8).
+//
+// Fails if candidate FAIL + base FAIL is laundered into a pre-repair witness,
+// or if the control passes because a leg was never reached.
+func TestW2AFailureSharedWithTheBaseIsNoPreRepairWitness(t *testing.T) {
+	r, baseDir, calls := witnessRunner(t, "broken", "broken", true, false)
+	w, ok, why := r.RunPreRepairWitness(context.Background(), witnessRequest(witnessTestID))
+	if len(calls.permits) != 1 || calls.permits[0] != Test || calls.baseline != 1 {
+		t.Fatalf("the permit and the baseline were not both asked: %+v", calls)
+	}
+	if !ranIn(r.Workspace) || !ranIn(baseDir) {
+		t.Fatalf("both legs were not executed (candidate %v, base %v)", ranIn(r.Workspace), ranIn(baseDir))
+	}
+	if ok || w.Purpose != "" || !strings.Contains(why, "did not pass on the candidate") {
+		t.Fatalf("a failure shared with the base produced a witness: ok=%v %+v (%s)", ok, w, why)
+	}
+
+	// W8: attribution keeps its meaning for the same execution.
+	e := r.Run(context.Background(), "task-1", Digest("diff A"), []Check{
+		{Kind: Test, Command: "go", Args: []string{"test", "-count=1", "-v", "-run", "^TestWitness$", "./w"}},
+	}).Checks[0]
+	if e.Outcome != Infrastructure || e.Attribution != "pre-existing" {
+		t.Fatalf("attribute no longer classifies a failure shared with the base as pre-existing infrastructure: %+v", e)
+	}
+}
+
+// W3 NO-RED CONTROL. The named test passes on the candidate and on the base.
+// Both legs execute and there is no witness: asking for a failing-first run
+// cannot manufacture one.
+//
+// Fails if a base PASS, or the request alone, yields a red artifact.
+func TestW3APassOnBothSidesIsNoPreRepairWitness(t *testing.T) {
+	r, baseDir, calls := witnessRunner(t, "repaired", "repaired", true, false)
+	w, ok, why := r.RunPreRepairWitness(context.Background(), witnessRequest(witnessTestID))
+	if len(calls.permits) != 1 || calls.baseline != 1 || !ranIn(r.Workspace) || !ranIn(baseDir) {
+		t.Fatalf("both legs were not reached and executed: %+v", calls)
+	}
+	if ok || w.Purpose != "" || !strings.Contains(why, "did not fail on the recorded base") {
+		t.Fatalf("a test green on both sides produced a witness: ok=%v %+v (%s)", ok, w, why)
+	}
+}
+
+// W5 AUTHORITY CONTROL. Nothing but a canonical named-test identity or an
+// admitted Test check can be executed. A command-shaped string, a malformed
+// id, a non-test check, an unknown subject kind, a non-evidence finding and an
+// unbound candidate are refused WITHOUT reaching the capability check or a
+// checkout (the doubles fail the test if reached) and without executing. A
+// valid test the envelope does not permit reaches the permit, which denies,
+// and never reaches the base.
+//
+// Fails if worker text can become an executable check, if a refusal is
+// actually some later guard's, or if a denied capability still executes.
+func TestW5OnlyABrokerOwnedTestIdentityIsExecuted(t *testing.T) {
+	for name, req := range map[string]PreRepairRequest{
+		"command string":      witnessRequest("go test ./... ; touch pwned"),
+		"no test name":        witnessRequest("w/w_test.go"),
+		"escapes the repo":    witnessRequest("../w/w_test.go:TestWitness"),
+		"absolute path":       witnessRequest("/w/w_test.go:TestWitness"),
+		"not a test function": witnessRequest("w/w_test.go:Witness"),
+		"shell in the name":   witnessRequest("w/w_test.go:TestWitness;touch pwned"),
+		"not a test file":     witnessRequest("w/w.go:TestWitness"),
+		"non-test check": func() PreRepairRequest {
+			q := witnessRequest("")
+			q.Subject = PreRepairSubject{Kind: AdmittedCheck, Check: Check{Kind: Build, Command: "sh", Args: []string{"-c", "touch pwned"}}}
+			return q
+		}(),
+		"unknown subject kind": func() PreRepairRequest {
+			q := witnessRequest(witnessTestID)
+			q.Subject.Kind = "prose"
+			return q
+		}(),
+		"code finding": func() PreRepairRequest {
+			q := witnessRequest(witnessTestID)
+			q.FindingClass = "code"
+			return q
+		}(),
+		"no base": func() PreRepairRequest {
+			q := witnessRequest(witnessTestID)
+			q.BaseSHA = ""
+			return q
+		}(),
+	} {
+		r, baseDir, calls := witnessRunner(t, "repaired", "broken", true, true)
+		w, ok, why := r.RunPreRepairWitness(context.Background(), req)
+		if ok || w.Purpose != "" || why == "" {
+			t.Fatalf("%s: produced a witness: %+v", name, w)
+		}
+		if len(calls.permits) != 0 || calls.baseline != 0 || ranIn(r.Workspace) || ranIn(baseDir) {
+			t.Fatalf("%s: refusal came after production was reached: %+v", name, calls)
+		}
+		for _, dir := range []string{r.Workspace, baseDir} {
+			if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+				t.Fatalf("%s: worker text was interpreted by a shell", name)
+			}
+		}
+	}
+
+	// Metacharacters inside an otherwise canonical id stay one argv element:
+	// the directory does not exist, go says so, and no shell ever runs.
+	r, baseDir, _ := witnessRunner(t, "repaired", "broken", true, false)
+	if _, ok, _ := r.RunPreRepairWitness(context.Background(), witnessRequest("w$(touch pwned)/w_test.go:TestWitness")); ok {
+		t.Fatal("a path that names no package produced a witness")
+	}
+	for _, dir := range []string{r.Workspace, baseDir} {
+		if _, err := os.Stat(filepath.Join(dir, "pwned")); err == nil {
+			t.Fatal("metacharacters in a test identity became shell syntax")
+		}
+	}
+
+	// A valid typed test the envelope does not permit.
+	denied, deniedBase, calls := witnessRunner(t, "repaired", "broken", false, false)
+	w, ok, why := denied.RunPreRepairWitness(context.Background(), witnessRequest(witnessTestID))
+	if len(calls.permits) != 1 || calls.permits[0] != Test {
+		t.Fatalf("the Test capability was not the check that decided: %+v", calls)
+	}
+	if calls.baseline != 0 || ranIn(denied.Workspace) || ranIn(deniedBase) {
+		t.Fatalf("a denied capability still executed or checked out the base: %+v", calls)
+	}
+	if ok || w.Purpose != "" || !strings.Contains(why, "not granted") {
+		t.Fatalf("a denied capability produced a witness: ok=%v (%s)", ok, why)
+	}
+}

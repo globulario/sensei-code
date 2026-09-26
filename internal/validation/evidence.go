@@ -581,3 +581,296 @@ func RenderRequiredTests(tests []RequiredTest) string {
 	}
 	return strings.TrimRight(sb.String(), "\n")
 }
+
+// ---------------------------------------------------------------------------
+// Pre-repair witnesses.
+//
+// A review may lawfully demand the red phase of a witness: the failing run that
+// shows the test catches what the candidate repaired. On the repaired
+// candidate that test passes, so no failing candidate execution exists to
+// cite, and the only place its failure can come from is the recorded base --
+// where attribute deliberately reads a failure as ENVIRONMENTAL, because the
+// base is the last good state. The same execution means opposite things
+// depending on why it was run, so the difference lives in the TYPE, not in
+// prose a reader has to infer.
+//
+// A PreRepairWitness is a CONTRAST, never an execution: the broker ran the same
+// named check against both sides, and it PASSED on the candidate at its exact
+// diff and FAILED on the candidate's recorded base. A base failure alone proves
+// nothing -- the environment may be broken -- and a failure on both sides is
+// exactly that. Only the pairing, with the candidate leg passing, makes the
+// base failure mean "the behaviour this candidate removed".
+//
+// The base leg is never candidate Evidence and never carries candidate
+// attribution: it did not execute on the candidate. attribute keeps its
+// meaning; this is its sibling.
+// ---------------------------------------------------------------------------
+
+// PreRepairPurpose is why a pre-repair witness was produced. The vocabulary is
+// closed and read by membership.
+type PreRepairPurpose string
+
+// PreRepair is the one purpose: the red phase of a witness, demanded by an
+// evidence finding.
+const PreRepair PreRepairPurpose = "pre-repair"
+
+// SubjectKind is how the broker came to hold the check it executed. Neither
+// member is a worker-supplied command.
+type SubjectKind string
+
+const (
+	// NamedGoTest is a typed "path/to/file_test.go:TestName" identity; the
+	// broker derives the package and the test and synthesizes the argv.
+	NamedGoTest SubjectKind = "named-go-test"
+	// AdmittedCheck is a Test check the broker's configuration already admitted
+	// and executed for this candidate.
+	AdmittedCheck SubjectKind = "admitted-check"
+)
+
+// ExecutionTarget names where one leg of a witness executed.
+type ExecutionTarget string
+
+const (
+	// OnCandidate is the candidate workspace at the witness's diff digest.
+	OnCandidate ExecutionTarget = "candidate"
+	// OnRecordedBase is a clean checkout of the candidate's RECORDED base
+	// commit -- never the current HEAD.
+	OnRecordedBase ExecutionTarget = "recorded-base"
+)
+
+// LegOutcome is what one leg's execution did, independent of blame. It is not
+// Outcome: Failed there means "the candidate is responsible", which a base
+// execution can never mean.
+type LegOutcome string
+
+const (
+	LegPassed LegOutcome = "PASSED"
+	LegFailed LegOutcome = "FAILED"
+)
+
+// PreRepairSubject is the check a witness executes: exactly one of a canonical
+// named-Go-test id, or an admitted Test check.
+type PreRepairSubject struct {
+	Kind SubjectKind
+	// TestID is the canonical named-test id, for NamedGoTest.
+	TestID string
+	// Check is the admitted check, for AdmittedCheck.
+	Check Check
+}
+
+// PreRepairRequest is what the workflow asks the broker to witness. Every
+// identity in it comes from the reviewer's finding or the current candidate.
+type PreRepairRequest struct {
+	CandidateID  string
+	BaseSHA      string
+	DiffDigest   string
+	FindingID    string
+	FindingClass string
+	Subject      PreRepairSubject
+}
+
+// WitnessLeg is one broker execution inside a witness.
+type WitnessLeg struct {
+	Target ExecutionTarget `json:"target"`
+	// TargetIdentity is the diff digest for the candidate leg and the recorded
+	// BaseSHA for the base leg: what the leg executed against.
+	TargetIdentity string    `json:"target_identity"`
+	Command        string    `json:"command"`
+	Args           []string  `json:"args,omitempty"`
+	ExecutedBy     string    `json:"executed_by"`
+	StartedAt      time.Time `json:"started_at"`
+	FinishedAt     time.Time `json:"finished_at"`
+	// Executed records that the check itself ran; for a named test, that the
+	// test's own verdict line was observed.
+	Executed     bool       `json:"executed"`
+	Outcome      LegOutcome `json:"outcome,omitempty"`
+	ExitStatus   int        `json:"exit_status"`
+	Output       string     `json:"output,omitempty"`
+	OutputDigest string     `json:"output_digest,omitempty"`
+}
+
+// PreRepairWitness is the contrast: the candidate leg PASSED on CandidateID at
+// DiffDigest and the base leg FAILED on BaseSHA, for one evidence finding.
+type PreRepairWitness struct {
+	Purpose      PreRepairPurpose `json:"purpose"`
+	CandidateID  string           `json:"candidate_id"`
+	BaseSHA      string           `json:"base_sha"`
+	DiffDigest   string           `json:"diff_digest"`
+	FindingID    string           `json:"finding_id"`
+	FindingClass string           `json:"finding_class"`
+	SubjectKind  SubjectKind      `json:"subject_kind"`
+	// Subject is the broker-owned identity of what executed: the canonical
+	// test id, or the admitted check's command line.
+	Subject   string     `json:"subject"`
+	Candidate WitnessLeg `json:"candidate_leg"`
+	Base      WitnessLeg `json:"base_leg"`
+}
+
+// Contrasts reports whether this witness is exactly the contrast its type
+// claims, about exactly this candidate and finding.
+func (w PreRepairWitness) Contrasts(candidateID, baseSHA, diffDigest, findingID string) bool {
+	return w.Purpose == PreRepair && w.FindingClass == evidenceClass &&
+		w.CandidateID != "" && w.CandidateID == candidateID &&
+		w.BaseSHA != "" && w.BaseSHA == baseSHA &&
+		w.DiffDigest != "" && w.DiffDigest == diffDigest &&
+		w.FindingID != "" && w.FindingID == findingID && w.Subject != "" &&
+		w.Candidate.Target == OnCandidate && w.Candidate.TargetIdentity == diffDigest &&
+		w.Candidate.Executed && w.Candidate.Outcome == LegPassed && w.Candidate.ExitStatus == 0 &&
+		w.Base.Target == OnRecordedBase && w.Base.TargetIdentity == baseSHA &&
+		w.Base.Executed && w.Base.Outcome == LegFailed && w.Base.ExitStatus != 0
+}
+
+// evidenceClass is the reviewer vocabulary's evidence class, copied rather than
+// imported so this package keeps no dependency on the reviewer's.
+const evidenceClass = "evidence"
+
+// RunPreRepairWitness executes one subject on the candidate and on the
+// recorded base and returns a witness only for candidate PASS and base FAIL.
+// Otherwise it returns no witness and says why.
+//
+// The order is the authority order. The request and the subject are checked
+// first, so a malformed or non-test subject never reaches the capability check
+// or a checkout; then the Test capability; then both executions. Both legs run
+// whatever the candidate did, so a refusal after execution is a refusal of the
+// RESULT, never of a check that was skipped.
+func (r Runner) RunPreRepairWitness(ctx context.Context, req PreRepairRequest) (PreRepairWitness, bool, string) {
+	switch {
+	case strings.TrimSpace(req.CandidateID) == "" || strings.TrimSpace(req.BaseSHA) == "" || strings.TrimSpace(req.DiffDigest) == "":
+		return PreRepairWitness{}, false, "the request names no exact candidate: task, recorded base and diff digest are all required"
+	case strings.TrimSpace(req.FindingID) == "":
+		return PreRepairWitness{}, false, "the request names no finding"
+	case req.FindingClass != evidenceClass:
+		return PreRepairWitness{}, false, fmt.Sprintf("a pre-repair witness answers only an evidence finding, and %s is class %q", req.FindingID, req.FindingClass)
+	}
+	var check Check
+	var subject, name string
+	switch req.Subject.Kind {
+	case NamedGoTest:
+		id := CanonicalRequiredTestID(req.Subject.TestID)
+		dir, test, ok := requiredTestTarget(id)
+		if !ok {
+			return PreRepairWitness{}, false, fmt.Sprintf("%q is not a canonical named-test id (path/to/file_test.go:TestName), so nothing was run", req.Subject.TestID)
+		}
+		// The argv is synthesized from the validated identity: no shell ever
+		// sees it, so nothing in the id can become syntax.
+		check = Check{Kind: Test, Command: "go", Args: []string{"test", "-count=1", "-v", "-run", "^" + test + "$", dir}}
+		subject, name = id, test
+	case AdmittedCheck:
+		if req.Subject.Check.Kind != Test || strings.TrimSpace(req.Subject.Check.Command) == "" || req.Subject.Check.Mutates {
+			return PreRepairWitness{}, false, fmt.Sprintf("the admitted check is a %q check, and only a test witnesses a red phase", req.Subject.Check.Kind)
+		}
+		check = req.Subject.Check
+		subject = strings.TrimSpace(check.Command + " " + strings.Join(check.Args, " "))
+	default:
+		return PreRepairWitness{}, false, fmt.Sprintf("the subject kind %q is neither a named Go test nor an admitted check", req.Subject.Kind)
+	}
+	if r.Permits == nil {
+		return PreRepairWitness{}, false, "no capability envelope was supplied, so the Test capability is not granted"
+	}
+	if permitted, reason := r.Permits(Test); !permitted {
+		return PreRepairWitness{}, false, "the Test capability is not granted: " + reason
+	}
+	if r.Baseline == nil {
+		return PreRepairWitness{}, false, "no recorded base checkout is available, so there is nothing to contrast against"
+	}
+	now := r.Now
+	if now == nil {
+		now = time.Now
+	}
+
+	cand := r.leg(ctx, r.Workspace, check, name, now)
+	cand.Target, cand.TargetIdentity = OnCandidate, req.DiffDigest
+	base, err := r.Baseline()
+	if err != nil || strings.TrimSpace(base) == "" {
+		why := "the recorded base could not be checked out"
+		if err != nil {
+			why += ": " + err.Error()
+		}
+		return PreRepairWitness{}, false, why
+	}
+	baseLeg := r.leg(ctx, base, check, name, now)
+	baseLeg.Target, baseLeg.TargetIdentity = OnRecordedBase, req.BaseSHA
+
+	switch {
+	case !cand.Executed || cand.Outcome != LegPassed:
+		return PreRepairWitness{}, false, fmt.Sprintf("%s did not pass on the candidate (%s, exit %d); a witness that fails on the repaired candidate shows no repair", subject, legState(cand), cand.ExitStatus)
+	case !baseLeg.Executed || baseLeg.Outcome != LegFailed:
+		return PreRepairWitness{}, false, fmt.Sprintf("%s did not fail on the recorded base (%s, exit %d); asking for a red phase cannot manufacture one", subject, legState(baseLeg), baseLeg.ExitStatus)
+	}
+	return PreRepairWitness{
+		Purpose: PreRepair, CandidateID: req.CandidateID, BaseSHA: req.BaseSHA, DiffDigest: req.DiffDigest,
+		FindingID: req.FindingID, FindingClass: req.FindingClass,
+		SubjectKind: req.Subject.Kind, Subject: subject,
+		Candidate: cand, Base: baseLeg,
+	}, true, ""
+}
+
+func legState(l WitnessLeg) string {
+	if !l.Executed {
+		return "not executed"
+	}
+	return string(l.Outcome)
+}
+
+// leg executes one side of a witness in dir. For a named test (name != "")
+// the leg executed only if the test's own verdict line was observed, and its
+// outcome is that verdict agreeing with the exit status; otherwise the command
+// executed if it ran to an exit status at all.
+func (r Runner) leg(ctx context.Context, dir string, check Check, name string, now func() time.Time) WitnessLeg {
+	l := WitnessLeg{
+		Command: strings.TrimSpace(check.Command + " " + strings.Join(check.Args, " ")), Args: check.Args,
+		ExecutedBy: "sensei-code execution broker", StartedAt: now().UTC(),
+	}
+	cmd := exec.CommandContext(ctx, check.Command, check.Args...)
+	cmd.Dir = dir
+	var out bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &out
+	err := cmd.Run()
+	l.FinishedAt = now().UTC()
+
+	body := out.String()
+	full := body
+	sum := sha256.Sum256([]byte(body))
+	l.OutputDigest = "sha256:" + hex.EncodeToString(sum[:])
+	if len(body) > maxOutput {
+		body = body[:maxOutput] + "\n… output truncated; digest covers the full capture"
+	}
+	l.Output = body
+
+	exited := err == nil
+	if err != nil {
+		var exitErr *exec.ExitError
+		if asExitError(err, &exitErr) {
+			exited = true
+			l.ExitStatus = exitErr.ExitCode()
+		} else {
+			l.ExitStatus = -1
+		}
+	}
+	if !exited {
+		return l
+	}
+	passedCommand := err == nil && !(check.FailIfOutput && strings.TrimSpace(full) != "")
+	if name == "" {
+		l.Executed = true
+		if passedCommand {
+			l.Outcome = LegPassed
+		} else {
+			l.Outcome = LegFailed
+		}
+		return l
+	}
+	executed, passed := namedVerdict(full, name)
+	l.Executed = executed
+	switch {
+	case executed && passed && passedCommand:
+		l.Outcome = LegPassed
+	case executed && !passed && err != nil:
+		l.Outcome = LegFailed
+	default:
+		// The verdict and the exit status disagree, or the test never ran:
+		// neither side of a contrast.
+		l.Executed = false
+	}
+	return l
+}

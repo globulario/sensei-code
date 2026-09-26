@@ -1919,7 +1919,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				// the broker executed for an EVIDENCE finding is retained now,
 				// and only the record read back from task state answers it.
 				readBack, rerr := e.retainFindingEvidence(taskID, cycle, retainedCandidate(tc.Identity.BaseSHA, evidence), outstanding, responses, evidence)
-				account := accountForFindings(outstanding, responses, moved, evidence, readBack)
+				// A finding the ordinary path leaves unmet, asking for a
+				// failing-first run, may be answered by a pre-repair witness:
+				// the broker's contrast of this candidate against its RECORDED
+				// base, retained and read back like any other durable answer.
+				pb, cleanup := e.preRepairBrokerFor(ctx, taskID, tc.Identity.BaseSHA, envelope, candidate)
+				preRepair, prerr := e.retainPreRepairWitnesses(ctx, taskID, cycle, retainedCandidate(tc.Identity.BaseSHA, evidence), outstanding, responses, evidence, pb)
+				cleanup()
+				account := accountForFindingsWithPreRepair(outstanding, responses, moved, evidence, readBack, preRepair)
 				if len(account.Disputes) != 0 {
 					// A classification disagreement is a ROUTE, not a licence:
 					// it goes to the architect by the same escalation a
@@ -1965,7 +1972,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				}
 				if !account.Settled() {
 					diagnosis := account.Diagnosis()
-					for _, err := range []error{perr, merr, rerr} {
+					for _, err := range []error{perr, merr, rerr, prerr} {
 						if err != nil {
 							diagnosis += " (" + err.Error() + ")"
 						}
@@ -3381,6 +3388,13 @@ type findingResponse struct {
 	// answer rests on. It must have passed on this candidate and be the check
 	// the finding's proof gap asks for.
 	Evidence string `json:"evidence,omitempty"`
+	// NamedTest is a typed named-Go-test reference, the canonical
+	// "path/to/file_test.go:TestName" identity, for an evidence finding that
+	// asks for a failing-first run. It is IDENTITY, never a command: the broker
+	// derives the package and the test from it, synthesizes the argv itself,
+	// and executes it on the candidate and on its recorded base. Nothing the
+	// worker says about what that run did is read.
+	NamedTest string `json:"named_test,omitempty"`
 	// DisputesClass is the class the worker believes the finding should have.
 	DisputesClass roles.FindingClass `json:"disputes_class,omitempty"`
 	Reason        string             `json:"reason,omitempty"`
@@ -3516,6 +3530,15 @@ func outstandingFindings(open openReview) []roles.Finding {
 // with no valid class cannot be discharged at all: nothing in the record says
 // what would discharge it, and guessing is the thing refused here.
 func accountForFindings(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle, readBack map[string]string) findingAccount {
+	return accountForFindingsWithPreRepair(outstanding, responses, moved, evidence, readBack, preRepairOutcome{})
+}
+
+// accountForFindingsWithPreRepair is accountForFindings with this cycle's
+// pre-repair witnesses. The ordinary evidence path is decided first and
+// unchanged; only an evidence finding it leaves unmet, whose requirement asks
+// for a failing-first run, may be answered by a pre-repair witness read back
+// from durable task state for exactly this candidate and finding.
+func accountForFindingsWithPreRepair(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle, readBack map[string]string, preRepair preRepairOutcome) findingAccount {
 	byID := make(map[string]findingResponse, len(responses))
 	for _, r := range responses {
 		id := strings.TrimSpace(r.ID)
@@ -3541,7 +3564,14 @@ func accountForFindings(outstanding []roles.Finding, responses []findingResponse
 			open(fmt.Sprintf("answered as %q, and the reviewer recorded it as %q", r.AnsweredBy, f.Class))
 		case f.Class == roles.EvidenceFinding:
 			if why := unmetProof(f, r, evidence); why != "" {
-				open(why)
+				switch id := strings.TrimSpace(f.ID); {
+				case asksForPreRepair(f) && preRepair.ReadBack[id] != "":
+					account.Evidenced = append(account.Evidenced, f.ID)
+				case preRepair.Refused[id] != "":
+					open(why + "; and no pre-repair witness answers it: " + preRepair.Refused[id])
+				default:
+					open(why)
+				}
 			} else if readBack[strings.TrimSpace(f.ID)] == "" {
 				open("the check it cites ran, and no retained record of it was read back from durable task state, so nothing durable answers it")
 			} else {
@@ -3751,11 +3781,295 @@ func (e *Engine) retainedEvidence(taskID string, cand taskstate.CandidateIdentit
 // reviewer-only flip a contradiction rather than an answer.
 func (e *Engine) retainedIdentities(taskID string, cand taskstate.CandidateIdentity) []string {
 	held, _ := e.retainedEvidence(taskID, cand)
-	ids := make([]string, 0, len(held))
+	witnesses, _ := e.retainedPreRepair(taskID, cand)
+	ids := make([]string, 0, len(held)+len(witnesses))
 	for _, r := range held {
 		ids = append(ids, r.Identity())
 	}
+	for _, w := range witnesses {
+		ids = append(ids, w.Identity())
+	}
 	return ids
+}
+
+// PRE-REPAIR WITNESSES.
+//
+// A finding may ask for the failing-first run of a witness on a candidate that
+// already repaired what the witness catches. There the witness passes, so no
+// failing candidate execution exists to cite, and a failure on the base is,
+// read alone, an environmental one -- which is why retainedOutcome refuses it
+// and why it stays refused. What answers such a finding is a different
+// artifact: the broker ran the same test on this candidate, where it PASSED,
+// and on this candidate's recorded base, where it FAILED. That pair is produced
+// by the broker, retained as its own type, and read back before it answers
+// anything. citedExecution and retainedOutcome are not consulted for it and do
+// not change.
+
+// preRepairOutcome is what this cycle's pre-repair path concluded: per finding
+// id, the key of a witness read back from durable task state, or why none was
+// produced.
+type preRepairOutcome struct {
+	ReadBack map[string]string
+	Refused  map[string]string
+}
+
+// asksForPreRepair reports whether the REVIEWER's requirement asks for a
+// failing or pre-repair run. The worker's wording never enters it.
+func asksForPreRepair(f roles.Finding) bool {
+	required := strings.ToLower(f.ProofGap + " " + f.Correction)
+	return strings.Contains(required, "failing") || strings.Contains(required, "pre-repair")
+}
+
+// requestsNamedTest reports whether the finding's requirement names this
+// canonical test: by its full id, or by its package directory together with
+// its exact function name. A test the reviewer did not name is the wrong test,
+// however it came out.
+func requestsNamedTest(f roles.Finding, id string) bool {
+	required := f.ProofGap + " " + f.Correction
+	if id == "" {
+		return false
+	}
+	if strings.Contains(required, id) {
+		return true
+	}
+	path, name, ok := strings.Cut(id, ":")
+	if !ok || !strings.HasPrefix(name, "Test") {
+		return false
+	}
+	dir := ""
+	if i := strings.LastIndex(path, "/"); i >= 0 {
+		dir = path[:i]
+	}
+	return dir != "" && strings.Contains(required, dir) && containsIdentifier(required, name)
+}
+
+// containsIdentifier reports whether name occurs in text as a whole Go
+// identifier, so TestFoo is not found inside TestFooBar.
+func containsIdentifier(text, name string) bool {
+	ident := func(b byte) bool {
+		return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+	}
+	for from := 0; ; {
+		i := strings.Index(text[from:], name)
+		if i < 0 {
+			return false
+		}
+		start, end := from+i, from+i+len(name)
+		if (start == 0 || !ident(text[start-1])) && (end == len(text) || !ident(text[end])) {
+			return true
+		}
+		from = start + 1
+	}
+}
+
+// preRepairSubject selects the broker-owned check that may witness this
+// finding's red phase, or says why none may. Only two inputs are admissible:
+// the typed named-test reference, which must name a test the reviewer asked
+// for; or, without one, a citation that resolves to a Test check the broker's
+// configuration admitted and executed on this candidate. Neither the finding's
+// prose nor the worker's evidence string is ever executed.
+func preRepairSubject(f roles.Finding, r findingResponse, b validation.Bundle, admitted []validation.Check) (validation.PreRepairSubject, string) {
+	switch {
+	case f.Class != roles.EvidenceFinding:
+		return validation.PreRepairSubject{}, fmt.Sprintf("the reviewer classed it %q, and a pre-repair witness answers only an evidence finding", f.Class)
+	case r.AnsweredBy != roles.EvidenceFinding || r.DisputesClass != "":
+		return validation.PreRepairSubject{}, "it was not answered as evidence"
+	case !asksForPreRepair(f):
+		return validation.PreRepairSubject{}, "its requirement does not ask for a failing or pre-repair run"
+	}
+	if named := strings.TrimSpace(r.NamedTest); named != "" {
+		id := validation.CanonicalRequiredTestID(named)
+		if !requestsNamedTest(f, id) {
+			return validation.PreRepairSubject{}, fmt.Sprintf("the named test %q is not the test the finding asks for", named)
+		}
+		return validation.PreRepairSubject{Kind: validation.NamedGoTest, TestID: id}, ""
+	}
+	cite := strings.TrimSpace(r.Evidence)
+	if cite == "" {
+		return validation.PreRepairSubject{}, "the answer carries no typed named test and cites no admitted check"
+	}
+	if !strings.Contains(f.ProofGap+" "+f.Correction, cite) {
+		return validation.PreRepairSubject{}, fmt.Sprintf("the check cited (%q) is not the proof the finding asks for", cite)
+	}
+	for _, c := range b.Checks {
+		if c.Kind != validation.Test || commandLine(c) != cite || c.Outcome != validation.Passed {
+			continue
+		}
+		for _, a := range admitted {
+			if a.Kind == validation.Test && strings.TrimSpace(a.Command+" "+strings.Join(a.Args, " ")) == cite {
+				return validation.PreRepairSubject{Kind: validation.AdmittedCheck, Check: a}, ""
+			}
+		}
+	}
+	return validation.PreRepairSubject{}, fmt.Sprintf("the check cited (%q) is not an admitted test check that executed on this candidate", cite)
+}
+
+// preRepairBroker is where a pre-repair witness executes: the candidate
+// workspace, the envelope's capability check, and a checkout of the recorded
+// base.
+type preRepairBroker struct {
+	workspace string
+	permits   func(validation.CheckKind) (bool, string)
+	baseline  func() (string, error)
+}
+
+// preRepairBrokerFor builds the broker for one cycle. The baseline is the
+// candidate's RECORDED base, never HEAD, checked out detached and lazily --
+// only a finding that selected a subject pays for it -- and removed by the
+// returned cleanup.
+func (e *Engine) preRepairBrokerFor(ctx context.Context, taskID, base string, envelope broker.Envelope, candidate gitx.Repo) (preRepairBroker, func()) {
+	var baselinePath string
+	b := preRepairBroker{
+		workspace: candidate.Root,
+		permits:   validationPermits(envelope),
+		baseline: func() (string, error) {
+			if baselinePath != "" {
+				return baselinePath, nil
+			}
+			if strings.TrimSpace(base) == "" {
+				return "", errors.New("no recorded base commit to contrast against")
+			}
+			path, err := e.Repo.CreateObservationWorktree(ctx, taskID+"-prerepair", base)
+			if err != nil {
+				return "", err
+			}
+			baselinePath = path
+			return path, nil
+		},
+	}
+	return b, func() {
+		if baselinePath != "" {
+			_ = e.Repo.RemoveObservationWorktree(ctx, baselinePath)
+		}
+	}
+}
+
+// retainPreRepairWitnesses produces, retains and reads back a pre-repair
+// witness for each outstanding evidence finding the ordinary path leaves unmet
+// and whose requirement asks for a failing-first run.
+//
+// The durable record is built from three sources and no fourth: the reviewer's
+// finding (its id and class), the current candidate (task, recorded base, diff
+// digest), and the broker's two executions. The worker's response only selects
+// the subject. A write that did not land, or a read that does not recover the
+// exact record, answers nothing.
+func (e *Engine) retainPreRepairWitnesses(ctx context.Context, taskID string, cycle int, cand taskstate.CandidateIdentity, outstanding []roles.Finding, responses []findingResponse, b validation.Bundle, pb preRepairBroker) (preRepairOutcome, error) {
+	out := preRepairOutcome{ReadBack: map[string]string{}, Refused: map[string]string{}}
+	byID := make(map[string]findingResponse, len(responses))
+	for _, r := range responses {
+		if id := strings.TrimSpace(r.ID); id != "" {
+			if _, seen := byID[id]; !seen {
+				byID[id] = r
+			}
+		}
+	}
+	admitted := checksOf(validation.Test, e.Config.Validation.Test)
+	runner := validation.Runner{Workspace: pb.workspace, Permits: pb.permits, Baseline: pb.baseline}
+	wanted := map[string]string{}
+	var failed error
+	for _, f := range outstanding {
+		id := strings.TrimSpace(f.ID)
+		r, ok := byID[id]
+		if !ok || f.Class != roles.EvidenceFinding || unmetProof(f, r, b) == "" {
+			continue
+		}
+		subject, why := preRepairSubject(f, r, b, admitted)
+		if why != "" {
+			if asksForPreRepair(f) {
+				out.Refused[id] = why
+			}
+			continue
+		}
+		w, produced, why := runner.RunPreRepairWitness(ctx, validation.PreRepairRequest{
+			CandidateID: taskID, BaseSHA: cand.BaseSHA, DiffDigest: cand.DiffDigest,
+			FindingID: id, FindingClass: string(f.Class), Subject: subject,
+		})
+		if !produced || !w.Contrasts(taskID, cand.BaseSHA, cand.DiffDigest, id) {
+			if why == "" {
+				why = "the broker's result is not the contrast for this candidate and finding"
+			}
+			out.Refused[id] = why
+			continue
+		}
+		rec := taskstate.RetainedPreRepairWitness{
+			CandidateID: taskID, Candidate: cand, Purpose: string(validation.PreRepair),
+			FindingID: id, FindingClass: string(f.Class),
+			SubjectKind: string(w.SubjectKind), Subject: w.Subject,
+			CandidateLeg: retainedLeg(w.Candidate), BaseLeg: retainedLeg(w.Base),
+			Producer: w.Candidate.ExecutedBy, Source: "pre-repair witness " + shortDigest(cand.DiffDigest), Cycle: cycle,
+		}
+		if err := taskstate.RetainPreRepairEvidence(e.Repo.Root, taskID, rec); err != nil {
+			out.Refused[id] = "its pre-repair witness could not be retained"
+			if failed == nil {
+				failed = fmt.Errorf("the pre-repair witness for %s could not be retained: %w", id, err)
+			}
+			continue
+		}
+		wanted[id] = rec.Key()
+	}
+	if len(wanted) == 0 {
+		return out, failed
+	}
+	read, err := e.readBackPreRepair(taskID, cand, outstanding, wanted)
+	if err != nil {
+		for id := range wanted {
+			out.Refused[id] = "its pre-repair witness could not be read back"
+		}
+		return out, fmt.Errorf("the pre-repair witnesses could not be read back: %w", err)
+	}
+	for id := range wanted {
+		if read[id] == "" {
+			out.Refused[id] = "no pre-repair witness with the key just retained was read back for this candidate"
+		}
+	}
+	out.ReadBack = read
+	return out, failed
+}
+
+// readBackPreRepair returns, per finding id, the key in wanted that durable
+// task state holds for exactly this task and candidate, for an evidence finding
+// whose requirement names the witness's subject.
+func (e *Engine) readBackPreRepair(taskID string, cand taskstate.CandidateIdentity, outstanding []roles.Finding, wanted map[string]string) (map[string]string, error) {
+	read := map[string]string{}
+	held, err := e.retainedPreRepair(taskID, cand)
+	if err != nil {
+		return read, err
+	}
+	findings := make(map[string]roles.Finding, len(outstanding))
+	for _, f := range outstanding {
+		findings[strings.TrimSpace(f.ID)] = f
+	}
+	for _, w := range held {
+		key, ok := wanted[w.FindingID]
+		f, raised := findings[w.FindingID]
+		if !ok || !raised || w.Key() != key || f.Class != roles.EvidenceFinding || w.FindingClass != string(roles.EvidenceFinding) || !asksForPreRepair(f) {
+			continue
+		}
+		if (w.SubjectKind == string(validation.NamedGoTest) && requestsNamedTest(f, w.Subject)) ||
+			(w.SubjectKind == string(validation.AdmittedCheck) && strings.Contains(f.ProofGap+" "+f.Correction, w.Subject)) {
+			read[w.FindingID] = key
+		}
+	}
+	return read, nil
+}
+
+// retainedPreRepair is the valid pre-repair witnesses durable task state holds
+// for this task and candidate, read from the file.
+func (e *Engine) retainedPreRepair(taskID string, cand taskstate.CandidateIdentity) ([]taskstate.RetainedPreRepairWitness, error) {
+	state, found, err := taskstate.Load(e.Repo.Root, taskID)
+	if err != nil || !found {
+		return nil, err
+	}
+	return state.RetainedPreRepairFor(taskID, cand), nil
+}
+
+func retainedLeg(l validation.WitnessLeg) taskstate.PreRepairLeg {
+	return taskstate.PreRepairLeg{
+		Target: string(l.Target), TargetIdentity: l.TargetIdentity, Command: l.Command,
+		Executed: l.Executed, Outcome: taskstate.EvidenceOutcome(l.Outcome), ExitStatus: l.ExitStatus,
+		Output: l.Output, OutputDigest: l.OutputDigest, ExecutedBy: l.ExecutedBy,
+		StartedAt: l.StartedAt, FinishedAt: l.FinishedAt,
+	}
 }
 
 // movedPathsSince is the set of files whose content differs between the
@@ -4896,14 +5210,17 @@ func orNone(value, absent string) string {
 const findingAccountingInstruction = `
 
 ACCOUNT FOR EVERY REVIEW FINDING, BY ID. End your output with one JSON object:
-{"finding_responses":[{"id":"f1","answered_by":"code"|"evidence"|"scope","paths":["the files you changed to repair THIS finding, for a code or scope answer"],"evidence":"the full command line of the validation check this rests on, for an evidence answer","disputes_class":"only if you believe the reviewer misclassified it","reason":"..."}]}
+{"finding_responses":[{"id":"f1","answered_by":"code"|"evidence"|"scope","paths":["the files you changed to repair THIS finding, for a code or scope answer"],"evidence":"the full command line of the validation check this rests on, for an evidence answer","named_test":"path/to/file_test.go:TestName, only for an evidence finding that asks for a failing-first run of that test","disputes_class":"only if you believe the reviewer misclassified it","reason":"..."}]}
 Each finding's class was set by the reviewer and is not yours to change. A code
 or scope finding is discharged only by a change to the files you name for it,
 which must have changed this cycle and include where the finding's reference
 points; an evidence finding only by a validation check that ran on this
 candidate (passing or failing) and is the check its proof gap names -- the
 engine retains that execution and reads it back, and your saying you answered
-a finding is not the answer. A finding you do not
+a finding is not the answer. When an evidence finding asks for the failing-first
+run of a test your change already makes pass, name that test in named_test: the
+engine runs it itself on this candidate and on the recorded base, and only a
+pass here with a failure there answers the finding. A finding you do not
 answer stays open and the cycle does not converge. If you believe a class is
 wrong, say so in disputes_class: that escalates the disagreement and does not
 discharge the finding.`

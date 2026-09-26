@@ -903,3 +903,510 @@ func TestW5ProducedNothingAndProducedEvidenceNotCodeAreDistinctDiagnoses(t *test
 		t.Fatalf("with evidence still owed, the diagnosis must name the open finding only: %s", partial)
 	}
 }
+
+// A PRE-REPAIR WITNESS IS A CONTRAST: the loop-level witnesses.
+//
+// Measured on objective 28's second governed run, 2026-09-26: a review asked
+// for the failing-first run of a named test, the candidate had repaired what
+// that test catches, and no honest worker could answer -- on the repaired
+// candidate the test passes, and the only place its failure could come from,
+// the recorded base, is deliberately reclassified as infrastructure. These
+// drive the REAL candidate loop over a base that holds a real Go module and a
+// real named test, so the broker executes that test on both sides.
+//
+// The named test reads main.go and requires it to print something. The base's
+// main.go is empty, so on the base it FAILS on its own assertion; the worker
+// rewrites main to print a number, so on the candidate it PASSES.
+
+const (
+	preRepairTestID = "witness_test.go:TestMainPrintsSomething"
+	preRepairSource = "package main\n\nimport (\n\t\"os\"\n\t\"strings\"\n\t\"testing\"\n)\n\n" +
+		"func TestMainPrintsSomething(t *testing.T) {\n\tb, err := os.ReadFile(\"main.go\")\n" +
+		"\tif err != nil || !strings.Contains(string(b), \"println\") {\n\t\tt.Fatal(\"main prints nothing\")\n\t}\n}\n"
+	// preRepairFinding demands the failing-first run of the named test.
+	preRepairFinding = `{"id":"f2","severity":"major","class":"evidence","claim":"the witness has a red phase","reference":"main.go","reason":"a passing run on the repaired candidate shows no red phase","proof_gap":"the failing-first run of ` + preRepairTestID + ` on the pre-repair base"}`
+	// answerF2WithTheNamedTest locates the test by its typed identity.
+	answerF2WithTheNamedTest = `{"id":"f2","answered_by":"evidence","named_test":"` + preRepairTestID + `"}`
+)
+
+// preRepairLoop is scriptedLoop cut from a base that also holds a Go module and
+// the named test, with the Test capability granted and no configured test
+// check: the named test reaches the broker only through the typed reference.
+func preRepairLoop(t *testing.T, findings, responses, testSource string) (*gateHarness, string) {
+	t.Helper()
+	h, reviews := scriptedLoop(t, findings, false, `{"finding_responses":[`+responses+`]}`)
+	h.engine.Config.Permissions.RunTests = true
+	ctx := context.Background()
+	repo := h.engine.Repo
+	for name, body := range map[string]string{"go.mod": "module witness\n\ngo 1.21\n", "witness_test.go": testSource} {
+		if err := os.WriteFile(repo.Root+"/"+name, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tree, err := repo.CanonicalTree(ctx, h.tc.Identity.BaseSHA, []string{"go.mod", "witness_test.go"})
+	if err != nil {
+		t.Fatalf("build the witness base tree: %v", err)
+	}
+	base, err := repo.MintCanonicalCommit(ctx, h.tc.Identity.BaseSHA, tree)
+	if err != nil {
+		t.Fatalf("commit the witness base: %v", err)
+	}
+	for _, name := range []string{"go.mod", "witness_test.go"} {
+		_ = os.Remove(repo.Root + "/" + name)
+	}
+	if err := repo.RemoveWorktree(ctx, h.work); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.DeleteBranch(ctx, repo.WorktreeBranch("task-1")); err != nil {
+		t.Fatal(err)
+	}
+	if h.work, err = repo.CreateWorktreeAt(ctx, "task-1", base); err != nil {
+		t.Fatal(err)
+	}
+	h.tc.Identity.BaseSHA = base
+	return h, reviews
+}
+
+// preRepairLeg and durablePreRepair are the pre-repair witness shape as it
+// sits in the task-state FILE, decoded independently of the package that
+// wrote it.
+type preRepairLeg struct {
+	Target         string `json:"target"`
+	TargetIdentity string `json:"target_identity"`
+	Command        string `json:"command"`
+	Executed       bool   `json:"executed"`
+	Outcome        string `json:"outcome"`
+	ExitStatus     int    `json:"exit_status"`
+	Output         string `json:"output"`
+	OutputDigest   string `json:"output_digest"`
+	ExecutedBy     string `json:"executed_by"`
+}
+
+type durablePreRepair struct {
+	CandidateID string `json:"candidate_id"`
+	Candidate   struct {
+		BaseSHA    string `json:"base_sha"`
+		DiffDigest string `json:"diff_digest"`
+	} `json:"candidate"`
+	Purpose      string       `json:"purpose"`
+	FindingID    string       `json:"finding_id"`
+	FindingClass string       `json:"finding_class"`
+	SubjectKind  string       `json:"subject_kind"`
+	Subject      string       `json:"subject"`
+	CandidateLeg preRepairLeg `json:"candidate_leg"`
+	BaseLeg      preRepairLeg `json:"base_leg"`
+	Producer     string       `json:"producer"`
+}
+
+func durablePreRepairs(t *testing.T, h *gateHarness) []durablePreRepair {
+	t.Helper()
+	raw, err := os.ReadFile(h.engine.Repo.Root + "/.sensei-code/tasks/task-1.json")
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatalf("the task-state file cannot be read: %v", err)
+	}
+	var file struct {
+		Witnesses []durablePreRepair `json:"pre_repair_witnesses"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("the task-state file does not decode: %v", err)
+	}
+	return file.Witnesses
+}
+
+// W1 THE MEASURED CASE. The only finding is EVIDENCE and asks for the
+// failing-first run of a named test; the repaired candidate passes it, so no
+// failing candidate execution exists to cite. The worker names the test by its
+// typed identity and changes nothing. The broker executes the named test on
+// the candidate (PASS) and on the candidate's RECORDED base (FAIL), retains
+// one pre-repair witness holding both legs, bound to task-1, the recorded base,
+// this diff and f2, reads it back, and the candidate returns to the reviewer.
+//
+// Fails before the repair because nothing can produce that pair: the finding
+// stays open and the cycle ends "the candidate did not change". Fails after it
+// if the witness is not a contrast of two broker executions, if the base leg
+// is not the recorded base, or if the evidence finding is not answered by it.
+func TestW1APreRepairWitnessAnswersAFailingFirstFindingOnARepairedCandidate(t *testing.T) {
+	h, reviews := preRepairLoop(t, preRepairFinding, answerF2WithTheNamedTest, preRepairSource)
+	outcome, err := h.runTwoCycles()
+	if err != nil || !outcome.Accepted() {
+		t.Fatalf("the failing-first finding was not answered by a pre-repair witness: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, reviews); got != "2" {
+		t.Fatalf("the reviewer was asked %s times; a durably answered finding goes back to the reviewer", got)
+	}
+	witnesses := durablePreRepairs(t, h)
+	if len(witnesses) != 1 {
+		t.Fatalf("the task-state file holds %d pre-repair witnesses, want the one the cycle produced: %+v", len(witnesses), witnesses)
+	}
+	w := witnesses[0]
+	if w.CandidateID != "task-1" || w.Candidate.BaseSHA != h.tc.Identity.BaseSHA || !strings.HasPrefix(w.Candidate.DiffDigest, "sha256:") ||
+		w.FindingID != "f2" || w.FindingClass != "evidence" || w.Purpose != "pre-repair" ||
+		w.SubjectKind != "named-go-test" || w.Subject != preRepairTestID || w.Producer == "" {
+		t.Fatalf("the witness is not bound to task-1, the recorded base, this diff, f2 and the named test: %+v", w)
+	}
+	c, b := w.CandidateLeg, w.BaseLeg
+	if c.Target != "candidate" || c.TargetIdentity != w.Candidate.DiffDigest || !c.Executed || c.Outcome != "PASSED" || c.ExitStatus != 0 ||
+		!strings.Contains(c.Output, "--- PASS: TestMainPrintsSomething") || !strings.HasPrefix(c.OutputDigest, "sha256:") {
+		t.Fatalf("the candidate leg is not the named test passing on this candidate: %+v", c)
+	}
+	if b.Target != "recorded-base" || b.TargetIdentity != h.tc.Identity.BaseSHA || !b.Executed || b.Outcome != "FAILED" || b.ExitStatus == 0 ||
+		!strings.Contains(b.Output, "--- FAIL: TestMainPrintsSomething") || !strings.HasPrefix(b.OutputDigest, "sha256:") {
+		t.Fatalf("the base leg is not the named test failing on the recorded base: %+v", b)
+	}
+	if c.Command != b.Command || !strings.Contains(c.Command, "-run ^TestMainPrintsSomething$") {
+		t.Fatalf("the two legs are not the same broker-synthesized command: %q vs %q", c.Command, b.Command)
+	}
+	if records := durableEvidence(t, h); len(records) != 0 {
+		t.Fatalf("a base execution was retained as ordinary candidate evidence: %+v", records)
+	}
+}
+
+// The same measured case through the other admissible input: the reviewer names
+// an ADMITTED test check by its full command line, the worker cites it, and it
+// passed on the repaired candidate. The ordinary path refuses the pass as the
+// failing run asked for, exactly as before; the broker then contrasts that same
+// admitted check against the recorded base.
+func TestW1AnAdmittedTestCheckCanWitnessTheRedPhase(t *testing.T) {
+	cite := "go test -count=1 -v -run ^TestMainPrintsSomething$ ."
+	finding := `{"id":"f2","severity":"major","class":"evidence","claim":"the witness has a red phase","reference":"main.go","reason":"no red phase","proof_gap":"the failing-first run of ` + cite + ` on the pre-repair base"}`
+	h, reviews := preRepairLoop(t, finding, `{"id":"f2","answered_by":"evidence","evidence":"`+cite+`"}`, preRepairSource)
+	h.engine.Config.Validation.Test = []config.Command{{Command: "go", Args: []string{"test", "-count=1", "-v", "-run", "^TestMainPrintsSomething$", "."}}}
+	outcome, err := h.runTwoCycles()
+	if err != nil || !outcome.Accepted() {
+		t.Fatalf("an admitted test check did not witness the red phase: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, reviews); got != "2" {
+		t.Fatalf("the reviewer was asked %s times", got)
+	}
+	w := durablePreRepairs(t, h)
+	if len(w) != 1 || w[0].SubjectKind != "admitted-check" || w[0].Subject != cite ||
+		w[0].CandidateLeg.Outcome != "PASSED" || w[0].BaseLeg.Outcome != "FAILED" || w[0].BaseLeg.TargetIdentity != h.tc.Identity.BaseSHA {
+		t.Fatalf("the durable witness is not the admitted check's contrast: %+v", w)
+	}
+	if records := durableEvidence(t, h); len(records) != 0 {
+		t.Fatalf("the passing candidate run was retained as the failing run asked for: %+v", records)
+	}
+}
+
+// W2 ENVIRONMENTAL CONTROL -- THE TRAP, in the loop. The named test fails on
+// the candidate and on the base. No pre-repair witness is retained, the
+// finding stays open saying why, and the reviewer is never asked again.
+//
+// Fails if a failure the base shares is laundered into a red phase.
+//
+// W3 NO-RED CONTROL, in the loop. The named test passes on both sides. No
+// witness, the finding stays open, and asking for a red phase manufactured
+// none.
+func TestW2W3NoContrastLeavesTheFailingFirstFindingOpen(t *testing.T) {
+	for name, tc := range map[string]struct{ assertion, why string }{
+		"fails on both sides":  {"never-in-main", "did not pass on the candidate"},
+		"passes on both sides": {"package main", "did not fail on the recorded base"},
+	} {
+		source := strings.Replace(preRepairSource, `"println"`, `"`+tc.assertion+`"`, 1)
+		h, reviews := preRepairLoop(t, preRepairFinding, answerF2WithTheNamedTest, source)
+		outcome, err := h.runTwoCycles()
+		if outcome.Accepted() || err == nil {
+			t.Fatalf("%s: a finding with no contrast was answered: outcome %q err %v", name, outcome, err)
+		}
+		if !strings.Contains(err.Error(), "[f2]") || !strings.Contains(err.Error(), tc.why) || !strings.Contains(err.Error(), producedNothing) {
+			t.Fatalf("%s: the finding is not open for the contrast's absence: %v", name, err)
+		}
+		if got := reviewCalls(t, reviews); got != "1" {
+			t.Fatalf("%s: the reviewer was asked %s times", name, got)
+		}
+		if w := durablePreRepairs(t, h); len(w) != 0 {
+			t.Fatalf("%s: a pre-repair witness was retained without the contrast: %+v", name, w)
+		}
+		if records := durableEvidence(t, h); len(records) != 0 {
+			t.Fatalf("%s: a base or candidate run was retained as ordinary evidence: %+v", name, records)
+		}
+	}
+}
+
+// Downstream doubles for the pre-repair broker. The permit is generic only so
+// this file can supply it without naming the broker's check-kind type; each
+// counts, and the ones named mustNot fail the test when reached.
+var (
+	preRepairPermits, preRepairBaselines int
+	preRepairT                           *testing.T
+)
+
+func mustNotPermit[K any](K) (bool, string) {
+	preRepairPermits++
+	preRepairT.Errorf("the capability check was reached for a request that must be refused before production")
+	return false, "must not be reached"
+}
+
+func denyPermit[K any](K) (bool, string) {
+	preRepairPermits++
+	return false, "run_tests not granted"
+}
+
+// recordingBroker is a broker over the harness's candidate whose baseline
+// counts, and fails the test when reached unless baselineAllowed. The caller
+// assigns the permit double.
+func recordingBroker(t *testing.T, h *gateHarness, baselineAllowed bool) preRepairBroker {
+	t.Helper()
+	preRepairT, preRepairPermits, preRepairBaselines = t, 0, 0
+	pb := preRepairBroker{workspace: h.work}
+	pb.baseline = func() (string, error) {
+		preRepairBaselines++
+		if !baselineAllowed {
+			t.Errorf("the recorded base was checked out for a request that must not reach it")
+		}
+		return h.work, nil
+	}
+	return pb
+}
+
+func findingOf(t *testing.T, raw string) roles.Finding {
+	t.Helper()
+	var f roles.Finding
+	if err := json.Unmarshal([]byte(raw), &f); err != nil {
+		t.Fatal(err)
+	}
+	return f
+}
+
+func responseOf(t *testing.T, raw string) findingResponse {
+	t.Helper()
+	var r findingResponse
+	if err := json.Unmarshal([]byte(raw), &r); err != nil {
+		t.Fatal(err)
+	}
+	return r
+}
+
+// W4 BINDING AND REPLAY CONTROL. One valid witness is retained by the real
+// loop for task-1, its recorded base, its diff and f2. Read back under the
+// exact identity it answers f2; under another diff digest, another base,
+// another task or another finding it answers nothing, and the accounting keeps
+// the finding open. A finding the reviewer classed CODE never reaches
+// production at all: the doubles fail the test if it does.
+//
+// Fails if a witness transfers to other bytes, another base, another task or
+// another finding, or if a non-evidence finding can cause an execution.
+func TestW4APreRepairWitnessDischargesOnlyItsExactCandidateAndFinding(t *testing.T) {
+	h, _ := preRepairLoop(t, preRepairFinding, answerF2WithTheNamedTest, preRepairSource)
+	if outcome, err := h.runTwoCycles(); err != nil || !outcome.Accepted() {
+		t.Fatalf("precondition: the measured case did not converge: %q %v", outcome, err)
+	}
+	durable := durablePreRepairs(t, h)
+	if len(durable) != 1 {
+		t.Fatalf("precondition: one witness, got %+v", durable)
+	}
+	b := n2bBundle("ok")
+	b.DiffDigest = durable[0].Candidate.DiffDigest
+	cand := retainedCandidate(h.tc.Identity.BaseSHA, b)
+	held, err := h.engine.retainedPreRepair("task-1", cand)
+	if err != nil || len(held) != 1 {
+		t.Fatalf("precondition: the witness is not held for its candidate: %v %+v", err, held)
+	}
+	key := held[0].Key()
+	f2 := findingOf(t, preRepairFinding)
+	answer := []findingResponse{responseOf(t, answerF2WithTheNamedTest)}
+	read, _ := h.engine.readBackPreRepair("task-1", cand, []roles.Finding{f2}, map[string]string{"f2": key})
+	if read["f2"] != key || !accountForFindingsWithPreRepair([]roles.Finding{f2}, answer, map[string]bool{}, b, nil, preRepairOutcome{ReadBack: read}).Settled() {
+		t.Fatalf("positive control: the exact witness did not answer f2: %+v", read)
+	}
+
+	// Another task, holding the very same file: only the witness's task
+	// binding, not the file's absence, can refuse it.
+	raw, err := os.ReadFile(h.engine.Repo.Root + "/.sensei-code/tasks/task-1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.engine.Repo.Root+"/.sensei-code/tasks/task-2.json", []byte(strings.Replace(string(raw), `"task_id": "task-1"`, `"task_id": "task-2"`, 1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	otherDiff, otherBase := cand, cand
+	otherDiff.DiffDigest = "sha256:" + strings.Repeat("0", 64)
+	otherBase.BaseSHA = strings.Repeat("0", 40)
+	f9 := f2
+	f9.ID = "f9"
+	for name, c := range map[string]struct {
+		task    string
+		finding roles.Finding
+		wanted  map[string]string
+		pick    int
+	}{
+		"another diff digest": {"task-1", f2, map[string]string{"f2": key}, 1},
+		"another base":        {"task-1", f2, map[string]string{"f2": key}, 2},
+		"another task":        {"task-2", f2, map[string]string{"f2": key}, 0},
+		"another finding":     {"task-1", f9, map[string]string{"f9": key}, 0},
+	} {
+		at := cand
+		switch c.pick {
+		case 1:
+			at = otherDiff
+		case 2:
+			at = otherBase
+		}
+		read, err := h.engine.readBackPreRepair(c.task, at, []roles.Finding{c.finding}, c.wanted)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(read) != 0 {
+			t.Fatalf("%s: the witness was read back for what it was not produced for: %+v", name, read)
+		}
+		resp := answer
+		if c.finding.ID == "f9" {
+			resp = []findingResponse{{ID: "f9", AnsweredBy: roles.EvidenceFinding, NamedTest: preRepairTestID}}
+		}
+		if accountForFindingsWithPreRepair([]roles.Finding{c.finding}, resp, map[string]bool{}, b, nil, preRepairOutcome{ReadBack: read}).Settled() {
+			t.Fatalf("%s: the finding was discharged", name)
+		}
+	}
+
+	// A CODE finding: never produced, and never discharged by a witness even if
+	// one were handed to the accounting under its id.
+	code := f2
+	code.Class = roles.CodeFinding
+	codeAnswer := []findingResponse{{ID: "f2", AnsweredBy: roles.CodeFinding, NamedTest: preRepairTestID}}
+	pb := recordingBroker(t, h, false)
+	pb.permits = mustNotPermit
+	out, err := h.engine.retainPreRepairWitnesses(context.Background(), "task-1", 3, cand, []roles.Finding{code}, codeAnswer, b, pb)
+	if err != nil || len(out.ReadBack) != 0 || preRepairPermits != 0 || preRepairBaselines != 0 {
+		t.Fatalf("a code finding reached pre-repair production: %+v %v permits=%d baselines=%d", out, err, preRepairPermits, preRepairBaselines)
+	}
+	if accountForFindingsWithPreRepair([]roles.Finding{code}, codeAnswer, map[string]bool{}, b, nil,
+		preRepairOutcome{ReadBack: map[string]string{"f2": key}}).Settled() {
+		t.Fatal("a pre-repair witness discharged a CODE finding")
+	}
+	if w := durablePreRepairs(t, h); len(w) != 1 {
+		t.Fatalf("the controls changed durable state: %+v", w)
+	}
+}
+
+// W5 AUTHORITY CONTROL. A worker cannot turn text into an executable check.
+// Each of these is refused WITHOUT reaching the capability check or a
+// checkout of the base -- the doubles fail the test if reached -- and retains
+// nothing: a command string where the test identity belongs, a malformed
+// identity the finding itself names, a valid test the finding did not ask
+// for, the right test mentioned only as prose rather than in the typed field,
+// a non-test check, and a test check the configuration never admitted. A valid
+// typed test the envelope does not permit reaches the permit, which denies,
+// and never reaches the base.
+//
+// Fails if any worker-supplied string becomes an execution, or if a refusal
+// credited here was really some later guard's.
+func TestW5AWorkerCannotTurnTextIntoAPreRepairExecution(t *testing.T) {
+	h, _ := preRepairLoop(t, preRepairFinding, answerF2WithTheNamedTest, preRepairSource)
+	b := n2bBundle("ok")
+	cand := retainedCandidate(h.tc.Identity.BaseSHA, b)
+	asks := func(proof string) roles.Finding {
+		f := findingOf(t, preRepairFinding)
+		f.ProofGap = proof
+		return f
+	}
+	named := asks("the failing-first run of " + preRepairTestID + " on the pre-repair base")
+	for name, c := range map[string]struct {
+		finding  roles.Finding
+		response string
+		why      string
+	}{
+		"command string": {named, `{"id":"f2","answered_by":"evidence","named_test":"go test ./... ; touch pwned"}`, "is not the test the finding asks for"},
+		"malformed identity": {asks("the failing-first run of witness_test.go on the pre-repair base"),
+			`{"id":"f2","answered_by":"evidence","named_test":"witness_test.go"}`, "not a canonical named-test id"},
+		"wrong test": {named, `{"id":"f2","answered_by":"evidence","named_test":"witness_test.go:TestSomethingElse"}`, "is not the test the finding asks for"},
+		"prose only": {named, `{"id":"f2","answered_by":"evidence","evidence":"` + preRepairTestID + `","reason":"I ran ` + preRepairTestID + `"}`, "is not an admitted test check"},
+		"non-test check": {asks("the failing-first run of gofmt -l cmd internal"),
+			`{"id":"f2","answered_by":"evidence","evidence":"gofmt -l cmd internal"}`, "is not an admitted test check"},
+		"unadmitted test check": {asks("the failing-first run of go test ./..."),
+			`{"id":"f2","answered_by":"evidence","evidence":"go test ./..."}`, "is not an admitted test check"},
+	} {
+		pb := recordingBroker(t, h, false)
+		pb.permits = mustNotPermit
+		out, err := h.engine.retainPreRepairWitnesses(context.Background(), "task-1", 2, cand,
+			[]roles.Finding{c.finding}, []findingResponse{responseOf(t, c.response)}, b, pb)
+		if err != nil || len(out.ReadBack) != 0 || !strings.Contains(out.Refused["f2"], c.why) {
+			t.Fatalf("%s: not refused for its own reason: %+v %v", name, out, err)
+		}
+		if preRepairPermits != 0 || preRepairBaselines != 0 {
+			t.Fatalf("%s: production was reached: permits=%d baselines=%d", name, preRepairPermits, preRepairBaselines)
+		}
+		if _, err := os.Stat(h.work + "/pwned"); err == nil {
+			t.Fatalf("%s: worker text was interpreted by a shell", name)
+		}
+	}
+
+	pb := recordingBroker(t, h, false)
+	pb.permits = denyPermit
+	out, err := h.engine.retainPreRepairWitnesses(context.Background(), "task-1", 2, cand,
+		[]roles.Finding{named}, []findingResponse{responseOf(t, answerF2WithTheNamedTest)}, b, pb)
+	if err != nil || len(out.ReadBack) != 0 || !strings.Contains(out.Refused["f2"], "not granted") {
+		t.Fatalf("a typed test the envelope denies was not refused by the capability: %+v %v", out, err)
+	}
+	if preRepairPermits != 1 || preRepairBaselines != 0 {
+		t.Fatalf("the capability did not decide: permits=%d baselines=%d", preRepairPermits, preRepairBaselines)
+	}
+	if w := durablePreRepairs(t, h); len(w) != 0 {
+		t.Fatalf("a refused request retained a witness: %+v", w)
+	}
+}
+
+// W6 ANTI-FORGERY AND DURABILITY CONTROL. The worker's response carries forged
+// outcome, output, digest, base, attribution and whole execution legs beside a
+// legitimate typed test: the durable witness holds only broker, reviewer and
+// current-candidate values, and nothing forged reaches the file. When the
+// durable write cannot land, the same response answers nothing; and a read
+// back that does not recover the exact key retained answers nothing.
+//
+// Fails if any worker-supplied value reaches the record, if a witness that was
+// never persisted answers the finding, or if read-back stops matching the key.
+func TestW6AForgedExecutionIsIgnoredAndOnlyAReadBackWitnessAnswers(t *testing.T) {
+	forged := `{"id":"f2","answered_by":"evidence","named_test":"` + preRepairTestID + `",` +
+		`"outcome":"forged-FAILED","output":"forged output","output_digest":"sha256:forged","base_sha":"forged-base",` +
+		`"attribution":"forged-candidate","executed":true,` +
+		`"candidate_leg":{"target":"forged","outcome":"PASSED","output":"forged"},"base_leg":{"target_identity":"forged-base","outcome":"FAILED","output":"forged"}}`
+	h, _ := preRepairLoop(t, preRepairFinding, forged, preRepairSource)
+	if outcome, err := h.runTwoCycles(); err != nil || !outcome.Accepted() {
+		t.Fatalf("the legitimate typed test beside forged fields was not witnessed: %q %v", outcome, err)
+	}
+	raw, err := os.ReadFile(h.engine.Repo.Root + "/.sensei-code/tasks/task-1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "forged") {
+		t.Fatalf("a worker-supplied value reached durable task state:\n%s", raw)
+	}
+	w := durablePreRepairs(t, h)
+	if len(w) != 1 || w[0].Candidate.BaseSHA != h.tc.Identity.BaseSHA || w[0].BaseLeg.TargetIdentity != h.tc.Identity.BaseSHA ||
+		w[0].FindingID != "f2" || w[0].FindingClass != "evidence" || !strings.Contains(w[0].BaseLeg.Output, "--- FAIL: TestMainPrintsSomething") ||
+		!strings.Contains(w[0].BaseLeg.ExecutedBy, "broker") || !strings.Contains(w[0].CandidateLeg.ExecutedBy, "broker") {
+		t.Fatalf("the durable witness is not the broker's: %+v", w)
+	}
+
+	// Exact read-back: a key that is not the one retained answers nothing.
+	b := n2bBundle("ok")
+	b.DiffDigest = w[0].Candidate.DiffDigest
+	cand := retainedCandidate(h.tc.Identity.BaseSHA, b)
+	f2 := findingOf(t, preRepairFinding)
+	read, err := h.engine.readBackPreRepair("task-1", cand, []roles.Finding{f2}, map[string]string{"f2": "sha256:nonmatching"})
+	if err != nil || len(read) != 0 {
+		t.Fatalf("a non-matching key was read back: %+v %v", read, err)
+	}
+	if accountForFindingsWithPreRepair([]roles.Finding{f2}, []findingResponse{responseOf(t, forged)}, map[string]bool{}, b, nil,
+		preRepairOutcome{ReadBack: read}).Settled() {
+		t.Fatal("the finding was discharged without its exact witness read back")
+	}
+
+	// Durable write broken: the same response answers nothing.
+	control, reviews := preRepairLoop(t, preRepairFinding, answerF2WithTheNamedTest, preRepairSource)
+	if err := os.MkdirAll(control.engine.Repo.Root+"/.sensei-code", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(control.engine.Repo.Root+"/.sensei-code/tasks", []byte("not a directory"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := control.runTwoCycles()
+	if outcome.Accepted() || err == nil || !strings.Contains(err.Error(), "[f2]") || !strings.Contains(err.Error(), "could not be retained") {
+		t.Fatalf("a witness that never reached durable state answered the finding: outcome %q err %v", outcome, err)
+	}
+	if got := reviewCalls(t, reviews); got != "1" {
+		t.Fatalf("control: the reviewer was asked %s times", got)
+	}
+}
