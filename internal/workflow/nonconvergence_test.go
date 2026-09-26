@@ -903,3 +903,157 @@ func TestW5ProducedNothingAndProducedEvidenceNotCodeAreDistinctDiagnoses(t *test
 		t.Fatalf("with evidence still owed, the diagnosis must name the open finding only: %s", partial)
 	}
 }
+
+// AN INVOCATION MAY END; ONLY THE WORK ENDS THE TASK: the loop-level witnesses.
+//
+// Measured 2026-09-25 on task-1790362662232490867: one run recorded its
+// candidate as resumable, then ended FAILED because the implementer returned an
+// identical diff, and `resume --task` answered that no such task existed.
+// These drive the REAL candidate loop to that ending and hand the failure to
+// the REAL terminal classifier, then ask the one reconstruction what it sees.
+
+// identicalDiffRun is the measured shape: a reviewer that always revises, two
+// cycles, and a worker that writes the same candidate both times. The loop
+// stops on the identical diff -- not on exhaustion -- so the failure reaches
+// the aggregate "no bounded implementor produced an acceptable candidate".
+func identicalDiffRun(t *testing.T) (*gateHarness, []event.Event) {
+	t.Helper()
+	h := reviseForever(t)
+	h.engine.Config.Workflow.ReviewCycles = 2
+	const task = "Rewrite main.go so it prints a number."
+	h.engine.emit(event.New(h.engine.SessionID, "task-1", event.SourceUser, event.TaskCreated, task, nil))
+	h.engine.emit(event.New(h.engine.SessionID, "task-1", event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	ctx := context.Background()
+	h.engine.implement(ctx, h.sc, certifiedStart{}, "task-1", h.tc, task, "",
+		func(err error) { h.engine.terminateRun(ctx, "task-1", task, err) })
+	return h, drainEvents(h.events)
+}
+
+// candidateContinuable is what the run REPORTED about its candidate: whether
+// its last recorded disposition keeps it as resumable work.
+func candidateContinuable(t *testing.T, events []event.Event) bool {
+	t.Helper()
+	var last *struct {
+		Disposition string `json:"disposition"`
+	}
+	for _, ev := range events {
+		if ev.Kind != event.CandidateResolved {
+			continue
+		}
+		last = &struct {
+			Disposition string `json:"disposition"`
+		}{}
+		if err := json.Unmarshal(ev.Payload, last); err != nil {
+			t.Fatalf("the candidate disposition does not decode: %v", err)
+		}
+	}
+	if last == nil {
+		t.Fatalf("the run recorded no candidate disposition: %v", kinds(events))
+	}
+	return last.Disposition == "resumable"
+}
+
+// W1 THE MEASURED CASE. The run stops because no implementer converged -- the
+// identical-diff ending, reported through the aggregate failure -- and its task
+// is still there to resume, as itself, with its plan.
+//
+// Fails if the emitter reports this invocation ending as the task ending:
+// FindInterrupted then finds nothing, exactly as `resume --task` did. It also
+// fails if the EMITTER still writes workflow.failed and only the reader's
+// legacy exception rescues the task -- the repair must be at the emitter.
+func TestW1ANonConvergedInvocationLeavesItsTaskResumable(t *testing.T) {
+	_, seen := identicalDiffRun(t)
+	if !strings.Contains(strings.Join(summaries(seen), "\n"), "no bounded implementor produced an acceptable candidate") {
+		t.Fatalf("the run did not reach the measured ending, so this witness exercises nothing: %v", summaries(seen))
+	}
+	if contains(seen, event.WorkflowNotConverged) {
+		t.Fatalf("the run ended through exhaustion, not the measured identical-diff ending: %v", kinds(seen))
+	}
+	if contains(seen, event.WorkflowFailed) || !contains(seen, event.WorkflowInvocationFailed) {
+		t.Fatalf("the emitter reported an invocation that could not converge as the work failing: %v", kinds(seen))
+	}
+	found := session.FindInterrupted(seen)
+	if len(found) != 1 || found[0].TaskID != "task-1" || !found[0].Planned || found[0].Plan != "the plan" {
+		t.Fatalf("an invocation that did not converge ended its task: %+v\n%v", found, kinds(seen))
+	}
+}
+
+// W2 THE TWO STATEMENTS AGREE. What the run said about its candidate and what
+// the reconstruction then says about its task are ONE answer. Asserted as
+// agreement, not as two separate truths, so a repair that changed the candidate
+// report to match the reader would fail here too (the report must stay
+// "resumable" -- the run did hold work).
+//
+// Fails if either statement moves without the other.
+func TestW2TheCandidateReportAndTheTaskRecordAgree(t *testing.T) {
+	_, seen := identicalDiffRun(t)
+	reported := candidateContinuable(t, seen)
+	if !reported {
+		t.Fatalf("the candidate report changed: the run holds work and must say it is resumable: %v", summaries(seen))
+	}
+	resumable := len(session.FindInterrupted(seen)) == 1
+	if reported != resumable {
+		t.Fatalf("one run, two answers: the candidate is continuable=%v and the task is resumable=%v", reported, resumable)
+	}
+}
+
+// unboundTurn stands for the objective-identity binding defect a resumed
+// re-plan hit on 2026-09-25: an error about the invocation, not the work, and
+// one the classifier has never been told about.
+type unboundTurn struct{}
+
+func (unboundTurn) Error() string { return "the resumed turn could not be bound to its objective" }
+
+// W6 THE COMPOUNDING CASE. A task already owes a re-plan over a resumable
+// candidate. A later invocation fails for a reason unrelated to the work -- a
+// turn it could not bind, or any error nobody has classified -- and the task is
+// left EXACTLY as resumable as it was: same obligations, byte for byte.
+//
+// The terminal is asserted to be WorkflowInvocationFailed, so the witness fails
+// for its own reason: if a block or restoration classifier caught the error
+// first, or the default fell back to WorkflowFailed, the kind is wrong. The
+// control asserts the work failure through workFailed and the task ends --
+// proving the assertion, not the absence of one, is what ends a task.
+func TestW6AnUnrelatedInvocationFailureLeavesThePriorTaskUnchanged(t *testing.T) {
+	nc, _ := json.Marshal(NotConverged{TaskID: "t", Implementers: []string{"claude"}, ReviewCycles: 3, Owed: OwedArchitectReplan})
+	prior := []event.Event{
+		event.New("s", "t", event.SourceUser, event.TaskCreated, "objective", nil),
+		event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", nil),
+		event.New("s", "t", event.SourceReviewer, event.Status, "the proof is missing", nil),
+		{SessionID: "s", TaskID: "t", Source: event.SourceSystem, Kind: event.WorkflowNotConverged, Payload: nc},
+	}
+	before, _ := json.Marshal(session.FindInterrupted(prior))
+	if len(session.FindInterrupted(prior)) != 1 {
+		t.Fatalf("the prior history is not resumable, so this witness exercises nothing: %s", before)
+	}
+	end := func(err error) []event.Event {
+		t.Helper()
+		bus := event.NewBus()
+		ch, cancel := bus.Subscribe(64)
+		defer cancel()
+		e := &Engine{Bus: bus, SessionID: "s", pending: map[string]chan string{}}
+		e.terminateRun(context.Background(), "t", "objective", err)
+		return drainEvents(ch)
+	}
+	for name, err := range map[string]error{
+		"an unbound turn":       unboundTurn{},
+		"an unclassified error": json.Unmarshal([]byte("{"), &struct{}{}),
+	} {
+		seen := end(err)
+		if contains(seen, event.WorkflowFailed) || !contains(seen, event.WorkflowInvocationFailed) {
+			t.Fatalf("%s: the invocation's failure was not classified as an invocation ending: %v", name, kinds(seen))
+		}
+		after, _ := json.Marshal(session.FindInterrupted(append(append([]event.Event{}, prior...), seen...)))
+		if string(after) != string(before) {
+			t.Fatalf("%s changed what the task owes:\nbefore %s\nafter  %s", name, before, after)
+		}
+	}
+
+	asserted := end(workFailed(unboundTurn{}))
+	if !contains(asserted, event.WorkflowFailed) || contains(asserted, event.WorkflowInvocationFailed) {
+		t.Fatalf("control: an asserted work failure did not end as the work failing: %v", kinds(asserted))
+	}
+	if found := session.FindInterrupted(append(append([]event.Event{}, prior...), asserted...)); len(found) != 0 {
+		t.Fatalf("control: a task whose work was asserted to have failed is still resumable: %+v", found)
+	}
+}

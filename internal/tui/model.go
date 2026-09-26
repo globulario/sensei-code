@@ -303,7 +303,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed ||
+		if e.Kind == event.WorkflowCompleted || e.Kind == event.WorkflowFailed || e.Kind == event.WorkflowInvocationFailed ||
 			e.Kind == event.WorkflowStopped || e.Kind == event.WorkflowAwaitingAuthority ||
 			e.Kind == event.WorkflowBlockedExternal || e.Kind == event.WorkflowNotConverged ||
 			e.Kind == event.WorkflowRestorationRefused {
@@ -618,6 +618,11 @@ func renderEvent(e event.Event) string {
 		prefix = dimStyle.Render("◇ NOT CONVERGED")
 		indent = "  "
 	}
+	if e.Kind == event.WorkflowInvocationFailed {
+		// This invocation could not proceed; the task is still there.
+		prefix = errorStyle.Render("✗ INVOCATION FAILED")
+		indent = "  "
+	}
 	if e.Kind == event.WorkflowRestorationRefused {
 		// Not an error: a resume declined to execute under authority it could
 		// not verify, and the task is still there.
@@ -825,8 +830,8 @@ func max(a, b int) int {
 func isConversation(e event.Event) bool {
 	switch e.Kind {
 	case event.ArchitectSpoke, event.PlanProposed, event.ChangeReported, event.AuthorityRequired, event.AuthorityResolved,
-		event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority, event.WorkflowBlockedExternal,
-		event.WorkflowNotConverged, event.WorkflowRestorationRefused:
+		event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority,
+		event.WorkflowBlockedExternal, event.WorkflowNotConverged, event.WorkflowRestorationRefused:
 		return true
 	case event.ArchitectReconciliation:
 		// Why the loop took the branch it took when two agents disagreed. Filed

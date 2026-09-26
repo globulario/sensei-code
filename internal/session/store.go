@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/globulario/sensei-code/internal/candidate"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/roles"
 )
@@ -329,6 +330,19 @@ func blockedRole(raw json.RawMessage) string {
 // a task-terminal event closes it. Deriving existence from the obligations
 // instead -- resumable if planned, or deferring, or blocked -- left the task
 // undiscoverable in every window between them.
+// endsInvocation is the set of events that end one invocation of a task,
+// whether or not they also end the task.
+func endsInvocation(k event.Kind) bool {
+	switch k {
+	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved,
+		event.WorkflowInvocationFailed, event.WorkflowStopped, event.WorkflowTimedOut,
+		event.WorkflowAwaitingReview, event.WorkflowAwaitingAuthority, event.WorkflowBlockedExternal,
+		event.WorkflowNotConverged, event.WorkflowRestorationRefused:
+		return true
+	}
+	return false
+}
+
 func FindInterrupted(events []event.Event) []Interrupted {
 	type partial struct {
 		Interrupted
@@ -339,6 +353,12 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		// instruction, so a later status line cannot replace an obligation
 		// with a sentence about it.
 		reviewFromVerdict bool
+		// resumableCandidate records that THIS invocation segment -- the events
+		// since the task's last invocation terminal -- recorded a structurally
+		// valid candidate disposition of resumable. It is the one fact a
+		// pre-change log carries that tells a legacy WorkflowFailed apart; see
+		// that case below.
+		resumableCandidate bool
 	}
 	order := []string{}
 	byTask := map[string]*partial{}
@@ -412,7 +432,37 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.ProspectiveRecord = e.Payload
 		case event.TestEditGranted:
 			p.TestEditRecord = e.Payload
-		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved:
+		case event.CandidateResolved:
+			// Only a record that decodes and validates as a disposition counts,
+			// and only the latest one in the segment: a later disposition that
+			// does not keep the candidate withdraws the earlier claim.
+			var r candidate.Resolution
+			p.resumableCandidate = len(e.Payload) != 0 && json.Unmarshal(e.Payload, &r) == nil &&
+				r.Validate() == nil && r.Disposition == candidate.Resumable
+		case event.WorkflowFailed:
+			// A WorkflowFailed is the WORK failing, and ends the task -- with one
+			// stated exception, for logs written before WorkflowInvocationFailed
+			// existed.
+			//
+			// Those logs carry WorkflowFailed for every ending, so the kind alone
+			// cannot tell the two apart; that inability was the defect. The
+			// exception keys on a DIFFERENT structural fact the same log already
+			// holds: this invocation segment recorded a valid candidate
+			// disposition of resumable. A run cannot truthfully say its candidate
+			// holds work resumable state references and also that the task
+			// holding it has ended, and the candidate report was the accurate
+			// one (task-1790362662232490867, 2026-09-25). So in that one shape
+			// the task is preserved with every obligation already reconstructed.
+			//
+			// A bare WorkflowFailed -- no such disposition since the last
+			// invocation terminal -- stays task-terminal, whatever its reason
+			// text says. Old tasks without the fact are not revived: the record
+			// cannot show their work did not fail, and a genuine work failure
+			// must still end its task.
+			if !p.resumableCandidate {
+				p.done = true
+			}
+		case event.WorkflowCompleted, event.WorkflowObserved:
 			// THE TASK-TERMINAL SET, stated positively and in one place: a change
 			// was admitted, the work failed, or a read-only run reported what it
 			// found. Nothing else ends a task.
@@ -424,12 +474,19 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// cannot be found, and a task that can never be finished, are the same
 			// disagreement between the record and the lifecycle.
 			//
+			// WorkflowFailed, the third member, has its own case above.
+			//
 			// The INVOCATION terminals -- stopped, timed out, awaiting review,
 			// awaiting authority, blocked external, not converged, restoration
-			// refused -- are deliberately absent. Each of them ends one
+			// refused, invocation failed -- are deliberately absent. Each of them ends one
 			// process's attempt and leaves the task owing something, which is
 			// precisely the state this function exists to report.
 			p.done = true
+		case event.WorkflowInvocationFailed:
+			// Not terminal: one invocation could not proceed, and the task owes
+			// exactly what it owed before that invocation ran. Nothing is
+			// changed here, so an invocation that failed for a reason unrelated
+			// to the work cannot become what the task is reconstructed from.
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it
@@ -524,6 +581,12 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// it already settled.
 			p.AwaitingAuthority = nil
 
+		}
+		// Every invocation terminal closes the segment the legacy exception
+		// reads, so a resumable disposition from an EARLIER invocation never
+		// vouches for a failure recorded by a later one.
+		if endsInvocation(e.Kind) {
+			p.resumableCandidate = false
 		}
 		// A reviewer's status line is the fallback, for records written before
 		// ReviewCompleted carried a payload. It must not overwrite a bounded

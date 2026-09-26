@@ -120,8 +120,20 @@ const (
 	ValidationRun     Kind = "validation.run"
 	AuthorityRequired Kind = "authority.required"
 	AuthorityResolved Kind = "authority.resolved"
-	WorkflowFailed    Kind = "workflow.failed"
-	WorkflowCompleted Kind = "workflow.completed"
+	// WorkflowFailed is the WORK failing: a task-terminal ending the emitter
+	// must positively assert. It is never where an unclassified error lands.
+	WorkflowFailed Kind = "workflow.failed"
+	// WorkflowInvocationFailed is one invocation that could not proceed -- no
+	// worker converged, a turn could not be bound, a provider produced nothing,
+	// or an error nobody has classified yet.
+	//
+	// Terminal for the INVOCATION and not for the TASK. Before it existed every
+	// such ending was emitted as WorkflowFailed, which FindInterrupted reads as
+	// final, so task-1790362662232490867 (2026-09-25) recorded its candidate as
+	// resumable and ended its task in the same second. The kind is the
+	// distinction; a reader never learns it from the reason text.
+	WorkflowInvocationFailed Kind = "workflow.invocation_failed"
+	WorkflowCompleted        Kind = "workflow.completed"
 	// WorkflowObserved is a read-only run that finished by reporting findings.
 	//
 	// Distinct from WorkflowCompleted, which means a change was admitted. An

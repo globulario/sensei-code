@@ -564,6 +564,47 @@ func (e *Engine) emitRunTerminal(taskID string, kind event.Kind, source event.So
 	e.emit(event.New(e.SessionID, taskID, source, kind, summary, payload))
 }
 
+// workFailure is the one assertion that the WORK failed, as opposed to the
+// invocation that was attempting it. Wrapping an error in it is the only way
+// a governed run reaches WorkflowFailed.
+type workFailure struct{ err error }
+
+func (w workFailure) Error() string { return w.err.Error() }
+func (w workFailure) Unwrap() error { return w.err }
+
+// workFailed asserts that err is a determination about the work itself: no
+// later invocation of this task could succeed where this one failed.
+func workFailed(err error) error { return workFailure{err: err} }
+
+// failureTerminal is THE classifier for a failure-shaped ending, and the
+// default is stated here and nowhere else: an ending is INVOCATION-terminal
+// unless the work was positively asserted to have failed.
+//
+// The default sits on this side because a fallthrough decides every ending
+// nobody has named yet. Task-terminal by default would leave the next unnamed
+// process failure -- the next unbound turn, the next provider that produced
+// nothing -- to destroy a task that still owes work, which is exactly what
+// ended task-1790362662232490867. A genuine work failure still ends its task,
+// because the emitter says so with workFailed.
+//
+// It reads the error's TYPE only. The reason text is presentation and decides
+// nothing.
+func failureTerminal(err error) event.Kind {
+	var asserted workFailure
+	if errors.As(err, &asserted) {
+		return event.WorkflowFailed
+	}
+	return event.WorkflowInvocationFailed
+}
+
+// emitFailureTerminal ends a governed run that did not succeed, through the
+// classifier and the one funnel. The receipt's outcome is FAILED either way:
+// it is the invocation's account of itself, and this invocation failed. What
+// the TASK is owed is carried by the event kind.
+func (e *Engine) emitFailureTerminal(taskID string, err error, cand runreceipt.CandidateState, payload any) {
+	e.emitRunTerminal(taskID, failureTerminal(err), event.SourceSystem, runreceipt.OutcomeFailed, cand, err.Error(), payload)
+}
+
 // noteFormatterMutation records whether validation's formatter changed
 // candidate bytes. Instrumentation only: it repairs nothing and decides
 // nothing, it merely stops the occurrence from being unobservable.

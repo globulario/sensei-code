@@ -79,6 +79,11 @@ const (
 	// exitFailed it would say the objective broke, which is the classification
 	// that destroyed the task this terminal exists to keep.
 	exitRestorationRefused = 10
+	// exitInvocationFailed means this invocation could not proceed and the
+	// task survives it, owing what it owed. Distinct from exitFailed, which is
+	// the work itself failing: a caller that cannot tell them apart either
+	// retries work that failed or abandons work that is still owed.
+	exitInvocationFailed = 11
 )
 
 func runGoverned(ctx context.Context, repo gitx.Repo, cfg config.Config, args []string) int {
@@ -367,6 +372,8 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitObserved, true
 	case event.WorkflowFailed:
 		return exitFailed, true
+	case event.WorkflowInvocationFailed:
+		return exitInvocationFailed, true
 	case event.WorkflowTimedOut:
 		return exitTimeout, true
 	case event.WorkflowStopped:
@@ -392,7 +399,7 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 // the interruption boundary a human needs to see.
 func terminal(k event.Kind) bool {
 	switch k {
-	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
+	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
 		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
 		event.WorkflowNotConverged, event.WorkflowRestorationRefused, event.AuthorityRequired:
