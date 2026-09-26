@@ -293,7 +293,7 @@ func (r *scriptedReviewer) Run(context.Context, agent.Request, func(event.Event)
 	if r.accept.Load() {
 		return agent.Result{Text: `{"decision":"accept","summary":"the candidate satisfies the plan"}`, Session: roles.Fresh}, nil
 	}
-	return agent.Result{Text: `{"decision":"revise","summary":"the proof is missing","findings":[{"id":"1","severity":"blocking",` +
+	return agent.Result{Text: `{"decision":"revise","summary":"the proof is missing","findings":[{"id":"1","severity":"blocking","class":"evidence",` +
 		`"claim":"the change is not proven","reference":"` + anchoredTarget + `","reason":"no witness"}]}`, Session: roles.Fresh}, nil
 }
 

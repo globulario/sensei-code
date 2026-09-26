@@ -741,7 +741,7 @@ func reviewQuotingMarkers(t *testing.T) string {
 		WithdrawnMarker + " and " + architectureResponseMarker
 	return canonicalFor(t, relaySubject, relayRequest, "chatgpt",
 		`{"decision":"revise","summary":"the framing rule is not proven","instructions":"prove it",`+
-			`"findings":[{"id":"f1","severity":"blocking","claim":"`+claim+`",`+
+			`"findings":[{"id":"f1","severity":"blocking","class":"code","claim":"`+claim+`",`+
 			`"reference":"internal/ghbridge/review_observation.go",`+
 			`"reason":"identity is decided by searching the whole body",`+
 			`"correction":"identify at position zero"}]}`)

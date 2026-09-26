@@ -22,6 +22,38 @@ const (
 
 func (s Severity) Valid() bool { return s == Blocking || s == Major || s == Minor }
 
+// FindingClass is what KIND of thing a finding says is wrong, and therefore
+// what kind of thing can make it right.
+//
+// It is stated by the reviewer and carried on the record, never derived. A
+// finding with no class is refused rather than given one: severity, wording and
+// position all look like evidence of a class and none of them is. And no party
+// answering a finding may set or change it -- a responder that could reclassify
+// a code defect as a missing proof would always choose the easier discharge.
+// Observed on the DF-19 resume, where a blocking code finding was absorbed into
+// the evidence-only reading of its neighbour and nothing objected.
+type FindingClass string
+
+const (
+	// ClassCode is a defect in the candidate. Only a change to the candidate
+	// can discharge it.
+	ClassCode FindingClass = "code"
+	// ClassEvidence is a proof record that does not establish what it must.
+	// Evidence can discharge it with no change to the candidate.
+	ClassEvidence FindingClass = "evidence"
+	// ClassScope is work outside the plan's bound. Like a code defect, it is
+	// discharged by changing the candidate, not by explaining it.
+	ClassScope FindingClass = "scope"
+)
+
+// Valid reads the class by membership. Nothing is normalised first: a class
+// that is not exactly one of these is not a class.
+func (c FindingClass) Valid() bool { return c == ClassCode || c == ClassEvidence || c == ClassScope }
+
+// RequiresCandidateChange reports whether only a changed candidate can
+// discharge a finding of this class.
+func (c FindingClass) RequiresCandidateChange() bool { return c == ClassCode || c == ClassScope }
+
 // Finding is one concrete objection, attributable to something a person can go
 // and look at.
 //
@@ -43,6 +75,8 @@ type Finding struct {
 	// the two: a finding that names neither is a complaint.
 	Correction string `json:"correction,omitempty"`
 	ProofGap   string `json:"proof_gap,omitempty"`
+	// Class is the kind of defect, stated by the reviewer. See FindingClass.
+	Class FindingClass `json:"class,omitempty"`
 }
 
 func (f Finding) Line() string {
@@ -50,8 +84,13 @@ func (f Finding) Line() string {
 	if f.ID != "" {
 		b.WriteString("[" + f.ID + "] ")
 	}
-	if f.Severity != "" {
+	switch {
+	case f.Severity != "" && f.Class != "":
+		b.WriteString(string(f.Severity) + ", class " + string(f.Class) + ": ")
+	case f.Severity != "":
 		b.WriteString(string(f.Severity) + ": ")
+	case f.Class != "":
+		b.WriteString("class " + string(f.Class) + ": ")
 	}
 	b.WriteString(strings.TrimSpace(f.Claim))
 	if f.Reference != "" {
@@ -94,6 +133,61 @@ type ReviewVerdict struct {
 	Summary      string     `json:"summary"`
 	Instructions string     `json:"instructions,omitempty"`
 	Findings     []Finding  `json:"findings,omitempty"`
+	// Resolutions are this reviewer's answers, by id, to findings earlier
+	// reviews left outstanding. Silence about an outstanding id resolves
+	// nothing.
+	Resolutions []Resolution `json:"resolutions,omitempty"`
+}
+
+// ResolutionOutcome is a reviewer's answer about one outstanding finding.
+type ResolutionOutcome string
+
+const (
+	// Resolved: the finding no longer holds against this candidate and evidence.
+	Resolved ResolutionOutcome = "resolved"
+	// StillOpen: the finding still holds.
+	StillOpen ResolutionOutcome = "open"
+)
+
+func (o ResolutionOutcome) Valid() bool { return o == Resolved || o == StillOpen }
+
+// Resolution is an independent reviewer's answer about one outstanding finding,
+// named by id. It carries no class: the class stays the one on the finding's
+// record, and a resolution is compatible with it or it closes nothing.
+type Resolution struct {
+	FindingID string            `json:"finding_id"`
+	Outcome   ResolutionOutcome `json:"outcome"`
+	// Basis is what in the candidate or its evidence the answer rests on.
+	Basis string `json:"basis,omitempty"`
+}
+
+// ResponseDisposition is what an implementer says it did about one finding.
+type ResponseDisposition string
+
+const (
+	// Discharged: the implementer claims to have answered the finding in the
+	// kind its class requires.
+	Discharged ResponseDisposition = "discharged"
+	// Disagreed: the implementer believes the finding is wrong or misclassified.
+	// That is an escalation to the architect, never a discharge.
+	Disagreed ResponseDisposition = "disagreed"
+)
+
+func (d ResponseDisposition) Valid() bool { return d == Discharged || d == Disagreed }
+
+// FindingResponse is an implementer's account of one outstanding finding.
+//
+// Class is the class the implementer BELIEVES it is answering. It is input,
+// never authority: it is compared against the class on the finding's record,
+// and a mismatch discharges nothing. There is no path by which it replaces the
+// recorded class.
+type FindingResponse struct {
+	FindingID   string              `json:"finding_id"`
+	Class       FindingClass        `json:"class"`
+	Disposition ResponseDisposition `json:"disposition"`
+	// Account is what was done, or why the implementer disagrees. It reaches
+	// the architect on a disagreement; it never reaches the reviewer.
+	Account string `json:"account,omitempty"`
 }
 
 // Accepts reports the reviewer's own conclusion and nothing more.
@@ -145,13 +239,8 @@ func (v ReviewVerdict) Validate(b Binding, implementer string) error {
 	if strings.TrimSpace(v.Summary) == "" {
 		return errors.New("review returned no summary")
 	}
-	for i, f := range v.Findings {
-		if !f.Severity.Valid() {
-			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
-		}
-		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
-			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
-		}
+	if err := validateFindings(v.Findings, v.Resolutions); err != nil {
+		return err
 	}
 	if v.Decision == Revise && strings.TrimSpace(v.Instructions) == "" && len(v.Findings) == 0 {
 		return errors.New("review asked for a revision without saying what to change")
@@ -161,6 +250,58 @@ func (v ReviewVerdict) Validate(b Binding, implementer string) error {
 		// is a verdict that disagrees with itself, and the disagreement would be
 		// resolved silently in favour of the softer half.
 		return fmt.Errorf("review accepted while recording %d blocking finding(s)", len(v.Blocking()))
+	}
+	return nil
+}
+
+// validateFindings is the finding and resolution half of a verdict's
+// validation, shared by the independent and the advisory verdict so the two
+// cannot drift apart.
+//
+// Every finding must carry an id, unique in the verdict, because later cycles
+// answer findings by id and an unnamed one cannot be answered. Every finding
+// must carry a class from the closed vocabulary, because a finding's class
+// decides what may discharge it; an absent class is refused, never guessed.
+func validateFindings(findings []Finding, resolutions []Resolution) error {
+	ids := make(map[string]bool, len(findings))
+	for i, f := range findings {
+		if !f.Severity.Valid() {
+			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
+		}
+		id := strings.TrimSpace(f.ID)
+		if id == "" {
+			return fmt.Errorf("finding %d has no id, so no later cycle could answer it", i+1)
+		}
+		if ids[id] {
+			return fmt.Errorf("two findings share the id %q, so an answer to one would answer both", id)
+		}
+		ids[id] = true
+		if !f.Class.Valid() {
+			return fmt.Errorf("finding %q has class %q, which is not code, evidence, or scope; a finding's class is stated by its reviewer and is never inferred", f.ID, f.Class)
+		}
+		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
+			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
+		}
+	}
+	answered := make(map[string]bool, len(resolutions))
+	for i, r := range resolutions {
+		id := strings.TrimSpace(r.FindingID)
+		if id == "" {
+			return fmt.Errorf("resolution %d names no finding", i+1)
+		}
+		if !r.Outcome.Valid() {
+			return fmt.Errorf("resolution of %q has outcome %q, which is not resolved or open", id, r.Outcome)
+		}
+		if answered[id] {
+			return fmt.Errorf("finding %q is resolved twice in one review", id)
+		}
+		answered[id] = true
+		if r.Outcome == Resolved && ids[id] {
+			// A verdict that raises a finding and resolves it at once disagrees
+			// with itself, and the disagreement would otherwise be settled
+			// silently in favour of whichever half was read last.
+			return fmt.Errorf("finding %q is both raised and resolved by this review", id)
+		}
 	}
 	return nil
 }
@@ -251,13 +392,8 @@ func (a Advisory) Validate(b Binding, implementer string) error {
 	if strings.TrimSpace(a.Summary) == "" {
 		return errors.New("review returned no summary")
 	}
-	for i, f := range a.Findings {
-		if !f.Severity.Valid() {
-			return fmt.Errorf("finding %d has severity %q, which is not blocking, major, or minor", i+1, f.Severity)
-		}
-		if f.Severity == Blocking && strings.TrimSpace(f.Reference) == "" {
-			return fmt.Errorf("blocking finding %q points at nothing a worker could open", f.ID)
-		}
+	if err := validateFindings(a.Findings, a.Resolutions); err != nil {
+		return err
 	}
 	if a.Decision == Revise && strings.TrimSpace(a.Instructions) == "" && len(a.Findings) == 0 {
 		return errors.New("review asked for a revision without saying what to change")

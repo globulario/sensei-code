@@ -52,12 +52,34 @@ type NotConverged struct {
 	ReviewCycles int `json:"review_cycles"`
 	// Owed is what a resume delivers: always OwedArchitectReplan.
 	Owed string `json:"owed"`
+	// Outstanding is the finding ledger when the budget ran out: every finding
+	// no independent review had resolved, with its recorded class and the
+	// candidate it was raised against. A resume restores it, so a process or
+	// provider change cannot forget an unanswered finding.
+	Outstanding []OutstandingFinding `json:"outstanding_findings,omitempty"`
 }
 
 // Describe is the one-line account the receipt and the terminal carry.
 func (n NotConverged) Describe() string {
-	return fmt.Sprintf("%s each spent %d review cycles and the reviewer still requires revision; owed: %s",
+	d := fmt.Sprintf("%s each spent %d review cycles and the reviewer still requires revision; owed: %s",
 		strings.Join(n.Implementers, ", "), n.ReviewCycles, n.Owed)
+	if len(n.Outstanding) != 0 {
+		d += "; outstanding findings: " + openReview{Outstanding: n.Outstanding}.outstandingIDs()
+	}
+	return d
+}
+
+// outstandingFrom reads the finding ledger a non-convergence record carried.
+// A record that cannot be read carries none; owedReplan has already refused it.
+func outstandingFrom(notConverged json.RawMessage) []OutstandingFinding {
+	if len(notConverged) == 0 {
+		return nil
+	}
+	n, err := ParseNotConverged(notConverged)
+	if err != nil {
+		return nil
+	}
+	return n.Outstanding
 }
 
 // ParseNotConverged reads a recorded non-convergence back, refusing one that
@@ -75,6 +97,12 @@ func ParseNotConverged(raw json.RawMessage) (NotConverged, error) {
 	}
 	if n.Owed != OwedArchitectReplan {
 		return NotConverged{}, fmt.Errorf("the non-convergence record owes %q, which no resume delivers", n.Owed)
+	}
+	for i, of := range n.Outstanding {
+		if strings.TrimSpace(of.Finding.ID) == "" || !of.Finding.Class.Valid() {
+			// Restoring it would mean inventing the id or the class it lacks.
+			return NotConverged{}, fmt.Errorf("the non-convergence record carries outstanding finding %d with id %q and class %q; an unnamed or unclassified finding cannot be carried", i+1, of.Finding.ID, of.Finding.Class)
+		}
 	}
 	return n, nil
 }

@@ -23,7 +23,7 @@ func revise(provider string) roles.ReviewVerdict {
 		Provenance: roles.Provenance{Provider: provider},
 		Decision:   roles.Revise,
 		Summary:    "required Sensei proof is absent",
-		Findings:   []roles.Finding{{ID: "f1", Severity: roles.Major, Claim: "the candidate satisfies the required scoped edit check", Reference: "internal/derived/derived.go", Reason: "validation records only gofmt, vet, build, tests", ProofGap: "scoped Sensei edit check"}},
+		Findings:   []roles.Finding{{ID: "f1", Severity: roles.Major, Class: roles.ClassEvidence, Claim: "the candidate satisfies the required scoped edit check", Reference: "internal/derived/derived.go", Reason: "validation records only gofmt, vet, build, tests", ProofGap: "scoped Sensei edit check"}},
 	}
 }
 
@@ -45,35 +45,227 @@ func TestAnAcceptOnTheUnchangedCandidateAndEvidenceContradictsTheOpenReview(t *t
 	}
 }
 
-func TestAChangedCandidateOrOutcomeAnswersTheOpenReviewMechanically(t *testing.T) {
+// The rule this replaced read any change to the candidate or its evidence as
+// the mechanical answer to the whole review. It is not: a finding is answered
+// by a review resolving its id, and new bytes or new outcomes resolve nothing.
+func TestAChangedCandidateOrOutcomeDoesNotAnswerAnOutstandingFinding(t *testing.T) {
 	first := n2bBundle("ok")
 	open := openReviewFrom(revise("codex"), 1, first.DiffDigest, evidenceIdentity(first, n2bAudit))
 
 	edited := n2bBundle("ok")
 	edited.DiffDigest = "sha256:other"
-	if open.contradicts(accept("claude"), edited.DiffDigest, evidenceIdentity(edited, n2bAudit)) {
-		t.Fatal("a different candidate is new facts, not a contradiction")
+	if !open.contradicts(accept("claude"), edited.DiffDigest, evidenceIdentity(edited, n2bAudit)) {
+		t.Fatal("a different candidate answered an outstanding finding nobody resolved")
 	}
 	failed := n2bBundle("ok")
 	failed.Checks[1].Outcome = validation.Failed
 	failed.Checks[1].ExitStatus = 1
-	if open.contradicts(accept("claude"), failed.DiffDigest, evidenceIdentity(failed, n2bAudit)) {
-		t.Fatal("a different outcome is different evidence")
+	if !open.contradicts(accept("claude"), failed.DiffDigest, evidenceIdentity(failed, n2bAudit)) {
+		t.Fatal("a different outcome answered an outstanding finding nobody resolved")
 	}
-	audited := n2bAudit
-	audited.Decision = "block"
-	if open.contradicts(accept("claude"), first.DiffDigest, evidenceIdentity(first, audited)) {
-		t.Fatal("a different audit decision is different evidence")
+	resolving := accept("claude")
+	resolving.Resolutions = []roles.Resolution{{FindingID: "f1", Outcome: roles.Resolved, Basis: "the scoped edit check now runs"}}
+	if open.contradicts(resolving, edited.DiffDigest, evidenceIdentity(edited, n2bAudit)) {
+		t.Fatal("a review that resolved the outstanding id was still read as a contradiction")
+	}
+	stillOpen := accept("claude")
+	stillOpen.Resolutions = []roles.Resolution{{FindingID: "f1", Outcome: roles.StillOpen}}
+	if !open.contradicts(stillOpen, edited.DiffDigest, evidenceIdentity(edited, n2bAudit)) {
+		t.Fatal("an answer of open closed the finding")
 	}
 	if open.contradicts(revise("claude"), first.DiffDigest, evidenceIdentity(first, n2bAudit)) {
 		t.Fatal("only an accepting verdict can contradict a non-accepting one")
 	}
 }
 
+// The class on the finding's record decides what may resolve it. A code
+// finding resolved on the very candidate it was raised against stays open; an
+// evidence finding may be resolved there, because evidence needs no change.
+func TestAResolutionMustBeCompatibleWithTheRecordedClass(t *testing.T) {
+	code := revise("codex")
+	code.Findings[0].Class = roles.ClassCode
+	code.Provenance.CandidateTree = "tree-1"
+	open := openReviewFrom(code, 1, "sha256:one", "ev")
+
+	resolving := accept("claude")
+	resolving.Resolutions = []roles.Resolution{{FindingID: "f1", Outcome: roles.Resolved}}
+	resolving.Provenance.CandidateTree = "tree-1"
+	next, refused := open.advance(resolving, 2, "sha256:one", "ev")
+	if len(next.Outstanding) != 1 || len(refused) != 1 || !strings.Contains(refused[0], "discharged only by a changed candidate") {
+		t.Fatalf("a code finding was resolved on the candidate it was raised against: outstanding=%v refused=%v", next.Outstanding, refused)
+	}
+	resolving.Provenance.CandidateTree = "tree-2"
+	if next, refused := open.advance(resolving, 2, "sha256:two", "ev"); len(next.Outstanding) != 0 || len(refused) != 0 {
+		t.Fatalf("a code finding resolved on a changed candidate stayed open: %v %v", next.Outstanding, refused)
+	}
+
+	evidence := openReviewFrom(revise("codex"), 1, "sha256:one", "ev")
+	resolving.Provenance.CandidateTree = ""
+	if next, _ := evidence.advance(resolving, 2, "sha256:one", "ev"); len(next.Outstanding) != 0 {
+		t.Fatalf("an evidence finding could not be resolved without a candidate change: %v", next.Outstanding)
+	}
+}
+
+// An outstanding id is never rewritten by a later review. A REVISE that raises
+// f1 again as an EVIDENCE finding leaves the CODE f1 on the record, raised
+// against the candidate it was raised against, and still open; the later
+// finding is held under an id of its own rather than lost.
+//
+// Breaks if: advance replaces an outstanding entry that shares a new finding's
+// id (the class and raised-against tree read back as the later ones), or drops
+// the later finding instead of holding it.
+func TestALaterFindingCannotRewriteAnOutstandingID(t *testing.T) {
+	code := revise("codex")
+	code.Findings[0].Class, code.Findings[0].Severity, code.Findings[0].Claim = roles.ClassCode, roles.Blocking, "resume discards the refusal"
+	code.Provenance.CandidateTree = "tree-1"
+	open := openReviewFrom(code, 1, "sha256:one", "ev")
+
+	later := revise("claude")
+	later.Findings[0].Class = roles.ClassEvidence
+	later.Provenance.CandidateTree = "tree-2"
+	next, refused := open.advance(later, 2, "sha256:two", "ev2")
+
+	if len(next.Outstanding) != 2 {
+		t.Fatalf("want the original f1 and the later finding both outstanding: %+v", next.Outstanding)
+	}
+	orig := next.Outstanding[0]
+	if orig.Finding.ID != "f1" || orig.Finding.Class != roles.ClassCode || orig.Finding.Claim != "resume discards the refusal" ||
+		orig.RaisedOnTree != "tree-1" || orig.RaisedDigest != "sha256:one" || orig.RaisedBy != "codex" || orig.RaisedAttempt != 1 {
+		t.Fatalf("the outstanding CODE f1 was rewritten by a later finding: %+v", orig)
+	}
+	held := next.Outstanding[1]
+	if held.Finding.ID == "f1" || held.Finding.Class != roles.ClassEvidence || held.RaisedOnTree != "tree-2" {
+		t.Fatalf("the later finding was not held under an id of its own: %+v", held)
+	}
+	if len(refused) != 1 || !strings.Contains(refused[0], "reused the outstanding id f1") {
+		t.Fatalf("the reuse was not stated: %v", refused)
+	}
+
+	restated := revise("claude")
+	restated.Findings[0] = code.Findings[0]
+	restated.Provenance.CandidateTree = "tree-2"
+	again, refused := open.advance(restated, 2, "sha256:two", "ev2")
+	if len(again.Outstanding) != 1 || again.Outstanding[0].RaisedOnTree != "tree-1" || len(refused) != 0 {
+		t.Fatalf("a restatement of the same finding changed its record: %+v %v", again.Outstanding, refused)
+	}
+}
+
+// THE ARCHITECT IS NOT A RESOLUTION AUTHORITY -- CONTROL. An ACCEPT omits the
+// outstanding CODE f1, so it contradicts the ledger; the architect rules that
+// the accepting review stands. That ruling resolves no id: the ledger is held
+// with f1 and its recorded class, and acceptance may not proceed. Only a later
+// independent review resolving f1 on a changed candidate closes it.
+//
+// runCandidate reaches acceptance after an adjudication only when adjudicated
+// says proceed, so this is the rule the engine's accept path is gated on.
+// Breaks if: adjudicated lets an accepting_review_stands ruling proceed, or
+// clears the ledger, while any id is outstanding.
+func TestAnArchitectRulingThatAnAcceptStandsResolvesNoFinding(t *testing.T) {
+	code := revise("codex")
+	code.Findings[0].Class, code.Findings[0].Severity = roles.ClassCode, roles.Blocking
+	code.Provenance.CandidateTree = "tree-1"
+	open := openReviewFrom(code, 1, "sha256:one", "ev")
+
+	omits := accept("claude")
+	omits.Provenance.CandidateTree = "tree-2"
+	if !open.contradicts(omits, "sha256:two", "ev2") {
+		t.Fatal("an ACCEPT that omitted the outstanding f1 did not contradict the ledger")
+	}
+	next, _ := open.advance(omits, 2, "sha256:two", "ev2")
+	hold, proceed := next.adjudicated(true)
+	if proceed {
+		t.Fatal("an architect ruling that the accept stands let a candidate with an outstanding CODE finding proceed to acceptance")
+	}
+	if len(hold.Outstanding) != 1 || hold.Outstanding[0].Finding.ID != "f1" || hold.Outstanding[0].Finding.Class != roles.ClassCode {
+		t.Fatalf("the architect's ruling changed the ledger: %+v", hold.Outstanding)
+	}
+	if hold, proceed := next.adjudicated(false); proceed || len(hold.Outstanding) != 1 {
+		t.Fatalf("a revise adjudication released the ledger: proceed=%v %+v", proceed, hold.Outstanding)
+	}
+
+	resolving := accept("codex")
+	resolving.Provenance.CandidateTree = "tree-3"
+	resolving.Resolutions = []roles.Resolution{{FindingID: "f1", Outcome: roles.Resolved, Basis: "repaired"}}
+	if hold.contradicts(resolving, "sha256:three", "ev3") {
+		t.Fatal("an independent review resolving f1 on a changed candidate was still a contradiction")
+	}
+
+	// The identity rule has no id to answer, and there the ruling settles it.
+	finding := revise("codex")
+	finding.Findings, finding.Instructions = nil, "run the scoped edit check"
+	if _, proceed := openReviewFrom(finding, 1, "sha256:one", "ev").adjudicated(true); !proceed {
+		t.Fatal("an identity-rule contradiction with no outstanding id could not be settled by the architect")
+	}
+}
+
+// The implementer's answers are measured against the ledger id by id, and the
+// class compared is always the recorded one.
+func TestTheAccountComparesTheRecordedClass(t *testing.T) {
+	v := revise("codex")
+	v.Findings = append(v.Findings, roles.Finding{ID: "f2", Severity: roles.Blocking, Class: roles.ClassCode, Claim: "c", Reference: "main.go", Reason: "r"})
+	v.Provenance.CandidateTree = "tree-1"
+	open := openReviewFrom(v, 1, "sha256:one", "ev")
+
+	responses, err := parseFindingResponses("done\n" + FindingResponsesHeading + "\n```json\n" +
+		`[{"finding_id":"f1","class":"evidence","disposition":"discharged"},{"finding_id":"f2","class":"evidence","disposition":"discharged"}]` + "\n```")
+	if err != nil || len(responses) != 2 {
+		t.Fatalf("responses not read: %v %v", responses, err)
+	}
+	a := open.account(responses, nil, "tree-2", "sha256:two")
+	if a.accounted() || len(a.Unanswered) != 1 || !strings.Contains(a.Unanswered[0], "f2 (code, blocking) is a code finding on the review record") {
+		t.Fatalf("a response reclassifying a code finding was accepted: %+v", a)
+	}
+	if len(a.Answered) != 1 || a.Answered[0] != "f1" {
+		t.Fatalf("the evidence answer to the evidence finding was not counted: %+v", a)
+	}
+	codeAnswer := []roles.FindingResponse{{FindingID: "f1", Class: roles.ClassEvidence, Disposition: roles.Discharged}, {FindingID: "f2", Class: roles.ClassCode, Disposition: roles.Discharged}}
+	if a := open.account(codeAnswer, nil, "tree-1", "sha256:one"); len(a.Unanswered) != 1 || !strings.Contains(a.Unanswered[0], "f2 (code, blocking) is a code finding and the candidate has not changed since it was raised") {
+		t.Fatalf("a code finding was discharged without a change to the candidate: %+v", a)
+	}
+	if a := open.account(nil, nil, "tree-2", "sha256:two"); len(a.Unanswered) != 2 {
+		t.Fatalf("silence answered something: %+v", a)
+	}
+	if _, err := parseFindingResponses(FindingResponsesHeading + " not json"); err == nil {
+		t.Fatal("an unreadable response block was read as no responses at all")
+	}
+}
+
+// A finding's class and id are stated by its reviewer. A verdict whose finding
+// has neither is refused -- never completed from its severity or its position.
+func TestAVerdictWhoseFindingHasNoClassIsRefused(t *testing.T) {
+	b := roles.Binding{TaskID: "t", BaseSHA: "b", CandidateDigest: "d"}
+	v := revise("codex")
+	v.Provenance = roles.Provenance{TaskID: "t", Role: roles.Reviewer, Provider: "codex", SessionMode: roles.Fresh, BaseSHA: "b", CandidateDigest: "d"}
+	if err := v.Validate(b, "claude"); err != nil {
+		t.Fatalf("a classed verdict was refused: %v", err)
+	}
+	v.Findings[0].Class = ""
+	if err := v.Validate(b, "claude"); err == nil || !strings.Contains(err.Error(), "never inferred") {
+		t.Fatalf("a finding with no class was accepted: %v", err)
+	}
+	v.Findings[0].Class = "CODE"
+	if err := v.Validate(b, "claude"); err == nil {
+		t.Fatal("a class outside the closed vocabulary was accepted")
+	}
+	v.Findings[0].Class, v.Findings[0].ID = roles.ClassEvidence, ""
+	if err := v.Validate(b, "claude"); err == nil {
+		t.Fatal("a finding with no id was accepted")
+	}
+}
+
+// The identity rule stands for a revise that raised no finding to answer by id,
+// and it still never fires on an identity nobody recorded.
 func TestAnOpenReviewIsNotRecordedWithoutAnIdentityToBindTo(t *testing.T) {
-	open := openReviewFrom(revise("codex"), 1, "", "")
+	instructionsOnly := revise("codex")
+	instructionsOnly.Findings, instructionsOnly.Instructions = nil, "run the scoped edit check"
+	open := openReviewFrom(instructionsOnly, 1, "", "")
 	if open.contradicts(accept("claude"), "", "") {
 		t.Fatal("an unbound open review must never fire: silence on identity is not sameness")
+	}
+	b := n2bBundle("ok")
+	bound := openReviewFrom(instructionsOnly, 1, b.DiffDigest, evidenceIdentity(b, n2bAudit))
+	if !bound.contradicts(accept("claude"), b.DiffDigest, evidenceIdentity(b, n2bAudit)) {
+		t.Fatal("an ACCEPT on the unchanged candidate flipped a finding-less revise on nothing")
 	}
 }
 

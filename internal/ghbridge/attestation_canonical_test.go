@@ -385,7 +385,7 @@ func TestAnUnreadableCanonicalRecordCannotBeAttested(t *testing.T) {
 func TestOnlyAnAcceptingCanonicalReviewCanBeAttested(t *testing.T) {
 	for name, body := range map[string]string{
 		"a review that asked for changes": `{"decision":"revise","summary":"the ledger invariant is not proven",` +
-			`"instructions":"prove it","findings":[{"id":"f1","severity":"blocking","claim":"the invariant holds",` +
+			`"instructions":"prove it","findings":[{"id":"f1","severity":"blocking","class":"code","claim":"the invariant holds",` +
 			`"reference":"ledger.go","reason":"no test covers position 0","correction":"add the test"}]}`,
 		"a review that escalated": `{"decision":"escalate","summary":"this needs a human",` +
 			`"instructions":"ask Dave","findings":[]}`,

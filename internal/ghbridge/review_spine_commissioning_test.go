@@ -38,7 +38,7 @@ import (
 const (
 	commissionAccept = `{"decision":"accept","summary":"the ledger invariant holds at physical position 0","instructions":"","findings":[]}`
 	commissionRevise = `{"decision":"revise","summary":"the mutation is not shown to be killed","instructions":"kill it",` +
-		`"findings":[{"id":"f1","severity":"blocking","claim":"the guard is exercised","reference":"ledger.go",` +
+		`"findings":[{"id":"f1","severity":"blocking","class":"code","claim":"the guard is exercised","reference":"ledger.go",` +
 		`"reason":"no assertion fails when the guard is deleted","correction":"add the isolating assertion"}]}`
 )
 
