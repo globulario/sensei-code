@@ -1019,3 +1019,377 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// P9 -- one AuthorityResolution per GapIdentity, consumed by every routing site.
+//
+// Measured on task-1790513596091085059 (2026-09-27): the proceed route declared
+// a gap uncovered and, two seconds later, the escalate route routed a
+// differently shaped plan over the same files, found it certifiable, and handed
+// the architect certifiedResolutionPrompt. Five architect turns, ended by SIGINT.
+// ---------------------------------------------------------------------------
+
+// certifyingPreflight is a scoped preflight Sensei would grant on: authoritative
+// and current, covered, classified with no approval gate, no blind spots.
+const certifyingPreflight = `{"content":[{"type":"text","text":"preflight ok"}],"structuredContent":{"status":"PREFLIGHT_STATUS_OK","risk_class":"LOW","change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},"coverage":{"sufficient":true,"direct_anchor_count":2,"file_count":1,"indexed_file_count":1},"authority":{"authoritative":true,"verdict":"authoritative","graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT","graph_build_commit":"fac399f8225f","source_repo_commit":"f56f5a305798"}}}`
+
+// certifyingSenseiScript is resumeSenseiScript with that preflight: every
+// region the plan names is one Sensei certifies. Whether a plan is granted is
+// then decided by the plan's own shape, which is the whole of the measured
+// contradiction.
+func certifyingSenseiScript(t *testing.T) string {
+	t.Helper()
+	const was = `result='{"content":[{"type":"text","text":"preflight ok"}],"structuredContent":{"status":"PREFLIGHT_STATUS_OK","risk_class":"ARCHITECTURE_SENSITIVE","required_actions":["run the tests"],"authority":{"authoritative":true,"graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT"}}}' ;;`
+	if !strings.Contains(resumeSenseiScript, was) {
+		t.Fatal("the resume Sensei stub no longer answers preflight as this witness expects")
+	}
+	return strings.Replace(resumeSenseiScript, was, `result='`+certifyingPreflight+`' ;;`, 1)
+}
+
+const (
+	// A modify plan resting on an inferred premise: the proceed route meets a
+	// bounded, reasoning-owned gap over main.go.
+	proceedOverAGap = `{"decision":"proceed","summary":"change main","plan":"Edit main.go.","mode":"modify","files":["main.go"],` +
+		`"claims":[{"statement":"main has no other callers","about":"main.go","source":"inference"}]}`
+	// An inspect plan over the SAME file, with no premise: a shape Sensei
+	// certifies.
+	escalateOverTheSameFiles = `{"decision":"escalate","summary":"a person should decide this","mode":"inspect","files":["main.go"],` +
+		`"human_question":"May main.go change while its callers are unverified?"}`
+)
+
+// certifiedMarker is the heading certifiedResolutionPrompt writes, and nothing
+// else in the engine writes.
+const certifiedMarker = "AUTHORITY ROUTING RESULT:"
+
+// gapRun drives the real resolution loop -- execute, the start gate, the
+// architect roster, routePlan -- over a scripted architect and a certifying
+// Sensei, and reports what the run did at the first authority boundary, or at
+// its end if it never reached one.
+type gapRun struct {
+	engine    *Engine
+	store     *session.Store
+	architect *scriptedArchitect
+	events    []event.Event
+	waited    bool // the run stopped at a human-authority question
+}
+
+// gapEngine is an engine over a certifying Sensei and a scripted architect. A
+// second engine built "like" a first shares its repository and its session
+// record, which is what a restarted process holds.
+func gapEngine(t *testing.T, like *gapRun, turns ...architectTurn) *gapRun {
+	t.Helper()
+	run := &gapRun{architect: &scriptedArchitect{turns: turns}}
+	e := &Engine{SessionID: "s1", pending: map[string]chan string{}, Bus: event.NewBus(),
+		Runners: &rosterResolver{byProvider: map[string]*scriptedArchitect{"chatgpt": run.architect}, refuse: map[string]error{}}}
+	if like != nil {
+		e.Repo, run.store = like.engine.Repo, like.store
+	} else {
+		e.Repo, _ = mintRepo(t)
+		store, err := session.New(t.TempDir(), "s1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		run.store = store
+	}
+	e.Store = run.store
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", certifyingSenseiScript(t)}
+	e.Config.Sensei.Repository = "globulario/sensei"
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "chatgpt", "true", "none"
+	run.engine = e
+	return run
+}
+
+// resume continues task through Engine.Resume and watches the run. answer is
+// what a person does at each human-authority question: an option ID, or "" to
+// defer it. until may end the watch early, before a terminal.
+func (run *gapRun) resume(t *testing.T, task session.Interrupted, answer string, until func(event.Event) bool) {
+	t.Helper()
+	events, cancel := run.engine.Bus.Subscribe(4096)
+	defer cancel()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	run.engine.Resume(ctx, task)
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case ev := <-events:
+			run.events = append(run.events, ev)
+			if until != nil && until(ev) {
+				return
+			}
+			switch ev.Kind {
+			case event.AuthorityRequired:
+				run.waited = true
+				go func() {
+					deadline := time.Now().Add(10 * time.Second)
+					for time.Now().Before(deadline) {
+						if answer == "" && run.engine.DeferAuthority(task.TaskID) ||
+							answer != "" && run.engine.ResolveHuman(task.TaskID, answer) {
+							return
+						}
+						time.Sleep(5 * time.Millisecond)
+					}
+				}()
+			case event.WorkflowAwaitingAuthority, event.WorkflowCompleted, event.WorkflowFailed,
+				event.WorkflowStopped, event.WorkflowBlockedExternal:
+				return
+			}
+		case <-timeout:
+			t.Fatalf("the run reached no terminal:\n%s", strings.Join(summaries(run.events), "\n"))
+		}
+	}
+}
+
+func runGapLoop(t *testing.T, taskID string, turns ...architectTurn) *gapRun {
+	t.Helper()
+	run := gapEngine(t, nil, turns...)
+	// The continuity root a real task has, so the record reconstructs it.
+	run.engine.emit(event.New("s1", taskID, event.SourceUser, event.TaskCreated, "change main.go", nil))
+	run.resume(t, session.Interrupted{TaskID: taskID, Task: "change main.go"}, "", nil)
+	return run
+}
+
+func (r gapRun) sawCertified() bool {
+	for _, p := range r.architect.prompts {
+		if strings.Contains(p, certifiedMarker) {
+			return true
+		}
+	}
+	return false
+}
+
+// W1 -- THE MEASURED LOOP. The architect proceeds into a bounded gap, then
+// escalates an inspect plan over the same file. The escalation is answered by
+// the open gap -- a human-authority question, deferred here -- and NOT by
+// certifying the escalation's differently shaped plan.
+func TestAnEscalationWhileTheGapIsOpenIsNotAnsweredAsCertified(t *testing.T) {
+	const taskID = "task-p9-w1"
+	run := runGapLoop(t, taskID,
+		architectTurn{text: proceedOverAGap},
+		architectTurn{text: escalateOverTheSameFiles},
+		// Reached only by the defect: the certified round asks again.
+		architectTurn{text: replyDecision}, architectTurn{text: replyDecision})
+	trace := strings.Join(summaries(run.events), "\n")
+
+	// The gap the proceed route identified, from the engine's own record.
+	var identified *GapIdentity
+	for _, ev := range run.events {
+		var p struct {
+			Gap *GapIdentity `json:"gap_identity"`
+		}
+		if ev.Kind == event.Status && strings.HasPrefix(ev.Summary, "bounded knowledge gap; closing it") &&
+			json.Unmarshal(ev.Payload, &p) == nil && p.Gap != nil {
+			identified = p.Gap
+			break
+		}
+	}
+	if identified == nil || identified.Kind != "unverified-premise" {
+		t.Fatalf("the proceed route did not identify the bounded gap this witness is about:\n%s", trace)
+	}
+
+	// THE ABSENCE: no certified round while the gap is open.
+	if run.sawCertified() {
+		t.Fatalf("the escalation was answered with certifiedResolutionPrompt while the gap was open:\n%s", trace)
+	}
+	for _, ev := range run.events {
+		if strings.Contains(ev.Summary, "Sensei certifies this region") {
+			t.Fatalf("the engine certified the escalation while the gap was open: %s", ev.Summary)
+		}
+	}
+	// Two architect turns, not a round ceiling.
+	if got := len(run.architect.prompts); got != 2 {
+		t.Fatalf("the architect was asked %d times; the escalation should have ended the loop at the gap:\n%s", got, trace)
+	}
+	for _, ev := range run.events {
+		if strings.Contains(ev.Summary, "resolution rounds") {
+			t.Fatalf("the loop ended on the round ceiling, not on the gap: %s", ev.Summary)
+		}
+	}
+
+	// The run ends deferred ON THE GAP: the preserved question carries the
+	// same identity the proceed route issued.
+	if !run.waited {
+		t.Fatalf("no human-authority question was asked about the open gap:\n%s", trace)
+	}
+	var q DeferredAuthority
+	payloadOf(t, run.events, event.WorkflowAwaitingAuthority, &q)
+	if q.Gap == nil || q.Gap.Key() != identified.Key() {
+		t.Fatalf("the deferred question is not about the gap the proceed route identified: %+v, want %+v", q.Gap, identified)
+	}
+	if r, ok := run.engine.gapResolution(taskID, *identified); !ok || !r.Open() {
+		t.Fatalf("the deferred gap is not open for this task: %+v (held %v)", r, ok)
+	}
+}
+
+// W2 -- THE CONTROL. With no gap open for the task, an escalation into a region
+// Sensei certifies still gets the certified path: a nervous model must not be
+// able to manufacture a Level-3 event.
+func TestAnEscalationWithNoOpenGapStillGetsTheCertifiedPath(t *testing.T) {
+	const taskID = "task-p9-w2"
+	run := runGapLoop(t, taskID,
+		architectTurn{text: escalateOverTheSameFiles},
+		architectTurn{text: replyDecision}, architectTurn{text: replyDecision})
+	trace := strings.Join(summaries(run.events), "\n")
+	if !run.sawCertified() {
+		t.Fatalf("an escalation with no open gap was not handed back as certified:\n%s", trace)
+	}
+	if run.waited {
+		t.Fatalf("an escalation into a certified region with no open gap reached a human:\n%s", trace)
+	}
+	if _, open := run.engine.openGapResolution(taskID, run.engine.governedBase(taskID)); open {
+		t.Fatal("a gap is open for a task whose routes never identified one")
+	}
+}
+
+// deferredOnTheGap is W1's run: a task whose proceed route identified a gap,
+// whose escalation was answered by it, and whose question was deferred.
+func deferredOnTheGap(t *testing.T, taskID string) (*gapRun, GapIdentity, session.Interrupted) {
+	t.Helper()
+	first := runGapLoop(t, taskID,
+		architectTurn{text: proceedOverAGap}, architectTurn{text: escalateOverTheSameFiles},
+		architectTurn{text: replyDecision}, architectTurn{text: replyDecision})
+	var q DeferredAuthority
+	payloadOf(t, first.events, event.WorkflowAwaitingAuthority, &q)
+	if q.Gap == nil || !q.Gap.Identified() {
+		t.Fatalf("the deferral carries no gap identity:\n%s", strings.Join(summaries(first.events), "\n"))
+	}
+	history, err := first.store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, task := range session.FindInterrupted(history) {
+		if task.TaskID == taskID {
+			if len(task.AwaitingAuthority) == 0 {
+				t.Fatal("the reconstructed task does not carry its standing question")
+			}
+			return first, *q.Gap, task
+		}
+	}
+	t.Fatalf("the deferred task was not reconstructed from its record")
+	return nil, GapIdentity{}, session.Interrupted{}
+}
+
+// W3a -- RESUME, OPEN. A task deferred on an open gap resumes to the SAME open
+// gap: a restarted process restores it from the record, asks the question
+// about it again, and a second deferral preserves the same identity.
+func TestAResumedTaskWithAnOpenGapResumesToTheSameOpenGap(t *testing.T) {
+	const taskID = "task-p9-w3-open"
+	first, gap, task := deferredOnTheGap(t, taskID)
+
+	// A restarted process: a fresh engine over the same repository and record.
+	second := gapEngine(t, first, architectTurn{text: replyDecision})
+	if r, ok := second.engine.gapResolution(taskID, gap); !ok || !r.Open() {
+		t.Fatalf("the restarted engine did not restore the gap as open: %+v (held %v)", r, ok)
+	}
+	if _, open := second.engine.openGapResolution(taskID, gap.World); !open {
+		t.Fatal("the restored open gap is not the one the escalate route reads")
+	}
+
+	second.resume(t, task, "", nil)
+	if !second.waited {
+		t.Fatalf("the resumed task did not re-ask its question:\n%s", strings.Join(summaries(second.events), "\n"))
+	}
+	var again DeferredAuthority
+	payloadOf(t, second.events, event.WorkflowAwaitingAuthority, &again)
+	if again.Gap == nil || again.Gap.Key() != gap.Key() {
+		t.Fatalf("the re-deferred question is about another gap: %+v, want %+v", again.Gap, gap)
+	}
+	if r, _ := second.engine.gapResolution(taskID, gap); !r.Open() {
+		t.Fatalf("an unanswered resume settled the gap: %+v", r)
+	}
+	if n := len(second.architect.prompts); n != 0 {
+		t.Fatalf("a deferred resume consulted the architect %d time(s)", n)
+	}
+}
+
+// W3b -- RESUME, SETTLED. The resumed question is answered; the answer settles
+// that exact identity, durably. The continuation meets the same gap again and
+// consumes the settled answer instead of reopening it: no closure round, no
+// second question. A third process restores it as settled, and nothing -- a
+// replay, a re-identification -- reopens it.
+func TestAResumedTaskWhoseGapWasSettledDoesNotReopenIt(t *testing.T) {
+	const taskID = "task-p9-w3-settled"
+	first, gap, task := deferredOnTheGap(t, taskID)
+
+	// The continuation's architect proceeds into the SAME gap again.
+	second := gapEngine(t, first,
+		architectTurn{text: proceedOverAGap}, architectTurn{text: replyDecision}, architectTurn{text: replyDecision})
+	honoured := func(ev event.Event) bool {
+		return ev.Kind == event.Status && strings.HasPrefix(ev.Summary, "proceeding on the human's earlier authorization")
+	}
+	second.resume(t, task, "1", honoured)
+	trace := strings.Join(summaries(second.events), "\n")
+
+	var answered struct {
+		authority.Resolution
+		Gap *GapIdentity `json:"gap"`
+	}
+	payloadOf(t, second.events, event.AuthorityResolved, &answered)
+	if answered.Gap == nil || answered.Gap.Key() != gap.Key() || answered.Outcome != authority.Authorize {
+		t.Fatalf("the recorded answer is not bound to the gap it settled: %+v", answered)
+	}
+	if r, _ := second.engine.gapResolution(taskID, gap); !r.Settled() {
+		t.Fatalf("the answered gap is not settled: %+v", r)
+	}
+
+	// The continuation re-identified the gap and did not reopen it.
+	var questions, closures, consumed int
+	for _, ev := range second.events {
+		switch {
+		case ev.Kind == event.AuthorityRequired:
+			questions++
+		case ev.Kind == event.Status && strings.HasPrefix(ev.Summary, "bounded knowledge gap; closing it"):
+			closures++
+		case ev.Kind == event.Status && strings.HasPrefix(ev.Summary, "the knowledge gap was settled by an authority answer"):
+			consumed++
+		}
+	}
+	if len(second.architect.prompts) != 1 || consumed != 1 {
+		t.Fatalf("the continuation did not re-meet the settled gap and consume it (architect turns %d, consumed %d):\n%s",
+			len(second.architect.prompts), consumed, trace)
+	}
+	if questions != 1 || closures != 0 {
+		t.Fatalf("the settled gap was reopened: %d question(s), %d closure round(s) after the answer:\n%s", questions, closures, trace)
+	}
+
+	// A third process restores it settled; a replayed identification and a
+	// replayed deferral of the same gap leave it settled.
+	third := gapEngine(t, first)
+	if r, ok := third.engine.gapResolution(taskID, gap); !ok || !r.Settled() || r.Outcome != authority.Authorize {
+		t.Fatalf("the settled gap did not survive a restart: %+v (held %v)", r, ok)
+	}
+	if r := third.engine.resolveGap(taskID, AuthorityResolution{Gap: gap, State: ResolutionOpen}); !r.Settled() {
+		t.Fatalf("re-identifying a settled gap reopened it: %+v", r)
+	}
+	if _, open := third.engine.openGapResolution(taskID, gap.World); open {
+		t.Fatal("a settled gap is reported open to the escalate route")
+	}
+}
+
+// Requirement 3's other half: an unsettled gap is not silently settled by a
+// later routing of a narrower plan. Only the identifying route granting a
+// modify plan that still names every file of the gap closes it.
+func TestANarrowerPlanDoesNotCloseAnOpenGap(t *testing.T) {
+	const taskID, world = "task-p9-narrow", "base"
+	gap := GapIdentity{Kind: "unverified-premise", Subject: "a.go", Scope: []string{"a.go", "b.go"}, World: world}
+	e := &Engine{}
+	e.resolveGap(taskID, AuthorityResolution{Gap: gap, State: ResolutionOpen, Condition: "an inferred premise"})
+
+	e.closeWithdrawnGaps(taskID, world, []string{"a.go"})
+	if r, _ := e.gapResolution(taskID, gap); !r.Open() {
+		t.Fatalf("a plan that dropped b.go closed the gap over it: %+v", r)
+	}
+	e.closeWithdrawnGaps(taskID, "another-base", []string{"a.go", "b.go"})
+	if r, _ := e.gapResolution(taskID, gap); !r.Open() {
+		t.Fatalf("a grant in another world closed the gap: %+v", r)
+	}
+	e.closeWithdrawnGaps(taskID, world, []string{"a.go", "b.go", "c.go"})
+	if r, _ := e.gapResolution(taskID, gap); r.State != ResolutionClosed {
+		t.Fatalf("a grant over the whole scope did not close the gap: %+v", r)
+	}
+	if _, open := e.openGapResolution(taskID, world); open {
+		t.Fatal("a closed gap still blocks the certified escalation path")
+	}
+}

@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
@@ -201,6 +202,170 @@ func (g GapIdentity) Key() string {
 
 // Identified reports whether the router classified this gap at all.
 func (g GapIdentity) Identified() bool { return strings.TrimSpace(g.Kind) != "" }
+
+// ResolutionState is where one gap stands for one task. The vocabulary is
+// closed and ordered: open may become settled or closed, and neither of those
+// becomes anything else.
+type ResolutionState string
+
+const (
+	// ResolutionOpen: a route identified the gap and nothing has settled it.
+	ResolutionOpen ResolutionState = "open"
+	// ResolutionSettled: a human authority answer settled this exact identity.
+	ResolutionSettled ResolutionState = "settled"
+	// ResolutionClosed: the route that identified the gap re-ran over a modify
+	// plan still naming every file in its scope, and no longer reported it. The
+	// gap stopped existing; nobody decided anything about it.
+	ResolutionClosed ResolutionState = "closed"
+)
+
+// AuthorityResolution is the one answer to "is gap G settled for task T at world
+// W" (P9). Every site that routes a plan -- proceed, escalate, resume -- reads
+// it here, and none of them may reach the opposite execution outcome for the
+// same gap by routing a differently shaped plan.
+//
+// Identity is the GapIdentity alone, including its World; the condition is
+// carried for the person reading the question and is never consulted to decide.
+// Values are immutable: advance returns the successor.
+type AuthorityResolution struct {
+	Gap       GapIdentity
+	State     ResolutionState
+	Condition string
+	// Outcome is the answer that settled it; empty unless State is settled.
+	Outcome authority.Outcome
+}
+
+func (r AuthorityResolution) Open() bool    { return r.State == ResolutionOpen }
+func (r AuthorityResolution) Settled() bool { return r.State == ResolutionSettled }
+
+// advance is the single transition. It is idempotent and monotonic: once a gap
+// is settled or closed, no later observation -- a replay, a resume, another
+// routing surface -- reopens or re-decides it, and an open gap keeps the
+// condition it was first identified with.
+func (r AuthorityResolution) advance(next AuthorityResolution) AuthorityResolution {
+	switch {
+	case r.State == ResolutionSettled || r.State == ResolutionClosed:
+		return r
+	case next.State == ResolutionSettled || next.State == ResolutionClosed:
+		if strings.TrimSpace(next.Condition) == "" {
+			next.Condition = r.Condition
+		}
+		return next
+	case r.State == ResolutionOpen:
+		return r
+	}
+	return next
+}
+
+// routing is the open gap as the route that identified it: what an escalation
+// is answered with while the gap stands.
+func (r AuthorityResolution) routing() Routing {
+	return Routing{Route: RouteCloseGap, Basis: BasisLacksKnowledge, Condition: r.Condition, Gap: r.Gap}
+}
+
+func gapResolutionKey(taskID string, gap GapIdentity) string { return taskID + "\x00" + gap.Key() }
+
+// resolveGap applies one transition to the task's resolution of next.Gap and
+// returns where it now stands. An unidentified gap has no resolution.
+func (e *Engine) resolveGap(taskID string, next AuthorityResolution) AuthorityResolution {
+	if !next.Gap.Identified() {
+		return next
+	}
+	e.hydrateGapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	key := gapResolutionKey(taskID, next.Gap)
+	current, ok := e.gapResolutions[key]
+	if ok {
+		next = current.advance(next)
+	}
+	e.gapResolutions[key] = next
+	return next
+}
+
+// gapResolution reads the task's resolution of one gap.
+func (e *Engine) gapResolution(taskID string, gap GapIdentity) (AuthorityResolution, bool) {
+	if !gap.Identified() {
+		return AuthorityResolution{}, false
+	}
+	e.hydrateGapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	r, ok := e.gapResolutions[gapResolutionKey(taskID, gap)]
+	return r, ok
+}
+
+// openGapResolution reports a gap still open for this task in this world. The
+// certified-escalation path is lawful only when there is none.
+func (e *Engine) openGapResolution(taskID, world string) (AuthorityResolution, bool) {
+	e.hydrateGapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	var found []AuthorityResolution
+	for key, r := range e.gapResolutions {
+		if strings.HasPrefix(key, taskID+"\x00") && r.Open() && r.Gap.World == strings.TrimSpace(world) {
+			found = append(found, r)
+		}
+	}
+	if len(found) == 0 {
+		return AuthorityResolution{}, false
+	}
+	// Deterministic, so a task with two open gaps is asked about the same one
+	// every time.
+	sort.Slice(found, func(i, j int) bool { return found[i].Gap.Key() < found[j].Gap.Key() })
+	return found[0], true
+}
+
+// closeWithdrawnGaps records that the route which identifies gaps granted a
+// modify plan still naming every file of an open gap's scope, in the same world:
+// the router no longer reports that gap, so it is closed. A plan that dropped
+// any of those files closes nothing -- narrowing away from a gap is not
+// evidence about it -- and an escalation's routing never reaches here.
+func (e *Engine) closeWithdrawnGaps(taskID, world string, files []string) {
+	planned := map[string]bool{}
+	for _, f := range files {
+		planned[strings.TrimSpace(f)] = true
+	}
+	e.hydrateGapResolutions(taskID)
+	e.mu.Lock()
+	var withdrawn []AuthorityResolution
+	for key, r := range e.gapResolutions {
+		if !strings.HasPrefix(key, taskID+"\x00") || !r.Open() || r.Gap.World != strings.TrimSpace(world) {
+			continue
+		}
+		covered := true
+		for _, f := range r.Gap.Scope {
+			if !planned[strings.TrimSpace(f)] {
+				covered = false
+				break
+			}
+		}
+		if covered {
+			withdrawn = append(withdrawn, r)
+		}
+	}
+	e.mu.Unlock()
+	for _, r := range withdrawn {
+		e.resolveGap(taskID, AuthorityResolution{Gap: r.Gap, State: ResolutionClosed})
+	}
+}
+
+// gapAnswer is what the task's resolution of this gap says. held reports that
+// the resolution owns the answer: settled is answered (authorized when its
+// outcome permits), and open is unanswered whatever text elsewhere matches the
+// condition. A caller reads the condition-and-scope record only where nothing
+// is held -- no gap, a closed one, or one preserved before its identity was
+// carried -- which is the only record such a route has.
+func (e *Engine) gapAnswer(taskID string, gap GapIdentity) (authorized, asked, held bool) {
+	r, ok := e.gapResolution(taskID, gap)
+	switch {
+	case ok && r.Settled():
+		return r.Outcome.Permits(), true, true
+	case ok && r.Open():
+		return false, false, true
+	}
+	return false, false, false
+}
 
 // gapSubject resolves what a premise is about to a planned file, by path.
 //

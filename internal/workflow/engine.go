@@ -119,6 +119,11 @@ type Engine struct {
 	// all of them would send the second gap straight to a human because the
 	// first one used the attempts.
 	closures map[string]int
+	// gapResolutions is the one answer to "is gap G settled for task T at world
+	// W", keyed by task and GapIdentity.Key. See AuthorityResolution.
+	// gapsHydrated marks the tasks whose record has been folded into it.
+	gapResolutions map[string]AuthorityResolution
+	gapsHydrated   map[string]bool
 	// premises are the engine-issued receipts for the knowledge gaps each task
 	// has met, the identity the closure budget is spent against. See
 	// premise.go.
@@ -468,10 +473,15 @@ const humanStopNote = "stopped by human authority at a Level-3 boundary; the que
 // deferred without an answer, and answered with one that could not be admitted.
 // Two copies would drift, and the thing that would drift is which fields of the
 // question's identity get written down.
-func (e *Engine) preserveQuestion(taskID, condition, domain, baseSHA string, decision authority.Decision, summary string, scope []string) {
+func (e *Engine) preserveQuestion(taskID, condition, domain, baseSHA string, decision authority.Decision, summary string, scope []string, gap GapIdentity) {
 	e.noteDeferredQuestion(taskID, decision.Subject, condition)
+	var carried *GapIdentity
+	if gap.Identified() {
+		carried = &gap
+	}
 	e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
 		runreceipt.OutcomeDeferred, e.candidateStateFor(taskID), summary, DeferredAuthority{
+			Gap:       carried,
 			Condition: condition, Domain: domain, BaseSHA: baseSHA, Decision: decision,
 			TaskID: taskID, SessionID: e.SessionID,
 			// The scope is part of the question. Dropping it is what made a
@@ -638,6 +648,10 @@ type DeferredAuthority struct {
 	// authorization to nothing; reading it as universal would widen it to
 	// everything. Neither is available, so the difference is recorded.
 	ScopeRecorded bool `json:"scope_recorded"`
+	// Gap is the structured identity of the bounded knowledge gap this
+	// question is about, when it is about one. A resumed process restores it as
+	// open from here, so the same gap is the one asked about again (P9).
+	Gap *GapIdentity `json:"gap,omitempty"`
 }
 
 // conversationSoFar reconstructs the dialogue with the architect from the
@@ -2418,7 +2432,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 			return d, nil
 		}
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
-		if _, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition); err != nil {
+		if _, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap); err != nil {
 			return architectureDecision{}, err
 		}
 		// The answer is read back through the same record an architect's
@@ -2789,13 +2803,22 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
 			var receipt *premiseReceipt
+			// THE PROCEED ROUTE IDENTIFIES GAPS, and registers each one it meets
+			// before anything else happens to it -- before its closure round --
+			// so every other routing site reads the same open gap (P9). A gap
+			// already settled for this task stays settled and is consumed below
+			// rather than worked again.
+			answered := false
 			if routing.ClosesGap() {
 				receipt = e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
+				answered = e.resolveGap(taskID, AuthorityResolution{Gap: routing.Gap, State: ResolutionOpen, Condition: routing.Condition}).Settled()
+			} else if routing.Granted() && planMode(d.Mode) == ModeModify {
+				e.closeWithdrawnGaps(taskID, strings.TrimSpace(e.governedBase(taskID)), d.Files)
 			}
 			switch {
 			case routing.Route == RouteCannotEstablish:
 				return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
-			case routing.ClosesGap() && e.spendClosure(taskID, receipt.ID):
+			case routing.ClosesGap() && !answered && e.spendClosure(taskID, receipt.ID):
 				// Bounded epistemic work, not an owner for the decision.
 				// Nothing is granted here: the round establishes what is
 				// knowable and the router runs again over what the graph then
@@ -2814,9 +2837,20 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				// The budget is spent and the router still reports the same
 				// gap. What happens NEXT depends on who could close it, which is
 				// disposeUnclosedGap's decision and not this switch's.
-				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
-					"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
-				e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count())
+				//
+				// A gap an authority answer already settled for this task takes
+				// the same path without being investigated again: the branch
+				// below consumes that answer, which is what resuming a settled
+				// gap must do instead of reopening it.
+				if answered {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+						"the knowledge gap was settled by an authority answer for this task; honouring it: "+routing.Condition,
+						map[string]any{"gap_identity": routing.Gap}))
+				} else {
+					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+						"the knowledge gap did not close; escalating with it open: "+routing.Condition, nil))
+					e.recordClosureQuestion(taskID, routing.Condition, d, start, architect.Label, rounds.count())
+				}
 				var limited error
 				if routing, limited = e.disposeUnclosedGap(taskID, start.Domain(), routing, action); limited != nil {
 					return architectureDecision{}, limited
@@ -2827,7 +2861,11 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				// reach this same condition on the next plan. Ask once per
 				// condition per task and then honour the answer, or the human
 				// is interrogated in a loop and the run never starts.
-				if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
+				authorized, asked, held := e.gapAnswer(taskID, routing.Gap)
+				if !held {
+					authorized, asked = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
+				}
+				if asked {
 					if !authorized {
 						return architectureDecision{}, fmt.Errorf(
 							"the human declined this architectural change and the plan still requires it: %s", routing.Condition)
@@ -2843,7 +2881,8 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					}
 					if open {
 						receipt := e.premiseReceiptFor(taskID, gap, gap.ClaimGap)
-						if !e.spendClosure(taskID, receipt.ID) {
+						settled := e.resolveGap(taskID, AuthorityResolution{Gap: gap.Gap, State: ResolutionOpen, Condition: gap.Condition}).Settled()
+						if settled || !e.spendClosure(taskID, receipt.ID) {
 							// The budget is spent and the gap the answer did not
 							// cover is still open. The same human-owned boundary
 							// every exhausted gap reaches: whether to proceed with
@@ -2854,7 +2893,11 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 							stillOpen := gap
 							stillOpen.Route = RouteHuman
 							stillOpen.Condition = "a bounded knowledge gap was not closed by investigation: " + gap.Condition
-							if authorized, asked := e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...); asked {
+							authorized, asked, held := e.gapAnswer(taskID, stillOpen.Gap)
+							if !held {
+								authorized, asked = e.applyAnsweredCondition(taskID, stillOpen.Condition, d.Files...)
+							}
+							if asked {
 								if !authorized {
 									return architectureDecision{}, fmt.Errorf(
 										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition)
@@ -2864,7 +2907,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 								return d, nil
 							}
 							e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(stillOpen), nil))
-							choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition)
+							choice, err := e.awaitHuman(ctx, sc, start, taskID, d, stillOpen.Condition, stillOpen.Gap)
 							if err != nil {
 								return architectureDecision{}, err
 							}
@@ -2887,7 +2930,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					return d, nil
 				}
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
-				choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
+				choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap)
 				if err != nil {
 					return architectureDecision{}, err
 				}
@@ -2915,7 +2958,23 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			}
 			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
+			// ONE DECIDER FOR THE GAP (P9). Certifying the region an escalation
+			// names answers a different question -- is THIS plan shape
+			// certifiable -- and an inspect plan over files a modify plan could
+			// not be granted over is routinely certifiable. While a gap the
+			// proceed route identified stands open for this task and world, the
+			// escalation is answered by that gap, never by the certification.
+			open, gapOpen := AuthorityResolution{}, false
 			if routing.Granted() {
+				open, gapOpen = e.openGapResolution(taskID, e.governedBase(taskID))
+			}
+			if gapOpen {
+				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
+					"architect asked to escalate while a knowledge gap identified for this task is open; "+
+						"certifying the escalation's region does not settle it: "+open.Condition,
+					map[string]any{"gap_identity": open.Gap}))
+				routing = open.routing()
+			} else if routing.Granted() {
 				e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 					"architect asked to escalate; Sensei certifies this region, so it is resolved architecturally", nil))
 				if err := newRound("an escalation into a region Sensei certifies"); err != nil {
@@ -2930,7 +2989,9 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			}
 			if routing.ClosesGap() {
 				receipt := e.premiseReceiptFor(taskID, routing, routing.ClaimGap)
-				if e.spendClosure(taskID, receipt.ID) {
+				// An open gap has had its closure round: it was registered
+				// immediately before it. Escalating out of it is not a second.
+				if !gapOpen && e.spendClosure(taskID, receipt.ID) {
 					e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 						"the architect asked to escalate a bounded knowledge gap; closing it instead: "+routing.Condition, map[string]any{"gap": receipt.ID, "gap_identity": routing.Gap}))
 					if err := newRound("a bounded knowledge gap"); err != nil {
@@ -2948,7 +3009,11 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 					return architectureDecision{}, limited
 				}
 			}
-			if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
+			authorized, asked, held := e.gapAnswer(taskID, routing.Gap)
+			if !held {
+				authorized, asked = e.applyAnsweredCondition(taskID, routing.Condition, d.Files...)
+			}
+			if asked {
 				if !authorized {
 					return architectureDecision{}, fmt.Errorf(
 						"the human declined this and the architect returned to it: %s", routing.Condition)
@@ -2961,7 +3026,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				continue
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status, escalationCondition(routing), nil))
-			choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition)
+			choice, err := e.awaitHuman(ctx, sc, start, taskID, d, routing.Condition, routing.Gap)
 			if err != nil {
 				return architectureDecision{}, err
 			}
@@ -4506,7 +4571,7 @@ func (e *Engine) prospectiveGrants(taskID string) []prospectiveGrant {
 	return e.prospective[taskID]
 }
 
-func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string) (string, error) {
+func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID string, d architectureDecision, condition string, gap GapIdentity) (string, error) {
 	// Human authority is deliberately presented as a tiny numbered decision
 	// surface. Model-supplied option IDs and labels are not authority: compose
 	// normalizes the IDs and assigns every outcome itself.
@@ -4527,7 +4592,7 @@ func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certif
 	if condition = strings.TrimSpace(condition); condition != "" {
 		decision.Reason = strings.TrimSpace(condition + "\n\n" + decision.Reason)
 	}
-	return e.awaitChoice(ctx, sc, taskID, condition, start.Domain(), e.governedBase(taskID), decision, options, d.Files...)
+	return e.awaitChoiceAbout(ctx, sc, taskID, condition, start.Domain(), e.governedBase(taskID), gap, decision, options, d.Files...)
 }
 
 // awaitChoice presents a numbered decision to the human and blocks until they
@@ -4553,7 +4618,25 @@ func (e *Engine) governedBase(taskID string) string {
 	return identity.BaseSHA
 }
 
+// awaitChoiceAbout is awaitChoice for a question about one identified gap. The
+// gap rides on the context of this one call, so every existing caller of
+// awaitChoice asks exactly what it asked before.
+func (e *Engine) awaitChoiceAbout(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, gap GapIdentity, decision authority.Decision, options []authority.Option, scope ...string) (string, error) {
+	if gap.Identified() {
+		ctx = context.WithValue(ctx, questionGapKey{}, gap)
+	}
+	return e.awaitChoice(ctx, sc, taskID, condition, domain, baseSHA, decision, options, scope...)
+}
+
+// questionGapKey carries the gap a question is about into awaitChoice.
+type questionGapKey struct{}
+
 func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, condition, domain, baseSHA string, decision authority.Decision, options []authority.Option, scope ...string) (string, error) {
+	// The gap is open while the question stands, travels in the deferral and
+	// in the answer, and is settled by an answer that settles it -- the
+	// transitions resume replays (AuthorityResolution).
+	gap, _ := ctx.Value(questionGapKey{}).(GapIdentity)
+	e.resolveGap(taskID, AuthorityResolution{Gap: gap, State: ResolutionOpen, Condition: condition})
 	ch := make(chan string, 1)
 	e.mu.Lock()
 	e.pending[taskID] = ch
@@ -4582,7 +4665,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 			// abolish. The event's shape is unchanged, because FindInterrupted
 			// reads it to resume the task.
 			e.preserveQuestion(taskID, condition, domain, baseSHA, decision,
-				"authority decision deferred; the question stands", scope)
+				"authority decision deferred; the question stands", scope, gap)
 			return "", errAuthorityDeferred
 		}
 		for _, option := range options {
@@ -4598,7 +4681,7 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 				if refusal := e.refuseUnprovenAuthority(taskID, option); refusal != nil {
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, refusal.Error(), nil))
 					e.preserveQuestion(taskID, condition, domain, baseSHA, decision,
-						"the answer was refused and the question stands: its authority scope cannot be proven", scope)
+						"the answer was refused and the question stands: its authority scope cannot be proven", scope, gap)
 					return "", refusal
 				}
 				// The answer is authoritative for this run the moment it is
@@ -4628,8 +4711,21 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 					} else {
 						resolution = authority.Persist(senseiProposer{sc}, resolution)
 					}
-					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, resolution))
+					// The gap travels beside the resolution rather than inside it:
+					// every reader that decodes an authority.Resolution reads the
+					// same bytes it always did.
+					var answered any = resolution
+					if gap.Identified() {
+						answered = struct {
+							authority.Resolution
+							Gap *GapIdentity `json:"gap"`
+						}{resolution, &gap}
+					}
+					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, answered))
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
+					if option.Outcome.Settles() {
+						e.resolveGap(taskID, AuthorityResolution{Gap: gap, State: ResolutionSettled, Condition: condition, Outcome: option.Outcome})
+					}
 				}
 
 				if option.Outcome == authority.Stop {
@@ -6270,8 +6366,14 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	}
 	defer sc.Close()
 
-	choice, err := e.awaitChoice(ctx, sc, task.TaskID, deferred.Condition, deferred.Domain, deferred.BaseSHA,
-		deferred.Decision, deferred.Decision.Options, deferred.Scope...)
+	// The gap the question is about is restored with it, so the question is
+	// asked about the same open identity and its answer settles exactly that.
+	var gap GapIdentity
+	if deferred.Gap != nil {
+		gap = *deferred.Gap
+	}
+	choice, err := e.awaitChoiceAbout(ctx, sc, task.TaskID, deferred.Condition, deferred.Domain, deferred.BaseSHA,
+		gap, deferred.Decision, deferred.Decision.Options, deferred.Scope...)
 	if err != nil {
 		// Deferred again, stopped, or genuinely broken. The workflow does not
 		// move past the boundary in any of the three, and which ending it was
@@ -6727,6 +6829,70 @@ func openFindings(review, audit string, cause error) []taskstate.Finding {
 		out = append(out, taskstate.Finding{Source: "previous worker stopped", Detail: cause.Error()})
 	}
 	return out
+}
+
+// gapRecord is the structured gap a durable authority record carries: the
+// WorkflowAwaitingAuthority and AuthorityResolved payloads both decode into it.
+type gapRecord struct {
+	Gap     *GapIdentity      `json:"gap,omitempty"`
+	Outcome authority.Outcome `json:"outcome,omitempty"`
+}
+
+// hydrateGapResolutions folds the task's durable record into its gap
+// resolutions (AuthorityResolution) once per engine, so a resumed process holds exactly what the one that
+// deferred or answered held: a preserved question is open, and an answer that
+// settles it is settled. Transitions go through advance, so replaying the
+// record in any number of passes cannot reopen anything.
+func (e *Engine) hydrateGapResolutions(taskID string) {
+	e.mu.Lock()
+	if e.gapResolutions == nil {
+		e.gapResolutions = map[string]AuthorityResolution{}
+	}
+	if e.gapsHydrated == nil {
+		e.gapsHydrated = map[string]bool{}
+	}
+	done := e.gapsHydrated[taskID]
+	e.gapsHydrated[taskID] = true
+	e.mu.Unlock()
+	if done || e.Store == nil {
+		return
+	}
+	events, err := e.Store.Load()
+	if err != nil {
+		return
+	}
+	for _, ev := range events {
+		if ev.TaskID != taskID {
+			continue
+		}
+		var next AuthorityResolution
+		switch ev.Kind {
+		case event.WorkflowAwaitingAuthority:
+			var q DeferredAuthority
+			if json.Unmarshal(ev.Payload, &q) != nil || q.Gap == nil {
+				continue
+			}
+			next = AuthorityResolution{Gap: *q.Gap, State: ResolutionOpen, Condition: q.Condition}
+		case event.AuthorityResolved:
+			var rec gapRecord
+			if json.Unmarshal(ev.Payload, &rec) != nil || rec.Gap == nil || !rec.Outcome.Settles() {
+				continue
+			}
+			next = AuthorityResolution{Gap: *rec.Gap, State: ResolutionSettled, Outcome: rec.Outcome}
+		default:
+			continue
+		}
+		if !next.Gap.Identified() {
+			continue
+		}
+		e.mu.Lock()
+		key := gapResolutionKey(taskID, next.Gap)
+		if current, ok := e.gapResolutions[key]; ok {
+			next = current.advance(next)
+		}
+		e.gapResolutions[key] = next
+		e.mu.Unlock()
+	}
 }
 
 // answeredConditions reports the certifiability conditions this task has
