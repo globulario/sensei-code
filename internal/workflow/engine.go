@@ -4458,16 +4458,76 @@ func (e *Engine) afterHumanAuthorization(sc *sensei.Client, start certifiedStart
 	return after, after.ClosesGap(), nil
 }
 
-// derivedRecipesPath is where the durable questions live.
-const derivedRecipesPath = "docs/awareness/derived_recipes.json"
+// committedRecipesPath is the PUBLISHED question corpus: recipes a human
+// committed or promoted into the repository. The workflow reads it and never
+// writes it -- a governed run that wrote here left a tracked modification in
+// the canonical checkout it started from, after every closure round.
+const committedRecipesPath = "docs/awareness/derived_recipes.json"
 
-// derivedReceiptsPath is the append-only log of investigator runs.
+// ownedRecipesPath is where closure rounds record questions: workflow-owned
+// state under the ignored .sensei-code/ area, beside the candidates and
+// sessions the workflow already owns there. Moved, not exempted: nothing in a
+// cleanliness check knows this path, because nothing tracked is written.
+//
+// It is durable on this machine and read by every later coverage read (see
+// composedRecipes), so a question one run wrote is available to the next
+// encounter. Promoting one into the committed corpus remains an explicit
+// governance action, never a side effect of running.
+const ownedRecipesPath = ".sensei-code/derived/derived_recipes.json"
+
+// ownedReceiptsPath is the append-only log of investigator runs, owned
+// beside the recipes it accounts for.
 //
 // Separate from the recipes, and append-only, because V2 §6.3 requires a
 // receipt per inference RUN. A run that proposed a duplicate or proposed
 // nothing still ran, and those are the recurrence and decline signals; storing
 // receipts inside recipes would discard exactly the ones that carry them.
-const derivedReceiptsPath = "docs/awareness/derived_receipts.jsonl"
+const ownedReceiptsPath = ".sensei-code/derived/derived_receipts.jsonl"
+
+// composedRecipes is every question a coverage read may ask: the committed
+// corpus first, then the owned overlay, one recipe per identity.
+//
+// Committed first, so a question that has been published is asked as
+// published and an overlay copy of it adds nothing. The composition carries
+// provenance through untouched: the future-only rule (derived.ExcludingTask)
+// is applied by the reader AFTER composing, so it sees the writer of every
+// recipe regardless of which layer holds it.
+//
+// Either layer being unreadable fails the read, which the caller turns into
+// no coverage -- silence, never a partial corpus presented as the whole.
+func composedRecipes(root string) ([]derived.Recipe, error) {
+	committed, err := derived.LoadRecipes(filepath.Join(root, committedRecipesPath))
+	if err != nil {
+		return nil, err
+	}
+	owned, err := derived.LoadRecipes(filepath.Join(root, ownedRecipesPath))
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var out []derived.Recipe
+	for _, r := range append(committed, owned...) {
+		if id := r.Identity(); !seen[id] {
+			seen[id] = true
+			out = append(out, r)
+		}
+	}
+	return out, nil
+}
+
+// publishedRecipe reports whether the committed corpus already asks r.
+func publishedRecipe(root string, r derived.Recipe) (bool, error) {
+	committed, err := derived.LoadRecipes(filepath.Join(root, committedRecipesPath))
+	if err != nil {
+		return false, err
+	}
+	for _, have := range committed {
+		if have.Identity() == r.Identity() {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 // senseiBinary is the CLI that performs derivations.
 //
@@ -4480,7 +4540,7 @@ func senseiBinary() string {
 	return "sensei"
 }
 
-// derivedCoverage revalidates the committed recipes against the world being
+// derivedCoverage revalidates the composed recipes against the world being
 // assessed and returns the planned files a derivation established THERE, each
 // with the architectural question that derivation can answer.
 //
@@ -4524,7 +4584,7 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 	if len(planned) == 0 {
 		return coverageComputation{}, false
 	}
-	recipes, err := derived.LoadRecipes(filepath.Join(e.Repo.Root, derivedRecipesPath))
+	recipes, err := composedRecipes(e.Repo.Root)
 	if err != nil || len(recipes) == 0 {
 		return coverageComputation{}, false
 	}
@@ -5569,7 +5629,7 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 		Nondeterminism:   derived.LLMNondeterminism,
 	}
 	defer func() {
-		if err := derived.AppendReceipt(filepath.Join(e.Repo.Root, derivedReceiptsPath), receipt); err != nil {
+		if err := derived.AppendReceipt(filepath.Join(e.Repo.Root, ownedReceiptsPath), receipt); err != nil {
 			e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.Status,
 				"could not record the inference receipt: "+err.Error(), nil))
 		}
@@ -5589,14 +5649,25 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 	receipt.CandidateDigest = derived.DigestOf(r)
 	receipt.CandidateID = r.Identity()
 
-	added, err := derived.Append(
-		filepath.Join(e.Repo.Root, derivedRecipesPath), r,
-		derived.Provenance{
-			OriginTask: taskID,
-			OriginGap:  condition,
-			Region:     append([]string(nil), d.Files...),
-			WrittenBy:  "closure_round",
-		}, d.Files)
+	// A question already published in the committed corpus is a duplicate: it
+	// is asked from there, and copying it into the overlay would only give it a
+	// second provenance. Validated first, so a question refused here is refused
+	// for what it is rather than reported as already known.
+	var added bool
+	err := derived.Validate(r, d.Files)
+	if err == nil {
+		var published bool
+		if published, err = publishedRecipe(e.Repo.Root, r); err == nil && !published {
+			added, err = derived.Append(
+				filepath.Join(e.Repo.Root, ownedRecipesPath), r,
+				derived.Provenance{
+					OriginTask: taskID,
+					OriginGap:  condition,
+					Region:     append([]string(nil), d.Files...),
+					WrittenBy:  "closure_round",
+				}, d.Files)
+		}
+	}
 	switch {
 	case err != nil:
 		receipt.Outcome, receipt.Detail = derived.OutcomeRefused, err.Error()

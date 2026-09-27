@@ -1639,3 +1639,142 @@ func TestPlanAdmissionReturnsTheProjectedRefusalBeforeAnyImplementerIsReached(t 
 		t.Fatal("a refused plan does not end the run between admission and implementation: the refusal would be survivable")
 	}
 }
+
+// confinementRepo is a clean canonical checkout carrying the repository's own
+// rule that .sensei-code/ is not source (the committed .gitignore says so;
+// the fixture states it where a fixture can without committing a file), with
+// a sensei stand-in whose every derivation DERIVES over main.go at the world
+// it is asked about. The stand-in is what lets a coverage read be observed at
+// all: a recipe the reader never saw and one it excluded both look like no
+// coverage, so the derivation must succeed whenever it is asked.
+func confinementRepo(t *testing.T) *Engine {
+	t.Helper()
+	repo, _ := mintRepo(t)
+	if err := os.WriteFile(repo.Root+"/.git/info/exclude", []byte("/.sensei-code/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir() + "/sensei"
+	script := "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -revision ] && rev=\"$2\"; shift; done\n" +
+		"printf '{\"result\":\"DERIVED\",\"pinned_commit\":\"%s\",\"subjects\":[{\"file\":\"main.go\"}]}' \"$rev\"\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SENSEI_BIN", bin)
+	return &Engine{Repo: repo}
+}
+
+func closureDecision(t *testing.T) architectureDecision {
+	t.Helper()
+	var d architectureDecision
+	if err := json.Unmarshal([]byte(`{"decision":"escalate","files":["main.go"],"proposed_recipe":`+
+		`{"kind":"field_access_under_lock","dir":".","type":"T","field":"f","lock":"mu"}}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
+func coversMain(c coverageComputation) bool {
+	for _, a := range c.coverage {
+		if a.File == "main.go" {
+			return true
+		}
+	}
+	return false
+}
+
+// W1-W3: a closure round starting from a clean canonical checkout records its
+// question and receipt, leaves the checkout clean, and what it wrote is read
+// by a LATER task and never by the task that wrote it.
+func TestAClosureRoundLeavesTheCanonicalCheckoutClean(t *testing.T) {
+	ctx := context.Background()
+	e := confinementRepo(t)
+	if clean, err := e.Repo.IsClean(ctx); err != nil || !clean {
+		t.Fatalf("the fixture is not a clean canonical checkout (clean=%v, err=%v)", clean, err)
+	}
+
+	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1)
+
+	// The operation produced the derived state, in the owned location.
+	recipes, err := os.ReadFile(e.Repo.Root + "/" + ownedRecipesPath)
+	if err != nil || !strings.Contains(string(recipes), `"task-writer"`) {
+		t.Fatalf("the closure round recorded no owned question (err=%v): %s", err, recipes)
+	}
+	if receipts, err := os.ReadFile(e.Repo.Root + "/" + ownedReceiptsPath); err != nil ||
+		!strings.Contains(string(receipts), "task-writer") {
+		t.Fatalf("the closure round recorded no owned receipt (err=%v): %s", err, receipts)
+	}
+	// W1: and nothing in the canonical checkout changed.
+	if _, err := os.Stat(e.Repo.Root + "/docs/awareness"); !os.IsNotExist(err) {
+		t.Fatalf("the closure round wrote into the committed corpus: %v", err)
+	}
+	if clean, err := e.Repo.IsClean(ctx); err != nil || !clean {
+		t.Fatalf("a closure round left workflow-owned modification in the canonical checkout (clean=%v, err=%v)", clean, err)
+	}
+
+	// W2: a later task's coverage read consumes the owned question.
+	later, ok := e.coverageAtWorld(ctx, "task-later", []string{"main.go"}, nil)
+	if !ok || !coversMain(later) {
+		t.Fatalf("a later task could not read the question an earlier run recorded: ok=%v %+v", ok, later.coverage)
+	}
+	// W3: the writing task still cannot.
+	own, _ := e.coverageAtWorld(ctx, "task-writer", []string{"main.go"}, nil)
+	if coversMain(own) {
+		t.Fatalf("the task that wrote the question was covered by it: %+v", own.coverage)
+	}
+}
+
+// W4: a recipe published in the committed corpus is still read, composes with
+// the owned overlay, and is not copied into it when a round proposes it again.
+func TestACommittedRecipeIsStillReadBesideTheOwnedOverlay(t *testing.T) {
+	ctx := context.Background()
+	e := confinementRepo(t)
+	if err := os.MkdirAll(e.Repo.Root+"/docs/awareness", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	published := `{"recipes":[{"kind":"field_access_under_lock","dir":".","type":"T","field":"f","lock":"mu"}]}`
+	if err := os.WriteFile(e.Repo.Root+"/"+committedRecipesPath, []byte(published), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	e.recordClosureQuestion("task-writer", "coverage gap", closureDecision(t), certifiedStart{}, "model", 1)
+	if _, err := os.Stat(e.Repo.Root + "/" + ownedRecipesPath); !os.IsNotExist(err) {
+		t.Fatalf("a question already published was copied into the owned overlay: %v", err)
+	}
+	if receipts, _ := os.ReadFile(e.Repo.Root + "/" + ownedReceiptsPath); !strings.Contains(string(receipts), `"outcome":"DUPLICATE"`) {
+		t.Fatalf("the round was not recorded as a duplicate of the published question: %s", receipts)
+	}
+	if got, _ := os.ReadFile(e.Repo.Root + "/" + committedRecipesPath); string(got) != published {
+		t.Fatalf("the committed corpus was rewritten: %s", got)
+	}
+	// Published, so no task wrote it and the future-only rule excludes no one.
+	c, ok := e.coverageAtWorld(ctx, "task-writer", []string{"main.go"}, nil)
+	if !ok || !coversMain(c) {
+		t.Fatalf("the committed recipe is no longer read: ok=%v %+v", ok, c.coverage)
+	}
+
+	// And this repository's own published corpus survives composition whole.
+	root := repoRootForCoverage(t)
+	committed, err := os.ReadFile(root + "/" + committedRecipesPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		Recipes []struct{ Kind, Type string } `json:"recipes"`
+	}
+	if err := json.Unmarshal(committed, &doc); err != nil || len(doc.Recipes) == 0 {
+		t.Fatalf("the published corpus is unreadable or empty, so this proves nothing: %v", err)
+	}
+	composed, err := composedRecipes(root)
+	if err != nil {
+		t.Fatalf("the published corpus no longer composes: %v", err)
+	}
+	for _, want := range doc.Recipes {
+		found := false
+		for _, r := range composed {
+			found = found || (r.Kind == want.Kind && r.Type == want.Type)
+		}
+		if !found {
+			t.Fatalf("published recipe %s/%s is not read after composition", want.Kind, want.Type)
+		}
+	}
+}
