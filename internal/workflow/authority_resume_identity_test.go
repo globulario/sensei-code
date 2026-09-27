@@ -869,3 +869,179 @@ func TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered(t *testing.T) {
 		t.Fatal("another task inherited this task's answer")
 	}
 }
+
+// WITNESS 16 -- answering a preserved question must not cost the task its
+// objective identity.
+//
+// Measured on task-1790481145146367848 (2026-09-27): the deferral, the question
+// and the answer were all correct, and the first architect turn after the
+// answer reached the resolver with ObjectiveDigest "". The task id, base and
+// graph referents survived; only the objective did not.
+//
+// The durable history carries the objective (session.FindInterrupted restores
+// it into Interrupted.Task), so the observation is made where the loss was
+// measured: the RunnerSpec the architect turn hands the configured resolver.
+// A restarted engine -- one that holds no objective in memory -- reconstructs
+// the task, is answered, runs execute against a minimal stand-in Sensei, and
+// the resolver captures what crossed. The resolver then refuses; reaching it is
+// the proof, and nothing after it is under test.
+func TestAnAnsweredAuthorityResumeHandsTheArchitectTheRecordedObjective(t *testing.T) {
+	const (
+		taskID    = "task-1790481145146367848"
+		objective = "keep the objective identity across an answered authority question"
+		// sha256 of exactly the bytes above, computed outside this package so
+		// the expectation shares no code with the path under test.
+		objectiveDigest = "413e3b75410073fc2da04efb3580d96bfea1cf799ae06a7b19d89e09ca5f0122"
+	)
+
+	// The durable record: objective recorded, question asked, question deferred.
+	store, err := session.New(t.TempDir(), "s-deferred")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := &Engine{Bus: event.NewBus(), SessionID: "s-deferred", Store: store, pending: map[string]chan string{}}
+	first.emit(event.New(first.SessionID, taskID, event.SourceUser, event.TaskCreated, objective, nil))
+	errc := make(chan error, 1)
+	go func() {
+		_, err := first.awaitChoice(context.Background(), nil, taskID, scopedCondition, "github.com/globulario/sensei-code",
+			"e7d3fede98ff88b89904b096a40b363adc9c5667",
+			authority.Decision{Level: authority.Human, Subject: "Architectural authority reached a human-owned boundary.", Options: realOptions()},
+			realOptions(), planScope()...)
+		errc <- err
+	}()
+	waitForPending(t, first, taskID)
+	if !first.DeferAuthority(taskID) {
+		t.Fatal("the deferral was refused")
+	}
+	if err := <-errc; !errors.Is(err, errAuthorityDeferred) {
+		t.Fatalf("deferral produced %v", err)
+	}
+
+	// Restart: nothing carried in memory, only what the store holds.
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	standing := session.FindInterrupted(history)
+	if len(standing) != 1 || standing[0].TaskID != taskID || len(standing[0].AwaitingAuthority) == 0 {
+		t.Fatalf("the deferred task did not reconstruct as itself with its question: %+v", standing)
+	}
+	if standing[0].Task != objective {
+		t.Fatalf("reconstruction changed the objective bytes: %q, want %q", standing[0].Task, objective)
+	}
+
+	repo, _ := mintRepo(t)
+	captured := make(chan RunnerSpec, 4)
+	e := &Engine{Repo: repo, Bus: event.NewBus(), SessionID: "s-resumed", pending: map[string]chan string{}}
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Architect.Name = "chatgpt"
+	e.Config.Sensei.Repository = "globulario/sensei"
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", standInSensei}
+	e.Runners = capturingResolver{specs: captured}
+	events, stop := e.Bus.Subscribe(512)
+	defer stop()
+
+	if got := e.Resume(context.Background(), standing[0]); got != taskID {
+		t.Fatalf("Resume continued %q instead of %q", got, taskID)
+	}
+	waitForAuthority(t, e, taskID, events)
+	if !e.ResolveHuman(taskID, "1") {
+		t.Fatal("the answer was not delivered to the resumed question")
+	}
+
+	select {
+	case spec := <-captured:
+		if spec.TaskID != taskID {
+			t.Fatalf("the architect turn was resolved for %q, want %q", spec.TaskID, taskID)
+		}
+		if spec.Architecture.ObjectiveDigest == "" {
+			t.Fatalf("the first architect turn after an answered authority resume carried no objective identity: %+v", spec.Architecture)
+		}
+		if spec.Architecture.ObjectiveDigest != objectiveDigest {
+			t.Fatalf("the architect turn carried objective digest %s, want %s (the recorded objective's)",
+				spec.Architecture.ObjectiveDigest, objectiveDigest)
+		}
+	case <-time.After(60 * time.Second):
+		var seen []string
+		for {
+			select {
+			case ev := <-events:
+				seen = append(seen, string(ev.Kind)+": "+ev.Summary)
+				continue
+			default:
+			}
+			break
+		}
+		t.Fatalf("the resumed task never reached the architect resolver:\n%s", strings.Join(seen, "\n"))
+	}
+	// And the resume established no human it cannot prove.
+	if got := e.objective(taskID); got.Text != objective || got.Provenance != ResumedGoverned {
+		t.Fatalf("the resumed objective is %+v, want the recorded text under resumed provenance", got)
+	}
+}
+
+// waitForAuthority waits for the resumed rendezvous, reporting what happened
+// instead if the run ended before reaching it.
+func waitForAuthority(t *testing.T, e *Engine, taskID string, events <-chan event.Event) {
+	t.Helper()
+	deadline := time.After(30 * time.Second)
+	for {
+		e.mu.Lock()
+		_, ok := e.pending[taskID]
+		e.mu.Unlock()
+		if ok {
+			return
+		}
+		select {
+		case ev := <-events:
+			if ev.Kind == event.WorkflowFailed {
+				t.Fatalf("the resume ended before its question was asked: %s", ev.Summary)
+			}
+		case <-deadline:
+			t.Fatal("the resumed question was never asked")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+}
+
+// capturingResolver records the spec each turn hands the resolver and refuses,
+// so the run stops at exactly the boundary under test.
+type capturingResolver struct{ specs chan RunnerSpec }
+
+func (r capturingResolver) Resolve(spec RunnerSpec) (Resolved, error) {
+	r.specs <- spec
+	return Resolved{}, errors.New("capturing resolver: the spec is the evidence, no adapter is served")
+}
+
+// standInSensei is the smallest Sensei the governed start can pass: an MCP
+// server in the Content-Length framing internal/sensei speaks, certifying a
+// complete workspace and an empty preflight, and answering every other tool
+// with nothing. The repository it is started in is given the origin the
+// workspace claims, because the start gate's identity handshake compares them.
+const standInSensei = `git remote get-url origin >/dev/null 2>&1 || git remote add origin https://github.com/globulario/sensei-code.git
+while :; do
+  len=
+  while IFS= read -r line; do
+    line=$(printf '%s' "$line" | tr -d '\r')
+    [ -z "$line" ] && break
+    case "$line" in [Cc]ontent-[Ll]ength:*) len=$(echo ${line#*:}) ;; esac
+  done
+  [ -n "$len" ] || exit 0
+  body=$(dd bs=1 count="$len" 2>/dev/null)
+  id=$(printf '%s' "$body" | sed -n 's/^{"jsonrpc":"2.0","id":\([0-9]*\),.*/\1/p')
+  [ -n "$id" ] || continue
+  case "$body" in
+    *'"method":"initialize"'*)
+      result='{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"stand-in","version":"0"}}' ;;
+    *'"name":"sensei_workspace_status"'*)
+      result='{"content":[{"type":"text","text":"composition_state: complete"}],"structuredContent":{"composition_state":"complete","binding":{"repository_domain":"github.com/globulario/sensei-code"}}}' ;;
+    *'"name":"awareness_preflight"'*)
+      result='{"content":[{"type":"text","text":"preflight: empty"}],"structuredContent":{"status":"PREFLIGHT_STATUS_EMPTY","authority":{"authoritative":true,"graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT"}}}' ;;
+    *)
+      result='{"content":[{"type":"text","text":"the stand-in graph holds nothing about this"}],"structuredContent":{}}' ;;
+  esac
+  resp='{"jsonrpc":"2.0","id":'"$id"',"result":'"$result"'}'
+  printf 'Content-Length: %d\r\n\r\n%s' "${#resp}" "$resp"
+done
+`
