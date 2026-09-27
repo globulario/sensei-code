@@ -1019,3 +1019,506 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// P9 -- ONE AUTHORITY RESOLUTION PER GAP IDENTITY (architect rulings 08/09).
+//
+// Measured on task-1790513596091085059 (2026-09-27): the proceed route declared
+// a gap open and, two seconds later, the escalate route certified the same
+// region because it routed a differently shaped plan. Two deciders answered
+// "is this gap settled for this task?" and disagreed; the round ceiling was
+// the only thing that could end the loop.
+//
+// The loop witnesses below drive the real resolution loop through execute,
+// with a scripted architect and a Sensei stub that certifies the region. Only
+// events and prompts that exist at the base are read, so the behavioural core
+// runs there too.
+// ---------------------------------------------------------------------------
+
+// gapLoopSenseiScript certifies the region fully: authoritative and current,
+// coverage proven over the one planned file, an explicit no-approval gate and
+// no blind spots. Any gap the router reports is therefore the plan's own -- an
+// inference claim -- and a plan without one routes to certification.
+const gapLoopSenseiScript = `
+LC_ALL=C; export LC_ALL
+git remote add origin https://github.com/globulario/sensei-code.git >/dev/null 2>&1
+reply() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
+while :; do
+	len=
+	while IFS= read -r line; do
+		line=$(printf %s "$line" | tr -d '\r')
+		[ -z "$line" ] && break
+		case "$line" in Content-Length:*) len=$(printf %s "${line#Content-Length:}" | tr -dc 0-9) ;; esac
+	done
+	[ -n "$len" ] || exit 0
+	body=$(dd bs=1 count="$len" 2>/dev/null)
+	case "$body" in '{"jsonrpc":"2.0","id":'*) ;; *) continue ;; esac
+	rest=${body#'{"jsonrpc":"2.0","id":'}
+	id=${rest%%,*}
+	rest=${rest#*,}
+	case "$rest" in
+	'"method":"initialize"'*)
+		result='{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"gap-loop-stub","version":"0"}}' ;;
+	*'"name":"sensei_workspace_status"}}')
+		result='{"content":[{"type":"text","text":"composition_state: complete"}],"structuredContent":{"composition_state":"complete","binding":{"repository_domain":"github.com/globulario/sensei-code"}}}' ;;
+	*'"name":"awareness_preflight"}}')
+		result='{"content":[{"type":"text","text":"preflight ok"}],"structuredContent":{"status":"PREFLIGHT_STATUS_OK","risk_class":"LOW_RISK","authority":{"authoritative":true,"graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT","graph_build_commit":"05feaf64d2694e97ac42b6bb93fbb49b9851a1f1","source_repo_commit":"39a8d2809ef239f203d5365d7f6e170349186cc4"},"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},"coverage":{"direct_anchor_count":2,"file_count":1,"indexed_file_count":1,"sufficient":true}}}' ;;
+	*)
+		result='{"content":[{"type":"text","text":"the stub graph holds nothing about this"}],"structuredContent":{}}' ;;
+	esac
+	reply "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":$result}"
+done
+`
+
+// The architect's two answers in the measured run: a modifying plan resting on
+// an unverified premise (a bounded gap), and an inspect escalation over the
+// same file carrying no premise at all (a plan Sensei certifies).
+const (
+	gapProceed = `{"decision":"proceed","summary":"edit main","plan":"edit main.go","files":["main.go"],"mode":"modify",` +
+		`"claims":[{"statement":"main has no callers","about":"main.go","source":"inference"}]}`
+	gapEscalate = `{"decision":"escalate","summary":"unsure about main","plan":"inspect main.go","files":["main.go"],"mode":"inspect",` +
+		`"human_question":"May main.go change?"}`
+	gapReply = `{"decision":"reply","message":"settled on the certification"}`
+	// certifiedMarker is certifiedResolutionPrompt's own heading.
+	certifiedMarker = "AUTHORITY ROUTING RESULT"
+)
+
+type gapLoopRun struct {
+	engine  *Engine
+	events  []event.Event
+	prompts []string
+	world   string
+}
+
+// newGapLoopEngine builds an engine whose architect answers from turns (the
+// last one repeated) and whose Sensei certifies the region. A prior engine's
+// repository is reused, so a resumed run continues the same candidate.
+func newGapLoopEngine(t *testing.T, prior *gapLoopRun, store *session.Store, turns ...string) (*Engine, *scriptedArchitect, string) {
+	t.Helper()
+	e := &Engine{Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
+	world := ""
+	if prior != nil {
+		e.Repo, world = prior.engine.Repo, prior.world
+	} else {
+		repo, base := mintRepo(t)
+		e.Repo, world = repo, base
+	}
+	script := make([]architectTurn, 0, 32)
+	for _, turn := range turns {
+		script = append(script, architectTurn{text: turn})
+	}
+	for len(script) < 32 {
+		script = append(script, architectTurn{text: turns[len(turns)-1]})
+	}
+	architect := &scriptedArchitect{turns: script}
+	e.Runners = &fixedResolver{runner: architect, name: "claude"}
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", gapLoopSenseiScript}
+	e.Config.Sensei.Repository = "globulario/sensei"
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "claude", "true", "none"
+	return e, architect, world
+}
+
+// driveGapLoop starts a run and follows it to its terminal. The first human
+// question is answered with answer ("" defers it); any later one is deferred,
+// so the run always ends.
+func driveGapLoop(t *testing.T, e *Engine, architect *scriptedArchitect, world, taskID, answer string, start func(context.Context)) gapLoopRun {
+	t.Helper()
+	ch, cancel := e.Bus.Subscribe(8192)
+	defer cancel()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	go start(ctx)
+	run := gapLoopRun{engine: e, world: world}
+	asked := 0
+	timeout := time.After(90 * time.Second)
+	for {
+		select {
+		case ev := <-ch:
+			run.events = append(run.events, ev)
+			switch ev.Kind {
+			case event.AuthorityRequired:
+				asked++
+				waitForPending(t, e, taskID)
+				if asked == 1 && answer != "" {
+					e.ResolveHuman(taskID, answer)
+				} else {
+					e.DeferAuthority(taskID)
+				}
+			case event.WorkflowAwaitingAuthority, event.WorkflowFailed, event.WorkflowCompleted, event.WorkflowStopped:
+				// Whatever the run still emits on its way out is kept.
+				settle := time.After(300 * time.Millisecond)
+				for {
+					select {
+					case ev := <-ch:
+						run.events = append(run.events, ev)
+					case <-settle:
+						run.prompts = append(run.prompts, architect.prompts...)
+						return run
+					}
+				}
+			}
+		case <-timeout:
+			stop()
+			t.Fatalf("the governed run did not end:\n%s", gapLoopTrace(run.events))
+		}
+	}
+}
+
+// runGapLoop drives one fresh governed run through the real resolution loop.
+func runGapLoop(t *testing.T, store *session.Store, taskID string, turns ...string) gapLoopRun {
+	t.Helper()
+	e, architect, world := newGapLoopEngine(t, nil, store, turns...)
+	return driveGapLoop(t, e, architect, world, taskID, "", func(ctx context.Context) {
+		e.run(ctx, taskID, "change main.go", RequestedByHuman)
+	})
+}
+
+func gapLoopTrace(evs []event.Event) string {
+	var b strings.Builder
+	for _, ev := range evs {
+		b.WriteString(string(ev.Kind) + ": " + ev.Summary + "\n")
+	}
+	return b.String()
+}
+
+func certifiedPrompts(prompts []string) int {
+	n := 0
+	for _, p := range prompts {
+		if strings.Contains(p, certifiedMarker) {
+			n++
+		}
+	}
+	return n
+}
+
+func sessionStore(t *testing.T) *session.Store {
+	t.Helper()
+	store, err := session.New(t.TempDir(), "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+// W1 -- THE MEASURED LOOP. Proceed opens a bounded gap; the architect then
+// escalates an inspect plan over the same file that Sensei would certify. The
+// escalation must not be answered with the certification while the gap is
+// open, and the run must end deferred on the gap -- not at the round ceiling.
+func TestAnEscalationIsNotCertifiedWhileTheProceedGapIsOpen(t *testing.T) {
+	run := runGapLoop(t, sessionStore(t), "task-w1", gapProceed, gapEscalate)
+	kinds := kindsOf(run.events)
+
+	// ABSENCE: no certified round while the gap is open.
+	if n := certifiedPrompts(run.prompts); n != 0 {
+		t.Fatalf("the escalation was answered with certifiedResolutionPrompt %d time(s) while the proceed gap was open:\n%s",
+			n, gapLoopTrace(run.events))
+	}
+	for _, ev := range run.events {
+		if strings.Contains(ev.Summary, "Sensei certifies this region") {
+			t.Fatalf("the escalation was certified while the gap was open: %q", ev.Summary)
+		}
+		if strings.Contains(ev.Summary, "resolution rounds") {
+			t.Fatalf("the run ended at the round ceiling, not at the gap: %q", ev.Summary)
+		}
+	}
+	// The honest outcome: the human is asked about the gap and the run is
+	// preserved awaiting that answer.
+	if !hasKind(kinds, event.AuthorityRequired) || !hasKind(kinds, event.WorkflowAwaitingAuthority) {
+		t.Fatalf("the run did not end deferred on the gap:\n%s", gapLoopTrace(run.events))
+	}
+	if hasKind(kinds, event.WorkflowFailed) {
+		t.Fatalf("the run failed instead of deferring on the gap:\n%s", gapLoopTrace(run.events))
+	}
+	var q DeferredAuthority
+	payloadOf(t, run.events, event.WorkflowAwaitingAuthority, &q)
+	if !strings.Contains(q.Condition, "unverified premise") {
+		t.Fatalf("the deferred question is not the gap the proceed route opened: %q", q.Condition)
+	}
+	// Two architect turns: the proceed and the escalation. No certified rounds.
+	if len(run.prompts) != 2 {
+		t.Fatalf("the architect was asked %d times, want 2 (proceed, escalate)", len(run.prompts))
+	}
+}
+
+// W2 -- CONTROL. With no gap open for the task, an escalation into a region
+// Sensei certifies is still handed back as certified. A nervous model must not
+// be able to manufacture a human interruption.
+func TestAnEscalationWithNoOpenGapStillReachesTheCertifiedPath(t *testing.T) {
+	run := runGapLoop(t, sessionStore(t), "task-w2", gapEscalate, gapReply)
+	if n := certifiedPrompts(run.prompts); n != 1 {
+		t.Fatalf("certifiedResolutionPrompt was sent %d time(s), want 1:\n%s", n, gapLoopTrace(run.events))
+	}
+	kinds := kindsOf(run.events)
+	if hasKind(kinds, event.AuthorityRequired) {
+		t.Fatalf("an escalation with no open gap reached a human:\n%s", gapLoopTrace(run.events))
+	}
+	if !hasKind(kinds, event.WorkflowCompleted) {
+		t.Fatalf("the certified path did not complete the run:\n%s", gapLoopTrace(run.events))
+	}
+}
+
+// W1, CANDIDATE SIDE. The same run, read through the state P9 keeps: the
+// deferred question names the gap the proceed route identified, bound to the
+// pinned world, and that identity is still open -- deferral settles nothing.
+func TestTheDeferredGapQuestionCarriesTheIdentityTheProceedRouteOpened(t *testing.T) {
+	run := runGapLoop(t, sessionStore(t), "task-w1", gapProceed, gapEscalate)
+	var q DeferredAuthority
+	payloadOf(t, run.events, event.WorkflowAwaitingAuthority, &q)
+	if q.Gap == nil {
+		t.Fatal("the deferred question does not carry the gap identity it is about")
+	}
+	want := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: run.world}
+	if q.Gap.Key() != want.Key() {
+		t.Fatalf("deferred gap = %+v, want %+v", *q.Gap, want)
+	}
+	open, ok := run.engine.openGap("task-w1", run.world)
+	if !ok || open.Gap.Key() != want.Key() {
+		t.Fatalf("the gap is not open after a deferral: %+v %v", open, ok)
+	}
+	if _, settled := run.engine.gapSettlement("task-w1", Routing{Gap: want}); settled {
+		t.Fatal("a deferral settled the gap")
+	}
+}
+
+// W3 -- RESUME. A task deferred on an open gap resumes to the SAME open gap;
+// answered, the answer settles exactly that identity, and the continuation
+// consumes the settlement instead of asking again. Driven through Resume.
+func TestResumeReconstructsTheSameOpenOrSettledGap(t *testing.T) {
+	const taskID = "task-w3"
+	store := sessionStore(t)
+	first := runGapLoop(t, store, taskID, gapProceed, gapEscalate)
+	var q DeferredAuthority
+	payloadOf(t, first.events, event.WorkflowAwaitingAuthority, &q)
+	if q.Gap == nil {
+		t.Fatal("the first run did not defer on an identified gap")
+	}
+	gap := *q.Gap
+	standing := func() session.Interrupted {
+		t.Helper()
+		history, err := store.Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tasks := session.FindInterrupted(history)
+		if len(tasks) != 1 || tasks[0].TaskID != taskID || len(tasks[0].AwaitingAuthority) == 0 {
+			t.Fatalf("the deferred task is not resumable: %+v", tasks)
+		}
+		return tasks[0]
+	}
+
+	// OPEN: resumed and deferred again, the gap is the same identity, and a
+	// process that knows only the record reconstructs it as open.
+	open, openArchitect, _ := newGapLoopEngine(t, &first, store, gapProceed)
+	task := standing()
+	again := driveGapLoop(t, open, openArchitect, first.world, taskID, "", func(ctx context.Context) { open.Resume(ctx, task) })
+	var q2 DeferredAuthority
+	payloadOf(t, again.events, event.WorkflowAwaitingAuthority, &q2)
+	if q2.Gap == nil || q2.Gap.Key() != gap.Key() {
+		t.Fatalf("the resumed question is about another gap: %+v, want %+v", q2.Gap, gap)
+	}
+	if len(again.prompts) != 0 {
+		t.Fatalf("a deferred resume consulted the architect %d time(s)", len(again.prompts))
+	}
+	fresh := &Engine{Store: store}
+	if got, ok := fresh.openGap(taskID, first.world); !ok || got.Gap.Key() != gap.Key() {
+		t.Fatalf("a restarted process does not reconstruct the open gap: %+v %v", got, ok)
+	}
+
+	// SETTLED: resumed and authorized, the answer settles exactly that identity
+	// and the continuation proceeds on it without asking again.
+	answered, architect, _ := newGapLoopEngine(t, &first, store, gapProceed)
+	task = standing()
+	resumed := driveGapLoop(t, answered, architect, first.world, taskID, "1", func(ctx context.Context) { answered.Resume(ctx, task) })
+	var res resolvedAuthority
+	payloadOf(t, resumed.events, event.AuthorityResolved, &res)
+	if res.Gap == nil || res.Gap.Key() != gap.Key() {
+		t.Fatalf("the answer does not settle the identity it was asked about: %+v", res.Gap)
+	}
+	asked := 0
+	for _, ev := range resumed.events {
+		if ev.Kind == event.AuthorityRequired {
+			asked++
+		}
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, "escalating with it open") {
+			t.Fatalf("the settled gap was re-escalated after resume: %q", ev.Summary)
+		}
+		// Consumed BEFORE the closure budget: a settled gap is not sent back
+		// to be investigated as though nobody had answered it.
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, "closing it before governance runs again") {
+			t.Fatalf("a closure round was spent on a gap an explicit answer settled: %q", ev.Summary)
+		}
+	}
+	if asked != 1 {
+		t.Fatalf("the human was asked %d time(s); only the restored question may be asked:\n%s", asked, gapLoopTrace(resumed.events))
+	}
+	if len(resumed.prompts) != 1 {
+		t.Fatalf("the continuation took %d architect turn(s), want 1: the proceed that consumes the settlement", len(resumed.prompts))
+	}
+	if !hasKind(kindsOf(resumed.events), event.PlanProposed) {
+		t.Fatalf("the continuation did not proceed on the settled gap:\n%s", gapLoopTrace(resumed.events))
+	}
+	// And the settlement is durable and monotonic: a restarted process reads
+	// it back, and a new observation of the same identity does not reopen it.
+	restarted := &Engine{Store: store}
+	if permits, settled := restarted.gapSettlement(taskID, Routing{Gap: gap}); !settled || !permits {
+		t.Fatalf("a restarted process does not reconstruct the settlement: permits=%v settled=%v", permits, settled)
+	}
+	if r := restarted.observeGap(taskID, Routing{Route: RouteCloseGap, Gap: gap}); !r.Settled || r.Open() {
+		t.Fatalf("observing a settled gap reopened it: %+v", r)
+	}
+	if _, ok := restarted.openGap(taskID, first.world); ok {
+		t.Fatal("a settled gap is reported open after resume")
+	}
+}
+
+// gapEscalateWithPremise is an escalation that itself rests on an unverified
+// premise, so the escalation, not a proceed, is what reaches the gap.
+const gapEscalateWithPremise = `{"decision":"escalate","summary":"unsure about main","plan":"inspect main.go","files":["main.go"],"mode":"inspect",` +
+	`"human_question":"May main.go change?","claims":[{"statement":"main has no callers","about":"main.go","source":"inference"}]}`
+
+// W4 -- an escalation that itself creates the gap is registered in P9 exactly
+// as a proceed is, and an earlier answer whose condition TEXT matches but whose
+// identity is another gap's does not authorize it.
+func TestAnAnswerAboutAnotherGapDoesNotAuthorizeAnEscalationsGapByText(t *testing.T) {
+	const taskID = "task-w4"
+	store := sessionStore(t)
+	condition := "a bounded knowledge gap was not closed by investigation: " +
+		"the plan rests on an unverified premise about main.go: main has no callers"
+	other := GapIdentity{Kind: "coverage-absent", Scope: []string{"main.go"}}
+	prior := resolvedAuthority{Resolution: authority.Resolution{
+		TaskID: taskID, SessionID: "s1", Question: "May main.go change?", Condition: condition,
+		OptionID: "1", OptionLabel: "Authorize the architectural change described above",
+		Scope: []string{"main.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC(),
+	}, Gap: &other}
+	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, prior.OptionLabel, prior)); err != nil {
+		t.Fatal(err)
+	}
+
+	run := runGapLoop(t, store, taskID, gapEscalateWithPremise)
+	if n := certifiedPrompts(run.prompts); n != 0 {
+		t.Fatalf("an answer about another gap authorized this one by its text (%d certified round(s)):\n%s", n, gapLoopTrace(run.events))
+	}
+	for _, ev := range run.events {
+		if strings.Contains(ev.Summary, "resolution rounds") {
+			t.Fatalf("the run ended at the round ceiling: %q", ev.Summary)
+		}
+	}
+	if !hasKind(kindsOf(run.events), event.AuthorityRequired) {
+		t.Fatalf("the escalation's own gap was never put to the human:\n%s", gapLoopTrace(run.events))
+	}
+	var q DeferredAuthority
+	payloadOf(t, run.events, event.WorkflowAwaitingAuthority, &q)
+	want := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: run.world}
+	if q.Gap == nil || q.Gap.Key() != want.Key() {
+		t.Fatalf("the question is not about the escalation's own gap: %+v", q.Gap)
+	}
+	if open, ok := run.engine.openGap(taskID, run.world); !ok || open.Gap.Key() != want.Key() {
+		t.Fatalf("the escalation's gap was not registered in the task's resolution: %+v %v", open, ok)
+	}
+}
+
+// W5 -- only settlement is terminal. A gap a later plan stops reporting is
+// inactive, not closed; the same identity observed again is open again, and
+// condition-text history cannot authorize it. Settlement is the one exit, and
+// the first one stands.
+func TestAGapThatDisappearsIsNotSettledAndReopensOnTheSameIdentity(t *testing.T) {
+	const (
+		taskID = "task-w5"
+		world  = "e7d3fede98ff88b89904b096a40b363adc9c5667"
+		cond   = "the plan rests on an unverified premise about main.go: main has no callers"
+	)
+	store := sessionStore(t)
+	gap := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: world}
+	// Text history: the gap's own human question, answered -- about another identity.
+	asked := "a bounded knowledge gap was not closed by investigation: " + cond
+	other := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: "another-world"}
+	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, "Authorize",
+		resolvedAuthority{Resolution: authority.Resolution{TaskID: taskID, SessionID: "s1", Condition: asked,
+			Scope: []string{"main.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC()}, Gap: &other})); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
+	route := Routing{Route: RouteCloseGap, Condition: cond, Gap: gap}
+
+	if r := e.observeGap(taskID, route); !r.Open() {
+		t.Fatalf("an observed gap is not open: %+v", r)
+	}
+	// An inspect plan re-evaluates nothing it would change and records nothing.
+	e.observeGapAbsence(taskID, world, Routing{Route: RouteArchitectural}, architectureDecision{Mode: ModeInspect, Files: []string{"main.go"}})
+	if _, ok := e.openGap(taskID, world); !ok {
+		t.Fatal("an inspect plan hid an open gap")
+	}
+	// A modifying plan over the whole scope that no longer reports it.
+	e.observeGapAbsence(taskID, world, Routing{Route: RouteArchitectural}, architectureDecision{Mode: ModeModify, Files: []string{"main.go"}})
+	if _, ok := e.openGap(taskID, world); ok {
+		t.Fatal("a gap the latest modifying plan did not report is still reported as observed")
+	}
+	if _, settled := e.gapSettlement(taskID, route); settled {
+		t.Fatal("disappearance settled the gap")
+	}
+	// The same identity, observed again: open again, owned by P9.
+	if r := e.observeGap(taskID, route); !r.Open() || r.Settled {
+		t.Fatalf("the re-identified gap is not open again: %+v", r)
+	}
+	if got, ok := e.openGap(taskID, world); !ok || got.Gap.Key() != gap.Key() {
+		t.Fatalf("the re-identified gap is not the open one: %+v %v", got, ok)
+	}
+	disposed := route
+	disposed.Route, disposed.Condition = RouteHuman, asked
+	if _, settled := e.gapSettlement(taskID, disposed); settled {
+		t.Fatal("the reopened gap reads as settled")
+	}
+	if authorized, answered := e.applyAnsweredCondition(taskID, asked, "main.go"); authorized || answered {
+		t.Fatal("condition-text history authorized a gap an identity-bound answer never settled")
+	}
+	// Settlement: a revise answer leaves it standing, an explicit authorize
+	// settles it, and a later answer cannot override the first settlement.
+	e.settleGap(taskID, gap, authority.Revise)
+	if _, settled := e.gapSettlement(taskID, route); settled {
+		t.Fatal("a revise answer settled the gap")
+	}
+	e.settleGap(taskID, gap, authority.Authorize)
+	e.settleGap(taskID, gap, authority.Stop)
+	if permits, settled := e.gapSettlement(taskID, route); !settled || !permits {
+		t.Fatalf("settlement is not monotonic: permits=%v settled=%v", permits, settled)
+	}
+	if r := e.observeGap(taskID, route); r.Open() {
+		t.Fatal("observing a settled gap reopened it")
+	}
+}
+
+// W4, the other half of requirement 5: when the gap an escalation reaches is
+// ALREADY settled for exactly its identity, the settlement is consumed where the
+// gap is registered -- no closure round is spent re-investigating it, and the
+// human is not asked again.
+func TestAnEscalationConsumesTheSettlementOfItsOwnGapBeforeTheClosureBudget(t *testing.T) {
+	const taskID = "task-w4-settled"
+	store := sessionStore(t)
+	e, architect, world := newGapLoopEngine(t, nil, store, gapEscalateWithPremise, gapReply)
+	own := GapIdentity{Kind: "unverified-premise", Subject: "main.go", Scope: []string{"main.go"}, World: world}
+	settled := resolvedAuthority{Resolution: authority.Resolution{
+		TaskID: taskID, SessionID: "s1", Question: "May main.go change?",
+		Condition: "a bounded knowledge gap was not closed by investigation: the plan rests on an unverified premise about main.go: main has no callers",
+		OptionID:  "1", OptionLabel: "Authorize the architectural change described above",
+		Scope: []string{"main.go"}, Outcome: authority.Authorize, DecidedAt: time.Now().UTC(),
+	}, Gap: &own}
+	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.AuthorityResolved, settled.OptionLabel, settled)); err != nil {
+		t.Fatal(err)
+	}
+	run := driveGapLoop(t, e, architect, world, taskID, "", func(ctx context.Context) {
+		e.run(ctx, taskID, "change main.go", RequestedByHuman)
+	})
+	for _, ev := range run.events {
+		if ev.Kind == event.Status && strings.Contains(ev.Summary, "closing it instead") {
+			t.Fatalf("a closure round was spent on a gap an explicit answer settled: %q", ev.Summary)
+		}
+	}
+	if hasKind(kindsOf(run.events), event.AuthorityRequired) {
+		t.Fatalf("the human was asked about a gap they already settled:\n%s", gapLoopTrace(run.events))
+	}
+	if len(run.prompts) != 2 {
+		t.Fatalf("the architect was asked %d time(s), want 2 (the escalation, then the round its settled answer opens)", len(run.prompts))
+	}
+}

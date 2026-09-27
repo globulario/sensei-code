@@ -17,11 +17,13 @@ package workflow
 // learn to dismiss.
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/globulario/sensei-code/internal/authority"
 	"github.com/globulario/sensei-code/internal/event"
 	"github.com/globulario/sensei-code/internal/sensei"
 )
@@ -201,6 +203,101 @@ func (g GapIdentity) Key() string {
 
 // Identified reports whether the router classified this gap at all.
 func (g GapIdentity) Identified() bool { return strings.TrimSpace(g.Kind) != "" }
+
+// AuthorityResolution is P9: the one durable answer to "is gap G settled for
+// task T at world W".
+//
+// Before it, two deciders answered that question and could disagree. The
+// proceed route read a modifying plan and reported the gap; the escalate route
+// read a differently shaped plan over the same work and certified it, and the
+// round ceiling was the only thing that ended the loop between them
+// (task-1790513596091085059, 2026-09-27). Coverage observations may establish
+// that a gap EXISTS; only an explicit authority answer may SETTLE it, and every
+// routing site -- proceed, escalate, resume -- consumes this record rather than
+// deciding for itself.
+//
+// Two facts are kept apart on purpose:
+//
+//   - Observed: whether the latest routing that re-evaluated this identity's
+//     scope reported it. A plan that stops reporting a gap makes it inactive
+//     for that observation. That is not settlement: the identity is kept, and
+//     a later RouteCloseGap observation of it opens it again.
+//   - Settled: an explicit authority answer given about exactly this identity.
+//     Terminal and monotonic. The first settlement stands; replay, resume and a
+//     second routing surface cannot reopen or override it.
+type AuthorityResolution struct {
+	Gap GapIdentity
+	// Routing is the latest observation of this identity, so a consumer that
+	// must ask about it asks the question the router actually reached.
+	Routing  Routing
+	Observed bool
+	Settled  bool
+	Outcome  authority.Outcome
+}
+
+// Open reports an identity that is currently observed and nobody has settled.
+func (r AuthorityResolution) Open() bool { return r.Observed && !r.Settled }
+
+// taskResolutions is one task's P9 state. hydrated records that the durable
+// session record has been read into it (the engine does that; this router file
+// reads no store), so a restarted process reconstructs the same open and
+// settled identities the interrupted one held.
+type taskResolutions struct {
+	hydrated bool
+	byKey    map[string]*AuthorityResolution
+	order    []string
+}
+
+// resolvedAuthority is the AuthorityResolved payload for an answer given about
+// an identified gap: the existing resolution, unchanged and inline, plus the
+// identity it settles. A reader that decodes an authority.Resolution sees
+// exactly the fields it always did.
+type resolvedAuthority struct {
+	authority.Resolution
+	Gap *GapIdentity `json:"gap_identity,omitempty"`
+}
+
+// authorityGapKey carries the gap a human question is about through the one
+// rendezvous every question uses, whose signature is shared with callers that
+// have no gap at all.
+type authorityGapKey struct{}
+
+func withAuthorityGap(ctx context.Context, gap GapIdentity) context.Context {
+	if !gap.Identified() {
+		return ctx
+	}
+	return context.WithValue(ctx, authorityGapKey{}, gap)
+}
+
+func authorityGapFrom(ctx context.Context) (GapIdentity, bool) {
+	gap, ok := ctx.Value(authorityGapKey{}).(GapIdentity)
+	return gap, ok && gap.Identified()
+}
+
+func (tr *taskResolutions) entry(gap GapIdentity) *AuthorityResolution {
+	key := gap.Key()
+	r, ok := tr.byKey[key]
+	if !ok {
+		r = &AuthorityResolution{Gap: gap}
+		tr.byKey[key] = r
+		tr.order = append(tr.order, key)
+	}
+	return r
+}
+
+// settle is the one settlement transition. Only an outcome that settles counts
+// (a revise answer asks for another design and leaves the gap standing), and
+// the first settlement stands.
+func (tr *taskResolutions) settle(gap GapIdentity, outcome authority.Outcome) {
+	if !outcome.Settles() {
+		return
+	}
+	r := tr.entry(gap)
+	if r.Settled {
+		return
+	}
+	r.Settled, r.Outcome = true, outcome
+}
 
 // gapSubject resolves what a premise is about to a planned file, by path.
 //
