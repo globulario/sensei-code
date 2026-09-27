@@ -1054,12 +1054,80 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	if e.refuseRestoration(taskID, err) {
 		return
 	}
+	// A candidate precondition that refused executed nothing, so it ends the
+	// invocation and not the task. The refusal is right -- a base is immutable
+	// and a dirty canonical checkout is not the state being governed -- and
+	// only its ending was wrong: as FAILED it removed the task it protected
+	// (objective 36, task-1790489127599728062, 2026-09-27).
+	if e.refuseCandidatePrecondition(taskID, err) {
+		return
+	}
 	// One classifier for both authority paths. A person choosing Stop is not
 	// a broken run, and this used to arrive as an anonymous error and be
 	// recorded as FAILED -- teaching the behavioural record that this task
 	// shape breaks, when what happened is that the human answered and said
 	// no.
 	e.terminateAuthorityOutcome(ctx, taskID, task, err)
+}
+
+// refuseCandidatePrecondition ends the invocation with the typed terminal of a
+// candidate precondition refusal, and reports whether err was one.
+//
+// The task is left exactly as it stands: nothing is disposed, no authority is
+// written, no question is cleared. The reason is the refusal's own text.
+func (e *Engine) refuseCandidatePrecondition(taskID string, err error) bool {
+	var (
+		kind    event.Kind
+		outcome runreceipt.Outcome
+		payload any
+	)
+	var moved *candidate.ErrBaseMoved
+	var dirty *candidate.ErrDirtyCanonical
+	switch {
+	case errors.As(err, &moved) && moved != nil:
+		kind, outcome, payload = event.WorkflowBaseMovedRefused, runreceipt.OutcomeBaseMovedRefused, moved
+	case errors.As(err, &dirty) && dirty != nil:
+		kind, outcome, payload = event.WorkflowDirtyCanonicalRefused, runreceipt.OutcomeDirtyCanonicalRefused, dirty
+	default:
+		return false
+	}
+	note := err.Error() + ". Nothing was executed; the task is preserved and still resumable"
+	e.emitRunTerminal(taskID, kind, event.SourceSystem, outcome, e.candidateStateFor(taskID), note, payload)
+	return true
+}
+
+// existingCandidatePrecondition refuses a resume whose recorded candidate can
+// no longer be continued, BEFORE anything durable happens on the way in -- in
+// particular before a standing authority question can be answered and its
+// answer persisted.
+//
+// It is read-only: it loads the identity already recorded and applies the same
+// immutable-base rule candidate.Establish applies to an existing identity. It
+// writes no candidate state and no authority, and a task with no recorded
+// identity is not its question -- execute establishes one under the ordinary
+// start gate, where a dirty canonical checkout is refused.
+//
+// Canonical cleanliness is deliberately NOT re-observed here. Establish does
+// not apply it to an existing identity either, and for a measured reason: the
+// run's own records -- this identity file, a persisted resolution -- dirty the
+// canonical checkout, so a cleanliness gate on resume refuses a task on the
+// system's own side effects (see the candidate package's second law).
+//
+// An identity that cannot be read is left to the path that reads it next, so
+// this precondition adds no ending of its own for it.
+func (e *Engine) existingCandidatePrecondition(ctx context.Context, taskID string) error {
+	identity, ok, err := candidate.Load(e.Repo.Root, taskID)
+	if err != nil || !ok {
+		return nil
+	}
+	head, err := e.Repo.Head(ctx)
+	if err != nil {
+		return fmt.Errorf("read HEAD before resuming candidate %s: %w", taskID, err)
+	}
+	if strings.TrimSpace(head) != "" && head != identity.BaseSHA {
+		return &candidate.ErrBaseMoved{TaskID: taskID, Recorded: identity.BaseSHA, Current: head}
+	}
+	return nil
 }
 
 // execute is the governed run itself, separated from how it was entered.
@@ -6459,6 +6527,15 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
+		return
+	}
+	// The candidate this task already holds must still be continuable, and that
+	// is decided BEFORE the question is asked again: an answer consumed and
+	// persisted ahead of a refusal that runs nothing is an answer lost
+	// (objective 36, task-1790489127599728062, 2026-09-27). A refusal here
+	// leaves the question standing, unanswered.
+	if err := e.existingCandidatePrecondition(ctx, task.TaskID); err != nil {
+		e.terminateRun(ctx, task.TaskID, task.Task, err)
 		return
 	}
 	// A question deferred before the scope was preserved cannot say what it was

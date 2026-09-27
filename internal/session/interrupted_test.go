@@ -267,3 +267,130 @@ func TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable(t *testing.T) {
 		t.Fatalf("a completed task with no objective is still active: %+v", ended)
 	}
 }
+
+// W4 -- R2 x PR. A candidate precondition refusal that executed nothing is
+// recorded, the process goes away, and a FRESH reconstruction reads the durable
+// record back. The task must still be found, its ending must read as the end of
+// an INVOCATION, the refusal's reason must survive, and the standing question
+// must be the one that was asked, byte for byte -- a refused resume answered
+// nothing.
+//
+// It goes through the store on disk and FindActive, the path `resume --list`
+// takes after a restart, rather than handing FindInterrupted a slice the test
+// built in memory.
+func TestAPreconditionRefusalSurvivesReconstructionAsAnInvocationTerminal(t *testing.T) {
+	const question = `{"condition":"graph coverage is absent for the planned files","decision":{"subject":"Authorize?","options":[{"id":"1"}]},"task_id":"t1"}`
+	for name, tc := range map[string]struct {
+		kind   event.Kind
+		reason string
+	}{
+		"base moved": {event.WorkflowBaseMovedRefused,
+			"candidate t1 was established at base 1e3f4a8 but the repository is now at 7aaeab1; a candidate's base is immutable"},
+		"dirty canonical": {event.WorkflowDirtyCanonicalRefused,
+			"the canonical checkout /repo has uncommitted changes"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			repo := t.TempDir()
+			store, err := New(repo, "s1")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, e := range []event.Event{
+				ev("t1", event.SourceUser, event.TaskCreated, "widen the boundary"),
+				{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
+					Summary: "authority decision deferred", Payload: []byte(question)},
+				{TaskID: "t1", Source: event.SourceSystem, Kind: tc.kind,
+					Summary: tc.reason, Payload: []byte(`{"TaskID":"t1"}`)},
+			} {
+				if err := store.Append(e); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			found, err := FindActive(repo)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(found.Active) != 1 || found.Active[0].Task.TaskID != "t1" {
+				t.Fatalf("the refused task is no longer resumable after reconstruction: %+v", found.Active)
+			}
+			task := found.Active[0].Task
+			if tc.kind.Terminality() != event.InvocationTerminal {
+				t.Fatalf("%s is classified %v, not as the end of an invocation", tc.kind, tc.kind.Terminality())
+			}
+			r := task.PreconditionRefused
+			if r == nil {
+				t.Fatal("the reconstruction lost the refusal: nothing says why the last attempt did not execute")
+			}
+			if r.Kind != tc.kind || r.Reason != tc.reason {
+				t.Fatalf("the refusal came back as %s %q, want %s %q", r.Kind, r.Reason, tc.kind, tc.reason)
+			}
+			if string(task.AwaitingAuthority) != question {
+				t.Fatalf("the standing question did not survive the refusal byte for byte:\n got %s\nwant %s",
+					task.AwaitingAuthority, question)
+			}
+		})
+	}
+}
+
+// W2 -- CONTROL. A genuine failure still ends the task, through the same one
+// classification the precondition refusals are read by; the new refusals do
+// not.
+func TestAGenuineFailureStillEndsTheTaskWhileAPreconditionRefusalDoesNot(t *testing.T) {
+	if event.WorkflowFailed.Terminality() != event.TaskTerminal {
+		t.Fatalf("WorkflowFailed is classified %v; a real failure must end the task", event.WorkflowFailed.Terminality())
+	}
+	failed := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+		ev("t1", event.SourceSystem, event.WorkflowFailed, "the worker died"),
+	})
+	if len(failed) != 0 {
+		t.Fatalf("a failed task is still offered for resume: %+v", failed)
+	}
+	for _, refusal := range []event.Kind{event.WorkflowBaseMovedRefused, event.WorkflowDirtyCanonicalRefused} {
+		if refusal.Terminality() != event.InvocationTerminal {
+			t.Fatalf("%s is classified %v", refusal, refusal.Terminality())
+		}
+		got := FindInterrupted([]event.Event{
+			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+			ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			ev("t1", event.SourceSystem, refusal, "refused"),
+		})
+		if len(got) != 1 {
+			t.Fatalf("%s ended the task: %+v", refusal, got)
+		}
+	}
+}
+
+// The terminality vocabulary is closed and read by membership: every run
+// ending is named on exactly one side, and a kind named on neither is not an
+// ending. A reader that kept its own copy of the task-terminal set could not
+// be checked against this.
+func TestEveryRunEndingIsClassifiedExactlyOnce(t *testing.T) {
+	task := []event.Kind{event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved}
+	invocation := []event.Kind{event.WorkflowStopped, event.WorkflowTimedOut, event.WorkflowAwaitingAuthority,
+		event.WorkflowAwaitingReview, event.WorkflowBlockedExternal, event.WorkflowNotConverged,
+		event.WorkflowRestorationRefused, event.WorkflowBaseMovedRefused, event.WorkflowDirtyCanonicalRefused}
+	for _, k := range task {
+		if k.Terminality() != event.TaskTerminal {
+			t.Errorf("%s is classified %v, want task-terminal", k, k.Terminality())
+		}
+	}
+	for _, k := range invocation {
+		if k.Terminality() != event.InvocationTerminal {
+			t.Errorf("%s is classified %v, want invocation-terminal", k, k.Terminality())
+		}
+	}
+	for _, k := range []event.Kind{event.TaskCreated, event.PlanProposed, event.AuthorityResolved,
+		event.RunReceipt, event.Status, "workflow.refused", "workflow.base_moved", ""} {
+		if k.Terminality() != event.NotTerminal {
+			t.Errorf("%q is classified %v; it is not a run ending", k, k.Terminality())
+		}
+	}
+	// An unnamed ending would be invisible above: the lists are pinned by size
+	// so that a new ending is classified here deliberately.
+	if len(task) != 3 || len(invocation) != 9 {
+		t.Fatalf("pinned %d task and %d invocation endings", len(task), len(invocation))
+	}
+}

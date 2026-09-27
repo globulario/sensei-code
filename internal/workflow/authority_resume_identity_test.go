@@ -1522,3 +1522,168 @@ func TestAnEscalationConsumesTheSettlementOfItsOwnGapBeforeTheClosureBudget(t *t
 		t.Fatalf("the architect was asked %d time(s), want 2 (the escalation, then the round its settled answer opens)", len(run.prompts))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// P2 -- A PRECONDITION REFUSAL ENDS AN INVOCATION, NEVER THE TASK, AND IS
+// DECIDED BEFORE THE ANSWER IS CONSUMED.
+//
+// Measured on objective 36, task-1790489127599728062 (2026-09-27): `resume
+// --answer 1` after main advanced emitted authority.resolved -- the answer
+// consumed and persisted as a governance proposal -- and then workflow.failed
+// with candidate.ErrBaseMoved. Nothing had executed; the task left resume
+// --list, and its standing question and the answer were both lost.
+// ---------------------------------------------------------------------------
+
+// refusedResumeSenseiScript is resumeSenseiScript with two tripwires in the
+// canonical checkout: one written when the process starts at all, one written
+// when a resolution is submitted for persistence (awareness_propose).
+var refusedResumeSenseiScript = ": > sensei-was-started\n" + strings.Replace(resumeSenseiScript,
+	"\tcase \"$rest\" in\n",
+	"\tcase \"$body\" in *'\"name\":\"awareness_propose\"'*) : > governance-proposal-written ;; esac\n\tcase \"$rest\" in\n", 1)
+
+// W1 + W3. HEAD moves under a task whose candidate identity is recorded and
+// whose authority question stands; the owner resumes it to answer.
+//
+// W1: the answer is NOT consumed (no authority.resolved), the ending is the
+// typed base-moved refusal and not a failure, and the task is still listed
+// with its question intact. W3: nothing reached the authority-resolution
+// writer -- Sensei was never started, and no governance proposal was written
+// into the canonical checkout.
+func TestAResumeWithAMovedBaseRefusesBeforeConsumingTheAnswer(t *testing.T) {
+	if !strings.Contains(refusedResumeSenseiScript, "governance-proposal-written") {
+		t.Fatal("the propose tripwire was not installed in the Sensei stub")
+	}
+	const (
+		taskID    = "task-1790489127599728062"
+		objective = "resume after main advanced"
+	)
+	ctx := context.Background()
+	repo, base := mintRepo(t)
+
+	// The candidate identity the first invocation established, at base.
+	identity := candidateIdentityWithBase(base)
+	identity.TaskID, identity.Repository = taskID, repo.Root
+	if err := identity.Save(repo.Root); err != nil {
+		t.Fatal(err)
+	}
+	// Main advances: a new commit on the checked-out branch, same tree, so the
+	// only thing that changed is HEAD.
+	tree, err := repo.CommitTreeOf(ctx, base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved, err := repo.MintCanonicalCommit(ctx, base, tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	branch, err := repo.Branch(ctx)
+	if err != nil || branch == "" {
+		t.Fatalf("the fixture has no checked-out branch: %q %v", branch, err)
+	}
+	if err := repo.PointBranchAt(ctx, branch, moved); err != nil {
+		t.Fatal(err)
+	}
+	if head, _ := repo.Head(ctx); head != moved || head == base {
+		t.Fatalf("HEAD did not move: head=%s base=%s", head, base)
+	}
+
+	q := deferScoped(t, taskID, planScope())
+	history := []event.Event{
+		event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil),
+		event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q),
+	}
+	standing := session.FindInterrupted(history)
+	if len(standing) != 1 || len(standing[0].AwaitingAuthority) == 0 {
+		t.Fatalf("the fixture task does not stand on its question: %+v", standing)
+	}
+	question := string(standing[0].AwaitingAuthority)
+
+	bus := event.NewBus()
+	ch, cancel := bus.Subscribe(1024)
+	defer cancel()
+	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", refusedResumeSenseiScript}
+	e.Config.Sensei.Repository = "globulario/sensei"
+
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	e.Resume(runCtx, standing[0])
+
+	// Drive it the way `resume --answer 1` does: if the question is asked
+	// again, answer it. The run is followed to its terminal event.
+	var seen []event.Event
+	timeout := time.After(60 * time.Second)
+	for ended := false; !ended; {
+		select {
+		case ev := <-ch:
+			seen = append(seen, ev)
+			if ev.Kind == event.AuthorityRequired {
+				waitForPending(t, e, taskID)
+				e.ResolveHuman(taskID, "1")
+			}
+			if ev.Kind.Terminality() != event.NotTerminal {
+				ended = true
+			}
+		case <-timeout:
+			t.Fatalf("the resumed run did not end:\n%s", gapLoopTrace(seen))
+		}
+	}
+	settle := time.After(300 * time.Millisecond)
+	for drained := false; !drained; {
+		select {
+		case ev := <-ch:
+			seen = append(seen, ev)
+		case <-settle:
+			drained = true
+		}
+	}
+	trace := gapLoopTrace(seen)
+	kinds := kindsOf(seen)
+
+	// W1: the answer was not consumed.
+	for _, wrong := range []event.Kind{event.AuthorityRequired, event.AuthorityResolved, event.WorkflowFailed} {
+		if hasKind(kinds, wrong) {
+			t.Errorf("a resume refused by a moved base emitted %s:\n%s", wrong, trace)
+		}
+	}
+	var refusal struct{ TaskID, Recorded, Current string }
+	payloadOf(t, seen, event.WorkflowBaseMovedRefused, &refusal)
+	if refusal.TaskID != taskID || refusal.Recorded != base || refusal.Current != moved {
+		t.Errorf("the refusal does not name the recorded and current bases: %+v", refusal)
+	}
+	var receipt struct {
+		Receipt struct {
+			Outcome string `json:"outcome"`
+		} `json:"receipt"`
+	}
+	payloadOf(t, seen, event.RunReceipt, &receipt)
+	if receipt.Receipt.Outcome != "BASE_MOVED_REFUSED" {
+		t.Errorf("the receipt states %q, not the ending the terminal event states", receipt.Receipt.Outcome)
+	}
+
+	// W1: the task is still listed, standing on the same question.
+	after := session.FindInterrupted(append(history, seen...))
+	if len(after) != 1 || after[0].TaskID != taskID {
+		t.Fatalf("the refused task left the resumable set:\n%s", trace)
+	}
+	if string(after[0].AwaitingAuthority) != question {
+		t.Fatalf("the standing question changed across the refusal:\n got %s\nwant %s", after[0].AwaitingAuthority, question)
+	}
+	if r := after[0].PreconditionRefused; r == nil || r.Kind != event.WorkflowBaseMovedRefused ||
+		!strings.Contains(r.Reason, "immutable") {
+		t.Fatalf("the reconstructed task does not say why the resume was refused: %+v", r)
+	}
+
+	// W3: nothing reached the authority-resolution writer.
+	status, err := repo.WorktreeIsCleanDetail(ctx, repo.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tripwire := range []string{"governance-proposal-written", "sensei-was-started"} {
+		if strings.Contains(status, tripwire) {
+			t.Errorf("a refused resume reached %s:\n%s", tripwire, status)
+		}
+	}
+}
