@@ -51,6 +51,12 @@ type prMailbox struct {
 	// failPosts makes every post fail, for the failure points between retiring
 	// an owed review and establishing its replacement.
 	failPosts bool
+	// commentReads counts comment-list GETs. onCommentRead, when set, sees each
+	// one with its 1-based count and the request's context before the list is
+	// served; it may block on that context, which is how a test holds a read
+	// open until the waiter's own deadline lands inside it.
+	commentReads  int32
+	onCommentRead func(ctx context.Context, n int32)
 }
 
 // append adds comments under the lock, wherever the caller is running.
@@ -126,6 +132,10 @@ func newPRMailboxWithGrants(t *testing.T, keyPath, number string, isPR bool, gra
 			// proving the refusal rather than the protocol.
 			fmt.Fprint(w, `{"id":1,"user":{"login":"globulario-sensei-code[bot]","id":99887766}}`)
 		case http.MethodGet:
+			n := atomic.AddInt32(&m.commentReads, 1)
+			if m.onCommentRead != nil {
+				m.onCommentRead(r.Context(), n)
+			}
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(m.snapshot())
 		}
@@ -393,5 +403,58 @@ func TestThePermissionRefusalCarriesNoToken(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "ghs_installation") {
 		t.Fatalf("the installation token reached a permission error: %v", err)
+	}
+}
+
+// The deadline that lands DURING a read ends the wait exactly as the deadline
+// that lands between reads does: no answer, why, and every rejection collected.
+//
+// The first read serves a refusal bound to another request, so a rejection is
+// accumulated. The second read is held open until the wait's own deadline
+// cancels it, so the deadline is necessarily observed inside
+// ObserveArchitecture rather than in the poll select -- deterministically, not
+// by racing the two.
+func TestADeadlineDuringAReadStillEndsAsNoAnswerWithItsRejections(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	m, box := newPRMailbox(t, keyPath, "157", true)
+
+	binding := architectureBinding()
+	wire, err := ArchitectureRefusal{
+		Binding: binding, RequestID: "r-0000000000000000",
+		Stage: RefusalStageWorkspace, Reason: "a refusal of some other exchange",
+	}.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.append(map[string]any{
+		"id": float64(7203), "body": wire,
+		"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+	})
+	m.onCommentRead = func(ctx context.Context, n int32) {
+		if n >= 2 {
+			<-ctx.Done()
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	req := ArchitectureRequest{Binding: binding, RequestID: "r-1111111111111111", Prompt: "architect this"}
+	_, err = AwaitArchitecture(ctx, box, req, 10*time.Millisecond)
+
+	if got := atomic.LoadInt32(&m.commentReads); got < 2 {
+		t.Fatalf("the deadline was not reached inside a read (%d comment read(s)); "+
+			"this witness did not exercise the branch it is named for", got)
+	}
+	if err == nil {
+		t.Fatal("a wait that ended by its deadline returned success")
+	}
+	if !errors.Is(err, ErrNoArchitectureAnswer) {
+		t.Fatalf("a deadline inside a read did not end as no answer: %v", err)
+	}
+	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Errorf("the no-answer does not say the deadline ended it: %v", err)
+	}
+	if !strings.Contains(err.Error(), "r-0000000000000000") {
+		t.Errorf("the rejection collected before the deadline was dropped: %v", err)
 	}
 }
