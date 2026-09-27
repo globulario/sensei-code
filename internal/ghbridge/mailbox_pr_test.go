@@ -51,6 +51,12 @@ type prMailbox struct {
 	// failPosts makes every post fail, for the failure points between retiring
 	// an owed review and establishing its replacement.
 	failPosts bool
+	// commentReads counts every comments GET. onCommentsGet, when set, runs
+	// inside the handler before that GET is answered, with the request's own
+	// context and its 1-based read number -- so a test can hold one exact read
+	// open until the caller gives up on it.
+	commentReads  int32
+	onCommentsGet func(ctx context.Context, read int32)
 }
 
 // append adds comments under the lock, wherever the caller is running.
@@ -126,6 +132,10 @@ func newPRMailboxWithGrants(t *testing.T, keyPath, number string, isPR bool, gra
 			// proving the refusal rather than the protocol.
 			fmt.Fprint(w, `{"id":1,"user":{"login":"globulario-sensei-code[bot]","id":99887766}}`)
 		case http.MethodGet:
+			read := atomic.AddInt32(&m.commentReads, 1)
+			if m.onCommentsGet != nil {
+				m.onCommentsGet(r.Context(), read)
+			}
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(m.snapshot())
 		}
@@ -329,6 +339,70 @@ func TestAnUnansweredPRMailboxTurnStillExpires(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("the turn did not respect its bound, took %s", elapsed)
+	}
+}
+
+// A deadline that lands INSIDE a mailbox read ends the wait exactly as one that
+// lands between reads: as no answer, carrying every rejection collected so far.
+// The first read is answered and records a refusal bound to another request;
+// the second is held open until the wait's own deadline cancels it, so the
+// deadline cannot land anywhere but inside that read.
+func TestADeadlineDuringAMailboxReadStillEndsAsNoAnswerWithItsRejections(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+	m, box := newPRMailbox(t, keyPath, "157", true)
+	req, refusal := architectureRefusalFixture()
+	refusal.RequestID = "r-0000000000000000"
+	wire, err := refusal.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.append(map[string]any{
+		"id": float64(7203), "body": wire,
+		"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+	})
+
+	// Registered after the server's Close, so it runs first: a held read is
+	// released even if the cancellation never reached the handler.
+	release := make(chan struct{})
+	t.Cleanup(func() { close(release) })
+	var heldUntilCanceled atomic.Bool
+	m.onCommentsGet = func(ctx context.Context, read int32) {
+		if read < 2 {
+			return
+		}
+		select {
+		case <-ctx.Done():
+			heldUntilCanceled.Store(true)
+		case <-release:
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err = AwaitArchitecture(ctx, box, req, 10*time.Millisecond)
+
+	if got := atomic.LoadInt32(&m.commentReads); got < 2 {
+		t.Fatalf("the deadline did not land inside a read: only %d comments read(s) were made", got)
+	}
+	if err == nil {
+		t.Fatal("a wait that ran out of time returned success")
+	}
+	if !errors.Is(err, ErrNoArchitectureAnswer) {
+		t.Fatalf("a deadline inside the read did not end as no answer: %v", err)
+	}
+	if !strings.Contains(err.Error(), context.DeadlineExceeded.Error()) {
+		t.Errorf("the wait did not say its deadline ended it: %v", err)
+	}
+	if !strings.Contains(err.Error(), "r-0000000000000000") {
+		t.Errorf("the refusal of another request collected before the deadline was dropped: %v", err)
+	}
+	// Checked last: the handler observes cancellation asynchronously to the
+	// client, so give it the moment it needs rather than racing it.
+	for i := 0; i < 100 && !heldUntilCanceled.Load(); i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !heldUntilCanceled.Load() {
+		t.Error("the second read was not held until the wait's context was canceled")
 	}
 }
 
