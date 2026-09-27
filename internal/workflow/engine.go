@@ -6281,6 +6281,11 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	}
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"authority decision answered on resume; continuing the task: "+choice, nil))
+	// The objective is the recorded one, restored exactly as
+	// resumeUnplannedArchitecture restores it. Without it a restarted process
+	// holds none, and the first architect turn after the answer is bound to an
+	// empty objective digest (task-1790481145146367848, 2026-09-27).
+	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
 	e.execute(ctx, task.TaskID, task.Task)
 }
 

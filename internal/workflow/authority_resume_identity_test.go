@@ -869,3 +869,153 @@ func TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered(t *testing.T) {
 		t.Fatal("another task inherited this task's answer")
 	}
 }
+
+// architectCapture is the resolver the witness below configures. It records the
+// FIRST architect RunnerSpec the engine hands it -- the binding exactly as it
+// crosses into adapter selection -- and refuses, so the run stops there.
+type architectCapture struct{ specs chan RunnerSpec }
+
+func (c architectCapture) Resolve(spec RunnerSpec) (Resolved, error) {
+	select {
+	case c.specs <- spec:
+	default:
+	}
+	return Resolved{}, errors.New("the witness captured the " + spec.Role.Label() + " request and serves no adapter")
+}
+
+// resumeSenseiScript is a Sensei MCP that certifies the start, run with sh so
+// the witness needs no import beyond what this file already has.
+//
+// It answers in the Content-Length framing internal/sensei speaks: a certified
+// workspace for this repository's domain, an OK preflight, and an empty answer
+// for every other tool. It also names the fixture repository's origin, because
+// the start gate compares the graph's domain against the remote on disk and a
+// repository with none is -- correctly -- refused.
+const resumeSenseiScript = `
+LC_ALL=C; export LC_ALL
+git remote add origin https://github.com/globulario/sensei-code.git >/dev/null 2>&1
+reply() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
+while :; do
+	len=
+	while IFS= read -r line; do
+		line=$(printf %s "$line" | tr -d '\r')
+		[ -z "$line" ] && break
+		case "$line" in Content-Length:*) len=$(printf %s "${line#Content-Length:}" | tr -dc 0-9) ;; esac
+	done
+	[ -n "$len" ] || exit 0
+	body=$(dd bs=1 count="$len" 2>/dev/null)
+	case "$body" in '{"jsonrpc":"2.0","id":'*) ;; *) continue ;; esac
+	rest=${body#'{"jsonrpc":"2.0","id":'}
+	id=${rest%%,*}
+	rest=${rest#*,}
+	case "$rest" in
+	'"method":"initialize"'*)
+		result='{"protocolVersion":"2025-06-18","capabilities":{},"serverInfo":{"name":"resume-stub","version":"0"}}' ;;
+	*'"name":"sensei_workspace_status"}}')
+		result='{"content":[{"type":"text","text":"composition_state: complete"}],"structuredContent":{"composition_state":"complete","binding":{"repository_domain":"github.com/globulario/sensei-code"}}}' ;;
+	*'"name":"awareness_preflight"}}')
+		result='{"content":[{"type":"text","text":"preflight ok"}],"structuredContent":{"status":"PREFLIGHT_STATUS_OK","risk_class":"ARCHITECTURE_SENSITIVE","required_actions":["run the tests"],"authority":{"authoritative":true,"graph_freshness_state":"GRAPH_FRESHNESS_STATE_CURRENT","seed_state":"SEED_STATE_CURRENT"}}}' ;;
+	*)
+		result='{"content":[{"type":"text","text":"the stub graph holds nothing about this"}],"structuredContent":{}}' ;;
+	esac
+	reply "{\"jsonrpc\":\"2.0\",\"id\":$id,\"result\":$result}"
+done
+`
+
+// WITNESS 16 — an authority-deferred task reaches its FIRST resumed architect
+// request with its objective identity intact.
+//
+// Measured on task-1790481145146367848 (2026-09-27): the preserved question was
+// answered, the answer applied, and the continuation died one second later with
+// "no exact objective/world binding for architect turn: {... ObjectiveDigest: ...}"
+// -- every referent but the objective survived.
+//
+// The assertion is made on the RunnerSpec the engine hands the configured
+// resolver, which is where that run emitted the empty digest; nothing here
+// asks architectureBinding for its opinion. The expected digest is pinned as the
+// SHA-256 of the recorded bytes, derived outside the code under test.
+func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(t *testing.T) {
+	const (
+		taskID    = "task-1790481145146367848"
+		objective = "restore the recorded objective across an answered authority question"
+		// sha256 of objective, computed independently of roles.BindArchitecture.
+		wantDigest = "5549bf4fa65d8ddc670960dc4b831d39101a1955e437e072cb6986b962b15b9d"
+	)
+
+	// The smallest history: objective recorded -> authority deferred.
+	q := deferScoped(t, taskID, planScope())
+	history := []event.Event{
+		event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil),
+		event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q),
+	}
+	standing := session.FindInterrupted(history)
+	if len(standing) != 1 || standing[0].TaskID != taskID {
+		t.Fatalf("the deferred task was not reconstructed as itself: %+v", standing)
+	}
+	task := standing[0]
+	if task.Task != objective {
+		t.Fatalf("reconstruction changed the recorded objective bytes: %q", task.Task)
+	}
+	if len(task.AwaitingAuthority) == 0 {
+		t.Fatal("the reconstructed task no longer carries its standing question")
+	}
+
+	repo, _ := mintRepo(t)
+	bus := event.NewBus()
+	events, cancel := bus.Subscribe(1024)
+	defer cancel()
+	capture := architectCapture{specs: make(chan RunnerSpec, 1)}
+	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", resumeSenseiScript}
+	e.Config.Sensei.Repository = "globulario/sensei"
+	// Named so the architect turn is attempted; the capture serves it.
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "chatgpt", "true", "none"
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	if got := e.Resume(ctx, task); got != taskID {
+		t.Fatalf("Resume continued %q instead of the task it was given", got)
+	}
+
+	// Answer the restored question the way a person does.
+	deadline := time.Now().Add(20 * time.Second)
+	for !e.ResolveHuman(taskID, "1") {
+		if time.Now().After(deadline) {
+			t.Fatal("the resumed task never re-asked its preserved question")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	var seen []string
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case spec := <-capture.specs:
+			got := spec.Architecture
+			if spec.TaskID != taskID || got.TaskID != taskID {
+				t.Fatalf("the resumed architect request names another task: spec=%q binding=%q", spec.TaskID, got.TaskID)
+			}
+			if got.ObjectiveDigest == "" {
+				t.Fatalf("the first resumed architect request carries no objective identity: %+v", got)
+			}
+			if got.ObjectiveDigest != wantDigest {
+				t.Fatalf("the resumed architect request carries an objective identity not derived from the recorded bytes: %s", got.ObjectiveDigest)
+			}
+			// Restored under the resumption's own provenance: nothing here
+			// establishes that a person asked.
+			if o := e.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
+				t.Fatalf("the restored objective claims provenance it does not have: %+v", o)
+			}
+			return
+		case ev := <-events:
+			seen = append(seen, string(ev.Kind)+": "+ev.Summary)
+			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowCompleted {
+				t.Fatalf("the resumed run ended before any architect request reached the resolver:\n%s", strings.Join(seen, "\n"))
+			}
+		case <-timeout:
+			t.Fatalf("no architect request reached the resolver:\n%s", strings.Join(seen, "\n"))
+		}
+	}
+}
