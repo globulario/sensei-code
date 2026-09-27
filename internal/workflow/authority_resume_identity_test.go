@@ -1039,9 +1039,17 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 // coverage proven over the one planned file, an explicit no-approval gate and
 // no blind spots. Any gap the router reports is therefore the plan's own -- an
 // inference claim -- and a plan without one routes to certification.
+//
+// It also states, before the first run establishes its candidate, the rule
+// every real repository carries that .sensei-code/ is not source (this
+// repository's .gitignore; confinementRepo states it the same way). Without it
+// the first run's own identity record dirties the fixture, and a resume refuses
+// -- correctly -- on the repository-wide cleanliness check.
 const gapLoopSenseiScript = `
 LC_ALL=C; export LC_ALL
 git remote add origin https://github.com/globulario/sensei-code.git >/dev/null 2>&1
+exclude=$(git rev-parse --git-path info/exclude)
+grep -qx '/.sensei-code/' "$exclude" 2>/dev/null || printf '/.sensei-code/\n' >> "$exclude"
 reply() { printf 'Content-Length: %d\r\n\r\n%s' "${#1}" "$1"; }
 while :; do
 	len=
@@ -1521,4 +1529,176 @@ func TestAnEscalationConsumesTheSettlementOfItsOwnGapBeforeTheClosureBudget(t *t
 	if len(run.prompts) != 2 {
 		t.Fatalf("the architect was asked %d time(s), want 2 (the escalation, then the round its settled answer opens)", len(run.prompts))
 	}
+}
+
+// proposalSenseiScript is resumeSenseiScript with one change of purpose: it
+// names no origin when it starts, and names one only when awareness_propose is
+// called. The fixture repository's origin is therefore the observable trace of
+// an authority-resolution proposal having been written (W3), readable through
+// gitx without an import this file does not already have.
+func proposalSenseiScript(t *testing.T) string {
+	t.Helper()
+	const startup = "git remote add origin https://github.com/globulario/sensei-code.git >/dev/null 2>&1\n"
+	const fallback = "\t*)\n\t\tresult='{\"content\":[{\"type\":\"text\",\"text\":\"the stub graph holds nothing about this\"}]"
+	if strings.Count(resumeSenseiScript, startup) != 1 || strings.Count(resumeSenseiScript, fallback) != 1 {
+		t.Fatal("resumeSenseiScript changed shape; the proposal stub was not derived from it")
+	}
+	script := strings.Replace(resumeSenseiScript, startup, "", 1)
+	return strings.Replace(script, fallback,
+		"\t*'\"name\":\"awareness_propose\"'*)\n"+
+			"\t\tgit remote add origin https://proposal.written.invalid/ >/dev/null 2>&1\n"+
+			"\t\tresult='{\"content\":[{\"type\":\"text\",\"text\":\"proposed\"}],\"structuredContent\":{}}' ;;\n"+fallback, 1)
+}
+
+// resumeAtRefusedPrecondition drives `resume --answer 1` for a task whose
+// candidate identity is already established and whose standing question was
+// deferred, and reports everything the refusal must not have done.
+func resumeAtRefusedPrecondition(t *testing.T, moveBase bool) (e *Engine, seen []event.Event, consumed bool, before, after []event.Event) {
+	t.Helper()
+	ctx := context.Background()
+	e, events, _ := resumeHarness(t, false)
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", proposalSenseiScript(t)}
+
+	const taskID = "task-r"
+	q := deferScoped(t, taskID, planScope())
+	for _, ev := range []event.Event{
+		event.New(e.SessionID, taskID, event.SourceUser, event.TaskCreated, "the objective", nil),
+		event.New(e.SessionID, taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q),
+	} {
+		if err := e.Store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if moveBase {
+		// main advances after the question was deferred: a new commit on the
+		// checked-out branch, same tree, so HEAD moves and nothing else does.
+		base, err := e.Repo.Head(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tree, err := e.Repo.CommitTreeOf(ctx, base)
+		if err != nil {
+			t.Fatal(err)
+		}
+		advanced, err := e.Repo.MintCanonicalCommit(ctx, base, tree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		branch, err := e.Repo.Branch(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := e.Repo.PointBranchAt(ctx, branch, advanced); err != nil {
+			t.Fatal(err)
+		}
+		if head, _ := e.Repo.Head(ctx); head == base {
+			t.Fatal("the fixture did not move HEAD off the recorded base")
+		}
+	}
+	var err error
+	if before, err = e.Store.Load(); err != nil {
+		t.Fatal(err)
+	}
+	standing := session.FindInterrupted(before)
+	if len(standing) != 1 || len(standing[0].AwaitingAuthority) == 0 {
+		t.Fatalf("the fixture does not hold one task with a standing question: %+v", standing)
+	}
+
+	e.Resume(ctx, standing[0])
+	deadline := time.After(30 * time.Second)
+	for {
+		// A person answering the moment the question is asked. A refusal
+		// decided before the rendezvous leaves nobody to take this answer.
+		if e.ResolveHuman(taskID, "1") {
+			consumed = true
+		}
+		select {
+		case ev := <-events:
+			seen = append(seen, ev)
+			if _, terminal := event.RunTerminality(ev.Kind); terminal {
+				if after, err = e.Store.Load(); err != nil {
+					t.Fatal(err)
+				}
+				return e, seen, consumed, before, after
+			}
+		case <-time.After(10 * time.Millisecond):
+		case <-deadline:
+			t.Fatalf("the resumed invocation did not end: %v", kindsOf(seen))
+		}
+	}
+}
+
+// assertRefusedBeforeTheAnswer holds what W1, the f1 dirty case and W3 share:
+// the typed invocation terminal, no answer consumed, no question re-asked, no
+// resolution proposal written, and the task still resumable with its question
+// standing byte for byte.
+func assertRefusedBeforeTheAnswer(t *testing.T, e *Engine, seen []event.Event, consumed bool, before, after []event.Event, want event.Kind) {
+	t.Helper()
+	if consumed {
+		t.Error("the answer was consumed: the question was re-asked before the precondition refused")
+	}
+	for _, ev := range seen {
+		switch ev.Kind {
+		case event.AuthorityResolved, event.AuthorityRequired:
+			t.Errorf("the refused resume reached the authority rendezvous: %s %s", ev.Kind, ev.Summary)
+		}
+	}
+	// W3: nothing reached awareness_propose.
+	if origin := e.Repo.OriginURL(context.Background()); origin != "" {
+		t.Errorf("an authority-resolution proposal was written for a refused resume (origin %q)", origin)
+	}
+	last := seen[len(seen)-1]
+	if last.Kind != want {
+		t.Fatalf("the resume ended %s (%s), want %s", last.Kind, last.Summary, want)
+	}
+	if terminality, ok := event.RunTerminality(last.Kind); !ok || terminality != event.InvocationTerminal {
+		t.Fatalf("%s is classified %q (ok=%v), want invocation-terminal", last.Kind, terminality, ok)
+	}
+	standing := session.FindInterrupted(after)
+	if len(standing) != 1 || standing[0].TaskID != "task-r" {
+		t.Fatalf("the refused task left the resumable set: %+v", standing)
+	}
+	if standing[0].PreconditionRefusal != want || !strings.Contains(standing[0].PreconditionRefusalReason, "Nothing was executed") {
+		t.Errorf("the task does not say why the resume refused: kind=%q reason=%q",
+			standing[0].PreconditionRefusal, standing[0].PreconditionRefusalReason)
+	}
+	if was := session.FindInterrupted(before); string(standing[0].AwaitingAuthority) != string(was[0].AwaitingAuthority) {
+		t.Errorf("the standing question changed:\n got %s\nwant %s", standing[0].AwaitingAuthority, was[0].AwaitingAuthority)
+	}
+}
+
+// W1 -- R2 x AR. `resume --answer` after main advanced past the task's recorded
+// candidate base. Measured on task-1790489127599728062 (2026-09-27): the answer
+// was consumed and persisted, THEN candidate.ErrBaseMoved refused, and the task
+// left resume --list as FAILED. The refusal is right; it must come before the
+// answer, and end the invocation only.
+func TestAResumeWhoseBaseMovedRefusesBeforeConsumingTheAnswer(t *testing.T) {
+	e, seen, consumed, before, after := resumeAtRefusedPrecondition(t, true)
+	assertRefusedBeforeTheAnswer(t, e, seen, consumed, before, after, event.WorkflowBaseMovedRefused)
+}
+
+// f1 -- an existing identity, HEAD unchanged, and a canonical checkout that is
+// not clean. The fixture's only dirt is untracked workflow state (.sensei-code/,
+// which a real repository ignores), so an exemption for workflow-owned paths
+// would pass it and fail this witness: cleanliness is the repository-wide
+// condition, read once, before the answer rendezvous.
+func TestAResumeOverADirtyCanonicalCheckoutRefusesBeforeConsumingTheAnswer(t *testing.T) {
+	body := funcBody(t, "internal/workflow/engine.go", "resumePrecondition")
+	if n := strings.Count(body, "IsClean("); n != 1 || !strings.Contains(body, "e.Repo.IsClean(") {
+		t.Fatalf("resumePrecondition consults %d cleanliness surfaces; it must call e.Repo.IsClean exactly once", n)
+	}
+	resume := funcBody(t, "internal/workflow/engine.go", "resumeAuthority")
+	pre, start := strings.Index(resume, "e.resumePrecondition("), strings.Index(resume, "sensei.Start(")
+	if pre < 0 || start < 0 || pre > start || pre > strings.Index(resume, "e.awaitChoice(") {
+		t.Fatal("resumeAuthority does not decide its candidate precondition before starting Sensei and awaiting the answer")
+	}
+
+	e, seen, consumed, before, after := resumeAtRefusedPrecondition(t, false)
+	if clean, err := e.Repo.IsClean(context.Background()); err != nil || clean {
+		t.Fatalf("the fixture's canonical checkout is not dirty (clean=%v, err=%v)", clean, err)
+	}
+	// HEAD is the recorded base here: the refusal below is typed as a dirty
+	// checkout, which the base check -- decided first -- would have preempted.
+	assertRefusedBeforeTheAnswer(t, e, seen, consumed, before, after, event.WorkflowDirtyCanonicalRefused)
 }

@@ -267,3 +267,55 @@ func TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable(t *testing.T) {
 		t.Fatalf("a completed task with no objective is still active: %+v", ended)
 	}
 }
+
+// W4 -- R2 x PR. A candidate-precondition refusal that executed nothing is
+// recorded, and a FRESH reconstruction of the stored events -- the restart path
+// -- still finds the task, reads its ending as invocation-terminal through the
+// canonical classifier, keeps the refusal's reason, and leaves the standing
+// question byte for byte as it was asked.
+//
+// W2 rides beside it as the control: the same history ending in a genuine
+// WorkflowFailed still closes the task.
+func TestAPreconditionRefusalSurvivesReconstructionWithItsQuestionStanding(t *testing.T) {
+	question := `{"task_id":"t1","condition":"a Level-3 condition","scope_recorded":true,"scope":["internal/a.go"],` +
+		`"decision":{"level":3,"subject":"Architectural authority reached a human-owned boundary.",` +
+		`"options":[{"id":"1","label":"Authorize","outcome":"authorize"},{"id":"3","label":"Stop this task","outcome":"stop"}]}}`
+	history := func(ending event.Event) []event.Event {
+		return []event.Event{
+			ev("t1", event.SourceUser, event.TaskCreated, "the objective"),
+			{TaskID: "t1", Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority,
+				Summary: "a Level-3 condition", Payload: []byte(question)},
+			ending,
+		}
+	}
+	for _, tc := range []struct {
+		kind   event.Kind
+		reason string
+	}{
+		{event.WorkflowBaseMovedRefused, "candidate t1 was established at base 1e3f4a8 but the repository is now at 7aaeab1; " +
+			"a candidate's base is immutable. Nothing was executed; the task is preserved and still resumable"},
+		{event.WorkflowDirtyCanonicalRefused, "the canonical checkout /repo has uncommitted changes. " +
+			"Nothing was executed; the task is preserved and still resumable"},
+	} {
+		t.Run(string(tc.kind), func(t *testing.T) {
+			got := FindInterrupted(history(ev("t1", event.SourceSystem, tc.kind, tc.reason)))
+			if len(got) != 1 || got[0].TaskID != "t1" {
+				t.Fatalf("the refused task is not resumable after reconstruction: %+v", got)
+			}
+			if terminality, ok := event.RunTerminality(tc.kind); !ok || terminality != event.InvocationTerminal {
+				t.Fatalf("the canonical classifier reads %s as %q (ok=%v), want invocation-terminal", tc.kind, terminality, ok)
+			}
+			if got[0].PreconditionRefusal != tc.kind || got[0].PreconditionRefusalReason != tc.reason {
+				t.Fatalf("the refusal did not survive reconstruction: kind=%q reason=%q",
+					got[0].PreconditionRefusal, got[0].PreconditionRefusalReason)
+			}
+			if string(got[0].AwaitingAuthority) != question {
+				t.Fatalf("the standing question changed across the refusal:\n got %s\nwant %s", got[0].AwaitingAuthority, question)
+			}
+		})
+	}
+	// W2: a genuine failure is still the end of the task.
+	if got := FindInterrupted(history(ev("t1", event.SourceSystem, event.WorkflowFailed, "a real defect"))); len(got) != 0 {
+		t.Fatalf("a genuine WorkflowFailed no longer ends the task: %+v", got)
+	}
+}
