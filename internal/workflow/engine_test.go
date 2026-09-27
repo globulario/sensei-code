@@ -193,14 +193,34 @@ func TestHandoverEntersTheNextWorkerAsUnansweredFeedback(t *testing.T) {
 // A post-creation prospective refutation is terminal. It is not review
 // feedback another implementor may reinterpret or retry.
 func TestAProspectiveSurfaceRefutationStopsBeforeHandoff(t *testing.T) {
-	if !isProspectiveSurfaceRefutation(errors.New("prospective surface refuted: package mismatch")) {
+	// The recognition is structural: the inspection's own refutation, wrapped
+	// or not, is recognized, and an error that merely carries its sentence is
+	// not (W5 is the fuller witness).
+	refuted := inspectProspectiveSurfaces("", []ProspectiveSurface{{Path: "x_new.go", Role: "no-such-role"}}, nil)
+	if refuted == nil || !strings.HasPrefix(refuted.Error(), "prospective surface refuted:") {
+		t.Fatalf("the inspection did not refute an ungoverned role: %v", refuted)
+	}
+	if !isProspectiveSurfaceRefutation(refuted) || !isProspectiveSurfaceRefutation(fmt.Errorf("candidate: %w", refuted)) {
 		t.Fatal("a prospective refutation was not recognized")
+	}
+	if isProspectiveSurfaceRefutation(errors.New(refuted.Error())) {
+		t.Fatal("an error carrying only the refutation's sentence was recognized as a refutation")
 	}
 	if isProspectiveSurfaceRefutation(errors.New("candidate validation failed")) {
 		t.Fatal("an ordinary candidate failure was treated as a prospective refutation")
 	}
 
+	// The source of implement alone: the classifier also names the predicate,
+	// and finding it there would say nothing about the branch in the loop.
 	body := rawSource(t, "internal/workflow/engine.go")
+	start := strings.Index(body, "func (e *Engine) implement(")
+	if start < 0 {
+		t.Fatal("implement is missing")
+	}
+	body = body[start:]
+	if end := strings.Index(body[1:], "\nfunc "); end >= 0 {
+		body = body[:end+1]
+	}
 	refutation := strings.Index(body, "isProspectiveSurfaceRefutation")
 	handoff := strings.Index(body, "handoffPacket")
 	if refutation < 0 || handoff < 0 {

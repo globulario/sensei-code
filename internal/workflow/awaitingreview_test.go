@@ -32,9 +32,14 @@ import (
 func TestAnAwaitingReviewRunLeavesAResumableTask(t *testing.T) {
 	h := newGateHarness(t, requiresIndependentReview(), roles.Unverified, "accept")
 
+	// The failure path is the REAL execute boundary, so a run that reached it
+	// would emit its classified terminal here and be seen below.
 	var failed error
 	h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc,
-		"Rewrite main.go so it prints a number.", "", func(err error) { failed = err })
+		"Rewrite main.go so it prints a number.", "", func(err error) {
+			failed = err
+			h.engine.terminateRun(context.Background(), "task-1", "Rewrite main.go so it prints a number.", err)
+		})
 	if failed != nil {
 		t.Fatalf("the run failed rather than awaiting a review: %v", failed)
 	}
@@ -45,8 +50,10 @@ func TestAnAwaitingReviewRunLeavesAResumableTask(t *testing.T) {
 	if !contains(events, event.WorkflowAwaitingReview) {
 		t.Fatalf("no awaiting-review terminal was emitted: %v", kinds(events))
 	}
-	if contains(events, event.WorkflowFailed) {
-		t.Fatal("an awaiting-review run reported a failure; nothing failed")
+	// Awaiting review is its own ending. The default failure classifier must
+	// not swallow it as either kind of failure.
+	if contains(events, event.WorkflowFailed) || contains(events, event.WorkflowInvocationFailed) {
+		t.Fatalf("an awaiting-review run reported a failure; nothing failed: %v", kinds(events))
 	}
 	if contains(events, event.WorkflowCompleted) {
 		t.Fatal("an awaiting-review run reported completion")
@@ -69,10 +76,11 @@ func TestAnAwaitingReviewRunLeavesAResumableTask(t *testing.T) {
 // continuity layer that resumes everything.
 func TestFailureAndCompletionRemainTerminalWhileAwaitingReviewDoesNot(t *testing.T) {
 	for kind, resumable := range map[event.Kind]bool{
-		event.WorkflowFailed:         false,
-		event.WorkflowCompleted:      false,
-		event.WorkflowAwaitingReview: true,
-		event.WorkflowStopped:        true,
+		event.WorkflowFailed:           false,
+		event.WorkflowCompleted:        false,
+		event.WorkflowAwaitingReview:   true,
+		event.WorkflowStopped:          true,
+		event.WorkflowInvocationFailed: true,
 	} {
 		events := withPlan(nil, "task-1", "the bounded plan")
 		events = append(events, event.New("s", "task-1", event.SourceSystem, kind, "ended", nil))

@@ -326,7 +326,8 @@ func TestResumingAnUnplannedBlockedTaskReentersTheSameTask(t *testing.T) {
 		select {
 		case ev := <-events:
 			seen = append(seen, ev)
-			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowBlockedExternal || ev.Kind == event.WorkflowCompleted {
+			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowInvocationFailed ||
+				ev.Kind == event.WorkflowBlockedExternal || ev.Kind == event.WorkflowCompleted {
 				done = true
 			}
 		case <-deadline:

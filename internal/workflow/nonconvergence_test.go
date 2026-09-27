@@ -903,3 +903,230 @@ func TestW5ProducedNothingAndProducedEvidenceNotCodeAreDistinctDiagnoses(t *test
 		t.Fatalf("with evidence still owed, the diagnosis must name the open finding only: %s", partial)
 	}
 }
+
+// AN INVOCATION MAY END; ONLY THE WORK ITSELF MAY END THE TASK.
+//
+// Measured 2026-09-25 on task-1790362662232490867: a reviewed candidate was
+// kept as "resumable", and in the same second the run's terminal ended the task,
+// so `resume --task` could not find it. These drive the REAL fallback -- the
+// candidate loop, its disposition, and the execute boundary's terminateRun --
+// and read the resulting history the way a restarted process does.
+
+// unconvergedRun is the measured shape: a reviewed candidate holds work, the
+// implementer's next cycle produced an identical diff, and no other bounded
+// implementor is configured. The failure reaches the same terminateRun that
+// execute's fail closure calls. It returns the run's events, with the task's
+// creation and plan recorded ahead of them as execute records them.
+func unconvergedRun(t *testing.T) (*gateHarness, []event.Event) {
+	t.Helper()
+	h, reviews := evidenceLoop(t, failingFirstFinding, ``)
+	const objective = "Rewrite main.go so it prints a number."
+	ctx := context.Background()
+	h.engine.emit(event.New(h.engine.SessionID, "task-1", event.SourceSystem, event.TaskCreated, objective, nil))
+	h.engine.emit(event.New(h.engine.SessionID, "task-1", event.SourceArchitect, event.PlanProposed, "the plan", nil))
+	h.engine.implement(ctx, h.sc, certifiedStart{}, "task-1", h.tc, objective, "",
+		func(err error) { h.engine.terminateRun(ctx, "task-1", objective, err) })
+	seen := drainEvents(h.events)
+	// The run must be the fallback this witness is named for, not another
+	// ending: the reviewer judged once, no budget was spent into a re-plan, and
+	// the run ended through the failure boundary with its receipt FAILED.
+	if got := reviewCalls(t, reviews); got != "1" {
+		t.Fatalf("the reviewer was asked %s times; the measured case is one review and an identical next diff", got)
+	}
+	if contains(seen, event.WorkflowNotConverged) || contains(seen, event.WorkflowAwaitingReview) || contains(seen, event.WorkflowCompleted) {
+		t.Fatalf("the run did not reach the no-bounded-implementor fallback: %v", kinds(seen))
+	}
+	if rec := receiptFrom(t, seen); rec.Outcome != runreceipt.OutcomeFailed {
+		t.Fatalf("the invocation's receipt outcome is %q; the run itself did fail and must say so", rec.Outcome)
+	}
+	return h, seen
+}
+
+// candidateContinuable is what the run REPORTED about its candidate: the last
+// candidate disposition it recorded, decoded from the durable event.
+func candidateContinuable(t *testing.T, events []event.Event) bool {
+	t.Helper()
+	var last json.RawMessage
+	for _, ev := range events {
+		if ev.Kind == event.CandidateResolved {
+			last = ev.Payload
+		}
+	}
+	if last == nil {
+		t.Fatalf("the run recorded no candidate disposition: %v", kinds(events))
+	}
+	var r struct {
+		Disposition string `json:"disposition"`
+	}
+	if err := json.Unmarshal(last, &r); err != nil {
+		t.Fatalf("the candidate disposition does not decode: %v", err)
+	}
+	return r.Disposition == "resumable"
+}
+
+// W1 THE MEASURED CASE. The run keeps its reviewed candidate as resumable work
+// and the task it belongs to stays discoverable to the one reconstruction that
+// decides task liveness.
+//
+// Fails if the no-bounded-implementor ending is recorded as the task's own
+// ending (the pre-repair behaviour: WorkflowFailed, and FindInterrupted
+// returns nothing), or if the candidate is no longer kept as resumable.
+func TestW1NoBoundedImplementorLeavesItsTaskResumable(t *testing.T) {
+	h, seen := unconvergedRun(t)
+	if !candidateContinuable(t, seen) {
+		t.Fatalf("the reviewed candidate was not kept as resumable work: %v", summaries(seen))
+	}
+	if _, err := os.Stat(h.work); err != nil {
+		t.Fatalf("the candidate the run called resumable is gone: %v", err)
+	}
+	found := session.FindInterrupted(seen)
+	if len(found) != 1 || found[0].TaskID != "task-1" || !found[0].Planned || found[0].Task == "" {
+		t.Fatalf("the run called its candidate resumable and then ended the task that owns it: found %+v after %v",
+			found, summaries(seen))
+	}
+}
+
+// W2 THE TWO STATEMENTS AGREE. For one run, what it reported about its
+// candidate's continuability and what the reconstruction then says about its
+// task's resumability are the same answer. Equality is the assertion; neither
+// side is checked alone.
+//
+// Fails if the run ends its task while calling its candidate resumable (the
+// measured disagreement), or calls a candidate it keeps for resume anything
+// else while the task stays open.
+func TestW2TheCandidateReportAndTheTaskRecordAgree(t *testing.T) {
+	_, seen := unconvergedRun(t)
+	continuable := candidateContinuable(t, seen)
+	resumable := false
+	for _, task := range session.FindInterrupted(seen) {
+		if task.TaskID == "task-1" {
+			resumable = true
+		}
+	}
+	if continuable != resumable {
+		t.Fatalf("one run, two answers: the candidate is continuable=%v and the task is resumable=%v: %v",
+			continuable, resumable, kinds(seen))
+	}
+}
+
+// W3 GENUINE WORK FAILURE STILL ENDS THE TASK -- CONTROL. Each failure the
+// engine positively attributes to the work -- a grant's typed refutation of the
+// candidate, prospective or test edit; a structural candidate failure -- goes
+// through the same terminateRun as W1 and ends the task WorkflowFailed, and the
+// task is gone from a restarted reconstruction. An empty objective, through
+// execute itself, is still task-terminal.
+//
+// The contrast is in the same loop: an error nothing classifies ends only the
+// invocation. Fails if the repair became "nothing ever ends", or if a typed
+// work failure lost its type on the way to the classifier.
+func TestW3AGenuineWorkFailureStillEndsTheTask(t *testing.T) {
+	prospective := inspectProspectiveSurfaces("", []ProspectiveSurface{{Path: "x_new.go", Role: "no-such-role"}}, nil)
+	for name, tc := range map[string]struct {
+		err       error
+		taskEnded bool
+	}{
+		"prospective refutation":  {prospective, true},
+		"test edit refutation":    {refuteTestEditCreated("internal/x/x_test.go"), true},
+		"structural failure":      {structuralFailure("CANDIDATE_NOT_AUDITABLE (malformed_diff)"), true},
+		"an unclassified failure": {os.ErrNotExist, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			e, events, _ := blockedEngine(t, root, "session-w3")
+			const task = "task-w3"
+			e.emit(event.New(e.SessionID, task, event.SourceSystem, event.TaskCreated, "the objective", nil))
+			e.emit(event.New(e.SessionID, task, event.SourceArchitect, event.PlanProposed, "the plan", nil))
+			e.beginReceipt(task)
+			e.terminateRun(context.Background(), task, "the objective", tc.err)
+			seen := drainEvents(events)
+			want, not := event.WorkflowInvocationFailed, event.WorkflowFailed
+			if tc.taskEnded {
+				want, not = event.WorkflowFailed, event.WorkflowInvocationFailed
+			}
+			if !contains(seen, want) || contains(seen, not) {
+				t.Fatalf("%v ended as %v, want %s", tc.err, kinds(seen), want)
+			}
+			if rec := receiptFrom(t, seen); rec.Outcome != runreceipt.OutcomeFailed {
+				t.Fatalf("the invocation's receipt outcome is %q, want FAILED for either kind", rec.Outcome)
+			}
+			found := reopen(t, root, "session-w3")
+			if ended := len(found) == 0; ended != tc.taskEnded {
+				t.Fatalf("task ended=%v, want %v: %+v", ended, tc.taskEnded, found)
+			}
+		})
+	}
+
+	// The empty objective, through execute: task-terminal, as it always was.
+	root := t.TempDir()
+	e, events, _ := blockedEngine(t, root, "session-w3e")
+	e.emit(event.New(e.SessionID, "task-empty", event.SourceSystem, event.TaskCreated, "   ", nil))
+	e.execute(context.Background(), "task-empty", "   ")
+	if seen := drainEvents(events); !contains(seen, event.WorkflowFailed) || contains(seen, event.WorkflowInvocationFailed) {
+		t.Fatalf("an empty objective is no longer the work's own failure: %v", kinds(seen))
+	}
+	if found := reopen(t, root, "session-w3e"); len(found) != 0 {
+		t.Fatalf("a task whose objective states nothing was left resumable: %+v", found)
+	}
+}
+
+// W7 HISTORICAL RECONSTRUCTION, BOTH SIDES OF THE RULING.
+//
+// RULED: a WorkflowFailed written before WorkflowInvocationFailed existed stays
+// task-terminal. The old emitter used that one kind for both endings, so the
+// record carries no fact that tells a genuine work failure from an invocation
+// that could not proceed, and nothing here reads its summary to guess. The
+// measured task-1790362662232490867 history, with its exact terminal sentence,
+// is therefore NOT reopened: the candidates stranded under the old conflation
+// are a sunk cost, stated rather than silently revived.
+//
+// The other side is a RECORDED history in the new shape -- creation, plan with
+// its record, a review verdict, prospective and test-edit grant records, then
+// WorkflowInvocationFailed -- and the task comes back WITH its obligations: the
+// plan record, the review instruction and both grant records byte for byte,
+// not as a bare id.
+//
+// Fails if bare WorkflowFailed is reopened (by kind or by its prose), or if an
+// invocation failure drops or rewrites anything the task owed.
+func TestW7RecordedHistoriesReconstructUnderTheRuling(t *testing.T) {
+	old := []event.Event{
+		event.New("s", "t", event.SourceSystem, event.TaskCreated, "objective", nil),
+		event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", nil),
+		event.New("s", "t", event.SourceGit, event.CandidateResolved,
+			"resumable: the run did not converge and the candidate holds work that resumable state references",
+			map[string]any{"disposition": "resumable"}),
+		event.New("s", "t", event.SourceSystem, event.WorkflowFailed,
+			"no bounded implementor produced an acceptable candidate: claude: the candidate did not change between review cycles", nil),
+	}
+	if found := session.FindInterrupted(old); len(found) != 0 {
+		t.Fatalf("a pre-change WorkflowFailed history was reopened: %+v", found)
+	}
+
+	plan := json.RawMessage(`{"plan_source":"architect","plan_digest":"sha256:abc"}`)
+	verdict := json.RawMessage(`{"decision":"revise","summary":"proof incomplete","findings":[{"id":"f1","severity":"blocking","class":"code","claim":"the ending is read from prose","reference":"internal/session/store.go","reason":"no typed kind"}]}`)
+	prospectiveRecord := json.RawMessage(`{"world":"1e3f4a8","grants":[{"anchor":{"file":"internal/x/new.go"}}]}`)
+	testEditRecord := json.RawMessage(`{"world":"1e3f4a8","grants":[{"path":"internal/x/x_test.go"}]}`)
+	recorded := []event.Event{
+		event.New("s", "t", event.SourceSystem, event.TaskCreated, "objective", nil),
+		{SessionID: "s", TaskID: "t", Source: event.SourceArchitect, Kind: event.PlanProposed, Summary: "plan", Payload: plan},
+		{SessionID: "s", TaskID: "t", Source: event.SourceSystem, Kind: event.ProspectiveGranted, Payload: prospectiveRecord},
+		{SessionID: "s", TaskID: "t", Source: event.SourceSystem, Kind: event.TestEditGranted, Payload: testEditRecord},
+		{SessionID: "s", TaskID: "t", Source: event.SourceReviewer, Kind: event.ReviewCompleted, Summary: "REVISE", Payload: verdict},
+		event.New("s", "t", event.SourceSystem, event.WorkflowInvocationFailed,
+			"no bounded implementor produced an acceptable candidate: claude: the candidate did not change between review cycles", nil),
+	}
+	found := session.FindInterrupted(recorded)
+	if len(found) != 1 {
+		t.Fatalf("an invocation failure ended the task: %+v", found)
+	}
+	got := found[0]
+	if got.TaskID != "t" || got.Task != "objective" || !got.Planned || got.Plan != "plan" ||
+		string(got.PlanRecord) != string(plan) || got.PlanSource != "architect" || got.PlanDigest != "sha256:abc" {
+		t.Fatalf("the plan did not survive the invocation's ending: %+v", got)
+	}
+	if !strings.Contains(got.Review, "the ending is read from prose") {
+		t.Fatalf("the review instruction the task owes was lost: %q", got.Review)
+	}
+	if string(got.ProspectiveRecord) != string(prospectiveRecord) || string(got.TestEditRecord) != string(testEditRecord) {
+		t.Fatalf("the grant records did not survive byte for byte: prospective %s, test edit %s", got.ProspectiveRecord, got.TestEditRecord)
+	}
+}

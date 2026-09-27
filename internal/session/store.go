@@ -512,6 +512,14 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// architect re-plan. Emitted as WorkflowFailed it was final here while
 			// the candidate record called the same work resumable (DF-6).
 			p.NotConverged = e.Payload
+		case event.WorkflowInvocationFailed:
+			// Not terminal, and it changes nothing the task owes: an invocation
+			// that could not proceed is a report on itself, not on the work. The
+			// plan, the review state and every grant stand exactly as the
+			// invocation found them. Only WorkflowFailed, which the engine emits
+			// solely for a failure it attributes to the work, ends the task --
+			// and a WorkflowFailed written before this kind existed stays final,
+			// because an old record cannot say which kind of ending it was.
 		case event.WorkflowAwaitingAuthority:
 			// Also not terminal, and resumable even with no plan: a question
 			// deferred during architecture is the ordinary case, and it is

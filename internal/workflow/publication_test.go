@@ -97,8 +97,13 @@ func TestAFailedPublicationEmitsOneTerminalEvent(t *testing.T) {
 	if !strings.Contains(body, "emitRunTerminal") {
 		t.Fatal("implement no longer ends the run through the single terminal funnel")
 	}
-	if !strings.Contains(body, "WorkflowFailed") || !strings.Contains(body, "WorkflowCompleted") {
+	// A failed publication ends through the classified-failure emitter, which
+	// decides whether the task ended with it; a settled one completes.
+	if !strings.Contains(body, "emitClassifiedFailure") || !strings.Contains(body, "published.Err") || !strings.Contains(body, "WorkflowCompleted") {
 		t.Fatal("the terminal event is no longer selected from the publication outcome")
+	}
+	if classified := funcBody(t, "internal/workflow/engine.go", "emitClassifiedFailure"); !strings.Contains(classified, "emitRunTerminal") {
+		t.Fatal("the classified-failure emitter does not end the run through the single terminal funnel")
 	}
 	if strings.Contains(body, "e.emit(event.New(e.SessionID, taskID, event.SourceSystem, kind") {
 		t.Fatal("the terminal event is emitted outside the funnel, so a run could end without a receipt")

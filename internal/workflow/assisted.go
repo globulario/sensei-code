@@ -378,8 +378,7 @@ func (e *Engine) runAssisted(ctx context.Context, taskID, task string) {
 	e.announceMode(taskID, assistedMode())
 
 	fail := func(err error) {
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, runreceipt.CandidateNone, err.Error(), nil)
+		e.emitClassifiedFailure(taskID, err, runreceipt.CandidateNone, err.Error(), nil)
 	}
 	if task == "" {
 		fail(errEmptyTask)

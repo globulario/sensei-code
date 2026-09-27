@@ -192,6 +192,17 @@ const (
 	// the authority instrument whose binding could not be read or verified, so
 	// the refusal can be told apart from a DERIVED mismatch it is not.
 	WorkflowRestorationRefused Kind = "workflow.restoration_refused"
+	// WorkflowInvocationFailed is an invocation that stopped because it could
+	// not proceed -- no bounded implementor converged, a turn could not be
+	// bound, a provider returned nothing -- where nothing established that the
+	// WORK failed.
+	//
+	// Terminal for the INVOCATION and not for the TASK. WorkflowFailed is
+	// reserved for a failure the engine positively attributes to the work, and
+	// the kind, never the summary, is what a reader keys on. Emitted as
+	// WorkflowFailed it was final to FindInterrupted while the same run called
+	// its candidate resumable (task-1790362662232490867, 2026-09-25).
+	WorkflowInvocationFailed Kind = "workflow.invocation_failed"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record

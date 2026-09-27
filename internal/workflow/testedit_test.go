@@ -120,9 +120,13 @@ func TestAGrantedTestEditIsInspectedAgainstItsExactGrant(t *testing.T) {
 		if err == nil || !strings.HasPrefix(err.Error(), "test edit refuted:") || !strings.Contains(err.Error(), r.want) {
 			t.Errorf("%s: %v", name, err)
 		}
+		// Terminal by its type, which is what the failure classifier reads.
+		if !isProspectiveSurfaceRefutation(err) || classifyFailure(err) != event.WorkflowFailed {
+			t.Errorf("%s: a test-edit refutation is not terminal: %v", name, err)
+		}
 	}
-	if !isProspectiveSurfaceRefutation(errors.New("test edit refuted: x")) {
-		t.Fatal("a test-edit refutation is not terminal")
+	if isProspectiveSurfaceRefutation(errors.New("test edit refuted: x")) {
+		t.Fatal("an error carrying only a test-edit refutation's sentence was recognized as one")
 	}
 }
 
@@ -1653,5 +1657,71 @@ func TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt(t *testing.
 	if late := inspectTestEdits(teDiffDeleted, grants, func(string) ([]byte, error) { return []byte(teFSrc), nil }); late == nil ||
 		!strings.Contains(late.Error(), "deletes it") {
 		t.Fatalf("the deletion a near-missed operation describes was never refused at all: %v", late)
+	}
+}
+
+// W5 THE DISTINCTION IS STRUCTURAL, NOT TEXTUAL.
+//
+// Emitter side: an error that carries the exact old refutation sentence and
+// nothing else is NOT a work failure, and the error the real inspections
+// construct is -- wrapped or not. Reader side: summaries are swapped so each
+// kind carries the other's prose, and FindInterrupted's answer follows the kind.
+// Absence: neither the classifier nor the refutation predicate reads the
+// error's text at all.
+//
+// Fails if the classifier or the reader decides by matching a reason string,
+// or if a real refutation loses its type.
+func TestW5TheEndingIsDecidedByTypeAndKindNeverByText(t *testing.T) {
+	for _, sentence := range []string{"prospective surface refuted: x_new.go has package \"a\", the declaration said \"b\"", "test edit refuted: x"} {
+		if got := classifyFailure(errors.New(sentence)); got != event.WorkflowInvocationFailed {
+			t.Fatalf("a plain error carrying %q was classified %s: the text decided", sentence, got)
+		}
+	}
+	prospective := inspectProspectiveSurfaces("", []ProspectiveSurface{{Path: "x_new.go", Role: "no-such-role"}}, nil)
+	for name, err := range map[string]error{
+		"prospective refutation":        prospective,
+		"test edit refutation":          refuteTestEditCreated(teF),
+		"test edit refutation, wrapped": errors.Join(errors.New("candidate"), refuteTestEditNovelImport(teF, "bytes")),
+		"structural candidate failure":  structuralFailure("CANDIDATE_NOT_AUDITABLE (malformed_diff)"),
+		"empty objective":               errEmptyTask,
+	} {
+		if got := classifyFailure(err); got != event.WorkflowFailed {
+			t.Fatalf("%s (%v) was classified %s, want the work's own failure", name, err, got)
+		}
+	}
+	// And a type with the sentence stripped still classifies: the words were
+	// never what decided.
+	if got := classifyFailure(&candidateRefutation{reason: "anything at all"}); got != event.WorkflowFailed {
+		t.Fatalf("a typed refutation with other words was classified %s", got)
+	}
+
+	history := func(kind event.Kind, summary string) []event.Event {
+		return []event.Event{
+			event.New("s", "t", event.SourceSystem, event.TaskCreated, "objective", nil),
+			event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", nil),
+			event.New("s", "t", event.SourceSystem, kind, summary, nil),
+		}
+	}
+	for _, summary := range []string{
+		"prospective surface refuted: the work failed",
+		"no bounded implementor produced an acceptable candidate: the invocation could not proceed",
+		"",
+	} {
+		if found := session.FindInterrupted(history(event.WorkflowFailed, summary)); len(found) != 0 {
+			t.Fatalf("WorkflowFailed %q was reopened by its prose: %+v", summary, found)
+		}
+		if found := session.FindInterrupted(history(event.WorkflowInvocationFailed, summary)); len(found) != 1 {
+			t.Fatalf("WorkflowInvocationFailed %q ended the task by its prose: %+v", summary, found)
+		}
+	}
+
+	// The absence, asserted: no text is read on the way to the decision.
+	for _, fn := range []string{"classifyFailure", "isProspectiveSurfaceRefutation"} {
+		body := funcBody(t, "internal/workflow/engine.go", fn)
+		for _, textual := range []string{"strings.", "Error(", "Summary"} {
+			if strings.Contains(body, textual) {
+				t.Fatalf("%s reads text (%s): %s", fn, textual, body)
+			}
+		}
 	}
 }

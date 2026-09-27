@@ -554,8 +554,8 @@ func (e *Engine) refuseUnprovenAuthority(taskID string, option authority.Option)
 //	stopped  -> STOPPED, reported as "stopped". A person answered and the answer
 //	            was no. The behavioural record must not learn from this that the
 //	            task shape breaks.
-//	anything -> FAILED, reported as "failure". A real defect.
-//	else
+//	anything -> the classified failure: FAILED only when the work is shown to
+//	else        have failed, INVOCATION_FAILED otherwise. See classifyFailure.
 //
 // It takes no boolean and returns none: a caller cannot guard it off and fall
 // through to its own idea of the terminal, which is the shape this replaced.
@@ -568,10 +568,50 @@ func (e *Engine) terminateAuthorityOutcome(ctx context.Context, taskID, task str
 			runreceipt.OutcomeStopped, e.candidateStateFor(taskID), humanStopNote, nil)
 		e.reportOutcome(context.WithoutCancel(ctx), behaviourStopped, task, humanStopNote)
 	default:
-		e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(taskID), err.Error(), nil)
+		e.emitClassifiedFailure(taskID, err, e.candidateStateFor(taskID), err.Error(), nil)
 		e.reportOutcome(ctx, behaviourFailure, task, err.Error())
 	}
+}
+
+// classifyFailure decides, in ONE place, which kind of ending a failure is: the
+// WORK's, which ends the task, or this INVOCATION's, which does not.
+//
+// THE DEFAULT IS THE INVOCATION. An invocation that stops because it could not
+// proceed -- no bounded implementor converged, a turn could not be bound, a
+// provider returned nothing, a record could not be read -- is reporting on
+// itself, and the task it was working on still owes what it owed. Task failure
+// is something the engine must ASSERT, from a typed condition it can name, and
+// never something an unrecognised error falls into: a fallthrough to FAILED is
+// what let every unnamed invocation ending destroy a task whose candidate the
+// same run had just called resumable (task-1790362662232490867, 2026-09-25).
+//
+// The positive cases are the work's own conclusions:
+//
+//	candidateRefutation -> a grant's inspection refuted the candidate's shape,
+//	                       and no later implementor may reinterpret it
+//	errStructural       -> a candidate no executor retry can address
+//	errEmptyTask        -> an objective that states nothing
+//
+// Nothing here reads the error's text. A sentence is for people.
+//
+// The dedicated invocation endings -- awaiting review, blocked external,
+// restoration refused, not converged, timed out, stopped, deferred authority --
+// keep their own emitters and never reach this function.
+func classifyFailure(err error) event.Kind {
+	switch {
+	case isProspectiveSurfaceRefutation(err), errors.Is(err, errStructural), errors.Is(err, errEmptyTask):
+		return event.WorkflowFailed
+	default:
+		return event.WorkflowInvocationFailed
+	}
+}
+
+// emitClassifiedFailure ends a run that failed, as whichever ending
+// classifyFailure decides. The receipt's outcome is FAILED either way: the
+// invocation did fail, and the event kind -- not the outcome and not the
+// summary -- is the durable statement of whether the task ended with it.
+func (e *Engine) emitClassifiedFailure(taskID string, err error, cand runreceipt.CandidateState, summary string, payload any) {
+	e.emitRunTerminal(taskID, classifyFailure(err), event.SourceSystem, runreceipt.OutcomeFailed, cand, summary, payload)
 }
 
 // DeferAuthority leaves a Level-3 question unanswered without answering it.
@@ -5976,8 +6016,7 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 				"publication": string(published.State),
 			}
 			if published.State == failed {
-				e.emitRunTerminal(taskID, event.WorkflowFailed, event.SourceSystem,
-					runreceipt.OutcomeFailed, e.candidateStateFor(taskID), summary, terminalPayload)
+				e.emitClassifiedFailure(taskID, published.Err, e.candidateStateFor(taskID), summary, terminalPayload)
 			} else {
 				e.emitRunTerminal(taskID, event.WorkflowCompleted, event.SourceSystem,
 					e.reviewedOutcome(taskID), e.candidateStateFor(taskID), summary, terminalPayload)
@@ -6034,8 +6073,13 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 	fail(fmt.Errorf("no bounded implementor produced an acceptable candidate: %s", strings.Join(failures, " | ")))
 }
 
+// isProspectiveSurfaceRefutation reports whether err carries a grant's typed
+// refutation of the candidate -- prospective or test edit. It inspects the
+// type, never the sentence: an error that merely SAYS "refuted" was refuted by
+// nothing.
 func isProspectiveSurfaceRefutation(err error) bool {
-	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") || strings.HasPrefix(err.Error(), "test edit refuted:"))
+	var r *candidateRefutation
+	return errors.As(err, &r)
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
@@ -6208,15 +6252,13 @@ func (e *Engine) disposeIfEmpty(ctx context.Context, taskID string, identity can
 func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) {
 	var deferred DeferredAuthority
 	if err := json.Unmarshal(task.AwaitingAuthority, &deferred); err != nil {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-			"the deferred authority question could not be read back, so it cannot be asked again: "+err.Error(), nil)
+		err = fmt.Errorf("the deferred authority question could not be read back, so it cannot be asked again: %w", err)
+		e.emitClassifiedFailure(task.TaskID, err, e.candidateStateFor(task.TaskID), err.Error(), nil)
 		return
 	}
 	if len(deferred.Decision.Options) == 0 {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-			"the deferred authority question carried no options, so there is nothing to answer", nil)
+		err := errors.New("the deferred authority question carried no options, so there is nothing to answer")
+		e.emitClassifiedFailure(task.TaskID, err, e.candidateStateFor(task.TaskID), err.Error(), nil)
 		return
 	}
 
@@ -6227,9 +6269,8 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// names none predates the field, and absence is not disagreement -- reading
 	// it as one would make every legacy question unresumable.
 	if deferred.TaskID != "" && deferred.TaskID != task.TaskID {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
+		err := errors.New("the preserved question is bound to task " + deferred.TaskID + ", not to this one; it cannot be answered here")
+		e.emitClassifiedFailure(task.TaskID, err, e.candidateStateFor(task.TaskID), err.Error(), nil)
 		return
 	}
 	// A question deferred before the scope was preserved cannot say what it was
@@ -6263,9 +6304,8 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	// consulted about the question.
 	sc, err := sensei.Start(ctx, e.Repo.Root, e.Config.Sensei.Command, e.Config.Sensei.Args)
 	if err != nil {
-		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-			fmt.Errorf("start Sensei: %w", err).Error(), nil)
+		err = fmt.Errorf("start Sensei: %w", err)
+		e.emitClassifiedFailure(task.TaskID, err, e.candidateStateFor(task.TaskID), err.Error(), nil)
 		return
 	}
 	defer sc.Close()
@@ -6316,9 +6356,8 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 			err = fmt.Errorf("the external block record is bound to task %s, not to this one", block.TaskID)
 		}
 		if err != nil {
-			e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
-				runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
-				"the task cannot be resumed at its blocked turn: "+err.Error(), nil)
+			err = fmt.Errorf("the task cannot be resumed at its blocked turn: %w", err)
+			e.emitClassifiedFailure(task.TaskID, err, e.candidateStateFor(task.TaskID), err.Error(), nil)
 			return
 		}
 		owed, record = block.Describe(), block

@@ -220,3 +220,30 @@ func TestTheHumansOwnWordsAreNotTheLastResponse(t *testing.T) {
 		t.Fatalf("last response is %q, want the architect's answer", got.lastResponse)
 	}
 }
+
+// An invocation that failed settles the prompt and stays in the conversation,
+// and it does not read as the task-terminal FAILED: the task is still there to
+// resume, and a red "FAILED" would tell the human it had ended. The control is
+// the task-terminal kind itself, rendered as FAILED.
+func TestAnInvocationFailureSettlesAndIsNotTheTaskFailing(t *testing.T) {
+	for kind, want := range map[event.Kind]string{
+		event.WorkflowInvocationFailed: "✗ INVOCATION FAILED",
+		event.WorkflowFailed:           "✗ FAILED",
+	} {
+		m := newTestModel("", "")
+		m.busy = true
+		updated, _ := m.Update(eventMsg(event.Event{Kind: kind, Source: event.SourceSystem, TaskID: "t1",
+			Summary: "no bounded implementor produced an acceptable candidate"}))
+		got := updated.(Model)
+		if got.busy {
+			t.Fatalf("%s: the invocation ended and the interface still reports it running", kind)
+		}
+		joined := plainTranscript(got.lines)
+		if !strings.Contains(joined, want) || !strings.Contains(joined, "no bounded implementor") {
+			t.Fatalf("%s: the ending is not in the conversation as %q: %q", kind, want, joined)
+		}
+		if kind == event.WorkflowInvocationFailed && strings.Contains(joined, "✗ FAILED") {
+			t.Fatalf("an invocation failure renders as the task-terminal FAILED: %q", joined)
+		}
+	}
+}

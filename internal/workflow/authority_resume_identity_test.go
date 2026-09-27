@@ -336,13 +336,19 @@ func TestTheAuthorityClassifierDistinguishesTheThreeEndings(t *testing.T) {
 			err: errStoppedByHumanAuthority, wantKind: event.WorkflowStopped,
 			forbidden: []event.Kind{event.WorkflowFailed},
 		},
-		"a real error is a failure": {
-			err: errors.New("the worker died"), wantKind: event.WorkflowFailed,
-			forbidden: []event.Kind{event.WorkflowStopped},
+		// An error nothing classifies ended this invocation, not the task: the
+		// default is the invocation, and task failure must be asserted.
+		"an unclassified error ends the invocation": {
+			err: errors.New("the worker died"), wantKind: event.WorkflowInvocationFailed,
+			forbidden: []event.Kind{event.WorkflowStopped, event.WorkflowFailed},
+		},
+		"a structural work failure ends the task": {
+			err: structuralFailure("the candidate cannot be audited"), wantKind: event.WorkflowFailed,
+			forbidden: []event.Kind{event.WorkflowStopped, event.WorkflowInvocationFailed},
 		},
 		"a deferral was already accounted for": {
 			err: errAuthorityDeferred, wantSilent: true,
-			forbidden: []event.Kind{event.WorkflowFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority},
+			forbidden: []event.Kind{event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowStopped, event.WorkflowAwaitingAuthority},
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -476,6 +482,9 @@ func TestAQuestionBoundToAnotherTaskIsRefusedBeforeAnythingStarts(t *testing.T) 
 	var named bool
 	for _, ev := range take() {
 		if ev.Kind == event.WorkflowFailed {
+			t.Fatalf("a binding refusal ended the task it could not bind to: %q", ev.Summary)
+		}
+		if ev.Kind == event.WorkflowInvocationFailed {
 			if !strings.Contains(ev.Summary, "bound to task task-original") {
 				t.Fatalf("the refusal does not name the mismatch: %q", ev.Summary)
 			}
@@ -487,6 +496,57 @@ func TestAQuestionBoundToAnotherTaskIsRefusedBeforeAnythingStarts(t *testing.T) 
 	}
 	if !named {
 		t.Fatal("a question bound to another task was not refused")
+	}
+}
+
+// W6 THE COMPOUNDING CASE. A resumable task's invocation fails for a reason
+// unrelated to its work -- the preserved question it resumes cannot be bound
+// to it -- and the task is afterwards EXACTLY as resumable as before: same task,
+// same plan, same review, same standing question. The failure is the one the
+// repository itself produces for that mismatch, not a fabricated event.
+//
+// Measured 2026-09-25: objective 27 stopped NOT_CONVERGED and was resumable;
+// its resume hit an unrelated binding defect and ended FAILED, and that FAILED
+// ended the task. Fails if a binding failure is emitted as the task's own
+// ending, or if the invocation's ending alters anything the task owed.
+// Resume succeeding is not required: the projection is what is read.
+func TestW6AnUnboundResumeLeavesTheTaskAsResumableAsItWas(t *testing.T) {
+	q := deferScoped(t, "task-original", planScope())
+	raw, err := json.Marshal(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const task = "task-w6"
+	verdict := []byte(`{"decision":"revise","summary":"proof incomplete","findings":[{"id":"f1","severity":"blocking","class":"code","claim":"the refusal is not typed","reference":"engine.go","reason":"reads prose"}]}`)
+	history := []event.Event{
+		event.New("s1", task, event.SourceSystem, event.TaskCreated, "the objective", nil),
+		event.New("s1", task, event.SourceArchitect, event.PlanProposed, "the plan", map[string]any{"plan_source": "architect"}),
+		{SessionID: "s1", TaskID: task, Source: event.SourceReviewer, Kind: event.ReviewCompleted, Summary: "REVISE", Payload: verdict},
+		{SessionID: "s1", TaskID: task, Source: event.SourceUser, Kind: event.WorkflowAwaitingAuthority, Summary: "deferred", Payload: raw},
+	}
+	before := session.FindInterrupted(history)
+	if len(before) != 1 || !before[0].Planned || len(before[0].AwaitingAuthority) == 0 || before[0].Review == "" {
+		t.Fatalf("the history is not a resumable task owing its question and review: %+v", before)
+	}
+
+	bus := event.NewBus()
+	take, done := collect(t, bus)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	e.resumeAuthority(context.Background(), before[0])
+	emitted := take()
+	if !hasKind(kindsOf(emitted), event.WorkflowInvocationFailed) || hasKind(kindsOf(emitted), event.WorkflowFailed) {
+		t.Fatalf("the unbound resume did not end as an invocation failure: %v", kindsOf(emitted))
+	}
+
+	after := session.FindInterrupted(append(append([]event.Event(nil), history...), emitted...))
+	if len(after) != 1 {
+		t.Fatalf("an invocation that could not bind its question ended the task: %+v after %v", after, kindsOf(emitted))
+	}
+	was, _ := json.Marshal(before[0])
+	now, _ := json.Marshal(after[0])
+	if string(was) != string(now) {
+		t.Fatalf("the invocation's failure changed what the task owes:\nbefore %s\nafter  %s", was, now)
 	}
 }
 

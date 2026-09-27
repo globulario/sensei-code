@@ -60,7 +60,7 @@ func settleResume(t *testing.T, events <-chan event.Event) []event.Event {
 		case ev := <-events:
 			seen = append(seen, ev)
 			switch ev.Kind {
-			case event.WorkflowFailed, event.WorkflowStopped, event.WorkflowTimedOut, event.WorkflowCompleted,
+			case event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowStopped, event.WorkflowTimedOut, event.WorkflowCompleted,
 				event.WorkflowBlockedExternal, event.WorkflowNotConverged, event.WorkflowAwaitingAuthority:
 				return seen
 			}
@@ -100,8 +100,8 @@ func TestAResumeStoppedByItsCallerIsNotAFailure(t *testing.T) {
 	cancel()
 	e.Resume(ctx, task)
 	seen := settleResume(t, events)
-	if contains(seen, event.WorkflowFailed) {
-		t.Fatalf("a resume stopped by its caller was recorded as a final failure: %v", kinds(seen))
+	if contains(seen, event.WorkflowFailed) || contains(seen, event.WorkflowInvocationFailed) {
+		t.Fatalf("a resume stopped by its caller was recorded as a failure: %v", kinds(seen))
 	}
 	if !contains(seen, event.WorkflowStopped) {
 		t.Fatalf("a resume stopped by its caller did not end STOPPED: %v", kinds(seen))
@@ -115,7 +115,8 @@ func TestADeferredQuestionIsNeverRecordedAsAnEnding(t *testing.T) {
 	e, events, _ := resumeHarness(t, false)
 	e.beginReceipt("task-r")
 	e.terminateRun(context.Background(), "task-r", "the objective", errAuthorityDeferred)
-	if seen := drainEvents(events); contains(seen, event.WorkflowFailed) || contains(seen, event.WorkflowStopped) {
+	if seen := drainEvents(events); contains(seen, event.WorkflowFailed) || contains(seen, event.WorkflowInvocationFailed) ||
+		contains(seen, event.WorkflowStopped) {
 		t.Fatalf("a deferred question was recorded as an ending: %v", kinds(seen))
 	}
 }

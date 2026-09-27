@@ -151,6 +151,8 @@ func TestAnInvocationTerminalDoesNotEndTheTask(t *testing.T) {
 		"awaiting authority":   event.WorkflowAwaitingAuthority,
 		"blocked external":     event.WorkflowBlockedExternal,
 		"not converged":        event.WorkflowNotConverged,
+		"restoration refused":  event.WorkflowRestorationRefused,
+		"invocation failed":    event.WorkflowInvocationFailed,
 	} {
 		got := FindInterrupted([]event.Event{
 			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
@@ -159,6 +161,37 @@ func TestAnInvocationTerminalDoesNotEndTheTask(t *testing.T) {
 		})
 		if len(got) != 1 {
 			t.Fatalf("%s ended the task, not just the invocation: %+v", name, got)
+		}
+	}
+}
+
+// W4 THE TASK-TERMINAL SET KEEPS ALL THREE MEMBERS -- CONTROL. An admitted
+// change and an observation still end the task, and WorkflowFailed is still the
+// work's own failure -- including a legacy one written before invocation
+// failures had a kind of their own. An earlier invocation failure changes none
+// of that: a later terminal from the set ends the task all the same.
+//
+// Fails if the invocation kind was added by weakening the set, or if an
+// invocation failure latched a task open.
+func TestW4TheTaskTerminalSetKeepsItsThreeMembers(t *testing.T) {
+	for name, terminal := range map[string]event.Kind{
+		"admitted change":             event.WorkflowCompleted,
+		"observation":                 event.WorkflowObserved,
+		"work failure, legacy or new": event.WorkflowFailed,
+	} {
+		for _, prior := range [][]event.Event{
+			nil,
+			{ev("t1", event.SourceSystem, event.WorkflowInvocationFailed, "an earlier invocation could not proceed")},
+		} {
+			history := []event.Event{
+				ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+				ev("t1", event.SourceArchitect, event.PlanProposed, "the plan"),
+			}
+			history = append(history, prior...)
+			history = append(history, ev("t1", event.SourceSystem, terminal, name))
+			if got := FindInterrupted(history); len(got) != 0 {
+				t.Fatalf("%s (after %d invocation failure(s)) did not end the task: %+v", name, len(prior), got)
+			}
 		}
 	}
 }

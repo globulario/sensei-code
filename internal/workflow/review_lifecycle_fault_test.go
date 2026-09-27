@@ -369,8 +369,8 @@ func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T
 			// twice left the second reader with nothing -- which looked like the
 			// terminal never being emitted.
 			events := drainEvents(h.events)
-			if contains(events, event.WorkflowFailed) {
-				t.Fatalf("an observation fault emitted WorkflowFailed: %v", kinds(events))
+			if contains(events, event.WorkflowFailed) || contains(events, event.WorkflowInvocationFailed) {
+				t.Fatalf("an observation fault emitted a failure terminal: %v", kinds(events))
 			}
 			if !contains(events, event.WorkflowAwaitingReview) {
 				t.Fatalf("no resumable review terminal was emitted: %v", kinds(events))
@@ -432,6 +432,47 @@ func TestAnObservationFaultReachesNoOtherParticipantAndIsNotSilence(t *testing.T
 			}
 			if !stated {
 				t.Error("no terminal stated what was observed")
+			}
+		})
+	}
+}
+
+// THE THIRD ENDING IS NOT SWALLOWED. An unanswered review and an observation
+// fault each end the invocation as WorkflowAwaitingReview and as neither kind
+// of failure, with the REAL execute boundary (terminateRun) as the failure
+// path: a run that fell into it would emit the classifier's default,
+// WorkflowInvocationFailed, and this would see it.
+//
+// Fails if either review condition reaches the generic failure classifier, or
+// stops being its own awaiting-review ending.
+func TestAnOwedReviewEndsAwaitingReviewAndNeverAsAFailure(t *testing.T) {
+	for name, runner := range map[string]func(*atomic.Int32) agent.Runner{
+		"unanswered": func(c *atomic.Int32) agent.Runner { return unansweredRunner{calls: c} },
+		"observation fault": func(*atomic.Int32) agent.Runner {
+			return &faultingRunner{err: observationFaultOf(roles.ObservedMalformed)}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var calls atomic.Int32
+			h := lifecycleHarness(t, runner(&calls))
+			const objective = "Rewrite main.go so it prints a number."
+			var failed error
+			h.engine.implement(context.Background(), h.sc, certifiedStart{}, "task-1", h.tc, objective, "",
+				func(err error) {
+					failed = err
+					h.engine.terminateRun(context.Background(), "task-1", objective, err)
+				})
+			events := drainEvents(h.events)
+			if failed != nil {
+				t.Fatalf("an owed review reached the failure boundary: %v (%v)", failed, kinds(events))
+			}
+			if !contains(events, event.WorkflowAwaitingReview) {
+				t.Fatalf("no awaiting-review terminal was emitted: %v", kinds(events))
+			}
+			for _, wrong := range []event.Kind{event.WorkflowFailed, event.WorkflowInvocationFailed} {
+				if contains(events, wrong) {
+					t.Fatalf("an owed review was recorded as %s: %v", wrong, kinds(events))
+				}
 			}
 		})
 	}
