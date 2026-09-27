@@ -280,6 +280,38 @@ func TestARealCandidateFailureIsStillAttributedToTheCandidate(t *testing.T) {
 	}
 }
 
+// TestABaseThatAlsoFailsDifferentlyDoesNotMakeTheFailurePreExisting holds
+// attribution to what it claims: "fails the same way" is a statement about two
+// executions and must be observed in both. A base that merely also fails is
+// necessary, not sufficient. Fails if any non-zero base exit is read as the
+// candidate's failure reproduced.
+func TestABaseThatAlsoFailsDifferentlyDoesNotMakeTheFailurePreExisting(t *testing.T) {
+	base := t.TempDir()
+	r := runner(t, nil)
+	r.Baseline = func() (string, error) { return base, nil }
+
+	// Both sides fail, but the marker present only in the candidate changes
+	// which failure occurs and what it prints.
+	marker := "candidate-only"
+	if err := writeFile(r.Workspace, marker); err != nil {
+		t.Fatal(err)
+	}
+	b := r.Run(context.Background(), "task-1", "sha256:abc", []Check{
+		{Kind: Test, Command: "sh", Args: []string{"-c",
+			"if [ -f " + marker + " ]; then echo 'candidate broke parsing' >&2; exit 2; fi; echo 'error obtaining VCS status' >&2; exit 1"}},
+	})
+	got := b.Checks[0]
+	if got.Attribution == "pre-existing" {
+		t.Fatalf("a base failing for a different cause made this failure pre-existing: %q", got.Detail)
+	}
+	if got.Outcome == Infrastructure {
+		t.Fatal("a candidate-caused failure was recorded as infrastructure")
+	}
+	if len(b.CandidateFailures()) != 1 {
+		t.Fatal("a candidate-caused failure was removed from what the worker can fix")
+	}
+}
+
 // TestUnattributedIsSaidRatherThanGuessed keeps the honest third answer. With no
 // baseline the question was not asked, and reporting either verdict would be
 // inventing one.

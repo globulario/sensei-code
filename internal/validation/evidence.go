@@ -414,13 +414,40 @@ func (r Runner) attribute(ctx context.Context, check Check, e Evidence) Evidence
 	cmd.Dir = base
 	var out bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &out
-	if baseErr := cmd.Run(); baseErr != nil {
+	baseErr := cmd.Run()
+
+	// The base is judged under the same Check semantics as the candidate, and
+	// "the same way" means the same exit status and the same complete combined
+	// output. A base that merely also fails is not the candidate's failure
+	// reproduced.
+	baseStatus := 0
+	switch {
+	case baseErr == nil:
+		if !check.FailIfOutput || strings.TrimSpace(out.String()) == "" {
+			e.Attribution = "candidate"
+			return e
+		}
+	default:
+		var exitErr *exec.ExitError
+		if !asExitError(baseErr, &exitErr) {
+			e.Attribution = "unattributed"
+			e.Detail = "the check could not be run against the base commit, so this failure could not be attributed: " + baseErr.Error()
+			return e
+		}
+		baseStatus = exitErr.ExitCode()
+	}
+	sum := sha256.Sum256(out.Bytes())
+	if baseStatus == e.ExitStatus && "sha256:"+hex.EncodeToString(sum[:]) == e.OutputDigest {
 		e.Outcome = Infrastructure
 		e.Attribution = "pre-existing"
-		e.Detail = "this check fails the same way against the base commit, so the candidate did not cause it and no edit to the candidate can fix it"
+		e.Detail = "this check fails the same way against the base commit (same exit status and identical output), so the candidate did not cause it and no edit to the candidate can fix it"
 		return e
 	}
 	e.Attribution = "candidate"
+	if e.Detail != "" {
+		e.Detail += "; "
+	}
+	e.Detail += fmt.Sprintf("the base commit also fails this check, but differently (base exit %d, output %s), so equivalence was not established and this failure remains the candidate's to fix", baseStatus, short("sha256:"+hex.EncodeToString(sum[:])))
 	return e
 }
 
