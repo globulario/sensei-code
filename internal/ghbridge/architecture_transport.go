@@ -340,8 +340,11 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 	for {
 		obs, err := ObserveArchitecture(ctx, box, r)
 		if err != nil {
+			// A deadline that lands during the read ends the wait exactly as one
+			// that lands in the select below: no answer, with every rejection.
 			if ctx.Err() != nil {
-				return ArchitectureResponse{}, ctx.Err()
+				return ArchitectureResponse{}, fmt.Errorf("%w: %v%s",
+					ErrNoArchitectureAnswer, ctx.Err(), renderRejected(rejected))
 			}
 			return ArchitectureResponse{}, fmt.Errorf("reading the architecture mailbox: %w", err)
 		}
