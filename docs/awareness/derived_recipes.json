@@ -148,6 +148,26 @@
       "field": "objectives",
       "lock": "mu",
       "why": "Engine.objectives holds the OBJECTIVE TEXT whose digest is the architecture binding's identity. A torn read would let an answer be matched against an objective the run is not executing. Covers internal/workflow/engine.go."
+    },
+    {
+      "kind": "state_mutation_confined_to_owner",
+      "dir": "internal/validation",
+      "type": "Evidence",
+      "field": "Attribution",
+      "search_paths": [
+        "internal"
+      ],
+      "why": "The investigated production seam assigns Evidence.Attribution in Runner.attribute, while workflow callers consume that attribution to decide whether a failure is actionable. Mechanically deriving whether mutation of Attribution is confined to the validation package directly tests ownership of the state whose false pre-existing value caused this objective.",
+      "provenance": {
+        "origin_task": "task-1790513596091085059",
+        "origin_gap": "Sensei reported missing coverage in the planned region: graph indexes this area but no anchored rules apply to the request",
+        "region": [
+          "internal/validation/evidence.go",
+          "internal/validation/evidence_test.go"
+        ],
+        "written_at": "2026-09-27T13:30:35Z",
+        "written_by": "closure_round"
+      }
     }
   ]
 }
