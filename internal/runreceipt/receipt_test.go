@@ -593,14 +593,15 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v11"
+	const version = "sensei-code.governed-run-receipt/v12"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
 	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
-		OutcomeRestorationRefused, OutcomeUnknown}
+		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused,
+		OutcomeUnknown}
 	for _, o := range outcomes {
 		if !o.Valid() {
 			t.Errorf("%q is enumerated here but not Valid()", o)
@@ -613,8 +614,19 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 			t.Errorf("%q is valid but not pinned by this test", candidate)
 		}
 	}
-	if len(outcomes) != 12 {
+	if len(outcomes) != 14 {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
+	}
+	// v12 is the version that added the two candidate-precondition refusals:
+	// it speaks them, and v11 does not.
+	const v11 = "sensei-code.governed-run-receipt/v11"
+	for _, o := range []Outcome{OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused} {
+		if err := SpeaksItsVersion(version, o); err != nil {
+			t.Errorf("v12 + %s must be valid: %v", o, err)
+		}
+		if err := SpeaksItsVersion(v11, o); err == nil {
+			t.Errorf("v11 + %s must be invalid: it was added in v12", o)
+		}
 	}
 }
 

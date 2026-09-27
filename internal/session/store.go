@@ -295,6 +295,20 @@ type Interrupted struct {
 	// Carried at all because a refusal whose reason is unreadable after a
 	// restart is indistinguishable from a task that was never attempted.
 	RestorationRefused json.RawMessage
+	// PreconditionRefused is the newest candidate precondition refusal --
+	// WorkflowBaseMovedRefused or WorkflowDirtyCanonicalRefused -- carried as
+	// EVIDENCE, like RestorationRefused: the task owes exactly what it owed
+	// before, and this says why the last attempt did not execute. It clears
+	// nothing, the standing question above all.
+	PreconditionRefused *PreconditionRefusal
+}
+
+// PreconditionRefusal is one candidate precondition refusal as recorded: its
+// typed ending, the reason it stated, and its payload byte for byte.
+type PreconditionRefusal struct {
+	Kind    event.Kind
+	Reason  string
+	Payload json.RawMessage
 }
 
 // blockedRole reads only the role an external-block record names. The workflow
@@ -357,6 +371,26 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		if p == nil {
 			continue
 		}
+		// THE TASK-TERMINAL SET is event.Kind.Terminality's, stated positively
+		// and in one place: a change was admitted, the work failed, or a
+		// read-only run reported what it found. Nothing else ends a task.
+		//
+		// WorkflowObserved is in it because an observation IS an ending -- the
+		// run succeeded and admitted nothing. Leaving it out would have made
+		// every finished audit reappear as active work for ever, which is the
+		// mirror image of the defect this reconstruction repairs: a task that
+		// cannot be found, and a task that can never be finished, are the same
+		// disagreement between the record and the lifecycle.
+		//
+		// The INVOCATION terminals -- stopped, timed out, awaiting review,
+		// awaiting authority, blocked external, not converged, and the
+		// restoration and candidate precondition refusals -- end one process's
+		// attempt and leave the task owing something, which is precisely the
+		// state this function exists to report. A second copy of the set here
+		// is how a new invocation ending would become final to this reader.
+		if e.Kind.Terminality() == event.TaskTerminal {
+			p.done = true
+		}
 		switch e.Kind {
 		case event.TaskCreated:
 			// THE CONTINUITY ROOT. A task exists from the moment its creation is
@@ -412,24 +446,6 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.ProspectiveRecord = e.Payload
 		case event.TestEditGranted:
 			p.TestEditRecord = e.Payload
-		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved:
-			// THE TASK-TERMINAL SET, stated positively and in one place: a change
-			// was admitted, the work failed, or a read-only run reported what it
-			// found. Nothing else ends a task.
-			//
-			// WorkflowObserved is here because an observation IS an ending -- the
-			// run succeeded and admitted nothing. Leaving it out would have made
-			// every finished audit reappear as active work for ever, which is the
-			// mirror image of the defect this reconstruction repairs: a task that
-			// cannot be found, and a task that can never be finished, are the same
-			// disagreement between the record and the lifecycle.
-			//
-			// The INVOCATION terminals -- stopped, timed out, awaiting review,
-			// awaiting authority, blocked external, not converged, restoration
-			// refused -- are deliberately absent. Each of them ends one
-			// process's attempt and leaves the task owing something, which is
-			// precisely the state this function exists to report.
-			p.done = true
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it
@@ -507,6 +523,12 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// obligation it was protecting (task-1789960053774525922,
 			// 2026-09-21).
 			p.RestorationRefused = e.Payload
+		case event.WorkflowBaseMovedRefused, event.WorkflowDirtyCanonicalRefused:
+			// NOT TERMINAL, for the same reason: a candidate precondition
+			// refused and executed nothing. Deliberately it clears nothing -- a
+			// refused resume never answered the question it was asked to
+			// answer, so AwaitingAuthority stands byte for byte.
+			p.PreconditionRefused = &PreconditionRefusal{Kind: e.Kind, Reason: e.Summary, Payload: e.Payload}
 		case event.WorkflowNotConverged:
 			// Not terminal: the candidate stands and the task is owed an
 			// architect re-plan. Emitted as WorkflowFailed it was final here while

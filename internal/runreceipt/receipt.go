@@ -49,6 +49,8 @@ import (
 // SchemaVersion identifies the shape of an emitted receipt. A reader that does
 // not recognise the version reports UNSUPPORTED rather than guessing: a
 // receipt parsed under the wrong schema is a fabricated specimen.
+// v12 adds BASE_MOVED_REFUSED and DIRTY_CANONICAL_REFUSED, the two candidate
+// precondition refusals that end an invocation and not the task.
 // v6 adds the formatter-mutation fact, because an attribution procedure that
 // depends on evidence the system deliberately discards can only answer UNKNOWN.
 // v5 added TIMED_OUT, because an expired execution budget is different evidence
@@ -59,7 +61,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v11"
+const SchemaVersion = "sensei-code.governed-run-receipt/v12"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -157,6 +159,16 @@ const (
 	// authority could not be verified by the instrument available to this
 	// resume, and nothing was executed under it.
 	OutcomeRestorationRefused Outcome = "RESTORATION_REFUSED"
+	// OutcomeBaseMovedRefused: the invocation refused because the repository
+	// no longer stands at the base its candidate was established on. Nothing
+	// was executed and the task stays resumable. FAILED would end the task for
+	// a refusal that ran nothing; RESTORATION_REFUSED names an authority
+	// instrument, and none is involved.
+	OutcomeBaseMovedRefused Outcome = "BASE_MOVED_REFUSED"
+	// OutcomeDirtyCanonicalRefused: the invocation refused because the
+	// canonical checkout holds uncommitted changes. Nothing was executed and
+	// the task stays resumable.
+	OutcomeDirtyCanonicalRefused Outcome = "DIRTY_CANONICAL_REFUSED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -169,7 +181,8 @@ func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
-		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused, OutcomeUnknown:
+		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused,
+		OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -240,6 +253,14 @@ var vocabularies = map[string][]Outcome{
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
 		OutcomeRestorationRefused, OutcomeUnknown,
 	},
+	// v12 adds BASE_MOVED_REFUSED and DIRTY_CANONICAL_REFUSED: candidate
+	// precondition refusals that executed nothing and leave the task resumable.
+	"sensei-code.governed-run-receipt/v12": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
+		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -272,6 +293,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	},
 	// v11 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
 	"sensei-code.governed-run-receipt/v11": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v12 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v12": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
