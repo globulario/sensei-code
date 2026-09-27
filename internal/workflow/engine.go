@@ -6343,6 +6343,14 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
+		// The objective is restored here, before any branch can reach an
+		// architect turn: the architecture binding digests exactly this record,
+		// and an answered question used to re-enter execute holding none
+		// (task-1790481145146367848, 2026-09-27). A process that still holds the
+		// objective keeps it; a record with no objective text restores nothing.
+		if task.Task != "" {
+			e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+		}
 		if len(task.AwaitingAuthority) != 0 {
 			e.resumeAuthority(ctx, task)
 			return

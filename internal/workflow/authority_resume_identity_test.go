@@ -869,3 +869,76 @@ func TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered(t *testing.T) {
 		t.Fatal("another task inherited this task's answer")
 	}
 }
+
+// W1 — answering a preserved question must not cost the task its objective
+// identity.
+//
+// task-1790481145146367848 (2026-09-27) deferred cleanly, was answered, and its
+// continuation died one second later: "no exact objective/world binding for
+// architect turn" with ObjectiveDigest EMPTY and every other referent intact.
+// The session record held the exact objective bytes; the resumed process held
+// no objective, so the binding the architect turn reads had nothing to digest.
+//
+// The reference digest is minted from the ORIGINAL bytes by the same function
+// the architect turn uses, never from a rendering. The bytes carry surrounding
+// whitespace on purpose: a reconstruction that trimmed them would reproduce a
+// different identity and must fail here too.
+func TestAnAnsweredDeferralResumesWithItsExactObjectiveIdentity(t *testing.T) {
+	const taskID = "task-1790481145146367848"
+	exact := "  repair the resume boundary\n"
+
+	ref := &Engine{}
+	ref.recordObjective(taskID, Objective{Text: exact, Provenance: ResumedGoverned})
+	want := ref.architectureBinding(taskID).ObjectiveDigest
+	if len(want) != 64 {
+		t.Fatalf("the reference digest for the exact objective is not a digest: %q", want)
+	}
+
+	q := deferScoped(t, taskID, planScope())
+	history := []event.Event{
+		event.New("s1", taskID, event.SourceSystem, event.TaskCreated, exact, nil),
+		event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, "authority decision deferred; the question stands", q),
+	}
+	standing := session.FindInterrupted(history)
+	if len(standing) != 1 || len(standing[0].AwaitingAuthority) == 0 {
+		t.Fatalf("the deferred task did not reconstruct as awaiting authority: %+v", standing)
+	}
+	task := standing[0]
+	// The session seam: the exact bytes the digest is minted from survived.
+	if task.Task != exact {
+		t.Fatalf("reconstruction changed the objective bytes: %q, want %q", task.Task, exact)
+	}
+
+	bus := event.NewBus()
+	ch, stop := bus.Subscribe(64)
+	defer stop()
+	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
+	if got := e.Resume(context.Background(), task); got != taskID {
+		t.Fatalf("Resume continued %q instead of the task it was given", got)
+	}
+	// This engine has no Sensei, so the continuation settles at its first
+	// capability gate. What is measured is what the architect turn would bind:
+	// resolveRunner reads exactly architectureBinding for that role.
+	deadline := time.After(20 * time.Second)
+wait:
+	for {
+		select {
+		case ev := <-ch:
+			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowCompleted {
+				break wait
+			}
+		case <-deadline:
+			t.Fatal("the resumed task never settled")
+		}
+	}
+	got := e.architectureBinding(taskID).ObjectiveDigest
+	if got == "" {
+		t.Fatal("the resumed engine owns no objective: the architect turn after the answer would bind an EMPTY objective digest")
+	}
+	if got != want {
+		t.Fatalf("the resumed objective digest %s does not name the recorded objective %s", got, want)
+	}
+	if o := e.objective(taskID); o.Provenance != ResumedGoverned {
+		t.Fatalf("a restarted process claimed provenance %q for a resumed task", o.Provenance)
+	}
+}
