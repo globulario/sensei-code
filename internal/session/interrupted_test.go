@@ -267,3 +267,169 @@ func TestACreatedTaskWithNoObjectiveIsFoundAndClassifiedUnusable(t *testing.T) {
 		t.Fatalf("a completed task with no objective is still active: %+v", ended)
 	}
 }
+
+// AN INVOCATION MAY END; ONLY THE WORK ITSELF MAY END THE TASK -- the reader side.
+//
+// historyOwing is a task as the engine writes it up to the moment one invocation
+// ends: created, planned, its candidate reported resumable, a bounded REVISE
+// that is the next actor's instruction, and a spent review budget that owes an
+// architect re-plan. Every field of it is an obligation a continuation needs.
+func historyOwing(taskID string) []event.Event {
+	return []event.Event{
+		ev(taskID, event.SourceSystem, event.TaskCreated, "separate the two endings"),
+		{TaskID: taskID, Source: event.SourceArchitect, Kind: event.PlanProposed, Summary: "the plan",
+			Payload: []byte(`{"plan_source":"architect","plan_digest":"sha256:abc"}`)},
+		{TaskID: taskID, Source: event.SourceGit, Kind: event.CandidateResolved, Summary: "resumable",
+			Payload: []byte(`{"disposition":"resumable","reason":"the run did not converge and the candidate holds work that resumable state references"}`)},
+		{TaskID: taskID, Source: event.SourceReviewer, Kind: event.ReviewCompleted, Summary: "REVISE",
+			Payload: []byte(`{"decision":"revise","summary":"the witness does not fail for its own reason"}`)},
+		{TaskID: taskID, Source: event.SourceSystem, Kind: event.WorkflowNotConverged, Summary: "not converged",
+			Payload: []byte(`{"task_id":"` + taskID + `","owed":"architect_replan"}`)},
+	}
+}
+
+func invocationFailed(taskID, summary string) event.Event {
+	return event.Event{TaskID: taskID, Source: event.SourceSystem, Kind: event.WorkflowInvocationFailed, Summary: summary}
+}
+
+// sameObligations reports the first field in which two reconstructions of one
+// task differ, or "" when a continuation would be handed exactly the same thing.
+func sameObligations(a, b Interrupted) string {
+	for name, pair := range map[string][2]string{
+		"TaskID":               {a.TaskID, b.TaskID},
+		"Task":                 {a.Task, b.Task},
+		"Plan":                 {a.Plan, b.Plan},
+		"PlanSource":           {a.PlanSource, b.PlanSource},
+		"PlanDigest":           {a.PlanDigest, b.PlanDigest},
+		"Review":               {a.Review, b.Review},
+		"AwaitingReviewRecord": {string(a.AwaitingReviewRecord), string(b.AwaitingReviewRecord)},
+		"AwaitingAuthority":    {string(a.AwaitingAuthority), string(b.AwaitingAuthority)},
+		"BlockedExternal":      {string(a.BlockedExternal), string(b.BlockedExternal)},
+		"NotConverged":         {string(a.NotConverged), string(b.NotConverged)},
+		"RestorationRefused":   {string(a.RestorationRefused), string(b.RestorationRefused)},
+		"ProspectiveRecord":    {string(a.ProspectiveRecord), string(b.ProspectiveRecord)},
+		"TestEditRecord":       {string(a.TestEditRecord), string(b.TestEditRecord)},
+	} {
+		if pair[0] != pair[1] {
+			return name
+		}
+	}
+	if a.Planned != b.Planned {
+		return "Planned"
+	}
+	if a.AwaitingReview != b.AwaitingReview {
+		return "AwaitingReview"
+	}
+	return ""
+}
+
+// W2 THE TWO STATEMENTS AGREE, reader side. The history a run writes when it
+// calls its candidate resumable and then ends its invocation must be read as a
+// resumable task. The emitter half is the workflow package's
+// TestW2WhatARunSaysOfItsCandidateAgreesWithHowItEnds.
+//
+// Fails if the reader treats the invocation ending as the task's.
+func TestW2ACandidateReportedResumableIsDiscoverable(t *testing.T) {
+	history := append(historyOwing("t1"), invocationFailed("t1", "no bounded implementor produced an acceptable candidate"))
+	reportsResumable := true // the CandidateResolved in historyOwing says "resumable"
+	discoverable := len(FindInterrupted(history)) == 1
+	if reportsResumable != discoverable {
+		t.Fatalf("the run called its candidate resumable and the reconstruction answers discoverable=%v", discoverable)
+	}
+}
+
+// W3 GENUINE WORK FAILURE STILL ENDS THE TASK -- CONTROL. A resumable candidate
+// report does not revive a task whose work failed: candidate disposition is not
+// a second liveness authority.
+//
+// Fails if WorkflowFailed stops ending the task, or if anything earlier in the
+// history (the resumable disposition, the owed re-plan) outranks it.
+func TestW3AWorkFailureIsNotRevivedByAResumableCandidate(t *testing.T) {
+	history := append(historyOwing("t1"), ev("t1", event.SourceSystem, event.WorkflowFailed,
+		"prospective surface refuted: x_test.go imports \"bytes\""))
+	if got := FindInterrupted(history); len(got) != 0 {
+		t.Fatalf("a task whose work failed is discoverable again: %+v", got)
+	}
+}
+
+// W4 AN ADMITTED CHANGE AND AN OBSERVATION STILL END THE TASK -- CONTROL, over
+// the same history that owes everything.
+//
+// Fails if either member of the task-terminal set stopped ending the task.
+func TestW4CompletedAndObservedStillEndTheTask(t *testing.T) {
+	for _, terminal := range []event.Kind{event.WorkflowCompleted, event.WorkflowObserved} {
+		history := append(historyOwing("t1"), ev("t1", event.SourceSystem, terminal, "done"))
+		if got := FindInterrupted(history); len(got) != 0 {
+			t.Fatalf("%s left the task discoverable: %+v", terminal, got)
+		}
+	}
+}
+
+// W5 THE READER KEYS ON THE KIND, NEVER ON THE REASON. Each ending carries the
+// other ending's wording, and the reader must not notice.
+//
+// Fails if a reason's text changes what the reconstruction decides.
+func TestW5TheReaderDecidesByKindNotReasonText(t *testing.T) {
+	failedTheWork := append(historyOwing("t1"), ev("t1", event.SourceSystem, event.WorkflowFailed,
+		"the invocation could not proceed; the task is preserved and still resumable"))
+	if got := FindInterrupted(failedTheWork); len(got) != 0 {
+		t.Fatalf("a WorkflowFailed worded as an invocation ending was read as one: %+v", got)
+	}
+	endedTheInvocation := append(historyOwing("t1"), invocationFailed("t1",
+		"the work failed: prospective surface refuted: the candidate is final"))
+	if got := FindInterrupted(endedTheInvocation); len(got) != 1 {
+		t.Fatalf("a WorkflowInvocationFailed worded as a work failure was read as one: %+v", got)
+	}
+}
+
+// W6 THE COMPOUNDING CASE. An invocation that failed for a reason unrelated to
+// the work -- a turn it could not bind -- leaves the task exactly as it was:
+// every obligation, field by field. This is the case that cost two candidates:
+// a not-converged task whose resume hit a binding defect ended FAILED.
+//
+// Fails if the invocation ending ends the task, or changes or erases any
+// obligation an earlier event recorded.
+func TestW6AnUnboundInvocationLeavesTheTaskAsItWas(t *testing.T) {
+	before := FindInterrupted(historyOwing("t1"))
+	if len(before) != 1 || len(before[0].NotConverged) == 0 || before[0].Review == "" || !before[0].Planned {
+		t.Fatalf("the history does not owe what this witness needs, so it proves nothing: %+v", before)
+	}
+	after := FindInterrupted(append(historyOwing("t1"),
+		ev("t1", event.SourceSystem, event.Status, "resuming the same task at the turn it is owed"),
+		invocationFailed("t1", "the task cannot be resumed at its blocked turn: the external block record is bound to task t2, not to this one")))
+	if len(after) != 1 {
+		t.Fatalf("an unbound invocation ended the task: %+v", after)
+	}
+	if field := sameObligations(before[0], after[0]); field != "" {
+		t.Fatalf("an unbound invocation changed the task's %s: before %+v, after %+v", field, before[0], after[0])
+	}
+}
+
+// W7 HISTORICAL RECONSTRUCTION. Ruled 2026-09-26: a pre-change history cannot be
+// recovered. An old record carries only WorkflowFailed whatever ended it, and it
+// cannot say which ending it was; the resumable disposition beside it is not
+// authority to reinterpret it, so such a task stays ended. The two candidates
+// already stranded that way are a sunk cost, not a reason to weaken W3.
+//
+// The same history written after the change, ending WorkflowInvocationFailed,
+// is discoverable WITH its obligations intact, not as a bare id.
+//
+// Fails if the legacy history is silently revived, or if the new one is lost or
+// reconstructed without what it owed.
+func TestW7APreChangeFailedHistoryStaysEndedAndANewOneKeepsItsObligations(t *testing.T) {
+	legacy := append(historyOwing("t1"), ev("t1", event.SourceSystem, event.WorkflowFailed,
+		"no bounded implementor produced an acceptable candidate: claude: the candidate did not change between review cycles"))
+	if got := FindInterrupted(legacy); len(got) != 0 {
+		t.Fatalf("a pre-change WorkflowFailed history was silently revived: %+v", got)
+	}
+
+	owed := FindInterrupted(historyOwing("t1"))
+	current := FindInterrupted(append(historyOwing("t1"), invocationFailed("t1",
+		"no bounded implementor produced an acceptable candidate: claude: the candidate did not change between review cycles")))
+	if len(current) != 1 {
+		t.Fatalf("a history ending WorkflowInvocationFailed is not discoverable: %+v", current)
+	}
+	if field := sameObligations(owed[0], current[0]); field != "" {
+		t.Fatalf("the rediscovered task lost its %s: %+v", field, current[0])
+	}
+}

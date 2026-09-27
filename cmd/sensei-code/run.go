@@ -367,6 +367,10 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 		return exitObserved, true
 	case event.WorkflowFailed:
 		return exitFailed, true
+	case event.WorkflowInvocationFailed:
+		// This process failed, so it exits as failed. The TASK survives it,
+		// and that is the session record's statement, not the exit code's.
+		return exitFailed, true
 	case event.WorkflowTimedOut:
 		return exitTimeout, true
 	case event.WorkflowStopped:
@@ -392,7 +396,7 @@ func exitFor(k event.Kind, deferred bool) (int, bool) {
 // the interruption boundary a human needs to see.
 func terminal(k event.Kind) bool {
 	switch k {
-	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowStopped,
+	case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowStopped,
 		event.WorkflowTimedOut, event.WorkflowObserved,
 		event.WorkflowAwaitingAuthority, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
 		event.WorkflowNotConverged, event.WorkflowRestorationRefused, event.AuthorityRequired:

@@ -306,8 +306,9 @@ func admissibleAgainst(d ProspectiveSurface, s prospectiveFacts, role prospectiv
 // the facts were missing, which is exactly the shape a damaged resume record
 // takes.
 //
-// The first mismatch is returned as an error beginning "prospective surface
-// refuted:". Nothing is reinterpreted.
+// The first mismatch is returned as a workFailure whose text begins
+// "prospective surface refuted:". The type, not the text, is what makes it
+// task-terminal. Nothing is reinterpreted.
 func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, facts map[string]prospectiveFacts) error {
 	if len(declarations) == 0 {
 		return nil
@@ -317,25 +318,25 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 		f := path.Clean(strings.TrimSpace(d.Path))
 		role, ok := prospectiveRoles[d.Role]
 		if !ok {
-			return fmt.Errorf("prospective surface refuted: %s declares role %q, which is not a governed role", f, d.Role)
+			return workFailed("prospective surface refuted: %s declares role %q, which is not a governed role", f, d.Role)
 		}
 		if matched, err := path.Match(role.pathGlob, path.Base(f)); err != nil || !matched {
-			return fmt.Errorf("prospective surface refuted: %s does not match the %s path shape %s", f, d.Role, role.pathGlob)
+			return workFailed("prospective surface refuted: %s does not match the %s path shape %s", f, d.Role, role.pathGlob)
 		}
 		src, ok := created[f]
 		if !ok {
-			return fmt.Errorf("prospective surface refuted: %s was declared but the candidate did not create it", f)
+			return workFailed("prospective surface refuted: %s was declared but the candidate did not create it", f)
 		}
 		actual, err := parseGoFacts([]byte(src))
 		if err != nil {
-			return fmt.Errorf("prospective surface refuted: %s could not be read as Go: %v", f, err)
+			return workFailed("prospective surface refuted: %s could not be read as Go: %v", f, err)
 		}
 		if actual.Package != d.Package {
-			return fmt.Errorf("prospective surface refuted: %s has package %q, the declaration said %q", f, actual.Package, d.Package)
+			return workFailed("prospective surface refuted: %s has package %q, the declaration said %q", f, actual.Package, d.Package)
 		}
 		recorded, ok := facts[f]
 		if !ok || recorded.Imports == nil {
-			return fmt.Errorf("prospective surface refuted: %s was declared but no recorded grant carries its covering surface's facts", f)
+			return workFailed("prospective surface refuted: %s was declared but no recorded grant carries its covering surface's facts", f)
 		}
 		allowed := recorded.Imports
 		imports := make([]string, 0, len(actual.Imports))
@@ -345,7 +346,7 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 		sort.Strings(imports)
 		for _, imp := range imports {
 			if !allowed[imp] && !role.novel[imp] {
-				return fmt.Errorf("prospective surface refuted: %s imports %q, which is outside the covering surface's imports and the %s allowance", f, imp, d.Role)
+				return workFailed("prospective surface refuted: %s imports %q, which is outside the covering surface's imports and the %s allowance", f, imp, d.Role)
 			}
 		}
 	}

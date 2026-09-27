@@ -426,10 +426,25 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			//
 			// The INVOCATION terminals -- stopped, timed out, awaiting review,
 			// awaiting authority, blocked external, not converged, restoration
-			// refused -- are deliberately absent. Each of them ends one
-			// process's attempt and leaves the task owing something, which is
-			// precisely the state this function exists to report.
+			// refused, invocation failed -- are deliberately absent. Each of
+			// them ends one process's attempt and leaves the task owing
+			// something, which is precisely the state this function exists to
+			// report.
+			//
+			// A WorkflowFailed read here means the work failed, and that is
+			// read of every WorkflowFailed, including one written before
+			// WorkflowInvocationFailed existed. Such a record cannot say which
+			// ending it was -- that inability was the defect -- and a
+			// candidate's disposition is not authority to reinterpret it, so
+			// a pre-change history that ended WorkflowFailed stays ended.
 			p.done = true
+		case event.WorkflowInvocationFailed:
+			// NOT TERMINAL. The invocation could not proceed and nothing was
+			// established about the work, so the task owes exactly what it owed
+			// before this invocation ran: every obligation an earlier event
+			// recorded is left as it stands, and none is recorded here. Emitted
+			// as WorkflowFailed it was final here while the same run called its
+			// candidate resumable (task-1790362662232490867, 2026-09-25).
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it

@@ -246,8 +246,9 @@ func buildConstraints(src []byte) []string {
 // its exact grant: edited in place (not created, deleted, or renamed), same
 // package clause, same build constraints, imports a subset of the imports at
 // the pinned world. A grant whose file the candidate did not touch is not a
-// mismatch. The first mismatch is returned as an error beginning
-// "test edit refuted:" and is terminal, as a prospective refutation is.
+// mismatch. The first mismatch is returned as a workFailure whose text begins
+// "test edit refuted:", and its type makes it terminal, as a prospective
+// refutation is.
 func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path string) ([]byte, error)) error {
 	if len(grants) == 0 {
 		return nil
@@ -268,11 +269,11 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 		}
 		after, err := candidate(f)
 		if err != nil {
-			return fmt.Errorf("test edit refuted: %s could not be read from the candidate: %v", f, err)
+			return workFailed("test edit refuted: %s could not be read from the candidate: %v", f, err)
 		}
 		facts, err := testFacts(after)
 		if err != nil {
-			return fmt.Errorf("test edit refuted: %s could not be read as Go after the edit: %v", f, err)
+			return workFailed("test edit refuted: %s could not be read as Go after the edit: %v", f, err)
 		}
 		if facts.Package != g.Facts.Package {
 			return refuteTestEditPackage(f, g.Facts.Package, facts.Package)
@@ -304,27 +305,27 @@ func inspectTestEdits(diff string, grants []testEditGrant, candidate func(path s
 // constructors so the early and the late check cannot drift apart: the
 // projector calls exactly these.
 func refuteTestEditCreated(f string) error {
-	return fmt.Errorf("test edit refuted: %s was granted as an EDIT of an existing file but the candidate creates it", f)
+	return workFailed("test edit refuted: %s was granted as an EDIT of an existing file but the candidate creates it", f)
 }
 
 func refuteTestEditDeleted(f string) error {
-	return fmt.Errorf("test edit refuted: %s was granted as an EDIT but the candidate deletes it", f)
+	return workFailed("test edit refuted: %s was granted as an EDIT but the candidate deletes it", f)
 }
 
 func refuteTestEditRenamed(f string) error {
-	return fmt.Errorf("test edit refuted: %s was granted as an EDIT but the candidate renames it", f)
+	return workFailed("test edit refuted: %s was granted as an EDIT but the candidate renames it", f)
 }
 
 func refuteTestEditPackage(f, was, now string) error {
-	return fmt.Errorf("test edit refuted: %s changed its package clause from %q to %q", f, was, now)
+	return workFailed("test edit refuted: %s changed its package clause from %q to %q", f, was, now)
 }
 
 func refuteTestEditConstraints(f string, was, now []string) error {
-	return fmt.Errorf("test edit refuted: %s changed its build constraints (%q -> %q)", f, strings.Join(was, "; "), strings.Join(now, "; "))
+	return workFailed("test edit refuted: %s changed its build constraints (%q -> %q)", f, strings.Join(was, "; "), strings.Join(now, "; "))
 }
 
 func refuteTestEditNovelImport(f, imp string) error {
-	return fmt.Errorf("test edit refuted: %s imports %q, which it did not import at the pinned world; the %s role admits no novel import", f, imp, roleGoRegressionTestEdit)
+	return workFailed("test edit refuted: %s imports %q, which it did not import at the pinned world; the %s role admits no novel import", f, imp, roleGoRegressionTestEdit)
 }
 
 // TestEditDeclaration is the plan's statement of the STRUCTURAL effects its

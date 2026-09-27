@@ -192,16 +192,33 @@ func TestHandoverEntersTheNextWorkerAsUnansweredFeedback(t *testing.T) {
 
 // A post-creation prospective refutation is terminal. It is not review
 // feedback another implementor may reinterpret or retry.
+//
+// It is recognised by its TYPE. The refutation sentences are what inspection
+// returns, and each must carry the typed marker; the same sentence as bare text
+// must not, because a reason's wording decides nothing.
 func TestAProspectiveSurfaceRefutationStopsBeforeHandoff(t *testing.T) {
-	if !isProspectiveSurfaceRefutation(errors.New("prospective surface refuted: package mismatch")) {
-		t.Fatal("a prospective refutation was not recognized")
+	prospective := inspectProspectiveSurfaces("", []ProspectiveSurface{{Path: "x_test.go", Role: "no-such-role"}}, nil)
+	if prospective == nil || !strings.HasPrefix(prospective.Error(), "prospective surface refuted:") {
+		t.Fatalf("the inspection did not refute an ungoverned role, so this proves nothing: %v", prospective)
 	}
-	if isProspectiveSurfaceRefutation(errors.New("candidate validation failed")) {
+	for name, err := range map[string]error{
+		"prospective": prospective,
+		"test edit":   refuteTestEditCreated("x_test.go"),
+		"wrapped":     fmt.Errorf("claude: %w", refuteTestEditDeleted("x_test.go")),
+	} {
+		if !isWorkFailure(err) {
+			t.Fatalf("a %s refutation does not carry the typed work-failure marker: %v", name, err)
+		}
+	}
+	if isWorkFailure(errors.New("prospective surface refuted: package mismatch")) {
+		t.Fatal("reason text alone was classified as a work failure")
+	}
+	if isWorkFailure(errors.New("candidate validation failed")) {
 		t.Fatal("an ordinary candidate failure was treated as a prospective refutation")
 	}
 
 	body := rawSource(t, "internal/workflow/engine.go")
-	refutation := strings.Index(body, "isProspectiveSurfaceRefutation")
+	refutation := strings.Index(body, "if isWorkFailure(err) {\n\t\t\t\tfail(err)")
 	handoff := strings.Index(body, "handoffPacket")
 	if refutation < 0 || handoff < 0 {
 		t.Fatal("the prospective terminal branch or ordinary handoff path is missing")
@@ -1637,5 +1654,205 @@ func TestPlanAdmissionReturnsTheProjectedRefusalBeforeAnyImplementerIsReached(t 
 	})
 	if !stops {
 		t.Fatal("a refused plan does not end the run between admission and implementation: the refusal would be survivable")
+	}
+}
+
+// AN INVOCATION MAY END; ONLY THE WORK ITSELF MAY END THE TASK.
+//
+// Measured 2026-09-25 on task-1790362662232490867: in one second the run said
+// candidate.resolved "resumable" and workflow.failed, and `resume --task` then
+// found nothing. The reader (session.FindInterrupted) already keeps invocation
+// endings out of its task-terminal set; the emitter used WorkflowFailed for both
+// kinds of ending, so the reader could not apply its own rule.
+
+// runNonConvergingToTerminal drives the REAL candidate loop to its ordinary
+// generic non-convergence -- one blocking CODE finding the worker never
+// addresses -- and ends it through the same terminal boundary execute uses.
+func runNonConvergingToTerminal(t *testing.T) (failed error, seen []event.Event) {
+	t.Helper()
+	h, _ := scriptedLoop(t, codeFinding, false, `nothing to report`)
+	ctx := context.Background()
+	const task = "Rewrite main.go so it prints a number."
+	h.engine.implement(ctx, h.sc, certifiedStart{}, "task-1", h.tc, task, "", func(err error) {
+		failed = err
+		h.engine.terminateRun(ctx, "task-1", task, err)
+	})
+	return failed, drainEvents(h.events)
+}
+
+// W1 THE MEASURED CASE. A run that stops because no implementer converged ends
+// its INVOCATION, not its task.
+//
+// The expected kind is spelled as its durable wire value, so that against the
+// pinned base this witness compiles and fails for its own reason: the boundary
+// emitted workflow.failed. Fails if the generic non-convergence is reported as
+// the task's own ending again, or if it stops reaching the terminal boundary.
+func TestW1ANonConvergedInvocationDoesNotEndItsTask(t *testing.T) {
+	failed, seen := runNonConvergingToTerminal(t)
+	if failed == nil || !strings.Contains(failed.Error(), "no bounded implementor produced an acceptable candidate") {
+		t.Fatalf("the loop did not reach its generic non-convergence, so this proves nothing: %v", failed)
+	}
+	if contains(seen, event.WorkflowFailed) {
+		t.Fatalf("a run that could not converge was recorded as the task failing (workflow.failed): %v", kinds(seen))
+	}
+	if !contains(seen, event.Kind("workflow.invocation_failed")) {
+		t.Fatalf("the invocation's ending was not recorded as workflow.invocation_failed: %v", kinds(seen))
+	}
+}
+
+// W2 THE TWO STATEMENTS AGREE, emitter side. For one run, what the run reported
+// about its candidate's continuability and whether the terminal it then wrote
+// is a member of the task-terminal set (FindInterrupted's: completed, failed,
+// observed) must be the same answer. The reader side of this pairing is
+// session's TestW2ACandidateReportedResumableIsDiscoverable.
+//
+// Fails if the run stops reporting the candidate at all, or if a run that calls
+// its candidate resumable writes a task-terminal ending, or the reverse.
+func TestW2WhatARunSaysOfItsCandidateAgreesWithHowItEnds(t *testing.T) {
+	_, seen := runNonConvergingToTerminal(t)
+	var disposition string
+	var terminal event.Kind
+	for _, ev := range seen {
+		switch ev.Kind {
+		case event.CandidateResolved:
+			var r struct {
+				Disposition string `json:"disposition"`
+			}
+			if err := json.Unmarshal(ev.Payload, &r); err != nil {
+				t.Fatalf("the candidate resolution does not read back: %v", err)
+			}
+			disposition = r.Disposition
+		case event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowCompleted, event.WorkflowObserved,
+			event.WorkflowNotConverged, event.WorkflowAwaitingReview, event.WorkflowBlockedExternal,
+			event.WorkflowRestorationRefused, event.WorkflowStopped, event.WorkflowTimedOut, event.WorkflowAwaitingAuthority:
+			terminal = ev.Kind
+		}
+	}
+	if disposition == "" || terminal == "" {
+		t.Fatalf("the run did not both report its candidate and end: disposition %q terminal %q (%v)", disposition, terminal, kinds(seen))
+	}
+	reportsContinuable := disposition == "resumable"
+	endsTask := terminal == event.WorkflowFailed || terminal == event.WorkflowCompleted || terminal == event.WorkflowObserved
+	if reportsContinuable == endsTask {
+		t.Fatalf("the run called its candidate %q and ended %s: the two statements disagree", disposition, terminal)
+	}
+}
+
+// terminalOf ends one run through terminateRun with err and returns the
+// terminal kinds it emitted. Nothing but the classifier stands between the
+// error and the event: no worker, no Sensei, no candidate.
+func terminalOf(t *testing.T, err error) []event.Kind {
+	t.Helper()
+	bus := event.NewBus()
+	events, done := bus.Subscribe(64)
+	defer done()
+	e := &Engine{Bus: bus, SessionID: "s1"}
+	e.terminateRun(context.Background(), "task-1", "the objective", err)
+	var out []event.Kind
+	for _, k := range drain(events) {
+		switch k {
+		case event.WorkflowFailed, event.WorkflowInvocationFailed, event.WorkflowStopped, event.WorkflowTimedOut,
+			event.WorkflowBlockedExternal, event.WorkflowRestorationRefused:
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// W3 GENUINE WORK FAILURE STILL ENDS THE TASK -- CONTROL. A structural candidate
+// failure and a refuted grant shape (the authorization refutation) are
+// positively typed work failures, built by the constructors the engine uses, and
+// each still ends with exactly WorkflowFailed. The reader half is session's
+// TestW3AWorkFailureIsNotRevivedByAResumableCandidate.
+//
+// Fails if the repair turned into "nothing ever ends": if either typed
+// condition is recorded as an invocation ending, or as anything but one
+// WorkflowFailed.
+func TestW3AGenuineWorkFailureStillEndsTheTask(t *testing.T) {
+	for name, err := range map[string]error{
+		"structural":            structuralFailure("CANDIDATE_NOT_AUDITABLE (diff_unparseable)"),
+		"prospective refuted":   inspectProspectiveSurfaces("", []ProspectiveSurface{{Path: "x_test.go", Role: "no-such-role"}}, nil),
+		"test edit refuted":     refuteTestEditNovelImport("x_test.go", "bytes"),
+		"wrapped by the worker": fmt.Errorf("claude: %w", refuteTestEditRenamed("x_test.go")),
+	} {
+		got := terminalOf(t, err)
+		if len(got) != 1 || got[0] != event.WorkflowFailed {
+			t.Errorf("%s: a positively typed work failure ended %v, want exactly [workflow.failed]", name, got)
+		}
+	}
+}
+
+// W5 THE DISTINCTION IS STRUCTURAL, NOT TEXTUAL. The same sentences, with and
+// without the typed marker, classify by the marker alone; and the classifier
+// and its callers contain no decision on reason text.
+//
+// Fails if a reason's wording changes the ending (either direction), or if any
+// text matcher -- a strings call or an .Error() read -- is reintroduced into
+// the classification path, or if engine.go again holds a refutation prefix.
+func TestW5TheEndingIsDecidedByTypeNeverByReasonText(t *testing.T) {
+	for _, text := range []string{
+		"prospective surface refuted: x_test.go was declared but the candidate did not create it",
+		"test edit refuted: x_test.go was granted as an EDIT but the candidate renames it",
+		"structural candidate failure: CANDIDATE_NOT_AUDITABLE",
+		"the work failed",
+	} {
+		if got := failureEnding(errors.New(text)); got != event.WorkflowInvocationFailed {
+			t.Errorf("bare text %q classified as %s: wording decided the ending", text, got)
+		}
+		if got := failureEnding(workFailed("%s", text)); got != event.WorkflowFailed {
+			t.Errorf("typed %q classified as %s", text, got)
+		}
+	}
+	for _, text := range []string{"no bounded implementor produced an acceptable candidate", "anything at all", ""} {
+		if got := failureEnding(workFailed("%s", text)); got != event.WorkflowFailed {
+			t.Errorf("a typed work failure worded %q classified as %s", text, got)
+		}
+	}
+
+	for _, fn := range []string{"failureEnding", "isWorkFailure", "endFailed", "terminateRun", "terminateAuthorityOutcome"} {
+		decl := funcDeclIn(t, "internal/workflow/engine.go", fn)
+		ast.Inspect(decl.Body, func(n ast.Node) bool {
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
+			}
+			if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == "strings" {
+				t.Errorf("%s calls strings.%s: the ending is decided by reading text", fn, sel.Sel.Name)
+			}
+			return true
+		})
+		if fn == "failureEnding" || fn == "isWorkFailure" {
+			if _, reads := callsIn(decl.Body)["Error"]; reads {
+				t.Errorf("%s reads err.Error(): the ending is decided by reading text", fn)
+			}
+		}
+	}
+	body := rawSource(t, "internal/workflow/engine.go")
+	for _, prefix := range []string{`"prospective surface refuted:`, `"test edit refuted:`} {
+		if strings.Contains(body, prefix) {
+			t.Errorf("engine.go holds the reason prefix %s: a text matcher is still part of ending classification", prefix)
+		}
+	}
+}
+
+// W6 THE COMPOUNDING CASE, emitter side. A resume that cannot bind its turn --
+// a record naming another task, a record that does not read back -- and a
+// generic unclassified error end the INVOCATION. The reader half, that such an
+// ending leaves every earlier obligation exactly as it was, is session's
+// TestW6AnUnboundInvocationLeavesTheTaskAsItWas.
+//
+// Fails if any of them is recorded as the task failing again.
+func TestW6AnInvocationThatCannotBindEndsOnlyItself(t *testing.T) {
+	for name, err := range map[string]error{
+		"blocked turn bound elsewhere": fmt.Errorf("the task cannot be resumed at its blocked turn: %w",
+			errors.New("the external block record is bound to task task-2, not to this one")),
+		"record unreadable": fmt.Errorf("the deferred authority question could not be read back, so it cannot be asked again: %w",
+			errors.New("unexpected end of JSON input")),
+		"unclassified": errors.New("an error nobody has named yet"),
+	} {
+		got := terminalOf(t, err)
+		if len(got) != 1 || got[0] != event.WorkflowInvocationFailed {
+			t.Errorf("%s: an invocation that could not proceed ended %v, want exactly [workflow.invocation_failed]", name, got)
+		}
 	}
 }
