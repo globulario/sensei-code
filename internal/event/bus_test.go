@@ -128,3 +128,49 @@ func TestPublishingToNobodyDropsNothing(t *testing.T) {
 		t.Fatalf("publishing with no subscribers counted %d drops", got)
 	}
 }
+
+// THE CLOSED TERMINALITY VOCABULARY. Every governed run ending is enumerated
+// with the classification it must receive, the set is pinned by size, and
+// anything outside it -- an unknown kind or a known nonterminal one -- is
+// rejected rather than defaulted to either kind of terminal.
+func TestRunTerminalityIsAClosedVocabulary(t *testing.T) {
+	want := map[Kind]Terminality{
+		WorkflowCompleted:             TaskTerminal,
+		WorkflowFailed:                TaskTerminal,
+		WorkflowObserved:              TaskTerminal,
+		WorkflowStopped:               InvocationTerminal,
+		WorkflowTimedOut:              InvocationTerminal,
+		WorkflowAwaitingAuthority:     InvocationTerminal,
+		WorkflowAwaitingReview:        InvocationTerminal,
+		WorkflowBlockedExternal:       InvocationTerminal,
+		WorkflowNotConverged:          InvocationTerminal,
+		WorkflowRestorationRefused:    InvocationTerminal,
+		WorkflowBaseMovedRefused:      InvocationTerminal,
+		WorkflowDirtyCanonicalRefused: InvocationTerminal,
+	}
+	if len(want) != 12 {
+		t.Fatalf("%d run endings pinned; if the set changed, pin it here", len(want))
+	}
+	tasks := 0
+	for kind, expected := range want {
+		got, ok := RunTerminality(kind)
+		if !ok {
+			t.Errorf("%s is a run ending the classifier does not recognise", kind)
+			continue
+		}
+		if got != expected {
+			t.Errorf("%s classified %q, want %q", kind, got, expected)
+		}
+		if got == TaskTerminal {
+			tasks++
+		}
+	}
+	if tasks != 3 {
+		t.Errorf("%d task terminals; the set is exactly completed, failed and observed", tasks)
+	}
+	for _, kind := range []Kind{Kind("workflow.refused"), Kind(""), Status, TaskCreated, AuthorityResolved, CandidateNotAuditable} {
+		if got, ok := RunTerminality(kind); ok || got != "" {
+			t.Errorf("%q is not a run ending and was classified %q (ok=%v)", kind, got, ok)
+		}
+	}
+}

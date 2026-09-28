@@ -295,6 +295,13 @@ type Interrupted struct {
 	// Carried at all because a refusal whose reason is unreadable after a
 	// restart is indistinguishable from a task that was never attempted.
 	RestorationRefused json.RawMessage
+	// PreconditionRefusal is the kind of the newest candidate-precondition
+	// refusal -- WorkflowBaseMovedRefused or WorkflowDirtyCanonicalRefused --
+	// and PreconditionRefusalReason is what it said. Evidence, like
+	// RestorationRefused: the task owes what it owed before, a standing
+	// question included, and this says why the last attempt did not execute.
+	PreconditionRefusal       event.Kind
+	PreconditionRefusalReason string
 }
 
 // blockedRole reads only the role an external-block record names. The workflow
@@ -412,24 +419,6 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			p.ProspectiveRecord = e.Payload
 		case event.TestEditGranted:
 			p.TestEditRecord = e.Payload
-		case event.WorkflowCompleted, event.WorkflowFailed, event.WorkflowObserved:
-			// THE TASK-TERMINAL SET, stated positively and in one place: a change
-			// was admitted, the work failed, or a read-only run reported what it
-			// found. Nothing else ends a task.
-			//
-			// WorkflowObserved is here because an observation IS an ending -- the
-			// run succeeded and admitted nothing. Leaving it out would have made
-			// every finished audit reappear as active work for ever, which is the
-			// mirror image of the defect this reconstruction repairs: a task that
-			// cannot be found, and a task that can never be finished, are the same
-			// disagreement between the record and the lifecycle.
-			//
-			// The INVOCATION terminals -- stopped, timed out, awaiting review,
-			// awaiting authority, blocked external, not converged, restoration
-			// refused -- are deliberately absent. Each of them ends one
-			// process's attempt and leaves the task owing something, which is
-			// precisely the state this function exists to report.
-			p.done = true
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it
@@ -507,6 +496,12 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// obligation it was protecting (task-1789960053774525922,
 			// 2026-09-21).
 			p.RestorationRefused = e.Payload
+		case event.WorkflowBaseMovedRefused, event.WorkflowDirtyCanonicalRefused:
+			// Not terminal, and deliberately NOT a clearing of the standing
+			// question: the refusal happened before any answer was consumed,
+			// so the question stands exactly as it was asked.
+			p.PreconditionRefusal = e.Kind
+			p.PreconditionRefusalReason = e.Summary
 		case event.WorkflowNotConverged:
 			// Not terminal: the candidate stands and the task is owed an
 			// architect re-plan. Emitted as WorkflowFailed it was final here while
@@ -524,6 +519,15 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			// it already settled.
 			p.AwaitingAuthority = nil
 
+		}
+		// THE TASK-TERMINAL PREDICATE is the event package's, and only it: the
+		// task-terminal set lives in one place (event.RunTerminality) so a
+		// reader here cannot drift from how the endings were classified. Every
+		// INVOCATION terminal ends one process's attempt and leaves the task
+		// owing something, which is precisely the state this function exists
+		// to report.
+		if terminality, ok := event.RunTerminality(e.Kind); ok && terminality == event.TaskTerminal {
+			p.done = true
 		}
 		// A reviewer's status line is the fallback, for records written before
 		// ReviewCompleted carried a payload. It must not overwrite a bounded

@@ -1054,12 +1054,69 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	if e.refuseRestoration(taskID, err) {
 		return
 	}
+	// A candidate precondition that refused before anything executed ends the
+	// invocation, not the task. The refusal is right -- a base is immutable,
+	// and a dirty checkout is not the state a candidate governs -- and it is
+	// typed here, ahead of the generic failure, because as WorkflowFailed it
+	// was final to FindInterrupted (task-1790489127599728062, 2026-09-27).
+	if e.refuseCandidatePrecondition(taskID, err) {
+		return
+	}
 	// One classifier for both authority paths. A person choosing Stop is not
 	// a broken run, and this used to arrive as an anonymous error and be
 	// recorded as FAILED -- teaching the behavioural record that this task
 	// shape breaks, when what happened is that the human answered and said
 	// no.
 	e.terminateAuthorityOutcome(ctx, taskID, task, err)
+}
+
+// refuseCandidatePrecondition ends the invocation with the typed refusal a
+// candidate precondition deserves, and reports whether err was one.
+func (e *Engine) refuseCandidatePrecondition(taskID string, err error) bool {
+	const kept = ". Nothing was executed; the task is preserved and still resumable"
+	var moved *candidate.ErrBaseMoved
+	if errors.As(err, &moved) && moved != nil {
+		e.emitRunTerminal(taskID, event.WorkflowBaseMovedRefused, event.SourceSystem,
+			runreceipt.OutcomeBaseMovedRefused, e.candidateStateFor(taskID), moved.Error()+kept, moved)
+		return true
+	}
+	var dirty *candidate.ErrDirtyCanonical
+	if errors.As(err, &dirty) && dirty != nil {
+		e.emitRunTerminal(taskID, event.WorkflowDirtyCanonicalRefused, event.SourceSystem,
+			runreceipt.OutcomeDirtyCanonicalRefused, e.candidateStateFor(taskID), dirty.Error()+kept, dirty)
+		return true
+	}
+	return false
+}
+
+// resumePrecondition refuses to continue a task whose ALREADY-ESTABLISHED
+// candidate can no longer be continued here, before anything durable happens.
+//
+// It reads the recorded identity and never creates or rewrites one: a task with
+// no identity yet has no base to have moved, and establishing one is execute's
+// job. The base is checked first, then the canonical checkout's cleanliness,
+// read once as the repository-wide condition -- no path is filtered, exempted
+// or ignored, so no second cleanliness policy exists beside it.
+func (e *Engine) resumePrecondition(ctx context.Context, taskID string) error {
+	existing, ok, err := candidate.Load(e.Repo.Root, taskID)
+	if err != nil || !ok {
+		return err
+	}
+	head, err := e.Repo.Head(ctx)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(head) != "" && head != existing.BaseSHA {
+		return &candidate.ErrBaseMoved{TaskID: taskID, Recorded: existing.BaseSHA, Current: head}
+	}
+	clean, err := e.Repo.IsClean(ctx)
+	if err != nil {
+		return err
+	}
+	if !clean {
+		return &candidate.ErrDirtyCanonical{Repository: e.Repo.Root}
+	}
+	return nil
 }
 
 // execute is the governed run itself, separated from how it was entered.
@@ -6530,6 +6587,15 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
 			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
 			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
+		return
+	}
+	// A refusal decidable before the answer is consumed is decided before it.
+	// The candidate's base and the checkout it governs are read now, so a
+	// moved base or a dirty checkout leaves the question standing, unanswered,
+	// instead of refusing one step after the answer was persisted
+	// (task-1790489127599728062, 2026-09-27).
+	if err := e.resumePrecondition(ctx, task.TaskID); err != nil {
+		e.terminateRun(ctx, task.TaskID, task.Task, err)
 		return
 	}
 	// A question deferred before the scope was preserved cannot say what it was
