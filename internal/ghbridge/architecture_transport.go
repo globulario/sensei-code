@@ -146,6 +146,11 @@ type ArchitectureTerminal struct {
 	// Comment is the mailbox comment this terminal was read from, so a reader
 	// can say WHICH artifact settled and in what order they arrived.
 	Comment int64
+	// raw is the comment's exact bytes, which P7 chooses a representative by.
+	raw string
+	// principal is who the comment authenticated as; see
+	// Principal.authenticatedAs.
+	principal string
 }
 
 // Refused reports whether this terminal ends the request negatively.
@@ -166,26 +171,75 @@ type ArchitectureObservation struct {
 	Rejected  []ArchitectureRefusalRejected
 }
 
-// Settlement is the ONE artifact that settles this request: THE EARLIEST valid
-// exact-bound terminal in the conversation.
+// Settlement is the ONE artifact that settles this request, when there is one.
 //
-// EARLIEST, in either direction, and that is the repair. The observation used to
-// hold answers and refusals in separate lists and the waiter scanned every
-// answer before looking at any refusal, so a refusal that had already settled a
-// request was overridden by an answer posted after it and the turn returned
-// SUCCESS. The reverse ordering has the same shape. Whichever came first is what
-// happened; later copies and later conflicting artifacts are inert, which is
-// also what makes duplicate wakes and republished refusals harmless.
-//
-// Order is taken from the conversation itself, never from a clock. Comment order
-// is what GitHub actually guarantees about this mailbox; two comments can share
-// a timestamp, and a reader that broke the tie by clock would settle a request
-// differently depending on which second they were posted in.
+// ok is false both when nothing settles the request and when it is in
+// conflict; settlement says which.
 func (o ArchitectureObservation) Settlement() (ArchitectureTerminal, bool) {
-	if len(o.Terminals) == 0 {
-		return ArchitectureTerminal{}, false
+	outcome, settled, _ := o.settlement()
+	return settled, outcome == settledOne
+}
+
+// settlement is P7 applied to one read of the architecture mailbox: none, one
+// material answer, or conflict -- the same rule the review wait settles by.
+//
+// It replaces "the earliest exact-bound terminal governs". Earliest was right
+// about one thing: an answer and a refusal must never both be acted on. It was
+// wrong about how to prevent that, because it picked a winner by comment order
+// between terminals that say different things. Materially different terminals
+// are a conflict with every one retained; materially identical copies -- a
+// duplicate wake, a republished refusal -- are one terminal, and which copy is
+// named is a function of the exact bytes, not of which was posted first.
+//
+// MATERIAL is the complete validated artifact: the kind (answer or refusal),
+// the request, the whole binding, the authenticated principal as
+// authentication identified it (Principal.authenticatedAs), and for an answer
+// the complete body -- the architecture JSON is not read here, so no part of it
+// can be declared immaterial -- or for a refusal its stage and its reason. The
+// comment id and time are not, nor is a display login beside a configured id.
+func (o ArchitectureObservation) settlement() (settlementOutcome, ArchitectureTerminal, []ArchitectureTerminal) {
+	cands := make([]settleable, len(o.Terminals))
+	for i, t := range o.Terminals {
+		cands[i] = settleable{material: t.material(), raw: t.raw, locator: t.Comment}
 	}
-	return o.Terminals[0], true
+	switch outcome, rep := settle(cands); outcome {
+	case settledOne:
+		return outcome, o.Terminals[rep], nil
+	case settledConflict:
+		return outcome, ArchitectureTerminal{}, o.Terminals
+	default:
+		return outcome, ArchitectureTerminal{}, nil
+	}
+}
+
+// material is this terminal's material identity; see settlement.
+func (t ArchitectureTerminal) material() string {
+	type identity struct {
+		Kind      string
+		RequestID string
+		Binding   roles.ArchitectureBinding
+		Principal string
+		Body      string
+		Stage     RefusalStage
+		Reason    string
+	}
+	var id identity
+	switch {
+	case t.Answer != nil:
+		id = identity{Kind: "answer", RequestID: t.Answer.RequestID, Binding: t.Answer.Binding,
+			Principal: t.principal, Body: t.Answer.Body}
+	case t.Refusal != nil:
+		id = identity{Kind: "refusal", RequestID: t.Refusal.RequestID, Binding: t.Refusal.Binding,
+			Principal: t.principal, Stage: t.Refusal.Stage, Reason: t.Refusal.Reason}
+	default:
+		// Not a terminal at all; its exact bytes are the only identity it has.
+		return "bytes|" + t.raw
+	}
+	blob, err := json.Marshal(id)
+	if err != nil {
+		return "bytes|" + t.raw
+	}
+	return string(blob)
 }
 
 // ObserveArchitecture reads the mailbox once and classifies what it holds for
@@ -207,6 +261,7 @@ func ObserveArchitecture(ctx context.Context, box Issue, r ArchitectureRequest) 
 		if !box.ExpectedReviewer.Matches(c.User.ID, c.User.Login) {
 			continue
 		}
+		principal := box.ExpectedReviewer.authenticatedAs(c.User.ID, c.User.Login)
 		// POSITION ZERO decides which grammar reads this comment. A refusal-
 		// shaped body is never handed to the answer parser and an answer is
 		// never handed to the refusal parser, so neither can be reported as a
@@ -229,7 +284,7 @@ func ObserveArchitecture(ctx context.Context, box Issue, r ArchitectureRequest) 
 			}
 			refusal.Author, refusal.AuthorID, refusal.Comment = c.User.Login, c.User.ID, c.ID
 			bound := refusal
-			obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Refusal: &bound, Comment: c.ID})
+			obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Refusal: &bound, Comment: c.ID, raw: c.Body, principal: principal})
 			continue
 		}
 		answer, ok := ParseArchitectureResponse(c.Body)
@@ -238,7 +293,7 @@ func ObserveArchitecture(ctx context.Context, box Issue, r ArchitectureRequest) 
 		}
 		answer.Author, answer.AuthorID = c.User.Login, c.User.ID
 		bound := answer
-		obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Answer: &bound, Comment: c.ID})
+		obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Answer: &bound, Comment: c.ID, raw: c.Body, principal: principal})
 	}
 	return obs, nil
 }
@@ -322,6 +377,39 @@ func renderRejected(rejected []ArchitectureRefusalRejected) string {
 
 var ErrNoArchitectureAnswer = errors.New("no architecture answer answering that request was posted")
 
+// ErrArchitectureConflict reports materially different exact-bound terminals
+// for one architecture request.
+var ErrArchitectureConflict = errors.New("materially different terminals answer that architecture request")
+
+// ArchitectureConflict is that conflict as a wait outcome: every exact-bound
+// terminal the read saw, none of them chosen.
+//
+// It is neither an answer nor a refusal, so it matches neither
+// ErrArchitectureRefused nor ErrNoArchitectureAnswer: the consumer replied, and
+// its replies disagree.
+type ArchitectureConflict struct {
+	RequestID string
+	Terminals []ArchitectureTerminal
+	Rejected  []ArchitectureRefusalRejected
+}
+
+func (e *ArchitectureConflict) Error() string {
+	b := strings.Builder{}
+	fmt.Fprintf(&b, "%v: request %s has %d exact-bound terminals and no winner", ErrArchitectureConflict,
+		e.RequestID, len(e.Terminals))
+	for _, t := range e.Terminals {
+		kind := "answer"
+		if t.Refused() {
+			kind = "refusal at stage " + string(t.Refusal.Stage)
+		}
+		fmt.Fprintf(&b, "; comment %d: %s", t.Comment, kind)
+	}
+	b.WriteString(renderRejected(e.Rejected))
+	return b.String()
+}
+
+func (e *ArchitectureConflict) Unwrap() error { return ErrArchitectureConflict }
+
 // AwaitArchitecture waits only for an authenticated answer matching request id,
 // objective digest, base and graph generation. A stale architecture response is
 // still visible on the issue and has no standing for this turn.
@@ -356,17 +444,18 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 			seen[rej.identity()] = true
 			rejected = append(rejected, rej)
 		}
-		// THE EARLIEST exact-bound terminal governs, whichever kind it is.
+		// P7 settles the request, whichever kind of terminal settles it.
 		//
 		// A valid bound refusal is terminal for this request immediately: waiting
 		// out the deadline after the consumer has already said why it stopped is
 		// how an hour was spent on a diagnostic that existed in seconds. An
-		// answer is terminal in exactly the same way, and asking the observation
-		// for ONE settlement is what keeps a late answer from overturning a
-		// refusal that already ended this exchange -- and a late refusal from
-		// overturning an answer. A non-settling refusal changes nothing here: the
-		// wait continues, and its rejection travels with whatever ends the wait.
-		if settled, ok := obs.Settlement(); ok {
+		// answer is terminal in exactly the same way. An answer and a refusal
+		// together are materially different terminals and CONFLICT: neither is
+		// acted on, and neither is chosen by which was posted first. A
+		// non-settling refusal changes nothing here: the wait continues, and its
+		// rejection travels with whatever ends the wait.
+		switch outcome, settled, conflicting := obs.settlement(); outcome {
+		case settledOne:
 			if !settled.Refused() {
 				return *settled.Answer, nil
 			}
@@ -376,6 +465,10 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 				Stage: refusal.Stage, Reason: refusal.Reason,
 				Author: refusal.Author, AuthorID: refusal.AuthorID, Comment: refusal.Comment,
 				Rejected: rejected,
+			}
+		case settledConflict:
+			return ArchitectureResponse{}, &ArchitectureConflict{
+				RequestID: r.RequestID, Terminals: conflicting, Rejected: rejected,
 			}
 		}
 		select {

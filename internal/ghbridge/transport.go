@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/globulario/sensei-code/internal/reviewartifact"
+	"github.com/globulario/sensei-code/internal/roles"
 	"github.com/globulario/sensei-code/internal/workflow"
 )
 
@@ -52,6 +53,19 @@ func (p Principal) Matches(authorID int64, authorLogin string) bool {
 		return authorID == p.UserID
 	}
 	return strings.EqualFold(strings.TrimSpace(p.Login), strings.TrimSpace(authorLogin))
+}
+
+// authenticatedAs names the principal a comment that Matches authenticated as,
+// by the rule Matches applies. With a configured user id that id alone is the
+// principal and the login is display metadata a rename changes; only the
+// login-only fallback is identified by its login, normalized as Matches
+// compares it. Settlement compares answers by this, so one principal cannot
+// conflict with itself because its display name moved.
+func (p Principal) authenticatedAs(authorID int64, authorLogin string) string {
+	if p.UserID != 0 {
+		return fmt.Sprintf("id:%d", authorID)
+	}
+	return "login:" + strings.ToLower(strings.TrimSpace(authorLogin))
 }
 
 // String describes the principal for diagnostics.
@@ -398,19 +412,20 @@ func AwaitReview(ctx context.Context, box Issue, o ReviewObligation, every time.
 		}
 		seen.addAll(found)
 
-		switch bound := seen.bound(); len(bound) {
-		case 0:
-		case 1:
-			// The one exact-bound canonical artifact. Earlier malformed or
-			// wrong-target observations are diagnostic and must not block a
-			// reviewer who corrected themselves.
-			b := bound[0]
+		// P7: the bound observation set settles the request, never comment
+		// order.
+		switch outcome, b, conflicting := seen.settlement(); outcome {
+		case settledOne:
+			// One material answer. Earlier malformed or wrong-target
+			// observations are diagnostic and must not block a reviewer who
+			// corrected themselves, and a materially identical copy is the
+			// same answer rather than a rival.
 			return MailboxReview{Artifact: *b.artifact, Author: b.author,
 				AuthorID: b.authorID, Comment: b.comment}, nil
-		default:
-			// Two different verdicts for one question. Not something to choose
-			// between, and not something to keep waiting through.
-			return MailboxReview{}, observationFault(o, conflictFrom(bound))
+		case settledConflict:
+			// Materially different answers to one question. Not something to
+			// choose between, and not something to keep waiting through.
+			return MailboxReview{}, observationFault(o, conflictFrom(conflicting))
 		}
 
 		select {
@@ -421,16 +436,63 @@ func AwaitReview(ctx context.Context, box Issue, o ReviewObligation, every time.
 	}
 }
 
+// ReviewWaitEnded is the ONE ending of a review wait whose context ended before
+// the request settled.
+//
+// One type because it is one fact: the deadline can land while the waiter
+// sleeps between polls or while a mailbox read is in flight, and both are
+// constructed here, by waitEnded, from what the waiter had accumulated. A
+// consumer asks this type -- not context.DeadlineExceeded, which any
+// transport failure can carry -- whether the wait ended unanswered.
+//
+// Condition is ErrNoAnswer in EVERY case: no answer settled the request before
+// the deadline, wherever the deadline landed and whatever was seen first. When
+// the waiter saw reviewer-origin evidence, Fault carries it as well, and
+// Unanswered is false: a reviewer who replied unusably is not a reviewer who
+// did not reply, and only Unanswered may become the owed review. Cause is the
+// context's own error, wrapped in both cases.
+type ReviewWaitEnded struct {
+	RequestID string
+	Condition error
+	Fault     *roles.ReviewObservationFault
+	Cause     error
+}
+
+func (e *ReviewWaitEnded) Error() string {
+	if e.Fault != nil {
+		return fmt.Sprintf("%v: %v; the wait ended: %v", e.Condition, e.Fault, e.Cause)
+	}
+	return fmt.Sprintf("%v: %v", e.Condition, e.Cause)
+}
+
+// Unwrap exposes the condition, the observation fault when there is one, and
+// the cause.
+func (e *ReviewWaitEnded) Unwrap() []error {
+	if e.Fault != nil {
+		return []error{e.Condition, e.Fault, e.Cause}
+	}
+	return []error{e.Condition, e.Cause}
+}
+
+// Unanswered reports whether this ending is the owed-review outcome: the wait
+// ended and nothing relevant was observed.
+func (e *ReviewWaitEnded) Unanswered() bool {
+	return e.Fault == nil && errors.Is(e.Condition, ErrNoAnswer)
+}
+
 // waitEnded says what a finished waiter actually saw.
 //
-// NO_RESPONSE is the only outcome that may become "no answer", and it is
-// constructed from an EMPTY relevant-observation set -- never from "we failed to
-// find a usable review", which is the conflation R5 removes.
+// NO_RESPONSE is the only outcome that may become the owed review (Unanswered),
+// and it is constructed from an EMPTY relevant-observation set -- never from "we
+// failed to find a usable review", which is the conflation R5 removes. Every
+// ending is ErrNoAnswer, because in every case no answer settled the request;
+// what was observed first travels as Fault.
 func waitEnded(o ReviewObligation, seen *observationSet, cause error) error {
 	if faults := seen.faults(); len(faults) > 0 {
-		return observationFault(o, faults)
+		return &ReviewWaitEnded{RequestID: o.RequestID, Fault: observationFault(o, faults),
+			Condition: ErrNoAnswer, Cause: cause}
 	}
-	return fmt.Errorf("%w: %v", ErrNoAnswer, cause)
+	return &ReviewWaitEnded{RequestID: o.RequestID, Condition: ErrNoAnswer, Cause: cause}
 }
 
 // Answers reports whether this observed review replies to this exact request.

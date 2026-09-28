@@ -391,34 +391,7 @@ func (r *Runner) attachWaiter(ctx context.Context, o ReviewObligation, req agent
 					"outcome": "unanswered", "reason": err.Error(), "transport": "github",
 				}))
 		}
-		// A cancelled or expired PARENT context is checked FIRST, and keeps its
-		// own identity. The caller stopped this run -- a human, an invocation
-		// budget -- and that is not a reviewer who failed to answer. Reported as
-		// ErrNoAnswer it would reach the reviewer ladder as this provider's
-		// failure, and the next reviewer would be asked for a review the caller
-		// had just cancelled. errors.Is must still match context.Canceled, so
-		// the cause is WRAPPED rather than formatted.
-		if cerr := ctx.Err(); cerr != nil {
-			return agent.Result{}, fmt.Errorf(
-				"the review wait was ended by its caller; request %s remains the review this candidate is owed: %w",
-				o.RequestID, cerr)
-		}
-		// THIS waiter's deadline passed while the turn was still wanted, and
-		// nothing relevant was observed. The request is published, bound to this
-		// exact candidate, and unanswered: a review still owed, not a provider
-		// that failed.
-		//
-		// An OBSERVATION FAULT deliberately does not match here. It wraps only
-		// its own condition, so it falls through unchanged and reaches the
-		// caller as itself -- reported as unanswered it would tell an operator to
-		// wait for a reviewer who has already replied, with the unusable reply
-		// sitting in the conversation unmentioned. There is no separate branch
-		// for it because a branch that cannot change the outcome is a guard
-		// nothing can test.
-		if errors.Is(err, ErrNoAnswer) || errors.Is(err, context.DeadlineExceeded) {
-			return agent.Result{}, obligationWaited(o, wait, err)
-		}
-		return agent.Result{}, err
+		return agent.Result{}, reviewWaitOutcome(ctx, o, wait, err)
 	}
 
 	return r.dischargeWith(o, req, review, emit)
@@ -766,6 +739,47 @@ func stagedTransports(rec reviewstore.Record) []string {
 func subjectOf(a reviewartifact.Artifact) Subject {
 	return Subject{TaskID: a.TaskID, BaseSHA: a.BaseSHA, CandidateDigest: a.CandidateDigest,
 		CandidateTree: a.CandidateTree, ReviewCommit: a.ReviewCommit}
+}
+
+// reviewWaitOutcome maps how AwaitReview ended onto what this turn reports.
+//
+// ctx is the PARENT context the waiter's own deadline was derived from; err is
+// AwaitReview's error.
+func reviewWaitOutcome(ctx context.Context, o ReviewObligation, wait time.Duration, err error) error {
+	// A cancelled or expired PARENT context is checked FIRST, and keeps its
+	// own identity. The caller stopped this run -- a human, an invocation
+	// budget -- and that is not a reviewer who failed to answer. Reported as
+	// ErrNoAnswer it would reach the reviewer ladder as this provider's
+	// failure, and the next reviewer would be asked for a review the caller
+	// had just cancelled. errors.Is must still match context.Canceled, so
+	// the cause is WRAPPED rather than formatted.
+	if cerr := ctx.Err(); cerr != nil {
+		return fmt.Errorf(
+			"the review wait was ended by its caller; request %s remains the review this candidate is owed: %w",
+			o.RequestID, cerr)
+	}
+	// THIS waiter's deadline passed while the turn was still wanted, and
+	// nothing relevant was observed. The request is published, bound to this
+	// exact candidate, and unanswered: a review still owed, not a provider
+	// that failed.
+	//
+	// An OBSERVATION FAULT deliberately does not match here. Its ending is
+	// not Unanswered, so it falls through unchanged and reaches the caller
+	// as itself -- reported as unanswered it would tell an operator to
+	// wait for a reviewer who has already replied, with the unusable reply
+	// sitting in the conversation unmentioned. There is no separate branch
+	// for it because a branch that cannot change the outcome is a guard
+	// nothing can test.
+	//
+	// ONE reader of that fact (P7): the waiter's own typed ending for THIS
+	// request, and nothing else. A bare context.DeadlineExceeded is not a
+	// synonym -- any transport failure can carry one, and reading it as
+	// "unanswered" would turn a broken mailbox into a review still owed.
+	var ended *ReviewWaitEnded
+	if errors.As(err, &ended) && ended.RequestID == o.RequestID && ended.Unanswered() {
+		return obligationWaited(o, wait, err)
+	}
+	return err
 }
 
 // obligationStands reports that this turn could not be answered and the review

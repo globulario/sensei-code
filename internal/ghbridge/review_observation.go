@@ -18,14 +18,17 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/globulario/sensei-code/internal/reviewartifact"
 	"github.com/globulario/sensei-code/internal/reviewstore"
 	"github.com/globulario/sensei-code/internal/roles"
+	"github.com/globulario/sensei-code/internal/workflow"
 )
 
 // observation is one thing seen in a standing request's response window.
@@ -34,7 +37,10 @@ type observation struct {
 	comment  int64
 	author   string
 	authorID int64
-	at       time.Time
+	// principal is who the comment authenticated as, by the rule that
+	// authenticated it; see Principal.authenticatedAs.
+	principal string
+	at        time.Time
 
 	bodyDigest string
 	bytes      int
@@ -143,7 +149,8 @@ func inResponseWindow(o ReviewObligation, c restComment) bool {
 // different from content that is a bad one.
 func classify(o ReviewObligation, c restComment) (observation, bool) {
 	obs := observation{
-		comment: c.ID, author: c.User.Login, authorID: c.User.ID, at: c.CreatedAt,
+		comment: c.ID, author: c.User.Login, authorID: c.User.ID,
+		principal: o.ExpectedReviewer.authenticatedAs(c.User.ID, c.User.Login), at: c.CreatedAt,
 		bodyDigest: bodyDigestOf(c.Body), bytes: len(c.Body),
 	}
 	if otherProtocolObject(c.Body) {
@@ -247,25 +254,43 @@ func (s *observationSet) addAll(all []observation) {
 	}
 }
 
-// bound lists the distinct exact-bound canonical artifacts observed, one per
-// distinct artifact digest.
+// bound lists every exact-bound canonical observation, in the order first seen.
 //
-// One review posted once and read on ten polls is one answer, not ten. Two
-// DIFFERENT digests for one standing request is the conflict.
+// One review posted once and read on ten polls is one observation, not ten --
+// the set already keys on comment and exact bytes. Whether several bound
+// observations are ONE answer or a CONFLICT is not decided here: that is P7's
+// question, answered by settle over their material identity.
 func (s *observationSet) bound() []observation {
 	var out []observation
-	seen := map[string]bool{}
 	for _, obs := range s.order {
-		if obs.kind != boundCanonical || obs.artifact == nil {
-			continue
+		if obs.kind == boundCanonical && obs.artifact != nil {
+			out = append(out, obs)
 		}
-		if seen[obs.artifact.Digest] {
-			continue
-		}
-		seen[obs.artifact.Digest] = true
-		out = append(out, obs)
 	}
 	return out
+}
+
+// settlement is P7 applied to the review wait: none, one answer, or conflict,
+// decided over the bound observations' material identity.
+//
+// For one answer the representative is the observation settle chose, which is
+// a function of the exact bytes and never of which comment arrived first. For a
+// conflict every bound observation is returned, because there is no winner to
+// keep and no loser to drop.
+func (s *observationSet) settlement() (settlementOutcome, observation, []observation) {
+	bound := s.bound()
+	cands := make([]settleable, len(bound))
+	for i, obs := range bound {
+		cands[i] = settleable{material: reviewMaterial(obs), raw: obs.artifact.Raw, locator: obs.comment}
+	}
+	switch outcome, rep := settle(cands); outcome {
+	case settledOne:
+		return outcome, bound[rep], nil
+	case settledConflict:
+		return outcome, observation{}, bound
+	default:
+		return outcome, observation{}, nil
+	}
 }
 
 // faults lists the non-authoritative observations, in the order first seen.
@@ -283,7 +308,8 @@ func (s *observationSet) faults() []observation {
 // become "no answer".
 func (s *observationSet) empty() bool { return len(s.order) == 0 }
 
-// conflict renders two or more distinct exact-bound artifacts as one fault.
+// conflict renders two or more materially distinct exact-bound answers as one
+// fault, every observation retained.
 //
 // No first, newest or comment-order winner. Two different verdicts for one
 // question is not a thing to choose between.
@@ -292,7 +318,7 @@ func conflictFrom(bound []observation) []observation {
 	for _, obs := range bound {
 		c := obs
 		c.kind = roles.ObservedConflict
-		c.diagnostic = "more than one distinct canonical review answers this exact request"
+		c.diagnostic = "more than one materially distinct canonical review answers this exact request"
 		out = append(out, c)
 	}
 	return out
@@ -347,4 +373,137 @@ func deliveryPending(o ReviewObligation, rec reviewstore.Record, art reviewartif
 		})
 	}
 	return fault
+}
+
+// P7 WAIT SETTLEMENT: which answer settles a request is a function of the bound
+// observation set, and of nothing else.
+//
+// Before P7 the two waits in this package answered that question two different
+// ways. The review wait conflicted on any two artifact digests -- and a digest
+// covers summary prose, so two carriers posting the same ACCEPT with no
+// findings ten seconds apart lost the candidate to a CONFLICT (2026-09-27,
+// r-2cd04f8649ecc3f6). The architecture wait let the earliest comment govern,
+// which is a winner chosen by arrival order. Both waits now ask settle.
+//
+// The rule: answers identical in every MATERIAL field are one answer;
+// answers differing in any material field conflict, with no winner. What is
+// material is stated by each wait's identity derivation, not here.
+type settlementOutcome int
+
+const (
+	settledNone settlementOutcome = iota
+	settledOne
+	settledConflict
+)
+
+// settleable is one bound observation as P7 sees it.
+type settleable struct {
+	// material is the answer's material identity. Equal material means the
+	// governed outcome is the same, whatever else differs.
+	material string
+	// raw is the exact authored bytes, which the representative is chosen by.
+	raw string
+	// locator is where it was seen. It orders only byte-identical copies, so
+	// the returned locator is deterministic too; it never decides between
+	// different bytes, let alone different material.
+	locator int64
+}
+
+// settle decides none, one answer, or conflict over bound observations.
+//
+// For one answer it returns the index of the representative: the least exact
+// authored bytes, then the least locator among byte-identical copies. Neither
+// is arrival order, so which bytes are recorded does not depend on which
+// carrier posted first. For a conflict it returns no index: the caller retains
+// every observation.
+func settle(cands []settleable) (settlementOutcome, int) {
+	if len(cands) == 0 {
+		return settledNone, -1
+	}
+	rep := 0
+	for i, c := range cands {
+		if c.material != cands[0].material {
+			return settledConflict, -1
+		}
+		r := cands[rep]
+		if c.raw < r.raw || (c.raw == r.raw && c.locator < r.locator) {
+			rep = i
+		}
+	}
+	return settledOne, rep
+}
+
+// reviewMaterial derives a bound review's material identity.
+//
+// MATERIAL: the request; the authenticated principal that posted it, as
+// authentication identified it (its configured user id, or its normalized login
+// only when no id is configured -- a display login beside an id is not
+// identity); the reviewer provider; the binding -- task, base, candidate digest, candidate
+// tree, review commit; and the governed verdict -- decision, instructions and
+// the findings as a set, every field of every finding. Those are everything the
+// engine acts on: the decision routes the candidate, instructions and findings
+// are what the implementer is held to, and findings are tracked by id.
+//
+// NOT MATERIAL: the summary, and transport facts such as the comment id and
+// time. The summary is reported but decides nothing -- no accept, revise,
+// escalation, finding or instruction is read from it -- so two reviews that
+// differ only there produce the same governed outcome. It is excluded whole,
+// never normalised: whitespace- or case-folding prose would be a proxy for
+// identity, not identity.
+//
+// The verdict is read through workflow.ValidateReviewBody, the same reader the
+// consumer uses, so material means what the engine will see. A payload that
+// reader refuses is NOT given semantic identity by guess: its identity is its
+// exact artifact digest, which is how every bound answer was compared before
+// P7, and it keeps failing later exactly as it did.
+func reviewMaterial(obs observation) string {
+	art := obs.artifact
+	binding := roles.Binding{TaskID: art.TaskID, BaseSHA: art.BaseSHA,
+		CandidateDigest: art.CandidateDigest, CandidateTree: art.CandidateTree}
+	verdict, err := workflow.ValidateReviewBody(art.Body, binding, art.ReviewerProvider)
+	if err != nil {
+		return "unvalidated|" + art.Digest
+	}
+	findings := make([]string, 0, len(verdict.Findings))
+	for _, f := range verdict.Findings {
+		blob, merr := json.Marshal(f)
+		if merr != nil {
+			return "unvalidated|" + art.Digest
+		}
+		findings = append(findings, string(blob))
+	}
+	// A SET: order is not what the reviewer decided, and neither is repeating
+	// an identical finding. Every field of each distinct finding stays in its
+	// identity; only exact repeats of one identity collapse.
+	sort.Strings(findings)
+	distinct := findings[:0]
+	for i, f := range findings {
+		if i == 0 || f != findings[i-1] {
+			distinct = append(distinct, f)
+		}
+	}
+	findings = distinct
+	blob, err := json.Marshal(struct {
+		RequestID       string
+		Principal       string
+		Provider        string
+		TaskID          string
+		BaseSHA         string
+		CandidateDigest string
+		CandidateTree   string
+		ReviewCommit    string
+		Decision        roles.Decision
+		Instructions    string
+		Findings        []string
+	}{
+		RequestID: art.RequestID, Principal: obs.principal,
+		Provider: strings.ToLower(strings.TrimSpace(art.ReviewerProvider)),
+		TaskID:   art.TaskID, BaseSHA: art.BaseSHA, CandidateDigest: art.CandidateDigest,
+		CandidateTree: art.CandidateTree, ReviewCommit: art.ReviewCommit,
+		Decision: verdict.Decision, Instructions: verdict.Instructions, Findings: findings,
+	})
+	if err != nil {
+		return "unvalidated|" + art.Digest
+	}
+	return "validated|" + string(blob)
 }
