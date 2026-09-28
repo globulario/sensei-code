@@ -192,6 +192,20 @@ const (
 	// the authority instrument whose binding could not be read or verified, so
 	// the refusal can be told apart from a DERIVED mismatch it is not.
 	WorkflowRestorationRefused Kind = "workflow.restoration_refused"
+	// WorkflowBaseMovedRefused is an invocation that refused to continue a
+	// task whose recorded candidate base is no longer the repository's HEAD
+	// (candidate.ErrBaseMoved), and executed nothing.
+	//
+	// Terminal for the INVOCATION and not for the TASK. The refusal is right --
+	// a candidate's base is immutable -- and its ending was wrong: emitted as
+	// WorkflowFailed it removed task-1790489127599728062 (2026-09-27) from the
+	// resumable set after nothing had run. The summary is the refusal's reason.
+	WorkflowBaseMovedRefused Kind = "workflow.base_moved_refused"
+	// WorkflowDirtyCanonicalRefused is an invocation that refused to continue
+	// because the canonical checkout is not clean (candidate.ErrDirtyCanonical),
+	// and executed nothing. Terminal for the INVOCATION and not for the TASK,
+	// for the same reason as WorkflowBaseMovedRefused.
+	WorkflowDirtyCanonicalRefused Kind = "workflow.dirty_canonical_refused"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record
@@ -204,6 +218,38 @@ const (
 	// inspected against after the candidate is produced.
 	TestEditGranted Kind = "testedit.granted"
 )
+
+// Terminality is what a governed run's ending ends: the INVOCATION only, or
+// the TASK as well.
+type Terminality string
+
+const (
+	// InvocationTerminal ends one process's attempt and leaves the task owing
+	// something: it stays resumable.
+	InvocationTerminal Terminality = "invocation"
+	// TaskTerminal ends the task. Nothing is left to resume.
+	TaskTerminal Terminality = "task"
+)
+
+// RunTerminality is the ONE classification of every governed run ending.
+//
+// It is closed and read by membership: a kind that is not a run ending --
+// unknown, or a known nonterminal such as Status -- reports false rather than
+// a default, so a new ending cannot quietly become either kind of terminal.
+// The task-terminal set is exactly WorkflowCompleted, WorkflowFailed and
+// WorkflowObserved: a change was admitted, the work failed, or a read-only run
+// reported what it found. Every other ending leaves the task resumable.
+func RunTerminality(k Kind) (Terminality, bool) {
+	switch k {
+	case WorkflowCompleted, WorkflowFailed, WorkflowObserved:
+		return TaskTerminal, true
+	case WorkflowStopped, WorkflowTimedOut, WorkflowAwaitingAuthority, WorkflowAwaitingReview,
+		WorkflowBlockedExternal, WorkflowNotConverged, WorkflowRestorationRefused,
+		WorkflowBaseMovedRefused, WorkflowDirtyCanonicalRefused:
+		return InvocationTerminal, true
+	}
+	return "", false
+}
 
 type Event struct {
 	ID        string          `json:"id"`

@@ -59,7 +59,7 @@ import (
 // COMPLETE receipt means, so the version moves with them: a reader on the wrong
 // version misreads the record, which is the fabricated specimen this comment
 // warns about.
-const SchemaVersion = "sensei-code.governed-run-receipt/v11"
+const SchemaVersion = "sensei-code.governed-run-receipt/v12"
 
 // Completeness is the instrument axis: does this record contain what a record
 // of a governed run must contain?
@@ -157,6 +157,15 @@ const (
 	// authority could not be verified by the instrument available to this
 	// resume, and nothing was executed under it.
 	OutcomeRestorationRefused Outcome = "RESTORATION_REFUSED"
+	// OutcomeBaseMovedRefused: an invocation refused to continue a task whose
+	// recorded candidate base is no longer the repository's HEAD, and executed
+	// nothing. FAILED said this about task-1790489127599728062 (2026-09-27),
+	// and the task left the resumable set although nothing had run.
+	OutcomeBaseMovedRefused Outcome = "BASE_MOVED_REFUSED"
+	// OutcomeDirtyCanonicalRefused: an invocation refused to continue because
+	// the canonical checkout is not clean, and executed nothing. The task
+	// stands and is resumable once the checkout is clean.
+	OutcomeDirtyCanonicalRefused Outcome = "DIRTY_CANONICAL_REFUSED"
 	// OutcomeUnknown: the record does not say. This is an admission of
 	// ignorance the reader can act on, not a default that hides one.
 	OutcomeUnknown Outcome = "UNKNOWN"
@@ -169,7 +178,8 @@ func (o Outcome) Valid() bool {
 	switch o {
 	case OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
 		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut, OutcomeReviewObligationUnmet,
-		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused, OutcomeUnknown:
+		OutcomeBlockedExternal, OutcomeNotConverged, OutcomeRestorationRefused,
+		OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown:
 		return true
 	}
 	return false
@@ -240,6 +250,14 @@ var vocabularies = map[string][]Outcome{
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
 		OutcomeRestorationRefused, OutcomeUnknown,
 	},
+	// v12 adds BASE_MOVED_REFUSED and DIRTY_CANONICAL_REFUSED: candidate
+	// preconditions a resume refused before executing anything.
+	"sensei-code.governed-run-receipt/v12": {
+		OutcomeAccepted, OutcomeRefused, OutcomeFailed, OutcomeUnreviewed,
+		OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
+		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
+		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown,
+	},
 }
 
 // candidateVocabularies pins the CANDIDATE vocabulary per version, for the same
@@ -272,6 +290,10 @@ var candidateVocabularies = map[string][]CandidateState{
 	},
 	// v11 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
 	"sensei-code.governed-run-receipt/v11": {
+		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
+	},
+	// v12 changes the OUTCOME vocabulary; the candidate vocabulary is unchanged.
+	"sensei-code.governed-run-receipt/v12": {
 		CandidateNone, CandidatePresent, CandidateUnattempted, CandidateUnknown,
 	},
 }
