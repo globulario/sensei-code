@@ -13169,6 +13169,42 @@ code_symbols:
     file: internal/ghbridge/architecture_test.go
     symbol: recordingLookup
     kind: type
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict.Error
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Rejected
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict.Rejected
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.RequestID
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict.RequestID
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Terminals
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict.Terminals
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict.Unwrap
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict
+    kind: type
   - id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
     namespace: structural.scip
     language: go
@@ -13187,6 +13223,12 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureObservation.Terminals
     kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureObservation.settlement
+    kind: method
   - id: internal/ghbridge/architecture_transport.go:ArchitectureObservation~type
     namespace: structural.scip
     language: go
@@ -13325,6 +13367,24 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureTerminal.Refused
     kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureTerminal.material
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.principal
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureTerminal.principal
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.raw
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureTerminal.raw
+    kind: var
   - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
     namespace: structural.scip
     language: go
@@ -13343,6 +13403,12 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: AwaitArchitecture
     kind: function
+  - id: internal/ghbridge/architecture_transport.go:ErrArchitectureConflict
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ErrArchitectureConflict
+    kind: var
   - id: internal/ghbridge/architecture_transport.go:ErrArchitectureRefused
     namespace: structural.scip
     language: go
@@ -13787,6 +13853,12 @@ code_symbols:
     file: internal/ghbridge/await_test.go
     symbol: TestDefaultWaitIsFinite
     kind: function
+  - id: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDuplicateArchitectureAnswersSettleOnce
+    kind: function
   - id: internal/ghbridge/await_test.go:TestDuplicateRefusalsSettleARequestExactlyOnce
     namespace: structural.scip
     language: go
@@ -13799,11 +13871,17 @@ code_symbols:
     file: internal/ghbridge/await_test.go
     symbol: TestMailboxReadFailureIsImmediateAndExplicit
     kind: function
-  - id: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - id: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     namespace: structural.scip
     language: go
     file: internal/ghbridge/await_test.go
-    symbol: TestTheEarliestTerminalGovernsInBothDirections
+    symbol: TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestOneArchitectPrincipalCannotConflictWithItself
     kind: function
   - id: internal/ghbridge/await_test.go:TestUnconfiguredMailboxIsRefusedNotPolled
     namespace: structural.scip
@@ -14674,6 +14752,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/mailbox_pr_test.go
     symbol: TestARequestPostsToTheConfiguredPRConversation
+    kind: function
+  - id: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/mailbox_pr_test.go
+    symbol: TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
     kind: function
   - id: internal/ghbridge/mailbox_pr_test.go:TestAnOrdinaryIssueIsRefusedAsTheMailbox
     namespace: structural.scip
@@ -16943,6 +17027,12 @@ code_symbols:
     file: internal/ghbridge/review_observation.go
     symbol: observation.mismatch
     kind: var
+  - id: internal/ghbridge/review_observation.go:observation.principal
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: observation.principal
+    kind: var
   - id: internal/ghbridge/review_observation.go:observation.report
     namespace: structural.scip
     language: go
@@ -16997,6 +17087,12 @@ code_symbols:
     file: internal/ghbridge/review_observation.go
     symbol: observationSet.seen
     kind: var
+  - id: internal/ghbridge/review_observation.go:observationSet.settlement
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: observationSet.settlement
+    kind: method
   - id: internal/ghbridge/review_observation.go:observationSet~type
     namespace: structural.scip
     language: go
@@ -17021,6 +17117,66 @@ code_symbols:
     file: internal/ghbridge/review_observation.go
     symbol: otherProtocolObject
     kind: function
+  - id: internal/ghbridge/review_observation.go:reviewMaterial
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: reviewMaterial
+    kind: function
+  - id: internal/ghbridge/review_observation.go:settle
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settle
+    kind: function
+  - id: internal/ghbridge/review_observation.go:settleable.locator
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settleable.locator
+    kind: var
+  - id: internal/ghbridge/review_observation.go:settleable.material
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settleable.material
+    kind: var
+  - id: internal/ghbridge/review_observation.go:settleable.raw
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settleable.raw
+    kind: var
+  - id: internal/ghbridge/review_observation.go:settleable~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settleable
+    kind: type
+  - id: internal/ghbridge/review_observation.go:settledConflict
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settledConflict
+    kind: const
+  - id: internal/ghbridge/review_observation.go:settledNone
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settledNone
+    kind: const
+  - id: internal/ghbridge/review_observation.go:settledOne
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settledOne
+    kind: const
+  - id: internal/ghbridge/review_observation.go:settlementOutcome~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation.go
+    symbol: settlementOutcome
+    kind: type
   - id: internal/ghbridge/review_observation_test.go:TestACorrectedReviewIsConsumedUnderTheSameObligationAfterAFault
     namespace: structural.scip
     language: go
@@ -17032,6 +17188,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/review_observation_test.go
     symbol: TestAMalformedReviewIsStillReportedWithItsFullForensics
+    kind: function
+  - id: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: TestARepeatedIdenticalFindingIsTheSameFindingsSet
     kind: function
   - id: internal/ghbridge/review_observation_test.go:TestAReviewQuotingProtocolMarkersIsObservedAsAReview
     namespace: structural.scip
@@ -17063,11 +17225,29 @@ code_symbols:
     file: internal/ghbridge/review_observation_test.go
     symbol: TestIrrelevantContentNeverEntersTheObservationSet
     kind: function
+  - id: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    kind: function
+  - id: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    kind: function
   - id: internal/ghbridge/review_observation_test.go:TestNoAnswerIsConstructedOnlyFromSilence
     namespace: structural.scip
     language: go
     file: internal/ghbridge/review_observation_test.go
     symbol: TestNoAnswerIsConstructedOnlyFromSilence
+    kind: function
+  - id: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: TestOneReviewerPrincipalCannotConflictWithItself
     kind: function
   - id: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
     namespace: structural.scip
@@ -17111,6 +17291,18 @@ code_symbols:
     file: internal/ghbridge/review_observation_test.go
     symbol: TestTheWaiterDecidesOnDistinctAnswersNotOnOrder
     kind: function
+  - id: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: assertP7Conflict
+    kind: function
+  - id: internal/ghbridge/review_observation_test.go:boundObservation
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: boundObservation
+    kind: function
   - id: internal/ghbridge/review_observation_test.go:canonicalFor
     namespace: structural.scip
     language: go
@@ -17134,6 +17326,108 @@ code_symbols:
     language: go
     file: internal/ghbridge/review_observation_test.go
     symbol: observedObligation
+    kind: function
+  - id: internal/ghbridge/review_observation_test.go:p7Base
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Base
+    kind: function
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.claim
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.claim
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.class
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.class
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.correction
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.correction
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.id
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.id
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.proofGap
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.proofGap
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.reason
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.reason
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.reference
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.reference
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding.severity
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding.severity
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Finding~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Finding
+    kind: type
+  - id: internal/ghbridge/review_observation_test.go:p7Review.decision
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Review.decision
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Review.findings
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Review.findings
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Review.instructions
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Review.instructions
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Review.payload
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Review.payload
+    kind: method
+  - id: internal/ghbridge/review_observation_test.go:p7Review.summary
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Review.summary
+    kind: var
+  - id: internal/ghbridge/review_observation_test.go:p7Review~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: p7Review
+    kind: type
+  - id: internal/ghbridge/review_observation_test.go:readAsSilence
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_observation_test.go
+    symbol: readAsSilence
     kind: function
   - id: internal/ghbridge/review_observation_test.go:reviewQuotingMarkers
     namespace: structural.scip
@@ -17501,6 +17795,12 @@ code_symbols:
     file: internal/ghbridge/runner.go
     symbol: obligationWaited
     kind: function
+  - id: internal/ghbridge/runner.go:reviewWaitOutcome
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/runner.go
+    symbol: reviewWaitOutcome
+    kind: function
   - id: internal/ghbridge/runner.go:shortCandidate
     namespace: structural.scip
     language: go
@@ -17572,6 +17872,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/runner_test.go
     symbol: TestNonReviewerRolesAlwaysReachTheExistingResolver
+    kind: function
+  - id: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/runner_test.go
+    symbol: TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
     kind: function
   - id: internal/ghbridge/runner_test.go:TestPublishRefusesAMalformedSubject
     namespace: structural.scip
@@ -17849,6 +18155,12 @@ code_symbols:
     file: internal/ghbridge/transport.go
     symbol: Principal.UserID
     kind: var
+  - id: internal/ghbridge/transport.go:Principal.authenticatedAs
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: Principal.authenticatedAs
+    kind: method
   - id: internal/ghbridge/transport.go:Principal~type
     namespace: structural.scip
     language: go
@@ -17861,6 +18173,54 @@ code_symbols:
     file: internal/ghbridge/transport.go
     symbol: PublishRequest
     kind: function
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.Cause
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.Cause
+    kind: var
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.Condition
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.Condition
+    kind: var
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.Error
+    kind: method
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.Fault
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.Fault
+    kind: var
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.RequestID
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.RequestID
+    kind: var
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.Unanswered
+    kind: method
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded.Unwrap
+    kind: method
+  - id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewWaitEnded
+    kind: type
   - id: internal/ghbridge/transport.go:Reviews
     namespace: structural.scip
     language: go

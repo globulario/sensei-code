@@ -4602,11 +4602,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6005,11 +6005,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6102,15 +6102,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/control/server.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6184,11 +6184,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6204,11 +6204,11 @@ code_references:
     to_name: Server.ListenRelay
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Serve
+    to_id: internal/ghwebhook/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Serve
+    to_id: internal/control/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7495,15 +7495,15 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
+    to_id: internal/workflow/engine.go:New
+    to_name: New
+    file: cmd/sensei-code/control_test.go
+  - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/session/store.go:New
-    to_name: New
-    file: cmd/sensei-code/control_test.go
-  - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7931,11 +7931,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -16177,11 +16177,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -17856,11 +17856,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -24636,17 +24636,17 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_name: Config
-    file: internal/behavioral/behavioral.go
-  - from: internal/behavioral/behavioral.go:New
     to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
+    to_name: Config
+    file: internal/behavioral/behavioral.go
+  - from: internal/behavioral/behavioral.go:New
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -38285,17 +38285,17 @@ code_references:
     to_name: Second
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_name: Server
+    file: internal/control/server.go
+  - from: internal/control/server.go:Server.Listen
     to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_name: Server
-    file: internal/control/server.go
-  - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -44645,11 +44645,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -52371,17 +52371,143 @@ code_references:
     to_id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
     to_name: recordingLookup.attempted
     file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    to_name: ArchitectureConflict
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Rejected
+    to_name: ArchitectureConflict.Rejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.RequestID
+    to_name: ArchitectureConflict.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Terminals
+    to_name: ArchitectureConflict.Terminals
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Stage
+    to_name: ArchitectureRefusal.Stage
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
+    to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
+    to_name: ArchitectureTerminal.Refusal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refused
+    to_name: ArchitectureTerminal.Refused
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_name: Builder
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_name: Builder.String
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_name: Builder.WriteString
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureConflict
+    to_name: ErrArchitectureConflict
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_name: Fprintf
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_name: fmt
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:renderRejected
+    to_name: renderRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_name: strings
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unwrap
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    to_name: ArchitectureConflict
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unwrap
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureConflict
+    to_name: ErrArchitectureConflict
+    file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation~type
     to_name: ArchitectureObservation
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
-    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
-    to_name: ArchitectureObservation.Terminals
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_name: ArchitectureObservation.settlement
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
     to_name: ArchitectureTerminal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation~type
+    to_name: ArchitectureObservation
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
+    to_name: ArchitectureTerminal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
+    to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_name: ArchitectureTerminal.material
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.raw
+    to_name: ArchitectureTerminal.raw
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settle
+    to_name: settle
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable~type
+    to_name: settleable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable.locator
+    to_name: settleable.locator
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable.material
+    to_name: settleable.material
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable.raw
+    to_name: settleable.raw
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settledConflict
+    to_name: settledConflict
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_id: internal/ghbridge/review_observation.go:settlementOutcome~type
+    to_name: settlementOutcome
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureRefusalRejected.identity
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefusalRejected~type
@@ -52462,6 +52588,71 @@ code_references:
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
     to_name: ArchitectureTerminal.Refusal
     file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/roles/architecture.go:ArchitectureBinding~type
+    to_name: ArchitectureBinding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Binding
+    to_name: ArchitectureRefusal.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Reason
+    to_name: ArchitectureRefusal.Reason
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.RequestID
+    to_name: ArchitectureRefusal.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Stage
+    to_name: ArchitectureRefusal.Stage
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
+    to_name: ArchitectureTerminal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
+    to_name: ArchitectureTerminal.Answer
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
+    to_name: ArchitectureTerminal.Refusal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.principal
+    to_name: ArchitectureTerminal.principal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.raw
+    to_name: ArchitectureTerminal.raw
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_name: Marshal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture.go:RefusalStage~type
+    to_name: RefusalStage
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_name: encoding/json
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:Architectures
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
     to_name: ArchitectureResponse
@@ -52492,12 +52683,28 @@ code_references:
     to_name: After
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    to_name: ArchitectureConflict
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Rejected
+    to_name: ArchitectureConflict.Rejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.RequestID
+    to_name: ArchitectureConflict.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Terminals
+    to_name: ArchitectureConflict.Terminals
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
     to_name: ArchitectureObservation.Rejected
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
-    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
-    to_name: ArchitectureObservation.Settlement
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
+    to_name: ArchitectureObservation.settlement
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Author
@@ -52576,6 +52783,10 @@ code_references:
     to_name: ArchitectureRequest
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Validate
     to_name: ArchitectureRequest.Validate
     file: internal/ghbridge/architecture_transport.go
@@ -52634,6 +52845,14 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:renderRejected
     to_name: renderRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/review_observation.go:settledConflict
+    to_name: settledConflict
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_name: time
@@ -52723,6 +52942,14 @@ code_references:
     to_name: ArchitectureTerminal.Refusal
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.principal
+    to_name: ArchitectureTerminal.principal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.raw
+    to_name: ArchitectureTerminal.raw
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_name: Context
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
@@ -52744,6 +52971,10 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/transport.go:Principal.Matches
     to_name: Principal.Matches
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: Principal.authenticatedAs
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:architectureComments
@@ -57707,6 +57938,107 @@ code_references:
   - from: internal/ghbridge/await_test.go:TestDefaultWaitIsFinite
     to_name: time
     file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
+    to_name: ArchitectureObservation.Settlement
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
+    to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refused
+    to_name: ArchitectureTerminal.Refused
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDuplicateArchitectureAnswersSettleOnce
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/await_test.go
   - from: internal/ghbridge/await_test.go:TestDuplicateRefusalsSettleARequestExactlyOnce
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
     to_name: ArchitectureObservation.Settlement
@@ -57890,131 +58222,258 @@ code_references:
   - from: internal/ghbridge/await_test.go:TestMailboxReadFailureIsImmediateAndExplicit
     to_name: time
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    to_name: ArchitectureConflict
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Terminals
+    to_name: ArchitectureConflict.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
     to_name: ArchitectureObservation.Rejected
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
     to_name: ArchitectureObservation.Settlement
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
     to_name: ArchitectureObservation.Terminals
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Marker
     to_name: ArchitectureRefusal.Marker
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Reason
     to_name: ArchitectureRefusal.Reason
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused~type
     to_name: ArchitectureRefused
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
-    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Comment
-    to_name: ArchitectureRefused.Comment
-    file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
-    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Reason
-    to_name: ArchitectureRefused.Reason
-    file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
     to_name: ArchitectureRequest.Binding
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
     to_name: ArchitectureRequest.RequestID
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
     to_name: ArchitectureResponse
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
     to_name: ArchitectureResponse.Binding
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
     to_name: ArchitectureResponse.Body
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
     to_name: ArchitectureResponse.Marker
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
     to_name: ArchitectureResponse.RequestID
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
     to_name: ArchitectureTerminal.Comment
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
-    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refused
-    to_name: ArchitectureTerminal.Refused
-    file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_name: AwaitArchitecture
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: Background
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_id: internal/ghbridge/architecture_transport.go:ErrNoArchitectureAnswer
+    to_name: ErrNoArchitectureAnswer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: Millisecond
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_name: ObserveArchitecture
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: Second
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: T
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: T.Run
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: WithTimeout
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
     to_name: architectureRefusalFixture
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: common.Errorf
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: common.Fatal
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: common.Fatalf
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_name: common.Helper
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: context
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
     to_name: newPRMailbox
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
     to_name: prMailbox.append
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: testing
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
     to_name: time
     file: internal/ghbridge/await_test.go
-  - from: internal/ghbridge/await_test.go:TestTheEarliestTerminalGovernsInBothDirections
+  - from: internal/ghbridge/await_test.go:TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
+    to_name: ArchitectureObservation.Settlement
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Author
+    to_name: ArchitectureResponse.Author
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
+    to_name: ArchitectureTerminal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
+    to_name: ArchitectureTerminal.Answer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
+    to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.principal
+    to_name: ArchitectureTerminal.principal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:Issue.ExpectedReviewer
+    to_name: Issue.ExpectedReviewer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:Principal.UserID
+    to_name: Principal.UserID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestOneArchitectPrincipalCannotConflictWithItself
     to_id: internal/ghbridge/installation_test.go:writeTestKey
     to_name: writeTestKey
     file: internal/ghbridge/await_test.go
@@ -63330,6 +63789,159 @@ code_references:
     to_name: testing
     file: internal/ghbridge/mailbox_pr_test.go
   - from: internal/ghbridge/mailbox_pr_test.go:TestARequestPostsToTheConfiguredPRConversation
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: As
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:AwaitReview
+    to_name: AwaitReview
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Background
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Bool
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Bool.Load
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Bool.Store
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Context
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Context.Done
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: DeadlineExceeded
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:ErrNoAnswer
+    to_name: ErrNoAnswer
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Hour
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Is
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: LoadInt32
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Millisecond
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/roles/observation.go:ObservedMalformed
+    to_name: ObservedMalformed
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/roles/observation.go:ReviewObservation.Comment
+    to_name: ReviewObservation.Comment
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/roles/observation.go:ReviewObservationFault~type
+    to_name: ReviewObservationFault
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/roles/observation.go:ReviewObservationFault.Has
+    to_name: ReviewObservationFault.Has
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/roles/observation.go:ReviewObservationFault.Observations
+    to_name: ReviewObservationFault.Observations
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Cause
+    to_name: ReviewWaitEnded.Cause
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Fault
+    to_name: ReviewWaitEnded.Fault
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.RequestID
+    to_name: ReviewWaitEnded.RequestID
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_name: ReviewWaitEnded.Unanswered
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: Sleep
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: T
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: T.Run
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: WithTimeout
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: common.Cleanup
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: common.Errorf
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: common.Fatal
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: common.Fatalf
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: common.Helper
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: context
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: errors
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/review_observation_test.go:obligationC1
+    to_name: obligationC1
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.commentReads
+    to_name: prMailbox.commentReads
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.onCommentsGet
+    to_name: prMailbox.onCommentsGet
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: sync/atomic
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: testing
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
+    to_name: time
+    file: internal/ghbridge/mailbox_pr_test.go
+  - from: internal/ghbridge/mailbox_pr_test.go:TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect
     to_id: internal/ghbridge/installation_test.go:writeTestKey
     to_name: writeTestKey
     file: internal/ghbridge/mailbox_pr_test.go
@@ -78649,8 +79261,16 @@ code_references:
     to_name: Parse
     file: internal/ghbridge/review_observation.go
   - from: internal/ghbridge/review_observation.go:classify
+    to_id: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: Principal.authenticatedAs
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:classify
     to_id: internal/ghbridge/review_obligation.go:ReviewObligation~type
     to_name: ReviewObligation
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:classify
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.ExpectedReviewer
+    to_name: ReviewObligation.ExpectedReviewer
     file: internal/ghbridge/review_observation.go
   - from: internal/ghbridge/review_observation.go:classify
     to_id: internal/ghbridge/review_observation.go:bodyDigestOf
@@ -78713,6 +79333,10 @@ code_references:
   - from: internal/ghbridge/review_observation.go:classify
     to_id: internal/ghbridge/review_observation.go:observation.mismatch
     to_name: observation.mismatch
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:classify
+    to_id: internal/ghbridge/review_observation.go:observation.principal
+    to_name: observation.principal
     file: internal/ghbridge/review_observation.go
   - from: internal/ghbridge/review_observation.go:classify
     to_id: internal/ghbridge/review_observation.go:otherProtocolObject
@@ -79223,10 +79847,6 @@ code_references:
     to_name: observationSet.add
     file: internal/ghbridge/review_observation.go
   - from: internal/ghbridge/review_observation.go:observationSet.bound
-    to_id: internal/reviewartifact/artifact.go:Artifact.Digest
-    to_name: Artifact.Digest
-    file: internal/ghbridge/review_observation.go
-  - from: internal/ghbridge/review_observation.go:observationSet.bound
     to_id: internal/ghbridge/review_observation.go:boundCanonical
     to_name: boundCanonical
     file: internal/ghbridge/review_observation.go
@@ -79278,6 +79898,66 @@ code_references:
     to_id: internal/ghbridge/review_observation.go:observationSet.order
     to_name: observationSet.order
     file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/reviewartifact/artifact.go:Artifact.Raw
+    to_name: Artifact.Raw
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:observation.artifact
+    to_name: observation.artifact
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:observation.comment
+    to_name: observation.comment
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:observationSet~type
+    to_name: observationSet
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:observationSet.bound
+    to_name: observationSet.bound
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: reviewMaterial
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settle
+    to_name: settle
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable~type
+    to_name: settleable
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable.locator
+    to_name: settleable.locator
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable.material
+    to_name: settleable.material
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settleable.raw
+    to_name: settleable.raw
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settledConflict
+    to_name: settledConflict
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_id: internal/ghbridge/review_observation.go:settlementOutcome~type
+    to_name: settlementOutcome
+    file: internal/ghbridge/review_observation.go
   - from: internal/ghbridge/review_observation.go:otherProtocolObject
     to_id: internal/reviewartifact/artifact.go:Opens
     to_name: Opens
@@ -79288,6 +79968,153 @@ code_references:
   - from: internal/ghbridge/review_observation.go:otherProtocolObject
     to_id: internal/ghbridge/review_observation.go:otherProtocolMarkers
     to_name: otherProtocolMarkers
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.BaseSHA
+    to_name: Artifact.BaseSHA
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.Body
+    to_name: Artifact.Body
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.CandidateDigest
+    to_name: Artifact.CandidateDigest
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.CandidateTree
+    to_name: Artifact.CandidateTree
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.Digest
+    to_name: Artifact.Digest
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.RequestID
+    to_name: Artifact.RequestID
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.ReviewCommit
+    to_name: Artifact.ReviewCommit
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.ReviewerProvider
+    to_name: Artifact.ReviewerProvider
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/reviewartifact/artifact.go:Artifact.TaskID
+    to_name: Artifact.TaskID
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/provenance.go:Binding~type
+    to_name: Binding
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/provenance.go:Binding.BaseSHA
+    to_name: Binding.BaseSHA
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/provenance.go:Binding.CandidateDigest
+    to_name: Binding.CandidateDigest
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/provenance.go:Binding.CandidateTree
+    to_name: Binding.CandidateTree
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/provenance.go:Binding.TaskID
+    to_name: Binding.TaskID
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/verdict.go:Decision~type
+    to_name: Decision
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: Marshal
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/verdict.go:ReviewVerdict.Decision
+    to_name: ReviewVerdict.Decision
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/verdict.go:ReviewVerdict.Findings
+    to_name: ReviewVerdict.Findings
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/roles/verdict.go:ReviewVerdict.Instructions
+    to_name: ReviewVerdict.Instructions
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: Strings
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: ToLower
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: TrimSpace
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/workflow/relayed_review.go:ValidateReviewBody
+    to_name: ValidateReviewBody
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: encoding/json
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: github.com/globulario/sensei-code/internal/workflow
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/ghbridge/review_observation.go:observation.artifact
+    to_name: observation.artifact
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_id: internal/ghbridge/review_observation.go:observation.principal
+    to_name: observation.principal
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: sort
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: strings
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settleable~type
+    to_name: settleable
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settleable.locator
+    to_name: settleable.locator
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settleable.material
+    to_name: settleable.material
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settleable.raw
+    to_name: settleable.raw
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settledConflict
+    to_name: settledConflict
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settledNone
+    to_name: settledNone
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/review_observation.go
+  - from: internal/ghbridge/review_observation.go:settle
+    to_id: internal/ghbridge/review_observation.go:settlementOutcome~type
+    to_name: settlementOutcome
     file: internal/ghbridge/review_observation.go
   - from: internal/ghbridge/review_observation_test.go:TestACorrectedReviewIsConsumedUnderTheSameObligationAfterAFault
     to_name: As
@@ -79447,15 +80274,8 @@ code_references:
     to_name: Binding.CandidateTree
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
-    to_id: internal/ghbridge/transport.go:ErrNoAnswer
-    to_name: ErrNoAnswer
-    file: internal/ghbridge/review_observation_test.go
-  - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
     to_id: internal/ghbridge/exchange.go:ExchangeRecord.RequestID
     to_name: ExchangeRecord.RequestID
-    file: internal/ghbridge/review_observation_test.go
-  - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
-    to_name: Is
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
     to_id: internal/ghbridge/transport.go:MailboxReview.Artifact
@@ -79575,6 +80395,10 @@ code_references:
     to_name: obligationFrom
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
+    to_id: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: readAsSilence
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
     to_id: internal/ghbridge/relay_test.go:relayFixture.exchanges
     to_name: relayFixture.exchanges
     file: internal/ghbridge/review_observation_test.go
@@ -79611,6 +80435,74 @@ code_references:
   - from: internal/ghbridge/review_observation_test.go:TestAMalformedReviewIsStillReportedWithItsFullForensics
     to_id: internal/ghbridge/review_observation_test.go:waitOn
     to_name: waitOn
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/reviewartifact/artifact.go:Artifact.Digest
+    to_name: Artifact.Digest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_name: T
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: assertP7Conflict
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: boundObservation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_name: common.Fatal
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_name: common.Fatalf
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation.go:observation.artifact
+    to_name: observation.artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation.go:observationSet~type
+    to_name: observationSet
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation.go:observationSet.addAll
+    to_name: observationSet.addAll
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_name: observationSet.settlement
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:observedObligation
+    to_name: observedObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:p7Base
+    to_name: p7Base
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.claim
+    to_name: p7Finding.claim
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.findings
+    to_name: p7Review.findings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: p7Review.payload
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestARepeatedIdenticalFindingIsTheSameFindingsSet
+    to_name: testing
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestAReviewQuotingProtocolMarkersIsObservedAsAReview
     to_id: internal/reviewartifact/artifact.go:Artifact.Body
@@ -80219,6 +81111,351 @@ code_references:
   - from: internal/ghbridge/review_observation_test.go:TestIrrelevantContentNeverEntersTheObservationSet
     to_name: testing
     file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact~type
+    to_name: Artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.BaseSHA
+    to_name: Artifact.BaseSHA
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.CandidateDigest
+    to_name: Artifact.CandidateDigest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.CandidateTree
+    to_name: Artifact.CandidateTree
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.Digest
+    to_name: Artifact.Digest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.Raw
+    to_name: Artifact.Raw
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.RequestID
+    to_name: Artifact.RequestID
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.ReviewCommit
+    to_name: Artifact.ReviewCommit
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.ReviewerProvider
+    to_name: Artifact.ReviewerProvider
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/reviewartifact/artifact.go:Artifact.TaskID
+    to_name: Artifact.TaskID
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: As
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: HasPrefix
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/transport.go:MailboxReview.Artifact
+    to_name: MailboxReview.Artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/roles/observation.go:ObservedConflict
+    to_name: ObservedConflict
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: Repeat
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestComment
+    to_name: ReviewObligation.RequestComment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/roles/observation.go:ReviewObservationFault~type
+    to_name: ReviewObservationFault
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/roles/observation.go:ReviewObservationFault.Has
+    to_name: ReviewObservationFault.Has
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/roles/observation.go:ReviewObservationFault.Observations
+    to_name: ReviewObservationFault.Observations
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: T
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: T.Run
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: assertP7Conflict
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: boundObservation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: common.Fatalf
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: errors
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: github.com/globulario/sensei-code/internal/reviewartifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/relay_test.go:newRelayFixture
+    to_name: newRelayFixture
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_obligation.go:obligationFrom
+    to_name: obligationFrom
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation.go:observation.artifact
+    to_name: observation.artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation.go:observation.comment
+    to_name: observation.comment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation.go:observation.principal
+    to_name: observation.principal
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:observedObligation
+    to_name: observedObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Base
+    to_name: p7Base
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.claim
+    to_name: p7Finding.claim
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.class
+    to_name: p7Finding.class
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.correction
+    to_name: p7Finding.correction
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.id
+    to_name: p7Finding.id
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.proofGap
+    to_name: p7Finding.proofGap
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.reason
+    to_name: p7Finding.reason
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.reference
+    to_name: p7Finding.reference
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.severity
+    to_name: p7Finding.severity
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Review~type
+    to_name: p7Review
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.decision
+    to_name: p7Review.decision
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.findings
+    to_name: p7Review.findings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.instructions
+    to_name: p7Review.instructions
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: p7Review.payload
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/relay_test.go:relayFixture.exchanges
+    to_name: relayFixture.exchanges
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/relay_test.go:relayFixture.mailbox
+    to_name: relayFixture.mailbox
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/relay_test.go:relayMailbox.add
+    to_name: relayMailbox.add
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: reviewMaterial
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_obligation_test.go:soleObligation
+    to_name: soleObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: strings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_name: testing
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyDifferentBoundReviewsConflictWithBothRetained
+    to_id: internal/ghbridge/review_observation_test.go:waitOn
+    to_name: waitOn
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/reviewartifact/artifact.go:Artifact.Digest
+    to_name: Artifact.Digest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/reviewartifact/artifact.go:Artifact.Raw
+    to_name: Artifact.Raw
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: As
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/transport.go:MailboxReview.Artifact
+    to_name: MailboxReview.Artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/relay.go:ReviewDigest
+    to_name: ReviewDigest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestComment
+    to_name: ReviewObligation.RequestComment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/roles/observation.go:ReviewObservationFault~type
+    to_name: ReviewObservationFault
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/roles/observation.go:ReviewObservationFault.Kinds
+    to_name: ReviewObservationFault.Kinds
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: T
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: T.Run
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: boundObservation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: common.Fatal
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: common.Fatalf
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: errors
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/relay_test.go:newRelayFixture
+    to_name: newRelayFixture
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_obligation.go:obligationFrom
+    to_name: obligationFrom
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:observation.artifact
+    to_name: observation.artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:observation.comment
+    to_name: observation.comment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:observationSet~type
+    to_name: observationSet
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:observationSet.addAll
+    to_name: observationSet.addAll
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_name: observationSet.settlement
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:observedObligation
+    to_name: observedObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:p7Base
+    to_name: p7Base
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.findings
+    to_name: p7Review.findings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: p7Review.payload
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.summary
+    to_name: p7Review.summary
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/relay_test.go:relayFixture.exchanges
+    to_name: relayFixture.exchanges
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/relay_test.go:relayFixture.mailbox
+    to_name: relayFixture.mailbox
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/relay_test.go:relayMailbox.add
+    to_name: relayMailbox.add
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_obligation_test.go:soleObligation
+    to_name: soleObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_name: testing
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer
+    to_id: internal/ghbridge/review_observation_test.go:waitOn
+    to_name: waitOn
+    file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestNoAnswerIsConstructedOnlyFromSilence
     to_name: Contains
     file: internal/ghbridge/review_observation_test.go
@@ -80246,6 +81483,153 @@ code_references:
   - from: internal/ghbridge/review_observation_test.go:TestNoAnswerIsConstructedOnlyFromSilence
     to_name: testing
     file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:Principal~type
+    to_name: Principal
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:Principal.Login
+    to_name: Principal.Login
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:Principal.Matches
+    to_name: Principal.Matches
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:Principal.UserID
+    to_name: Principal.UserID
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.ExpectedReviewer
+    to_name: ReviewObligation.ExpectedReviewer
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestComment
+    to_name: ReviewObligation.RequestComment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestID
+    to_name: ReviewObligation.RequestID
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_name: T
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_name: T.Run
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:boundCanonical
+    to_name: boundCanonical
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation_test.go:canonicalFor
+    to_name: canonicalFor
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:classify
+    to_name: classify
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation_test.go:comment
+    to_name: comment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_name: common.Fatal
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_name: common.Fatalf
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/relay_test.go:newRelayFixture
+    to_name: newRelayFixture
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_obligation.go:obligationFrom
+    to_name: obligationFrom
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observation.author
+    to_name: observation.author
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observation.diagnostic
+    to_name: observation.diagnostic
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observation.kind
+    to_name: observation.kind
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observationSet~type
+    to_name: observationSet
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observationSet.addAll
+    to_name: observationSet.addAll
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_name: observationSet.settlement
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation_test.go:observedObligation
+    to_name: observedObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/relay_test.go:relayFixture.exchanges
+    to_name: relayFixture.exchanges
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/relay_test.go:relayFixture.mailbox
+    to_name: relayFixture.mailbox
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/relay_test.go:relayMailbox.add
+    to_name: relayMailbox.add
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/relay_test.go:relayRequest
+    to_name: relayRequest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/relay_test.go:relaySubject
+    to_name: relaySubject
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:restComment.$anon_c9440287ba795e5e.ID
+    to_name: restComment.$anon_c9440287ba795e5e.ID
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:restComment.$anon_c9440287ba795e5e.Login
+    to_name: restComment.$anon_c9440287ba795e5e.Login
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:restComment.ID
+    to_name: restComment.ID
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/transport.go:restComment.User
+    to_name: restComment.User
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_obligation_test.go:soleObligation
+    to_name: soleObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_name: testing
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOneReviewerPrincipalCannotConflictWithItself
+    to_id: internal/ghbridge/review_observation_test.go:waitOn
+    to_name: waitOn
+    file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
     to_name: As
     file: internal/ghbridge/review_observation_test.go
@@ -80254,13 +81638,6 @@ code_references:
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
     to_name: DeadlineExceeded
-    file: internal/ghbridge/review_observation_test.go
-  - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
-    to_id: internal/ghbridge/transport.go:ErrNoAnswer
-    to_name: ErrNoAnswer
-    file: internal/ghbridge/review_observation_test.go
-  - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
-    to_name: Is
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
     to_id: internal/reviewartifact/artifact.go:Marker
@@ -80375,6 +81752,10 @@ code_references:
     to_name: otherProtocolObject
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
+    to_id: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: readAsSilence
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOnlyATopLevelProtocolObjectIsExcluded
     to_id: internal/ghbridge/relay_test.go:relayRequest
     to_name: relayRequest
     file: internal/ghbridge/review_observation_test.go
@@ -80481,6 +81862,10 @@ code_references:
   - from: internal/ghbridge/review_observation_test.go:TestOnlySilenceBecomesNoAnswer
     to_id: internal/ghbridge/review_observation_test.go:observedObligation
     to_name: observedObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestOnlySilenceBecomesNoAnswer
+    to_id: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: readAsSilence
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestOnlySilenceBecomesNoAnswer
     to_id: internal/ghbridge/relay_test.go:relaySubject
@@ -80924,6 +82309,10 @@ code_references:
     to_name: obligationFrom
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:TestTheWaiterDecidesOnDistinctAnswersNotOnOrder
+    to_id: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: readAsSilence
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:TestTheWaiterDecidesOnDistinctAnswersNotOnOrder
     to_id: internal/ghbridge/relay_test.go:relayFixture.exchanges
     to_name: relayFixture.exchanges
     file: internal/ghbridge/review_observation_test.go
@@ -80953,6 +82342,139 @@ code_references:
   - from: internal/ghbridge/review_observation_test.go:TestTheWaiterDecidesOnDistinctAnswersNotOnOrder
     to_id: internal/ghbridge/review_observation_test.go:waitOn
     to_name: waitOn
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/roles/observation.go:ObservedConflict
+    to_name: ObservedConflict
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/roles/observation.go:ReviewObservationFault.Has
+    to_name: ReviewObservationFault.Has
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/roles/observation.go:ReviewObservationFault.Kinds
+    to_name: ReviewObservationFault.Kinds
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/roles/observation.go:ReviewObservationFault.Observations
+    to_name: ReviewObservationFault.Observations
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: T
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: common.Fatalf
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: common.Helper
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:conflictFrom
+    to_name: conflictFrom
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observation.artifact
+    to_name: observation.artifact
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observation.comment
+    to_name: observation.comment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observationFault
+    to_name: observationFault
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observationSet~type
+    to_name: observationSet
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observationSet.addAll
+    to_name: observationSet.addAll
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_name: observationSet.settlement
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation_test.go:observedObligation
+    to_name: observedObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_id: internal/ghbridge/review_observation.go:settledConflict
+    to_name: settledConflict
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:assertP7Conflict
+    to_name: testing
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: HasPrefix
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation~type
+    to_name: ReviewObligation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: T
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation.go:boundCanonical
+    to_name: boundCanonical
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation_test.go:canonicalFor
+    to_name: canonicalFor
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation.go:classify
+    to_name: classify
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation_test.go:comment
+    to_name: comment
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: common.Fatalf
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: common.Helper
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation.go:observation.diagnostic
+    to_name: observation.diagnostic
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation.go:observation.kind
+    to_name: observation.kind
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/relay_test.go:relayRequest
+    to_name: relayRequest
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/relay_test.go:relaySubject
+    to_name: relaySubject
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_id: internal/ghbridge/review_observation.go:reviewMaterial
+    to_name: reviewMaterial
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: strings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:boundObservation
+    to_name: testing
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:canonicalFor
     to_id: internal/reviewartifact/artifact.go:Artifact~type
@@ -81246,6 +82768,147 @@ code_references:
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:observedObligation
     to_name: time
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding~type
+    to_name: p7Finding
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.claim
+    to_name: p7Finding.claim
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.class
+    to_name: p7Finding.class
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.correction
+    to_name: p7Finding.correction
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.id
+    to_name: p7Finding.id
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.reason
+    to_name: p7Finding.reason
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.reference
+    to_name: p7Finding.reference
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.severity
+    to_name: p7Finding.severity
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Review~type
+    to_name: p7Review
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.decision
+    to_name: p7Review.decision
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.findings
+    to_name: p7Review.findings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.instructions
+    to_name: p7Review.instructions
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Base
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.summary
+    to_name: p7Review.summary
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: Builder
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: Builder.String
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: Builder.WriteString
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/relay_test.go:jsonString
+    to_name: jsonString
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.claim
+    to_name: p7Finding.claim
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.class
+    to_name: p7Finding.class
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.correction
+    to_name: p7Finding.correction
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.id
+    to_name: p7Finding.id
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.proofGap
+    to_name: p7Finding.proofGap
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.reason
+    to_name: p7Finding.reason
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.reference
+    to_name: p7Finding.reference
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Finding.severity
+    to_name: p7Finding.severity
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Review~type
+    to_name: p7Review
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.decision
+    to_name: p7Review.decision
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.findings
+    to_name: p7Review.findings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.instructions
+    to_name: p7Review.instructions
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_id: internal/ghbridge/review_observation_test.go:p7Review.summary
+    to_name: p7Review.summary
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:p7Review.payload
+    to_name: strings
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: As
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_id: internal/ghbridge/transport.go:ErrNoAnswer
+    to_name: ErrNoAnswer
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: Is
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_name: ReviewWaitEnded.Unanswered
+    file: internal/ghbridge/review_observation_test.go
+  - from: internal/ghbridge/review_observation_test.go:readAsSilence
+    to_name: errors
     file: internal/ghbridge/review_observation_test.go
   - from: internal/ghbridge/review_observation_test.go:reviewQuotingMarkers
     to_id: internal/reviewartifact/artifact.go:Marker
@@ -84945,12 +86608,6 @@ code_references:
     to_name: Context
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_name: Context.Err
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_name: DeadlineExceeded
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_id: internal/ghbridge/doorbell.go:Doorbell.Ring
     to_name: Doorbell.Ring
     file: internal/ghbridge/runner.go
@@ -84958,21 +86615,11 @@ code_references:
     to_name: Duration.String
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_id: internal/ghbridge/transport.go:ErrNoAnswer
-    to_name: ErrNoAnswer
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_name: Errorf
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_id: internal/event/event.go:Event~type
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_name: FormatInt
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_name: Is
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_id: internal/event/event.go:New
@@ -85070,20 +86717,14 @@ code_references:
     to_name: context
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_name: errors
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_name: fmt
-    file: internal/ghbridge/runner.go
-  - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_name: github.com/globulario/sensei-code/internal/agent
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_name: github.com/globulario/sensei-code/internal/event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
-    to_id: internal/ghbridge/runner.go:obligationWaited
-    to_name: obligationWaited
+    to_id: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: reviewWaitOutcome
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.attachWaiter
     to_name: strconv
@@ -85411,10 +87052,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -85865,6 +87506,57 @@ code_references:
     to_name: obligationStands
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:obligationWaited
+    to_name: time
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: As
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: Context
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: Context.Err
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: Duration
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: Errorf
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation~type
+    to_name: ReviewObligation
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestID
+    to_name: ReviewObligation.RequestID
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.RequestID
+    to_name: ReviewWaitEnded.RequestID
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_name: ReviewWaitEnded.Unanswered
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: context
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: errors
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: fmt
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_id: internal/ghbridge/runner.go:obligationWaited
+    to_name: obligationWaited
+    file: internal/ghbridge/runner.go
+  - from: internal/ghbridge/runner.go:reviewWaitOutcome
     to_name: time
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:stagedTransports
@@ -86393,6 +88085,160 @@ code_references:
     file: internal/ghbridge/runner_test.go
   - from: internal/ghbridge/runner_test.go:TestNonReviewerRolesAlwaysReachTheExistingResolver
     to_name: testing
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: As
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: Background
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: Canceled
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: DeadlineExceeded
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/runner.go:DefaultWait
+    to_name: DefaultWait
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/transport.go:ErrNoAnswer
+    to_name: ErrNoAnswer
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/roles/unanswered.go:ErrReviewUnanswered
+    to_name: ErrReviewUnanswered
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: Is
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: Join
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: New
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/roles/observation.go:ObservedMalformed
+    to_name: ObservedMalformed
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: Repeat
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation~type
+    to_name: ReviewObligation
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.BaseSHA
+    to_name: ReviewObligation.BaseSHA
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.CandidateDigest
+    to_name: ReviewObligation.CandidateDigest
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.CandidateTree
+    to_name: ReviewObligation.CandidateTree
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.Conversation
+    to_name: ReviewObligation.Conversation
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestComment
+    to_name: ReviewObligation.RequestComment
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestID
+    to_name: ReviewObligation.RequestID
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.ReviewCommit
+    to_name: ReviewObligation.ReviewCommit
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.TaskID
+    to_name: ReviewObligation.TaskID
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/roles/unanswered.go:ReviewUnanswered~type
+    to_name: ReviewUnanswered
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/roles/unanswered.go:ReviewUnanswered.RequestID
+    to_name: ReviewUnanswered.RequestID
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/roles/unanswered.go:ReviewUnanswered.Waited
+    to_name: ReviewUnanswered.Waited
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: T
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: T.Run
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: WithCancel
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:bodyDigestOf
+    to_name: bodyDigestOf
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: common.Errorf
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: common.Fatalf
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: context
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: errors
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:observation~type
+    to_name: observation
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:observation.bodyDigest
+    to_name: observation.bodyDigest
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:observation.comment
+    to_name: observation.comment
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:observation.kind
+    to_name: observation.kind
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:observationSet~type
+    to_name: observationSet
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/review_observation.go:observationSet.add
+    to_name: observationSet.add
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/runner.go:reviewWaitOutcome
+    to_name: reviewWaitOutcome
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: strings
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_name: testing
+    file: internal/ghbridge/runner_test.go
+  - from: internal/ghbridge/runner_test.go:TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview
+    to_id: internal/ghbridge/transport.go:waitEnded
+    to_name: waitEnded
     file: internal/ghbridge/runner_test.go
   - from: internal/ghbridge/runner_test.go:TestPublishRefusesAMalformedSubject
     to_name: Background
@@ -87530,8 +89376,16 @@ code_references:
     to_name: observationSet.addAll
     file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:AwaitReview
-    to_id: internal/ghbridge/review_observation.go:observationSet.bound
-    to_name: observationSet.bound
+    to_id: internal/ghbridge/review_observation.go:observationSet.settlement
+    to_name: observationSet.settlement
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:AwaitReview
+    to_id: internal/ghbridge/review_observation.go:settledConflict
+    to_name: settledConflict
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:AwaitReview
+    to_id: internal/ghbridge/review_observation.go:settledOne
+    to_name: settledOne
     file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:AwaitReview
     to_name: time
@@ -87767,6 +89621,29 @@ code_references:
   - from: internal/ghbridge/transport.go:Principal.String
     to_name: fmt
     file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_id: internal/ghbridge/transport.go:Principal~type
+    to_name: Principal
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_id: internal/ghbridge/transport.go:Principal.UserID
+    to_name: Principal.UserID
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: Sprintf
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: ToLower
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: TrimSpace
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: fmt
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:Principal.authenticatedAs
+    to_name: strings
+    file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:PublishRequest
     to_id: internal/ghbridge/apiclient.go:AppClient.Configured
     to_name: AppClient.Configured
@@ -87840,6 +89717,66 @@ code_references:
   - from: internal/ghbridge/transport.go:PublishRequest
     to_id: internal/ghbridge/transport.go:run
     to_name: run
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Cause
+    to_name: ReviewWaitEnded.Cause
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Condition
+    to_name: ReviewWaitEnded.Condition
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Fault
+    to_name: ReviewWaitEnded.Fault
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    to_name: Sprintf
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Error
+    to_name: fmt
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_id: internal/ghbridge/transport.go:ErrNoAnswer
+    to_name: ErrNoAnswer
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_name: Is
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Condition
+    to_name: ReviewWaitEnded.Condition
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Fault
+    to_name: ReviewWaitEnded.Fault
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unanswered
+    to_name: errors
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unwrap
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unwrap
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Cause
+    to_name: ReviewWaitEnded.Cause
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unwrap
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Condition
+    to_name: ReviewWaitEnded.Condition
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:ReviewWaitEnded.Unwrap
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Fault
+    to_name: ReviewWaitEnded.Fault
     file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:Reviews
     to_name: Context
@@ -88200,14 +90137,32 @@ code_references:
     to_name: ErrNoAnswer
     file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:waitEnded
-    to_name: Errorf
-    file: internal/ghbridge/transport.go
-  - from: internal/ghbridge/transport.go:waitEnded
     to_id: internal/ghbridge/review_obligation.go:ReviewObligation~type
     to_name: ReviewObligation
     file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:waitEnded
-    to_name: fmt
+    to_id: internal/ghbridge/review_obligation.go:ReviewObligation.RequestID
+    to_name: ReviewObligation.RequestID
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:waitEnded
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded~type
+    to_name: ReviewWaitEnded
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:waitEnded
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Cause
+    to_name: ReviewWaitEnded.Cause
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:waitEnded
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Condition
+    to_name: ReviewWaitEnded.Condition
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:waitEnded
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.Fault
+    to_name: ReviewWaitEnded.Fault
+    file: internal/ghbridge/transport.go
+  - from: internal/ghbridge/transport.go:waitEnded
+    to_id: internal/ghbridge/transport.go:ReviewWaitEnded.RequestID
+    to_name: ReviewWaitEnded.RequestID
     file: internal/ghbridge/transport.go
   - from: internal/ghbridge/transport.go:waitEnded
     to_id: internal/ghbridge/review_observation.go:observationFault
@@ -90060,10 +92015,10 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -102859,10 +104814,10 @@ code_references:
     to_name: testing
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
-    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
+    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
@@ -143172,10 +145127,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -166001,11 +167956,11 @@ code_references:
     to_name: Engine.emit
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
@@ -169856,10 +171811,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -170472,10 +172427,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -171905,11 +173860,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -172304,10 +174259,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -174437,10 +176392,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -176137,11 +178092,11 @@ code_references:
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -176157,11 +178112,11 @@ code_references:
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -184258,11 +186213,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -184406,11 +186361,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -200483,11 +202438,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
