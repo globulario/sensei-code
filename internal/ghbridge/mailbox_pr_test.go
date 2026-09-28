@@ -406,6 +406,117 @@ func TestADeadlineDuringAMailboxReadStillEndsAsNoAnswerWithItsRejections(t *test
 	}
 }
 
+// W3 (R9 x GR) -- DR2: THE REVIEW DEADLINE IS ONE FACT WHEREVER IT LANDS.
+//
+// The same mailbox, waited on twice. Once the deadline lands in the wait's
+// select: one read, then a poll interval longer than the wait. Once it lands
+// INSIDE a mailbox read: the second read is held by the test-only comments-read
+// gate until the wait's own context ends, so expiry cannot land anywhere else.
+// No sleep races a timer; the gate forces the interleaving.
+//
+// Both endings must be the waiter's one typed ending -- ErrNoAnswer, wrapping
+// the deadline, carrying whatever was observed before it -- and must be the same
+// ending. With an earlier malformed reply that ending is STILL ErrNoAnswer; the
+// fault travels on it, and Unanswered is false, so the Runner does not turn a
+// reviewer who replied unusably into a review still owed.
+func TestAReviewDeadlineInsideAMailboxReadIsTheSameEndingAsInTheSelect(t *testing.T) {
+	keyPath, _ := writeTestKey(t)
+
+	wait := func(t *testing.T, withFault, insideRead bool) error {
+		t.Helper()
+		m, box := newPRMailbox(t, keyPath, "157", true)
+		if withFault {
+			m.append(map[string]any{
+				"id": float64(7301), "body": "LGTM, ship it", "created_at": "2026-09-27T12:00:00Z",
+				"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+			})
+		}
+		every := time.Hour
+		release := make(chan struct{})
+		t.Cleanup(func() { close(release) })
+		var heldUntilCanceled atomic.Bool
+		if insideRead {
+			every = 10 * time.Millisecond
+			m.onCommentsGet = func(ctx context.Context, read int32) {
+				if read < 2 {
+					return
+				}
+				select {
+				case <-ctx.Done():
+					heldUntilCanceled.Store(true)
+				case <-release:
+				}
+			}
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		_, err := AwaitReview(ctx, box, obligationC1(box), every)
+
+		reads := atomic.LoadInt32(&m.commentReads)
+		if insideRead {
+			if reads < 2 {
+				t.Fatalf("the deadline did not land inside a read: only %d read(s) were made", reads)
+			}
+			for i := 0; i < 100 && !heldUntilCanceled.Load(); i++ {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !heldUntilCanceled.Load() {
+				t.Fatal("the second read was not held until the wait's context ended")
+			}
+		} else if reads != 1 {
+			t.Fatalf("the select-path wait made %d reads, want exactly 1", reads)
+		}
+		return err
+	}
+
+	for name, withFault := range map[string]bool{"nothing observed": false, "an earlier malformed reply": true} {
+		t.Run(name, func(t *testing.T) {
+			endings := map[string]error{
+				"select":      wait(t, withFault, false),
+				"inside read": wait(t, withFault, true),
+			}
+			for path, err := range endings {
+				var ended *ReviewWaitEnded
+				if !errors.As(err, &ended) {
+					t.Fatalf("%s: err = %v, want the waiter's typed ending", path, err)
+				}
+				if ended.RequestID != "r-1" {
+					t.Errorf("%s: the ending names request %q, want r-1", path, ended.RequestID)
+				}
+				if !errors.Is(err, context.DeadlineExceeded) || ended.Cause != context.DeadlineExceeded {
+					t.Errorf("%s: the ending lost its cause: %v", path, err)
+				}
+				// ONE identity wherever the deadline landed, with or without
+				// evidence seen first.
+				if !errors.Is(err, ErrNoAnswer) {
+					t.Errorf("%s: the deadline ending is not ErrNoAnswer: %v", path, err)
+				}
+				if withFault {
+					if ended.Unanswered() {
+						t.Errorf("%s: an observed reply was reported as nobody answering: %v", path, err)
+					}
+					if ended.Fault == nil {
+						t.Errorf("%s: the ending does not carry the fault seen before the deadline", path)
+					}
+					var observed *roles.ReviewObservationFault
+					if !errors.As(err, &observed) || !observed.Has(roles.ObservedMalformed) ||
+						len(observed.Observations) != 1 || observed.Observations[0].Comment != 7301 {
+						t.Errorf("%s: the fault seen before the deadline was not carried: %v", path, err)
+					}
+				} else {
+					if !errors.Is(err, ErrNoAnswer) || !ended.Unanswered() || ended.Fault != nil {
+						t.Errorf("%s: silence did not end as ErrNoAnswer: %v", path, err)
+					}
+				}
+			}
+			// THE SAME FACT: one ending, identical wherever the deadline landed.
+			if a, b := endings["select"].Error(), endings["inside read"].Error(); a != b {
+				t.Fatalf("the deadline's ending depends on where it landed:\n select:      %s\n inside read: %s", a, b)
+			}
+		})
+	}
+}
+
 // The defect this pair exists to prevent: #157 verified as a genuine pull
 // request and the very first post returned HTTP 403, because reading a
 // conversation needs issues:read while posting into a PR conversation is

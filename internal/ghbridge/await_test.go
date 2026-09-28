@@ -77,12 +77,13 @@ func TestDefaultWaitIsFinite(t *testing.T) {
 // A REFUSAL IS TERMINAL FOR ONE EXACT REQUEST, AND ONLY ONCE.
 //
 // W6 IDEMPOTENCE. A wake can be rung twice, a consumer can retry, and the same
-// refusal can therefore appear in the conversation more than once. The first
-// valid bound copy settles the request; the later ones are inert.
+// refusal can therefore appear in the conversation more than once. Identical
+// copies are one terminal (P7); the settlement names the least locator among
+// byte-identical copies, which here is also the first.
 //
 // The sharp assertion is not that the wait ends -- one copy would prove that --
-// but that N copies produce ONE settlement, naming the first of them, with no
-// copy reported as a rejection. An implementation that treated the second copy
+// but that N copies produce ONE settlement, with no copy reported as a
+// rejection or a conflict. An implementation that treated the second copy
 // as a competing or unusable refusal would fail here rather than in production.
 func TestDuplicateRefusalsSettleARequestExactlyOnce(t *testing.T) {
 	req, refusal := architectureRefusalFixture()
@@ -193,115 +194,189 @@ func TestALegacyResponderIsUnaffectedByTheRefusalGrammar(t *testing.T) {
 	})
 }
 
-// POSITIONAL FRAMING W6 -- ORDER PRESERVED, BOTH DIRECTIONS.
+// P7 AT THE ARCHITECTURE WAIT -- MATERIALLY DIFFERENT TERMINALS CONFLICT, IN
+// BOTH DIRECTIONS, AND NO COMMENT ORDER CHOOSES BETWEEN THEM.
 //
-// THE EARLIEST VALID TERMINAL GOVERNS, and the later conflicting artifact is
-// inert. Proving one direction proves nothing: a reader that always preferred
-// refusals would pass the refusal-first case, and a reader that always preferred
-// answers -- which is what this repairs -- would pass the answer-first case.
+// This replaces POSITIONAL FRAMING W6, "the earliest valid terminal governs".
+// W6 prevented the right thing -- an answer and a refusal both being acted on,
+// which is how a refused request once returned SUCCESS -- by choosing a winner
+// by comment order. Measured 2026-09-27 (r-93f1aec046bd0217): two answers to one
+// request, and the run proceeded on whichever came first. The review wait
+// called the same shape CONFLICT. One package, two rules; P7 is one.
 //
-// THE DEFECT. The observation separated answers from refusals into two lists and
-// so discarded the order they shared, and the waiter scanned EVERY answer before
-// it looked at any refusal. A valid refusal settled the exchange, an answer
-// arrived before the next poll, and the turn returned SUCCESS on a request the
-// consumer had already refused. The reverse ordering has the same shape: a late
-// refusal must not overturn an answer that already discharged the wait.
-//
-// Order is taken from the conversation, never from the clock. The two comments
-// below carry the SAME created_at on purpose: a reader that broke the tie by
-// timestamp would settle this request differently depending on which second the
-// consumer happened to post in, and GitHub guarantees comment order rather than
-// clock separation.
-func TestTheEarliestTerminalGovernsInBothDirections(t *testing.T) {
+// Order still never comes from the clock: the comments carry the SAME
+// created_at, and now order does not decide anything either -- both orders
+// must produce the same outcome.
+func TestMateriallyDifferentArchitectureTerminalsConflictWithNoWinner(t *testing.T) {
 	req, refusal := architectureRefusalFixture()
 	refusalWire, err := refusal.Marker()
 	if err != nil {
 		t.Fatal(err)
 	}
-	const answerBody = `{"decision":"proceed","summary":"bounded","plan":"do it"}`
-	answerWire, err := ArchitectureResponse{
-		Binding: req.Binding, RequestID: req.RequestID, Body: answerBody,
-	}.Marker()
+	otherRefusal := refusal
+	otherRefusal.Reason = refusal.Reason + " -- and the base could not be read either"
+	otherRefusalWire, err := otherRefusal.Marker()
 	if err != nil {
 		t.Fatal(err)
 	}
+	answer := func(body string) string {
+		t.Helper()
+		wire, err := ArchitectureResponse{Binding: req.Binding, RequestID: req.RequestID, Body: body}.Marker()
+		if err != nil {
+			t.Fatal(err)
+		}
+		return wire
+	}
+	proceed := answer(`{"decision":"proceed","summary":"bounded","plan":"do it"}`)
+	proceedOtherPlan := answer(`{"decision":"proceed","summary":"bounded","plan":"do something else"}`)
 
-	for name, tc := range map[string]struct {
-		first, second string
-		wantRefused   bool
-	}{
-		"a refusal settles before a later answer":  {refusalWire, answerWire, true},
-		"an answer settles before a later refusal": {answerWire, refusalWire, false},
+	for name, pair := range map[string][2]string{
+		"a refusal and an answer":             {refusalWire, proceed},
+		"an answer and a refusal":             {proceed, refusalWire},
+		"two answers with different plans":    {proceed, proceedOtherPlan},
+		"two refusals with different reasons": {refusalWire, otherRefusalWire},
 	} {
 		t.Run(name, func(t *testing.T) {
 			keyPath, _ := writeTestKey(t)
 			m, box := newPRMailbox(t, keyPath, "157", true)
-			// One snapshot, both artifacts, identical timestamps.
 			const sameMoment = "2026-09-24T21:14:00Z"
 			m.append(map[string]any{
-				"id": float64(9300), "body": tc.first, "created_at": sameMoment,
+				"id": float64(9300), "body": pair[0], "created_at": sameMoment,
 				"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
 			})
 			m.append(map[string]any{
-				"id": float64(9301), "body": tc.second, "created_at": sameMoment,
+				"id": float64(9301), "body": pair[1], "created_at": sameMoment,
 				"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
 			})
-
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 
-			// BOTH are exact-bound terminals, so the fixture really does pose
-			// the ordering question rather than answering it by absence.
+			// BOTH are exact-bound terminals, so the fixture poses the question
+			// rather than answering it by absence.
 			obs, oerr := ObserveArchitecture(ctx, box, req)
 			if oerr != nil {
 				t.Fatal(oerr)
 			}
-			if len(obs.Terminals) != 2 {
-				t.Fatalf("the snapshot holds %d exact-bound terminals, want 2; the fixture "+
-					"does not pose the ordering question: %+v", len(obs.Terminals), obs.Terminals)
+			if len(obs.Terminals) != 2 || len(obs.Rejected) != 0 {
+				t.Fatalf("the snapshot holds %d terminals and %d rejections, want 2 and 0",
+					len(obs.Terminals), len(obs.Rejected))
 			}
-			settled, ok := obs.Settlement()
-			if !ok || settled.Comment != 9300 {
-				t.Fatalf("settlement is %+v, want the FIRST comment 9300", settled)
-			}
-			if settled.Refused() != tc.wantRefused {
-				t.Fatalf("the settlement is refused=%v, want %v", settled.Refused(), tc.wantRefused)
-			}
-			// The later conflicting artifact is INERT, and observable as such:
-			// still in the snapshot, not the settlement, and not a rejection.
-			if obs.Terminals[1].Comment != 9301 || obs.Terminals[1].Refused() == tc.wantRefused {
-				t.Fatalf("the later conflicting artifact is not observable as inert: %+v", obs.Terminals[1])
-			}
-			if len(obs.Rejected) != 0 {
-				t.Errorf("a later conflicting artifact was reported as unusable: %+v", obs.Rejected)
+			if settled, ok := obs.Settlement(); ok {
+				t.Fatalf("materially different terminals settled on comment %d", settled.Comment)
 			}
 
-			// AND THE WAITER AGREES. The observation deciding correctly while
-			// the waiter still scanned answers first is exactly the shape of the
-			// defect, so the decision is proved where it is acted on.
-			answer, werr := AwaitArchitecture(ctx, box, req, 10*time.Millisecond)
-			if !tc.wantRefused {
-				if werr != nil {
-					t.Fatalf("an answer that arrived first did not discharge the wait: %v", werr)
-				}
-				if answer.Body != answerBody {
-					t.Errorf("the answer body changed:\n got %q\nwant %q", answer.Body, answerBody)
-				}
-				return
-			}
+			// AND THE WAITER AGREES: no answer, no refusal, a conflict naming both.
+			got, werr := AwaitArchitecture(ctx, box, req, 10*time.Millisecond)
 			if werr == nil {
-				t.Fatalf("a request refused BEFORE the answer returned success: %+v", answer)
+				t.Fatalf("the waiter chose an answer between different terminals: %q", got.Body)
 			}
-			refused, isRefusal := werr.(*ArchitectureRefused)
-			if !isRefusal {
-				t.Fatalf("a settled refusal did not end the wait as a refusal: %v", werr)
+			if got.Body != "" {
+				t.Errorf("a conflict produced an architecture body: %q", got.Body)
 			}
-			if refused.Comment != 9300 || refused.Reason != refusal.Reason {
-				t.Errorf("the settlement is not the first refusal: %+v", refused)
+			if _, refused := werr.(*ArchitectureRefused); refused {
+				t.Fatalf("the waiter chose the refusal between different terminals: %v", werr)
 			}
-			if answer.Body != "" {
-				t.Errorf("a refused request produced an architecture body: %q", answer.Body)
+			conflict, ok := werr.(*ArchitectureConflict)
+			if !ok {
+				t.Fatalf("err = %v, want an architecture conflict", werr)
+			}
+			if len(conflict.Terminals) != 2 || conflict.Terminals[0].Comment != 9300 ||
+				conflict.Terminals[1].Comment != 9301 {
+				t.Fatalf("the conflict did not retain both terminals: %+v", conflict.Terminals)
+			}
+			if strings.Contains(werr.Error(), ErrNoArchitectureAnswer.Error()) {
+				t.Errorf("a conflict was reported as nobody answering: %v", werr)
 			}
 		})
+	}
+}
+
+// The control: exact duplicate ANSWERS are one settlement, not a conflict.
+// Duplicate refusals are TestDuplicateRefusalsSettleARequestExactlyOnce.
+func TestDuplicateArchitectureAnswersSettleOnce(t *testing.T) {
+	req, _ := architectureRefusalFixture()
+	const body = `{"decision":"proceed","summary":"bounded","plan":"do it"}`
+	wire, err := ArchitectureResponse{Binding: req.Binding, RequestID: req.RequestID, Body: body}.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath, _ := writeTestKey(t)
+	m, box := newPRMailbox(t, keyPath, "157", true)
+	for _, id := range []float64{9401, 9400} {
+		m.append(map[string]any{
+			"id": id, "body": wire,
+			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+		})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	obs, err := ObserveArchitecture(ctx, box, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(obs.Terminals) != 2 {
+		t.Fatalf("the observation found %d copies, want 2; the fixture is not exercising duplication",
+			len(obs.Terminals))
+	}
+	// Byte-identical copies: the least locator names the settlement, whatever
+	// the conversation order -- here the later-listed comment.
+	settled, ok := obs.Settlement()
+	if !ok || settled.Refused() || settled.Comment != 9400 {
+		t.Fatalf("two identical answers settled as ok=%v %+v, want one answer on comment 9400", ok, settled)
+	}
+	got, err := AwaitArchitecture(ctx, box, req, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("an answer posted twice did not discharge the wait: %v", err)
+	}
+	if got.Body != body {
+		t.Errorf("the answer body changed:\n got %q\nwant %q", got.Body, body)
+	}
+}
+
+// One principal, one identity, on the architecture side too: the same answer
+// from the same configured user id under a renamed login is ONE terminal, not a
+// conflict with itself. The control -- a different canonical principal -- cannot
+// pass the pinned principal's Matches in one mailbox, so it is proved at settle.
+func TestOneArchitectPrincipalCannotConflictWithItself(t *testing.T) {
+	req, _ := architectureRefusalFixture()
+	const body = `{"decision":"proceed","summary":"bounded","plan":"do it"}`
+	wire, err := ArchitectureResponse{Binding: req.Binding, RequestID: req.RequestID, Body: body}.Marker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyPath, _ := writeTestKey(t)
+	m, box := newPRMailbox(t, keyPath, "157", true)
+	if box.ExpectedReviewer.UserID != 1697116 {
+		t.Fatalf("the mailbox pins %v, want user id 1697116; the fixture does not pose the question",
+			box.ExpectedReviewer)
+	}
+	for id, login := range map[float64]string{9500: "davecourtois", 9501: "dave-renamed"} {
+		m.append(map[string]any{
+			"id": id, "body": wire,
+			"user": map[string]any{"login": login, "id": float64(1697116)},
+		})
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	obs, err := ObserveArchitecture(ctx, box, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(obs.Terminals) != 2 || obs.Terminals[0].Answer.Author == obs.Terminals[1].Answer.Author {
+		t.Fatalf("the fixture is not two copies under two logins: %+v", obs.Terminals)
+	}
+	if settled, ok := obs.Settlement(); !ok || settled.Comment != 9500 {
+		t.Fatalf("one principal under two logins settled as ok=%v %+v, want one answer on comment 9500", ok, settled)
+	}
+	if got, err := AwaitArchitecture(ctx, box, req, 10*time.Millisecond); err != nil || got.Body != body {
+		t.Fatalf("one principal under two logins did not discharge the wait: %q, %v", got.Body, err)
+	}
+
+	// THE CONTROL: a different canonical principal is a different terminal.
+	other := obs
+	other.Terminals = append([]ArchitectureTerminal(nil), obs.Terminals...)
+	other.Terminals[1].principal = "id:424242"
+	if settled, ok := other.Settlement(); ok {
+		t.Fatalf("two principals' answers settled on comment %d", settled.Comment)
 	}
 }

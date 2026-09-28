@@ -188,7 +188,7 @@ func TestOnlySilenceBecomesNoAnswer(t *testing.T) {
 			t.Fatal("the fixture is not empty, so it proves nothing")
 		}
 		err := waitEnded(o, &seen, context.DeadlineExceeded)
-		if !errors.Is(err, ErrNoAnswer) {
+		if !errors.Is(err, ErrNoAnswer) || !readAsSilence(err) {
 			t.Fatalf("err = %v, want ErrNoAnswer", err)
 		}
 		var observed *roles.ReviewObservationFault
@@ -208,8 +208,12 @@ func TestOnlySilenceBecomesNoAnswer(t *testing.T) {
 				t.Fatal("the fixture observed nothing, so it proves nothing")
 			}
 			err := waitEnded(o, &seen, context.DeadlineExceeded)
-			if errors.Is(err, ErrNoAnswer) {
+			if readAsSilence(err) {
 				t.Fatalf("observed evidence was reported as nobody answering: %v", err)
+			}
+			// Still the one deadline ending: no answer settled, cause kept.
+			if !errors.Is(err, ErrNoAnswer) || !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("the ending lost its identity or its cause: %v", err)
 			}
 			var observed *roles.ReviewObservationFault
 			if !errors.As(err, &observed) {
@@ -488,7 +492,12 @@ func TestTheWaiterDecidesOnDistinctAnswersNotOnOrder(t *testing.T) {
 		f := newRelayFixture(t)
 		o := obligationFrom(soleObligation(t, f.exchanges))
 		o.RequestComment = 1 // every fixture comment is posted after this locator
-		first, second := exact(t, "the first verdict"), exact(t, "the second verdict")
+		// DIFFERENT IN A MATERIAL FIELD, the decision. Two accepts differing
+		// only in summary prose are one answer since P7 (architect ruling 03);
+		// that case is TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer.
+		first := exact(t, "the first verdict")
+		second := artifactFor(t, relaySubject, relayRequest, "chatgpt",
+			`{"decision":"revise","summary":"the second verdict","instructions":"redo it","findings":[]}`)
 		if ReviewDigest(first) == ReviewDigest(second) {
 			t.Fatal("the fixtures are the same bytes, so a conflict proves nothing")
 		}
@@ -555,7 +564,7 @@ func TestTheWaiterDecidesOnDistinctAnswersNotOnOrder(t *testing.T) {
 		if !errors.As(err, &observed) || !observed.Has(roles.ObservedMalformed) {
 			t.Fatalf("err = %v, want a MALFORMED observation", err)
 		}
-		if errors.Is(err, ErrNoAnswer) {
+		if readAsSilence(err) {
 			t.Fatalf("observed evidence was reported as nobody answering: %v", err)
 		}
 	})
@@ -565,7 +574,7 @@ func TestTheWaiterDecidesOnDistinctAnswersNotOnOrder(t *testing.T) {
 		o := obligationFrom(soleObligation(t, f.exchanges))
 		o.RequestComment = 1
 		_, err := waitOn(t, f, o)
-		if !errors.Is(err, ErrNoAnswer) {
+		if !errors.Is(err, ErrNoAnswer) || !readAsSilence(err) {
 			t.Fatalf("err = %v, want ErrNoAnswer", err)
 		}
 		var observed *roles.ReviewObservationFault
@@ -573,6 +582,356 @@ func TestTheWaiterDecidesOnDistinctAnswersNotOnOrder(t *testing.T) {
 			t.Fatalf("silence was reported as an observation fault: %+v", observed)
 		}
 	})
+}
+
+// readAsSilence reports whether a wait's ending would be taken for nobody
+// answering: its typed ending says Unanswered -- the one state the Runner maps
+// to the owed review -- or an untyped error claims ErrNoAnswer. ErrNoAnswer on
+// the typed ending no longer says that alone: every deadline ending is
+// ErrNoAnswer (P7), and one carrying observed evidence is still not silence.
+func readAsSilence(err error) bool {
+	var ended *ReviewWaitEnded
+	if errors.As(err, &ended) {
+		return ended.Unanswered()
+	}
+	return errors.Is(err, ErrNoAnswer)
+}
+
+// P7 FIXTURES: one bound review payload with one finding, rendered with every
+// field a test can vary, so each material component can be changed in turn.
+type p7Review struct {
+	decision, summary, instructions string
+	findings                        []p7Finding
+}
+
+type p7Finding struct {
+	id, severity, class, claim, reference, reason, correction, proofGap string
+}
+
+func (r p7Review) payload() string {
+	b := strings.Builder{}
+	b.WriteString(`{"decision":` + jsonString(r.decision) + `,"summary":` + jsonString(r.summary) +
+		`,"instructions":` + jsonString(r.instructions) + `,"findings":[`)
+	for i, f := range r.findings {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"id":` + jsonString(f.id) + `,"severity":` + jsonString(f.severity) +
+			`,"class":` + jsonString(f.class) + `,"claim":` + jsonString(f.claim) +
+			`,"reference":` + jsonString(f.reference) + `,"reason":` + jsonString(f.reason) +
+			`,"correction":` + jsonString(f.correction) + `,"proof_gap":` + jsonString(f.proofGap) + `}`)
+	}
+	b.WriteString(`]}`)
+	return b.String()
+}
+
+func p7Base() p7Review {
+	return p7Review{decision: "revise", summary: "one defect", instructions: "repair the guard",
+		findings: []p7Finding{
+			{id: "f1", severity: "major", class: "code", claim: "the guard is unreachable",
+				reference: "internal/ghbridge/transport.go", reason: "it is checked after the write",
+				correction: "check it first"},
+			{id: "f2", severity: "minor", class: "evidence", claim: "the witness is weak",
+				reference: "internal/ghbridge/transport_test.go", reason: "it asserts a neighbour",
+				correction: "assert the property"},
+		}}
+}
+
+// boundObservation classifies a canonical review as an in-window comment from
+// the pinned principal, and fails unless it is exact-bound with a verdict the
+// consumer's reader accepts -- a material identity that fell back to the digest
+// would make every comparison below a comparison of bytes, proving nothing.
+func boundObservation(t *testing.T, o ReviewObligation, id int64, body string) observation {
+	t.Helper()
+	obs, ok := classify(o, comment(id, 1697116, "davecourtois",
+		canonicalFor(t, relaySubject, relayRequest, "chatgpt", body)))
+	if !ok || obs.kind != boundCanonical {
+		t.Fatalf("fixture %d is %s (%s), want an exact-bound review", id, obs.kind, obs.diagnostic)
+	}
+	if !strings.HasPrefix(reviewMaterial(obs), "validated|") {
+		t.Fatalf("fixture %d has no validated verdict, so its identity is only its bytes: %s", id, body)
+	}
+	return obs
+}
+
+// W1 (R11 x GR) -- DR1, THE MEASURED FAILURE.
+//
+// 2026-09-27, request r-2cd04f8649ecc3f6: two carriers posted the same ACCEPT
+// with no findings ten seconds apart, bound identically, differing only in the
+// summary's prose. The waiter compared artifact digests, called it CONFLICT,
+// and the candidate went unreviewed. Answers identical in every material field
+// are ONE answer, and which bytes are returned does not depend on which was
+// posted first.
+func TestMateriallyIdenticalBoundReviewsSettleAsOneAnswer(t *testing.T) {
+	reordered := p7Base()
+	reordered.findings[0], reordered.findings[1] = reordered.findings[1], reordered.findings[0]
+	reordered.summary = "the same defect, told in another order"
+	for name, pair := range map[string][2]string{
+		"two accepts with no findings, summaries differ": {
+			`{"decision":"accept","summary":"the ledger invariant holds","instructions":"","findings":[]}`,
+			`{"decision":"accept","summary":"LGTM -- the invariant holds at position 0","instructions":"","findings":[]}`,
+		},
+		"the same findings as a set, in another order": {p7Base().payload(), reordered.payload()},
+	} {
+		t.Run(name, func(t *testing.T) {
+			o := observedObligation()
+			a := boundObservation(t, o, 6800, pair[0])
+			b := boundObservation(t, o, 6801, pair[1])
+			if a.artifact.Digest == b.artifact.Digest {
+				t.Fatal("the fixtures are the same bytes, so this proves nothing about material identity")
+			}
+			want := a.artifact.Raw
+			if b.artifact.Raw < want {
+				want = b.artifact.Raw
+			}
+
+			// The set, in both arrival orders.
+			for _, order := range [][]observation{{a, b}, {b, a}} {
+				var seen observationSet
+				seen.addAll(order)
+				outcome, settled, conflicting := seen.settlement()
+				if outcome != settledOne || conflicting != nil {
+					t.Fatalf("two materially identical answers settled as %v with %d conflicting", outcome, len(conflicting))
+				}
+				if settled.artifact.Raw != want {
+					t.Fatalf("the representative depends on arrival order: got comment %d", settled.comment)
+				}
+			}
+
+			// And the waiter, end to end, in both posting orders: ONE answer,
+			// the same exact bytes, and -- the absence -- no CONFLICT.
+			for i, bodies := range [][2]string{{a.artifact.Raw, b.artifact.Raw}, {b.artifact.Raw, a.artifact.Raw}} {
+				f := newRelayFixture(t)
+				ob := obligationFrom(soleObligation(t, f.exchanges))
+				ob.RequestComment = 1
+				f.mailbox.add(bodies[0], "davecourtois", 1697116)
+				f.mailbox.add(bodies[1], "davecourtois", 1697116)
+				res, err := waitOn(t, f, ob)
+				var observed *roles.ReviewObservationFault
+				if errors.As(err, &observed) {
+					t.Fatalf("order %d: materially identical answers were reported as %v", i, observed.Kinds())
+				}
+				if err != nil {
+					t.Fatalf("order %d: one material answer did not settle: %v", i, err)
+				}
+				if res.Artifact.Raw != want {
+					t.Fatalf("order %d: settled on %s, want the deterministic representative %s",
+						i, res.Artifact.Digest, ReviewDigest(want))
+				}
+			}
+		})
+	}
+}
+
+// W2 (R11 x GR, CONTROL) -- conflict stays correct when any MATERIAL field
+// differs, and keeps every observation with no winner.
+//
+// Each row changes ONE material component of an otherwise identical answer.
+// The verdict rows go through classify, the waiter and the mailbox; the binding
+// and principal rows cannot both be exact-bound to one obligation, so they are
+// changed on the observation itself and proved at settle, which is the only
+// place the identity is read.
+func TestMateriallyDifferentBoundReviewsConflictWithBothRetained(t *testing.T) {
+	o := observedObligation()
+	base := boundObservation(t, o, 6900, p7Base().payload())
+
+	verdict := map[string]func(r *p7Review){
+		"decision":           func(r *p7Review) { r.decision = "escalate" },
+		"instructions":       func(r *p7Review) { r.instructions = "repair the guard and its witness" },
+		"a finding added":    func(r *p7Review) { r.findings = append(r.findings, r.findings[1]); r.findings[2].id = "f3" },
+		"a finding removed":  func(r *p7Review) { r.findings = r.findings[:1] },
+		"finding id":         func(r *p7Review) { r.findings[0].id = "f9" },
+		"finding severity":   func(r *p7Review) { r.findings[0].severity = "blocking" },
+		"finding class":      func(r *p7Review) { r.findings[0].class = "scope" },
+		"finding claim":      func(r *p7Review) { r.findings[0].claim = "the guard is misplaced" },
+		"finding reference":  func(r *p7Review) { r.findings[0].reference = "internal/ghbridge/runner.go" },
+		"finding reason":     func(r *p7Review) { r.findings[0].reason = "it is checked twice" },
+		"finding correction": func(r *p7Review) { r.findings[0].correction = "check it once" },
+		"finding proof gap":  func(r *p7Review) { r.findings[0].proofGap = "no witness forces the order" },
+	}
+	for name, mutate := range verdict {
+		t.Run(name, func(t *testing.T) {
+			r := p7Base()
+			mutate(&r)
+			rival := boundObservation(t, o, 6901, r.payload())
+			if reviewMaterial(rival) == reviewMaterial(base) {
+				t.Fatalf("changing the %s did not change the material identity", name)
+			}
+			assertP7Conflict(t, base, rival)
+
+			// The waiter agrees, in both posting orders.
+			for i, bodies := range [][2]string{{base.artifact.Raw, rival.artifact.Raw}, {rival.artifact.Raw, base.artifact.Raw}} {
+				f := newRelayFixture(t)
+				ob := obligationFrom(soleObligation(t, f.exchanges))
+				ob.RequestComment = 1
+				f.mailbox.add(bodies[0], "davecourtois", 1697116)
+				f.mailbox.add(bodies[1], "davecourtois", 1697116)
+				res, err := waitOn(t, f, ob)
+				if err == nil {
+					t.Fatalf("order %d: the waiter chose %s between materially different answers", i, res.Artifact.Digest)
+				}
+				var observed *roles.ReviewObservationFault
+				if !errors.As(err, &observed) || !observed.Has(roles.ObservedConflict) {
+					t.Fatalf("order %d: err = %v, want a CONFLICT", i, err)
+				}
+				if len(observed.Observations) != 2 {
+					t.Fatalf("order %d: the conflict kept %d observations, want both", i, len(observed.Observations))
+				}
+			}
+		})
+	}
+
+	identity := map[string]func(a *reviewartifact.Artifact, obs *observation){
+		"request":           func(a *reviewartifact.Artifact, _ *observation) { a.RequestID = "r-ffffffffffffffff" },
+		"reviewer provider": func(a *reviewartifact.Artifact, _ *observation) { a.ReviewerProvider = "gemini" },
+		"task":              func(a *reviewartifact.Artifact, _ *observation) { a.TaskID = "T-other" },
+		"base":              func(a *reviewartifact.Artifact, _ *observation) { a.BaseSHA = strings.Repeat("b", 40) },
+		"candidate digest": func(a *reviewartifact.Artifact, _ *observation) {
+			a.CandidateDigest = "sha256:" + strings.Repeat("0", 64)
+		},
+		"candidate tree": func(a *reviewartifact.Artifact, _ *observation) { a.CandidateTree = strings.Repeat("d", 40) },
+		"review commit":  func(a *reviewartifact.Artifact, _ *observation) { a.ReviewCommit = strings.Repeat("e", 40) },
+		// A different canonical principal cannot pass the pinned principal's
+		// Matches in one wait, so it is set on the observation and proved at
+		// settle. A display login beside the same id is not a principal; see
+		// TestOneReviewerPrincipalCannotConflictWithItself.
+		"principal": func(_ *reviewartifact.Artifact, obs *observation) { obs.principal = "id:424242" },
+	}
+	for name, mutate := range identity {
+		t.Run(name, func(t *testing.T) {
+			rival := base
+			rival.comment = 6902
+			art := *base.artifact
+			mutate(&art, &rival)
+			rival.artifact = &art
+			if !strings.HasPrefix(reviewMaterial(rival), "validated|") {
+				t.Fatalf("the rival's verdict no longer validates, so this compares bytes: %+v", art)
+			}
+			if reviewMaterial(rival) == reviewMaterial(base) {
+				t.Fatalf("changing the %s did not change the material identity", name)
+			}
+			assertP7Conflict(t, base, rival)
+		})
+	}
+}
+
+// The findings are a SET: one finding raised twice is the same set as that
+// finding raised once, so the two answers are one answer. Order and repetition
+// are not what the reviewer decided; every field of each distinct finding is,
+// so a repeat that differs in any field is a different finding and conflicts.
+func TestARepeatedIdenticalFindingIsTheSameFindingsSet(t *testing.T) {
+	o := observedObligation()
+	once := boundObservation(t, o, 7100, p7Base().payload())
+
+	repeated := p7Base()
+	repeated.findings = append(repeated.findings, repeated.findings[0], repeated.findings[1], repeated.findings[0])
+	twice := boundObservation(t, o, 7101, repeated.payload())
+	if once.artifact.Digest == twice.artifact.Digest {
+		t.Fatal("the fixtures are the same bytes, so this proves nothing about the findings set")
+	}
+	for _, order := range [][]observation{{once, twice}, {twice, once}} {
+		var seen observationSet
+		seen.addAll(order)
+		outcome, _, conflicting := seen.settlement()
+		if outcome != settledOne || conflicting != nil {
+			t.Fatalf("a repeated identical finding settled as %v with %d conflicting, want one answer",
+				outcome, len(conflicting))
+		}
+	}
+
+	// THE CONTROL: the repeat differs in one field, so it is a distinct finding.
+	variant := p7Base()
+	extra := variant.findings[0]
+	extra.claim = "the guard is misplaced"
+	variant.findings = append(variant.findings, extra)
+	assertP7Conflict(t, once, boundObservation(t, o, 7102, variant.payload()))
+}
+
+// ONE principal, one identity. With a configured user id, authentication is
+// by that id and the login is display metadata a rename changes -- so the same
+// answer from the same id under another login is the same answer, not a
+// CONFLICT with itself. Only the login-only fallback is identified by its
+// login, compared as Matches compares it.
+func TestOneReviewerPrincipalCannotConflictWithItself(t *testing.T) {
+	reviews := [2]string{
+		`{"decision":"accept","summary":"the ledger invariant holds","instructions":"","findings":[]}`,
+		`{"decision":"accept","summary":"LGTM -- the invariant holds","instructions":"","findings":[]}`,
+	}
+	for name, tc := range map[string]struct {
+		pinned Principal
+		logins [2]string
+	}{
+		"the same user id under a renamed login": {Principal{UserID: 1697116, Login: "davecourtois"},
+			[2]string{"davecourtois", "dave-renamed"}},
+		"the login-only fallback, as Matches folds it": {Principal{Login: "davecourtois"},
+			[2]string{"davecourtois", " DaveCourtois "}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			o := observedObligation()
+			o.ExpectedReviewer = tc.pinned
+			var bound [2]observation
+			for i := range bound {
+				c := comment(7200+int64(i), 1697116, tc.logins[i],
+					canonicalFor(t, relaySubject, relayRequest, "chatgpt", reviews[i]))
+				if !o.ExpectedReviewer.Matches(c.User.ID, c.User.Login) {
+					t.Fatalf("comment %d does not authenticate, so it cannot reach settlement", c.ID)
+				}
+				obs, ok := classify(o, c)
+				if !ok || obs.kind != boundCanonical {
+					t.Fatalf("comment %d is %s (%s), want an exact-bound review", c.ID, obs.kind, obs.diagnostic)
+				}
+				bound[i] = obs
+			}
+			if bound[0].author == bound[1].author {
+				t.Fatal("the fixture's logins are identical, so this proves nothing about display names")
+			}
+			for _, order := range [][]observation{{bound[0], bound[1]}, {bound[1], bound[0]}} {
+				var seen observationSet
+				seen.addAll(order)
+				outcome, _, conflicting := seen.settlement()
+				if outcome != settledOne || conflicting != nil {
+					t.Fatalf("one principal's identical answers settled as %v with %d conflicting",
+						outcome, len(conflicting))
+				}
+			}
+		})
+	}
+
+	// And the waiter, end to end: the same id, two logins, ONE answer and no
+	// CONFLICT.
+	f := newRelayFixture(t)
+	ob := obligationFrom(soleObligation(t, f.exchanges))
+	ob.RequestComment = 1
+	f.mailbox.add(canonicalFor(t, relaySubject, ob.RequestID, "chatgpt", reviews[0]), "davecourtois", 1697116)
+	f.mailbox.add(canonicalFor(t, relaySubject, ob.RequestID, "chatgpt", reviews[1]), "dave-renamed", 1697116)
+	if _, err := waitOn(t, f, ob); err != nil {
+		t.Fatalf("one principal under two logins did not settle as one answer: %v", err)
+	}
+}
+
+// assertP7Conflict settles two observations in both orders and requires a
+// conflict that retains both, with no winner.
+func assertP7Conflict(t *testing.T, a, b observation) {
+	t.Helper()
+	for _, order := range [][]observation{{a, b}, {b, a}} {
+		var seen observationSet
+		seen.addAll(order)
+		outcome, settled, conflicting := seen.settlement()
+		if outcome != settledConflict {
+			t.Fatalf("materially different answers settled as %v on comment %d", outcome, settled.comment)
+		}
+		if settled.artifact != nil {
+			t.Fatalf("a conflict named a winner: comment %d", settled.comment)
+		}
+		if len(conflicting) != 2 {
+			t.Fatalf("the conflict retained %d observations, want both", len(conflicting))
+		}
+		fault := observationFault(observedObligation(), conflictFrom(conflicting))
+		if !fault.Has(roles.ObservedConflict) || len(fault.Observations) != 2 {
+			t.Fatalf("the conflict fault is %v with %d observations, want CONFLICT with both",
+				fault.Kinds(), len(fault.Observations))
+		}
+	}
 }
 
 // A protocol object is recognised by BEING one, not by mentioning one.
@@ -655,7 +1014,7 @@ func TestOnlyATopLevelProtocolObjectIsExcluded(t *testing.T) {
 			var seen observationSet
 			seen.add(obs)
 			err := waitEnded(o, &seen, context.DeadlineExceeded)
-			if errors.Is(err, ErrNoAnswer) {
+			if readAsSilence(err) {
 				t.Fatalf("it decayed into no-answer: %v", err)
 			}
 			var observed *roles.ReviewObservationFault
@@ -1019,7 +1378,7 @@ func TestAMalformedReviewIsStillReportedWithItsFullForensics(t *testing.T) {
 	if !errors.As(err, &observed) {
 		t.Fatalf("err = %v, want an observation fault", err)
 	}
-	if errors.Is(err, ErrNoAnswer) {
+	if readAsSilence(err) {
 		t.Fatalf("observed evidence was reported as nobody answering: %v", err)
 	}
 	if len(observed.Observations) != 1 {
