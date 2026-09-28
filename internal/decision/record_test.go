@@ -73,13 +73,17 @@ func TestAuthorityProvenanceNamesTheRealOwner(t *testing.T) {
 }
 
 func TestArgsNeverRebuildTheGraph(t *testing.T) {
-	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, RepoRoot: "/repo",
+	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, WriteRoot: "/repo/.sensei-code/decisions/task-1",
 		Authority: Authority{Owner: Architectural}}
 	args := strings.Join(r.Args(), " ")
 	if !strings.Contains(args, "--no-rebuild") {
 		t.Fatal("decision recording must not republish the graph")
 	}
-	for _, want := range []string{"--kind decision", "--related-invariant inv.one", "--target-repo /repo"} {
+	// The write root is owned, ignored state: staging it is never attempted.
+	if !strings.Contains(args, "--no-stage") {
+		t.Fatal("decision recording must not stage anything")
+	}
+	for _, want := range []string{"--kind decision", "--related-invariant inv.one", "--target-repo /repo/.sensei-code/decisions/task-1"} {
 		if !strings.Contains(args, want) {
 			t.Fatalf("args missing %q: %s", want, args)
 		}

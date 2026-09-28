@@ -1617,15 +1617,22 @@ func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskCont
 		Invariants:   tc.Invariants,
 		Repo:         tc.Domain,
 		Domain:       tc.Domain,
-		RepoRoot:     e.Repo.Root,
+		// Written beneath task-owned state, not the canonical checkout: the
+		// run must leave the human's tracked state as it found it, and the
+		// reviewed candidate tree is already final.
+		WriteRoot: decision.OwnedRoot(e.Repo.Root, taskID),
 	}
 	if strings.TrimSpace(record.Title) == "" {
 		record.Title = tc.Task
 	}
 	err := decision.Write(ctx, record)
 	if err == nil {
+		// The location is the promotion step's only way to the record, so the
+		// event names it.
+		pending := decision.Pending(record.WriteRoot)
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
-			"architectural decision recorded for review: "+record.Title, nil))
+			"architectural decision recorded for review: "+record.Title+" (pending promotion at "+pending+")",
+			map[string]string{"pending": pending}))
 		return
 	}
 	// Not recording is a gap in the shared memory, so it is said out loud

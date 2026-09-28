@@ -11,7 +11,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -84,9 +86,28 @@ type Record struct {
 	SourceFiles  []string
 	Invariants   []string
 	Failures     []string
-	Repo         string
-	Domain       string
-	RepoRoot     string
+	// Repo and Domain are the provenance: the repository the decision is about.
+	Repo   string
+	Domain string
+	// WriteRoot is only where the pending entry is physically appended. It is
+	// deliberately not the canonical checkout: see OwnedRoot.
+	WriteRoot string
+}
+
+// OwnedRoot is the task-owned governance root a decision is written beneath:
+// <repo>/.sensei-code/decisions/<task>. The canonical checkout is the human's
+// working state, and a decision appended to its tracked corpus left every
+// accepted run with a staged decisions.yaml there. The location is derived from
+// the task identity alone, so the promotion step can find it again without any
+// session state.
+func OwnedRoot(repoRoot, taskID string) string {
+	return filepath.Join(repoRoot, ".sensei-code", "decisions", filepath.Base(taskID))
+}
+
+// Pending is the file Sensei appends the entry to beneath a write root, and so
+// the file the human promotion step reads to carry it into the corpus.
+func Pending(writeRoot string) string {
+	return filepath.Join(writeRoot, "docs", "awareness", "architecture", "decisions.yaml")
 }
 
 // ErrNotLinked reports a decision that Sensei would refuse. Sensei enforces
@@ -136,6 +157,9 @@ func (r Record) Args() []string {
 		// graph and rotate its marker, staling every other repository that
 		// shares the store; promotion stays a deliberate human step.
 		"--no-rebuild",
+		// The write root is workflow-owned and ignored, never tracked, so there
+		// is nothing to stage and staging must not be attempted.
+		"--no-stage",
 	}
 	if c := strings.TrimSpace(r.Authority.Describe()); c != "" {
 		args = append(args, "--context", c)
@@ -164,7 +188,7 @@ func (r Record) Args() []string {
 	if r.Domain != "" {
 		args = append(args, "--domain", r.Domain)
 	}
-	args = append(args, "--target-repo", r.RepoRoot)
+	args = append(args, "--target-repo", r.WriteRoot)
 	return args
 }
 
@@ -185,12 +209,20 @@ func Write(ctx context.Context, r Record) error {
 	if err := r.Validate(); err != nil {
 		return err
 	}
+	// An empty root would let Sensei fall back to its default target, which is
+	// a repository this record does not belong in.
+	if strings.TrimSpace(r.WriteRoot) == "" {
+		return errors.New("decision has no write root, so it was not recorded")
+	}
 	path, err := exec.LookPath("sensei")
 	if err != nil {
 		return ErrUnavailable
 	}
+	if err := os.MkdirAll(r.WriteRoot, 0o755); err != nil {
+		return fmt.Errorf("decision write root: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, path, r.Args()...)
-	cmd.Dir = r.RepoRoot
+	cmd.Dir = r.WriteRoot
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sensei refused the decision record: %s", strings.TrimSpace(string(out)))

@@ -179,3 +179,105 @@ func TestObservationSurvivesTheCancellationThatTriggeredIt(t *testing.T) {
 		t.Fatal("work in a stopped run's candidate is not seen")
 	}
 }
+
+// R15b W1, W2 and W4. An accepted run used to append its architectural decision
+// to the canonical checkout's docs/awareness/architecture/decisions.yaml and
+// stage it, so every accepted run left the human's checkout dirty and #216's
+// truthful DIRTY_CANONICAL refusal then refused the task's own resume.
+//
+// decision.Write execs `sensei` from PATH, so the stand-in goes on PATH (the
+// confinementRepo stand-in uses SENSEI_BIN, which this writer does not read).
+// It behaves as the real propose does: it appends beneath --target-repo and
+// stages what it wrote unless told --no-stage. The real command was
+// characterized writing to a non-git target and to an ignored directory with
+// --no-stage before this was written.
+func TestAnAcceptedDecisionLeavesTheCanonicalCheckoutClean(t *testing.T) {
+	ctx := context.Background()
+	dir, base := newRepo(t)
+	// The committed .gitignore states .sensei-code/ is not source; the fixture
+	// states it where a fixture can without committing a file.
+	if err := os.WriteFile(filepath.Join(dir, ".git", "info", "exclude"), []byte("/.sensei-code/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := t.TempDir()
+	script := "#!/bin/sh\ntarget=\"\"; title=\"\"; stage=1\n" +
+		"while [ $# -gt 0 ]; do case \"$1\" in --target-repo) target=\"$2\"; shift;; --title) title=\"$2\"; shift;; --no-stage) stage=0;; esac; shift; done\n" +
+		"[ -n \"$target\" ] || exit 2\n" +
+		"f=\"$target/docs/awareness/architecture/decisions.yaml\"\n" +
+		"mkdir -p \"$(dirname \"$f\")\"\n" +
+		"[ -f \"$f\" ] || echo decisions: > \"$f\"\n" +
+		"printf '  - title: %s\\n' \"$title\" >> \"$f\"\n" +
+		"if [ $stage = 1 ]; then git -C \"$target\" add \"$f\" || exit 1; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "sensei"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	e := recordingEngine(t)
+	e.Repo.Root = dir
+	events, done := collect(t, e.Bus)
+	defer done()
+	// The task holds a candidate identity, so #216's resume precondition reads
+	// this checkout exactly as it would for the task's own resume.
+	id := candidateIdentityFor(base)
+	id.TaskID = "task-7"
+	if err := id.Save(dir); err != nil {
+		t.Fatal(err)
+	}
+	status := func() string {
+		t.Helper()
+		out, err := exec.Command("git", "-C", dir, "status", "--porcelain").CombinedOutput()
+		if err != nil {
+			t.Fatalf("git status: %v\n%s", err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if s := status(); s != "" {
+		t.Fatalf("the fixture is not a clean canonical checkout: %s", s)
+	}
+
+	tc := &taskContext{Task: "confine the decision", Rationale: "decision under owned state",
+		Invariants: []string{"inv.one"}, Domain: "example.com/x"}
+	e.recordDecision(ctx, "task-7", tc, certifiedStart{}, []string{"a.txt"})
+
+	// W1: nothing tracked, staged or untracked appeared in the canonical checkout...
+	if s := status(); s != "" {
+		t.Fatalf("recording the decision modified the canonical checkout:\n%s", s)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "docs")); !os.IsNotExist(err) {
+		t.Fatalf("the decision was written into the canonical corpus: %v", err)
+	}
+	// ...so the task's own resume is not refused for a dirt its acceptance made.
+	if err := e.resumePrecondition(ctx, "task-7"); err != nil {
+		t.Fatalf("the task's own accepted decision trips its resume precondition: %v", err)
+	}
+
+	// W1 and W2: the record exists at the deterministic task-owned location,
+	// and the event the promotion step reads names that location.
+	pending := filepath.Join(dir, ".sensei-code", "decisions", "task-7", "docs", "awareness", "architecture", "decisions.yaml")
+	var announced bool
+	for _, ev := range events() {
+		if ev.Kind != "decision.recorded" {
+			continue
+		}
+		if !strings.Contains(ev.Summary, pending) || !strings.Contains(string(ev.Payload), pending) {
+			t.Fatalf("the decision event does not name the pending location %s: %q %s", pending, ev.Summary, ev.Payload)
+		}
+		announced = true
+	}
+	if !announced {
+		t.Fatal("no decision event was emitted, so the promotion step has nothing to follow")
+	}
+	body, err := os.ReadFile(pending)
+	if err != nil || !strings.Contains(string(body), "decision under owned state") {
+		t.Fatalf("the promotion step cannot find the record at %s (err=%v): %s", pending, err, body)
+	}
+
+	// W4 control: a genuinely dirty checkout is still refused as #216 refuses it.
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("base\nhuman edit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := e.resumePrecondition(ctx, "task-7").(*candidate.ErrDirtyCanonical); !ok {
+		t.Fatal("a dirty canonical checkout was not refused with DIRTY_CANONICAL")
+	}
+}
