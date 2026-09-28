@@ -179,3 +179,110 @@ func TestObservationSurvivesTheCancellationThatTriggeredIt(t *testing.T) {
 		t.Fatal("work in a stopped run's candidate is not seen")
 	}
 }
+
+// R15b W1 + W2. The accept path's decision recording, driven against a clean
+// canonical git repository with a fake `sensei` on PATH (the exec pattern of
+// derivedAnchorNaming, placed on PATH because decision.Write resolves the
+// binary by name). The fake behaves like `sensei propose`: it appends under
+// --target-repo's docs/awareness/ and stages the file unless --no-stage is
+// given. The only ignore rule in play is the repository's own .sensei-code/
+// entry, committed as the real .gitignore commits it; the cleanliness read is
+// plain `git status --porcelain`.
+//
+// W1 is an absence: the canonical tracked status is exactly what it was, and
+// the record exists at the task-owned location. W2 is its reader: the human
+// promotion step is told where the pending record is by the DecisionRecorded
+// summary, and the record is found at that path.
+func TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks(t *testing.T) {
+	dir, _ := newRepo(t)
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", args...)
+		cmd.Dir = dir
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+		return string(out)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".sensei-code/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git("add", ".gitignore")
+	git("commit", "-qm", "ignore owned state")
+
+	bin := t.TempDir()
+	fake := `#!/bin/sh
+target=""; title=""; stage=1
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --target-repo) target="$2"; shift ;;
+    --title) title="$2"; shift ;;
+    --no-stage) stage=0 ;;
+  esac
+  shift
+done
+f="$target/docs/awareness/architecture/decisions.yaml"
+mkdir -p "$(dirname "$f")" || exit 1
+printf 'decisions:\n  - title: %s\n' "$title" >> "$f" || exit 1
+if [ "$stage" = 1 ]; then git -C "$target" add -f "$f" || exit 1; fi
+`
+	if err := os.WriteFile(filepath.Join(bin, "sensei"), []byte(fake), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	e := recordingEngine(t)
+	e.Repo.Root = dir
+	read, done := collect(t, e.Bus)
+	defer done()
+
+	ctx := context.Background()
+	before := git("status", "--porcelain")
+	if clean, err := e.Repo.IsClean(ctx); err != nil || !clean || before != "" {
+		t.Fatalf("specimen is not a clean canonical checkout: clean=%v err=%v status=%q", clean, err, before)
+	}
+
+	const title = "record the owned decision"
+	e.recordDecision(ctx, "task-r15b", &taskContext{
+		Task: "the task", Rationale: title, Invariants: []string{"inv.one"}, Domain: "github.com/x/y",
+	}, certifiedStart{}, []string{"a.txt"})
+
+	// W1: the canonical tracked status is unchanged -- nothing staged,
+	// modified or untracked.
+	if after := git("status", "--porcelain"); after != before {
+		t.Fatalf("recording the decision changed the canonical checkout:\n%s", after)
+	}
+	if clean, err := e.Repo.IsClean(ctx); err != nil || !clean {
+		t.Fatalf("the canonical checkout is not clean after the decision: clean=%v err=%v", clean, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "docs", "awareness")); !os.IsNotExist(err) {
+		t.Fatalf("the decision reached the canonical docs/awareness/: %v", err)
+	}
+	owned := filepath.Join(dir, ".sensei-code", "decisions", "task-r15b", "docs", "awareness", "architecture", "decisions.yaml")
+	if body, err := os.ReadFile(owned); err != nil || !strings.Contains(string(body), title) {
+		t.Fatalf("the decision is not at its owned location %s: %v %q", owned, err, body)
+	}
+
+	// W2: the promotion step reads the location the recorded event names.
+	var summary string
+	for _, ev := range read() {
+		if strings.HasPrefix(ev.Summary, "architectural decision recorded for review:") {
+			summary = ev.Summary
+		}
+	}
+	const marker = "pending promotion at "
+	i := strings.Index(summary, marker)
+	if i < 0 || !strings.HasSuffix(summary, ")") {
+		t.Fatalf("the recorded decision does not name where it is pending: %q", summary)
+	}
+	named := summary[i+len(marker) : len(summary)-1]
+	if named != owned {
+		t.Fatalf("promotion is pointed at %s, the record is at %s", named, owned)
+	}
+	if body, err := os.ReadFile(named); err != nil || !strings.Contains(string(body), title) {
+		t.Fatalf("the promotion step does not find the record at %s: %v %q", named, err, body)
+	}
+}

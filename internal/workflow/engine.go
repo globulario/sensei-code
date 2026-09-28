@@ -1607,6 +1607,12 @@ func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision
 // decision, so the reason this work was authorized outlives the session and any
 // agent can read it later. A decision Sensei would refuse is reported, never
 // padded with invented links to make it pass.
+//
+// The entry is written under the task's owned decision root, not the canonical
+// checkout and not the reviewed candidate: the canonical tracked status stays
+// unchanged and the published branch stays the reviewed tree. The recorded
+// event names the pending file, because that is where the human promotion step
+// finds it.
 func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskContext, start certifiedStart, changed []string) {
 	record := decision.Record{
 		Title:        strings.TrimSpace(tc.Rationale),
@@ -1617,7 +1623,7 @@ func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskCont
 		Invariants:   tc.Invariants,
 		Repo:         tc.Domain,
 		Domain:       tc.Domain,
-		RepoRoot:     e.Repo.Root,
+		WriteRoot:    decision.OwnedRoot(e.Repo.Root, taskID),
 	}
 	if strings.TrimSpace(record.Title) == "" {
 		record.Title = tc.Task
@@ -1625,7 +1631,8 @@ func (e *Engine) recordDecision(ctx context.Context, taskID string, tc *taskCont
 	err := decision.Write(ctx, record)
 	if err == nil {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSensei, event.DecisionRecorded,
-			"architectural decision recorded for review: "+record.Title, nil))
+			"architectural decision recorded for review: "+record.Title+
+				" (pending promotion at "+decision.PendingPath(record.WriteRoot)+")", nil))
 		return
 	}
 	// Not recording is a gap in the shared memory, so it is said out loud
