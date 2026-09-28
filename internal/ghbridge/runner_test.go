@@ -489,3 +489,64 @@ func TestTransportAnswersAreUnverifiedAndNeverIndependent(t *testing.T) {
 		t.Fatal("an unverified transport answer reported itself independent")
 	}
 }
+
+// W4 (R9 x GR, consumer) -- ONE READER OF THE DEADLINE FACT.
+//
+// The Runner used to accept either ErrNoAnswer or a bare
+// context.DeadlineExceeded as "unanswered": a second reader of one fact, and
+// one any transport failure carrying a deadline could satisfy. Only the
+// waiter's own typed ending for THIS request, with nothing observed, is the
+// owed-review outcome; everything else reaches the caller as itself, and a
+// caller's stop is still the caller's.
+func TestOnlyTheWaitersOwnTypedEndingIsAnOwedReview(t *testing.T) {
+	o := ReviewObligation{TaskID: "T-1", RequestID: "r-1", RequestComment: 1, Conversation: "157",
+		BaseSHA: strings.Repeat("a", 40), CandidateDigest: "sha256:" + strings.Repeat("0", 64),
+		CandidateTree: strings.Repeat("b", 40), ReviewCommit: strings.Repeat("c", 40)}
+	var seen observationSet
+	ending := waitEnded(o, &seen, context.DeadlineExceeded)
+	waited := DefaultWait
+
+	t.Run("the typed ending is the owed review", func(t *testing.T) {
+		err := reviewWaitOutcome(context.Background(), o, waited, ending)
+		var owed *roles.ReviewUnanswered
+		if !errors.As(err, &owed) || owed.RequestID != "r-1" || owed.Waited != waited {
+			t.Fatalf("err = %v, want the owed review for r-1", err)
+		}
+		if !errors.Is(err, ErrNoAnswer) || !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("the owed review lost the ending it was built from: %v", err)
+		}
+	})
+
+	var faulted observationSet
+	faulted.add(observation{kind: roles.ObservedMalformed, comment: 7, bodyDigest: bodyDigestOf("LGTM")})
+	for name, err := range map[string]error{
+		"a bare deadline":                      context.DeadlineExceeded,
+		"a transport failure carrying one":     errors.Join(errors.New("reading the review mailbox"), context.DeadlineExceeded),
+		"another request's ending":             waitEnded(ReviewObligation{RequestID: "r-2"}, &seen, context.DeadlineExceeded),
+		"an ending that observed a bad review": waitEnded(o, &faulted, context.DeadlineExceeded),
+	} {
+		t.Run(name+" is not an owed review", func(t *testing.T) {
+			got := reviewWaitOutcome(context.Background(), o, waited, err)
+			var owed *roles.ReviewUnanswered
+			if errors.As(got, &owed) || errors.Is(got, roles.ErrReviewUnanswered) {
+				t.Fatalf("%v was classified as unanswered", err)
+			}
+			if got != err {
+				t.Fatalf("the error was rewritten: got %v, want %v unchanged", got, err)
+			}
+		})
+	}
+
+	t.Run("the caller's stop stays the caller's", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		err := reviewWaitOutcome(ctx, o, waited, ending)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want the caller's cancellation", err)
+		}
+		var owed *roles.ReviewUnanswered
+		if errors.As(err, &owed) {
+			t.Fatalf("a caller's stop was reported as an owed review: %v", err)
+		}
+	})
+}
