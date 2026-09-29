@@ -807,3 +807,56 @@ func TestTheAuthorityStatementPinRejects(t *testing.T) {
 		})
 	}
 }
+
+// W6 CONTROL: a plan with no prospective declarations routes exactly as at
+// base. The new-package roles are reached only through a declaration: without
+// one, files in a directory absent at the pinned world stay uncovered, the
+// coverage is the ordinary derived coverage of the existing files alone, and
+// the route is the bounded knowledge gap it always was.
+func TestW6APlanWithNoProspectiveDeclarationsRoutesAsAtBase(t *testing.T) {
+	scoped := scopedPreflight(t, `{"status":"PREFLIGHT_STATUS_EMPTY",`+
+		`"change_risk":{"blast_radius":"BLAST_RADIUS_LOCAL","approval_gate":"APPROVAL_GATE_NONE"},`+
+		healthyAuthority+`}`)
+	planned := append([]string{libS}, newLibPlanned()...)
+	anchors := derivedAnchorNaming(t, libS)
+	world := worldOf(newPackageWorld())
+
+	grants, out := coverPlannedAtWorld(t.Context(), prospectiveWorld, planned, nil, anchors, world)
+	if len(grants) != 0 {
+		t.Fatalf("a plan with no declarations was granted: %+v", grants)
+	}
+	for _, a := range out {
+		if a.File != libS {
+			t.Fatalf("an undeclared file was covered: %+v", a)
+		}
+	}
+	// The base computation: ordinary coverage of the existing file only.
+	_, base := coverPlannedAtWorld(t.Context(), prospectiveWorld, []string{libS}, nil, anchors, world)
+	if len(out) == 0 || len(out) != len(base) {
+		t.Fatalf("coverage differs from ordinary derived coverage: %+v vs %+v", out, base)
+	}
+
+	got := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: out})
+	if !got.ClosesGap() || got.Granted() {
+		t.Fatalf("an undeclared new package did not route to the bounded knowledge gap: %+v", got)
+	}
+	// The routing the base (dacf77b) produced for this plan, written out
+	// rather than recomputed by the candidate router: the condition is base
+	// authority.go's absent-coverage condition over this preflight.
+	const baseRoute, baseCondition, baseBasis = RouteCloseGap,
+		"graph coverage is absent for the planned files: 0 direct anchor(s) over 0 indexed file(s)", BasisLacksKnowledge
+	if got.Route != baseRoute || got.Condition != baseCondition || got.Basis != baseBasis {
+		t.Fatalf("routing moved for a plan with no declarations:\n got %s %q %v\nwant %s %q %v",
+			got.Route, got.Condition, got.Basis, baseRoute, baseCondition, baseBasis)
+	}
+
+	// Contrast: the same plan with its new package declared is covered in
+	// full and no longer routes to the gap.
+	grants, declared := coverPlannedAtWorld(t.Context(), prospectiveWorld, planned, newLibDeclarations(), anchors, world)
+	if len(grants) != 3 {
+		t.Fatalf("premise: the declared package is granted, got %+v", grants)
+	}
+	if r := routeAuthorityForAction(scoped, nil, Action{Stage: StageCandidateEdit, Files: planned, DerivedCoverage: declared}); r.ClosesGap() {
+		t.Fatalf("a declared, admitted new package still routed to the gap: %+v", r)
+	}
+}
