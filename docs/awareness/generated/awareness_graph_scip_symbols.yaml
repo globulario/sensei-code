@@ -42725,6 +42725,12 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: TestTheInspectionReviewerJudgesFindingsNotADiff
     kind: function
+  - id: internal/workflow/engine_test.go:TestTheRecordedLibraryEdgeReachesCandidateInspection
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheRecordedLibraryEdgeReachesCandidateInspection
+    kind: function
   - id: internal/workflow/engine_test.go:TestTheReplanIsGivenTheScopeTheHumanAuthorised
     namespace: structural.scip
     language: go
@@ -45227,6 +45233,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: confirmedMissing
     kind: function
+  - id: internal/workflow/prospective.go:edgeFault
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: edgeFault
+    kind: function
   - id: internal/workflow/prospective.go:errNotAtWorld
     namespace: structural.scip
     language: go
@@ -45245,17 +45257,41 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: goModuleDir
     kind: function
+  - id: internal/workflow/prospective.go:goModulePath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: goModulePath
+    kind: function
   - id: internal/workflow/prospective.go:grantTracesToItsSurface
     namespace: structural.scip
     language: go
     file: internal/workflow/prospective.go
     symbol: grantTracesToItsSurface
     kind: function
+  - id: internal/workflow/prospective.go:inspectProspective
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: inspectProspective
+    kind: function
+  - id: internal/workflow/prospective.go:inspectProspectiveGrants
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: inspectProspectiveGrants
+    kind: function
   - id: internal/workflow/prospective.go:inspectProspectiveSurfaces
     namespace: structural.scip
     language: go
     file: internal/workflow/prospective.go
     symbol: inspectProspectiveSurfaces
+    kind: function
+  - id: internal/workflow/prospective.go:libraryEdge
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: libraryEdge
     kind: function
   - id: internal/workflow/prospective.go:matchGrantsToDeclarations
     namespace: structural.scip
@@ -45275,6 +45311,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: newPackageGrants
     kind: function
+  - id: internal/workflow/prospective.go:oneEdgePerCommand
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: oneEdgePerCommand
+    kind: function
   - id: internal/workflow/prospective.go:parseGoFacts
     namespace: structural.scip
     language: go
@@ -45287,6 +45329,36 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveAnchors
     kind: function
+  - id: internal/workflow/prospective.go:prospectiveEdge.Import
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveEdge.Import
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveEdge.Library
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveEdge.Library
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveEdge.Module
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveEdge.Module
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveEdge.ModuleDir
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveEdge.ModuleDir
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveEdge~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveEdge
+    kind: type
   - id: internal/workflow/prospective.go:prospectiveFacts.Imports
     namespace: structural.scip
     language: go
@@ -45322,6 +45394,12 @@ code_symbols:
     language: go
     file: internal/workflow/prospective.go
     symbol: prospectiveGrant.Covering
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveGrant.Edge
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveGrant.Edge
     kind: var
   - id: internal/workflow/prospective.go:prospectiveGrant.Facts
     namespace: structural.scip
@@ -45485,6 +45563,30 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: TestAnUnreadableFWithAReadableSReceivesNoProspectiveAuthority
     kind: function
+  - id: internal/workflow/prospective_test.go:TestCauseBW1CoveringSurfaceEligibilityIsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestCauseBW1CoveringSurfaceEligibilityIsUnchanged
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestCauseBW2ACommandImportingItsGrantedSamePlanLibraryIsGranted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestCauseBW2ACommandImportingItsGrantedSamePlanLibraryIsGranted
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestCauseBW3FalsifiersGrantNoDependentCommand
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestCauseBW3FalsifiersGrantNoDependentCommand
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestCauseBW4TheEdgeResumesOnlyIntact
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestCauseBW4TheEdgeResumesOnlyIntact
+    kind: function
   - id: internal/workflow/prospective_test.go:TestEveryAdmissibleAnchorOverTheCoveringSurfaceIsCarried
     namespace: structural.scip
     language: go
@@ -45575,6 +45677,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: TestW4NewPackageInspectionRefusesDivergence
     kind: function
+  - id: internal/workflow/prospective_test.go:answererImport
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: answererImport
+    kind: const
   - id: internal/workflow/prospective_test.go:cmdS
     namespace: structural.scip
     language: go
@@ -45587,6 +45695,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: cmdSSource
     kind: const
+  - id: internal/workflow/prospective_test.go:commandGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: commandGrant
+    kind: function
   - id: internal/workflow/prospective_test.go:createdDiff
     namespace: structural.scip
     language: go
@@ -45598,6 +45712,42 @@ code_symbols:
     language: go
     file: internal/workflow/prospective_test.go
     symbol: derivedAnchorNaming
+    kind: function
+  - id: internal/workflow/prospective_test.go:edgeCmdDeclarations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: edgeCmdDeclarations
+    kind: function
+  - id: internal/workflow/prospective_test.go:edgeCommandDiff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: edgeCommandDiff
+    kind: function
+  - id: internal/workflow/prospective_test.go:edgeDeclarations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: edgeDeclarations
+    kind: function
+  - id: internal/workflow/prospective_test.go:edgeLibraryDiff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: edgeLibraryDiff
+    kind: function
+  - id: internal/workflow/prospective_test.go:edgePlanned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: edgePlanned
+    kind: function
+  - id: internal/workflow/prospective_test.go:edgeRecordOf
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: edgeRecordOf
     kind: function
   - id: internal/workflow/prospective_test.go:gosumcheckAnchors
     namespace: structural.scip
