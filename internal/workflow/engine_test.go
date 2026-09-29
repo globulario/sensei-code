@@ -1814,3 +1814,57 @@ func TestTheArchitectPromptStatesTheNewPackageRoles(t *testing.T) {
 		t.Fatalf("the declared covering surface is not read: %+v", d.ProspectiveSurfaces)
 	}
 }
+
+// Cause B, at the engine: the one command-to-library edge is recorded with the
+// grants, restored with them, and the recorded grants -- not covering facts
+// alone -- reach candidate inspection. A restored command grant that lost its
+// edge refuses the dependent command, terminally. A plan with no prospective
+// declarations is untouched: no grant, no record needed, no inspection.
+func TestTheRecordedLibraryEdgeReachesCandidateInspection(t *testing.T) {
+	body := rawSource(t, "internal/workflow/engine.go")
+	gate := strings.Index(body, "if len(tc.Prospective) != 0 {")
+	call := strings.Index(body, "inspectProspectiveGrants(diff, tc.Prospective, e.prospectiveGrants(taskID))")
+	if gate < 0 || call < gate || strings.Contains(body[gate:call], "}") {
+		t.Fatal("candidate inspection is not handed the recorded grants inside the declaration gate")
+	}
+	if strings.Contains(body, "inspectProspectiveSurfaces(") {
+		t.Fatal("the engine still inspects candidates against covering facts alone")
+	}
+
+	decl := edgeDeclarations()
+	grants := prospectiveFor(t, edgePlanned(), decl, newPackageAnchors(), newPackageWorld())
+	e := &Engine{}
+	if err := e.restoreProspectiveGrants(edgeRecordOf(grants), decl, prospectiveWorld); err != nil {
+		t.Fatalf("the recorded edge did not restore: %v", err)
+	}
+	good := edgeLibraryDiff() + edgeCommandDiff("fmt", "os", answererImport)
+	if err := inspectProspectiveGrants(good, decl, e.prospectiveGrants("t")); err != nil {
+		t.Fatalf("the restored edge did not reach inspection: %v", err)
+	}
+
+	dropped := append([]prospectiveGrant(nil), e.prospectiveGrants("t")...)
+	for i := range dropped {
+		dropped[i].Edge = nil
+	}
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecordOf(dropped), decl, prospectiveWorld); err == nil {
+		t.Fatal("a restored command grant without its edge was resumed")
+	}
+	e.setProspectiveGrants("t", dropped)
+	err := inspectProspectiveGrants(good, decl, e.prospectiveGrants("t"))
+	if err == nil || !isProspectiveSurfaceRefutation(err) || !strings.Contains(err.Error(), answererImport) {
+		t.Fatalf("a command whose edge was dropped was not refuted terminally: %v", err)
+	}
+
+	// No prospective declarations: routing grants nothing over the same files,
+	// resume needs no record, and inspection has nothing to check.
+	none, _ := coverPlannedAtWorld(context.Background(), prospectiveWorld, edgePlanned(), nil, derivedAnchorNaming(t, libS, cmdS), worldOf(newPackageWorld()))
+	if len(none) != 0 {
+		t.Fatalf("a plan with no declarations was granted: %+v", none)
+	}
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecordOf(nil), nil, prospectiveWorld); err != nil {
+		t.Fatalf("a plan with no declarations needed a record: %v", err)
+	}
+	if err := inspectProspectiveGrants(good, nil, nil); err != nil {
+		t.Fatalf("a plan with no declarations was inspected: %v", err)
+	}
+}

@@ -142,6 +142,22 @@ type prospectiveGrant struct {
 	// go-regression-test in a newly admitted package traces through to its
 	// covering surface. Empty for every other grant.
 	Via string `json:"via,omitempty"`
+	// Edge is the one same-plan library package a go-command-package grant
+	// may import beyond its covering surface's imports. Nil for every other
+	// grant, and for a command that declared no such dependency.
+	Edge *prospectiveEdge `json:"edge,omitempty"`
+}
+
+// prospectiveEdge is a command-to-library dependency edge: the module import
+// path of a new go-library-package directory declared in the same plan, every
+// planned production create of which was granted at the same pinned world in
+// the same Go module. The module is read from that module's go.mod at the
+// world; the edge is established by those facts, never by the declaration.
+type prospectiveEdge struct {
+	Import    string `json:"import"`
+	Library   string `json:"library"`
+	Module    string `json:"module"`
+	ModuleDir string `json:"module_dir"`
 }
 
 // matchGrantsToDeclarations proves a recorded grant set is exactly the
@@ -181,6 +197,87 @@ func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospecti
 		if err := grantTracesToItsSurface(f, g, byPath); err != nil {
 			return err
 		}
+		if err := edgeFault(f, g, declared, byPath); err != nil {
+			return err
+		}
+	}
+	return oneEdgePerCommand(grants)
+}
+
+// edgeFault is the record-side form of the command-to-library rule. A grant
+// that is not a go-command-package production grant carries no edge. A
+// command grant's declared dependencies beyond its covering surface's imports
+// are exactly its edge's import, or nothing; and the edge must name a
+// same-plan go-library-package directory in the command's own module whose
+// every declared file holds a grant for its own declaration here. A command
+// grant whose edge was dropped, or whose edge disagrees with the record, is
+// refused rather than restored with its dependency unauthorized.
+func edgeFault(f string, g prospectiveGrant, declared []ProspectiveSurface, byPath map[string]prospectiveGrant) error {
+	if g.Surface.Role != roleGoCommandPackage || g.Via != "" {
+		if g.Edge != nil {
+			return fmt.Errorf("the recorded grant for %s carries a library edge, which only a command grant may", f)
+		}
+		return nil
+	}
+	role := prospectiveRoles[g.Surface.Role]
+	var novel []string
+	for _, dep := range g.Surface.Dependencies {
+		if !g.Facts.Imports[dep] && !role.novel[dep] {
+			novel = append(novel, dep)
+		}
+	}
+	if g.Edge == nil {
+		if len(novel) != 0 {
+			return fmt.Errorf("the recorded command grant for %s declares %q beyond its covering surface but records no library edge", f, novel[0])
+		}
+		return nil
+	}
+	e := *g.Edge
+	if len(novel) != 1 || novel[0] != e.Import {
+		return fmt.Errorf("the recorded library edge of %s is not its one declared dependency beyond its covering surface", f)
+	}
+	lib, cmdDir := path.Clean(e.Library), path.Dir(f)
+	if e.Library != lib || lib == cmdDir || strings.TrimSpace(e.Module) == "" || strings.TrimSpace(e.ModuleDir) == "" ||
+		!underModule(e.ModuleDir, lib) || !underModule(e.ModuleDir, cmdDir) || e.Import != e.Module+"/"+moduleRel(e.ModuleDir, lib) {
+		return fmt.Errorf("the recorded library edge of %s does not name a library package in its own module", f)
+	}
+	production := 0
+	for _, d := range declared {
+		df := path.Clean(strings.TrimSpace(d.Path))
+		if path.Dir(df) != lib {
+			continue
+		}
+		lg, ok := byPath[df]
+		if !ok || !sameSurface(lg.Surface, d) {
+			return fmt.Errorf("the recorded library edge of %s names %s, whose declared file %s holds no grant", f, lib, df)
+		}
+		switch {
+		case d.Role == roleGoLibraryPackage && lg.Via == "":
+			production++
+		case d.Role == roleGoRegressionTest:
+		default:
+			return fmt.Errorf("the recorded library edge of %s names %s, which is not a same-plan library package", f, lib)
+		}
+	}
+	if production == 0 {
+		return fmt.Errorf("the recorded library edge of %s names %s, which holds no granted library package", f, lib)
+	}
+	return nil
+}
+
+// oneEdgePerCommand refuses a command package whose grants bind more than one
+// library: a command may depend on exactly one same-plan library package.
+func oneEdgePerCommand(grants []prospectiveGrant) error {
+	libraryOf := map[string]string{}
+	for _, g := range grants {
+		if g.Edge == nil {
+			continue
+		}
+		dir := path.Dir(path.Clean(strings.TrimSpace(g.Anchor.File)))
+		if lib, ok := libraryOf[dir]; ok && lib != g.Edge.Library {
+			return fmt.Errorf("the recorded command package %s binds two library packages, %s and %s", dir, lib, g.Edge.Library)
+		}
+		libraryOf[dir] = g.Edge.Library
 	}
 	return nil
 }
@@ -366,8 +463,33 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 			break
 		}
 	}
+	// Library directories are decided first, so a command directory can bind
+	// its one library edge only to a group already granted whole. The output
+	// keeps declaration order.
+	isCommandDir := map[string]bool{}
+	for _, d := range declarations {
+		if d.Role == roleGoCommandPackage {
+			isCommandDir[path.Dir(path.Clean(strings.TrimSpace(d.Path)))] = true
+		}
+	}
+	byNewDir := map[string][]prospectiveGrant{}
+	libraries := map[string][]prospectiveGrant{}
 	for _, dir := range newDirs {
-		grants = append(grants, newPackageGrants(ctx, world, dir, planned, declarations, existing, read)...)
+		if isCommandDir[dir] {
+			continue
+		}
+		byNewDir[dir] = newPackageGrants(ctx, world, dir, planned, declarations, existing, nil, read)
+		if len(byNewDir[dir]) != 0 {
+			libraries[dir] = byNewDir[dir]
+		}
+	}
+	for _, dir := range newDirs {
+		if isCommandDir[dir] {
+			byNewDir[dir] = newPackageGrants(ctx, world, dir, planned, declarations, existing, libraries, read)
+		}
+	}
+	for _, dir := range newDirs {
+		grants = append(grants, byNewDir[dir]...)
 	}
 	return grants
 }
@@ -389,11 +511,17 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 //	    dir are children of the same existing directory named "cmd";
 //	    go-library-package: S is not package main and S's package directory
 //	    and dir lie under the same top-level directory of that module;
-//	N7. every declared dependency is in S's imports or the role allowance.
+//	N7. every declared dependency is in S's imports or the role allowance,
+//	    except that a go-command-package declaration may bind at most one
+//	    other dependency, and only as the edge libraryEdge establishes; the
+//	    command package as a whole binds at most one library.
+//
+// libraries holds the same-plan go-library-package directories already
+// granted whole at this world; it is nil when dir is itself a library.
 //
 // A go-regression-test in dir is admitted only through a production grant in
 // dir, over the same S and package: the one prospective-to-prospective step.
-func newPackageGrants(ctx context.Context, world, dir string, planned []string, declarations []ProspectiveSurface, existing []CoverageAnchor, read worldReader) []prospectiveGrant {
+func newPackageGrants(ctx context.Context, world, dir string, planned []string, declarations []ProspectiveSurface, existing []CoverageAnchor, libraries map[string][]prospectiveGrant, read worldReader) []prospectiveGrant {
 	if dir == "." || dir == ".." || strings.HasPrefix(dir, "../") || path.IsAbs(dir) {
 		return nil
 	}
@@ -513,6 +641,8 @@ func newPackageGrants(ctx context.Context, world, dir string, planned []string, 
 		}
 	}
 	// N7.
+	edges := map[string]*prospectiveEdge{}
+	var bound *prospectiveEdge
 	for _, f := range files {
 		d := declared[f]
 		if d.Package != first.Package {
@@ -522,11 +652,23 @@ func newPackageGrants(ctx context.Context, world, dir string, planned []string, 
 			return nil
 		}
 		role := prospectiveRoles[d.Role]
+		var novel []string
 		for _, dep := range d.Dependencies {
 			if !facts.Imports[dep] && !role.novel[dep] {
-				return nil
+				novel = append(novel, dep)
 			}
 		}
+		if len(novel) == 0 {
+			continue
+		}
+		if d.Role != roleGoCommandPackage || len(novel) != 1 {
+			return nil
+		}
+		edge, ok := libraryEdge(ctx, world, dir, mod, novel[0], declarations, libraries, read)
+		if !ok || (bound != nil && *bound != *edge) {
+			return nil
+		}
+		bound, edges[f] = edge, edge
 	}
 
 	grantFor := func(f, via string) prospectiveGrant {
@@ -544,7 +686,7 @@ func newPackageGrants(ctx context.Context, world, dir string, planned []string, 
 					d.Role, f, authorizedBy, shortWorldID(world), a.Describe),
 			})
 		}
-		return prospectiveGrant{Surface: d, Covering: covering, Facts: facts, Anchor: carried[0], Anchors: carried, Via: via}
+		return prospectiveGrant{Surface: d, Covering: covering, Facts: facts, Anchor: carried[0], Anchors: carried, Via: via, Edge: edges[f]}
 	}
 	var grants []prospectiveGrant
 	for _, f := range production {
@@ -573,6 +715,91 @@ func goModuleDir(ctx context.Context, world, dir string, read worldReader) (stri
 			return "", false
 		}
 	}
+}
+
+// libraryEdge establishes the one dependency a command in cmdDir may take
+// beyond its covering surface's imports: dep must be exactly the module import
+// path, read from the go.mod of the command's module mod at world, of one
+// same-plan go-library-package directory in that same module, and every
+// declared file in that directory must hold a grant issued at this world. A
+// dependency that names anything else -- another module, a package absent from
+// the plan, or a library any planned create of which was refused -- binds no
+// edge.
+func libraryEdge(ctx context.Context, world, cmdDir, mod, dep string, declarations []ProspectiveSurface, libraries map[string][]prospectiveGrant, read worldReader) (*prospectiveEdge, bool) {
+	if len(libraries) == 0 {
+		return nil, false
+	}
+	gomod := "go.mod"
+	if mod != "." {
+		gomod = mod + "/go.mod"
+	}
+	src, err := read(ctx, world, gomod)
+	if err != nil {
+		return nil, false
+	}
+	module, ok := goModulePath(src)
+	if !ok {
+		return nil, false
+	}
+	dirs := make([]string, 0, len(libraries))
+	for dir := range libraries {
+		dirs = append(dirs, dir)
+	}
+	sort.Strings(dirs)
+	for _, lib := range dirs {
+		if lib == cmdDir || !underModule(mod, lib) || dep != module+"/"+moduleRel(mod, lib) {
+			continue
+		}
+		if libMod, ok := goModuleDir(ctx, world, lib, read); !ok || libMod != mod {
+			return nil, false
+		}
+		granted := map[string]prospectiveGrant{}
+		for _, g := range libraries[lib] {
+			granted[path.Clean(g.Anchor.File)] = g
+		}
+		production := 0
+		for _, d := range declarations {
+			f := path.Clean(strings.TrimSpace(d.Path))
+			if path.Dir(f) != lib {
+				continue
+			}
+			g, ok := granted[f]
+			if !ok || !sameSurface(g.Surface, d) {
+				return nil, false // a declared create in the library was refused
+			}
+			switch {
+			case d.Role == roleGoLibraryPackage && g.Via == "":
+				production++
+			case d.Role == roleGoRegressionTest:
+			default:
+				return nil, false
+			}
+		}
+		if production == 0 {
+			return nil, false
+		}
+		return &prospectiveEdge{Import: dep, Library: lib, Module: module, ModuleDir: mod}, true
+	}
+	return nil, false
+}
+
+// goModulePath reads the module path from a go.mod's module directive.
+func goModulePath(src []byte) (string, bool) {
+	for _, line := range strings.Split(string(src), "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) != 2 || fields[0] != "module" {
+			continue
+		}
+		p := fields[1]
+		if unq, err := strconv.Unquote(p); err == nil {
+			p = unq
+		}
+		return p, p != ""
+	}
+	return "", false
 }
 
 func underModule(mod, dir string) bool {
@@ -611,6 +838,37 @@ func admissibleAgainst(d ProspectiveSurface, s prospectiveFacts, role prospectiv
 // The first mismatch is returned as an error beginning "prospective surface
 // refuted:". Nothing is reinterpreted.
 func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, facts map[string]prospectiveFacts) error {
+	return inspectProspective(diff, declarations, facts, nil)
+}
+
+// inspectProspectiveGrants is the candidate inspection against the recorded
+// grants themselves: each declaration is checked against its grant's covering
+// facts, and a command's created imports may exceed them by exactly the one
+// library edge its grant records. An edge is honored only when it still holds
+// against the declarations and the other grants (edgeFault); an absent or
+// tampered edge authorizes no import, so the command importing it is refuted.
+func inspectProspectiveGrants(diff string, declarations []ProspectiveSurface, grants []prospectiveGrant) error {
+	facts := map[string]prospectiveFacts{}
+	byPath := map[string]prospectiveGrant{}
+	for _, g := range grants {
+		f := path.Clean(strings.TrimSpace(g.Anchor.File))
+		facts[f] = g.Facts
+		byPath[f] = g
+	}
+	edges := map[string]string{}
+	if oneEdgePerCommand(grants) == nil {
+		for f, g := range byPath {
+			if g.Edge != nil && edgeFault(f, g, declarations, byPath) == nil {
+				edges[f] = g.Edge.Import
+			}
+		}
+	}
+	return inspectProspective(diff, declarations, facts, edges)
+}
+
+// inspectProspective is inspectProspectiveSurfaces with, per declared path,
+// the one recorded library edge the created file may import beyond its facts.
+func inspectProspective(diff string, declarations []ProspectiveSurface, facts map[string]prospectiveFacts, edges map[string]string) error {
 	if len(declarations) == 0 {
 		return nil
 	}
@@ -646,8 +904,8 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 		}
 		sort.Strings(imports)
 		for _, imp := range imports {
-			if !allowed[imp] && !role.novel[imp] {
-				return fmt.Errorf("prospective surface refuted: %s imports %q, which is outside the covering surface's imports and the %s allowance", f, imp, d.Role)
+			if !allowed[imp] && !role.novel[imp] && (edges[f] == "" || imp != edges[f]) {
+				return fmt.Errorf("prospective surface refuted: %s imports %q, which is outside the covering surface's imports, the %s allowance and any recorded library edge", f, imp, d.Role)
 			}
 		}
 	}
@@ -739,6 +997,9 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 				allowed[imp] = true
 			}
 		}
+		if g.Edge != nil {
+			allowed[g.Edge.Import] = true
+		}
 		imports := make([]string, 0, len(allowed))
 		for imp := range allowed {
 			imports = append(imports, imp)
@@ -767,6 +1028,9 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 			fmt.Fprintf(&b, "    package: %s (must equal the covering surface's package)\n", g.Surface.Package)
 		}
 		fmt.Fprintf(&b, "    role: %s\n", g.Surface.Role)
+		if g.Edge != nil {
+			fmt.Fprintf(&b, "    same-plan library edge: %s (the granted package %s)\n", g.Edge.Import, g.Edge.Library)
+		}
 		fmt.Fprintf(&b, "    declared dependencies: %s\n", strings.Join(g.Surface.Dependencies, ", "))
 		fmt.Fprintf(&b, "    EFFECTIVE ALLOWED IMPORTS (covering surface's imports at the pinned world + the role allowance): %s\n", strings.Join(imports, ", "))
 		fmt.Fprintf(&b, "    architectural requirements carried: %s\n", strings.Join(requirements, ", "))
