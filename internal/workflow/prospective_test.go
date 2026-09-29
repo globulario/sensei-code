@@ -920,3 +920,286 @@ func TestTheImplementorIsShownANewPackageGrant(t *testing.T) {
 		t.Fatalf("a new package was told to take the covering surface's package:\n%s", rendered)
 	}
 }
+
+// Cause B: a new command imports its own new library package. The fixtures
+// below are the Objective 48 new-package world with the command declaring that
+// one same-plan library as a dependency.
+const answererImport = "example.com/m/" + newLibDir
+
+func edgeCmdDeclarations() []ProspectiveSurface {
+	return []ProspectiveSurface{{Path: newCmdDir + "/main.go", Package: "main", Role: roleGoCommandPackage, Covering: cmdS,
+		Dependencies: []string{"fmt", "os", answererImport}}}
+}
+
+func edgePlanned() []string { return append(newLibPlanned(), newCmdDir+"/main.go") }
+
+func edgeDeclarations() []ProspectiveSurface {
+	return append(newLibDeclarations(), edgeCmdDeclarations()...)
+}
+
+func edgeRecordOf(grants []prospectiveGrant) session.Interrupted {
+	raw, _ := json.Marshal(prospectiveRecord{World: prospectiveWorld, Grants: grants})
+	return session.Interrupted{TaskID: "t", ProspectiveRecord: raw}
+}
+
+func edgeLibraryDiff() string {
+	return createdDiff(newLibDir+"/answerer.go", "package answerer\n\nimport \"strings\"\n\nvar X = strings.ToUpper\n") +
+		createdDiff(newLibDir+"/config.go", "package answerer\n\nimport \"os\"\n\nvar Y = os.Getenv\n") +
+		createdDiff(newLibDir+"/answerer_test.go", "package answerer\n\nimport \"testing\"\n\nfunc TestX(t *testing.T) {}\n")
+}
+
+func edgeCommandDiff(imports ...string) string {
+	src := "package main\n\nimport (\n"
+	for _, imp := range imports {
+		src += "\t_ " + fmt.Sprintf("%q", imp) + "\n"
+	}
+	return createdDiff(newCmdDir+"/main.go", src+")\n\nfunc main() {}\n")
+}
+
+func commandGrant(grants []prospectiveGrant) (prospectiveGrant, bool) {
+	g, ok := grantedPaths(grants)[newCmdDir+"/main.go"]
+	return g, ok
+}
+
+// W1 CONTROL for cause B: covering-surface eligibility is unchanged. Through
+// the engine's partition, with recipe-derived anchors fixed by the caller, the
+// command binds its library edge only when its own named surface carries a
+// derived anchor; declaring the edge derives nothing for an uncovered surface.
+func TestCauseBW1CoveringSurfaceEligibilityIsUnchanged(t *testing.T) {
+	world := worldOf(newPackageWorld())
+	grants, _ := coverPlannedAtWorld(context.Background(), prospectiveWorld, edgePlanned(), edgeDeclarations(), derivedAnchorNaming(t, libS, cmdS), world)
+	if g, ok := commandGrant(grants); !ok || g.Edge == nil {
+		t.Fatalf("with both surfaces derived the command was not granted its edge: %+v", grants)
+	}
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, edgePlanned(), edgeDeclarations(), derivedAnchorNaming(t, libS), world)
+	if _, ok := commandGrant(grants); ok {
+		t.Fatalf("a command whose named surface has no derived anchor was granted: %+v", grants)
+	}
+	if len(grants) != 3 {
+		t.Fatalf("the library's own eligibility changed: %+v", grants)
+	}
+	for _, a := range out {
+		if a.File == cmdS || strings.HasPrefix(a.File, newCmdDir+"/") {
+			t.Fatalf("declaring the edge produced coverage for %s: %+v", a.File, a)
+		}
+	}
+}
+
+// W2 cause B: the command declared with its covering surface's imports plus the
+// same-plan granted library is GRANTED with that one edge, and inspection
+// accepts a candidate containing exactly that import.
+func TestCauseBW2ACommandImportingItsGrantedSamePlanLibraryIsGranted(t *testing.T) {
+	decl := edgeDeclarations()
+	grants := prospectiveFor(t, edgePlanned(), decl, newPackageAnchors(), newPackageWorld())
+	if len(grants) != 4 {
+		t.Fatalf("expected four grants, got %+v", grants)
+	}
+	g, ok := commandGrant(grants)
+	want := prospectiveEdge{Import: answererImport, Library: newLibDir, Module: "example.com/m", ModuleDir: "."}
+	if !ok || g.Edge == nil || *g.Edge != want || g.Covering != cmdS {
+		t.Fatalf("the command was not granted the one library edge: %+v", g)
+	}
+	for _, lg := range grants {
+		if lg.Anchor.File != g.Anchor.File && lg.Edge != nil {
+			t.Fatalf("a non-command grant carries an edge: %+v", lg)
+		}
+	}
+	if err := matchGrantsToDeclarations(decl, grants); err != nil {
+		t.Fatalf("the issued grants do not match their declarations: %v", err)
+	}
+	// Declaration order does not decide it: a command declared before its
+	// library still binds the library once that library is granted whole.
+	if g, ok := commandGrant(prospectiveFor(t, edgePlanned(), append(edgeCmdDeclarations(), newLibDeclarations()...), newPackageAnchors(), newPackageWorld())); !ok || g.Edge == nil {
+		t.Fatalf("a command declared before its library was not granted its edge: %+v", g)
+	}
+	good := edgeLibraryDiff() + edgeCommandDiff("fmt", "os", answererImport)
+	if err := inspectProspectiveGrants(good, decl, grants); err != nil {
+		t.Fatalf("the admitted command was refused: %v", err)
+	}
+	for name, diff := range map[string]string{
+		"a second novel import": edgeLibraryDiff() + edgeCommandDiff("fmt", answererImport, "example.com/m/internal/relay"),
+		"another package only":  edgeLibraryDiff() + edgeCommandDiff("fmt", "example.com/m/internal/relay"),
+	} {
+		if err := inspectProspectiveGrants(diff, decl, grants); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+			t.Fatalf("%s was accepted: %v", name, err)
+		}
+	}
+	// Covering facts alone never carried the edge.
+	facts := map[string]prospectiveFacts{}
+	for _, g := range grants {
+		facts[g.Anchor.File] = g.Facts
+	}
+	if err := inspectProspectiveSurfaces(good, decl, facts); err == nil {
+		t.Fatal("covering facts alone authorized the library import")
+	}
+	if rendered := renderProspectiveGrants(grants); !strings.Contains(rendered, "same-plan library edge: "+answererImport) {
+		t.Fatalf("the worker is not shown the edge:\n%s", rendered)
+	}
+}
+
+// W3 ABSENCE: each falsifier yields no command grant.
+func TestCauseBW3FalsifiersGrantNoDependentCommand(t *testing.T) {
+	cmdWith := func(deps ...string) []ProspectiveSurface {
+		d := edgeCmdDeclarations()
+		d[0].Dependencies = append([]string{"fmt", "os"}, deps...)
+		return d
+	}
+	second := []ProspectiveSurface{
+		{Path: "internal/answerer2/a.go", Package: "answerer2", Role: roleGoLibraryPackage, Covering: libS, Dependencies: []string{"fmt"}},
+	}
+	refusedLib := newLibDeclarations()
+	refusedLib[1].Dependencies = append(refusedLib[1].Dependencies, "net/http")
+
+	// A library in another Go module that the command's module path would
+	// otherwise name: internal/ is its own module at the world.
+	crossWorld := newPackageWorld()
+	crossWorld["internal/go.mod"] = "module example.com/m/internal\n"
+	crossWorld["internal/sub/relay/relay.go"] = libSSource
+	crossLib := []ProspectiveSurface{{Path: "internal/sub/answerer/a.go", Package: "answerer", Role: roleGoLibraryPackage, Covering: "internal/sub/relay/relay.go", Dependencies: []string{"fmt"}}}
+	crossAnchors := append(newPackageAnchors(), CoverageAnchor{File: "internal/sub/relay/relay.go", Requirement: RequirementLockDiscipline, Describe: "x"})
+	if lib := prospectiveFor(t, []string{"internal/sub/answerer/a.go"}, crossLib, crossAnchors, crossWorld); len(lib) != 1 {
+		t.Fatalf("premise: the cross-module library is granted on its own, got %+v", lib)
+	}
+
+	cases := []struct {
+		name    string
+		planned []string
+		decl    []ProspectiveSurface
+		world   map[string]string
+		anchors []CoverageAnchor
+	}{
+		{"a package that is not in the plan", edgePlanned(), append(newLibDeclarations(), cmdWith("example.com/m/internal/relay")...), newPackageWorld(), newPackageAnchors()},
+		{"a same-plan path in another module path", edgePlanned(), append(newLibDeclarations(), cmdWith("example.com/other/"+newLibDir)...), newPackageWorld(), newPackageAnchors()},
+		{"the library is absent from the plan", []string{newCmdDir + "/main.go"}, edgeCmdDeclarations(), newPackageWorld(), newPackageAnchors()},
+		{"a planned production create of the library was refused", edgePlanned(), append(refusedLib, edgeCmdDeclarations()...), newPackageWorld(), newPackageAnchors()},
+		{"an undeclared file in the library", append(edgePlanned(), newLibDir+"/mailbox.go"), edgeDeclarations(), newPackageWorld(), newPackageAnchors()},
+		{"an undeclared file in the command", append(edgePlanned(), newCmdDir+"/extra.go"), edgeDeclarations(), newPackageWorld(), newPackageAnchors()},
+		{"a second novel import", append(edgePlanned(), "internal/answerer2/a.go"),
+			append(append(newLibDeclarations(), second...), cmdWith(answererImport, "example.com/m/internal/answerer2")...), newPackageWorld(), newPackageAnchors()},
+		{"two command files binding two libraries", append(append(edgePlanned(), "internal/answerer2/a.go"), newCmdDir+"/two.go"),
+			append(append(edgeDeclarations(), second...), ProspectiveSurface{Path: newCmdDir + "/two.go", Package: "main", Role: roleGoCommandPackage, Covering: cmdS,
+				Dependencies: []string{"example.com/m/internal/answerer2"}}), newPackageWorld(), newPackageAnchors()},
+		{"a library in another Go module", []string{"internal/sub/answerer/a.go", newCmdDir + "/main.go"},
+			append(crossLib, cmdWith("example.com/m/internal/sub/answerer")...), crossWorld, crossAnchors},
+		{"a novel import on a test in the command", append(edgePlanned(), newCmdDir+"/main_test.go"),
+			append(edgeDeclarations(), ProspectiveSurface{Path: newCmdDir + "/main_test.go", Package: "main", Role: roleGoRegressionTest, Dependencies: []string{"testing", answererImport}}),
+			newPackageWorld(), newPackageAnchors()},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			grants := prospectiveFor(t, c.planned, c.decl, c.anchors, c.world)
+			for _, g := range grants {
+				if strings.HasPrefix(g.Anchor.File, newCmdDir+"/") {
+					t.Fatalf("%s: the dependent command was granted: %+v", c.name, grants)
+				}
+			}
+		})
+	}
+	// The control: without the library edge the second case's command is
+	// granted, so the refusal above is the edge's.
+	if g, ok := commandGrant(prospectiveFor(t, edgePlanned(), append(newLibDeclarations(), cmdWith()...), newPackageAnchors(), newPackageWorld())); !ok || g.Edge != nil {
+		t.Fatalf("a command with no novel dependency was not granted plainly: %+v", g)
+	}
+}
+
+// W4 resume: the recorded edge is restored through the session record, and a
+// restored command grant whose edge is dropped or disagrees with the record is
+// refused; inspection honors no absent or tampered edge.
+func TestCauseBW4TheEdgeResumesOnlyIntact(t *testing.T) {
+	decl := edgeDeclarations()
+	grants := prospectiveFor(t, edgePlanned(), decl, newPackageAnchors(), newPackageWorld())
+	if _, ok := commandGrant(grants); !ok || len(grants) != 4 {
+		t.Fatalf("premise: four grants with the command, got %+v", grants)
+	}
+	found := session.FindInterrupted([]event.Event{
+		event.New("s", "t", event.SourceSystem, event.TaskCreated, "task", nil),
+		event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", proposedPlan{architectureDecision: architectureDecision{Plan: "p"}}),
+		event.New("s", "t", event.SourceSystem, event.ProspectiveGranted, "recorded", prospectiveRecord{World: prospectiveWorld, Grants: grants}),
+	})
+	if len(found) != 1 {
+		t.Fatalf("the record did not survive the session: %+v", found)
+	}
+	e := &Engine{}
+	if err := e.restoreProspectiveGrants(found[0], decl, prospectiveWorld); err != nil {
+		t.Fatalf("the intact record was refused: %v", err)
+	}
+	restored, ok := commandGrant(e.prospectiveGrants("t"))
+	if !ok || restored.Edge == nil || restored.Edge.Import != answererImport || restored.Edge.Library != newLibDir {
+		t.Fatalf("the edge was not restored: %+v", restored)
+	}
+	good := edgeLibraryDiff() + edgeCommandDiff("fmt", answererImport)
+	if err := inspectProspectiveGrants(good, decl, e.prospectiveGrants("t")); err != nil {
+		t.Fatalf("the restored edge did not reach inspection: %v", err)
+	}
+
+	tamper := func(f func(g *prospectiveGrant)) []prospectiveGrant {
+		out := append([]prospectiveGrant(nil), grants...)
+		for i := range out {
+			if out[i].Edge != nil {
+				edge := *out[i].Edge
+				out[i].Edge = &edge
+			}
+			f(&out[i])
+		}
+		return out
+	}
+	isCmd := func(g *prospectiveGrant) bool { return g.Anchor.File == newCmdDir+"/main.go" }
+	for name, gs := range map[string][]prospectiveGrant{
+		"edge dropped": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge = nil
+			}
+		}),
+		"edge import altered": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Import = "example.com/m/internal/relay"
+			}
+		}),
+		"edge retargeted to a package outside the plan": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Library, g.Edge.Import = "internal/relay", "example.com/m/internal/relay"
+			}
+		}),
+		"edge module altered": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Module = "example.com/other"
+			}
+		}),
+		"edge on a library grant": tamper(func(g *prospectiveGrant) {
+			if g.Anchor.File == newLibDir+"/answerer.go" {
+				g.Edge = &prospectiveEdge{Import: answererImport, Library: newLibDir, Module: "example.com/m", ModuleDir: "."}
+			}
+		}),
+		"library grant for another declaration": tamper(func(g *prospectiveGrant) {
+			if g.Anchor.File == newLibDir+"/config.go" {
+				g.Surface.Role = roleGoCommandPackage
+			}
+		}),
+	} {
+		e := &Engine{}
+		if err := e.restoreProspectiveGrants(edgeRecordOf(gs), decl, prospectiveWorld); err == nil {
+			t.Errorf("%s: resumed", name)
+		}
+		if len(e.prospectiveGrants("t")) != 0 {
+			t.Errorf("%s: a refused resume registered grants", name)
+		}
+	}
+	// A path that bypassed restore still cannot import through a dropped or
+	// tampered edge.
+	for name, gs := range map[string][]prospectiveGrant{
+		"dropped": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge = nil
+			}
+		}),
+		"retargeted": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Library = "internal/relay"
+			}
+		}),
+	} {
+		if err := inspectProspectiveGrants(good, decl, gs); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+			t.Errorf("inspection honored a %s edge: %v", name, err)
+		}
+	}
+}
