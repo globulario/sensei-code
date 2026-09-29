@@ -101,14 +101,22 @@ func CLIResolved(spec RunnerSpec, sessionID string) Resolved {
 // weaker source than these records. Deriving identity back out of prompt text
 // would recreate the class this project keeps removing: strong truth exists,
 // yet a weaker projection is consumed.
-func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
+//
+// The objective is read from the one objective record. An absent objective is
+// returned as the refusal it is, never bound as an empty text: the turn stops
+// before any resolver sees it.
+func (e *Engine) architectureBinding(taskID string) (roles.ArchitectureBinding, error) {
+	objective, err := e.objectiveRecord(taskID)
+	if err != nil {
+		return roles.ArchitectureBinding{}, err
+	}
 	graphBuild := ""
 	if graph := e.graphFor(taskID); graph != nil {
 		graphBuild = graph.Digest
 	}
 	return roles.BindArchitecture(
 		taskID,
-		e.objective(taskID).Text,
+		objective.Text,
 		e.governedBase(taskID),
 		// The graph repository is CONFIGURED, never derived. The workspace
 		// remote is a different authority domain and answering with it would
@@ -117,7 +125,7 @@ func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
 		// rather than guessing.
 		e.Config.Sensei.Repository,
 		graphBuild,
-	)
+	), nil
 }
 
 // resolveRunner returns the adapter that serves this turn.
@@ -137,7 +145,11 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	// substitute it. For a governed task, candidate.Establish has already pinned
 	// the base and bindGraph has already recorded the start gate's graph.
 	if spec.Role == roles.Architect {
-		spec.Architecture = e.architectureBinding(spec.TaskID)
+		binding, err := e.architectureBinding(spec.TaskID)
+		if err != nil {
+			return Resolved{}, fmt.Errorf("the %s turn cannot be bound to an objective: %w", spec.Role.Label(), err)
+		}
+		spec.Architecture = binding
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil

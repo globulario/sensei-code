@@ -2,6 +2,7 @@ package event
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"time"
@@ -260,6 +261,23 @@ type Event struct {
 	Kind      Kind            `json:"kind"`
 	Summary   string          `json:"summary,omitempty"`
 	Payload   json.RawMessage `json:"payload,omitempty"`
+}
+
+// ObjectiveDigest is the one rule naming an objective by its exact submitted
+// bytes. Nothing is trimmed or normalized: two objectives that render alike but
+// differ in bytes are two inputs. An absent objective produces no digest at
+// all, so a missing record cannot masquerade as the perfectly valid SHA-256 of
+// an empty string.
+//
+// It lives here, in the package every role and ingress already shares, so the
+// architecture binding and the webhook proposal store read one rule without
+// either reaching into the other's package.
+func ObjectiveDigest(objective string) string {
+	if objective == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(objective))
+	return hex.EncodeToString(sum[:])
 }
 
 func New(sessionID, taskID string, source Source, kind Kind, summary string, payload any) Event {

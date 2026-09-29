@@ -110,3 +110,32 @@ func TestApprovalAttemptIsDurableAndAtMostOnce(t *testing.T) {
 		t.Fatalf("loaded receipt: ok=%v receipt=%+v err=%v", ok, loaded, err)
 	}
 }
+
+// W4 -- ONE DIGEST RULE. A proposal names its objective by the same rule the
+// architecture binding does, so the vectors below are the ones the workflow
+// witnesses pin for roles.BindArchitecture (W16 and W2 in
+// internal/workflow/authority_resume_identity_test.go): a proposal and the
+// architect turn it becomes cannot disagree about which bytes they name.
+//
+// An empty objective has NO digest, never the perfectly valid SHA-256 of "",
+// and a non-empty one is hashed as its exact bytes, whitespace included.
+func TestW4DigestObjectiveAgreesWithTheArchitectureBindingRule(t *testing.T) {
+	if got := DigestObjective(""); got != "" {
+		t.Fatalf("an empty objective was given digest %q; the architecture binding gives it none", got)
+	}
+	for _, v := range []struct{ objective, digest string }{
+		{"restore the recorded objective across an answered authority question",
+			"5549bf4fa65d8ddc670960dc4b831d39101a1955e437e072cb6986b962b15b9d"},
+		// Leading spaces and a trailing newline are part of the objective.
+		{"  read the recorded objective, not the handed one\n",
+			"9d2364da08f00f7f0f3ea457ea5d14cd9b049730848a90731307c8e2e113a359"},
+	} {
+		if got := DigestObjective(v.objective); got != v.digest {
+			t.Errorf("DigestObjective(%q) = %s, want the exact-byte digest %s", v.objective, got, v.digest)
+		}
+	}
+	// Trimming would collapse two distinct objectives into one identity.
+	if DigestObjective(" x") == DigestObjective("x") || DigestObjective("x\n") == DigestObjective("x") {
+		t.Fatal("whitespace-distinct objectives share a digest; the bytes were normalized")
+	}
+}

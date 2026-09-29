@@ -253,3 +253,62 @@ func TestTheObjectiveLaneHasNoDownstreamWriter(t *testing.T) {
 		t.Error("the objective lane is established from something other than the objective")
 	}
 }
+
+// W5 -- CONTROL. In the process that holds the submission, a human's objective
+// survives Resume exactly: the objective record returns the held submission,
+// provenance included, and never demotes it to the durable read's resumption
+// provenance. The architect the continuation reaches is bound to the same
+// bytes.
+func TestW5AHumanObjectiveSurvivesResumeInTheSameProcess(t *testing.T) {
+	const taskID, text = "task-w5-human", "keep the human's objective as they asked it"
+	held := Objective{Text: text, Provenance: RequestedByHuman}
+	got := resumeUnplannedToArchitect(t, taskID, text, text, &held)
+	if !got.reached {
+		t.Fatalf("the resumed task never reached its architect: %q\n%s", got.ended, got.trace)
+	}
+	if o := got.engine.objective(taskID); o != held || !o.HumanAuthorized() {
+		t.Fatalf("Resume changed the held objective to %+v, want %+v", o, held)
+	}
+	if d := got.spec.Architecture.ObjectiveDigest; d == "" || d != objectiveDigestRule(text) {
+		t.Fatalf("the architect was bound to %q, not to the held objective's bytes", d)
+	}
+}
+
+// W1 -- A RESTARTED PLANNED CONTINUATION READS THE SAME OBJECTIVE IDENTITY.
+//
+// A task created in one engine is resumed through Engine.Resume in a FRESH
+// engine over the same durable session, and its implementation loop reaches
+// the architect the reviewer escalated to. That request must name the objective
+// the fresh run named, and both must be the digest of the exact bytes the human
+// submitted. At main 7ff9d85 the planned continuation recorded no objective, so
+// this request was bound to an empty digest and a GitHub architect refused it.
+func TestW1APlannedResumeReachesTheEscalationArchitectWithTheSubmittedObjective(t *testing.T) {
+	const (
+		taskID    = "task-w1-planned-resume"
+		objective = "print a number from main"
+		// sha256 of objective's exact bytes, computed outside the code under
+		// test; roles.BindArchitecture must yield this for them.
+		submitted = "55ba4e62f4144e5ea92b49709ae6b64798364cd5c3783afe05cb13e63f0e6d19"
+	)
+	fresh, resumed, second := resumedReviewerEscalation(t, taskID, objective)
+	if fresh.Architecture.ObjectiveDigest != submitted {
+		t.Fatalf("the fresh run bound %q, not the submitted objective's digest", fresh.Architecture.ObjectiveDigest)
+	}
+	if resumed.TaskID != taskID || resumed.Architecture.TaskID != taskID {
+		t.Fatalf("the escalation architect request names another task: %+v", resumed.Architecture)
+	}
+	if got := resumed.Architecture.ObjectiveDigest; got == "" {
+		t.Fatal("the resumed escalation reached its architect with no objective identity")
+	}
+	if got := resumed.Architecture.ObjectiveDigest; got != fresh.Architecture.ObjectiveDigest || got != submitted {
+		t.Fatalf("identity(resume) %q differs from identity(fresh) %q or the submitted bytes' digest %q",
+			got, fresh.Architecture.ObjectiveDigest, submitted)
+	}
+	if got := resumed.Architecture.ObjectiveDigest; got != objectiveDigestRule(objective) {
+		t.Fatalf("the resumed binding does not follow the one digest rule: %q", got)
+	}
+	// The restarted process read the record; it did not inherit the human.
+	if o := second.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
+		t.Fatalf("the restarted process projected %+v", o)
+	}
+}

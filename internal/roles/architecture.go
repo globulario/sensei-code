@@ -1,11 +1,11 @@
 package roles
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/globulario/sensei-code/internal/event"
 )
 
 // ArchitectureBinding names the exact pre-candidate question an architect is
@@ -44,19 +44,15 @@ var lowerHex64 = regexp.MustCompile(`^[0-9a-f]{64}$`)
 var repositoryPath = regexp.MustCompile(`^[0-9A-Za-z._-]+/[0-9A-Za-z._-]+$`)
 
 // BindArchitecture computes the objective identity from the exact submitted
-// bytes. It does not trim or normalize them: two objectives that render alike
-// but differ in bytes are two inputs, and a reply to one must not answer the
-// other. An absent objective produces no digest at all, so a missing workflow
-// record cannot masquerade as the perfectly valid SHA-256 of an empty string.
+// bytes, by the one rule event.ObjectiveDigest owns. It does not trim or
+// normalize them: two objectives that render alike but differ in bytes are two
+// inputs, and a reply to one must not answer the other. An absent objective
+// produces no digest at all, so a missing workflow record cannot masquerade as
+// the perfectly valid SHA-256 of an empty string.
 func BindArchitecture(taskID, objective, baseSHA, graphRepository, graphBuildCommit string) ArchitectureBinding {
-	digest := ""
-	if objective != "" {
-		sum := sha256.Sum256([]byte(objective))
-		digest = hex.EncodeToString(sum[:])
-	}
 	return ArchitectureBinding{
 		TaskID:           strings.TrimSpace(taskID),
-		ObjectiveDigest:  digest,
+		ObjectiveDigest:  event.ObjectiveDigest(objective),
 		BaseSHA:          strings.TrimSpace(baseSHA),
 		GraphRepository:  strings.TrimSpace(graphRepository),
 		GraphBuildCommit: strings.TrimSpace(graphBuildCommit),

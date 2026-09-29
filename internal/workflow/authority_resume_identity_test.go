@@ -759,9 +759,11 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-
 	task := session.Interrupted{TaskID: "task-1789848074761930104", Task: "repair the resume path"}
+	// The objective is read from the durable record, so the record is there.
+	store := durableHistory(t, event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil))
+	e := &Engine{Bus: bus, Store: store, SessionID: "s1", pending: map[string]chan string{}}
+
 	e.resumeUnplannedArchitecture(context.Background(), task)
 
 	evs := take()
@@ -783,8 +785,8 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	if !strings.Contains(owed, "architect turn") && !strings.Contains(owed, "no recorded plan") {
 		t.Fatalf("the owed turn is not named as the architect's: %q", owed)
 	}
-	// The objective is the recorded one, under the resumption's own provenance:
-	// a restarted process establishes no human.
+	// The objective is the recorded one, read from durable history under the
+	// resumption's own provenance: a restarted process establishes no human.
 	if got := e.objective(task.TaskID); got.Text != task.Task || got.Provenance != ResumedGoverned {
 		t.Fatalf("the recorded objective was not carried: %+v", got)
 	}
@@ -941,12 +943,79 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 		// sha256 of objective, computed independently of roles.BindArchitecture.
 		wantDigest = "5549bf4fa65d8ddc670960dc4b831d39101a1955e437e072cb6986b962b15b9d"
 	)
+	spec, e := resumeAnsweredAuthority(t, taskID, objective, nil)
+	got := spec.Architecture
+	if got.ObjectiveDigest == "" {
+		t.Fatalf("the first resumed architect request carries no objective identity: %+v", got)
+	}
+	if got.ObjectiveDigest != wantDigest {
+		t.Fatalf("the resumed architect request carries an objective identity not derived from the recorded bytes: %s", got.ObjectiveDigest)
+	}
+	// Restored under the resumption's own provenance: nothing here
+	// establishes that a person asked.
+	if o := e.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
+		t.Fatalf("the restored objective claims provenance it does not have: %+v", o)
+	}
+}
 
+// W2 -- THE AUTHORITY-RESUME IDENTITY IS READ FROM THE DURABLE RECORD.
+//
+// A FRESH engine, holding no objective in memory, resumes an answered question
+// and reaches its architect. The task handed to Resume is deliberately given
+// other text than the durable TaskCreated holds: a continuation that restored
+// the objective from whatever it was handed -- the path-local writer this
+// repair removed -- binds the handed bytes, and only a read of the durable
+// record binds the submitted ones.
+func TestW2AnAuthorityResumeReadsTheObjectiveFromDurableHistory(t *testing.T) {
+	const (
+		taskID    = "task-w2-authority-resume"
+		objective = "  read the recorded objective, not the handed one\n"
+		// sha256 of objective's exact bytes, leading spaces and trailing
+		// newline included; computed outside the code under test.
+		wantDigest = "9d2364da08f00f7f0f3ea457ea5d14cd9b049730848a90731307c8e2e113a359"
+	)
+	spec, e := resumeAnsweredAuthority(t, taskID, objective, func(task *session.Interrupted) {
+		task.Task = "a projection that is not the record"
+	})
+	if got := spec.Architecture.ObjectiveDigest; got != wantDigest {
+		t.Fatalf("the authority-resumed architect is bound to %q, not to the durable objective's exact bytes %q", got, wantDigest)
+	}
+	if got := spec.Architecture.ObjectiveDigest; got != event.ObjectiveDigest(objective) {
+		t.Fatalf("the binding does not follow the one digest rule: %s", got)
+	}
+	if o := e.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned {
+		t.Fatalf("the canonical record projected %+v, want the durable bytes under the resumption's provenance", o)
+	}
+}
+
+// durableHistory is a session store holding exactly the given events, as a
+// restarted process finds it.
+func durableHistory(t *testing.T, events ...event.Event) *session.Store {
+	t.Helper()
+	store := sessionStore(t)
+	for _, ev := range events {
+		if err := store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return store
+}
+
+// resumeAnsweredAuthority records objective -> deferred question in a durable
+// session, resumes the task in a FRESH engine over it, answers the question and
+// returns the first architect RunnerSpec the configured resolver receives.
+// handed, when set, alters the task as Resume is given it.
+func resumeAnsweredAuthority(t *testing.T, taskID, objective string, handed func(*session.Interrupted)) (RunnerSpec, *Engine) {
+	t.Helper()
 	// The smallest history: objective recorded -> authority deferred.
 	q := deferScoped(t, taskID, planScope())
-	history := []event.Event{
+	store := durableHistory(t,
 		event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil),
 		event.New("s1", taskID, event.SourceSystem, event.WorkflowAwaitingAuthority, q.Condition, q),
+	)
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
 	}
 	standing := session.FindInterrupted(history)
 	if len(standing) != 1 || standing[0].TaskID != taskID {
@@ -959,13 +1028,19 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 	if len(task.AwaitingAuthority) == 0 {
 		t.Fatal("the reconstructed task no longer carries its standing question")
 	}
+	if handed != nil {
+		handed(&task)
+	}
 
 	repo, _ := mintRepo(t)
 	bus := event.NewBus()
 	events, cancel := bus.Subscribe(1024)
 	defer cancel()
 	capture := architectCapture{specs: make(chan RunnerSpec, 1)}
-	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	e := &Engine{Repo: repo, Bus: bus, Store: store, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	if len(e.objectives) != 0 {
+		t.Fatal("the fresh engine already holds an objective, so recovery would not be exercised")
+	}
 	e.Config.Permissions.ReadRepository = true
 	e.Config.Sensei.Command = "sh"
 	e.Config.Sensei.Args = []string{"-c", resumeSenseiScript}
@@ -993,22 +1068,10 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 	for {
 		select {
 		case spec := <-capture.specs:
-			got := spec.Architecture
-			if spec.TaskID != taskID || got.TaskID != taskID {
-				t.Fatalf("the resumed architect request names another task: spec=%q binding=%q", spec.TaskID, got.TaskID)
+			if spec.TaskID != taskID || spec.Architecture.TaskID != taskID {
+				t.Fatalf("the resumed architect request names another task: spec=%q binding=%q", spec.TaskID, spec.Architecture.TaskID)
 			}
-			if got.ObjectiveDigest == "" {
-				t.Fatalf("the first resumed architect request carries no objective identity: %+v", got)
-			}
-			if got.ObjectiveDigest != wantDigest {
-				t.Fatalf("the resumed architect request carries an objective identity not derived from the recorded bytes: %s", got.ObjectiveDigest)
-			}
-			// Restored under the resumption's own provenance: nothing here
-			// establishes that a person asked.
-			if o := e.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
-				t.Fatalf("the restored objective claims provenance it does not have: %+v", o)
-			}
-			return
+			return spec, e
 		case ev := <-events:
 			seen = append(seen, string(ev.Kind)+": "+ev.Summary)
 			if ev.Kind == event.WorkflowFailed || ev.Kind == event.WorkflowCompleted {
@@ -1016,6 +1079,217 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 			}
 		case <-timeout:
 			t.Fatalf("no architect request reached the resolver:\n%s", strings.Join(seen, "\n"))
+		}
+	}
+}
+
+// objectiveDigestRule is the one digest rule, for witnesses in files that do
+// not import the event package.
+func objectiveDigestRule(objective string) string { return event.ObjectiveDigest(objective) }
+
+// unplannedArchitectResume is what resumeUnplannedToArchitect observed.
+type unplannedArchitectResume struct {
+	engine *Engine
+	// spec is the first architect request the resolver received; reached
+	// reports whether one did.
+	spec    RunnerSpec
+	reached bool
+	// ended is the terminal the run settled on when no request reached it.
+	ended string
+	trace string
+}
+
+// resumeUnplannedToArchitect resumes an unplanned task in a FRESH engine over a
+// durable session and follows it to the first architect request the resolver
+// receives, or to the terminal the run settles on first.
+//
+// recorded is the objective the durable TaskCreated holds; "" records no
+// creation for the task at all (another task's creation is recorded instead, so
+// the history is not simply empty). held, when set, is what this same process
+// recorded at submission. The task handed to Resume always carries handed.
+func resumeUnplannedToArchitect(t *testing.T, taskID, recorded, handed string, held *Objective) unplannedArchitectResume {
+	t.Helper()
+	creation := event.New("s1", "task-someone-else", event.SourceUser, event.TaskCreated, "another task's objective", nil)
+	if recorded != "" {
+		creation = event.New("s1", taskID, event.SourceUser, event.TaskCreated, recorded, nil)
+	}
+	store := durableHistory(t, creation)
+
+	repo, _ := mintRepo(t)
+	bus := event.NewBus()
+	events, cancel := bus.Subscribe(1024)
+	defer cancel()
+	capture := architectCapture{specs: make(chan RunnerSpec, 1)}
+	e := &Engine{Repo: repo, Bus: bus, Store: store, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	if held != nil {
+		e.recordObjective(taskID, *held)
+	}
+	e.Config.Permissions.ReadRepository = true
+	e.Config.Sensei.Command = "sh"
+	e.Config.Sensei.Args = []string{"-c", resumeSenseiScript}
+	e.Config.Sensei.Repository = "globulario/sensei"
+	e.Config.Architect.Name, e.Config.Architect.Command, e.Config.Architect.Graph = "chatgpt", "true", "none"
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	if got := e.Resume(ctx, session.Interrupted{TaskID: taskID, Task: handed}); got != taskID {
+		t.Fatalf("Resume continued %q instead of the task it was given", got)
+	}
+	out := unplannedArchitectResume{engine: e}
+	var seen []string
+	timeout := time.After(60 * time.Second)
+	for {
+		select {
+		case spec := <-capture.specs:
+			out.spec, out.reached, out.trace = spec, true, strings.Join(seen, "\n")
+			return out
+		case ev := <-events:
+			seen = append(seen, string(ev.Kind)+": "+ev.Summary)
+			switch ev.Kind {
+			case event.WorkflowFailed, event.WorkflowCompleted, event.WorkflowStopped,
+				event.WorkflowBlockedExternal, event.WorkflowAwaitingAuthority:
+				// A request already handed over is still reported.
+				select {
+				case spec := <-capture.specs:
+					out.spec, out.reached = spec, true
+				default:
+				}
+				out.ended, out.trace = ev.Summary, strings.Join(seen, "\n")
+				return out
+			}
+		case <-timeout:
+			t.Fatalf("the resumed task neither reached its architect nor settled:\n%s", strings.Join(seen, "\n"))
+		}
+	}
+}
+
+// escalationResolver serves a resumed planned task: the implementer on its
+// command line, the reviewer from a fixed runner, and the architect by
+// capturing the request and refusing it, so the run stops at that turn.
+type escalationResolver struct {
+	architect chan RunnerSpec
+	reviewer  answeringRunner
+	session   string
+}
+
+func (r escalationResolver) Resolve(spec RunnerSpec) (Resolved, error) {
+	switch string(spec.Role) {
+	case "architect":
+		select {
+		case r.architect <- spec:
+		default:
+		}
+		return Resolved{}, errors.New("the witness captured the architect request and serves no adapter")
+	case "reviewer":
+		return Resolved{Runner: r.reviewer, Name: "remote:abc", Label: "remote:abc"}, nil
+	}
+	return CLIResolved(spec, r.session), nil
+}
+
+// resumedReviewerEscalation drives the planned continuation Engine.Resume owns
+// to its reviewer-escalation architect turn, in a FRESH engine over the durable
+// session a first engine wrote.
+//
+// The first engine runs the task as a human submitted it: its architect turn is
+// recorded (fresh is that request) and proposes a plan, and the run then stops
+// for want of an implementor. The history is read back only up to the plan --
+// the process died there -- so the task is found planned and resumable. The
+// second engine holds nothing in memory: its implementor writes the candidate,
+// the audit passes, the reviewer escalates, and the architect request that
+// escalation makes is returned as resumed.
+func resumedReviewerEscalation(t *testing.T, taskID, objective string) (fresh, resumed RunnerSpec, second *Engine) {
+	t.Helper()
+	requireGofmt(t)
+	store := sessionStore(t)
+	const plan = `{"decision":"proceed","summary":"edit main","plan":"edit main.go","files":["main.go"],"mode":"modify"}`
+	first, architect, world := newGapLoopEngine(t, nil, store, plan)
+	first.Config.Permissions.WriteCandidates = true
+	first.Config.Permissions.CreateWorktrees = true
+	ran := driveGapLoop(t, first, architect, world, taskID, "", func(ctx context.Context) {
+		first.run(ctx, taskID, objective, RequestedByHuman)
+	})
+	asked := first.Runners.(*fixedResolver).specs
+	if len(asked) == 0 || string(asked[0].Role) != "architect" {
+		t.Fatalf("the fresh run made no architect request:\n%s", gapLoopTrace(ran.events))
+	}
+	fresh = asked[0]
+
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := -1
+	for i, ev := range history {
+		if ev.TaskID == taskID && ev.Kind == event.PlanProposed {
+			cut = i + 1
+		}
+	}
+	if cut < 0 {
+		t.Fatalf("the fresh run proposed no plan:\n%s", gapLoopTrace(ran.events))
+	}
+	standing := session.FindInterrupted(history[:cut])
+	if len(standing) != 1 || standing[0].TaskID != taskID || !standing[0].Planned {
+		t.Fatalf("the task was not found planned and resumable: %+v", standing)
+	}
+
+	second = &Engine{Repo: first.Repo, Bus: event.NewBus(), Store: store, SessionID: "s1", pending: map[string]chan string{}}
+	if len(second.objectives) != 0 {
+		t.Fatal("the fresh engine already holds an objective, so recovery would not be exercised")
+	}
+	events, cancel := second.Bus.Subscribe(4096)
+	defer cancel()
+	second.Config.Permissions = first.Config.Permissions
+	second.Config.Permissions.RunFormatters = true
+	second.Config.Permissions.LocalCommit = true
+	second.Config.Workflow.ReviewCycles = 1
+	second.Config.Validation = formattingValidation()
+	second.Config.Sensei = first.Config.Sensei
+	// The same certified start, and an audit that passes, so the candidate
+	// reaches its reviewer.
+	second.Config.Sensei.Args = []string{"-c", strings.Replace(gapLoopSenseiScript, "\t*)\n",
+		"\t*'\"name\":\"awareness_audit_diff\"'*)\n"+
+			"\t\tresult='{\"content\":[{\"type\":\"text\",\"text\":\"audit: pass\"}],\"structuredContent\":"+
+			"{\"schema\":\"sensei.audit.diff.v1\",\"decision\":\"pass\",\"availability\":\"available\"}}' ;;\n\t*)\n", 1)}
+	implCommand, implArgs := stubProcess(t, "implementor", "")
+	worker := first.Config.Architect
+	worker.Name, worker.Command, worker.Args, worker.Graph = "claude", implCommand, implArgs, "none"
+	second.Config.Implementors = append(second.Config.Implementors, worker)
+	second.Config.Architect = first.Config.Architect
+	second.Config.Architect.Name = "chatgpt"
+	second.Config.Reviewer = first.Config.Architect
+	second.Config.Reviewer.Name = "codex"
+	resolver := escalationResolver{architect: make(chan RunnerSpec, 1), session: "s1",
+		reviewer: answeringRunner{text: `{"decision":"escalate","summary":"the plan needs an architectural answer"}`, mode: "unverified"}}
+	second.Runners = resolver
+
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	if got := second.Resume(ctx, standing[0]); got != taskID {
+		t.Fatalf("Resume continued %q instead of the task it was given", got)
+	}
+	var seen []string
+	escalated := false
+	timeout := time.After(90 * time.Second)
+	for {
+		select {
+		case spec := <-resolver.architect:
+			if !escalated {
+				t.Fatalf("an architect request arrived before the reviewer escalated:\n%s", strings.Join(seen, "\n"))
+			}
+			return fresh, spec, second
+		case ev := <-events:
+			seen = append(seen, string(ev.Kind)+": "+ev.Summary)
+			if ev.Kind == event.ReviewCompleted && strings.HasPrefix(ev.Summary, "ESCALATE") {
+				escalated = true
+			}
+			switch ev.Kind {
+			case event.WorkflowFailed, event.WorkflowCompleted, event.WorkflowStopped, event.WorkflowNotConverged,
+				event.WorkflowBlockedExternal, event.WorkflowAwaitingAuthority:
+				t.Fatalf("the resumed run ended before its reviewer-escalation architect request reached the resolver:\n%s",
+					strings.Join(seen, "\n"))
+			}
+		case <-timeout:
+			t.Fatalf("no reviewer-escalation architect request reached the resolver:\n%s", strings.Join(seen, "\n"))
 		}
 	}
 }

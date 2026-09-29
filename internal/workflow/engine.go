@@ -945,35 +945,96 @@ func (e *Engine) run(ctx context.Context, taskID, task string, how Provenance) {
 }
 
 // objective returns what this task was asked to do, and what established that
-// anyone asked. A task nothing recorded reads as unestablished, which is the
-// honest answer rather than a missing one.
+// anyone asked, for the readers that decide on provenance. It reads the one
+// objective record; a task whose record holds no objective reads as
+// unestablished, which is the honest answer rather than a missing one.
+//
+// An architect turn does not read this: an absent objective is a refusal there,
+// never an empty text (see architectureBinding).
 func (e *Engine) objective(taskID string) Objective {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if o, ok := e.objectives[taskID]; ok {
+	if o, err := e.objectiveRecord(taskID); err == nil {
 		return o
 	}
 	return Objective{Provenance: SubmittedUnattended}
+}
+
+// objectiveAbsent is the typed state of a task whose objective no record holds.
+// It is a refusal, never an objective: absence must not become an empty text,
+// a task id or any placeholder that a digest could then name.
+type objectiveAbsent struct {
+	taskID string
+	reason string
+}
+
+func (a objectiveAbsent) Error() string {
+	return "task " + a.taskID + " has no recorded objective: " + a.reason
+}
+
+// objectiveRecord is the ONE reader of what a task was asked to do.
+//
+// The objective is created once, at submission, as the task's durable
+// TaskCreated event; the process-local map is only a projection of it. A
+// process that holds the submission keeps it exactly, provenance included:
+// overwriting it would quietly demote a task a human asked for. A process that
+// does not -- restarted, or a different one resuming -- reads the exact bytes
+// back from durable history under the resumption's own provenance, which
+// establishes no human (TestAResumedTaskDoesNotInventHumanAuthority), and
+// caches that projection. So every continuation reads the same identity, and
+// none owns a restoration rule of its own.
+func (e *Engine) objectiveRecord(taskID string) (Objective, error) {
+	e.mu.Lock()
+	held, ok := e.objectives[taskID]
+	store := e.Store
+	e.mu.Unlock()
+	if ok {
+		if held.Text == "" {
+			return Objective{}, objectiveAbsent{taskID, "its submission recorded no objective text"}
+		}
+		return held, nil
+	}
+	if store == nil {
+		return Objective{}, objectiveAbsent{taskID, "this process holds no submission record and has no durable session to read one from"}
+	}
+	events, err := store.Load()
+	if err != nil {
+		return Objective{}, objectiveAbsent{taskID, "the durable session could not be read: " + err.Error()}
+	}
+	created, text := 0, ""
+	for _, ev := range events {
+		if ev.TaskID == taskID && ev.Kind == event.TaskCreated {
+			created++
+			text = ev.Summary
+		}
+	}
+	switch {
+	case created == 0:
+		return Objective{}, objectiveAbsent{taskID, "its durable history records no creation"}
+	case created > 1:
+		// Two creations under one id cannot be attributed to one objective,
+		// and choosing either would mint an identity the record does not hold.
+		return Objective{}, objectiveAbsent{taskID, "its durable history records its creation more than once"}
+	case text == "":
+		return Objective{}, objectiveAbsent{taskID, "its recorded creation carries no objective"}
+	}
+	recovered := Objective{Text: text, Provenance: ResumedGoverned}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// A submission recorded while the history was being read is the stronger
+	// record, and it is kept.
+	if held, ok := e.objectives[taskID]; ok {
+		return held, nil
+	}
+	if e.objectives == nil {
+		e.objectives = make(map[string]Objective)
+	}
+	e.objectives[taskID] = recovered
+	return recovered, nil
 }
 
 // recordObjective stores the request and its provenance at submission.
 func (e *Engine) recordObjective(taskID string, o Objective) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.objectives == nil {
-		e.objectives = make(map[string]Objective)
-	}
-	e.objectives[taskID] = o
-}
-
-// recordObjectiveIfAbsent records an objective only when this process holds
-// none for the task, so a resume never replaces what the submission recorded.
-func (e *Engine) recordObjectiveIfAbsent(taskID string, o Objective) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if _, ok := e.objectives[taskID]; ok {
-		return
-	}
 	if e.objectives == nil {
 		e.objectives = make(map[string]Objective)
 	}
@@ -6661,11 +6722,10 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	}
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"authority decision answered on resume; continuing the task: "+choice, nil))
-	// The objective is the recorded one, restored exactly as
-	// resumeUnplannedArchitecture restores it. Without it a restarted process
-	// holds none, and the first architect turn after the answer is bound to an
-	// empty objective digest (task-1790481145146367848, 2026-09-27).
-	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	// The objective is the recorded one, read by every architect turn through
+	// objectiveRecord. A restarted process holds none in memory, and the first
+	// architect turn after the answer was once bound to an empty objective
+	// digest (task-1790481145146367848, 2026-09-27).
 	e.execute(ctx, task.TaskID, task.Task)
 }
 
@@ -6708,12 +6768,9 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 		}
 		owed, record = block.Describe(), block
 	}
-	// The objective is the recorded one. A process that still holds it -- the
-	// TUI that took the /run -- keeps its provenance exactly; overwriting it
-	// would quietly demote a task a human asked for. A restarted process holds
-	// nothing, and gets the resumption's own provenance, which establishes no
-	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
-	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	// The objective is the recorded one, read through objectiveRecord: a
+	// process that still holds the submission keeps its provenance exactly, and
+	// a restarted one reads the durable record under the resumption's own.
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"resuming the same task at the turn it is owed ("+owed+"); the objective, task identity and "+
 			"candidate base are the recorded ones", record))
@@ -6728,6 +6785,15 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
+		// Every continuation below can reach an architect turn -- the answered
+		// question, the unplanned turn, and a planned task's re-plan, reviewer
+		// escalation and finding-class dispute -- so the objective is read here,
+		// once, from the one record. Absence is not decided here: it is refused
+		// at the architect edge that consumes it, and said now.
+		if _, err := e.objectiveRecord(task.TaskID); err != nil {
+			e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
+				err.Error()+"; any architect turn this continuation reaches will be refused", nil))
+		}
 		if len(task.AwaitingAuthority) != 0 {
 			e.resumeAuthority(ctx, task)
 			return

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/event"
 )
 
 // ObjectiveProposalMarker distinguishes untrusted objective proposals from
@@ -140,9 +142,12 @@ func ParseObjectiveProposal(body string) (objective string, handled bool, err er
 	return envelope.Objective, true, nil
 }
 
+// DigestObjective names an objective by the one rule the architecture binding
+// also uses, so a proposal and the architect turn it becomes cannot disagree
+// about which bytes they name -- and an empty objective has no digest here
+// either.
 func DigestObjective(objective string) string {
-	sum := sha256.Sum256([]byte(objective))
-	return fmt.Sprintf("%x", sum[:])
+	return event.ObjectiveDigest(objective)
 }
 
 func (s *ProposalStore) proposalPath(commentID int64) string {
