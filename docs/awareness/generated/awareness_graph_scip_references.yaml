@@ -4602,11 +4602,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6005,11 +6005,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6102,11 +6102,11 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6960,11 +6960,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7495,7 +7495,7 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7503,7 +7503,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7931,11 +7931,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -11000,11 +11000,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -16177,11 +16177,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -17856,11 +17856,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -24615,10 +24615,10 @@ code_references:
     to_name: strings
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Client~type
     to_name: Client
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Client~type
     to_name: Client
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -28058,11 +28058,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -30515,11 +30515,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -41223,6 +41223,21 @@ code_references:
   - from: internal/decision/record.go:Authority.Describe
     to_name: strings
     file: internal/decision/record.go
+  - from: internal/decision/record.go:OwnedRoot
+    to_name: Base
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:OwnedRoot
+    to_name: Join
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:OwnedRoot
+    to_name: path/filepath
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:PendingPath
+    to_name: Join
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:PendingPath
+    to_name: path/filepath
+    file: internal/decision/record.go
   - from: internal/decision/record.go:Record.Args
     to_id: internal/decision/record.go:Authority.Describe
     to_name: Authority.Describe
@@ -41260,16 +41275,16 @@ code_references:
     to_name: Record.Repo
     file: internal/decision/record.go
   - from: internal/decision/record.go:Record.Args
-    to_id: internal/decision/record.go:Record.RepoRoot
-    to_name: Record.RepoRoot
-    file: internal/decision/record.go
-  - from: internal/decision/record.go:Record.Args
     to_id: internal/decision/record.go:Record.SourceFiles
     to_name: Record.SourceFiles
     file: internal/decision/record.go
   - from: internal/decision/record.go:Record.Args
     to_id: internal/decision/record.go:Record.Title
     to_name: Record.Title
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:Record.Args
+    to_id: internal/decision/record.go:Record.WriteRoot
+    to_name: Record.WriteRoot
     file: internal/decision/record.go
   - from: internal/decision/record.go:Record.Args
     to_name: TrimSpace
@@ -41362,6 +41377,12 @@ code_references:
     to_name: LookPath
     file: internal/decision/record.go
   - from: internal/decision/record.go:Write
+    to_name: MkdirAll
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:Write
+    to_name: New
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:Write
     to_id: internal/decision/record.go:Record~type
     to_name: Record
     file: internal/decision/record.go
@@ -41370,12 +41391,12 @@ code_references:
     to_name: Record.Args
     file: internal/decision/record.go
   - from: internal/decision/record.go:Write
-    to_id: internal/decision/record.go:Record.RepoRoot
-    to_name: Record.RepoRoot
-    file: internal/decision/record.go
-  - from: internal/decision/record.go:Write
     to_id: internal/decision/record.go:Record.Validate
     to_name: Record.Validate
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:Write
+    to_id: internal/decision/record.go:Record.WriteRoot
+    to_name: Record.WriteRoot
     file: internal/decision/record.go
   - from: internal/decision/record.go:Write
     to_name: TrimSpace
@@ -41384,7 +41405,13 @@ code_references:
     to_name: context
     file: internal/decision/record.go
   - from: internal/decision/record.go:Write
+    to_name: errors
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:Write
     to_name: fmt
+    file: internal/decision/record.go
+  - from: internal/decision/record.go:Write
+    to_name: os
     file: internal/decision/record.go
   - from: internal/decision/record.go:Write
     to_name: os/exec
@@ -41440,12 +41467,12 @@ code_references:
     to_name: Record.Rationale
     file: internal/decision/record_test.go
   - from: internal/decision/record_test.go:TestArgsNeverRebuildTheGraph
-    to_id: internal/decision/record.go:Record.RepoRoot
-    to_name: Record.RepoRoot
-    file: internal/decision/record_test.go
-  - from: internal/decision/record_test.go:TestArgsNeverRebuildTheGraph
     to_id: internal/decision/record.go:Record.Title
     to_name: Record.Title
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestArgsNeverRebuildTheGraph
+    to_id: internal/decision/record.go:Record.WriteRoot
+    to_name: Record.WriteRoot
     file: internal/decision/record_test.go
   - from: internal/decision/record_test.go:TestArgsNeverRebuildTheGraph
     to_name: T
@@ -41560,6 +41587,80 @@ code_references:
     to_name: strings
     file: internal/decision/record_test.go
   - from: internal/decision/record_test.go:TestAuthorityProvenanceNamesTheRealOwner
+    to_name: testing
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Architectural
+    to_name: Architectural
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Authority~type
+    to_name: Authority
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Authority.Owner
+    to_name: Authority.Owner
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_name: Contains
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_name: Join
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:OwnedRoot
+    to_name: OwnedRoot
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:PendingPath
+    to_name: PendingPath
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record~type
+    to_name: Record
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Args
+    to_name: Record.Args
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Authority
+    to_name: Record.Authority
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Domain
+    to_name: Record.Domain
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Invariants
+    to_name: Record.Invariants
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Rationale
+    to_name: Record.Rationale
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Repo
+    to_name: Record.Repo
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.Title
+    to_name: Record.Title
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_id: internal/decision/record.go:Record.WriteRoot
+    to_name: Record.WriteRoot
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_name: T
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_name: common.Fatalf
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    to_name: strings
+    file: internal/decision/record_test.go
+  - from: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
     to_name: testing
     file: internal/decision/record_test.go
   - from: internal/decision/record_test.go:TestGraphClassPrefixesAreStrippedFromLinks
@@ -44645,11 +44746,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -49806,10 +49907,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
@@ -87052,10 +87153,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -104814,10 +104915,10 @@ code_references:
     to_name: testing
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
+    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
-    to_id: internal/processx/runner.go:Environ
     to_name: Environ
     file: internal/processx/env_test.go
   - from: internal/processx/env_test.go:TestEnvironWithNothingToUnsetIsTheProcessEnvironment
@@ -157731,11 +157832,11 @@ code_references:
     to_name: Engine.applyAnsweredCondition
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
@@ -167251,6 +167352,156 @@ code_references:
   - from: internal/workflow/disposal_test.go:TestANewUntrackedFileCountsAsWork
     to_name: testing
     file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Background
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Cmd.CombinedOutput
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Cmd.Dir
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Cmd.Env
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Command
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Contains
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:Engine.Bus
+    to_name: Engine.Bus
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:Engine.recordDecision
+    to_name: Engine.recordDecision
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Environ
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/event/event.go:Event.Summary
+    to_name: Event.Summary
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Getenv
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: HasPrefix
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: HasSuffix
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Index
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: IsNotExist
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Join
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Join
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: PathListSeparator
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: ReadFile
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/gitx/git.go:Repo.IsClean
+    to_name: Repo.IsClean
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: Stat
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: T
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: T.Setenv
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: WriteFile
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/authority_resume_identity_test.go:collect
+    to_name: collect
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: common.Fatal
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: common.Fatalf
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: common.Helper
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: common.TempDir
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: context
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/disposal_test.go:newRepo
+    to_name: newRepo
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: os
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: os/exec
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: path/filepath
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/exact_objective_test.go:recordingEngine
+    to_name: recordingEngine
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: strings
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:taskContext~type
+    to_name: taskContext
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:taskContext.Domain
+    to_name: taskContext.Domain
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:taskContext.Invariants
+    to_name: taskContext.Invariants
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:taskContext.Rationale
+    to_name: taskContext.Rationale
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_id: internal/workflow/engine.go:taskContext.Task
+    to_name: taskContext.Task
+    file: internal/workflow/disposal_test.go
+  - from: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    to_name: testing
+    file: internal/workflow/disposal_test.go
   - from: internal/workflow/disposal_test.go:TestAnUnreadableCandidateHoldsWork
     to_name: Background
     file: internal/workflow/disposal_test.go
@@ -168321,10 +168572,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
@@ -171126,10 +171377,10 @@ code_references:
     to_name: Identity.BindGraph
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
@@ -173440,6 +173691,14 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.recordDecision
+    to_id: internal/decision/record.go:OwnedRoot
+    to_name: OwnedRoot
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordDecision
+    to_id: internal/decision/record.go:PendingPath
+    to_name: PendingPath
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordDecision
     to_id: internal/decision/record.go:Record~type
     to_name: Record
     file: internal/workflow/engine.go
@@ -173468,16 +173727,16 @@ code_references:
     to_name: Record.Repo
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.recordDecision
-    to_id: internal/decision/record.go:Record.RepoRoot
-    to_name: Record.RepoRoot
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordDecision
     to_id: internal/decision/record.go:Record.SourceFiles
     to_name: Record.SourceFiles
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.recordDecision
     to_id: internal/decision/record.go:Record.Title
     to_name: Record.Title
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordDecision
+    to_id: internal/decision/record.go:Record.WriteRoot
+    to_name: Record.WriteRoot
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.recordDecision
     to_id: internal/gitx/git.go:Repo.Root
@@ -174259,10 +174518,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -176392,6 +176651,7 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -176399,7 +176659,6 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -178112,11 +178371,11 @@ code_references:
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -179820,11 +180079,11 @@ code_references:
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -185331,10 +185590,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -186213,15 +186472,15 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
+    to_id: internal/session/store.go:New
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/event/event.go:New
-    to_name: New
-    file: internal/workflow/external_block_test.go
-  - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster

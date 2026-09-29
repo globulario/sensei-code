@@ -10001,12 +10001,24 @@ code_symbols:
     file: internal/decision/record.go
     symbol: Human
     kind: const
+  - id: internal/decision/record.go:OwnedRoot
+    namespace: structural.scip
+    language: go
+    file: internal/decision/record.go
+    symbol: OwnedRoot
+    kind: function
   - id: internal/decision/record.go:Owner~type
     namespace: structural.scip
     language: go
     file: internal/decision/record.go
     symbol: Owner
     kind: type
+  - id: internal/decision/record.go:PendingPath
+    namespace: structural.scip
+    language: go
+    file: internal/decision/record.go
+    symbol: PendingPath
+    kind: function
   - id: internal/decision/record.go:Record.Args
     namespace: structural.scip
     language: go
@@ -10055,12 +10067,6 @@ code_symbols:
     file: internal/decision/record.go
     symbol: Record.Repo
     kind: var
-  - id: internal/decision/record.go:Record.RepoRoot
-    namespace: structural.scip
-    language: go
-    file: internal/decision/record.go
-    symbol: Record.RepoRoot
-    kind: var
   - id: internal/decision/record.go:Record.SourceFiles
     namespace: structural.scip
     language: go
@@ -10079,6 +10085,12 @@ code_symbols:
     file: internal/decision/record.go
     symbol: Record.Validate
     kind: method
+  - id: internal/decision/record.go:Record.WriteRoot
+    namespace: structural.scip
+    language: go
+    file: internal/decision/record.go
+    symbol: Record.WriteRoot
+    kind: var
   - id: internal/decision/record.go:Record~type
     namespace: structural.scip
     language: go
@@ -10114,6 +10126,12 @@ code_symbols:
     language: go
     file: internal/decision/record_test.go
     symbol: TestAuthorityProvenanceNamesTheRealOwner
+    kind: function
+  - id: internal/decision/record_test.go:TestDecisionIsWrittenToTheOwnedRootWithoutStaging
+    namespace: structural.scip
+    language: go
+    file: internal/decision/record_test.go
+    symbol: TestDecisionIsWrittenToTheOwnedRootWithoutStaging
     kind: function
   - id: internal/decision/record_test.go:TestGraphClassPrefixesAreStrippedFromLinks
     namespace: structural.scip
@@ -40144,6 +40162,12 @@ code_symbols:
     language: go
     file: internal/workflow/disposal_test.go
     symbol: TestANewUntrackedFileCountsAsWork
+    kind: function
+  - id: internal/workflow/disposal_test.go:TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/disposal_test.go
+    symbol: TestAnAcceptedDecisionLeavesTheCanonicalCheckoutUnchangedAndIsFoundWherePromotionLooks
     kind: function
   - id: internal/workflow/disposal_test.go:TestAnUnreadableCandidateHoldsWork
     namespace: structural.scip
