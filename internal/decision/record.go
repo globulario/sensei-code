@@ -5,13 +5,22 @@
 // Sensei owns the record. This package only invokes Sensei's own `propose`
 // surface; it never writes awareness YAML itself and never promotes anything
 // into the live graph. The entry is appended for a human to review and commit.
+//
+// The append lands in state the run owns, not in the canonical checkout. A
+// decision staged into the canonical corpus dirtied every checkout a governed
+// run was accepted from, which the next resume then truthfully refused. The
+// write is moved, not unstaged or exempted afterwards: the canonical checkout
+// is never touched, and the pending record waits at OwnedRoot for the human
+// promotion step to read it.
 package decision
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -84,9 +93,27 @@ type Record struct {
 	SourceFiles  []string
 	Invariants   []string
 	Failures     []string
-	Repo         string
-	Domain       string
-	RepoRoot     string
+	// Repo and Domain are the provenance: which repository the decision is
+	// about. They are carried separately from WriteRoot, which is only where
+	// the pending entry is physically written.
+	Repo   string
+	Domain string
+	// WriteRoot is the directory whose docs/awareness/ receives the pending
+	// entry. For a governed run it is OwnedRoot, never the canonical checkout.
+	WriteRoot string
+}
+
+// OwnedRoot is the deterministic task-owned root a governed run writes its
+// decision under: beside the candidates and derived state in the ignored
+// .sensei-code/ area, so the canonical checkout's tracked status is unchanged.
+func OwnedRoot(repoRoot, taskID string) string {
+	return filepath.Join(repoRoot, ".sensei-code", "decisions", filepath.Base(taskID))
+}
+
+// PendingPath is the file under a write root where Sensei appends the
+// decision. It is what the human promotion step reads.
+func PendingPath(writeRoot string) string {
+	return filepath.Join(writeRoot, "docs", "awareness", "architecture", "decisions.yaml")
 }
 
 // ErrNotLinked reports a decision that Sensei would refuse. Sensei enforces
@@ -136,6 +163,8 @@ func (r Record) Args() []string {
 		// graph and rotate its marker, staling every other repository that
 		// shares the store; promotion stays a deliberate human step.
 		"--no-rebuild",
+		// The write root is owned state, not a checkout to stage into.
+		"--no-stage",
 	}
 	if c := strings.TrimSpace(r.Authority.Describe()); c != "" {
 		args = append(args, "--context", c)
@@ -164,7 +193,7 @@ func (r Record) Args() []string {
 	if r.Domain != "" {
 		args = append(args, "--domain", r.Domain)
 	}
-	args = append(args, "--target-repo", r.RepoRoot)
+	args = append(args, "--target-repo", r.WriteRoot)
 	return args
 }
 
@@ -189,8 +218,14 @@ func Write(ctx context.Context, r Record) error {
 	if err != nil {
 		return ErrUnavailable
 	}
+	if strings.TrimSpace(r.WriteRoot) == "" {
+		return errors.New("decision has no write root, so it was not recorded")
+	}
+	if err := os.MkdirAll(r.WriteRoot, 0o755); err != nil {
+		return fmt.Errorf("decision write root could not be created: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, path, r.Args()...)
-	cmd.Dir = r.RepoRoot
+	cmd.Dir = r.WriteRoot
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("sensei refused the decision record: %s", strings.TrimSpace(string(out)))
