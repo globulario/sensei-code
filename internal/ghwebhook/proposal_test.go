@@ -110,3 +110,30 @@ func TestApprovalAttemptIsDurableAndAtMostOnce(t *testing.T) {
 		t.Fatalf("loaded receipt: ok=%v receipt=%+v err=%v", ok, loaded, err)
 	}
 }
+
+// W4 -- ONE DIGEST RULE. The proposal digest is the objective identity
+// roles.BindArchitecture binds, so a proposal and the architecture turn it
+// becomes cannot name different bytes. roles is outside this ingress's reach
+// (boundary_test.go), so the agreement is pinned through values computed
+// independently of both (sha256sum over the exact bytes): the workflow's W1 and
+// W3 witnesses pin BindArchitecture's output against the SAME constant.
+func TestDigestObjectiveAgreesWithTheArchitectureBinding(t *testing.T) {
+	// An empty objective has no digest, exactly as BindArchitecture gives none:
+	// it must not become the valid-looking SHA-256 of "".
+	if got := DigestObjective(""); got != "" {
+		t.Fatalf("an empty objective was digested to %q; BindArchitecture yields no digest for it", got)
+	}
+	const (
+		exact = "\t  resume reads the recorded objective  \n"
+		// sha256 of exact, byte for byte.
+		exactDigest = "d60db1d22ca040881a6fec3d731ae42a0ecdad7c0c941a6885ac188ff47ea6f2"
+		// sha256 of the same text trimmed: a different input, a different identity.
+		trimmedDigest = "04ceb57735a2a4f974f1a701d2bde4cff09881b721193d36a4ea6d651b80b109"
+	)
+	if got := DigestObjective(exact); got != exactDigest {
+		t.Fatalf("the digest does not name the exact untrimmed bytes: %s", got)
+	}
+	if got := DigestObjective("resume reads the recorded objective"); got != trimmedDigest || got == exactDigest {
+		t.Fatalf("trimmed and untrimmed objectives were not kept apart: %s", got)
+	}
+}

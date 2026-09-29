@@ -111,6 +111,8 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	}
 	e.setRouting("task-1", policy, sensei.PreflightDecision{}, nil, nil)
 	e.beginReceipt("task-1")
+	// The task was submitted: an architect turn it reaches binds its objective.
+	e.recordObjective("task-1", Objective{Text: "print a number from main", Provenance: SubmittedUnattended})
 
 	return &gateHarness{
 		engine: e, sc: sc, work: workspace, worker: worker, workerSaw: workerSaw,

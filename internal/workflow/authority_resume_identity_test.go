@@ -759,9 +759,14 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-
+	// The creation is durable, as it is for every real task: the objective
+	// the continuation carries is read from it, not from the Interrupted value.
+	store := sessionStore(t)
 	task := session.Interrupted{TaskID: "task-1789848074761930104", Task: "repair the resume path"}
+	if err := store.Append(event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil)); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Bus: bus, Store: store, SessionID: "s1", pending: map[string]chan string{}}
 	e.resumeUnplannedArchitecture(context.Background(), task)
 
 	evs := take()
@@ -808,7 +813,7 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	resumed := event.NewBus()
 	ch, stop := resumed.Subscribe(64)
 	defer stop()
-	r := &Engine{Bus: resumed, SessionID: "s1", pending: map[string]chan string{}}
+	r := &Engine{Bus: resumed, Store: store, SessionID: "s1", pending: map[string]chan string{}}
 	if got := r.Resume(context.Background(), task); got != task.TaskID {
 		t.Fatalf("Resume continued %q instead of the task it was given", got)
 	}
@@ -934,6 +939,10 @@ done
 // resolver, which is where that run emitted the empty digest; nothing here
 // asks architectureBinding for its opinion. The expected digest is pinned as the
 // SHA-256 of the recorded bytes, derived outside the code under test.
+//
+// The history is written by one engine and resumed by a FRESH one over the same
+// durable session record, holding no objective in memory: the identity it
+// carries can only have been recovered from the recorded TaskCreated.
 func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(t *testing.T) {
 	const (
 		taskID    = "task-1790481145146367848"
@@ -961,11 +970,31 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 	}
 
 	repo, _ := mintRepo(t)
+	// Outside the repository, so the record does not dirty the canonical
+	// checkout the resume re-certifies.
+	record := t.TempDir()
+	store, err := session.New(record, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	creator := &Engine{Store: store, SessionID: "s1"}
+	for _, ev := range history {
+		creator.emit(ev)
+	}
+	// A restart: a new store object over the same record, a new engine, and
+	// nothing carried in memory.
+	reopened, err := session.New(record, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	bus := event.NewBus()
 	events, cancel := bus.Subscribe(1024)
 	defer cancel()
 	capture := architectCapture{specs: make(chan RunnerSpec, 1)}
-	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	e := &Engine{Repo: repo, Bus: bus, Store: reopened, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	if len(e.objectives) != 0 {
+		t.Fatalf("the fresh engine was handed an objective in memory: %+v", e.objectives)
+	}
 	e.Config.Permissions.ReadRepository = true
 	e.Config.Sensei.Command = "sh"
 	e.Config.Sensei.Args = []string{"-c", resumeSenseiScript}
@@ -1008,6 +1037,13 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 			if o := e.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
 				t.Fatalf("the restored objective claims provenance it does not have: %+v", o)
 			}
+			// The source is the durable creation, not the Interrupted value the
+			// resume was handed: an engine given only the record, and no
+			// continuation at all, reads the same bytes through the accessor.
+			recovered, err := (&Engine{Store: reopened, SessionID: "s1"}).objectiveRecord(taskID)
+			if err != nil || recovered.Text != objective || recovered.Provenance != ResumedGoverned {
+				t.Fatalf("the objective was not recovered from the recorded TaskCreated: %+v (err %v)", recovered, err)
+			}
 			return
 		case ev := <-events:
 			seen = append(seen, string(ev.Kind)+": "+ev.Summary)
@@ -1018,6 +1054,89 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 			t.Fatalf("no architect request reached the resolver:\n%s", strings.Join(seen, "\n"))
 		}
 	}
+}
+
+// ABSENT IS PROVEN ABSENCE, NOTHING ELSE.
+//
+// The objective record answers ABSENT only when the durable history establishes
+// that no objective exists. A history that could not be read is unknown, and one
+// that states the task's creation twice is contradictory; neither is absence,
+// so neither wraps ErrObjectiveAbsent -- yet all three still refuse the
+// architect turn before any resolver is asked.
+func TestObjectiveRecordDistinguishesUnreadableAndContradictoryHistoryFromAbsence(t *testing.T) {
+	const taskID = "task-1"
+	// The refusal is read from the architect turn itself, so every assertion
+	// below is about the error that stopped it before the resolver.
+	refusedBeforeResolver := func(t *testing.T, e *Engine) error {
+		t.Helper()
+		resolver := &fixedResolver{name: "claude"}
+		e.Runners = resolver
+		_, err := e.resolveRunner(RunnerSpec{Role: "architect", TaskID: taskID})
+		if err == nil {
+			t.Fatal("an architect turn with no readable objective was resolved")
+		}
+		if len(resolver.specs) != 0 {
+			t.Fatalf("the resolver was asked with no readable objective: %d call(s)", len(resolver.specs))
+		}
+		return err
+	}
+
+	t.Run("never written is absent", func(t *testing.T) {
+		store, err := session.New(t.TempDir(), "s1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = refusedBeforeResolver(t, &Engine{Store: store, SessionID: "s1"})
+		if !errors.Is(err, ErrObjectiveAbsent) || errors.Is(err, ErrObjectiveUnreadable) || errors.Is(err, ErrObjectiveContradicted) {
+			t.Fatalf("a session record never written to is not ABSENT: %v", err)
+		}
+	})
+
+	t.Run("unreadable is not absent", func(t *testing.T) {
+		root := t.TempDir()
+		store, err := session.New(root, "s1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Occupy the record's own path with a directory: the record exists and
+		// cannot be read, which is exactly "could not look".
+		if _, err := session.New(root, "s1/events.jsonl"); err != nil {
+			t.Fatal(err)
+		}
+		_, loadErr := store.Load()
+		if loadErr == nil {
+			t.Fatal("the unreadable record was read")
+		}
+		err = refusedBeforeResolver(t, &Engine{Store: store, SessionID: "s1"})
+		if !errors.Is(err, ErrObjectiveUnreadable) || errors.Is(err, ErrObjectiveAbsent) {
+			t.Fatalf("an unreadable history was not refused as unreadable, or was called ABSENT: %v", err)
+		}
+		// The read failure itself survives, as an error and not only as text.
+		var cause interface{ Timeout() bool }
+		if !errors.As(err, &cause) || !strings.Contains(err.Error(), loadErr.Error()) {
+			t.Fatalf("the underlying read error was not preserved: %v", err)
+		}
+	})
+
+	t.Run("two creations are contradictory, not absent", func(t *testing.T) {
+		store, err := session.New(t.TempDir(), "s1")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range []string{"the first objective", "the second objective"} {
+			if err := store.Append(event.New("s1", taskID, event.SourceUser, event.TaskCreated, text, nil)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		e := &Engine{Store: store, SessionID: "s1"}
+		err = refusedBeforeResolver(t, e)
+		if !errors.Is(err, ErrObjectiveContradicted) || errors.Is(err, ErrObjectiveAbsent) {
+			t.Fatalf("a doubled creation was not refused as contradictory, or was called ABSENT: %v", err)
+		}
+		if o := e.objective(taskID); o.Text != "" || o.HumanAuthorized() {
+			t.Fatalf("one of the contradictory objectives was chosen: %+v", o)
+		}
+	})
 }
 
 // ---------------------------------------------------------------------------
