@@ -2003,12 +2003,10 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// created file has another shape is refuted here, before any review
 		// is asked and with no retry: the authorized shape was not the shape
 		// produced, and nothing downstream may reinterpret that.
+		// The recorded grants are handed over whole, so a command's one
+		// library edge is inspected from the grant that recorded it.
 		if len(tc.Prospective) != 0 {
-			facts := map[string]prospectiveFacts{}
-			for _, g := range e.prospectiveGrants(taskID) {
-				facts[g.Anchor.File] = g.Facts
-			}
-			if err := inspectProspectiveSurfaces(diff, tc.Prospective, facts); err != nil {
+			if err := inspectProspectiveGrants(diff, tc.Prospective, e.prospectiveGrants(taskID)); err != nil {
 				return candidateNotConverged, plan, lastReview, lastAudit, err
 			}
 		}
