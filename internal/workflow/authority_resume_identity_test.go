@@ -759,9 +759,14 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-
+	// The creation is durable, as it is for every real task: the objective
+	// the continuation carries is read from it, not from the Interrupted value.
+	store := sessionStore(t)
 	task := session.Interrupted{TaskID: "task-1789848074761930104", Task: "repair the resume path"}
+	if err := store.Append(event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil)); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Bus: bus, Store: store, SessionID: "s1", pending: map[string]chan string{}}
 	e.resumeUnplannedArchitecture(context.Background(), task)
 
 	evs := take()
@@ -808,7 +813,7 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	resumed := event.NewBus()
 	ch, stop := resumed.Subscribe(64)
 	defer stop()
-	r := &Engine{Bus: resumed, SessionID: "s1", pending: map[string]chan string{}}
+	r := &Engine{Bus: resumed, Store: store, SessionID: "s1", pending: map[string]chan string{}}
 	if got := r.Resume(context.Background(), task); got != task.TaskID {
 		t.Fatalf("Resume continued %q instead of the task it was given", got)
 	}
@@ -934,6 +939,10 @@ done
 // resolver, which is where that run emitted the empty digest; nothing here
 // asks architectureBinding for its opinion. The expected digest is pinned as the
 // SHA-256 of the recorded bytes, derived outside the code under test.
+//
+// The history is written by one engine and resumed by a FRESH one over the same
+// durable session record, holding no objective in memory: the identity it
+// carries can only have been recovered from the recorded TaskCreated.
 func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(t *testing.T) {
 	const (
 		taskID    = "task-1790481145146367848"
@@ -961,11 +970,31 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 	}
 
 	repo, _ := mintRepo(t)
+	// Outside the repository, so the record does not dirty the canonical
+	// checkout the resume re-certifies.
+	record := t.TempDir()
+	store, err := session.New(record, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	creator := &Engine{Store: store, SessionID: "s1"}
+	for _, ev := range history {
+		creator.emit(ev)
+	}
+	// A restart: a new store object over the same record, a new engine, and
+	// nothing carried in memory.
+	reopened, err := session.New(record, "s1")
+	if err != nil {
+		t.Fatal(err)
+	}
 	bus := event.NewBus()
 	events, cancel := bus.Subscribe(1024)
 	defer cancel()
 	capture := architectCapture{specs: make(chan RunnerSpec, 1)}
-	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	e := &Engine{Repo: repo, Bus: bus, Store: reopened, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	if len(e.objectives) != 0 {
+		t.Fatalf("the fresh engine was handed an objective in memory: %+v", e.objectives)
+	}
 	e.Config.Permissions.ReadRepository = true
 	e.Config.Sensei.Command = "sh"
 	e.Config.Sensei.Args = []string{"-c", resumeSenseiScript}
@@ -1007,6 +1036,13 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 			// establishes that a person asked.
 			if o := e.objective(taskID); o.Text != objective || o.Provenance != ResumedGoverned || o.HumanAuthorized() {
 				t.Fatalf("the restored objective claims provenance it does not have: %+v", o)
+			}
+			// The source is the durable creation, not the Interrupted value the
+			// resume was handed: an engine given only the record, and no
+			// continuation at all, reads the same bytes through the accessor.
+			recovered, err := (&Engine{Store: reopened, SessionID: "s1"}).objectiveRecord(taskID)
+			if err != nil || recovered.Text != objective || recovered.Provenance != ResumedGoverned {
+				t.Fatalf("the objective was not recovered from the recorded TaskCreated: %+v (err %v)", recovered, err)
 			}
 			return
 		case ev := <-events:

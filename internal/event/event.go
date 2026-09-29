@@ -2,6 +2,7 @@ package event
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"time"
@@ -272,4 +273,21 @@ func New(sessionID, taskID string, source Source, kind Kind, summary string, pay
 	_, _ = rand.Read(entropy[:])
 	id := now.Format("20060102T150405.000000000Z") + "-" + hex.EncodeToString(entropy[:])
 	return Event{ID: id, Time: now, SessionID: sessionID, TaskID: taskID, Source: source, Kind: kind, Summary: summary, Payload: raw}
+}
+
+// DigestObjective is the one identity of an objective: the SHA-256 of its exact
+// submitted bytes, as lowercase hex. The bytes are neither trimmed nor
+// normalized -- two objectives that render alike but differ in bytes are two
+// inputs. An empty objective has NO digest: a missing record must not
+// masquerade as the perfectly valid SHA-256 of an empty string.
+//
+// It lives here, beside TaskCreated, because this package is stdlib-only and
+// both the architecture binding (roles) and the objective-proposal ingress
+// (ghwebhook, which may not import roles) must compute the same identity.
+func DigestObjective(objective string) string {
+	if objective == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(objective))
+	return hex.EncodeToString(sum[:])
 }

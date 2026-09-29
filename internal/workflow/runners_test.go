@@ -101,6 +101,7 @@ func TestAConfiguredResolverIsAskedAndItsAnswerIsUsed(t *testing.T) {
 	runner := &stubRunner{}
 	resolver := &stubResolver{resolved: Resolved{Runner: runner, Name: "remote-a", Label: "Remote A"}}
 	e := &Engine{SessionID: "sess-1", Runners: resolver}
+	e.recordObjective("task-1", Objective{Text: "the objective", Provenance: SubmittedUnattended})
 
 	got, err := e.resolveRunner(specFor(roles.Architect))
 	if err != nil {
@@ -123,6 +124,7 @@ func TestAConfiguredResolverIsAskedAndItsAnswerIsUsed(t *testing.T) {
 func TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine(t *testing.T) {
 	refused := errors.New("the remote architect is not holding the role")
 	e := &Engine{SessionID: "sess-1", Runners: &stubResolver{err: refused}}
+	e.recordObjective("task-1", Objective{Text: "the objective", Provenance: SubmittedUnattended})
 
 	got, err := e.resolveRunner(specFor(roles.Architect))
 	if err == nil {
