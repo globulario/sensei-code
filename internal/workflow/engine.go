@@ -2004,11 +2004,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// is asked and with no retry: the authorized shape was not the shape
 		// produced, and nothing downstream may reinterpret that.
 		if len(tc.Prospective) != 0 {
-			facts := map[string]prospectiveFacts{}
+			facts, edges := map[string]prospectiveFacts{}, map[string]string{}
 			for _, g := range e.prospectiveGrants(taskID) {
 				facts[g.Anchor.File] = g.Facts
+				if g.Edge != nil {
+					edges[g.Anchor.File] = g.Edge.ImportPath
+				}
 			}
-			if err := inspectProspectiveSurfaces(diff, tc.Prospective, facts); err != nil {
+			if err := inspectProspectiveSurfacesWithEdges(diff, tc.Prospective, facts, edges); err != nil {
 				return candidateNotConverged, plan, lastReview, lastAudit, err
 			}
 		}
