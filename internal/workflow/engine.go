@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/globulario/sensei-code/internal/evidence"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -2004,11 +2005,14 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// is asked and with no retry: the authorized shape was not the shape
 		// produced, and nothing downstream may reinterpret that.
 		if len(tc.Prospective) != 0 {
-			facts := map[string]prospectiveFacts{}
+			facts, edges := map[string]prospectiveFacts{}, map[string]string{}
 			for _, g := range e.prospectiveGrants(taskID) {
 				facts[g.Anchor.File] = g.Facts
+				if g.Edge != nil {
+					edges[g.Anchor.File] = g.Edge.ImportPath
+				}
 			}
-			if err := inspectProspectiveSurfaces(diff, tc.Prospective, facts); err != nil {
+			if err := inspectProspectiveSurfacesWithEdges(diff, tc.Prospective, facts, edges); err != nil {
 				return candidateNotConverged, plan, lastReview, lastAudit, err
 			}
 		}
@@ -4677,6 +4681,11 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 	// established it by writing something down -- the self-approval this design
 	// exists to refuse. Encounter 1 writes; encounter 2 benefits.
 	recipes = derived.ExcludingTask(recipes, taskID)
+	// One derivation pass at the pinned world establishes both the planned
+	// files and the covering surfaces the plan's new-package declarations
+	// name; coverPlannedAtWorld keeps, of the latter, only the named ones.
+	// A named surface no composed recipe is about stays underived and its
+	// declaration uncovered: the name is a question, not an anchor.
 	anchors, _ := derived.AnchorsFor(ctx, derived.CLI{Bin: senseiBinary()}, e.Repo.Root, world, recipes)
 	grants, out := coverPlannedAtWorld(ctx, world, planned, declarations, anchors, gitShowAt(e.Repo.Root))
 	edits, reasons := testEditGrants(ctx, world, planned, out, authoredEvidence{}, gitShowAt(e.Repo.Root))
@@ -4804,20 +4813,26 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 	}
 
 	// Prospective authority (sensei#312): a planned file ABSENT at world can be
-	// covered only by established facts about a covering surface in its
-	// directory plus the plan's declaration. The covering surfaces are every
-	// subject file a derivation established here, planned or not, read from
-	// the pinned world and never the working tree (a subject that cannot be
-	// read there is no surface). Undeclared absent files stay uncovered.
+	// covered only by established facts about a covering surface plus the
+	// plan's declaration. A surface is looked at for one of two reasons only:
+	// it shares a directory with a planned file (the per-file roles), or a
+	// new-package declaration NAMES it as its covering surface. A named
+	// surface need not be planned and usually lies in another directory; it is
+	// established by the same derivations at the same pinned world, and only
+	// its own anchors are handed on -- no other subject becomes a surface. A
+	// surface is read from the pinned world and never the working tree (a
+	// subject that cannot be read there is no surface). Undeclared absent
+	// files stay uncovered, and naming a surface is not coverage of it.
 	//
 	// The predicate is handed EVERY planned file, not only the confirmed
 	// missing ones: it re-establishes absence per declaration itself, and a
 	// new package is admitted only when every planned file in its directory
 	// is declared -- an unreadable file there must still count against it.
+	sameDir, named := prospectiveSurfaceScope(planned, declarations)
 	var surfaces []CoverageAnchor
 	for _, a := range anchors {
 		for _, f := range a.Files() {
-			if !a.Covers(world, f) {
+			if !a.Covers(world, f) || !(sameDir[path.Dir(f)] || named[f]) {
 				continue
 			}
 			if _, err := read(ctx, world, f); err != nil {

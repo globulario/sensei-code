@@ -1814,3 +1814,177 @@ func TestTheArchitectPromptStatesTheNewPackageRoles(t *testing.T) {
 		t.Fatalf("the declared covering surface is not read: %+v", d.ProspectiveSurfaces)
 	}
 }
+
+// Edge W4: the command's dependency edge is recorded with the grants and
+// restored with them. A restored command grant whose edge is missing or does
+// not name its same-plan library is refused, and nothing is registered: the
+// edge is read from the record, never rebuilt from the declaration.
+func TestEdgeW4TheRecordedEdgeIsRestoredAndNeverReconstructed(t *testing.T) {
+	decl := edgeDeclarations(edgeImport)
+	grants := prospectiveFor(t, edgePlanned(), decl, newPackageAnchors(), newPackageWorld())
+	e := &Engine{}
+	if err := e.restoreProspectiveGrants(edgeRecord(grants), decl, prospectiveWorld); err != nil {
+		t.Fatalf("the intact record was refused: %v", err)
+	}
+	restored := 0
+	for _, g := range e.prospectiveGrants("t") {
+		if g.Edge != nil {
+			restored++
+			if g.Anchor.File != newCmdDir+"/main.go" || *g.Edge != (prospectiveEdge{ImportPath: edgeImport, Dir: newLibDir, Module: "."}) {
+				t.Fatalf("the restored edge is not the recorded one: %+v", g)
+			}
+		}
+	}
+	if restored != 1 {
+		t.Fatalf("expected exactly one restored edge, got %d", restored)
+	}
+
+	tamper := func(f func(g *prospectiveGrant)) []prospectiveGrant {
+		out := make([]prospectiveGrant, len(grants))
+		for i, g := range grants {
+			if g.Edge != nil {
+				edge := *g.Edge
+				g.Edge = &edge
+			}
+			f(&g)
+			out[i] = g
+		}
+		return out
+	}
+	isCmd := func(g *prospectiveGrant) bool { return g.Surface.Role == roleGoCommandPackage }
+	for name, gs := range map[string][]prospectiveGrant{
+		"the command's edge is missing": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge = nil
+			}
+		}),
+		"the edge names another import path": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.ImportPath = "example.com/m/internal/other"
+			}
+		}),
+		"the edge names another import path with the library's suffix": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.ImportPath = "example.org/x/" + newLibDir
+			}
+		}),
+		"the edge names a directory with no library grant": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Dir, g.Edge.ImportPath = "internal/other", "example.com/m/internal/other"
+			}
+		}),
+		"the edge names the command's own directory": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Dir = newCmdDir
+			}
+		}),
+		"the edge's module does not hold the library": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Module = "cmd"
+			}
+		}),
+		"the edge's module does not hold the command": tamper(func(g *prospectiveGrant) {
+			if isCmd(g) {
+				g.Edge.Module = "internal"
+			}
+		}),
+		"a library grant carries an edge": tamper(func(g *prospectiveGrant) {
+			if g.Surface.Role == roleGoLibraryPackage {
+				g.Edge = &prospectiveEdge{ImportPath: edgeImport, Dir: newLibDir, Module: "."}
+			}
+		}),
+	} {
+		e := &Engine{}
+		if err := e.restoreProspectiveGrants(edgeRecord(gs), decl, prospectiveWorld); err == nil {
+			t.Errorf("%s: resumed", name)
+		}
+		if len(e.prospectiveGrants("t")) != 0 {
+			t.Errorf("%s: a refused resume registered grants", name)
+		}
+	}
+
+	// A library grant may not carry an edge even when its declaration lists
+	// exactly the edge's import path: the record, not the declaration,
+	// decides, and only a command grant carries one.
+	libDecl := append([]ProspectiveSurface(nil), decl...)
+	libGrants := append([]prospectiveGrant(nil), grants...)
+	for i := range libDecl {
+		if libDecl[i].Path == newLibDir+"/config.go" {
+			libDecl[i].Dependencies = append(append([]string(nil), libDecl[i].Dependencies...), "example.com/m/internal/mailbox")
+		}
+	}
+	for i := range libGrants {
+		if libGrants[i].Anchor.File == newLibDir+"/config.go" {
+			libGrants[i].Surface.Dependencies = append(append([]string(nil), libGrants[i].Surface.Dependencies...), "example.com/m/internal/mailbox")
+			libGrants[i].Edge = &prospectiveEdge{ImportPath: "example.com/m/internal/mailbox", Dir: "internal/mailbox", Module: "."}
+		}
+	}
+	mailbox := prospectiveGrant{Surface: ProspectiveSurface{Path: "internal/mailbox/mailbox.go", Package: "mailbox", Role: roleGoLibraryPackage, Covering: libS},
+		Covering: libS, Facts: libGrants[0].Facts, Anchor: CoverageAnchor{File: "internal/mailbox/mailbox.go"}}
+	libDecl = append(libDecl, mailbox.Surface)
+	libGrants = append(libGrants, mailbox)
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecord(libGrants), libDecl, prospectiveWorld); err == nil || !strings.Contains(err.Error(), "only a command grant") {
+		t.Fatalf("a library grant carrying an edge was resumed: %v", err)
+	}
+
+	// The edge's library grants must be in the record: a command grant alone,
+	// restored for a plan that declares only the command, is refused.
+	for _, g := range grants {
+		if isCmd(&g) {
+			if err := (&Engine{}).restoreProspectiveGrants(edgeRecord([]prospectiveGrant{g}), edgeCmdDeclarations(edgeImport), prospectiveWorld); err == nil || !strings.Contains(err.Error(), "no recorded library grant") {
+				t.Fatalf("a command grant was resumed with its library absent from the record: %v", err)
+			}
+		}
+	}
+	// The edge's directory must be the one its import path names, even when
+	// another granted library is recorded there.
+	twoDecl := append(edgeDeclarations(edgeImport),
+		ProspectiveSurface{Path: "internal/mailbox/mailbox.go", Package: "mailbox", Role: roleGoLibraryPackage, Covering: libS, Dependencies: []string{"fmt"}})
+	twoGrants := prospectiveFor(t, append(edgePlanned(), "internal/mailbox/mailbox.go"), twoDecl, newPackageAnchors(), newPackageWorld())
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecord(twoGrants), twoDecl, prospectiveWorld); err != nil {
+		t.Fatalf("premise: the two-library record restores: %v", err)
+	}
+	for i := range twoGrants {
+		if twoGrants[i].Edge != nil {
+			edge := *twoGrants[i].Edge
+			edge.Dir = "internal/mailbox"
+			twoGrants[i].Edge = &edge
+		}
+	}
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecord(twoGrants), twoDecl, prospectiveWorld); err == nil || !strings.Contains(err.Error(), "does not name a library directory") {
+		t.Fatalf("an edge naming another library's directory was resumed: %v", err)
+	}
+
+	// One edge per command package on restore too: a record whose two command
+	// files each carry a valid edge to a different recorded library is refused.
+	serve := newCmdDir + "/serve.go"
+	serveDecl := func(dep string) ProspectiveSurface {
+		return ProspectiveSurface{Path: serve, Package: "main", Role: roleGoCommandPackage, Covering: cmdS, Dependencies: []string{"fmt", dep}}
+	}
+	oneEdgeDecl := append(append([]ProspectiveSurface(nil), twoDecl...), serveDecl(edgeImport))
+	oneEdge := prospectiveFor(t, append(edgePlanned(), "internal/mailbox/mailbox.go", serve), oneEdgeDecl, newPackageAnchors(), newPackageWorld())
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecord(oneEdge), oneEdgeDecl, prospectiveWorld); err != nil {
+		t.Fatalf("premise: a two-file command sharing one edge restores: %v", err)
+	}
+	twoEdgeDecl := append(append([]ProspectiveSurface(nil), twoDecl...), serveDecl("example.com/m/internal/mailbox"))
+	for i := range oneEdge {
+		if oneEdge[i].Anchor.File == serve {
+			oneEdge[i].Surface = serveDecl("example.com/m/internal/mailbox")
+			oneEdge[i].Edge = &prospectiveEdge{ImportPath: "example.com/m/internal/mailbox", Dir: "internal/mailbox", Module: "."}
+		}
+	}
+	e = &Engine{}
+	if err := e.restoreProspectiveGrants(edgeRecord(oneEdge), twoEdgeDecl, prospectiveWorld); err == nil || !strings.Contains(err.Error(), "two dependency edges") {
+		t.Fatalf("a command package carrying two edges was resumed: %v", err)
+	}
+	if len(e.prospectiveGrants("t")) != 0 {
+		t.Fatal("a refused two-edge resume registered grants")
+	}
+
+	// A command grant issued without an edge still restores: no edge is
+	// required where the declaration lists nothing beyond its surface.
+	plain := edgeDeclarations()
+	if err := (&Engine{}).restoreProspectiveGrants(edgeRecord(prospectiveFor(t, edgePlanned(), plain, newPackageAnchors(), newPackageWorld())), plain, prospectiveWorld); err != nil {
+		t.Fatalf("a command grant with no edge was refused on resume: %v", err)
+	}
+}
