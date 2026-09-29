@@ -578,3 +578,340 @@ func TestTheGrantSurvivesAReviewFeedbackCycle(t *testing.T) {
 		t.Fatal("the grant section is repeated")
 	}
 }
+
+// The new-package world: one module, a covered library surface under
+// internal/, a covered command surface under cmd/, and nothing at the two new
+// directories a plan creates.
+const (
+	newLibDir  = "internal/answerer"
+	newCmdDir  = "cmd/sensei-code-answerer"
+	libS       = "internal/relay/relay.go"
+	cmdS       = "cmd/sensei-code/main.go"
+	libSSource = "package relay\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\t\"strings\"\n)\n\nfunc R() { fmt.Println(os.Args, strings.ToUpper(\"x\")) }\n"
+	cmdSSource = "package main\n\nimport (\n\t\"fmt\"\n\t\"os\"\n)\n\nfunc main() { fmt.Println(os.Args) }\n"
+)
+
+func newPackageWorld() map[string]string {
+	return map[string]string{"go.mod": "module example.com/m\n", libS: libSSource, cmdS: cmdSSource}
+}
+
+func newPackageAnchors() []CoverageAnchor {
+	return []CoverageAnchor{
+		{File: libS, Requirement: RequirementLockDiscipline, Describe: "lock discipline over internal/relay"},
+		{File: cmdS, Requirement: RequirementInvocationConfinement, Describe: "command_invocation_confined_to over cmd/sensei-code"},
+	}
+}
+
+func newLibDeclarations() []ProspectiveSurface {
+	return []ProspectiveSurface{
+		{Path: newLibDir + "/answerer.go", Package: "answerer", Role: roleGoLibraryPackage, Covering: libS, Dependencies: []string{"fmt", "strings"}},
+		{Path: newLibDir + "/config.go", Package: "answerer", Role: roleGoLibraryPackage, Covering: libS, Dependencies: []string{"os"}},
+		{Path: newLibDir + "/answerer_test.go", Package: "answerer", Role: roleGoRegressionTest, Dependencies: []string{"testing", "strings"}},
+	}
+}
+
+func newLibPlanned() []string {
+	return []string{newLibDir + "/answerer.go", newLibDir + "/config.go", newLibDir + "/answerer_test.go"}
+}
+
+func newCmdDeclarations() []ProspectiveSurface {
+	return []ProspectiveSurface{{Path: newCmdDir + "/main.go", Package: "main", Role: roleGoCommandPackage, Covering: cmdS, Dependencies: []string{"fmt", "os"}}}
+}
+
+func grantedPaths(grants []prospectiveGrant) map[string]prospectiveGrant {
+	out := map[string]prospectiveGrant{}
+	for _, g := range grants {
+		out[g.Anchor.File] = g
+	}
+	return out
+}
+
+// W1: a new library package -- production files plus an adjacent test -- with
+// a named, covered covering surface is admitted with grants for exactly those
+// files. The test traces through a production grant to the same surface.
+func TestW1ADeclaredNewLibraryPackageIsAdmittedFileByFile(t *testing.T) {
+	grants := prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld())
+	got := grantedPaths(grants)
+	if len(grants) != 3 || len(got) != 3 {
+		t.Fatalf("expected exactly three grants, got %+v", grants)
+	}
+	for _, f := range newLibPlanned() {
+		g, ok := got[f]
+		if !ok {
+			t.Fatalf("no grant for %s", f)
+		}
+		if g.Covering != libS || g.Facts.Package != "relay" || !g.Facts.Imports["strings"] {
+			t.Fatalf("%s is not granted against the pinned facts of %s: %+v", f, libS, g)
+		}
+		if !strings.HasPrefix(g.Anchor.Describe, "PROSPECTIVE ") || !strings.Contains(g.Anchor.Describe, libS) || g.Anchor.Requirement != RequirementLockDiscipline {
+			t.Fatalf("%s's anchor is not a prospective anchor carrying S's requirement: %+v", f, g.Anchor)
+		}
+	}
+	if test := got[newLibDir+"/answerer_test.go"]; test.Via != newLibDir+"/answerer.go" {
+		t.Fatalf("the adjacent test does not trace through a production grant: %+v", test)
+	}
+	if prod := got[newLibDir+"/answerer.go"]; prod.Via != "" {
+		t.Fatalf("a production grant claims to trace through another: %+v", prod)
+	}
+	if err := matchGrantsToDeclarations(newLibDeclarations(), grants); err != nil {
+		t.Fatalf("the issued grants do not match their declarations: %v", err)
+	}
+}
+
+// W2: a new command package is admitted the same way.
+func TestW2ADeclaredNewCommandPackageIsAdmitted(t *testing.T) {
+	grants := prospectiveFor(t, []string{newCmdDir + "/main.go"}, newCmdDeclarations(), newPackageAnchors(), newPackageWorld())
+	if len(grants) != 1 || grants[0].Anchor.File != newCmdDir+"/main.go" || grants[0].Covering != cmdS ||
+		grants[0].Facts.Package != "main" || grants[0].Anchor.Requirement != RequirementInvocationConfinement {
+		t.Fatalf("the command package was not granted against %s: %+v", cmdS, grants)
+	}
+	// Both new packages in one plan are decided independently.
+	both := prospectiveFor(t, append(newLibPlanned(), newCmdDir+"/main.go"), append(newLibDeclarations(), newCmdDeclarations()...),
+		newPackageAnchors(), newPackageWorld())
+	if len(both) != 4 {
+		t.Fatalf("expected four grants over the two packages, got %+v", both)
+	}
+}
+
+// W3: ABSENCE. Each falsifier leaves every file of the new package ungranted.
+func TestW3NewPackageFalsifiersGrantNothing(t *testing.T) {
+	with := func(mut func(ds []ProspectiveSurface) []ProspectiveSurface) []ProspectiveSurface {
+		return mut(newLibDeclarations())
+	}
+	world := newPackageWorld()
+	extend := func(extra map[string]string) map[string]string {
+		w := newPackageWorld()
+		for k, v := range extra {
+			w[k] = v
+		}
+		return w
+	}
+	cases := []struct {
+		name    string
+		planned []string
+		decl    []ProspectiveSurface
+		anchors []CoverageAnchor
+		read    worldReader
+	}{
+		{"an undeclared file in the new directory", append(newLibPlanned(), newLibDir+"/mailbox.go"), newLibDeclarations(), newPackageAnchors(), worldOf(world)},
+		{"a declaration with no matching planned file", newLibPlanned()[:2], newLibDeclarations(), newPackageAnchors(), worldOf(world)},
+		{"an unknown role name", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[1].Role = "go-helper-package"
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"no covering surface named", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[0].Covering, ds[1].Covering = "", ""
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"two covering surfaces named", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[1].Covering = cmdS
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"covering surface missing at the world", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			worldOf(map[string]string{"go.mod": "module example.com/m\n", cmdS: cmdSSource})},
+		{"covering surface uncovered at the world", newLibPlanned(), newLibDeclarations(), newPackageAnchors()[1:], worldOf(world)},
+		{"covering surface is a command, not a library", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[0].Covering, ds[1].Covering = cmdS, cmdS
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"covering surface under another top-level root", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[0].Covering, ds[1].Covering = "pkg/relay/relay.go", "pkg/relay/relay.go"
+			return ds
+		}), append(newPackageAnchors(), CoverageAnchor{File: "pkg/relay/relay.go", Requirement: RequirementLockDiscipline, Describe: "x"}),
+			worldOf(extend(map[string]string{"pkg/relay/relay.go": libSSource}))},
+		{"covering surface in another Go module", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			worldOf(extend(map[string]string{"internal/relay/go.mod": "module example.com/relay\n"}))},
+		{"no Go module at the world", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			worldOf(map[string]string{libS: libSSource, cmdS: cmdSSource})},
+		{"the new directory already exists", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			worldOf(extend(map[string]string{newLibDir: "tree", newLibDir + "/old.go": "package answerer\n"}))},
+		{"a production role on a test path", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[2].Role, ds[2].Covering = roleGoLibraryPackage, libS
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"a library declaring package main", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			for i := range ds {
+				ds[i].Package = "main"
+			}
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"a test outside the package's clause", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[2].Package = "answerer_test"
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"a dependency outside the covering surface's imports", newLibPlanned(), with(func(ds []ProspectiveSurface) []ProspectiveSurface {
+			ds[0].Dependencies = append(ds[0].Dependencies, "net/http")
+			return ds
+		}), newPackageAnchors(), worldOf(world)},
+		{"a test with no production declaration", []string{newLibDir + "/answerer_test.go"}, newLibDeclarations()[2:], newPackageAnchors(), worldOf(world)},
+		{"unclassified read failure of a planned file", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			unreadableAt(worldOf(world), newLibDir+"/config.go")},
+		{"unclassified read failure of the new directory", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			unreadableAt(worldOf(world), newLibDir)},
+		{"unclassified read failure of go.mod", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			unreadableAt(worldOf(world), "go.mod")},
+		{"unclassified read failure of the covering surface", newLibPlanned(), newLibDeclarations(), newPackageAnchors(),
+			unreadableAt(worldOf(world), libS)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			grants := prospectiveAnchors(context.Background(), prospectiveWorld, c.planned, c.decl, c.anchors, c.read)
+			for _, g := range grants {
+				if strings.HasPrefix(g.Anchor.File, newLibDir+"/") {
+					t.Fatalf("%s: the new package was granted: %+v", c.name, grants)
+				}
+			}
+		})
+	}
+
+	cmdCases := []struct {
+		name string
+		decl []ProspectiveSurface
+		dir  string
+	}{
+		{"command covering surface is a library", []ProspectiveSurface{{Path: newCmdDir + "/main.go", Package: "main", Role: roleGoCommandPackage, Covering: libS}}, newCmdDir},
+		{"command not under the covering surface's cmd root", []ProspectiveSurface{{Path: "tools/answerer/main.go", Package: "main", Role: roleGoCommandPackage, Covering: cmdS}}, "tools/answerer"},
+		{"command declaring a non-main package", []ProspectiveSurface{{Path: newCmdDir + "/main.go", Package: "answerer", Role: roleGoCommandPackage, Covering: cmdS}}, newCmdDir},
+	}
+	for _, c := range cmdCases {
+		t.Run(c.name, func(t *testing.T) {
+			if grants := prospectiveFor(t, []string{c.decl[0].Path}, c.decl, newPackageAnchors(), world); len(grants) != 0 {
+				t.Fatalf("%s: the command package was granted: %+v", c.name, grants)
+			}
+		})
+	}
+
+	// Through the engine's partition as well: an unreadable planned file in
+	// the new directory is not handed on as absent, and still counts against
+	// the package.
+	grants, out := coverPlannedAtWorld(context.Background(), prospectiveWorld, newLibPlanned(), newLibDeclarations(),
+		derivedAnchorNaming(t, libS), unreadableAt(worldOf(world), newLibDir+"/config.go"))
+	if len(grants) != 0 {
+		t.Fatalf("an unreadable planned file left its package grantable: %+v", grants)
+	}
+	for _, a := range out {
+		if strings.HasPrefix(a.File, newLibDir+"/") {
+			t.Fatalf("a file of the refused package was covered: %+v", a)
+		}
+	}
+	// The same for an unreadable planned file nobody declared: it is neither
+	// present nor absent, and it is still a create the package did not declare.
+	grants, _ = coverPlannedAtWorld(context.Background(), prospectiveWorld, append(newLibPlanned(), newLibDir+"/mailbox.go"),
+		newLibDeclarations(), derivedAnchorNaming(t, libS), unreadableAt(worldOf(world), newLibDir+"/mailbox.go"))
+	if len(grants) != 0 {
+		t.Fatalf("an unreadable undeclared file left its package grantable: %+v", grants)
+	}
+}
+
+// W4: a created file whose package clause or imports diverge from its
+// declaration is refused, and so is an undeclared file created in the new
+// package. The admitted shape passes.
+func TestW4NewPackageInspectionRefusesDivergence(t *testing.T) {
+	decl := newLibDeclarations()
+	grants := prospectiveFor(t, newLibPlanned(), decl, newPackageAnchors(), newPackageWorld())
+	if len(grants) != 3 {
+		t.Fatalf("premise: three grants, got %+v", grants)
+	}
+	facts := map[string]prospectiveFacts{}
+	for _, g := range grants {
+		facts[g.Anchor.File] = g.Facts
+	}
+	good := createdDiff(newLibDir+"/answerer.go", "package answerer\n\nimport \"strings\"\n\nvar X = strings.ToUpper\n") +
+		createdDiff(newLibDir+"/config.go", "package answerer\n\nimport \"os\"\n\nvar Y = os.Getenv\n") +
+		createdDiff(newLibDir+"/answerer_test.go", "package answerer\n\nimport \"testing\"\n\nfunc TestX(t *testing.T) {}\n")
+	if err := inspectProspectiveSurfaces(good, decl, facts); err != nil {
+		t.Fatalf("the admitted shape was refused: %v", err)
+	}
+	for name, diff := range map[string]string{
+		"package clause": strings.Replace(good, "+package answerer\n+\n+import \"os\"", "+package config\n+\n+import \"os\"", 1),
+		"import":         strings.Replace(good, "import \"os\"", "import \"net/http\"", 1),
+		"test import":    strings.Replace(good, "+import \"testing\"", "+import (\n+\t\"net/http\"\n+\t\"testing\"\n+)", 1),
+		"undeclared":     good + createdDiff(newLibDir+"/mailbox.go", "package answerer\n"),
+	} {
+		if diff == good {
+			t.Fatalf("%s: the mutation did not apply", name)
+		}
+		if err := inspectProspectiveSurfaces(diff, decl, facts); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+			t.Fatalf("%s divergence was not refused: %v", name, err)
+		}
+	}
+	// A command whose created file is not package main is refused.
+	cmd := newCmdDeclarations()
+	cmdGrants := prospectiveFor(t, []string{newCmdDir + "/main.go"}, cmd, newPackageAnchors(), newPackageWorld())
+	cmdFacts := map[string]prospectiveFacts{newCmdDir + "/main.go": cmdGrants[0].Facts}
+	if err := inspectProspectiveSurfaces(createdDiff(newCmdDir+"/main.go", "package answerer\n"), cmd, cmdFacts); err == nil || !strings.Contains(err.Error(), "package") {
+		t.Fatalf("a command with the wrong package clause was not refused: %v", err)
+	}
+}
+
+// Resume inspects against the same pinned facts: the recorded new-package
+// grants restore intact, and a record whose test grant no longer traces to a
+// same-directory production grant over the same surface is refused.
+func TestNewPackageGrantsResumeOnlyWhenTheyStillTrace(t *testing.T) {
+	decl := newLibDeclarations()
+	grants := prospectiveFor(t, newLibPlanned(), decl, newPackageAnchors(), newPackageWorld())
+	record := func(gs []prospectiveGrant) session.Interrupted {
+		raw, _ := json.Marshal(prospectiveRecord{World: prospectiveWorld, Grants: gs})
+		return session.Interrupted{TaskID: "t", ProspectiveRecord: raw}
+	}
+	if err := (&Engine{}).restoreProspectiveGrants(record(grants), decl, prospectiveWorld); err != nil {
+		t.Fatalf("the intact record was refused: %v", err)
+	}
+	tamper := func(f func(g *prospectiveGrant)) []prospectiveGrant {
+		out := append([]prospectiveGrant(nil), grants...)
+		for i := range out {
+			f(&out[i])
+		}
+		return out
+	}
+	for name, gs := range map[string][]prospectiveGrant{
+		"test traces through nothing": tamper(func(g *prospectiveGrant) {
+			if g.Via != "" {
+				g.Via = newLibDir + "/gone.go"
+			}
+		}),
+		"test covers by another surface than its production grant": tamper(func(g *prospectiveGrant) {
+			if g.Via != "" {
+				g.Covering = cmdS
+			}
+		}),
+		"production covers by another surface": tamper(func(g *prospectiveGrant) {
+			if g.Via == "" {
+				g.Covering = cmdS
+			}
+		}),
+		"production claims a trace": tamper(func(g *prospectiveGrant) {
+			if g.Via == "" {
+				g.Via = newLibDir + "/config.go"
+			}
+		}),
+	} {
+		e := &Engine{}
+		if err := e.restoreProspectiveGrants(record(gs), decl, prospectiveWorld); err == nil {
+			t.Errorf("%s: resumed", name)
+		}
+		if len(e.prospectiveGrants("t")) != 0 {
+			t.Errorf("%s: a refused resume registered grants", name)
+		}
+	}
+}
+
+// The worker sees a new-package grant as its own shape: the named covering
+// surface, the declared package, and the production grant a test traces to.
+func TestTheImplementorIsShownANewPackageGrant(t *testing.T) {
+	rendered := renderProspectiveGrants(prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld()))
+	for _, want := range []string{
+		"CREATE " + newLibDir + "/answerer.go",
+		"covering surface: " + libS,
+		"role: " + roleGoLibraryPackage,
+		"package: answerer (the new package's declared clause)",
+		"traced through production grant: " + newLibDir + "/answerer.go",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("the rendered grant lacks %q:\n%s", want, rendered)
+		}
+	}
+	if strings.Contains(rendered, "must equal the covering surface's package") {
+		t.Fatalf("a new package was told to take the covering surface's package:\n%s", rendered)
+	}
+}
