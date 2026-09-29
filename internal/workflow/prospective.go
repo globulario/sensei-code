@@ -29,6 +29,13 @@ type ProspectiveSurface struct {
 	Package      string   `json:"package"`
 	Role         string   `json:"role"`
 	Dependencies []string `json:"dependencies,omitempty"`
+	// Covering names the one existing, covered file S at the pinned world a
+	// new-package declaration is admitted against. It is REQUIRED for the
+	// go-library-package and go-command-package roles: a directory absent at
+	// the pinned world holds no surface, so S must be named and then satisfy
+	// the role's structural rule. For go-regression-test it is optional and,
+	// when given, restricts the covering surface to that file.
+	Covering string `json:"covering,omitempty"`
 }
 
 // prospectiveRole is one governed shape a created file may take. The set is
@@ -39,13 +46,34 @@ type prospectiveRole struct {
 	pathGlob string
 	// novel is the only import set the role admits beyond S's own imports.
 	novel map[string]bool
+	// newPackage marks a production role for a Go package directory ABSENT at
+	// the pinned world. Its covering surface is named by the declaration and
+	// lies outside the new directory; see newPackageGrants.
+	newPackage bool
 }
 
-// roleGoRegressionTest is the one role this change defines.
-const roleGoRegressionTest = "go-regression-test"
+// The closed role set. go-regression-test is the only test role; the two
+// new-package roles are production roles and never admit a *_test.go.
+const (
+	roleGoRegressionTest = "go-regression-test"
+	roleGoLibraryPackage = "go-library-package"
+	roleGoCommandPackage = "go-command-package"
+)
 
 var prospectiveRoles = map[string]prospectiveRole{
 	roleGoRegressionTest: {pathGlob: "*_test.go", novel: map[string]bool{"testing": true}},
+	roleGoLibraryPackage: {pathGlob: "*.go", novel: map[string]bool{}, newPackage: true},
+	roleGoCommandPackage: {pathGlob: "*.go", novel: map[string]bool{}, newPackage: true},
+}
+
+// roleAdmitsPath reports whether f has the role's path shape. A production
+// role never admits a test file: go-regression-test is the only test role.
+func roleAdmitsPath(role prospectiveRole, f string) bool {
+	base := path.Base(f)
+	if matched, err := path.Match(role.pathGlob, base); err != nil || !matched {
+		return false
+	}
+	return !role.newPackage || !strings.HasSuffix(base, "_test.go")
 }
 
 // prospectiveFacts is what was read from S at the pinned world: its package
@@ -110,6 +138,10 @@ type prospectiveGrant struct {
 	// answered. All are emitted, and the consumer selects by requirement.
 	Anchor  CoverageAnchor   `json:"anchor"`
 	Anchors []CoverageAnchor `json:"anchors,omitempty"`
+	// Via names the same-directory new-package production grant a
+	// go-regression-test in a newly admitted package traces through to its
+	// covering surface. Empty for every other grant.
+	Via string `json:"via,omitempty"`
 }
 
 // matchGrantsToDeclarations proves a recorded grant set is exactly the
@@ -146,13 +178,48 @@ func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospecti
 		if strings.TrimSpace(g.Covering) == "" || strings.TrimSpace(g.Facts.Package) == "" || g.Facts.Imports == nil {
 			return fmt.Errorf("the recorded grant for %s names no covering surface or carries no pinned-world facts", f)
 		}
+		if err := grantTracesToItsSurface(f, g, byPath); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// grantTracesToItsSurface is the record-side form of the new-package rules: a
+// production grant covers by exactly the surface its declaration named, and a
+// test that traces through a production grant names one recorded in the same
+// directory, for the same package, over the same covering surface.
+func grantTracesToItsSurface(f string, g prospectiveGrant, byPath map[string]prospectiveGrant) error {
+	role := prospectiveRoles[g.Surface.Role]
+	if named := strings.TrimSpace(g.Surface.Covering); named != "" && path.Clean(named) != g.Covering {
+		return fmt.Errorf("the recorded grant for %s covers by %s, not the declared covering surface %s", f, g.Covering, named)
+	}
+	if role.newPackage {
+		if strings.TrimSpace(g.Surface.Covering) == "" || g.Via != "" {
+			return fmt.Errorf("the recorded new-package grant for %s does not cover by its declared surface alone", f)
+		}
+		return nil
+	}
+	if g.Via == "" {
+		// An untraced test grant is an ordinary one, and an ordinary grant
+		// covers by a surface in its own directory. A test in a new package
+		// covers by an external surface only through its production trace.
+		if path.Dir(g.Covering) != path.Dir(path.Clean(f)) {
+			return fmt.Errorf("the recorded grant for %s covers by %s outside its directory with no production trace", f, g.Covering)
+		}
+		return nil
+	}
+	p, ok := byPath[path.Clean(g.Via)]
+	if !ok || !prospectiveRoles[p.Surface.Role].newPackage || path.Dir(path.Clean(g.Via)) != path.Dir(f) ||
+		p.Covering != g.Covering || p.Surface.Package != g.Surface.Package {
+		return fmt.Errorf("the recorded grant for %s traces through %s, which is not a same-directory production grant over %s", f, g.Via, g.Covering)
 	}
 	return nil
 }
 
 // sameSurface compares declarations field by field, dependencies as a set.
 func sameSurface(a, b ProspectiveSurface) bool {
-	if path.Clean(strings.TrimSpace(a.Path)) != path.Clean(strings.TrimSpace(b.Path)) || a.Package != b.Package || a.Role != b.Role || len(a.Dependencies) != len(b.Dependencies) {
+	if path.Clean(strings.TrimSpace(a.Path)) != path.Clean(strings.TrimSpace(b.Path)) || a.Package != b.Package || a.Role != b.Role || a.Covering != b.Covering || len(a.Dependencies) != len(b.Dependencies) {
 		return false
 	}
 	seen := map[string]bool{}
@@ -223,6 +290,20 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 	for _, list := range byDir {
 		sort.SliceStable(list, func(i, j int) bool { return list[i].File < list[j].File })
 	}
+	// Directories a new-package role is declared in are decided whole, by
+	// newPackageGrants, and never by the per-file loop below.
+	var newDirs []string
+	isNewDir := map[string]bool{}
+	for _, d := range declarations {
+		if !prospectiveRoles[d.Role].newPackage {
+			continue
+		}
+		dir := path.Dir(path.Clean(strings.TrimSpace(d.Path)))
+		if !isNewDir[dir] {
+			isNewDir[dir] = true
+			newDirs = append(newDirs, dir)
+		}
+	}
 
 	var grants []prospectiveGrant
 	for _, d := range declarations {
@@ -230,19 +311,23 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 		if f == "." || !isPlanned[f] {
 			continue // a declaration with no matching planned file
 		}
+		if isNewDir[path.Dir(f)] {
+			continue
+		}
 		if _, err := read(ctx, world, f); !confirmedMissing(err) {
 			continue // F exists at world, or its existence could not be established: not a create
 		}
 		// Clause C, read by membership.
 		role, ok := prospectiveRoles[d.Role]
-		if !ok {
+		if !ok || role.newPackage {
 			continue
 		}
-		if matched, err := path.Match(role.pathGlob, path.Base(f)); err != nil || !matched {
+		if !roleAdmitsPath(role, f) {
 			continue
 		}
+		named := strings.TrimSpace(d.Covering)
 		for _, s := range byDir[path.Dir(f)] {
-			if s.File == f {
+			if s.File == f || (named != "" && s.File != path.Clean(named)) {
 				continue
 			}
 			src, err := read(ctx, world, s.File)
@@ -281,7 +366,224 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 			break
 		}
 	}
+	for _, dir := range newDirs {
+		grants = append(grants, newPackageGrants(ctx, world, dir, planned, declarations, existing, read)...)
+	}
 	return grants
+}
+
+// newPackageGrants decides a directory a new-package role is declared in, as
+// a whole: every declared file in it is granted, or none is. The covering
+// surface S is the one the declarations NAME, and it is admitted only on
+// facts read at the pinned world:
+//
+//	N1. dir is confirmed ABSENT at world (only errNotAtWorld establishes it);
+//	N2. every planned file in dir is declared exactly once, with a role from
+//	    the closed set whose path shape it matches, and is confirmed absent;
+//	N3. the production declarations share one new-package role, one package
+//	    clause (main for a command, a non-main identifier for a library) and
+//	    one named covering surface S;
+//	N4. S is a covered, readable, non-test Go file outside dir;
+//	N5. S's directory and dir resolve to the same go.mod at world;
+//	N6. go-command-package: S is package main and S's package directory and
+//	    dir are children of the same existing directory named "cmd";
+//	    go-library-package: S is not package main and S's package directory
+//	    and dir lie under the same top-level directory of that module;
+//	N7. every declared dependency is in S's imports or the role allowance.
+//
+// A go-regression-test in dir is admitted only through a production grant in
+// dir, over the same S and package: the one prospective-to-prospective step.
+func newPackageGrants(ctx context.Context, world, dir string, planned []string, declarations []ProspectiveSurface, existing []CoverageAnchor, read worldReader) []prospectiveGrant {
+	if dir == "." || dir == ".." || strings.HasPrefix(dir, "../") || path.IsAbs(dir) {
+		return nil
+	}
+	// N1.
+	if _, err := read(ctx, world, dir); !confirmedMissing(err) {
+		return nil
+	}
+	// N2.
+	declared := map[string]ProspectiveSurface{}
+	for _, d := range declarations {
+		f := path.Clean(strings.TrimSpace(d.Path))
+		if path.Dir(f) != dir {
+			continue
+		}
+		if _, dup := declared[f]; dup {
+			return nil
+		}
+		declared[f] = d
+	}
+	isPlanned := map[string]bool{}
+	for _, p := range planned {
+		f := path.Clean(p)
+		if path.Dir(f) != dir {
+			continue
+		}
+		isPlanned[f] = true
+		if _, ok := declared[f]; !ok {
+			return nil // an undeclared create in the new directory
+		}
+	}
+	for f := range declared {
+		if !isPlanned[f] {
+			return nil // a declaration with no matching planned file
+		}
+	}
+	files := make([]string, 0, len(declared))
+	for f := range declared {
+		files = append(files, f)
+	}
+	sort.Strings(files)
+	var production, tests []string
+	for _, f := range files {
+		d := declared[f]
+		role, ok := prospectiveRoles[d.Role]
+		if !ok || !roleAdmitsPath(role, f) {
+			return nil
+		}
+		if _, err := read(ctx, world, f); !confirmedMissing(err) {
+			return nil
+		}
+		if role.newPackage {
+			production = append(production, f)
+		} else {
+			tests = append(tests, f)
+		}
+	}
+	// N3.
+	if len(production) == 0 {
+		return nil
+	}
+	first := declared[production[0]]
+	covering := path.Clean(strings.TrimSpace(first.Covering))
+	if strings.TrimSpace(first.Covering) == "" {
+		return nil
+	}
+	for _, f := range production {
+		d := declared[f]
+		if d.Role != first.Role || d.Package != first.Package || path.Clean(strings.TrimSpace(d.Covering)) != covering || strings.TrimSpace(d.Covering) == "" {
+			return nil
+		}
+	}
+	command := first.Role == roleGoCommandPackage
+	if command && first.Package != "main" {
+		return nil
+	}
+	if !command && (first.Package == "main" || !token.IsIdentifier(first.Package)) {
+		return nil
+	}
+	// N4.
+	var carriedFrom []CoverageAnchor
+	for _, a := range existing {
+		if a.File == covering {
+			carriedFrom = append(carriedFrom, a)
+		}
+	}
+	sDir := path.Dir(covering)
+	if len(carriedFrom) == 0 || sDir == dir || path.Ext(covering) != ".go" || strings.HasSuffix(covering, "_test.go") {
+		return nil
+	}
+	src, err := read(ctx, world, covering)
+	if err != nil {
+		return nil
+	}
+	facts, err := parseGoFacts(src)
+	if err != nil {
+		return nil
+	}
+	// N5.
+	mod, ok := goModuleDir(ctx, world, dir, read)
+	if !ok {
+		return nil
+	}
+	if sMod, ok := goModuleDir(ctx, world, sDir, read); !ok || sMod != mod {
+		return nil
+	}
+	// N6.
+	if command {
+		parent := path.Dir(dir)
+		if facts.Package != "main" || path.Base(parent) != "cmd" || path.Dir(sDir) != parent || !underModule(mod, parent) {
+			return nil
+		}
+	} else {
+		relNew, relS := strings.Split(moduleRel(mod, dir), "/"), strings.Split(moduleRel(mod, sDir), "/")
+		if facts.Package == "main" || !underModule(mod, dir) || !underModule(mod, sDir) ||
+			len(relNew) < 2 || len(relS) < 2 || relNew[0] != relS[0] {
+			return nil
+		}
+	}
+	// N7.
+	for _, f := range files {
+		d := declared[f]
+		if d.Package != first.Package {
+			return nil // a test in the new package carries the package's clause
+		}
+		if named := strings.TrimSpace(d.Covering); named != "" && path.Clean(named) != covering {
+			return nil
+		}
+		role := prospectiveRoles[d.Role]
+		for _, dep := range d.Dependencies {
+			if !facts.Imports[dep] && !role.novel[dep] {
+				return nil
+			}
+		}
+	}
+
+	grantFor := func(f, via string) prospectiveGrant {
+		d := declared[f]
+		authorizedBy := covering
+		if via != "" {
+			authorizedBy = via + " tracing to " + covering
+		}
+		var carried []CoverageAnchor
+		for _, a := range carriedFrom {
+			carried = append(carried, CoverageAnchor{
+				File:        f,
+				Requirement: a.Requirement,
+				Describe: fmt.Sprintf("PROSPECTIVE %s %s: create authorized by %s at %s; %s",
+					d.Role, f, authorizedBy, shortWorldID(world), a.Describe),
+			})
+		}
+		return prospectiveGrant{Surface: d, Covering: covering, Facts: facts, Anchor: carried[0], Anchors: carried, Via: via}
+	}
+	var grants []prospectiveGrant
+	for _, f := range production {
+		grants = append(grants, grantFor(f, ""))
+	}
+	for _, f := range tests {
+		grants = append(grants, grantFor(f, production[0]))
+	}
+	return grants
+}
+
+// goModuleDir returns the directory of the go.mod that governs dir at world,
+// walking up from dir. Only confirmed absence moves the walk up; any other
+// read failure establishes no module at all.
+func goModuleDir(ctx context.Context, world, dir string, read worldReader) (string, bool) {
+	for d := dir; ; d = path.Dir(d) {
+		f := "go.mod"
+		if d != "." {
+			f = d + "/go.mod"
+		}
+		_, err := read(ctx, world, f)
+		if err == nil {
+			return d, true
+		}
+		if !confirmedMissing(err) || d == "." {
+			return "", false
+		}
+	}
+}
+
+func underModule(mod, dir string) bool {
+	return mod == "." || strings.HasPrefix(dir, mod+"/")
+}
+
+func moduleRel(mod, dir string) string {
+	if mod == "." {
+		return dir
+	}
+	return strings.TrimPrefix(dir, mod+"/")
 }
 
 // admissibleAgainst is clauses B and D for one declaration against one
@@ -319,7 +621,7 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 		if !ok {
 			return fmt.Errorf("prospective surface refuted: %s declares role %q, which is not a governed role", f, d.Role)
 		}
-		if matched, err := path.Match(role.pathGlob, path.Base(f)); err != nil || !matched {
+		if !roleAdmitsPath(role, f) {
 			return fmt.Errorf("prospective surface refuted: %s does not match the %s path shape %s", f, d.Role, role.pathGlob)
 		}
 		src, ok := created[f]
@@ -347,6 +649,26 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 			if !allowed[imp] && !role.novel[imp] {
 				return fmt.Errorf("prospective surface refuted: %s imports %q, which is outside the covering surface's imports and the %s allowance", f, imp, d.Role)
 			}
+		}
+	}
+	// A new package was admitted as exactly its declared files: anything else
+	// created in that directory was authorized by nothing.
+	isDeclared, newDirs := map[string]bool{}, map[string]bool{}
+	for _, d := range declarations {
+		f := path.Clean(strings.TrimSpace(d.Path))
+		isDeclared[f] = true
+		if prospectiveRoles[d.Role].newPackage {
+			newDirs[path.Dir(f)] = true
+		}
+	}
+	names := make([]string, 0, len(created))
+	for f := range created {
+		names = append(names, f)
+	}
+	sort.Strings(names)
+	for _, f := range names {
+		if newDirs[path.Dir(f)] && !isDeclared[f] {
+			return fmt.Errorf("prospective surface refuted: %s was created in a new package but no declaration admitted it", f)
 		}
 	}
 	return nil
@@ -436,7 +758,14 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 		sort.Strings(requirements)
 		fmt.Fprintf(&b, "- CREATE %s\n", path.Clean(strings.TrimSpace(g.Surface.Path)))
 		fmt.Fprintf(&b, "    covering surface: %s\n", g.Covering)
-		fmt.Fprintf(&b, "    package: %s (must equal the covering surface's package)\n", g.Surface.Package)
+		if g.Via != "" {
+			fmt.Fprintf(&b, "    traced through production grant: %s\n", g.Via)
+		}
+		if known && role.newPackage || g.Via != "" {
+			fmt.Fprintf(&b, "    package: %s (the new package's declared clause)\n", g.Surface.Package)
+		} else {
+			fmt.Fprintf(&b, "    package: %s (must equal the covering surface's package)\n", g.Surface.Package)
+		}
 		fmt.Fprintf(&b, "    role: %s\n", g.Surface.Role)
 		fmt.Fprintf(&b, "    declared dependencies: %s\n", strings.Join(g.Surface.Dependencies, ", "))
 		fmt.Fprintf(&b, "    EFFECTIVE ALLOWED IMPORTS (covering surface's imports at the pinned world + the role allowance): %s\n", strings.Join(imports, ", "))

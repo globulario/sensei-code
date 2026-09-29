@@ -4809,6 +4809,11 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 	// subject file a derivation established here, planned or not, read from
 	// the pinned world and never the working tree (a subject that cannot be
 	// read there is no surface). Undeclared absent files stay uncovered.
+	//
+	// The predicate is handed EVERY planned file, not only the confirmed
+	// missing ones: it re-establishes absence per declaration itself, and a
+	// new package is admitted only when every planned file in its directory
+	// is declared -- an unreadable file there must still count against it.
 	var surfaces []CoverageAnchor
 	for _, a := range anchors {
 		for _, f := range a.Files() {
@@ -4821,7 +4826,7 @@ func coverPlannedAtWorld(ctx context.Context, world string, planned []string, de
 			surfaces = append(surfaces, CoverageAnchor{File: f, Requirement: requirementOfFamily(a.Kind()), Describe: a.Describe()})
 		}
 	}
-	grants := prospectiveAnchors(ctx, world, missing, declarations, surfaces, read)
+	grants := prospectiveAnchors(ctx, world, planned, declarations, surfaces, read)
 	for _, g := range grants {
 		if len(g.Anchors) == 0 {
 			out = append(out, g.Anchor)
@@ -5131,7 +5136,7 @@ Return ONLY JSON in this exact shape:
   "files": ["path/the/work/touches.go"],
   "mode": "modify" | "inspect",
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
-  "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]}],
+  "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]},{"path":"internal/n/n.go","package":"n","role":"go-library-package","covering":"internal/m/m.go","dependencies":["fmt"]}],
   "test_edits": [{"path":"pkg/y_test.go","operation":"edit","package":"y","build_constraints":[],"imports":["testing","strings"]}],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
@@ -5139,9 +5144,23 @@ Return ONLY JSON in this exact shape:
   "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference","gap":"only the receipt id of an unsettled premise this claim continues"}],
   "premise_resolutions": [{"gap":"receipt id you were asked to answer","outcome":"established|refuted|unresolved","evidence":"..."}]
 }
-Declare every file the plan CREATES under "prospective_surfaces" (the only role is
-go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
-imports and "testing"); an undeclared new file stays uncovered.
+Declare every file the plan CREATES under "prospective_surfaces"; an undeclared new file
+stays uncovered. The roles are a closed set of exactly three:
+  go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
+    imports and "testing". It is the only test role.
+  go-library-package / go-command-package: a non-test .go file in a NEW directory, one that
+    does not exist at the pinned base. Each MUST name "covering": exactly one existing file,
+    covered at the pinned base, in the same Go module (same go.mod). For go-command-package
+    the new directory and the covering file's directory are both children of the same
+    existing "cmd" directory, the covering file is package main, and "package" is "main".
+    For go-library-package they lie under the same top-level directory of the module, the
+    covering file is not package main, and "package" is the new package's name. Imports are
+    limited to the covering file's own imports.
+  A new package is admitted whole or not at all: declare EVERY file created in that
+  directory, all production files with the same role, package and covering file. A
+  *_test.go in the new package is declared as go-regression-test with that same package;
+  it is admitted only through the package's production declarations and the same covering
+  file. Objective text, prose and future imports never establish a covering file.
 Declare every ALREADY-EXISTING test file the plan EDITS under "test_edits", with the
 structural effects of that edit: "operation", the "package" clause it will still carry,
 its "build_constraints", and the "imports" it will need. Those files may only be edited in
