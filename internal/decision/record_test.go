@@ -73,7 +73,7 @@ func TestAuthorityProvenanceNamesTheRealOwner(t *testing.T) {
 }
 
 func TestArgsNeverRebuildTheGraph(t *testing.T) {
-	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, RepoRoot: "/repo",
+	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, WriteRoot: "/repo",
 		Authority: Authority{Owner: Architectural}}
 	args := strings.Join(r.Args(), " ")
 	if !strings.Contains(args, "--no-rebuild") {
@@ -108,5 +108,33 @@ func TestGraphClassPrefixesAreStrippedFromLinks(t *testing.T) {
 	}
 	if !strings.Contains(args, "--related-invariant sensei_code.provider.credentials_remain_provider_owned") {
 		t.Fatalf("the normalised invariant id is missing: %s", args)
+	}
+}
+
+// R15b: the decision is appended into owned state, never staged. Staging is
+// what left decisions.yaml modified in the canonical checkout after every
+// accepted run, so the argv must say --no-stage, and the write root must be
+// the task-owned root under the ignored .sensei-code/ area -- with the
+// repository and domain provenance carried separately from where it is written.
+func TestDecisionIsWrittenToTheOwnedRootWithoutStaging(t *testing.T) {
+	root := OwnedRoot("/canonical", "task-7")
+	if root != "/canonical/.sensei-code/decisions/task-7" {
+		t.Fatalf("owned root = %q, want it beneath the canonical .sensei-code/ area", root)
+	}
+	if got := PendingPath(root); got != root+"/docs/awareness/architecture/decisions.yaml" {
+		t.Fatalf("pending path = %q, not where sensei propose appends beneath the root", got)
+	}
+	r := Record{Title: "t", Rationale: "r", Invariants: []string{"inv.one"}, Authority: Authority{Owner: Architectural},
+		Repo: "github.com/x/y", Domain: "github.com/x/y", WriteRoot: root}
+	args := r.Args()
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"--no-stage", "--no-rebuild", "--target-repo " + root,
+		"--repo github.com/x/y", "--domain github.com/x/y"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args missing %q: %s", want, joined)
+		}
+	}
+	if strings.Contains(joined, "--target-repo /canonical ") || args[len(args)-1] == "/canonical" {
+		t.Fatalf("the decision targets the canonical checkout: %s", joined)
 	}
 }
