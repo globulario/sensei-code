@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/globulario/sensei-code/internal/event"
 )
 
 // ObjectiveProposalMarker distinguishes untrusted objective proposals from
@@ -140,9 +142,12 @@ func ParseObjectiveProposal(body string) (objective string, handled bool, err er
 	return envelope.Objective, true, nil
 }
 
+// DigestObjective is the objective identity a proposal is stored under. It is
+// event.ObjectiveDigest -- the rule the architecture binding uses -- so a
+// proposal and the architect turn it may later cause name the same bytes the
+// same way, and an empty objective has no digest on either.
 func DigestObjective(objective string) string {
-	sum := sha256.Sum256([]byte(objective))
-	return fmt.Sprintf("%x", sum[:])
+	return event.ObjectiveDigest(objective)
 }
 
 func (s *ProposalStore) proposalPath(commentID int64) string {
@@ -269,7 +274,9 @@ func (s *ProposalStore) loadProposalUnlocked(commentID int64) (ObjectiveProposal
 	if err := readJSON(s.proposalPath(commentID), &p); err != nil {
 		return ObjectiveProposal{}, err
 	}
-	if p.CommentID != commentID || p.Version != 1 || p.ObjectiveDigest != DigestObjective(p.Objective) {
+	// An empty objective has no digest, so a record carrying neither must not
+	// verify by the two blanks agreeing.
+	if p.CommentID != commentID || p.Version != 1 || p.ObjectiveDigest == "" || p.ObjectiveDigest != DigestObjective(p.Objective) {
 		return ObjectiveProposal{}, fmt.Errorf("proposal %d failed its immutable identity check", commentID)
 	}
 	return p, nil

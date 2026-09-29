@@ -2,6 +2,7 @@ package event
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"time"
@@ -272,4 +273,21 @@ func New(sessionID, taskID string, source Source, kind Kind, summary string, pay
 	_, _ = rand.Read(entropy[:])
 	id := now.Format("20060102T150405.000000000Z") + "-" + hex.EncodeToString(entropy[:])
 	return Event{ID: id, Time: now, SessionID: sessionID, TaskID: taskID, Source: source, Kind: kind, Summary: summary, Payload: raw}
+}
+
+// ObjectiveDigest is the one identity rule for an objective: the SHA-256 of its
+// exact bytes, lowercase hex.
+//
+// The bytes are neither trimmed nor normalized: two objectives that render
+// alike but differ in bytes are two inputs. An empty objective has NO digest,
+// so an absent record cannot masquerade as the valid SHA-256 of "". It lives
+// here, beside TaskCreated, because every holder of an objective -- the
+// workflow's architecture binding and the webhook's proposal store alike --
+// already depends on this package and on nothing else in common.
+func ObjectiveDigest(objective string) string {
+	if objective == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte(objective))
+	return hex.EncodeToString(sum[:])
 }

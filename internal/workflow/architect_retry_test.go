@@ -39,6 +39,7 @@ func resolveWithArchitect(t *testing.T, turns ...architectTurn) (*scriptedArchit
 	architect := &scriptedArchitect{turns: turns}
 	e := New(gitx.Repo{Root: t.TempDir()}, config.Default(), event.NewBus(), nil, "sess-1")
 	e.Runners = &fixedResolver{runner: architect, name: "claude"}
+	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 	_, err := e.resolveArchitectureIn(context.Background(), nil, certifiedStart{}, "task-1", "task", "PROMPT", t.TempDir())
 	return architect, err
 }
