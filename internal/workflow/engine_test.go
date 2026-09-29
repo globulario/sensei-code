@@ -1778,3 +1778,39 @@ func TestACommittedRecipeIsStillReadBesideTheOwnedOverlay(t *testing.T) {
 		}
 	}
 }
+
+// The architect is told the closed role set as it now stands: the two
+// new-package production roles, the covering surface each must name and the
+// structural rule it must satisfy, and the unchanged regression-test rule. The
+// schema's own example declares a covering surface the decision type reads.
+func TestTheArchitectPromptStatesTheNewPackageRoles(t *testing.T) {
+	prompt := architecturePrompt("/repo", "d", "ChatGPT", "task", "", "ws", "pf", "", "", "", "")
+	for _, want := range []string{
+		"closed set of exactly three",
+		"go-regression-test: a *_test.go beside a covered file",
+		"It is the only test role",
+		"go-library-package / go-command-package",
+		`MUST name "covering"`,
+		"same Go module",
+		`existing "cmd" directory`,
+		"same top-level directory of the module",
+		"declare EVERY file created in that",
+		"only through the package's production declarations",
+		"never establish a covering file",
+		`"covering":"internal/m/m.go"`,
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("the architect prompt does not say %q", want)
+		}
+	}
+	if strings.Contains(prompt, "the only role is") {
+		t.Fatal("the architect prompt still says go-regression-test is the only role")
+	}
+	var d architectureDecision
+	if err := json.Unmarshal([]byte(`{"prospective_surfaces":[{"path":"internal/n/n.go","package":"n","role":"go-library-package","covering":"internal/m/m.go"}]}`), &d); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.ProspectiveSurfaces) != 1 || d.ProspectiveSurfaces[0].Covering != "internal/m/m.go" {
+		t.Fatalf("the declared covering surface is not read: %+v", d.ProspectiveSurfaces)
+	}
+}
