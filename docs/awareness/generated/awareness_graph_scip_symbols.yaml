@@ -39389,6 +39389,12 @@ code_symbols:
     file: internal/workflow/blindspot_test.go
     symbol: TestUnrecognisedBlindSpotsFailClosed
     kind: function
+  - id: internal/workflow/blindspot_test.go:TestW6APlanWithNoProspectiveDeclarationsRoutesAsAtBase
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/blindspot_test.go
+    symbol: TestW6APlanWithNoProspectiveDeclarationsRoutesAsAtBase
+    kind: function
   - id: internal/workflow/blindspot_test.go:authorityStatementSummaryArgs
     namespace: structural.scip
     language: go
@@ -42683,6 +42689,12 @@ code_symbols:
     file: internal/workflow/engine_test.go
     symbol: TestTheArchitectIsAskedToDeclareTheMode
     kind: function
+  - id: internal/workflow/engine_test.go:TestTheArchitectPromptStatesTheNewPackageRoles
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestTheArchitectPromptStatesTheNewPackageRoles
+    kind: function
   - id: internal/workflow/engine_test.go:TestTheArchitectResolutionLoopIsBounded
     namespace: structural.scip
     language: go
@@ -45161,6 +45173,12 @@ code_symbols:
     file: internal/workflow/premise.go
     symbol: scopesOverlap
     kind: function
+  - id: internal/workflow/prospective.go:ProspectiveSurface.Covering
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: ProspectiveSurface.Covering
+    kind: var
   - id: internal/workflow/prospective.go:ProspectiveSurface.Dependencies
     namespace: structural.scip
     language: go
@@ -45221,6 +45239,18 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: gitShowAt
     kind: function
+  - id: internal/workflow/prospective.go:goModuleDir
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: goModuleDir
+    kind: function
+  - id: internal/workflow/prospective.go:grantTracesToItsSurface
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: grantTracesToItsSurface
+    kind: function
   - id: internal/workflow/prospective.go:inspectProspectiveSurfaces
     namespace: structural.scip
     language: go
@@ -45232,6 +45262,18 @@ code_symbols:
     language: go
     file: internal/workflow/prospective.go
     symbol: matchGrantsToDeclarations
+    kind: function
+  - id: internal/workflow/prospective.go:moduleRel
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: moduleRel
+    kind: function
+  - id: internal/workflow/prospective.go:newPackageGrants
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: newPackageGrants
     kind: function
   - id: internal/workflow/prospective.go:parseGoFacts
     namespace: structural.scip
@@ -45293,6 +45335,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveGrant.Surface
     kind: var
+  - id: internal/workflow/prospective.go:prospectiveGrant.Via
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveGrant.Via
+    kind: var
   - id: internal/workflow/prospective.go:prospectiveGrant~type
     namespace: structural.scip
     language: go
@@ -45317,6 +45365,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveRecord
     kind: type
+  - id: internal/workflow/prospective.go:prospectiveRole.newPackage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveRole.newPackage
+    kind: var
   - id: internal/workflow/prospective.go:prospectiveRole.novel
     namespace: structural.scip
     language: go
@@ -45347,6 +45401,24 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: renderProspectiveGrants
     kind: function
+  - id: internal/workflow/prospective.go:roleAdmitsPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: roleAdmitsPath
+    kind: function
+  - id: internal/workflow/prospective.go:roleGoCommandPackage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: roleGoCommandPackage
+    kind: const
+  - id: internal/workflow/prospective.go:roleGoLibraryPackage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: roleGoLibraryPackage
+    kind: const
   - id: internal/workflow/prospective.go:roleGoRegressionTest
     namespace: structural.scip
     language: go
@@ -45364,6 +45436,12 @@ code_symbols:
     language: go
     file: internal/workflow/prospective.go
     symbol: shortWorldID
+    kind: function
+  - id: internal/workflow/prospective.go:underModule
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: underModule
     kind: function
   - id: internal/workflow/prospective.go:worldReader~type
     namespace: structural.scip
@@ -45425,6 +45503,12 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: TestInterruptedProspectiveInspectionUsesTheRecordedGrants
     kind: function
+  - id: internal/workflow/prospective_test.go:TestNewPackageGrantsResumeOnlyWhenTheyStillTrace
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestNewPackageGrantsResumeOnlyWhenTheyStillTrace
+    kind: function
   - id: internal/workflow/prospective_test.go:TestPostCreationInspectionAcceptsTheAuthorizedShapeOnly
     namespace: structural.scip
     language: go
@@ -45455,12 +45539,54 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: TestTheGrantSurvivesAReviewFeedbackCycle
     kind: function
+  - id: internal/workflow/prospective_test.go:TestTheImplementorIsShownANewPackageGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestTheImplementorIsShownANewPackageGrant
+    kind: function
   - id: internal/workflow/prospective_test.go:TestTheImplementorIsShownTheProspectiveGrantItOperatesUnder
     namespace: structural.scip
     language: go
     file: internal/workflow/prospective_test.go
     symbol: TestTheImplementorIsShownTheProspectiveGrantItOperatesUnder
     kind: function
+  - id: internal/workflow/prospective_test.go:TestW1ADeclaredNewLibraryPackageIsAdmittedFileByFile
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestW1ADeclaredNewLibraryPackageIsAdmittedFileByFile
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestW2ADeclaredNewCommandPackageIsAdmitted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestW2ADeclaredNewCommandPackageIsAdmitted
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestW3NewPackageFalsifiersGrantNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestW3NewPackageFalsifiersGrantNothing
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestW4NewPackageInspectionRefusesDivergence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestW4NewPackageInspectionRefusesDivergence
+    kind: function
+  - id: internal/workflow/prospective_test.go:cmdS
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: cmdS
+    kind: const
+  - id: internal/workflow/prospective_test.go:cmdSSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: cmdSSource
+    kind: const
   - id: internal/workflow/prospective_test.go:createdDiff
     namespace: structural.scip
     language: go
@@ -45509,6 +45635,66 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: gosumcheckSrc
     kind: const
+  - id: internal/workflow/prospective_test.go:grantedPaths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: grantedPaths
+    kind: function
+  - id: internal/workflow/prospective_test.go:libS
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: libS
+    kind: const
+  - id: internal/workflow/prospective_test.go:libSSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: libSSource
+    kind: const
+  - id: internal/workflow/prospective_test.go:newCmdDeclarations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newCmdDeclarations
+    kind: function
+  - id: internal/workflow/prospective_test.go:newCmdDir
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newCmdDir
+    kind: const
+  - id: internal/workflow/prospective_test.go:newLibDeclarations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newLibDeclarations
+    kind: function
+  - id: internal/workflow/prospective_test.go:newLibDir
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newLibDir
+    kind: const
+  - id: internal/workflow/prospective_test.go:newLibPlanned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newLibPlanned
+    kind: function
+  - id: internal/workflow/prospective_test.go:newPackageAnchors
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newPackageAnchors
+    kind: function
+  - id: internal/workflow/prospective_test.go:newPackageWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: newPackageWorld
+    kind: function
   - id: internal/workflow/prospective_test.go:prospectiveFor
     namespace: structural.scip
     language: go
