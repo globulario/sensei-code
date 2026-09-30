@@ -2669,6 +2669,211 @@ type reviewDecision struct {
 	Findings     []roles.Finding `json:"findings,omitempty"`
 }
 
+// STRICT CONTRACT VALIDATION, for a party that must decide whether bytes it did
+// not author conform to the written wire contracts BEFORE anything reads them.
+//
+// The readers above stay exactly as they are: decodeModelJSON tolerates a fence
+// and surrounding prose, the architect loop folds the decision's case, and
+// numberFindings supplies ids and a default severity. That leniency belongs to
+// a consumer that has already accepted a turn. A transport deciding whether to
+// post a turn at all must not let it manufacture validity, so these entry
+// points read the same types, vocabularies and rules against the original
+// bytes and repair nothing.
+//
+// They are side-effect free: no provenance, standing, routing or state. An
+// error means "this does not conform to the contract"; nil means only that it
+// does, and grants nothing.
+
+// StrictValidateArchitectureBody reports whether body is exactly one
+// architecture JSON object satisfying the architecture contract.
+func StrictValidateArchitectureBody(body string) error {
+	var d architectureDecision
+	if err := strictDecodeModelJSON(body, &d); err != nil {
+		return err
+	}
+	return strictArchitectureContract(d)
+}
+
+// StrictValidateReviewPayload reports whether body is exactly one reviewer JSON
+// object satisfying the review contract. Findings are read as the reviewer
+// wrote them, before numberFindings could give one an id or a severity.
+func StrictValidateReviewPayload(body string) error {
+	var d reviewDecision
+	if err := strictDecodeModelJSON(body, &d); err != nil {
+		return err
+	}
+	return strictReviewContract(d)
+}
+
+// strictDecodeModelJSON is decodeModelJSON without the repairs: no fence is
+// stripped, no prose is skipped, and a field outside the contract is refused.
+// Surrounding whitespace is the only thing not part of the object.
+func strictDecodeModelJSON(body string, dst any) error {
+	s := strings.TrimSpace(body)
+	dec := json.NewDecoder(strings.NewReader(s))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return fmt.Errorf("decode model decision: %w", err)
+	}
+	if dec.InputOffset() != int64(len(s)) {
+		return errors.New("the payload carries data after its JSON object")
+	}
+	return nil
+}
+
+// claimSources is the closed provenance vocabulary the architecture contract
+// states for a claim, the one the router reads in authority.go.
+var claimSources = map[string]bool{"graph": true, "repository": true, "inference": true}
+
+// strictArchitectureContract applies the written architecture contract. Every
+// vocabulary is read by exact membership: a value the reader would fold into a
+// member ("Proceed", " edit ") is refused here, not normalized.
+func strictArchitectureContract(d architectureDecision) error {
+	switch d.Decision {
+	case "reply":
+		if strings.TrimSpace(d.Message) == "" {
+			return errors.New("reply carries no message")
+		}
+	case "proceed":
+		if strings.TrimSpace(d.Plan) == "" {
+			return errors.New("proceed carries no plan")
+		}
+		if d.Mode == "" {
+			return errors.New("proceed carries no mode")
+		}
+		if len(d.Claims) == 0 {
+			return errors.New("proceed carries no claims")
+		}
+	case "escalate":
+		if strings.TrimSpace(d.HumanQuestion) == "" {
+			return errors.New("escalate carries no human_question")
+		}
+		if n := len(d.Options); n < 2 || n > 3 {
+			return fmt.Errorf("escalate must carry 2 or 3 options, got %d", n)
+		}
+		ids := map[string]bool{}
+		for i, o := range d.Options {
+			if strings.TrimSpace(o.ID) == "" || strings.TrimSpace(o.Label) == "" {
+				return fmt.Errorf("option %d must carry an id and a label", i+1)
+			}
+			if ids[o.ID] {
+				return fmt.Errorf("option id %q appears twice", o.ID)
+			}
+			if o.Outcome != "" {
+				return fmt.Errorf("option %q states an outcome; outcomes are set by the orchestrator, never by a model", o.ID)
+			}
+			ids[o.ID] = true
+		}
+		if !ids[d.Recommendation] {
+			return fmt.Errorf("escalate recommendation %q names none of its options", d.Recommendation)
+		}
+	default:
+		return fmt.Errorf("architect decision must be reply, proceed, or escalate, got %q", d.Decision)
+	}
+	if d.Mode != "" && d.Mode != ModeModify && d.Mode != ModeInspect {
+		return fmt.Errorf("mode must be %s or %s, got %q", ModeModify, ModeInspect, d.Mode)
+	}
+	if d.Adjudication != "" && d.Adjudication != adjudicationRevise && d.Adjudication != adjudicationAcceptingStands {
+		return fmt.Errorf("adjudication must be %s or %s, got %q", adjudicationRevise, adjudicationAcceptingStands, d.Adjudication)
+	}
+	for i, c := range d.Claims {
+		if strings.TrimSpace(c.Statement) == "" {
+			return fmt.Errorf("claim %d states nothing", i+1)
+		}
+		if !claimSources[c.Source] {
+			return fmt.Errorf("claim %d has source %q, which is not graph, repository, or inference", i+1, c.Source)
+		}
+	}
+	for i, s := range d.ProspectiveSurfaces {
+		if strings.TrimSpace(s.Path) == "" || strings.TrimSpace(s.Package) == "" {
+			return fmt.Errorf("prospective surface %d must name a path and a package", i+1)
+		}
+		role, known := prospectiveRoles[s.Role]
+		if !known {
+			return fmt.Errorf("prospective surface %s has role %q, which is not in the closed role set", s.Path, s.Role)
+		}
+		if role.newPackage && strings.TrimSpace(s.Covering) == "" {
+			return fmt.Errorf("prospective surface %s has role %s and names no covering file", s.Path, s.Role)
+		}
+	}
+	for i, t := range d.TestEdits {
+		if strings.TrimSpace(t.Path) == "" {
+			return fmt.Errorf("test edit %d names no path", i+1)
+		}
+		switch t.Operation {
+		case "", testEditOperationEdit, testEditOperationCreate, testEditOperationDelete, testEditOperationRename:
+		default:
+			return fmt.Errorf("test edit %s has operation %q, which is not edit, create, delete, or rename", t.Path, t.Operation)
+		}
+	}
+	for i, r := range d.PremiseResolutions {
+		if strings.TrimSpace(r.Gap) == "" {
+			return fmt.Errorf("premise resolution %d names no gap", i+1)
+		}
+		switch r.Outcome {
+		case premiseEstablished, premiseRefuted, premiseUnresolved:
+		default:
+			return fmt.Errorf("premise resolution %s has outcome %q, which is not established, refuted, or unresolved", r.Gap, r.Outcome)
+		}
+	}
+	return nil
+}
+
+// strictReviewContract applies the written review contract to findings exactly
+// as the reviewer wrote them. The class rule is admitFindings, the one the
+// workflow enforces where a verdict acquires standing.
+func strictReviewContract(d reviewDecision) error {
+	v := roles.ReviewVerdict{Decision: roles.Decision(d.Decision), Summary: d.Summary, Instructions: d.Instructions, Findings: d.Findings}
+	if !v.Decision.Valid() {
+		return fmt.Errorf("review decision must be accept, revise, or escalate, got %q", d.Decision)
+	}
+	if strings.TrimSpace(v.Summary) == "" {
+		return errors.New("review returned no summary")
+	}
+	ids := map[string]bool{}
+	for i, f := range v.Findings {
+		if strings.TrimSpace(f.ID) == "" {
+			return fmt.Errorf("finding %d carries no id", i+1)
+		}
+		if ids[f.ID] {
+			return fmt.Errorf("finding id %q appears twice", f.ID)
+		}
+		ids[f.ID] = true
+		if !f.Severity.Valid() {
+			return fmt.Errorf("finding %s has severity %q, which is not blocking, major, or minor", f.ID, f.Severity)
+		}
+		if strings.TrimSpace(f.Claim) == "" || strings.TrimSpace(f.Reason) == "" {
+			return fmt.Errorf("finding %s must state a claim and a reason", f.ID)
+		}
+		if strings.TrimSpace(f.Correction) == "" && strings.TrimSpace(f.ProofGap) == "" {
+			return fmt.Errorf("finding %s names neither a correction nor a proof gap", f.ID)
+		}
+		switch f.Class {
+		case roles.CodeFinding, roles.ScopeFinding:
+			if strings.TrimSpace(f.Reference) == "" {
+				return fmt.Errorf("%s finding %s names no reference a change could discharge", f.Class, f.ID)
+			}
+		case roles.EvidenceFinding:
+			if strings.TrimSpace(f.ProofGap) == "" {
+				return fmt.Errorf("evidence finding %s names no proof_gap", f.ID)
+			}
+		}
+		if f.Severity == roles.Blocking && strings.TrimSpace(f.Reference) == "" {
+			return fmt.Errorf("blocking finding %s points at nothing a worker could open", f.ID)
+		}
+	}
+	if err := admitFindings(v); err != nil {
+		return err
+	}
+	if v.Decision == roles.Revise && strings.TrimSpace(v.Instructions) == "" && len(v.Findings) == 0 {
+		return errors.New("review asked for a revision without saying what to change")
+	}
+	if v.Decision == roles.Accept && len(v.Blocking()) != 0 {
+		return fmt.Errorf("review accepted while recording %d blocking finding(s)", len(v.Blocking()))
+	}
+	return nil
+}
+
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
 	return e.resolveArchitectureIn(ctx, sc, start, taskID, task, prompt, e.Repo.Root)
 }
