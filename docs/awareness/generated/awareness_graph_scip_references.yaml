@@ -4602,11 +4602,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6102,15 +6102,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/session/store.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6184,11 +6184,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6960,11 +6960,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7495,7 +7495,7 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7503,7 +7503,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7931,11 +7931,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -11000,11 +11000,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -28058,11 +28058,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -38285,17 +38285,17 @@ code_references:
     to_name: Second
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_name: Server
+    file: internal/control/server.go
+  - from: internal/control/server.go:Server.Listen
     to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_name: Server
-    file: internal/control/server.go
-  - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -46163,6 +46163,18 @@ code_references:
   - from: internal/event/event.go:New
     to_name: time
     file: internal/event/event.go
+  - from: internal/event/event.go:ObjectiveDigest
+    to_name: EncodeToString
+    file: internal/event/event.go
+  - from: internal/event/event.go:ObjectiveDigest
+    to_name: Sum256
+    file: internal/event/event.go
+  - from: internal/event/event.go:ObjectiveDigest
+    to_name: crypto/sha256
+    file: internal/event/event.go
+  - from: internal/event/event.go:ObjectiveDigest
+    to_name: encoding/hex
+    file: internal/event/event.go
   - from: internal/event/event.go:RunTerminality
     to_id: internal/event/event.go:InvocationTerminal
     to_name: InvocationTerminal
@@ -49907,10 +49919,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
@@ -86253,10 +86265,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -90819,16 +90831,11 @@ code_references:
     to_name: net
     file: internal/ghwebhook/netutil_test.go
   - from: internal/ghwebhook/proposal.go:DigestObjective
-    to_name: Sprintf
+    to_id: internal/event/event.go:ObjectiveDigest
+    to_name: ObjectiveDigest
     file: internal/ghwebhook/proposal.go
   - from: internal/ghwebhook/proposal.go:DigestObjective
-    to_name: Sum256
-    file: internal/ghwebhook/proposal.go
-  - from: internal/ghwebhook/proposal.go:DigestObjective
-    to_name: crypto/sha256
-    file: internal/ghwebhook/proposal.go
-  - from: internal/ghwebhook/proposal.go:DigestObjective
-    to_name: fmt
+    to_name: github.com/globulario/sensei-code/internal/event
     file: internal/ghwebhook/proposal.go
   - from: internal/ghwebhook/proposal.go:NewProposalStore
     to_name: Join
@@ -91911,6 +91918,19 @@ code_references:
   - from: internal/ghwebhook/proposal_test.go:TestApprovalAttemptIsDurableAndAtMostOnce
     to_name: time
     file: internal/ghwebhook/proposal_test.go
+  - from: internal/ghwebhook/proposal_test.go:TestDigestObjectiveIsTheArchitectureBindingsExactByteRule
+    to_id: internal/ghwebhook/proposal.go:DigestObjective
+    to_name: DigestObjective
+    file: internal/ghwebhook/proposal_test.go
+  - from: internal/ghwebhook/proposal_test.go:TestDigestObjectiveIsTheArchitectureBindingsExactByteRule
+    to_name: T
+    file: internal/ghwebhook/proposal_test.go
+  - from: internal/ghwebhook/proposal_test.go:TestDigestObjectiveIsTheArchitectureBindingsExactByteRule
+    to_name: common.Fatalf
+    file: internal/ghwebhook/proposal_test.go
+  - from: internal/ghwebhook/proposal_test.go:TestDigestObjectiveIsTheArchitectureBindingsExactByteRule
+    to_name: testing
+    file: internal/ghwebhook/proposal_test.go
   - from: internal/ghwebhook/proposal_test.go:TestObjectiveProposalProtocolIsStrictAndPreservesTheString
     to_id: internal/ghwebhook/proposal.go:ErrMalformedObjectiveProposal
     to_name: ErrMalformedObjectiveProposal
@@ -92116,10 +92136,10 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -124466,19 +124486,14 @@ code_references:
     to_name: ArchitectureBinding.TaskID
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:BindArchitecture
-    to_name: EncodeToString
-    file: internal/roles/architecture.go
-  - from: internal/roles/architecture.go:BindArchitecture
-    to_name: Sum256
+    to_id: internal/event/event.go:ObjectiveDigest
+    to_name: ObjectiveDigest
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:BindArchitecture
     to_name: TrimSpace
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:BindArchitecture
-    to_name: crypto/sha256
-    file: internal/roles/architecture.go
-  - from: internal/roles/architecture.go:BindArchitecture
-    to_name: encoding/hex
+    to_name: github.com/globulario/sensei-code/internal/event
     file: internal/roles/architecture.go
   - from: internal/roles/architecture.go:BindArchitecture
     to_name: strings
@@ -153188,6 +153203,10 @@ code_references:
     to_name: Engine.Runners
     file: internal/workflow/architect_retry_test.go
   - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
+    to_id: internal/workflow/engine.go:Engine.recordObjective
+    to_name: Engine.recordObjective
+    file: internal/workflow/architect_retry_test.go
+  - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
     to_id: internal/workflow/engine.go:Engine.resolveArchitectureIn
     to_name: Engine.resolveArchitectureIn
     file: internal/workflow/architect_retry_test.go
@@ -153200,12 +153219,28 @@ code_references:
     to_name: NewBus
     file: internal/workflow/architect_retry_test.go
   - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
+    to_id: internal/workflow/objective.go:Objective~type
+    to_name: Objective
+    file: internal/workflow/architect_retry_test.go
+  - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/architect_retry_test.go
+  - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
+    file: internal/workflow/architect_retry_test.go
+  - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
     to_id: internal/gitx/git.go:Repo~type
     to_name: Repo
     file: internal/workflow/architect_retry_test.go
   - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
     to_id: internal/gitx/git.go:Repo.Root
     to_name: Repo.Root
+    file: internal/workflow/architect_retry_test.go
+  - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
+    to_id: internal/workflow/mode.go:SubmittedUnattended
+    to_name: SubmittedUnattended
     file: internal/workflow/architect_retry_test.go
   - from: internal/workflow/architect_retry_test.go:resolveWithArchitect
     to_name: T
@@ -153311,6 +153346,187 @@ code_references:
     to_id: internal/workflow/architect_retry_test.go:scriptedArchitect.turns
     to_name: scriptedArchitect.turns
     file: internal/workflow/architect_retry_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/config/config.go:Agent.Command
+    to_name: Agent.Command
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/roles/architecture.go:ArchitectureBinding.CheckObjective
+    to_name: ArchitectureBinding.CheckObjective
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/config/config.go:Config.Architect
+    to_name: Config.Architect
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.Runners
+    to_name: Engine.Runners
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.SessionID
+    to_name: Engine.SessionID
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/runners.go:Engine.architectureBinding
+    to_name: Engine.architectureBinding
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/runners.go:Engine.bindArchitecture
+    to_name: Engine.bindArchitecture
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.objective
+    to_name: Engine.objective
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.recordObjective
+    to_name: Engine.recordObjective
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.recordedObjective
+    to_name: Engine.recordedObjective
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_name: Engine.resolveArchitectureIn
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/objective.go:Objective~type
+    to_name: Objective
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/mode.go:RequestedByHuman
+    to_name: RequestedByHuman
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/mode.go:SubmittedUnattended
+    to_name: SubmittedUnattended
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: T
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: T.Run
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: TrimLeft
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: TrimRight
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: TrimSpace
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/architect_retry_test.go:architectTurn~type
+    to_name: architectTurn
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/architect_retry_test.go:architectTurn.text
+    to_name: architectTurn.text
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: common.Context
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: common.Fatal
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: common.Fatalf
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: common.TempDir
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/advisory_test.go:fixedResolver~type
+    to_name: fixedResolver
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/advisory_test.go:fixedResolver.name
+    to_name: fixedResolver.name
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/advisory_test.go:fixedResolver.runner
+    to_name: fixedResolver.runner
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/advisory_test.go:fixedResolver.specs
+    to_name: fixedResolver.specs
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:objectiveAbsent~type
+    to_name: objectiveAbsent
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:objectiveAbsent.TaskID
+    to_name: objectiveAbsent.TaskID
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/engine.go:objectiveUnreadable~type
+    to_name: objectiveUnreadable
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/architect_retry_test.go:replyDecision
+    to_name: replyDecision
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect~type
+    to_name: scriptedArchitect
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect.prompts
+    to_name: scriptedArchitect.prompts
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect.turns
+    to_name: scriptedArchitect.turns
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/authority_resume_identity_test.go:sessionStore
+    to_name: sessionStore
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_id: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: storeWithTaskCreated
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: strings
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    to_name: testing
+    file: internal/workflow/architecture_binding_test.go
   - from: internal/workflow/architecture_binding_test.go:TestArchitectBindingComesFromWorkflowTruthBeforeResolver
     to_name: Contains
     file: internal/workflow/architecture_binding_test.go
@@ -153322,6 +153538,9 @@ code_references:
     file: internal/workflow/architecture_binding_test.go
   - from: internal/workflow/architecture_binding_test.go:TestArchitectBindingComesFromWorkflowTruthBeforeResolver
     to_name: T
+    file: internal/workflow/architecture_binding_test.go
+  - from: internal/workflow/architecture_binding_test.go:TestArchitectBindingComesFromWorkflowTruthBeforeResolver
+    to_name: common.Error
     file: internal/workflow/architecture_binding_test.go
   - from: internal/workflow/architecture_binding_test.go:TestArchitectBindingComesFromWorkflowTruthBeforeResolver
     to_name: common.Errorf
@@ -158302,8 +158521,16 @@ code_references:
     to_name: Engine.SessionID
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_id: internal/workflow/engine.go:Engine.objective
     to_name: Engine.objective
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
+    to_id: internal/workflow/engine.go:Engine.objectives
+    to_name: Engine.objectives
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_id: internal/workflow/engine.go:Engine.pending
@@ -158367,6 +158594,10 @@ code_references:
     to_name: Objective.Text
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
+    to_id: internal/event/event.go:ObjectiveDigest
+    to_name: ObjectiveDigest
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_id: internal/config/config.go:Permissions.ReadRepository
     to_name: Permissions.ReadRepository
     file: internal/workflow/authority_resume_identity_test.go
@@ -158399,6 +158630,10 @@ code_references:
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_id: internal/event/event.go:SourceUser
     to_name: SourceUser
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
+    to_id: internal/session/store.go:Store.Append
+    to_name: Store.Append
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_name: T
@@ -158466,6 +158701,10 @@ code_references:
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_id: internal/workflow/authority_resume_identity_test.go:resumeSenseiScript
     to_name: resumeSenseiScript
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
+    to_id: internal/workflow/authority_resume_identity_test.go:sessionStore
+    to_name: sessionStore
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective
     to_name: strings
@@ -158847,12 +159086,16 @@ code_references:
     to_name: Engine.SessionID
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
-    to_id: internal/workflow/engine.go:Engine.objective
-    to_name: Engine.objective
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_id: internal/workflow/engine.go:Engine.pending
     to_name: Engine.pending
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
+    to_id: internal/workflow/engine.go:Engine.recordedObjective
+    to_name: Engine.recordedObjective
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_id: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
@@ -158883,6 +159126,10 @@ code_references:
     to_name: Interrupted.TaskID
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
+    to_id: internal/event/event.go:New
+    to_name: New
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_id: internal/event/bus.go:NewBus
     to_name: NewBus
     file: internal/workflow/authority_resume_identity_test.go
@@ -158902,11 +159149,23 @@ code_references:
     to_name: Second
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
+    to_id: internal/event/event.go:SourceUser
+    to_name: SourceUser
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_id: internal/event/event.go:Status
     to_name: Status
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
+    to_id: internal/session/store.go:Store.Append
+    to_name: Store.Append
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_name: T
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
+    to_id: internal/event/event.go:TaskCreated
+    to_name: TaskCreated
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_id: internal/event/event.go:WorkflowCompleted
@@ -158945,6 +159204,10 @@ code_references:
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_id: internal/workflow/authority_resume_identity_test.go:kindsOf
     to_name: kindsOf
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
+    to_id: internal/workflow/authority_resume_identity_test.go:sessionStore
+    to_name: sessionStore
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity
     to_name: strings
@@ -161084,6 +161347,48 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/authority
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:stopOptionID
+    to_name: testing
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_id: internal/event/event.go:New
+    to_name: New
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_id: internal/event/event.go:SourceUser
+    to_name: SourceUser
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_id: internal/session/store.go:Store~type
+    to_name: Store
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_id: internal/session/store.go:Store.Append
+    to_name: Store.Append
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: T
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_id: internal/event/event.go:TaskCreated
+    to_name: TaskCreated
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: common.Fatal
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: common.Helper
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: github.com/globulario/sensei-code/internal/session
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_id: internal/workflow/authority_resume_identity_test.go:sessionStore
+    to_name: sessionStore
+    file: internal/workflow/authority_resume_identity_test.go
+  - from: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
     to_name: testing
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_test.go:TestAConsequenceSignalIsNeverAGrantOnItsOwn
@@ -168680,10 +168985,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
@@ -170833,8 +171138,8 @@ code_references:
     to_name: Engine.authorityDecisions
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.decisionAuthority
-    to_id: internal/workflow/engine.go:Engine.objective
-    to_name: Engine.objective
+    to_id: internal/workflow/engine.go:Engine.recordedObjective
+    to_name: Engine.recordedObjective
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.decisionAuthority
     to_id: internal/workflow/suppliedplan.go:Engine.suppliedPlan
@@ -171485,10 +171790,10 @@ code_references:
     to_name: Identity.BindGraph
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
@@ -172170,10 +172475,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -172677,12 +172982,8 @@ code_references:
     to_name: Objective
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.objective
-    to_id: internal/workflow/objective.go:Objective.Provenance
-    to_name: Objective.Provenance
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.objective
-    to_id: internal/workflow/mode.go:SubmittedUnattended
-    to_name: SubmittedUnattended
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.obligationLeftOpen
     to_id: internal/roles/verdict.go:Advisory.Describe
@@ -173980,27 +174281,86 @@ code_references:
     to_id: internal/workflow/objective.go:Objective~type
     to_name: Objective
     file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - from: internal/workflow/engine.go:Engine.recordedObjective
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
     file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
     to_id: internal/workflow/engine.go:Engine.mu
     to_name: Engine.mu
     file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - from: internal/workflow/engine.go:Engine.recordedObjective
     to_id: internal/workflow/engine.go:Engine.objectives
     to_name: Engine.objectives
     file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/event/event.go:Event.Kind
+    to_name: Event.Kind
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/event/event.go:Event.Summary
+    to_name: Event.Summary
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/event/event.go:Event.TaskID
+    to_name: Event.TaskID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
     to_name: Mutex.Lock
     file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - from: internal/workflow/engine.go:Engine.recordedObjective
     to_name: Mutex.Unlock
     file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - from: internal/workflow/engine.go:Engine.recordedObjective
     to_id: internal/workflow/objective.go:Objective~type
     to_name: Objective
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/mode.go:ResumedGoverned
+    to_name: ResumedGoverned
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/session/store.go:Store.Load
+    to_name: Store.Load
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/event/event.go:TaskCreated
+    to_name: TaskCreated
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/engine.go:objectiveAbsent~type
+    to_name: objectiveAbsent
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/engine.go:objectiveAbsent.TaskID
+    to_name: objectiveAbsent.TaskID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/engine.go:objectiveUnreadable~type
+    to_name: objectiveUnreadable
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/engine.go:objectiveUnreadable.Cause
+    to_name: objectiveUnreadable.Cause
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.recordedObjective
+    to_id: internal/workflow/engine.go:objectiveUnreadable.TaskID
+    to_name: objectiveUnreadable.TaskID
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.refuseCandidatePrecondition
     to_name: As
@@ -174665,6 +175025,10 @@ code_references:
     to_name: RunnerSpec.TaskID
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/workflow/runners.go:RunnerSpec.governed
+    to_name: RunnerSpec.governed
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
     to_id: internal/event/event.go:SourceArchitect
     to_name: SourceArchitect
     file: internal/workflow/engine.go
@@ -175318,10 +175682,6 @@ code_references:
     to_name: Engine.noteUnprovenAuthorityScope
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
-    to_name: Engine.recordObjectiveIfAbsent
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeAuthority
     to_id: internal/workflow/engine.go:Engine.resumePrecondition
     to_name: Engine.resumePrecondition
     file: internal/workflow/engine.go
@@ -175357,28 +175717,12 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/workflow/objective.go:Objective~type
-    to_name: Objective
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/workflow/objective.go:Objective.Provenance
-    to_name: Objective.Provenance
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/workflow/objective.go:Objective.Text
-    to_name: Objective.Text
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeAuthority
     to_id: internal/runreceipt/receipt.go:OutcomeFailed
     to_name: OutcomeFailed
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
     to_id: internal/gitx/git.go:Repo.Root
     to_name: Repo.Root
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeAuthority
-    to_id: internal/workflow/mode.go:ResumedGoverned
-    to_name: ResumedGoverned
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeAuthority
     to_id: internal/event/event.go:SourceSystem
@@ -175519,10 +175863,6 @@ code_references:
     to_name: Engine.execute
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
-    to_id: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
-    to_name: Engine.recordObjectiveIfAbsent
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
@@ -175554,28 +175894,12 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
-    to_id: internal/workflow/objective.go:Objective~type
-    to_name: Objective
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
-    to_id: internal/workflow/objective.go:Objective.Provenance
-    to_name: Objective.Provenance
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
-    to_id: internal/workflow/objective.go:Objective.Text
-    to_name: Objective.Text
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
     to_id: internal/runreceipt/receipt.go:OutcomeFailed
     to_name: OutcomeFailed
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
     to_id: internal/workflow/external_block.go:ParseExternalBlock
     to_name: ParseExternalBlock
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
-    to_id: internal/workflow/mode.go:ResumedGoverned
-    to_name: ResumedGoverned
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resumeUnplannedArchitecture
     to_id: internal/event/event.go:SourceSystem
@@ -176012,6 +176336,10 @@ code_references:
   - from: internal/workflow/engine.go:Engine.routePlan
     to_id: internal/workflow/engine.go:Engine.preflightRecord
     to_name: Engine.preflightRecord
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.routePlan
+    to_id: internal/workflow/engine.go:Engine.recordedObjective
+    to_name: Engine.recordedObjective
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.routePlan
     to_id: internal/workflow/testedit.go:Engine.setTestEditGrants
@@ -176755,14 +177083,14 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/event/event.go:New
+    to_name: New
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/broker/broker.go:New
-    to_name: New
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -178443,11 +178771,11 @@ code_references:
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -178455,19 +178783,19 @@ code_references:
     to_name: Evidence.BaseSHA
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
-    to_name: Evidence.ChangedPaths
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
-    to_name: Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
+    to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_name: Evidence.DiffBytes
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -179384,6 +179712,34 @@ code_references:
   - from: internal/workflow/engine.go:numberFindings
     to_name: strings
     file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveAbsent.Error
+    to_id: internal/workflow/engine.go:objectiveAbsent~type
+    to_name: objectiveAbsent
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveAbsent.Error
+    to_id: internal/workflow/engine.go:objectiveAbsent.TaskID
+    to_name: objectiveAbsent.TaskID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveUnreadable.Error
+    to_id: internal/workflow/engine.go:objectiveUnreadable~type
+    to_name: objectiveUnreadable
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveUnreadable.Error
+    to_id: internal/workflow/engine.go:objectiveUnreadable.Cause
+    to_name: objectiveUnreadable.Cause
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveUnreadable.Error
+    to_id: internal/workflow/engine.go:objectiveUnreadable.TaskID
+    to_name: objectiveUnreadable.TaskID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveUnreadable.Unwrap
+    to_id: internal/workflow/engine.go:objectiveUnreadable~type
+    to_name: objectiveUnreadable
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:objectiveUnreadable.Unwrap
+    to_id: internal/workflow/engine.go:objectiveUnreadable.Cause
+    to_name: objectiveUnreadable.Cause
+    file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:observation.HoldsWork
     to_id: internal/workflow/engine.go:observation~type
     to_name: observation
@@ -180163,19 +180519,19 @@ code_references:
     to_name: ToolResult
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.IsError
-    to_name: ToolResult.IsError
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/sensei/mcp.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
-    to_name: ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.IsError
+    to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_name: ToolResult.Structured
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:senseiProposer.CallTool
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -185845,10 +186201,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -186727,15 +187083,15 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
-    to_name: New
-    file: internal/workflow/external_block_test.go
-  - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/event/event.go:New
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:architectRoster
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -186875,11 +187231,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -193377,6 +193733,165 @@ code_references:
   - from: internal/workflow/objective_test.go:TestAHumanObjectiveDoesNotEstablishItsTechnicalPremises
     to_name: testing
     file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/engine.go:Engine.Runners
+    to_name: Engine.Runners
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/engine.go:Engine.objective
+    to_name: Engine.objective
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective.go:Objective.HumanAuthorized
+    to_name: Objective.HumanAuthorized
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/mode.go:RequestedByHuman
+    to_name: RequestedByHuman
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/runners.go:RunnerSpec.Architecture
+    to_name: RunnerSpec.Architecture
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_name: T
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_name: common.Fatalf
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_name: common.TempDir
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective_test.go:objectiveRoles~type
+    to_name: objectiveRoles
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective_test.go:objectiveRoles.bindings
+    to_name: objectiveRoles.bindings
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective_test.go:objectiveRoles.reviewer
+    to_name: objectiveRoles.reviewer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective_test.go:objectiveRun
+    to_name: objectiveRun
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_id: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: resumeToEscalation
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    to_name: testing
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/engine.go:Engine.objective
+    to_name: Engine.objective
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/engine.go:Engine.objectives
+    to_name: Engine.objectives
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective.go:Objective.HumanAuthorized
+    to_name: Objective.HumanAuthorized
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/mode.go:RequestedByHuman
+    to_name: RequestedByHuman
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/mode.go:ResumedGoverned
+    to_name: ResumedGoverned
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/runners.go:RunnerSpec.Architecture
+    to_name: RunnerSpec.Architecture
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/runners.go:RunnerSpec.TaskID
+    to_name: RunnerSpec.TaskID
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_name: T
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_name: common.Fatal
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_name: common.Fatalf
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_name: common.TempDir
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective_test.go:objectiveEngine
+    to_name: objectiveEngine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective_test.go:objectiveRoles~type
+    to_name: objectiveRoles
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective_test.go:objectiveRoles.bindings
+    to_name: objectiveRoles.bindings
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective_test.go:objectiveRoles.reviewer
+    to_name: objectiveRoles.reviewer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective_test.go:objectiveRun
+    to_name: objectiveRun
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_id: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: resumeToEscalation
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    to_name: testing
+    file: internal/workflow/objective_test.go
   - from: internal/workflow/objective_test.go:TestAResumedTaskDoesNotInventHumanAuthority
     to_id: internal/workflow/mode.go:DefaultEntry
     to_name: DefaultEntry
@@ -193776,6 +194291,429 @@ code_references:
   - from: internal/workflow/objective_test.go:editAction
     to_id: internal/workflow/consequence.go:StageCandidateEdit
     to_name: StageCandidateEdit
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Agent.Args
+    to_name: Agent.Args
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Agent.Command
+    to_name: Agent.Command
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Args
+    to_name: Config.$anon_c8be6179330fcb50.Args
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Architect
+    to_name: Config.Architect
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Implementors
+    to_name: Config.Implementors
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Permissions
+    to_name: Config.Permissions
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Reviewer
+    to_name: Config.Reviewer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Sensei
+    to_name: Config.Sensei
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Validation
+    to_name: Config.Validation
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Config.Workflow
+    to_name: Config.Workflow
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/engine.go:Engine.Runners
+    to_name: Engine.Runners
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Permissions.CreateWorktrees
+    to_name: Permissions.CreateWorktrees
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Permissions.LocalCommit
+    to_name: Permissions.LocalCommit
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Permissions.RunFormatters
+    to_name: Permissions.RunFormatters
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Permissions.WriteCandidates
+    to_name: Permissions.WriteCandidates
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_name: T
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/config/config.go:Workflow.ReviewCycles
+    to_name: Workflow.ReviewCycles
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/external_block_test.go:blockedEngine
+    to_name: blockedEngine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_name: common.Helper
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/postvalidation_test.go:formattingValidation
+    to_name: formattingValidation
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/authority_resume_identity_test.go:gapLoopRun~type
+    to_name: gapLoopRun
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/authority_resume_identity_test.go:gapLoopRun.engine
+    to_name: gapLoopRun.engine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/authority_resume_identity_test.go:gapLoopRun.world
+    to_name: gapLoopRun.world
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/authority_resume_identity_test.go:newGapLoopEngine
+    to_name: newGapLoopEngine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/objective_test.go:objectivePlan
+    to_name: objectivePlan
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/objective_test.go:objectiveRoles~type
+    to_name: objectiveRoles
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/objective_test.go:objectiveRunScript
+    to_name: objectiveRunScript
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/postvalidation_test.go:requireGofmt
+    to_name: requireGofmt
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_id: internal/workflow/postvalidation_test.go:stubProcess
+    to_name: stubProcess
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveEngine
+    to_name: testing
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/runners.go:Resolved~type
+    to_name: Resolved
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/runners.go:RunnerSpec.Agent
+    to_name: RunnerSpec.Agent
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/runners.go:RunnerSpec.Role
+    to_name: RunnerSpec.Role
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:answeringRunner~type
+    to_name: answeringRunner
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:answeringRunner.mode
+    to_name: answeringRunner.mode
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:answeringRunner.text
+    to_name: answeringRunner.text
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/authority_resume_identity_test.go:architectCapture~type
+    to_name: architectCapture
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/authority_resume_identity_test.go:architectCapture.Resolve
+    to_name: architectCapture.Resolve
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/authority_resume_identity_test.go:architectCapture.specs
+    to_name: architectCapture.specs
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:fixedResolver~type
+    to_name: fixedResolver
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:fixedResolver.Resolve
+    to_name: fixedResolver.Resolve
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:fixedResolver.name
+    to_name: fixedResolver.name
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/advisory_test.go:fixedResolver.runner
+    to_name: fixedResolver.runner
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/objective_test.go:objectiveRoles~type
+    to_name: objectiveRoles
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/objective_test.go:objectiveRoles.architect
+    to_name: objectiveRoles.architect
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/objective_test.go:objectiveRoles.bindings
+    to_name: objectiveRoles.bindings
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/objective_test.go:objectiveRoles.implementer
+    to_name: objectiveRoles.implementer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/objective_test.go:objectiveRoles.reviewer
+    to_name: objectiveRoles.reviewer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/reviewgate_test.go:roleResolver~type
+    to_name: roleResolver
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/reviewgate_test.go:roleResolver.Resolve
+    to_name: roleResolver.Resolve
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/reviewgate_test.go:roleResolver.name
+    to_name: roleResolver.name
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/reviewgate_test.go:roleResolver.reviewer
+    to_name: roleResolver.reviewer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    to_id: internal/workflow/reviewgate_test.go:roleResolver.session
+    to_name: roleResolver.session
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/event/bus.go:Bus.Subscribe
+    to_name: Bus.Subscribe
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/engine.go:Engine.Bus
+    to_name: Engine.Bus
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/engine.go:Engine.run
+    to_name: Engine.run
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/event/event.go:Event.Kind
+    to_name: Event.Kind
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/mode.go:Provenance~type
+    to_name: Provenance
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/runners.go:RunnerSpec.Architecture
+    to_name: RunnerSpec.Architecture
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_name: T
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/architect_retry_test.go:architectTurn~type
+    to_name: architectTurn
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/architect_retry_test.go:architectTurn.text
+    to_name: architectTurn.text
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_name: common.Context
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_name: common.Fatal
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_name: common.Fatalf
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_name: common.Helper
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/awaitingreview_test.go:kinds
+    to_name: kinds
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/objective_test.go:objectiveEngine
+    to_name: objectiveEngine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/objective_test.go:objectivePlan
+    to_name: objectivePlan
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/objective_test.go:objectiveRoles~type
+    to_name: objectiveRoles
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/objective_test.go:objectiveRoles.architect
+    to_name: objectiveRoles.architect
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/objective_test.go:objectiveRoles.bindings
+    to_name: objectiveRoles.bindings
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/objective_test.go:objectiveRoles.implementer
+    to_name: objectiveRoles.implementer
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/external_block_test.go:quota
+    to_name: quota
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect~type
+    to_name: scriptedArchitect
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect.turns
+    to_name: scriptedArchitect.turns
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/resume_composition_test.go:settleResume
+    to_name: settleResume
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_name: testing
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/external_block_test.go:unavailableRunner~type
+    to_name: unavailableRunner
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:objectiveRun
+    to_id: internal/workflow/external_block_test.go:unavailableRunner.cause
+    to_name: unavailableRunner.cause
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/event/bus.go:Bus.Subscribe
+    to_name: Bus.Subscribe
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: Contains
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/engine.go:Engine.Bus
+    to_name: Engine.Bus
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/engine.go:Engine.Resume
+    to_name: Engine.Resume
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/event/event.go:Event.Kind
+    to_name: Event.Kind
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/event/event.go:Event.Summary
+    to_name: Event.Summary
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: HasPrefix
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/session/store.go:Interrupted.Planned
+    to_name: Interrupted.Planned
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/session/store.go:Interrupted.TaskID
+    to_name: Interrupted.TaskID
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: T
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: common.Context
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: common.Fatalf
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: common.Helper
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/awaitingreview_test.go:kinds
+    to_name: kinds
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/external_block_test.go:reopen
+    to_name: reopen
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_id: internal/workflow/resume_composition_test.go:settleResume
+    to_name: settleResume
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: strings
+    file: internal/workflow/objective_test.go
+  - from: internal/workflow/objective_test.go:resumeToEscalation
+    to_name: testing
     file: internal/workflow/objective_test.go
   - from: internal/workflow/observe_test.go:TestADeclaredOutwardActionStillEscalatesAnObservation
     to_id: internal/workflow/consequence.go:Action~type
@@ -205018,11 +205956,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
@@ -209910,6 +210848,10 @@ code_references:
     to_name: Engine.beginReceipt
     file: internal/workflow/reviewgate_test.go
   - from: internal/workflow/reviewgate_test.go:newGateHarness
+    to_id: internal/workflow/engine.go:Engine.recordObjective
+    to_name: Engine.recordObjective
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_id: internal/workflow/engine.go:Engine.setRouting
     to_name: Engine.setRouting
     file: internal/workflow/reviewgate_test.go
@@ -209926,6 +210868,18 @@ code_references:
   - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_id: internal/event/bus.go:NewBus
     to_name: NewBus
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:newGateHarness
+    to_id: internal/workflow/objective.go:Objective~type
+    to_name: Objective
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:newGateHarness
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:newGateHarness
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
     file: internal/workflow/reviewgate_test.go
   - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_id: internal/config/config.go:Permissions~type
@@ -209978,6 +210932,10 @@ code_references:
   - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_id: internal/sensei/mcp.go:Start
     to_name: Start
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:newGateHarness
+    to_id: internal/workflow/mode.go:SubmittedUnattended
+    to_name: SubmittedUnattended
     file: internal/workflow/reviewgate_test.go
   - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_name: T
@@ -213008,46 +213966,61 @@ code_references:
     to_name: ArchitectureBinding
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/roles/architecture.go:BindArchitecture
-    to_name: BindArchitecture
-    file: internal/workflow/runners.go
-  - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Repository
-    to_name: Config.$anon_c8be6179330fcb50.Repository
-    file: internal/workflow/runners.go
-  - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/config/config.go:Config.Sensei
-    to_name: Config.Sensei
-    file: internal/workflow/runners.go
-  - from: internal/workflow/runners.go:Engine.architectureBinding
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/workflow/engine.go:Engine.Config
-    to_name: Engine.Config
+    to_id: internal/workflow/runners.go:Engine.bindArchitecture
+    to_name: Engine.bindArchitecture
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/workflow/engine.go:Engine.governedBase
-    to_name: Engine.governedBase
-    file: internal/workflow/runners.go
-  - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/workflow/engine.go:Engine.graphFor
-    to_name: Engine.graphFor
-    file: internal/workflow/runners.go
-  - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/workflow/engine.go:Engine.objective
-    to_name: Engine.objective
-    file: internal/workflow/runners.go
-  - from: internal/workflow/runners.go:Engine.architectureBinding
-    to_id: internal/agent/agent.go:GraphBinding.Digest
-    to_name: GraphBinding.Digest
+    to_id: internal/workflow/engine.go:Engine.recordedObjective
+    to_name: Engine.recordedObjective
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
     to_id: internal/workflow/objective.go:Objective.Text
     to_name: Objective.Text
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.architectureBinding
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/roles/architecture.go:ArchitectureBinding~type
+    to_name: ArchitectureBinding
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/roles/architecture.go:BindArchitecture
+    to_name: BindArchitecture
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/config/config.go:Config.$anon_c8be6179330fcb50.Repository
+    to_name: Config.$anon_c8be6179330fcb50.Repository
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/config/config.go:Config.Sensei
+    to_name: Config.Sensei
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/workflow/engine.go:Engine.governedBase
+    to_name: Engine.governedBase
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/workflow/engine.go:Engine.graphFor
+    to_name: Engine.graphFor
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
+    to_id: internal/agent/agent.go:GraphBinding.Digest
+    to_name: GraphBinding.Digest
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.bindArchitecture
     to_name: github.com/globulario/sensei-code/internal/roles
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.resolveRunner
@@ -213073,6 +214046,10 @@ code_references:
   - from: internal/workflow/runners.go:Engine.resolveRunner
     to_id: internal/workflow/runners.go:Engine.architectureBinding
     to_name: Engine.architectureBinding
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.resolveRunner
+    to_id: internal/workflow/runners.go:Engine.bindArchitecture
+    to_name: Engine.bindArchitecture
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.resolveRunner
     to_name: Errorf
@@ -213122,6 +214099,10 @@ code_references:
     to_name: RunnerSpec.TaskID
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.resolveRunner
+    to_id: internal/workflow/runners.go:RunnerSpec.governed
+    to_name: RunnerSpec.governed
+    file: internal/workflow/runners.go
+  - from: internal/workflow/runners.go:Engine.resolveRunner
     to_name: TrimSpace
     file: internal/workflow/runners.go
   - from: internal/workflow/runners.go:Engine.resolveRunner
@@ -213150,8 +214131,24 @@ code_references:
     to_name: Engine.SessionID
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
+    to_id: internal/workflow/engine.go:Engine.recordObjective
+    to_name: Engine.recordObjective
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
     to_id: internal/workflow/runners.go:Engine.resolveRunner
     to_name: Engine.resolveRunner
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
+    to_id: internal/workflow/objective.go:Objective~type
+    to_name: Objective
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
     to_id: internal/workflow/runners.go:Resolved~type
@@ -213180,6 +214177,10 @@ code_references:
   - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
     to_id: internal/workflow/runners.go:RunnerSpec.TaskID
     to_name: RunnerSpec.TaskID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
+    to_id: internal/workflow/mode.go:SubmittedUnattended
+    to_name: SubmittedUnattended
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestAConfiguredResolverIsAskedAndItsAnswerIsUsed
     to_name: T
@@ -213310,6 +214311,10 @@ code_references:
     to_name: Engine.SessionID
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
+    to_id: internal/workflow/engine.go:Engine.recordObjective
+    to_name: Engine.recordObjective
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
     to_id: internal/workflow/runners.go:Engine.resolveRunner
     to_name: Engine.resolveRunner
     file: internal/workflow/runners_test.go
@@ -213320,8 +214325,24 @@ code_references:
     to_name: New
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
+    to_id: internal/workflow/objective.go:Objective~type
+    to_name: Objective
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
+    to_id: internal/workflow/objective.go:Objective.Provenance
+    to_name: Objective.Provenance
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
+    to_id: internal/workflow/objective.go:Objective.Text
+    to_name: Objective.Text
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
     to_id: internal/workflow/runners.go:Resolved.Runner
     to_name: Resolved.Runner
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
+    to_id: internal/workflow/mode.go:SubmittedUnattended
+    to_name: SubmittedUnattended
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine
     to_name: T
@@ -213527,6 +214548,165 @@ code_references:
     to_name: stubRunner
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestAnUnnamedAdapterKeepsItsNameAsItsLabel
+    to_name: testing
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/config/config.go:Agent.Command
+    to_name: Agent.Command
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/roles/roles.go:Architect
+    to_name: Architect
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/config/config.go:Config.Architect
+    to_name: Config.Architect
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/engine.go:Engine.Runners
+    to_name: Engine.Runners
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/engine.go:Engine.SessionID
+    to_name: Engine.SessionID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:Engine.bindArchitecture
+    to_name: Engine.bindArchitecture
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_name: Engine.resolveArchitectureIn
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:Engine.resolveRunner
+    to_name: Engine.resolveRunner
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:RunnerSpec~type
+    to_name: RunnerSpec
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:RunnerSpec.Agent
+    to_name: RunnerSpec.Agent
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:RunnerSpec.Architecture
+    to_name: RunnerSpec.Architecture
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:RunnerSpec.Role
+    to_name: RunnerSpec.Role
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:RunnerSpec.Source
+    to_name: RunnerSpec.Source
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/runners.go:RunnerSpec.TaskID
+    to_name: RunnerSpec.TaskID
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/event/event.go:SourceArchitect
+    to_name: SourceArchitect
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: T
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: T.Run
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/architect_retry_test.go:architectTurn~type
+    to_name: architectTurn
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/architect_retry_test.go:architectTurn.text
+    to_name: architectTurn.text
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: common.Context
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: common.Fatal
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: common.Fatalf
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: common.TempDir
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/advisory_test.go:fixedResolver~type
+    to_name: fixedResolver
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/advisory_test.go:fixedResolver.name
+    to_name: fixedResolver.name
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/advisory_test.go:fixedResolver.runner
+    to_name: fixedResolver.runner
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/advisory_test.go:fixedResolver.specs
+    to_name: fixedResolver.specs
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/architect_retry_test.go:replyDecision
+    to_name: replyDecision
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect~type
+    to_name: scriptedArchitect
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/architect_retry_test.go:scriptedArchitect.turns
+    to_name: scriptedArchitect.turns
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/authority_resume_identity_test.go:sessionStore
+    to_name: sessionStore
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    to_id: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    to_name: storeWithTaskCreated
+    file: internal/workflow/runners_test.go
+  - from: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
     to_name: testing
     file: internal/workflow/runners_test.go
   - from: internal/workflow/runners_test.go:TestTheDefaultResolverIsTheOnlyPlaceAnAdapterIsConstructed

@@ -11681,6 +11681,12 @@ code_symbols:
     file: internal/event/event.go
     symbol: New
     kind: function
+  - id: internal/event/event.go:ObjectiveDigest
+    namespace: structural.scip
+    language: go
+    file: internal/event/event.go
+    symbol: ObjectiveDigest
+    kind: function
   - id: internal/event/event.go:Output
     namespace: structural.scip
     language: go
@@ -18886,6 +18892,12 @@ code_symbols:
     language: go
     file: internal/ghwebhook/proposal_test.go
     symbol: TestApprovalAttemptIsDurableAndAtMostOnce
+    kind: function
+  - id: internal/ghwebhook/proposal_test.go:TestDigestObjectiveIsTheArchitectureBindingsExactByteRule
+    namespace: structural.scip
+    language: go
+    file: internal/ghwebhook/proposal_test.go
+    symbol: TestDigestObjectiveIsTheArchitectureBindingsExactByteRule
     kind: function
   - id: internal/ghwebhook/proposal_test.go:TestObjectiveProposalProtocolIsStrictAndPreservesTheString
     namespace: structural.scip
@@ -37613,6 +37625,12 @@ code_symbols:
     file: internal/workflow/architect_retry_test.go
     symbol: scriptedArchitect
     kind: type
+  - id: internal/workflow/architecture_binding_test.go:TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/architecture_binding_test.go
+    symbol: TestAnAbsentObjectiveRefusesTheArchitectTurnBeforeAnyRunner
+    kind: function
   - id: internal/workflow/architecture_binding_test.go:TestArchitectBindingComesFromWorkflowTruthBeforeResolver
     namespace: structural.scip
     language: go
@@ -38878,6 +38896,12 @@ code_symbols:
     language: go
     file: internal/workflow/authority_resume_identity_test.go
     symbol: stopOptionID
+    kind: function
+  - id: internal/workflow/authority_resume_identity_test.go:storeWithTaskCreated
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/authority_resume_identity_test.go
+    symbol: storeWithTaskCreated
     kind: function
   - id: internal/workflow/authority_test.go:TestAConsequenceSignalIsNeverAGrantOnItsOwn
     namespace: structural.scip
@@ -40811,11 +40835,11 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.recordObjective
     kind: method
-  - id: internal/workflow/engine.go:Engine.recordObjectiveIfAbsent
+  - id: internal/workflow/engine.go:Engine.recordedObjective
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
-    symbol: Engine.recordObjectiveIfAbsent
+    symbol: Engine.recordedObjective
     kind: method
   - id: internal/workflow/engine.go:Engine.refuseCandidatePrecondition
     namespace: structural.scip
@@ -41765,6 +41789,54 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: numberFindings
     kind: function
+  - id: internal/workflow/engine.go:objectiveAbsent.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveAbsent.Error
+    kind: method
+  - id: internal/workflow/engine.go:objectiveAbsent.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveAbsent.TaskID
+    kind: var
+  - id: internal/workflow/engine.go:objectiveAbsent~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveAbsent
+    kind: type
+  - id: internal/workflow/engine.go:objectiveUnreadable.Cause
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveUnreadable.Cause
+    kind: var
+  - id: internal/workflow/engine.go:objectiveUnreadable.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveUnreadable.Error
+    kind: method
+  - id: internal/workflow/engine.go:objectiveUnreadable.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveUnreadable.TaskID
+    kind: var
+  - id: internal/workflow/engine.go:objectiveUnreadable.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveUnreadable.Unwrap
+    kind: method
+  - id: internal/workflow/engine.go:objectiveUnreadable~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: objectiveUnreadable
+    kind: type
   - id: internal/workflow/engine.go:observation.ChangedPaths
     namespace: structural.scip
     language: go
@@ -44645,6 +44717,18 @@ code_symbols:
     file: internal/workflow/objective_test.go
     symbol: TestAHumanObjectiveDoesNotEstablishItsTechnicalPremises
     kind: function
+  - id: internal/workflow/objective_test.go:TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: TestAHumanObjectiveSurvivesResumeInTheSameProcess
+    kind: function
+  - id: internal/workflow/objective_test.go:TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: TestAResumedPlannedTaskEscalatesWithTheSubmittedObjectiveIdentity
+    kind: function
   - id: internal/workflow/objective_test.go:TestAResumedTaskDoesNotInventHumanAuthority
     namespace: structural.scip
     language: go
@@ -44692,6 +44776,72 @@ code_symbols:
     language: go
     file: internal/workflow/objective_test.go
     symbol: editAction
+    kind: function
+  - id: internal/workflow/objective_test.go:objectiveEngine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveEngine
+    kind: function
+  - id: internal/workflow/objective_test.go:objectivePlan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectivePlan
+    kind: const
+  - id: internal/workflow/objective_test.go:objectiveRoles.Resolve
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRoles.Resolve
+    kind: method
+  - id: internal/workflow/objective_test.go:objectiveRoles.architect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRoles.architect
+    kind: var
+  - id: internal/workflow/objective_test.go:objectiveRoles.bindings
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRoles.bindings
+    kind: var
+  - id: internal/workflow/objective_test.go:objectiveRoles.implementer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRoles.implementer
+    kind: var
+  - id: internal/workflow/objective_test.go:objectiveRoles.reviewer
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRoles.reviewer
+    kind: var
+  - id: internal/workflow/objective_test.go:objectiveRoles~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRoles
+    kind: type
+  - id: internal/workflow/objective_test.go:objectiveRun
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRun
+    kind: function
+  - id: internal/workflow/objective_test.go:objectiveRunScript
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: objectiveRunScript
+    kind: var
+  - id: internal/workflow/objective_test.go:resumeToEscalation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/objective_test.go
+    symbol: resumeToEscalation
     kind: function
   - id: internal/workflow/observe_test.go:TestADeclaredOutwardActionStillEscalatesAnObservation
     namespace: structural.scip
@@ -48263,6 +48413,12 @@ code_symbols:
     file: internal/workflow/runners.go
     symbol: Engine.architectureBinding
     kind: method
+  - id: internal/workflow/runners.go:Engine.bindArchitecture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners.go
+    symbol: Engine.bindArchitecture
+    kind: method
   - id: internal/workflow/runners.go:Engine.resolveRunner
     namespace: structural.scip
     language: go
@@ -48341,6 +48497,12 @@ code_symbols:
     file: internal/workflow/runners.go
     symbol: RunnerSpec.TaskID
     kind: var
+  - id: internal/workflow/runners.go:RunnerSpec.governed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners.go
+    symbol: RunnerSpec.governed
+    kind: var
   - id: internal/workflow/runners.go:RunnerSpec~type
     namespace: structural.scip
     language: go
@@ -48382,6 +48544,12 @@ code_symbols:
     language: go
     file: internal/workflow/runners_test.go
     symbol: TestAnUnnamedAdapterKeepsItsNameAsItsLabel
+    kind: function
+  - id: internal/workflow/runners_test.go:TestTheAssistedArchitectTurnKeepsItsUnboundContract
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/runners_test.go
+    symbol: TestTheAssistedArchitectTurnKeepsItsUnboundContract
     kind: function
   - id: internal/workflow/runners_test.go:TestTheDefaultResolverIsTheOnlyPlaceAnAdapterIsConstructed
     namespace: structural.scip
