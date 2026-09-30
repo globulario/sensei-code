@@ -2669,6 +2669,217 @@ type reviewDecision struct {
 	Findings     []roles.Finding `json:"findings,omitempty"`
 }
 
+// StrictValidateArchitectureBody checks the architecture wire contract without
+// routing authority, normalizing fields, or changing the supplied bytes. The
+// existing readers deliberately retain their lenient extraction and defaults.
+func StrictValidateArchitectureBody(body string) error {
+	var d architectureDecision
+	if err := strictDecodeBody(body, &d); err != nil {
+		return err
+	}
+	if err := architectureRequiredBody(d); err != nil {
+		return err
+	}
+	if d.Decision != "reply" && strings.TrimSpace(d.Summary) == "" {
+		return errors.New("architecture returned no summary")
+	}
+	if d.Decision == "proceed" {
+		if d.Mode != ModeInspect && d.Mode != ModeModify {
+			return fmt.Errorf("unknown architecture mode %q", d.Mode)
+		}
+		if len(d.Claims) == 0 {
+			return errors.New("proceed requires claims")
+		}
+	}
+	if d.Mode != "" && d.Mode != ModeInspect && d.Mode != ModeModify {
+		return fmt.Errorf("unknown architecture mode %q", d.Mode)
+	}
+	if d.Decision == "escalate" {
+		if strings.TrimSpace(d.HumanQuestion) == "" || strings.TrimSpace(d.Recommendation) == "" || len(d.Options) < 2 || len(d.Options) > 3 {
+			return errors.New("escalate requires human_question, two or three options, and recommendation")
+		}
+		seen, recommended := map[string]bool{}, false
+		for _, o := range d.Options {
+			if strings.TrimSpace(o.ID) == "" || strings.TrimSpace(o.Label) == "" || seen[o.ID] || o.Outcome != "" {
+				return errors.New("invalid escalation option")
+			}
+			seen[o.ID] = true
+			recommended = recommended || o.ID == d.Recommendation
+		}
+		if !recommended {
+			return errors.New("recommendation does not name an option")
+		}
+	}
+	for _, c := range d.Claims {
+		if strings.TrimSpace(c.Statement) == "" || strings.TrimSpace(c.About) == "" {
+			return errors.New("claim requires statement and about")
+		}
+		if c.Source != "graph" && c.Source != "repository" && c.Source != "inference" {
+			return fmt.Errorf("unknown claim source %q", c.Source)
+		}
+	}
+	for _, s := range d.ProspectiveSurfaces {
+		r, ok := prospectiveRoles[s.Role]
+		if !ok || strings.TrimSpace(s.Path) == "" || strings.TrimSpace(s.Package) == "" || !roleAdmitsPath(r, s.Path) || (r.newPackage && strings.TrimSpace(s.Covering) == "") {
+			return errors.New("invalid prospective surface declaration")
+		}
+	}
+	for _, t := range d.TestEdits {
+		if strings.TrimSpace(t.Path) == "" {
+			return errors.New("test edit requires path")
+		}
+		switch t.Operation {
+		case testEditOperationEdit, testEditOperationCreate, testEditOperationDelete, testEditOperationRename:
+		default:
+			return fmt.Errorf("unknown test edit operation %q", t.Operation)
+		}
+	}
+	for _, p := range d.PremiseResolutions {
+		if strings.TrimSpace(p.Gap) == "" {
+			return errors.New("premise resolution requires gap")
+		}
+		switch p.Outcome {
+		case premiseEstablished, premiseRefuted, premiseUnresolved:
+		default:
+			return fmt.Errorf("unknown premise outcome %q", p.Outcome)
+		}
+	}
+	if _, err := adjudicationStands(d); err != nil {
+		return err
+	}
+	if d.Adjudication != "" && d.Adjudication != adjudicationRevise && d.Adjudication != adjudicationAcceptingStands {
+		return errors.New("noncanonical adjudication")
+	}
+	if d.ProposedRecipe != nil {
+		if d.ProposedRecipe.Provenance != nil {
+			return errors.New("proposed recipe cannot author its own provenance")
+		}
+		if err := derived.Validate(*d.ProposedRecipe, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// architectureRequiredBody is shared with the lenient reader after its existing
+// decision normalization. Strict transport validation calls it before any such
+// normalization, then checks the additional written requirements above.
+func architectureRequiredBody(d architectureDecision) error {
+	switch d.Decision {
+	case "reply":
+		if strings.TrimSpace(d.Message) == "" {
+			return errors.New("architect returned REPLY without a message")
+		}
+	case "proceed":
+		if strings.TrimSpace(d.Plan) == "" {
+			return errors.New("architect returned PROCEED without a plan")
+		}
+	case "escalate":
+	default:
+		return fmt.Errorf("architect decision must be reply, proceed, or escalate, got %q", d.Decision)
+	}
+	return nil
+}
+
+// StrictValidateReviewPayload validates the original reviewer payload before
+// numberFindings can manufacture IDs or severity. It grants no reviewer standing
+// and attaches no provenance. Types and closed vocabularies are the workflow's.
+func StrictValidateReviewPayload(body string) error {
+	var d reviewDecision
+	if err := strictDecodeBody(body, &d); err != nil {
+		return err
+	}
+	if !roles.Decision(d.Decision).Valid() {
+		return fmt.Errorf("unknown review decision %q", d.Decision)
+	}
+	if strings.TrimSpace(d.Summary) == "" {
+		return errors.New("review returned no summary")
+	}
+	// This existing canonical class rule is also used by workflow review
+	// construction. Passing only findings here attaches no provenance/standing.
+	if err := admitFindings(roles.ReviewVerdict{Findings: d.Findings}); err != nil {
+		return err
+	}
+	seen := map[string]bool{}
+	for _, f := range d.Findings {
+		if strings.TrimSpace(f.ID) == "" || seen[f.ID] || !f.Severity.Valid() || strings.TrimSpace(f.Claim) == "" || strings.TrimSpace(f.Reason) == "" {
+			return errors.New("malformed review finding")
+		}
+		seen[f.ID] = true
+		if (f.Severity == roles.Blocking || f.Class == roles.CodeFinding || f.Class == roles.ScopeFinding) && strings.TrimSpace(f.Reference) == "" {
+			return errors.New("finding requires reference")
+		}
+		if f.Class == roles.EvidenceFinding && strings.TrimSpace(f.ProofGap) == "" {
+			return errors.New("evidence finding requires proof_gap")
+		}
+		if strings.TrimSpace(f.Correction) == "" && strings.TrimSpace(f.ProofGap) == "" {
+			return errors.New("finding requires correction or proof_gap")
+		}
+		if d.Decision == string(roles.Accept) && f.Severity == roles.Blocking {
+			return errors.New("review accepted with blocking finding")
+		}
+	}
+	if d.Decision == string(roles.Revise) && strings.TrimSpace(d.Instructions) == "" && len(d.Findings) == 0 {
+		return errors.New("review asked for revision without saying what to change")
+	}
+	return nil
+}
+
+// strictDecodeBody accepts one JSON object, including no duplicate keys at any
+// nesting level. Lenient decodeModelJSON remains unchanged for workflow readers.
+func strictDecodeBody(body string, dst any) error {
+	if strings.Contains(body, "\ue200") || strings.Contains(body, "\ue201") || strings.Contains(body, "\ue202") {
+		return errors.New("citation artifact in response")
+	}
+	s := strings.TrimSpace(body)
+	if !strings.HasPrefix(s, "{") || !strings.HasSuffix(s, "}") || !json.Valid([]byte(s)) {
+		return errors.New("response must be exactly one JSON object")
+	}
+	dec := json.NewDecoder(strings.NewReader(s))
+	if err := uniqueJSONValue(dec); err != nil {
+		return err
+	}
+	dec = json.NewDecoder(strings.NewReader(s))
+	dec.DisallowUnknownFields()
+	return dec.Decode(dst)
+}
+
+func uniqueJSONValue(dec *json.Decoder) error {
+	tok, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	if s, ok := tok.(string); ok && (strings.Contains(s, "\ue200") || strings.Contains(s, "\ue201") || strings.Contains(s, "\ue202")) {
+		return errors.New("citation artifact in response")
+	}
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil
+	}
+	keys := map[string]bool{}
+	for dec.More() {
+		if delim == '{' {
+			key, err := dec.Token()
+			if err != nil {
+				return err
+			}
+			name, ok := key.(string)
+			if !ok || keys[name] {
+				return errors.New("duplicate JSON field")
+			}
+			if name != strings.ToLower(name) {
+				return errors.New("noncanonical JSON field spelling")
+			}
+			keys[name] = true
+		}
+		if err := uniqueJSONValue(dec); err != nil {
+			return err
+		}
+	}
+	_, err = dec.Token()
+	return err
+}
+
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
 	return e.resolveArchitectureIn(ctx, sc, start, taskID, task, prompt, e.Repo.Root)
 }
@@ -3069,15 +3280,15 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// The human asked something rather than requesting a change. The
 			// architect answers and the governed candidate pipeline never
 			// starts: there is nothing to implement, admit, or verify.
-			if strings.TrimSpace(d.Message) == "" {
-				lastErr = errors.New("architect returned REPLY without a message")
+			if err := architectureRequiredBody(d); err != nil {
+				lastErr = err
 				retryNote = architectRetryMalformed
 				continue
 			}
 			return d, nil
 		case "proceed":
-			if strings.TrimSpace(d.Plan) == "" {
-				lastErr = errors.New("architect returned PROCEED without a plan")
+			if err := architectureRequiredBody(d); err != nil {
+				lastErr = err
 				retryNote = architectRetryMalformed
 				continue
 			}
