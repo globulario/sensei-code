@@ -101,6 +101,7 @@ func TestAConfiguredResolverIsAskedAndItsAnswerIsUsed(t *testing.T) {
 	runner := &stubRunner{}
 	resolver := &stubResolver{resolved: Resolved{Runner: runner, Name: "remote-a", Label: "Remote A"}}
 	e := &Engine{SessionID: "sess-1", Runners: resolver}
+	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 
 	got, err := e.resolveRunner(specFor(roles.Architect))
 	if err != nil {
@@ -123,6 +124,7 @@ func TestAConfiguredResolverIsAskedAndItsAnswerIsUsed(t *testing.T) {
 func TestARefusingResolverIsNeverRecoveredFromByBuildingTheCommandLine(t *testing.T) {
 	refused := errors.New("the remote architect is not holding the role")
 	e := &Engine{SessionID: "sess-1", Runners: &stubResolver{err: refused}}
+	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 
 	got, err := e.resolveRunner(specFor(roles.Architect))
 	if err == nil {
@@ -211,5 +213,51 @@ func TestTheDefaultResolverIsTheOnlyPlaceAnAdapterIsConstructed(t *testing.T) {
 	if len(offenders) != 0 {
 		t.Fatalf("agent.CLI is constructed outside the seam, so a resolver has no say over these turns:\n  %s",
 			strings.Join(offenders, "\n  "))
+	}
+}
+
+// THE ASSISTED LANE IS NOT A GOVERNED CONTINUATION. It writes TaskCreated but
+// records no objective (a declared non-goal of the objective record), and its
+// architect turn keeps the binding it had before the record: none. It is not
+// recovered from its TaskCreated, and it is not refused for lacking one. The
+// governed roster walk, over the very same durable record, is bound to it.
+func TestTheAssistedArchitectTurnKeepsItsUnboundContract(t *testing.T) {
+	const task = "task-assisted"
+	for name, setup := range map[string]func(e *Engine){
+		"no durable record":         func(e *Engine) {},
+		"durable TaskCreated":       func(e *Engine) { e.Store = storeWithTaskCreated(t, task, "what does this do?") },
+		"unreadable durable record": func(e *Engine) { e.Store = sessionStore(t) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			resolver := &fixedResolver{runner: &scriptedArchitect{}, name: "claude"}
+			e := &Engine{SessionID: "s1", Runners: resolver}
+			setup(e)
+			// The assisted lane's own request shape (assisted.go).
+			if _, err := e.resolveRunner(RunnerSpec{Role: roles.Architect, Agent: e.Config.Architect, Source: event.SourceArchitect, TaskID: task}); err != nil {
+				t.Fatalf("the assisted architect turn was refused: %v", err)
+			}
+			if len(resolver.specs) != 1 {
+				t.Fatalf("the resolver was not asked exactly once: %d", len(resolver.specs))
+			}
+			if got := resolver.specs[0].Architecture; got.TaskID != task || got.ObjectiveDigest != "" {
+				t.Fatalf("the assisted turn's binding changed: %+v", got)
+			}
+		})
+	}
+
+	// The governed walk over the same durable record binds the recovered bytes.
+	architect := &scriptedArchitect{turns: []architectTurn{{text: replyDecision}}}
+	resolver := &fixedResolver{runner: architect, name: "claude"}
+	e := &Engine{SessionID: "s1", Runners: resolver, Store: storeWithTaskCreated(t, task, "what does this do?")}
+	e.Config.Architect.Name, e.Config.Architect.Command = "claude", "true"
+	_, _ = e.resolveArchitectureIn(t.Context(), nil, certifiedStart{}, task, "what does this do?", "PROMPT", t.TempDir())
+	if len(resolver.specs) == 0 {
+		t.Fatal("the governed architect turn was never asked")
+	}
+	if resolver.specs[0].Role != roles.Architect {
+		t.Fatalf("the governed walk did not ask for the architect role: %q", resolver.specs[0].Role)
+	}
+	if got, want := resolver.specs[0].Architecture.ObjectiveDigest, e.bindArchitecture(task, "what does this do?").ObjectiveDigest; got == "" || got != want {
+		t.Fatalf("the governed turn was not bound to the recorded objective: %q, want %q", got, want)
 	}
 }

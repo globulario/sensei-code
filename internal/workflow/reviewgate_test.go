@@ -95,6 +95,7 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 	t.Cleanup(cancel)
 
 	e := &Engine{Repo: repo, SessionID: "session-1", Bus: bus}
+	e.recordObjective("task-1", Objective{Text: "task", Provenance: SubmittedUnattended})
 	e.Config.Permissions = config.Permissions{
 		ReadRepository: true, WriteCandidates: true, CreateWorktrees: true,
 		RunFormatters: true, LocalCommit: true,

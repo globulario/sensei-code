@@ -50,6 +50,13 @@ type RunnerSpec struct {
 	// Env are extra environment entries enforcing capability boundaries the
 	// agent must not be able to talk its way past.
 	Env []string
+	// governed marks the governed architect turn -- the roster walk every
+	// governed continuation takes -- whose binding is read through
+	// recordedObjective and refused when the objective is not established. It
+	// names the lane, never the binding: the engine still binds. Unset is the
+	// assisted lane, which records no objective (a declared non-goal of the
+	// objective record) and keeps binding none, exactly as before it.
+	governed bool
 }
 
 // Resolved is the adapter that will serve a turn, and who it is.
@@ -101,14 +108,28 @@ func CLIResolved(spec RunnerSpec, sessionID string) Resolved {
 // weaker source than these records. Deriving identity back out of prompt text
 // would recreate the class this project keeps removing: strong truth exists,
 // yet a weaker projection is consumed.
-func (e *Engine) architectureBinding(taskID string) roles.ArchitectureBinding {
+//
+// The objective is read through recordedObjective, the one reader every
+// continuation shares. Its absence is returned, never bound: an empty objective
+// has no identity, and an architect turn asked without one is not asked.
+func (e *Engine) architectureBinding(taskID string) (roles.ArchitectureBinding, error) {
+	objective, err := e.recordedObjective(taskID)
+	if err != nil {
+		return roles.ArchitectureBinding{}, err
+	}
+	return e.bindArchitecture(taskID, objective.Text), nil
+}
+
+// bindArchitecture binds an objective's exact bytes to the task's pinned base
+// and graph generation, through roles.BindArchitecture's one digest rule.
+func (e *Engine) bindArchitecture(taskID, objective string) roles.ArchitectureBinding {
 	graphBuild := ""
 	if graph := e.graphFor(taskID); graph != nil {
 		graphBuild = graph.Digest
 	}
 	return roles.BindArchitecture(
 		taskID,
-		e.objective(taskID).Text,
+		objective,
 		e.governedBase(taskID),
 		// The graph repository is CONFIGURED, never derived. The workspace
 		// remote is a different authority domain and answering with it would
@@ -136,8 +157,16 @@ func (e *Engine) resolveRunner(spec RunnerSpec) (Resolved, error) {
 	// choose a transport. Call sites do not supply it and a resolver cannot
 	// substitute it. For a governed task, candidate.Establish has already pinned
 	// the base and bindGraph has already recorded the start gate's graph.
-	if spec.Role == roles.Architect {
-		spec.Architecture = e.architectureBinding(spec.TaskID)
+	if spec.Role == roles.Architect && spec.governed {
+		binding, err := e.architectureBinding(spec.TaskID)
+		if err != nil {
+			return Resolved{}, fmt.Errorf("the %s turn cannot be asked: %w", spec.Role.Label(), err)
+		}
+		spec.Architecture = binding
+	} else if spec.Role == roles.Architect {
+		// The assisted lane: it records no objective, so its architect turn is
+		// bound to none, and a resolver that requires one refuses it as before.
+		spec.Architecture = e.bindArchitecture(spec.TaskID, "")
 	}
 	if e.Runners == nil {
 		return CLIResolved(spec, e.SessionID), nil

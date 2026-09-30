@@ -759,9 +759,15 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	bus := event.NewBus()
 	take, done := collect(t, bus)
 	defer done()
-	e := &Engine{Bus: bus, SessionID: "s1", pending: map[string]chan string{}}
-
 	task := session.Interrupted{TaskID: "task-1789848074761930104", Task: "repair the resume path"}
+	// The durable record the task was reconstructed from: the only place a
+	// restarted process can read its objective.
+	store := sessionStore(t)
+	if err := store.Append(event.New("s1", task.TaskID, event.SourceUser, event.TaskCreated, task.Task, nil)); err != nil {
+		t.Fatal(err)
+	}
+	e := &Engine{Bus: bus, SessionID: "s1", Store: store, pending: map[string]chan string{}}
+
 	e.resumeUnplannedArchitecture(context.Background(), task)
 
 	evs := take()
@@ -783,10 +789,10 @@ func TestAnUnplannedTaskReEntersExecutionUnderItsOwnIdentity(t *testing.T) {
 	if !strings.Contains(owed, "architect turn") && !strings.Contains(owed, "no recorded plan") {
 		t.Fatalf("the owed turn is not named as the architect's: %q", owed)
 	}
-	// The objective is the recorded one, under the resumption's own provenance:
-	// a restarted process establishes no human.
-	if got := e.objective(task.TaskID); got.Text != task.Task || got.Provenance != ResumedGoverned {
-		t.Fatalf("the recorded objective was not carried: %+v", got)
+	// The objective is the recorded one, recovered from TaskCreated under the
+	// resumption's own provenance: a restarted process establishes no human.
+	if got, err := e.recordedObjective(task.TaskID); err != nil || got.Text != task.Task || got.Provenance != ResumedGoverned {
+		t.Fatalf("the recorded objective was not carried: %+v %v", got, err)
 	}
 	// And the run it entered is a continuation, never a fresh submission.
 	body := funcBody(t, "internal/workflow/engine.go", "resumeUnplannedArchitecture")
@@ -934,6 +940,11 @@ done
 // resolver, which is where that run emitted the empty digest; nothing here
 // asks architectureBinding for its opinion. The expected digest is pinned as the
 // SHA-256 of the recorded bytes, derived outside the code under test.
+//
+// The engine is FRESH over the durable session record, exactly as `sensei-code
+// resume` builds it: no objective is held in memory before Resume, so the
+// identity the architect request carries can only have been recovered from the
+// recorded TaskCreated through recordedObjective.
 func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(t *testing.T) {
 	const (
 		taskID    = "task-1790481145146367848"
@@ -960,12 +971,22 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 		t.Fatal("the reconstructed task no longer carries its standing question")
 	}
 
+	store := sessionStore(t)
+	for _, ev := range history {
+		if err := store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+
 	repo, _ := mintRepo(t)
 	bus := event.NewBus()
 	events, cancel := bus.Subscribe(1024)
 	defer cancel()
 	capture := architectCapture{specs: make(chan RunnerSpec, 1)}
-	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", pending: map[string]chan string{}, Runners: capture}
+	e := &Engine{Repo: repo, Bus: bus, SessionID: "s1", Store: store, pending: map[string]chan string{}, Runners: capture}
+	if len(e.objectives) != 0 {
+		t.Fatalf("the fresh engine already holds an objective, so recovery would not be proven: %+v", e.objectives)
+	}
 	e.Config.Permissions.ReadRepository = true
 	e.Config.Sensei.Command = "sh"
 	e.Config.Sensei.Args = []string{"-c", resumeSenseiScript}
@@ -1000,7 +1021,7 @@ func TestAnAnsweredAuthorityQuestionResumesTheArchitectWithTheRecordedObjective(
 			if got.ObjectiveDigest == "" {
 				t.Fatalf("the first resumed architect request carries no objective identity: %+v", got)
 			}
-			if got.ObjectiveDigest != wantDigest {
+			if got.ObjectiveDigest != wantDigest || event.ObjectiveDigest(objective) != wantDigest {
 				t.Fatalf("the resumed architect request carries an objective identity not derived from the recorded bytes: %s", got.ObjectiveDigest)
 			}
 			// Restored under the resumption's own provenance: nothing here
@@ -1199,6 +1220,17 @@ func certifiedPrompts(prompts []string) int {
 		}
 	}
 	return n
+}
+
+// storeWithTaskCreated is a durable session record holding one task's
+// TaskCreated, with exactly the given bytes as its objective.
+func storeWithTaskCreated(t *testing.T, taskID, objective string) *session.Store {
+	t.Helper()
+	store := sessionStore(t)
+	if err := store.Append(event.New("s1", taskID, event.SourceUser, event.TaskCreated, objective, nil)); err != nil {
+		t.Fatal(err)
+	}
+	return store
 }
 
 func sessionStore(t *testing.T) *session.Store {

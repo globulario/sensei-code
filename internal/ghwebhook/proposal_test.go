@@ -110,3 +110,27 @@ func TestApprovalAttemptIsDurableAndAtMostOnce(t *testing.T) {
 		t.Fatalf("loaded receipt: ok=%v receipt=%+v err=%v", ok, loaded, err)
 	}
 }
+
+// W4 -- ONE DIGEST RULE. A proposal's objective identity is the architecture
+// binding's: no digest for the empty objective, and the SHA-256 of the exact
+// untrimmed bytes otherwise. This package may not import internal/roles, so the
+// agreement is pinned through one literal: the same sha256 of the same bytes
+// that architecture_binding_test.go asserts roles.BindArchitecture produces.
+// Before the rule was shared, DigestObjective("") was a valid-looking hash
+// where BindArchitecture yielded none.
+func TestDigestObjectiveIsTheArchitectureBindingsExactByteRule(t *testing.T) {
+	if got := DigestObjective(""); got != "" {
+		t.Fatalf("the empty objective was given a digest: %s", got)
+	}
+	const exact = "  bind these exact bytes\n"
+	// sha256 of exact, computed independently of the code under test.
+	const want = "697cfa7b1fd6ef72dbfebe973586ed019ad384310554df7e9d97660195b239bb"
+	if got := DigestObjective(exact); got != want {
+		t.Fatalf("the digest does not name the exact bytes: %s", got)
+	}
+	for _, normalized := range []string{"bind these exact bytes", "  bind these exact bytes", "bind these exact bytes\n"} {
+		if DigestObjective(normalized) == want {
+			t.Fatalf("normalized bytes %q share the exact objective's identity", normalized)
+		}
+	}
+}

@@ -944,36 +944,119 @@ func (e *Engine) run(ctx context.Context, taskID, task string, how Provenance) {
 	e.execute(ctx, taskID, task)
 }
 
-// objective returns what this task was asked to do, and what established that
-// anyone asked. A task nothing recorded reads as unestablished, which is the
-// honest answer rather than a missing one.
+// objective is the process-local projection of the recorded objective: what
+// recordedObjective has already established for this task, and nothing more.
+// It reads no durable history, so it has no failure to swallow, and a task the
+// accessor has not established reads as the zero Objective -- no text and no
+// provenance, never a placeholder for either. Nothing may take an objective
+// from here that recordedObjective has not first established; a caller that
+// needs the objective, or must act on its absence, reads recordedObjective.
 func (e *Engine) objective(taskID string) Objective {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if o, ok := e.objectives[taskID]; ok {
+	if o := e.objectives[taskID]; o.Text != "" {
 		return o
 	}
-	return Objective{Provenance: SubmittedUnattended}
+	// A submission that recorded no bytes established nothing, provenance
+	// included, exactly as recordedObjective reads it.
+	return Objective{}
+}
+
+// objectiveAbsent is the refusal state for a task whose objective nothing
+// recorded: no submission in this process, and no TaskCreated in its durable
+// session record. It is never an empty objective, a placeholder or the task id.
+type objectiveAbsent struct {
+	TaskID string
+}
+
+func (a objectiveAbsent) Error() string {
+	return "no recorded objective for task " + a.TaskID +
+		": neither this process's submission nor the durable TaskCreated record holds one"
+}
+
+// objectiveUnreadable is the refusal state for a task whose durable session
+// record could not be read. It is kept apart from objectiveAbsent because it
+// establishes nothing about whether an objective was recorded; it fails closed
+// all the same.
+type objectiveUnreadable struct {
+	TaskID string
+	Cause  error
+}
+
+func (u objectiveUnreadable) Error() string {
+	return "the objective of task " + u.TaskID + " cannot be read: its durable session record is unreadable: " + u.Cause.Error()
+}
+
+func (u objectiveUnreadable) Unwrap() error { return u.Cause }
+
+// recordedObjective is the one reader of a task's objective identity.
+//
+// The objective is created once, at submission, and TaskCreated is its durable
+// record. A submission this process holds is authoritative and returned
+// unchanged, provenance included. Otherwise the exact bytes are recovered from
+// the task's TaskCreated event, under ResumedGoverned: the durable record
+// carries the text but not who asked, and a restarted process must not claim
+// more than it can show. What is recovered is cached, never over a submission.
+// Nothing recorded is objectiveAbsent, returned only once the durable record
+// was read and holds no matching non-empty TaskCreated; a record that cannot be
+// read is objectiveUnreadable. No continuation may reach an architect turn by
+// reading either as an empty objective.
+func (e *Engine) recordedObjective(taskID string) (Objective, error) {
+	e.mu.Lock()
+	o, held := e.objectives[taskID]
+	store := e.Store
+	e.mu.Unlock()
+	if held {
+		// A submission that recorded no bytes recorded no objective. Its
+		// provenance is not carried either way: reading this as absent can only
+		// understate what was established, never claim more.
+		if o.Text == "" {
+			return Objective{}, objectiveAbsent{TaskID: taskID}
+		}
+		return o, nil
+	}
+	if store == nil {
+		return Objective{}, objectiveAbsent{TaskID: taskID}
+	}
+	history, err := store.Load()
+	if err != nil {
+		// Unreadable is not absent: nothing has shown that no objective was
+		// recorded, only that the record could not be read.
+		return Objective{}, objectiveUnreadable{TaskID: taskID, Cause: err}
+	}
+	// The task's first TaskCreated is its submission; its bytes are the objective.
+	text := ""
+	for _, ev := range history {
+		if ev.TaskID == taskID && ev.Kind == event.TaskCreated {
+			text = ev.Summary
+			break
+		}
+	}
+	if text == "" {
+		return Objective{}, objectiveAbsent{TaskID: taskID}
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	// A submission recorded while history was being read wins: the cache never
+	// overwrites what this process holds.
+	if o, held := e.objectives[taskID]; held {
+		if o.Text == "" {
+			return Objective{}, objectiveAbsent{TaskID: taskID}
+		}
+		return o, nil
+	}
+	if e.objectives == nil {
+		e.objectives = make(map[string]Objective)
+	}
+	recovered := Objective{Text: text, Provenance: ResumedGoverned}
+	e.objectives[taskID] = recovered
+	return recovered, nil
 }
 
 // recordObjective stores the request and its provenance at submission.
 func (e *Engine) recordObjective(taskID string, o Objective) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.objectives == nil {
-		e.objectives = make(map[string]Objective)
-	}
-	e.objectives[taskID] = o
-}
-
-// recordObjectiveIfAbsent records an objective only when this process holds
-// none for the task, so a resume never replaces what the submission recorded.
-func (e *Engine) recordObjectiveIfAbsent(taskID string, o Objective) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-	if _, ok := e.objectives[taskID]; ok {
-		return
-	}
 	if e.objectives == nil {
 		e.objectives = make(map[string]Objective)
 	}
@@ -1591,9 +1674,16 @@ func (e *Engine) decisionAuthority(taskID string, start certifiedStart) decision
 	if p, ok := e.suppliedPlan(taskID); ok {
 		decidedBy = "supplied plan sha256 " + p.Digest + " (not architect-produced)"
 	}
-	grant := "none established: " + string(e.objective(taskID).Provenance)
-	if e.objective(taskID).HumanAuthorized() {
+	// Provenance only, read through the one accessor. An objective it cannot
+	// establish grants nothing, and the grant says why rather than naming a
+	// provenance nothing recorded.
+	grant := "none established: "
+	if o, err := e.recordedObjective(taskID); err != nil {
+		grant += err.Error()
+	} else if o.HumanAuthorized() {
 		grant = "task execution via /run"
+	} else {
+		grant += string(o.Provenance)
 	}
 	return decision.Authority{
 		Owner:       decision.Architectural,
@@ -2690,7 +2780,7 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 	var attempted []roles.ArchitectAttemptFailure
 	for position, cfg := range roster {
 		architect, err := e.resolveRunner(RunnerSpec{
-			Role: roles.Architect, Agent: cfg, Source: event.SourceArchitect, TaskID: taskID,
+			Role: roles.Architect, Agent: cfg, Source: event.SourceArchitect, TaskID: taskID, governed: true,
 		})
 		if err != nil {
 			// A RESOLVER REFUSAL IS NOT A PROVIDER THAT COULD NOT BE REACHED.
@@ -4306,6 +4396,13 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// same inputs and separates them, so a reader can see that the objective
 	// established none of the technical premises and that the consequence
 	// assessment did not consult who asked.
+	//
+	// The objective is the recorded one. Its absence is propagated, never
+	// rendered as an empty objective; once established here, objective() reads
+	// the same record back.
+	if _, err := e.recordedObjective(taskID); err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		StateAuthority(e.objective(taskID), d.Claims, AssessConsequences(action), routing, d).Render(), nil))
 
@@ -6678,11 +6775,9 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	}
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"authority decision answered on resume; continuing the task: "+choice, nil))
-	// The objective is the recorded one, restored exactly as
-	// resumeUnplannedArchitecture restores it. Without it a restarted process
-	// holds none, and the first architect turn after the answer is bound to an
-	// empty objective digest (task-1790481145146367848, 2026-09-27).
-	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
+	// The objective is the recorded one: every architect turn reads it through
+	// recordedObjective, which recovers it from TaskCreated in a restarted
+	// process (task-1790481145146367848, 2026-09-27, bound an empty digest here).
 	e.execute(ctx, task.TaskID, task.Task)
 }
 
@@ -6725,12 +6820,11 @@ func (e *Engine) resumeUnplannedArchitecture(ctx context.Context, task session.I
 		}
 		owed, record = block.Describe(), block
 	}
-	// The objective is the recorded one. A process that still holds it -- the
-	// TUI that took the /run -- keeps its provenance exactly; overwriting it
-	// would quietly demote a task a human asked for. A restarted process holds
-	// nothing, and gets the resumption's own provenance, which establishes no
+	// The objective is the recorded one, read through recordedObjective. A
+	// process that still holds it -- the TUI that took the /run -- keeps its
+	// provenance exactly; a restarted process recovers the bytes from
+	// TaskCreated under the resumption's own provenance, which establishes no
 	// human (the safe direction, as in TestAResumedTaskDoesNotInventHumanAuthority).
-	e.recordObjectiveIfAbsent(task.TaskID, Objective{Text: task.Task, Provenance: ResumedGoverned})
 	e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 		"resuming the same task at the turn it is owed ("+owed+"); the objective, task identity and "+
 			"candidate base are the recorded ones", record))
