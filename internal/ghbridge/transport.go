@@ -502,22 +502,40 @@ func waitEnded(o ReviewObligation, seen *observationSet, cause error) error {
 // a different provider would otherwise answer the question -- a review by
 // somebody the workflow did not ask, accepted because the envelope was
 // well-formed and the posting account was the right one.
-func (m MailboxReview) Answers(r Request) bool {
-	return m.Artifact.RequestID == r.RequestID &&
-		m.Subject().Same(r.Subject) &&
-		sameProvider(m.Artifact.ReviewerProvider, r.ReviewerProvider)
+func (m MailboxReview) Answers(r Request) bool { return artifactAnswers(m.Artifact, r) }
+
+// ReviewAnswers reports whether replyBody is a canonical review artifact that
+// replies to exactly the review request requestBody carries.
+//
+// Composition only: the request is read by ParseRequest, the reply by
+// reviewartifact.Parse, and the binding is artifactAnswers -- the predicate
+// MailboxReview.Answers applies -- so a party outside this package that asks
+// "is this request already answered?" gets the bridge's own answer and cannot
+// hold a second reply grammar that drifts from it. It authenticates nobody:
+// who posted the reply is the caller's question.
+func ReviewAnswers(requestBody, replyBody string) bool {
+	r, ok := ParseRequest(requestBody)
+	if !ok {
+		return false
+	}
+	art, err := reviewartifact.Parse(replyBody)
+	if err != nil {
+		return false
+	}
+	return artifactAnswers(art, r)
+}
+
+// artifactAnswers is THE binding rule between a review artifact and a request:
+// request id, every candidate identity field, and the assigned reviewer
+// provider. One function so the mailbox reader and ReviewAnswers cannot drift.
+func artifactAnswers(a reviewartifact.Artifact, r Request) bool {
+	return a.RequestID == r.RequestID &&
+		subjectOf(a).Same(r.Subject) &&
+		sameProvider(a.ReviewerProvider, r.ReviewerProvider)
 }
 
 // Subject is the candidate identity the observed artifact carries.
-func (m MailboxReview) Subject() Subject {
-	return Subject{
-		TaskID:          m.Artifact.TaskID,
-		BaseSHA:         m.Artifact.BaseSHA,
-		CandidateDigest: m.Artifact.CandidateDigest,
-		CandidateTree:   m.Artifact.CandidateTree,
-		ReviewCommit:    m.Artifact.ReviewCommit,
-	}
-}
+func (m MailboxReview) Subject() Subject { return subjectOf(m.Artifact) }
 
 // sameProvider compares two provider names.
 //
