@@ -2669,6 +2669,95 @@ type reviewDecision struct {
 	Findings     []roles.Finding `json:"findings,omitempty"`
 }
 
+// decodeArchitectureBody is the architecture wire contract: the model's text
+// decoded, the decision read by membership in its closed vocabulary, and the
+// one field each decision cannot stand without. It is the only reading of an
+// architect's answer; askArchitect and ValidateArchitectureBody both call it.
+//
+// The Decision it returns is lower-cased for the caller's switch. That is the
+// workflow reading a copy, never a rewrite of the bytes it was handed.
+func decodeArchitectureBody(text string) (architectureDecision, error) {
+	var d architectureDecision
+	if err := decodeModelJSON(text, &d); err != nil {
+		return architectureDecision{}, err
+	}
+	d.Decision = strings.ToLower(strings.TrimSpace(d.Decision))
+	switch d.Decision {
+	case "reply":
+		if strings.TrimSpace(d.Message) == "" {
+			return architectureDecision{}, errors.New("architect returned REPLY without a message")
+		}
+	case "proceed":
+		if strings.TrimSpace(d.Plan) == "" {
+			return architectureDecision{}, errors.New("architect returned PROCEED without a plan")
+		}
+	case "escalate":
+	default:
+		return architectureDecision{}, fmt.Errorf("architect decision must be reply, proceed, or escalate, got %q", d.Decision)
+	}
+	return d, nil
+}
+
+// ValidateArchitectureBody reports whether body satisfies the architecture wire
+// contract this workflow reads, by the same function its own architect turn
+// decodes with.
+//
+// Protocol and schema only. It attaches no provenance, routes no authority,
+// admits nothing, touches no workflow state, and neither repairs nor rewrites
+// body: a caller that gets nil back still holds exactly the bytes it passed.
+func ValidateArchitectureBody(body []byte) error {
+	_, err := decodeArchitectureBody(string(body))
+	return err
+}
+
+// decodeReviewBody is the reviewer wire contract's decode step and the verdict
+// content read from it. askReviewer and ValidateReviewPayload both call it, so a
+// reviewer's JSON means one thing whichever of them reads it. The verdict it
+// returns carries no provenance; the caller that has a binding attaches one.
+func decodeReviewBody(text string) (roles.ReviewVerdict, error) {
+	var d reviewDecision
+	if err := decodeModelJSON(text, &d); err != nil {
+		return roles.ReviewVerdict{}, err
+	}
+	return roles.ReviewVerdict{
+		Decision:     roles.Decision(strings.ToLower(strings.TrimSpace(d.Decision))),
+		Summary:      strings.TrimSpace(d.Summary),
+		Instructions: d.Instructions,
+		Findings:     numberFindings(d.Findings),
+	}, nil
+}
+
+// ValidateReviewPayload reports whether body satisfies the reviewer wire contract:
+// decodeReviewBody, then the content rules roles.Advisory.Validate states --
+// the closed decision and severity vocabularies, a summary, a reference on
+// every blocking finding, a revision that says what to change, no accept over
+// a blocking finding -- and then admitFindings' closed class vocabulary. They
+// are the same predicates askReviewer applies to a verdict.
+//
+// Protocol and schema only. The verdict is judged against the zero binding and
+// no implementer, so the binding and self-review clauses are vacuous here: they
+// are relations to a candidate and an author this function is never given, and
+// the caller that has them still owes them. Nothing here grants standing --
+// the Role is set only because Validate refuses a verdict from any other role,
+// and the session mode stays unestablished, which is the advisory reading.
+// body is neither repaired nor rewritten.
+//
+// Not named ValidateReviewBody: that name is already the relay's reader in
+// relayed_review.go, which takes a binding and returns a verdict. This is the
+// binding-free, byte-in/error-out form a transport that holds no candidate can
+// call.
+func ValidateReviewPayload(body []byte) error {
+	v, err := decodeReviewBody(string(body))
+	if err != nil {
+		return err
+	}
+	v.Provenance = roles.Provenance{Role: roles.Reviewer}
+	if err := roles.NewAdvisory(v).Validate(roles.Binding{}, ""); err != nil {
+		return err
+	}
+	return admitFindings(v)
+}
+
 func (e *Engine) resolveArchitecture(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task, prompt string) (architectureDecision, error) {
 	return e.resolveArchitectureIn(ctx, sc, start, taskID, task, prompt, e.Repo.Root)
 }
@@ -3057,30 +3146,23 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			retryNote = architectRetryNoAnswer
 			continue
 		}
-		var d architectureDecision
-		if err := decodeModelJSON(result.Text, &d); err != nil {
+		// The wire rules -- decode, the closed decision vocabulary and each
+		// decision's required field -- are decodeArchitectureBody's, the same
+		// function ValidateArchitectureBody exports. What follows reads only a
+		// decision that already satisfied them.
+		d, err := decodeArchitectureBody(result.Text)
+		if err != nil {
 			lastErr = err
 			retryNote = architectRetryMalformed
 			continue
 		}
-		d.Decision = strings.ToLower(strings.TrimSpace(d.Decision))
 		switch d.Decision {
 		case "reply":
 			// The human asked something rather than requesting a change. The
 			// architect answers and the governed candidate pipeline never
 			// starts: there is nothing to implement, admit, or verify.
-			if strings.TrimSpace(d.Message) == "" {
-				lastErr = errors.New("architect returned REPLY without a message")
-				retryNote = architectRetryMalformed
-				continue
-			}
 			return d, nil
 		case "proceed":
-			if strings.TrimSpace(d.Plan) == "" {
-				lastErr = errors.New("architect returned PROCEED without a plan")
-				retryNote = architectRetryMalformed
-				continue
-			}
 			// Record the bound BEFORE routing, because routing is control flow
 			// that can terminate this run: it escalates, the human defers, and
 			// resolveArchitectureIn returns an error. Anything recorded after
@@ -3342,9 +3424,6 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			prompt = humanResolutionPrompt(prompt, d, choice)
 			attempt = 0 // the human answer establishes a new architectural question.
 			continue
-		default:
-			lastErr = fmt.Errorf("architect decision must be reply, proceed, or escalate, got %q", d.Decision)
-			retryNote = architectRetryMalformed
 		}
 	}
 	if lastErr == nil {
@@ -3534,24 +3613,18 @@ func (e *Engine) askReviewer(ctx context.Context, taskID string, cfg config.Agen
 		if err != nil {
 			return ReviewResult{}, err
 		}
-		var d reviewDecision
-		if err := decodeModelJSON(result.Text, &d); err != nil {
+		verdict, err := decodeReviewBody(result.Text)
+		if err != nil {
 			lastErr = err
 			continue
 		}
-		verdict := roles.ReviewVerdict{
-			Provenance: roles.Provenance{
-				TaskID: taskID, Role: roles.Reviewer, Provider: reviewer.Name,
-				SessionID: e.SessionID, SessionMode: result.Session,
-				BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
-				CandidateTree:    binding.CandidateTree,
-				GraphBuildCommit: packet.Provenance.GraphBuildCommit,
-				At:               time.Now().UTC(),
-			},
-			Decision:     roles.Decision(strings.ToLower(strings.TrimSpace(d.Decision))),
-			Summary:      strings.TrimSpace(d.Summary),
-			Instructions: d.Instructions,
-			Findings:     numberFindings(d.Findings),
+		verdict.Provenance = roles.Provenance{
+			TaskID: taskID, Role: roles.Reviewer, Provider: reviewer.Name,
+			SessionID: e.SessionID, SessionMode: result.Session,
+			BaseSHA: binding.BaseSHA, CandidateDigest: binding.CandidateDigest,
+			CandidateTree:    binding.CandidateTree,
+			GraphBuildCommit: packet.Provenance.GraphBuildCommit,
+			At:               time.Now().UTC(),
 		}
 		// A turn this project did not open cannot be certified as isolated, so
 		// it takes the advisory path -- every other rule, none of the standing.
