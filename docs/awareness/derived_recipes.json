@@ -168,6 +168,28 @@
         "written_at": "2026-09-27T13:30:35Z",
         "written_by": "closure_round"
       }
+    },
+    {
+      "kind": "field_access_under_lock",
+      "dir": "cmd/sensei-code",
+      "type": "humanAnswer",
+      "field": "spent",
+      "lock": "mu",
+      "why": "humanAnswer.spent is the one-answer guard for a preserved human-owned authority decision. The pinned source declares spent beside mu and AnswerAuthority reads and writes spent while holding mu; the adjacent regression test makes the one-shot purpose explicit. Verify that relationship mechanically rather than treating this repository reading as coverage.",
+      "provenance": {
+        "origin_task": "task-1790728779930954954",
+        "origin_gap": "the plan rests on an unverified premise about cmd/sensei-code/resume.go: Whether this exact field_access_under_lock question returns DERIVED and names cmd/sensei-code/resume.go as a subject is not established by repository reading and must be decided by the later mechanical derivation.",
+        "region": [
+          "cmd/sensei-code/control.go",
+          "cmd/sensei-code/resume.go",
+          "cmd/sensei-code/resume_test.go",
+          "cmd/sensei-code/run.go",
+          "internal/derived/write.go",
+          "internal/derived/derived.go"
+        ],
+        "written_at": "2026-09-30T00:53:05Z",
+        "written_by": "closure_round"
+      }
     }
   ]
 }
