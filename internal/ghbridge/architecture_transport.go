@@ -32,7 +32,9 @@ func PublishArchitectureRequest(ctx context.Context, box Issue, r ArchitectureRe
 	if !box.Valid() {
 		return 0, errors.New("an architecture request needs a mailbox pull request number and an expected remote principal")
 	}
-	body, err := r.Marker()
+	// THE REQUEST CARRIES THE RESPONSE SCAFFOLD, rendered by the code that
+	// renders responses; see ArchitectureResponseScaffold.
+	body, err := architectureRequestBody(r)
 	if err != nil {
 		return 0, err
 	}
@@ -133,16 +135,56 @@ func (r ArchitectureRefusalRejected) identity() string {
 	return fmt.Sprintf("%d|%s", r.Comment, r.Diagnostic)
 }
 
-// ArchitectureTerminal is ONE artifact that can settle an exact request: either
-// the answer to it or the refusal of it.
+// ArchitectureResponseRejected is one response-SHAPED comment that cannot
+// settle this request, together with the reason it cannot: a well formed answer
+// bound elsewhere, or a malformed response whose identity is not exactly this
+// request's.
 //
-// One type for both because settlement has ONE ordering. Keeping answers and
-// refusals in separate lists discarded the order they shared, and a reader then
-// had to pick a rule -- answers first, refusals first, or by clock -- none of
-// which is what the conversation says. Exactly one of the two pointers is set.
+// DF-26. An answer-shaped comment used to be skipped with no record at all, so
+// a delivered, authenticated, correctly bound answer missing one empty line was
+// reported as silence. It is recorded now, and NOT attributed to the request
+// being waited on: the diagnostic travels with whatever ends the wait.
+type ArchitectureResponseRejected struct {
+	Comment    int64
+	Author     string
+	AuthorID   int64
+	Diagnostic string
+}
+
+// identity names one rejection, so the same comment seen on ten polls is
+// reported once.
+func (r ArchitectureResponseRejected) identity() string {
+	return fmt.Sprintf("%d|%s", r.Comment, r.Diagnostic)
+}
+
+// ArchitectureMalformedAnswer is an authenticated response-shaped comment whose
+// grammar the strict parser refused, but whose identity header -- every
+// canonical field, in its canonical position, before the defect -- names THIS
+// exact request.
+//
+// It is not an answer and cannot become one: it carries no decision, and the
+// bytes are kept only as evidence. It is not a refusal either. It is the third
+// terminal: the consumer replied to this request, and the reply is unreadable.
+type ArchitectureMalformedAnswer struct {
+	Binding    roles.ArchitectureBinding
+	RequestID  string
+	Diagnostic string
+	Author     string
+	AuthorID   int64
+	Comment    int64
+}
+
+// ArchitectureTerminal is ONE artifact that can settle an exact request: the
+// answer to it, the refusal of it, or a malformed answer to it.
+//
+// One type for all three because settlement has ONE ordering. Keeping answers
+// and refusals in separate lists discarded the order they shared, and a reader
+// then had to pick a rule -- answers first, refusals first, or by clock -- none
+// of which is what the conversation says. Exactly one of the pointers is set.
 type ArchitectureTerminal struct {
-	Answer  *ArchitectureResponse
-	Refusal *ArchitectureRefusal
+	Answer    *ArchitectureResponse
+	Refusal   *ArchitectureRefusal
+	Malformed *ArchitectureMalformedAnswer
 	// Comment is the mailbox comment this terminal was read from, so a reader
 	// can say WHICH artifact settled and in what order they arrived.
 	Comment int64
@@ -155,6 +197,9 @@ type ArchitectureTerminal struct {
 
 // Refused reports whether this terminal ends the request negatively.
 func (t ArchitectureTerminal) Refused() bool { return t.Refusal != nil }
+
+// IsMalformed reports whether this terminal is a malformed answer to the request.
+func (t ArchitectureTerminal) IsMalformed() bool { return t.Malformed != nil }
 
 // ArchitectureObservation is what ONE read of the mailbox saw for one open
 // request: the artifacts bound to it exactly that can settle it, in the order
@@ -169,6 +214,10 @@ type ArchitectureObservation struct {
 	// artifact must be observable as inert rather than invisible.
 	Terminals []ArchitectureTerminal
 	Rejected  []ArchitectureRefusalRejected
+	// Unusable are the response-shaped comments this read saw that cannot
+	// settle this request: answers bound elsewhere and malformed responses
+	// whose identity is not exactly this request's.
+	Unusable []ArchitectureResponseRejected
 }
 
 // Settlement is the ONE artifact that settles this request, when there is one.
@@ -231,6 +280,11 @@ func (t ArchitectureTerminal) material() string {
 	case t.Refusal != nil:
 		id = identity{Kind: "refusal", RequestID: t.Refusal.RequestID, Binding: t.Refusal.Binding,
 			Principal: t.principal, Stage: t.Refusal.Stage, Reason: t.Refusal.Reason}
+	case t.Malformed != nil:
+		// The exact bytes are the complete artifact: nothing in them was read
+		// as a payload, so no part of them can be declared immaterial.
+		id = identity{Kind: "malformed", RequestID: t.Malformed.RequestID, Binding: t.Malformed.Binding,
+			Principal: t.principal, Body: t.raw}
 	default:
 		// Not a terminal at all; its exact bytes are the only identity it has.
 		return "bytes|" + t.raw
@@ -287,15 +341,63 @@ func ObserveArchitecture(ctx context.Context, box Issue, r ArchitectureRequest) 
 			obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Refusal: &bound, Comment: c.ID, raw: c.Body, principal: principal})
 			continue
 		}
-		answer, ok := ParseArchitectureResponse(c.Body)
-		if !ok || !answer.Answers(r) {
+		// A body that does not open with the response marker is ordinary
+		// content, exactly as before: prose that merely mentions a marker is
+		// not an artifact.
+		if !architectureResponseShaped(c.Body) {
 			continue
 		}
-		answer.Author, answer.AuthorID = c.User.Login, c.User.ID
-		bound := answer
-		obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Answer: &bound, Comment: c.ID, raw: c.Body, principal: principal})
+		unusable := ArchitectureResponseRejected{Comment: c.ID, Author: c.User.Login, AuthorID: c.User.ID}
+		answer, ok := ParseArchitectureResponse(c.Body)
+		if ok {
+			if !answer.Answers(r) {
+				unusable.Diagnostic = "a well formed architecture answer bound elsewhere cannot settle this request: " +
+					answerMismatch(answer, r)
+				obs.Unusable = append(obs.Unusable, unusable)
+				continue
+			}
+			answer.Author, answer.AuthorID = c.User.Login, c.User.ID
+			bound := answer
+			obs.Terminals = append(obs.Terminals, ArchitectureTerminal{Answer: &bound, Comment: c.ID, raw: c.Body, principal: principal})
+			continue
+		}
+		// MALFORMED. Parsing stays strict: nothing here repairs these bytes or
+		// reads an answer out of them. Identity is established, if at all, by
+		// the diagnostic-only positional recognizer, and only an identity that
+		// is exactly this request's makes the comment this request's terminal.
+		diagnostic := "the architecture response grammar refused it"
+		if _, _, _, _, perr := parseArchitectureEnvelope(c.Body, architectureResponseMarker, false); perr != nil {
+			diagnostic += ": " + perr.Error()
+		}
+		binding, id, identified := recognizeArchitectureResponseIdentity(c.Body)
+		if !identified {
+			unusable.Diagnostic = "a malformed architecture response whose request identity cannot be " +
+				"established is attributed to no request; " + diagnostic
+			obs.Unusable = append(obs.Unusable, unusable)
+			continue
+		}
+		if m := answerMismatch(ArchitectureResponse{Binding: binding, RequestID: id}, r); m != "" {
+			unusable.Diagnostic = "a malformed architecture response bound elsewhere cannot settle this request: " +
+				m + "; " + diagnostic
+			obs.Unusable = append(obs.Unusable, unusable)
+			continue
+		}
+		obs.Terminals = append(obs.Terminals, ArchitectureTerminal{
+			Malformed: &ArchitectureMalformedAnswer{
+				Binding: binding, RequestID: id, Diagnostic: diagnostic,
+				Author: c.User.Login, AuthorID: c.User.ID, Comment: c.ID,
+			},
+			Comment: c.ID, raw: c.Body, principal: principal,
+		})
 	}
 	return obs, nil
+}
+
+// answerMismatch names the first identity on which a response differs from an
+// open request, or "" when it binds to it exactly. The refusal's predicate, so
+// an answer and a refusal bound elsewhere are described by one rule.
+func answerMismatch(a ArchitectureResponse, q ArchitectureRequest) string {
+	return ArchitectureRefusal{Binding: a.Binding, RequestID: a.RequestID}.mismatch(q)
 }
 
 // ErrArchitectureRefused reports that the consumer this request was published to
@@ -325,6 +427,9 @@ type ArchitectureRefused struct {
 	// settle this request. Carried with the settlement so a malformed copy stays
 	// visible even when a later valid one ends the wait.
 	Rejected []ArchitectureRefusalRejected
+	// Unusable are the response-shaped comments seen while waiting that could
+	// not settle this request, carried for the same reason.
+	Unusable []ArchitectureResponseRejected
 
 	// ExchangeCloseErr records that this request's durable exchange record could
 	// NOT be closed after the refusal settled it.
@@ -339,8 +444,9 @@ type ArchitectureRefused struct {
 }
 
 func (e *ArchitectureRefused) Error() string {
-	out := fmt.Sprintf("%v: request %s was refused at stage %s: %s%s",
-		ErrArchitectureRefused, e.RequestID, e.Stage, e.Reason, renderRejected(e.Rejected))
+	out := fmt.Sprintf("%v: request %s was refused at stage %s: %s%s%s",
+		ErrArchitectureRefused, e.RequestID, e.Stage, e.Reason, renderRejected(e.Rejected),
+		renderUnusable(e.Unusable))
 	if e.ExchangeCloseErr != nil {
 		out += "; its durable exchange record could not be closed and is still open: " +
 			e.ExchangeCloseErr.Error()
@@ -375,7 +481,57 @@ func renderRejected(rejected []ArchitectureRefusalRejected) string {
 	return b.String()
 }
 
+// renderUnusable states response-shaped comments that could not settle a
+// request. Empty when there were none, so an exchange that never saw one
+// reports exactly what it reported before.
+func renderUnusable(unusable []ArchitectureResponseRejected) string {
+	if len(unusable) == 0 {
+		return ""
+	}
+	b := strings.Builder{}
+	fmt.Fprintf(&b, "; %d architecture-response-shaped comment(s) could not settle this request", len(unusable))
+	for _, u := range unusable {
+		fmt.Fprintf(&b, ": comment %d from %s: %s", u.Comment, u.Author, u.Diagnostic)
+	}
+	return b.String()
+}
+
 var ErrNoArchitectureAnswer = errors.New("no architecture answer answering that request was posted")
+
+// ErrArchitectureAnswerMalformed reports that the consumer answered THIS exact
+// request and its answer is unreadable under the strict response grammar.
+var ErrArchitectureAnswerMalformed = errors.New("the remote consumer's answer to this exact architecture request is malformed")
+
+// ArchitectureAnswerMalformed is that malformed answer as a wait outcome.
+//
+// Its own condition because none of the existing ones is true. The consumer
+// replied, so nothing is unanswered; it did not refuse, so nothing was refused;
+// and the reply decides nothing, so nothing was answered. It travels as an
+// ERROR and matches neither ErrNoArchitectureAnswer nor ErrArchitectureRefused
+// nor roles.ErrArchitectRefusal: a malformed answer is never read as a refusal
+// and never as an answer.
+type ArchitectureAnswerMalformed struct {
+	ArchitectureMalformedAnswer
+	Rejected []ArchitectureRefusalRejected
+	Unusable []ArchitectureResponseRejected
+	// ExchangeCloseErr records that this request's durable exchange record
+	// could NOT be closed after the malformed answer settled it; see
+	// ArchitectureRefused.ExchangeCloseErr.
+	ExchangeCloseErr error
+}
+
+func (e *ArchitectureAnswerMalformed) Error() string {
+	out := fmt.Sprintf("%v: request %s was answered by comment %d from %s, and %s%s%s",
+		ErrArchitectureAnswerMalformed, e.RequestID, e.Comment, e.Author, e.Diagnostic,
+		renderRejected(e.Rejected), renderUnusable(e.Unusable))
+	if e.ExchangeCloseErr != nil {
+		out += "; its durable exchange record could not be closed and is still open: " +
+			e.ExchangeCloseErr.Error()
+	}
+	return out
+}
+
+func (e *ArchitectureAnswerMalformed) Unwrap() error { return ErrArchitectureAnswerMalformed }
 
 // ErrArchitectureConflict reports materially different exact-bound terminals
 // for one architecture request.
@@ -391,6 +547,7 @@ type ArchitectureConflict struct {
 	RequestID string
 	Terminals []ArchitectureTerminal
 	Rejected  []ArchitectureRefusalRejected
+	Unusable  []ArchitectureResponseRejected
 }
 
 func (e *ArchitectureConflict) Error() string {
@@ -399,12 +556,16 @@ func (e *ArchitectureConflict) Error() string {
 		e.RequestID, len(e.Terminals))
 	for _, t := range e.Terminals {
 		kind := "answer"
-		if t.Refused() {
+		switch {
+		case t.Refused():
 			kind = "refusal at stage " + string(t.Refusal.Stage)
+		case t.IsMalformed():
+			kind = "malformed answer"
 		}
 		fmt.Fprintf(&b, "; comment %d: %s", t.Comment, kind)
 	}
 	b.WriteString(renderRejected(e.Rejected))
+	b.WriteString(renderUnusable(e.Unusable))
 	return b.String()
 }
 
@@ -423,8 +584,15 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 	// Rejections accumulate across polls. A waiter that remembered only its last
 	// poll would forget an unusable refusal the moment the next poll returned
 	// nothing new, and would end as silence again.
+	//
+	// EVERY exit carries them (ruling 47): an answer, a refusal, a malformed
+	// answer, a conflict, the deadline and a mailbox read error alike. They are
+	// provenance about what the mailbox held, not a settlement outcome, so a
+	// later answer does not erase them and a final error does not discard them.
 	var rejected []ArchitectureRefusalRejected
+	var unusable []ArchitectureResponseRejected
 	seen := map[string]bool{}
+	seenUnusable := map[string]bool{}
 	for {
 		obs, err := ObserveArchitecture(ctx, box, r)
 		if err != nil {
@@ -432,10 +600,11 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 			// landing in the select below -- no answer arrived -- and it must
 			// be reported the same way, rejections included.
 			if ctx.Err() != nil {
-				return ArchitectureResponse{}, fmt.Errorf("%w: %v%s",
-					ErrNoArchitectureAnswer, ctx.Err(), renderRejected(rejected))
+				return ArchitectureResponse{}, fmt.Errorf("%w: %v%s%s",
+					ErrNoArchitectureAnswer, ctx.Err(), renderRejected(rejected), renderUnusable(unusable))
 			}
-			return ArchitectureResponse{}, fmt.Errorf("reading the architecture mailbox: %w", err)
+			return ArchitectureResponse{}, fmt.Errorf("reading the architecture mailbox: %w%s%s",
+				err, renderRejected(rejected), renderUnusable(unusable))
 		}
 		for _, rej := range obs.Rejected {
 			if seen[rej.identity()] {
@@ -443,6 +612,13 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 			}
 			seen[rej.identity()] = true
 			rejected = append(rejected, rej)
+		}
+		for _, u := range obs.Unusable {
+			if seenUnusable[u.identity()] {
+				continue
+			}
+			seenUnusable[u.identity()] = true
+			unusable = append(unusable, u)
 		}
 		// P7 settles the request, whichever kind of terminal settles it.
 		//
@@ -454,27 +630,41 @@ func AwaitArchitecture(ctx context.Context, box Issue, r ArchitectureRequest, ev
 		// acted on, and neither is chosen by which was posted first. A
 		// non-settling refusal changes nothing here: the wait continues, and its
 		// rejection travels with whatever ends the wait.
+		//
+		// A malformed answer bound exactly to this request is terminal in the
+		// same way: the consumer replied and the reply is unreadable, so waiting
+		// out the deadline would report a delivered answer as silence. It is
+		// materially different from any valid answer or refusal, so beside one
+		// it is a CONFLICT, whichever was posted first.
 		switch outcome, settled, conflicting := obs.settlement(); outcome {
 		case settledOne:
-			if !settled.Refused() {
-				return *settled.Answer, nil
+			switch {
+			case settled.IsMalformed():
+				return ArchitectureResponse{}, &ArchitectureAnswerMalformed{
+					ArchitectureMalformedAnswer: *settled.Malformed,
+					Rejected:                    rejected, Unusable: unusable,
+				}
+			case settled.Refused():
+				refusal := settled.Refusal
+				return ArchitectureResponse{}, &ArchitectureRefused{
+					RequestID: refusal.RequestID, Binding: refusal.Binding,
+					Stage: refusal.Stage, Reason: refusal.Reason,
+					Author: refusal.Author, AuthorID: refusal.AuthorID, Comment: refusal.Comment,
+					Rejected: rejected, Unusable: unusable,
+				}
 			}
-			refusal := settled.Refusal
-			return ArchitectureResponse{}, &ArchitectureRefused{
-				RequestID: refusal.RequestID, Binding: refusal.Binding,
-				Stage: refusal.Stage, Reason: refusal.Reason,
-				Author: refusal.Author, AuthorID: refusal.AuthorID, Comment: refusal.Comment,
-				Rejected: rejected,
-			}
+			answer := *settled.Answer
+			answer.Rejected, answer.Unusable = rejected, unusable
+			return answer, nil
 		case settledConflict:
 			return ArchitectureResponse{}, &ArchitectureConflict{
-				RequestID: r.RequestID, Terminals: conflicting, Rejected: rejected,
+				RequestID: r.RequestID, Terminals: conflicting, Rejected: rejected, Unusable: unusable,
 			}
 		}
 		select {
 		case <-ctx.Done():
-			return ArchitectureResponse{}, fmt.Errorf("%w: %v%s",
-				ErrNoArchitectureAnswer, ctx.Err(), renderRejected(rejected))
+			return ArchitectureResponse{}, fmt.Errorf("%w: %v%s%s",
+				ErrNoArchitectureAnswer, ctx.Err(), renderRejected(rejected), renderUnusable(unusable))
 		case <-time.After(every):
 		}
 	}

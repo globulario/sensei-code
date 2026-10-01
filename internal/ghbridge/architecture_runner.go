@@ -220,6 +220,54 @@ func (r *ArchitectureRunner) Run(ctx context.Context, req agent.Request, emit fu
 		return agent.Result{}, err
 	}
 
+	// MALFORMED ANSWER: the consumer replied to this exact request, and the
+	// reply is unreadable under the strict response grammar (DF-26).
+	//
+	// Terminal, so the record is closed and nothing is withdrawn, exactly as on
+	// the refused path: the consumer has replied, and a later corrected comment
+	// does not reopen this exchange -- it needs a new request. Reported by its
+	// own name and never as "unanswered" or "refused": on 2026-10-01 this same
+	// condition was reported as silence after a 30-minute wait.
+	var malformed *ArchitectureAnswerMalformed
+	if errors.As(err, &malformed) {
+		settled := true
+		if r.Exchanges.Dir != "" {
+			if closeErr := r.Exchanges.Close(req.TaskID, request.RequestID); closeErr != nil {
+				malformed.ExchangeCloseErr = closeErr
+				settled = false
+			}
+		}
+		summary := "the remote consumer answered request " + request.RequestID +
+			" with a malformed architecture response: " + malformed.Diagnostic
+		if !settled {
+			summary += "; its exchange record is still open: " + malformed.ExchangeCloseErr.Error()
+		}
+		if emit != nil {
+			fields := map[string]any{
+				"request_id":         request.RequestID,
+				"request_comment":    requestComment,
+				"objective_digest":   r.Binding.ObjectiveDigest,
+				"base":               r.Binding.BaseSHA,
+				"graph_repository":   r.Binding.GraphRepository,
+				"graph_build_commit": r.Binding.GraphBuildCommit,
+				"outcome":            "malformed_answer",
+				"malformed_comment":  malformed.Comment,
+				"github_author":      malformed.Author,
+				"github_author_id":   malformed.AuthorID,
+				"reason":             err.Error(),
+				"exchange_closed":    settled,
+				"transport":          "github",
+			}
+			if !settled {
+				fields["exchange_close_error"] = malformed.ExchangeCloseErr.Error()
+			}
+			emit(event.New(r.SessionID, req.TaskID, event.SourceArchitect, event.AgentFinished,
+				summary, fields))
+		}
+		// No architecture result: nothing was read out of the malformed bytes.
+		return agent.Result{}, err
+	}
+
 	if err != nil {
 		// An exchange that ENDED must say so where an operator can see it.
 		//

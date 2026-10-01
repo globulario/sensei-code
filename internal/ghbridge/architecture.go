@@ -99,6 +99,12 @@ type ArchitectureResponse struct {
 	Body      string
 	Author    string
 	AuthorID  int64
+	// Rejected and Unusable are what the waiter saw in the mailbox that could
+	// not settle this request, carried with the answer so a successful wait
+	// does not erase them. Transport facts filled in by AwaitArchitecture,
+	// never part of the envelope.
+	Rejected []ArchitectureRefusalRejected
+	Unusable []ArchitectureResponseRejected
 }
 
 func (r ArchitectureResponse) Validate() error {
@@ -118,17 +124,157 @@ func (r ArchitectureResponse) Marker() (string, error) {
 	if err := r.Validate(); err != nil {
 		return "", err
 	}
-	b := strings.Builder{}
-	b.WriteString(architectureResponseMarker + "\n")
-	fmt.Fprintf(&b, "task=%s\n", r.Binding.TaskID)
-	fmt.Fprintf(&b, "request=%s\n", r.RequestID)
-	fmt.Fprintf(&b, "objective_digest=%s\n", r.Binding.ObjectiveDigest)
-	fmt.Fprintf(&b, "base=%s\n", r.Binding.BaseSHA)
-	fmt.Fprintf(&b, "graph_repository=%s\n", r.Binding.GraphRepository)
-	fmt.Fprintf(&b, "graph_build_commit=%s\n", r.Binding.GraphBuildCommit)
-	b.WriteString("\n")
-	b.WriteString(r.Body)
-	return b.String(), nil
+	return architectureResponseEnvelope(r.Binding, r.RequestID) + r.Body, nil
+}
+
+// architectureResponseFields is the canonical identity header of an
+// architecture response, in its one order.
+//
+// THE ONLY PLACE THAT ORDER IS SPELLED. The envelope renderer writes it, the
+// producer-facing scaffold is that renderer's output, and the diagnostic
+// identity recognizer reads it positionally -- so none of the three can come to
+// disagree with the others about where a field belongs.
+var architectureResponseFields = []string{
+	"task", "request", "objective_digest", "base", "graph_repository", "graph_build_commit",
+}
+
+// architectureResponseValues is one binding and request id keyed by the header
+// fields above.
+func architectureResponseValues(b roles.ArchitectureBinding, requestID string) map[string]string {
+	return map[string]string{
+		"task":               b.TaskID,
+		"request":            requestID,
+		"objective_digest":   b.ObjectiveDigest,
+		"base":               b.BaseSHA,
+		"graph_repository":   b.GraphRepository,
+		"graph_build_commit": b.GraphBuildCommit,
+	}
+}
+
+// architectureResponseEnvelope renders the marker, the identity header and the
+// exactly-one empty line that ends it. Everything after it is payload.
+//
+// Shared by ArchitectureResponse.Marker and ArchitectureResponseScaffold, so the
+// envelope a response is rendered with and the envelope a request teaches are
+// one rendering and not two templates.
+func architectureResponseEnvelope(b roles.ArchitectureBinding, requestID string) string {
+	values := architectureResponseValues(b, requestID)
+	out := strings.Builder{}
+	out.WriteString(architectureResponseMarker + "\n")
+	for _, key := range architectureResponseFields {
+		fmt.Fprintf(&out, "%s=%s\n", key, values[key])
+	}
+	out.WriteString("\n")
+	return out.String()
+}
+
+// ArchitecturePayloadPlaceholder marks where the architecture JSON goes in the
+// scaffold a request carries.
+//
+// Exported so a consumer can find the slot without re-spelling it, and so a
+// test can substitute a real payload and prove the result parses and binds.
+const ArchitecturePayloadPlaceholder = "<your architecture JSON payload>"
+
+// ArchitectureResponseScaffold is the literal response this request must
+// receive: the canonical envelope with this request's identity already filled
+// in, followed by the payload slot.
+//
+// MEASURED 2026-10-01. The request carried no response scaffold, so a responder
+// wrote the envelope from the grammar it inferred, omitted the one empty line
+// between graph_build_commit and the JSON, and a correctly bound answer was
+// unreadable. The scaffold is produced by the same renderer as
+// ArchitectureResponse.Marker, so a change to the accepted envelope cannot
+// leave what the producer is shown stale.
+func ArchitectureResponseScaffold(r ArchitectureRequest) (string, error) {
+	if err := r.Validate(); err != nil {
+		return "", err
+	}
+	return architectureResponseEnvelope(r.Binding, r.RequestID) + ArchitecturePayloadPlaceholder, nil
+}
+
+// architectureRequestBody is the comment a request is published as: the
+// request envelope, then the literal response scaffold.
+//
+// The scaffold travels in the request's payload rather than its header, so the
+// request grammar is unchanged and a request that predates it still parses.
+func architectureRequestBody(r ArchitectureRequest) (string, error) {
+	marker, err := r.Marker()
+	if err != nil {
+		return "", err
+	}
+	scaffold, err := ArchitectureResponseScaffold(r)
+	if err != nil {
+		return "", err
+	}
+	return marker + "\n\n" +
+		"Your GitHub reply must be exactly this architecture response: the envelope below copied " +
+		"byte for byte, including the single empty line after graph_build_commit, then your " +
+		"architecture JSON payload in place of " + ArchitecturePayloadPlaceholder + ". Post it as a " +
+		"single comment with no prose before the envelope.\n\n" + scaffold, nil
+}
+
+// architectureResponseShaped reports whether a comment CLAIMS to be an
+// architecture response: the exact marker at position zero, nothing more.
+//
+// The same positional rule ArchitectureRefusalShaped applies. Identity comes
+// from the first token; well-formedness is decided afterwards by the grammar
+// that token selected, so a malformed response is a malformed RESPONSE and
+// never ordinary content.
+func architectureResponseShaped(body string) bool {
+	return reviewartifact.Opens(body, architectureResponseMarker)
+}
+
+// recognizeArchitectureResponseIdentity establishes, for DIAGNOSIS ONLY, which
+// request a response-shaped comment that the strict grammar refused names.
+//
+// It never returns an ArchitectureResponse and nothing it returns is an answer.
+// It reads the exact bytes positionally: the marker at position zero, its "\n"
+// delimiter, then every canonical identity field in its canonical position, each
+// a complete "key=value\n" line. It does not normalize line endings or
+// whitespace, skip a malformed line, search later text for a missing field,
+// infer a value, or borrow anything from the request being waited on. Any
+// identity key appearing again anywhere after its position is a duplicate, and
+// an ambiguous identity is no identity. ok is false whenever any of this fails.
+func recognizeArchitectureResponseIdentity(body string) (roles.ArchitectureBinding, string, bool) {
+	if !architectureResponseShaped(body) {
+		return roles.ArchitectureBinding{}, "", false
+	}
+	rest, ok := strings.CutPrefix(body[len(architectureResponseMarker):], "\n")
+	if !ok {
+		return roles.ArchitectureBinding{}, "", false
+	}
+	values := map[string]string{}
+	for _, key := range architectureResponseFields {
+		line, after, complete := strings.Cut(rest, "\n")
+		if !complete {
+			return roles.ArchitectureBinding{}, "", false
+		}
+		value, keyed := strings.CutPrefix(line, key+"=")
+		if !keyed || value == "" {
+			return roles.ArchitectureBinding{}, "", false
+		}
+		values[key] = value
+		rest = after
+	}
+	for _, line := range strings.Split(rest, "\n") {
+		for _, key := range architectureResponseFields {
+			if strings.HasPrefix(line, key+"=") {
+				return roles.ArchitectureBinding{}, "", false
+			}
+		}
+	}
+	binding := roles.ArchitectureBinding{
+		TaskID:           values["task"],
+		ObjectiveDigest:  values["objective_digest"],
+		BaseSHA:          values["base"],
+		GraphRepository:  values["graph_repository"],
+		GraphBuildCommit: values["graph_build_commit"],
+	}
+	id := values["request"]
+	if !binding.Valid() || !architectureRequestID.MatchString(id) {
+		return roles.ArchitectureBinding{}, "", false
+	}
+	return binding, id, true
 }
 
 func (r ArchitectureResponse) Answers(q ArchitectureRequest) bool {
