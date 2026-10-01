@@ -782,3 +782,103 @@ func TestARefusalWhoseExchangeCannotBeClosedIsNotReportedAsSettled(t *testing.T)
 		t.Fatalf("the blocked record is gone, so nothing was left open: %v", serr)
 	}
 }
+
+// DF-26 AT THE RUNNER -- a malformed answer to this exact request ends the turn
+// BY NAME, closes its exchange as terminal, and is never reported as unanswered
+// or refused. A later corrected comment cannot reopen the closed exchange: the
+// turn has already returned, and only a new request can be answered.
+func TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange(t *testing.T) {
+	const requestID = "r-c4891d244802fb2b"
+	keyPath, _ := writeTestKey(t)
+	m, box := newPRMailbox(t, keyPath, "157", true)
+	var corrected string
+	m.onPost = func(body string) []map[string]any {
+		posted, ok := ParseArchitectureRequest(body)
+		if !ok {
+			return nil
+		}
+		wire, rerr := ArchitectureResponse{Binding: posted.Binding, RequestID: posted.RequestID,
+			Body: `{"decision":"escalate","summary":"s","plan":""}`}.Marker()
+		if rerr != nil {
+			return nil
+		}
+		corrected = wire
+		sep := "graph_build_commit=" + posted.Binding.GraphBuildCommit + "\n\n"
+		return []map[string]any{{
+			"id": float64(5926376268), "body": strings.Replace(wire, sep, strings.TrimSuffix(sep, "\n"), 1),
+			"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+		}}
+	}
+
+	log := ExchangeLog{Dir: filepath.Join(t.TempDir(), "exchanges")}
+	runner := &ArchitectureRunner{
+		Issue: box, Binding: architectureBinding(),
+		NewRequestID: func() string { return requestID },
+		Poll:         10 * time.Millisecond, Wait: 20 * time.Second,
+		Exchanges: log,
+	}
+	var outcomes []string
+	var summaries []string
+	start := time.Now()
+	res, err := runner.Run(context.Background(),
+		agent.Request{Role: roles.Architect, TaskID: architectureBinding().TaskID, Prompt: "architect this"},
+		func(e event.Event) {
+			summaries = append(summaries, e.Summary)
+			var fields map[string]any
+			if jerr := json.Unmarshal(e.Payload, &fields); jerr == nil {
+				if o, ok := fields["outcome"].(string); ok {
+					outcomes = append(outcomes, o)
+				}
+			}
+		})
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("the turn waited %s instead of ending at once", elapsed)
+	}
+	if err == nil || res != (agent.Result{}) {
+		t.Fatalf("a malformed answer produced a result: %+v, %v", res, err)
+	}
+	var malformed *ArchitectureAnswerMalformed
+	if !errors.As(err, &malformed) || !errors.Is(err, ErrArchitectureAnswerMalformed) {
+		t.Fatalf("err = %v, want the named malformed-answer outcome", err)
+	}
+	if errors.Is(err, roles.ErrArchitectRefusal) || errors.Is(err, ErrArchitectureRefused) ||
+		errors.Is(err, ErrNoArchitectureAnswer) {
+		t.Fatalf("a malformed answer matched a refusal or unanswered condition: %v", err)
+	}
+	if len(outcomes) != 1 || outcomes[0] != "malformed_answer" {
+		t.Fatalf("outcomes = %v, want exactly malformed_answer", outcomes)
+	}
+	for _, s := range summaries {
+		if strings.Contains(s, "without an answer") {
+			t.Errorf("an operator was told the turn was unanswered: %q", s)
+		}
+	}
+	if malformed.ExchangeCloseErr != nil {
+		t.Fatalf("the exchange did not close: %v", malformed.ExchangeCloseErr)
+	}
+	pending, perr := log.Pending()
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	if len(pending) != 0 {
+		t.Fatalf("the settled exchange is still open, so startup would withdraw it: %+v", pending)
+	}
+	// Nothing was withdrawn: a malformed answer is settlement, not abandonment.
+	for _, c := range m.snapshot() {
+		if body, _ := c["body"].(string); strings.HasPrefix(body, "[sensei-code:withdrawn]") {
+			t.Fatalf("a request answered malformed was withdrawn as unanswered: %q", body)
+		}
+	}
+
+	// A corrected comment arriving afterwards finds no open exchange to settle.
+	if corrected == "" {
+		t.Fatal("the fixture never answered")
+	}
+	m.append(map[string]any{
+		"id": float64(5926376269), "body": corrected,
+		"user": map[string]any{"login": "davecourtois", "id": float64(1697116)},
+	})
+	if pending, _ := log.Pending(); len(pending) != 0 {
+		t.Fatalf("a corrected comment reopened the exchange: %+v", pending)
+	}
+}
