@@ -34,7 +34,9 @@ type ProspectiveSurface struct {
 	// go-library-package and go-command-package roles: a directory absent at
 	// the pinned world holds no surface, so S must be named and then satisfy
 	// the role's structural rule. For go-regression-test it is optional and,
-	// when given, restricts the covering surface to that file.
+	// when given, restricts the covering surface to that file. For
+	// go-existing-package it is REQUIRED and names an existing non-test Go
+	// file in the created file's own directory and package.
 	Covering string `json:"covering,omitempty"`
 }
 
@@ -50,20 +52,28 @@ type prospectiveRole struct {
 	// the pinned world. Its covering surface is named by the declaration and
 	// lies outside the new directory; see newPackageGrants.
 	newPackage bool
+	// existingPackage marks the production role for one non-test Go file in
+	// a package directory PRESENT at the pinned world. Its covering surface is
+	// named by the declaration and lies in the same directory and package;
+	// see existingPackageGrant.
+	existingPackage bool
 }
 
 // The closed role set. go-regression-test is the only test role; the two
-// new-package roles are production roles and never admit a *_test.go.
+// new-package roles and go-existing-package are production roles and never
+// admit a *_test.go.
 const (
-	roleGoRegressionTest = "go-regression-test"
-	roleGoLibraryPackage = "go-library-package"
-	roleGoCommandPackage = "go-command-package"
+	roleGoRegressionTest  = "go-regression-test"
+	roleGoLibraryPackage  = "go-library-package"
+	roleGoCommandPackage  = "go-command-package"
+	roleGoExistingPackage = "go-existing-package"
 )
 
 var prospectiveRoles = map[string]prospectiveRole{
-	roleGoRegressionTest: {pathGlob: "*_test.go", novel: map[string]bool{"testing": true}},
-	roleGoLibraryPackage: {pathGlob: "*.go", novel: map[string]bool{}, newPackage: true},
-	roleGoCommandPackage: {pathGlob: "*.go", novel: map[string]bool{}, newPackage: true},
+	roleGoRegressionTest:  {pathGlob: "*_test.go", novel: map[string]bool{"testing": true}},
+	roleGoLibraryPackage:  {pathGlob: "*.go", novel: map[string]bool{}, newPackage: true},
+	roleGoCommandPackage:  {pathGlob: "*.go", novel: map[string]bool{}, newPackage: true},
+	roleGoExistingPackage: {pathGlob: "*.go", novel: map[string]bool{}, existingPackage: true},
 }
 
 // roleAdmitsPath reports whether f has the role's path shape. A production
@@ -73,7 +83,7 @@ func roleAdmitsPath(role prospectiveRole, f string) bool {
 	if matched, err := path.Match(role.pathGlob, base); err != nil || !matched {
 		return false
 	}
-	return !role.newPackage || !strings.HasSuffix(base, "_test.go")
+	return !(role.newPackage || role.existingPackage) || !strings.HasSuffix(base, "_test.go")
 }
 
 // prospectiveFacts is what was read from S at the pinned world: its package
@@ -146,6 +156,23 @@ type prospectiveGrant struct {
 	// may import beyond its covering surface's imports. Nil for every other
 	// grant, and for a command that declared no such dependency.
 	Edge *prospectiveEdge `json:"edge,omitempty"`
+	// Existing is the dependency envelope of a go-existing-package grant, and
+	// nil for every other grant. For such a grant Facts holds the package
+	// facts: the covering file's package clause and the union of the imports
+	// of every covered non-test Go file in the directory with that clause.
+	Existing *prospectiveExisting `json:"existing,omitempty"`
+}
+
+// prospectiveExisting is the pinned module facts a go-existing-package grant
+// was decided on and the exact import envelope it authorizes. Envelope is the
+// declaration's dependencies, each admitted by the closed dependency rule
+// (dependencyAdmitted) against Facts.Imports, Module and Requires; the created
+// file may import exactly those and nothing else.
+type prospectiveExisting struct {
+	Module    string   `json:"module"`
+	ModuleDir string   `json:"module_dir"`
+	Requires  []string `json:"requires"`
+	Envelope  []string `json:"envelope"`
 }
 
 // prospectiveEdge is a command-to-library dependency edge: the module import
@@ -198,6 +225,9 @@ func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospecti
 			return err
 		}
 		if err := edgeFault(f, g, declared, byPath); err != nil {
+			return err
+		}
+		if err := existingFault(f, g); err != nil {
 			return err
 		}
 	}
@@ -265,6 +295,63 @@ func edgeFault(f string, g prospectiveGrant, declared []ProspectiveSurface, byPa
 	return nil
 }
 
+// existingFault is the record-side form of the go-existing-package rule,
+// checked against the recorded facts alone and never by re-reading the world:
+// only a grant of that role carries an envelope, and its grant covers by the
+// declared surface, a non-test Go file in the created file's own directory,
+// for the package clause recorded there; its envelope is exactly the
+// declaration's dependencies, each still admitted by the closed rule against
+// the recorded package and module facts. A record whose envelope was widened,
+// narrowed, or no longer follows from its own facts is refused.
+func existingFault(f string, g prospectiveGrant) error {
+	if g.Surface.Role != roleGoExistingPackage {
+		if g.Existing != nil {
+			return fmt.Errorf("the recorded grant for %s carries an existing-package envelope, which only a %s grant may", f, roleGoExistingPackage)
+		}
+		return nil
+	}
+	if g.Existing == nil || g.Via != "" || g.Edge != nil {
+		return fmt.Errorf("the recorded existing-package grant for %s carries no envelope of its own", f)
+	}
+	named := strings.TrimSpace(g.Surface.Covering)
+	if named == "" || path.Clean(named) != g.Covering || !sameDirectoryNonTestGo(f, g.Covering) {
+		return fmt.Errorf("the recorded existing-package grant for %s does not cover by a declared non-test Go file in its own directory", f)
+	}
+	if g.Facts.Package != g.Surface.Package {
+		return fmt.Errorf("the recorded existing-package grant for %s holds package %q for declared package %q", f, g.Facts.Package, g.Surface.Package)
+	}
+	x := *g.Existing
+	if strings.TrimSpace(x.Module) == "" || strings.TrimSpace(x.ModuleDir) == "" || !(x.ModuleDir == path.Dir(f) || underModule(x.ModuleDir, path.Dir(f))) {
+		return fmt.Errorf("the recorded existing-package grant for %s names no module governing its directory", f)
+	}
+	envelope := map[string]bool{}
+	for _, imp := range x.Envelope {
+		envelope[imp] = true
+	}
+	declared := map[string]bool{}
+	for _, dep := range g.Surface.Dependencies {
+		declared[dep] = true
+	}
+	if len(envelope) != len(x.Envelope) || len(envelope) != len(declared) {
+		return fmt.Errorf("the recorded envelope of %s is not exactly its declared dependencies", f)
+	}
+	for imp := range envelope {
+		if !declared[imp] {
+			return fmt.Errorf("the recorded envelope of %s holds %q, which was not declared", f, imp)
+		}
+		if !dependencyAdmitted(imp, g.Facts.Imports, x.Module, x.Requires) {
+			return fmt.Errorf("the recorded envelope of %s holds %q, which its recorded facts do not admit", f, imp)
+		}
+	}
+	return nil
+}
+
+// sameDirectoryNonTestGo reports whether covering is a non-test Go file in
+// f's own directory, other than f.
+func sameDirectoryNonTestGo(f, covering string) bool {
+	return covering != f && path.Dir(covering) == path.Dir(f) && path.Ext(covering) == ".go" && !strings.HasSuffix(covering, "_test.go")
+}
+
 // oneEdgePerCommand refuses a command package whose grants bind more than one
 // library: a command may depend on exactly one same-plan library package.
 func oneEdgePerCommand(grants []prospectiveGrant) error {
@@ -314,17 +401,21 @@ func grantTracesToItsSurface(f string, g prospectiveGrant, byPath map[string]pro
 	return nil
 }
 
-// sameSurface compares declarations field by field, dependencies as a set.
+// sameSurface compares declarations field by field, dependencies as a
+// multiset: both sides sorted and compared element by element. A one-way
+// membership test after a length check would let a duplicate stand in for a
+// dropped dependency, so ["os","os"] would match a record of
+// ["os","golang.org/x/sys/unix"] and restore the dependency undeclared.
 func sameSurface(a, b ProspectiveSurface) bool {
 	if path.Clean(strings.TrimSpace(a.Path)) != path.Clean(strings.TrimSpace(b.Path)) || a.Package != b.Package || a.Role != b.Role || a.Covering != b.Covering || len(a.Dependencies) != len(b.Dependencies) {
 		return false
 	}
-	seen := map[string]bool{}
-	for _, d := range a.Dependencies {
-		seen[d] = true
-	}
-	for _, d := range b.Dependencies {
-		if !seen[d] {
+	da := append([]string(nil), a.Dependencies...)
+	db := append([]string(nil), b.Dependencies...)
+	sort.Strings(da)
+	sort.Strings(db)
+	for i := range da {
+		if da[i] != db[i] {
 			return false
 		}
 	}
@@ -369,6 +460,9 @@ func parseGoFacts(src []byte) (prospectiveFacts, error) {
 //	C. F's role is a member of the closed role table and F's path matches it;
 //	D. every declared dependency is in S's imports or the role's novel allowance.
 //
+// A go-existing-package declaration is decided by existingPackageGrant instead
+// of clauses A-D, and new-package directories by newPackageGrants.
+//
 // The anchor carries S's requirement and a description that says PROSPECTIVE
 // and names S, so it never reads as an observation of F.
 func prospectiveAnchors(ctx context.Context, world string, planned []string, declarations []ProspectiveSurface, existing []CoverageAnchor, read worldReader) []prospectiveGrant {
@@ -402,6 +496,11 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 		}
 	}
 
+	declaredTimes := map[string]int{}
+	for _, d := range declarations {
+		declaredTimes[path.Clean(strings.TrimSpace(d.Path))]++
+	}
+
 	var grants []prospectiveGrant
 	for _, d := range declarations {
 		f := path.Clean(strings.TrimSpace(d.Path))
@@ -417,6 +516,15 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 		// Clause C, read by membership.
 		role, ok := prospectiveRoles[d.Role]
 		if !ok || role.newPackage {
+			continue
+		}
+		if role.existingPackage {
+			if declaredTimes[f] != 1 {
+				continue // one path, one declaration: two say no single thing
+			}
+			if g, ok := existingPackageGrant(ctx, world, f, d, byDir[path.Dir(f)], read); ok {
+				grants = append(grants, g)
+			}
 			continue
 		}
 		if !roleAdmitsPath(role, f) {
@@ -492,6 +600,206 @@ func prospectiveAnchors(ctx context.Context, world string, planned []string, dec
 		grants = append(grants, byNewDir[dir]...)
 	}
 	return grants
+}
+
+// existingPackageGrant decides one go-existing-package declaration d for the
+// planned file f, already confirmed ABSENT at world. surfaces are the covered
+// surfaces in f's directory. The grant is issued only on facts read at world:
+//
+//	E1. f has the role's path shape: a non-test *.go file;
+//	E2. d names a covering file S: a non-test Go file in f's own directory,
+//	    other than f, covered by a derived anchor and readable at world -- so
+//	    the directory exists there and f is not in a new package;
+//	E3. d's package equals S's package clause read at world;
+//	E4. the package facts are S's clause and the union of the imports of
+//	    every covered, readable non-test Go file in the directory that
+//	    carries that clause;
+//	E5. the go.mod governing the directory at world is read for its module
+//	    path and its require directives;
+//	E6. every declared dependency is admitted by dependencyAdmitted against
+//	    those facts, and the declared dependencies are the whole envelope.
+//
+// Absence is a precondition here, never authority: nothing is granted unless
+// E1-E6 hold. File name, GOOS suffix and build constraints play no part.
+func existingPackageGrant(ctx context.Context, world, f string, d ProspectiveSurface, surfaces []CoverageAnchor, read worldReader) (prospectiveGrant, bool) {
+	role := prospectiveRoles[roleGoExistingPackage]
+	// E1.
+	if !roleAdmitsPath(role, f) {
+		return prospectiveGrant{}, false
+	}
+	// E2.
+	named := strings.TrimSpace(d.Covering)
+	if named == "" {
+		return prospectiveGrant{}, false
+	}
+	covering := path.Clean(named)
+	if !sameDirectoryNonTestGo(f, covering) {
+		return prospectiveGrant{}, false
+	}
+	var carriedFrom []CoverageAnchor
+	for _, a := range surfaces {
+		if a.File == covering {
+			carriedFrom = append(carriedFrom, a)
+		}
+	}
+	if len(carriedFrom) == 0 {
+		return prospectiveGrant{}, false
+	}
+	src, err := read(ctx, world, covering)
+	if err != nil {
+		return prospectiveGrant{}, false
+	}
+	sFacts, err := parseGoFacts(src)
+	if err != nil {
+		return prospectiveGrant{}, false
+	}
+	// E3.
+	if strings.TrimSpace(d.Package) == "" || d.Package != sFacts.Package {
+		return prospectiveGrant{}, false
+	}
+	// E4.
+	facts := prospectiveFacts{Package: sFacts.Package, Imports: map[string]bool{}}
+	seen := map[string]bool{}
+	for _, a := range surfaces {
+		g := a.File
+		if seen[g] || g == f || !sameDirectoryNonTestGo(f, g) {
+			continue
+		}
+		seen[g] = true
+		b, err := read(ctx, world, g)
+		if err != nil {
+			continue
+		}
+		gf, err := parseGoFacts(b)
+		if err != nil || gf.Package != facts.Package {
+			continue
+		}
+		for imp := range gf.Imports {
+			facts.Imports[imp] = true
+		}
+	}
+	// E5.
+	dir := path.Dir(f)
+	mod, ok := goModuleDir(ctx, world, dir, read)
+	if !ok || !(mod == dir || underModule(mod, dir)) {
+		return prospectiveGrant{}, false
+	}
+	gomod := "go.mod"
+	if mod != "." {
+		gomod = mod + "/go.mod"
+	}
+	modSrc, err := read(ctx, world, gomod)
+	if err != nil {
+		return prospectiveGrant{}, false
+	}
+	module, ok := goModulePath(modSrc)
+	if !ok {
+		return prospectiveGrant{}, false
+	}
+	requires := goModRequires(modSrc)
+	// E6.
+	envelope := []string{}
+	inEnvelope := map[string]bool{}
+	for _, dep := range d.Dependencies {
+		if !dependencyAdmitted(dep, facts.Imports, module, requires) {
+			return prospectiveGrant{}, false
+		}
+		if !inEnvelope[dep] {
+			inEnvelope[dep] = true
+			envelope = append(envelope, dep)
+		}
+	}
+	sort.Strings(envelope)
+
+	var carried []CoverageAnchor
+	for _, a := range carriedFrom {
+		carried = append(carried, CoverageAnchor{
+			File:        f,
+			Requirement: a.Requirement,
+			Describe: fmt.Sprintf("PROSPECTIVE %s %s: create authorized by %s at %s; %s",
+				d.Role, f, covering, shortWorldID(world), a.Describe),
+		})
+	}
+	return prospectiveGrant{
+		Surface:  d,
+		Covering: covering,
+		Facts:    facts,
+		Anchor:   carried[0],
+		Anchors:  carried,
+		Existing: &prospectiveExisting{Module: module, ModuleDir: mod, Requires: requires, Envelope: envelope},
+	}, true
+}
+
+// dependencyAdmitted is the closed dependency rule of go-existing-package. A
+// declared import is admitted when it is already in the pinned package's
+// import set, or when the module that owns it is one the governing go.mod
+// explicitly requires. Ownership is longest path-segment matching over the
+// required modules and the main module itself: an import inside the main
+// module is owned by it and is not admitted by any shorter requirement. Only
+// a declared import is ever asked about; go.mod presence alone grants nothing.
+func dependencyAdmitted(imp string, packageImports map[string]bool, module string, requires []string) bool {
+	if imp == "" {
+		return false
+	}
+	if packageImports[imp] {
+		return true
+	}
+	owner, required := "", false
+	consider := func(m string, req bool) {
+		if m == "" || (imp != m && !strings.HasPrefix(imp, m+"/")) {
+			return
+		}
+		if len(m) > len(owner) || (len(m) == len(owner) && !req) {
+			owner, required = m, req
+		}
+	}
+	for _, r := range requires {
+		consider(r, true)
+	}
+	consider(module, false)
+	return owner != "" && required
+}
+
+// goModRequires reads the module paths a go.mod's require directives name,
+// in both the single-line and the block form, sorted and without duplicates.
+func goModRequires(src []byte) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(fields []string) {
+		if len(fields) < 2 {
+			return
+		}
+		p := fields[0]
+		if unq, err := strconv.Unquote(p); err == nil {
+			p = unq
+		}
+		if p != "" && !seen[p] {
+			seen[p] = true
+			out = append(out, p)
+		}
+	}
+	inBlock := false
+	for _, line := range strings.Split(string(src), "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		switch {
+		case inBlock && fields[0] == ")":
+			inBlock = false
+		case inBlock:
+			add(fields)
+		case fields[0] == "require" && len(fields) == 2 && fields[1] == "(":
+			inBlock = true
+		case fields[0] == "require":
+			add(fields[1:])
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 // newPackageGrants decides a directory a new-package role is declared in, as
@@ -572,10 +880,13 @@ func newPackageGrants(ctx context.Context, world, dir string, planned []string, 
 		if _, err := read(ctx, world, f); !confirmedMissing(err) {
 			return nil
 		}
-		if role.newPackage {
+		switch {
+		case role.newPackage:
 			production = append(production, f)
-		} else {
+		case d.Role == roleGoRegressionTest:
 			tests = append(tests, f)
+		default:
+			return nil // go-existing-package never creates in a new directory
 		}
 	}
 	// N3.
@@ -838,7 +1149,7 @@ func admissibleAgainst(d ProspectiveSurface, s prospectiveFacts, role prospectiv
 // The first mismatch is returned as an error beginning "prospective surface
 // refuted:". Nothing is reinterpreted.
 func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, facts map[string]prospectiveFacts) error {
-	return inspectProspective(diff, declarations, facts, nil)
+	return inspectProspective(diff, declarations, facts, nil, nil)
 }
 
 // inspectProspectiveGrants is the candidate inspection against the recorded
@@ -847,6 +1158,9 @@ func inspectProspectiveSurfaces(diff string, declarations []ProspectiveSurface, 
 // library edge its grant records. An edge is honored only when it still holds
 // against the declarations and the other grants (edgeFault); an absent or
 // tampered edge authorizes no import, so the command importing it is refuted.
+// A go-existing-package file is checked against its grant's recorded envelope
+// alone, honored only when the grant was issued for that exact declaration
+// and still holds against its own recorded facts (existingFault).
 func inspectProspectiveGrants(diff string, declarations []ProspectiveSurface, grants []prospectiveGrant) error {
 	facts := map[string]prospectiveFacts{}
 	byPath := map[string]prospectiveGrant{}
@@ -863,12 +1177,27 @@ func inspectProspectiveGrants(diff string, declarations []ProspectiveSurface, gr
 			}
 		}
 	}
-	return inspectProspective(diff, declarations, facts, edges)
+	envelopes := map[string]map[string]bool{}
+	for _, d := range declarations {
+		f := path.Clean(strings.TrimSpace(d.Path))
+		g, ok := byPath[f]
+		if !ok || g.Existing == nil || !sameSurface(g.Surface, d) || existingFault(f, g) != nil {
+			continue
+		}
+		envelope := map[string]bool{}
+		for _, imp := range g.Existing.Envelope {
+			envelope[imp] = true
+		}
+		envelopes[f] = envelope
+	}
+	return inspectProspective(diff, declarations, facts, edges, envelopes)
 }
 
 // inspectProspective is inspectProspectiveSurfaces with, per declared path,
-// the one recorded library edge the created file may import beyond its facts.
-func inspectProspective(diff string, declarations []ProspectiveSurface, facts map[string]prospectiveFacts, edges map[string]string) error {
+// the one recorded library edge the created file may import beyond its facts,
+// and, for a go-existing-package declaration, the recorded envelope that is
+// the whole of what it may import.
+func inspectProspective(diff string, declarations []ProspectiveSurface, facts map[string]prospectiveFacts, edges map[string]string, envelopes map[string]map[string]bool) error {
 	if len(declarations) == 0 {
 		return nil
 	}
@@ -897,6 +1226,12 @@ func inspectProspective(diff string, declarations []ProspectiveSurface, facts ma
 		if !ok || recorded.Imports == nil {
 			return fmt.Errorf("prospective surface refuted: %s was declared but no recorded grant carries its covering surface's facts", f)
 		}
+		if role.existingPackage {
+			if err := inspectExisting(f, actual, envelopes[f]); err != nil {
+				return err
+			}
+			continue
+		}
 		allowed := recorded.Imports
 		imports := make([]string, 0, len(actual.Imports))
 		for imp := range actual.Imports {
@@ -910,13 +1245,18 @@ func inspectProspective(diff string, declarations []ProspectiveSurface, facts ma
 		}
 	}
 	// A new package was admitted as exactly its declared files: anything else
-	// created in that directory was authorized by nothing.
-	isDeclared, newDirs := map[string]bool{}, map[string]bool{}
+	// created in that directory was authorized by nothing. So was a create in
+	// an existing package a go-existing-package declaration admitted into: the
+	// declaration names the one file, never its undeclared siblings.
+	isDeclared, newDirs, existingDirs := map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, d := range declarations {
 		f := path.Clean(strings.TrimSpace(d.Path))
 		isDeclared[f] = true
 		if prospectiveRoles[d.Role].newPackage {
 			newDirs[path.Dir(f)] = true
+		}
+		if prospectiveRoles[d.Role].existingPackage {
+			existingDirs[path.Dir(f)] = true
 		}
 	}
 	names := make([]string, 0, len(created))
@@ -927,6 +1267,31 @@ func inspectProspective(diff string, declarations []ProspectiveSurface, facts ma
 	for _, f := range names {
 		if newDirs[path.Dir(f)] && !isDeclared[f] {
 			return fmt.Errorf("prospective surface refuted: %s was created in a new package but no declaration admitted it", f)
+		}
+		if existingDirs[path.Dir(f)] && !isDeclared[f] {
+			return fmt.Errorf("prospective surface refuted: %s was created beside a %s declaration but no declaration admitted it", f, roleGoExistingPackage)
+		}
+	}
+	return nil
+}
+
+// inspectExisting checks a created go-existing-package file against its
+// recorded grant: imports drawn from the recorded envelope alone. The package
+// clause was already held to the declaration, and an envelope is honored only
+// when existingFault bound that declaration to the recorded package clause. A
+// missing envelope authorizes no import and no file.
+func inspectExisting(f string, actual prospectiveFacts, envelope map[string]bool) error {
+	if envelope == nil {
+		return fmt.Errorf("prospective surface refuted: %s was declared %s but no intact recorded grant carries its dependency envelope", f, roleGoExistingPackage)
+	}
+	imports := make([]string, 0, len(actual.Imports))
+	for imp := range actual.Imports {
+		imports = append(imports, imp)
+	}
+	sort.Strings(imports)
+	for _, imp := range imports {
+		if !envelope[imp] {
+			return fmt.Errorf("prospective surface refuted: %s imports %q, which is outside its recorded %s envelope", f, imp, roleGoExistingPackage)
 		}
 	}
 	return nil
@@ -989,12 +1354,19 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 	for _, g := range grants {
 		role, known := prospectiveRoles[g.Surface.Role]
 		allowed := map[string]bool{}
-		for imp := range g.Facts.Imports {
-			allowed[imp] = true
-		}
-		if known {
-			for imp := range role.novel {
+		existing := known && role.existingPackage && g.Existing != nil
+		if existing {
+			for _, imp := range g.Existing.Envelope {
 				allowed[imp] = true
+			}
+		} else {
+			for imp := range g.Facts.Imports {
+				allowed[imp] = true
+			}
+			if known {
+				for imp := range role.novel {
+					allowed[imp] = true
+				}
 			}
 		}
 		if g.Edge != nil {
@@ -1024,6 +1396,8 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 		}
 		if known && role.newPackage || g.Via != "" {
 			fmt.Fprintf(&b, "    package: %s (the new package's declared clause)\n", g.Surface.Package)
+		} else if known && role.existingPackage {
+			fmt.Fprintf(&b, "    package: %s (must equal the existing package's clause)\n", g.Surface.Package)
 		} else {
 			fmt.Fprintf(&b, "    package: %s (must equal the covering surface's package)\n", g.Surface.Package)
 		}
@@ -1032,7 +1406,12 @@ func renderProspectiveGrants(grants []prospectiveGrant) string {
 			fmt.Fprintf(&b, "    same-plan library edge: %s (the granted package %s)\n", g.Edge.Import, g.Edge.Library)
 		}
 		fmt.Fprintf(&b, "    declared dependencies: %s\n", strings.Join(g.Surface.Dependencies, ", "))
-		fmt.Fprintf(&b, "    EFFECTIVE ALLOWED IMPORTS (covering surface's imports at the pinned world + the role allowance): %s\n", strings.Join(imports, ", "))
+		if existing {
+			fmt.Fprintf(&b, "    EFFECTIVE ALLOWED IMPORTS (exactly the declared dependencies the pinned package and go.mod admit; nothing else): %s\n", strings.Join(imports, ", "))
+			fmt.Fprintf(&b, "    an undeclared file created in %s is refuted\n", path.Dir(path.Clean(strings.TrimSpace(g.Surface.Path))))
+		} else {
+			fmt.Fprintf(&b, "    EFFECTIVE ALLOWED IMPORTS (covering surface's imports at the pinned world + the role allowance): %s\n", strings.Join(imports, ", "))
+		}
 		fmt.Fprintf(&b, "    architectural requirements carried: %s\n", strings.Join(requirements, ", "))
 	}
 	return strings.TrimRight(b.String(), "\n")
