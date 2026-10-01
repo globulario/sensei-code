@@ -839,6 +839,18 @@ code_symbols:
     file: cmd/proofbench/preflight.go
     symbol: tailLines
     kind: function
+  - id: cmd/sensei-code-answerer/main.go:bridgeProtocol
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code-answerer/main.go
+    symbol: bridgeProtocol
+    kind: function
+  - id: cmd/sensei-code-answerer/main.go:main
+    namespace: structural.scip
+    language: go
+    file: cmd/sensei-code-answerer/main.go
+    symbol: main
+    kind: function
   - id: cmd/sensei-code/architecture_bridge_test.go:TestConfiguredBridgeCarriesABoundArchitectTurn
     namespace: structural.scip
     language: go
@@ -3623,6 +3635,1320 @@ code_symbols:
     file: internal/agent/agent_session_test.go
     symbol: TestTheArchitectContinuesItsConversation
     kind: function
+  - id: internal/answerer/answerer.go:AcquireLock
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: AcquireLock
+    kind: function
+  - id: internal/answerer/answerer.go:Answerer.Every
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Every
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.LockPath
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.LockPath
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Mailbox
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Mailbox
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.MailboxRepository
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.MailboxRepository
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Model
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Model
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Once
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Once
+    kind: method
+  - id: internal/answerer/answerer.go:Answerer.Protocol
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Protocol
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Report
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Report
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Requester
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Requester
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Responder
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Responder
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.Run
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Run
+    kind: method
+  - id: internal/answerer/answerer.go:Answerer.Validators
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.Validators
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.answer
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.answer
+    kind: method
+  - id: internal/answerer/answerer.go:Answerer.ready
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.ready
+    kind: method
+  - id: internal/answerer/answerer.go:Answerer.report
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.report
+    kind: method
+  - id: internal/answerer/answerer.go:Answerer.reported
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.reported
+    kind: var
+  - id: internal/answerer/answerer.go:Answerer.unboundReply
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer.unboundReply
+    kind: method
+  - id: internal/answerer/answerer.go:Answerer~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Answerer
+    kind: type
+  - id: internal/answerer/answerer.go:CanonicalRequest.ID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: CanonicalRequest.ID
+    kind: var
+  - id: internal/answerer/answerer.go:CanonicalRequest.MailboxRepository
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: CanonicalRequest.MailboxRepository
+    kind: var
+  - id: internal/answerer/answerer.go:CanonicalRequest.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: CanonicalRequest.TaskID
+    kind: var
+  - id: internal/answerer/answerer.go:CanonicalRequest~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: CanonicalRequest
+    kind: type
+  - id: internal/answerer/answerer.go:ErrAlreadyRunning
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: ErrAlreadyRunning
+    kind: var
+  - id: internal/answerer/answerer.go:Lock.Release
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Lock.Release
+    kind: method
+  - id: internal/answerer/answerer.go:Lock.path
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Lock.path
+    kind: var
+  - id: internal/answerer/answerer.go:Lock~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Lock
+    kind: type
+  - id: internal/answerer/answerer.go:New
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: New
+    kind: function
+  - id: internal/answerer/answerer.go:Outcome.Detail
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Outcome.Detail
+    kind: var
+  - id: internal/answerer/answerer.go:Outcome.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Outcome.Kind
+    kind: var
+  - id: internal/answerer/answerer.go:Outcome.Request
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Outcome.Request
+    kind: var
+  - id: internal/answerer/answerer.go:Outcome.Result
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Outcome.Result
+    kind: var
+  - id: internal/answerer/answerer.go:Outcome~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Outcome
+    kind: type
+  - id: internal/answerer/answerer.go:Protocol.ArchitectureAnswers
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.ArchitectureAnswers
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.ArchitectureReply
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.ArchitectureReply
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.ArchitectureRequest
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.ArchitectureRequest
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.ReviewAnswers
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.ReviewAnswers
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.ReviewReply
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.ReviewReply
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.ReviewRequest
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.ReviewRequest
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.Withdrawal
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.Withdrawal
+    kind: var
+  - id: internal/answerer/answerer.go:Protocol.answers
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.answers
+    kind: method
+  - id: internal/answerer/answerer.go:Protocol.complete
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.complete
+    kind: method
+  - id: internal/answerer/answerer.go:Protocol.recognise
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.recognise
+    kind: method
+  - id: internal/answerer/answerer.go:Protocol.reply
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol.reply
+    kind: method
+  - id: internal/answerer/answerer.go:Protocol~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Protocol
+    kind: type
+  - id: internal/answerer/answerer.go:ResultMisrouted
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: ResultMisrouted
+    kind: const
+  - id: internal/answerer/answerer.go:ResultPosted
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: ResultPosted
+    kind: const
+  - id: internal/answerer/answerer.go:ResultSkipped
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: ResultSkipped
+    kind: const
+  - id: internal/answerer/answerer.go:ResultTransportFailure
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: ResultTransportFailure
+    kind: const
+  - id: internal/answerer/answerer.go:Validators.Architecture
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Validators.Architecture
+    kind: var
+  - id: internal/answerer/answerer.go:Validators.Review
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Validators.Review
+    kind: var
+  - id: internal/answerer/answerer.go:Validators~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Validators
+    kind: type
+  - id: internal/answerer/answerer.go:Validator~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: Validator
+    kind: type
+  - id: internal/answerer/answerer.go:architectureSystem
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: architectureSystem
+    kind: const
+  - id: internal/answerer/answerer.go:citationArtifact
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: citationArtifact
+    kind: function
+  - id: internal/answerer/answerer.go:citeClose
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: citeClose
+    kind: const
+  - id: internal/answerer/answerer.go:citeOpen
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: citeOpen
+    kind: const
+  - id: internal/answerer/answerer.go:citeSep
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: citeSep
+    kind: const
+  - id: internal/answerer/answerer.go:digitRun
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: digitRun
+    kind: function
+  - id: internal/answerer/answerer.go:envelopeNamespace
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: envelopeNamespace
+    kind: const
+  - id: internal/answerer/answerer.go:letterRun
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: letterRun
+    kind: function
+  - id: internal/answerer/answerer.go:maxCommentBytes
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: maxCommentBytes
+    kind: const
+  - id: internal/answerer/answerer.go:protocolViolation
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: protocolViolation
+    kind: function
+  - id: internal/answerer/answerer.go:reviewSystem
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer.go
+    symbol: reviewSystem
+    kind: const
+  - id: internal/answerer/answerer_test.go:TestAReplyTheBridgeWouldNotBindIsNotPosted
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestAReplyTheBridgeWouldNotBindIsNotPosted
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestAWellFormedMarkerForAnotherTargetIsNotTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestAWellFormedMarkerForAnotherTargetIsNotTerminal
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestAnIncompleteProtocolIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestAnIncompleteProtocolIsRefused
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestConfigurationIsCompleteOrRefused
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestConfigurationIsCompleteOrRefused
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestEveryTurnIsFreshAndStateless
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestEveryTurnIsFreshAndStateless
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestReviewLivenessUsesOnlyTheInjectedPredicate
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestReviewLivenessUsesOnlyTheInjectedPredicate
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestTheInjectedValidatorsDecideConformance
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestTheInjectedValidatorsDecideConformance
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestW1AnAnswerIsPostedOnlyUnderItsOwnRequest
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestW1AnAnswerIsPostedOnlyUnderItsOwnRequest
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestW2AHumanAuthorityQuestionGetsNoCallAndNoPost
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestW2AHumanAuthorityQuestionGetsNoCallAndNoPost
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestW3MalformedOutputPostsNothingAndAValidRefusalPostsUnchanged
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestW3MalformedOutputPostsNothingAndAValidRefusalPostsUnchanged
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestW4AtMostOnce
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestW4AtMostOnce
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestW5ASecondInstanceRefusesToStart
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestW5ASecondInstanceRefusesToStart
+    kind: function
+  - id: internal/answerer/answerer_test.go:TestW6RequestTextChangesNoBindingDestinationOrIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: TestW6RequestTextChangesNoBindingDestinationOrIdentity
+    kind: function
+  - id: internal/answerer/answerer_test.go:archReq
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: archReq
+    kind: function
+  - id: internal/answerer/answerer_test.go:errString.Error
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: errString.Error
+    kind: method
+  - id: internal/answerer/answerer_test.go:errString~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: errString
+    kind: type
+  - id: internal/answerer/answerer_test.go:fakeMailbox.List
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.List
+    kind: method
+  - id: internal/answerer/answerer_test.go:fakeMailbox.Post
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.Post
+    kind: method
+  - id: internal/answerer/answerer_test.go:fakeMailbox.add
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.add
+    kind: method
+  - id: internal/answerer/answerer_test.go:fakeMailbox.alter
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.alter
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox.beforeList
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.beforeList
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox.comments
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.comments
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox.lists
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.lists
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox.next
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.next
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox.postAs
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.postAs
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox.posts
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox.posts
+    kind: var
+  - id: internal/answerer/answerer_test.go:fakeMailbox~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: fakeMailbox
+    kind: type
+  - id: internal/answerer/answerer_test.go:harness
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: harness
+    kind: function
+  - id: internal/answerer/answerer_test.go:mailboxRepo
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: mailboxRepo
+    kind: const
+  - id: internal/answerer/answerer_test.go:protocolCalls.archAnswers
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: protocolCalls.archAnswers
+    kind: var
+  - id: internal/answerer/answerer_test.go:protocolCalls.reviewAnswers
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: protocolCalls.reviewAnswers
+    kind: var
+  - id: internal/answerer/answerer_test.go:protocolCalls~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: protocolCalls
+    kind: type
+  - id: internal/answerer/answerer_test.go:requesterID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: requesterID
+    kind: const
+  - id: internal/answerer/answerer_test.go:responderID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: responderID
+    kind: const
+  - id: internal/answerer/answerer_test.go:resultsFor
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: resultsFor
+    kind: function
+  - id: internal/answerer/answerer_test.go:reviewReq
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: reviewReq
+    kind: function
+  - id: internal/answerer/answerer_test.go:scriptedModel.Answer
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: scriptedModel.Answer
+    kind: method
+  - id: internal/answerer/answerer_test.go:scriptedModel.script
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: scriptedModel.script
+    kind: var
+  - id: internal/answerer/answerer_test.go:scriptedModel.turns
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: scriptedModel.turns
+    kind: var
+  - id: internal/answerer/answerer_test.go:scriptedModel~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: scriptedModel
+    kind: type
+  - id: internal/answerer/answerer_test.go:toyFields
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: toyFields
+    kind: function
+  - id: internal/answerer/answerer_test.go:toyProtocol
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: toyProtocol
+    kind: function
+  - id: internal/answerer/answerer_test.go:toyRequest
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: toyRequest
+    kind: function
+  - id: internal/answerer/answerer_test.go:toyValidate
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: toyValidate
+    kind: function
+  - id: internal/answerer/answerer_test.go:validConfig
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: validConfig
+    kind: function
+  - id: internal/answerer/answerer_test.go:validatorCalls.arch
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: validatorCalls.arch
+    kind: var
+  - id: internal/answerer/answerer_test.go:validatorCalls.review
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: validatorCalls.review
+    kind: var
+  - id: internal/answerer/answerer_test.go:validatorCalls~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/answerer_test.go
+    symbol: validatorCalls
+    kind: type
+  - id: internal/answerer/config.go:Config.GitHubAPI
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.GitHubAPI
+    kind: var
+  - id: internal/answerer/config.go:Config.GitHubToken
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.GitHubToken
+    kind: var
+  - id: internal/answerer/config.go:Config.LockPath
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.LockPath
+    kind: var
+  - id: internal/answerer/config.go:Config.MailboxNumber
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.MailboxNumber
+    kind: var
+  - id: internal/answerer/config.go:Config.MailboxRepository
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.MailboxRepository
+    kind: var
+  - id: internal/answerer/config.go:Config.ModelAPIKey
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.ModelAPIKey
+    kind: var
+  - id: internal/answerer/config.go:Config.ModelEndpoint
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.ModelEndpoint
+    kind: var
+  - id: internal/answerer/config.go:Config.ModelName
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.ModelName
+    kind: var
+  - id: internal/answerer/config.go:Config.RequesterID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.RequesterID
+    kind: var
+  - id: internal/answerer/config.go:Config.RequesterLogin
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.RequesterLogin
+    kind: var
+  - id: internal/answerer/config.go:Config.ResponderID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.ResponderID
+    kind: var
+  - id: internal/answerer/config.go:Config.ResponderLogin
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.ResponderLogin
+    kind: var
+  - id: internal/answerer/config.go:Config.Validate
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config.Validate
+    kind: method
+  - id: internal/answerer/config.go:ConfigFromEnv
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: ConfigFromEnv
+    kind: function
+  - id: internal/answerer/config.go:Config~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: Config
+    kind: type
+  - id: internal/answerer/config.go:EnvGitHubAPI
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvGitHubAPI
+    kind: const
+  - id: internal/answerer/config.go:EnvGitHubToken
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvGitHubToken
+    kind: const
+  - id: internal/answerer/config.go:EnvLockPath
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvLockPath
+    kind: const
+  - id: internal/answerer/config.go:EnvMailboxNumber
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvMailboxNumber
+    kind: const
+  - id: internal/answerer/config.go:EnvMailboxRepository
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvMailboxRepository
+    kind: const
+  - id: internal/answerer/config.go:EnvModelAPIKey
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvModelAPIKey
+    kind: const
+  - id: internal/answerer/config.go:EnvModelEndpoint
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvModelEndpoint
+    kind: const
+  - id: internal/answerer/config.go:EnvModelName
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvModelName
+    kind: const
+  - id: internal/answerer/config.go:EnvRequesterID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvRequesterID
+    kind: const
+  - id: internal/answerer/config.go:EnvRequesterLogin
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvRequesterLogin
+    kind: const
+  - id: internal/answerer/config.go:EnvResponderID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvResponderID
+    kind: const
+  - id: internal/answerer/config.go:EnvResponderLogin
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: EnvResponderLogin
+    kind: const
+  - id: internal/answerer/config.go:digits
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: digits
+    kind: function
+  - id: internal/answerer/config.go:nameChars
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: nameChars
+    kind: function
+  - id: internal/answerer/config.go:repositoryPath
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/config.go
+    symbol: repositoryPath
+    kind: function
+  - id: internal/answerer/mailbox.go:Comment.AuthorID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Comment.AuthorID
+    kind: var
+  - id: internal/answerer/mailbox.go:Comment.AuthorLogin
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Comment.AuthorLogin
+    kind: var
+  - id: internal/answerer/mailbox.go:Comment.Body
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Comment.Body
+    kind: var
+  - id: internal/answerer/mailbox.go:Comment.ID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Comment.ID
+    kind: var
+  - id: internal/answerer/mailbox.go:Comment~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Comment
+    kind: type
+  - id: internal/answerer/mailbox.go:GitHubMailbox.API
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.API
+    kind: var
+  - id: internal/answerer/mailbox.go:GitHubMailbox.Client
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.Client
+    kind: var
+  - id: internal/answerer/mailbox.go:GitHubMailbox.List
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.List
+    kind: method
+  - id: internal/answerer/mailbox.go:GitHubMailbox.Number
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.Number
+    kind: var
+  - id: internal/answerer/mailbox.go:GitHubMailbox.Post
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.Post
+    kind: method
+  - id: internal/answerer/mailbox.go:GitHubMailbox.Repository
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.Repository
+    kind: var
+  - id: internal/answerer/mailbox.go:GitHubMailbox.Token
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.Token
+    kind: var
+  - id: internal/answerer/mailbox.go:GitHubMailbox.commentsURL
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.commentsURL
+    kind: method
+  - id: internal/answerer/mailbox.go:GitHubMailbox.do
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox.do
+    kind: method
+  - id: internal/answerer/mailbox.go:GitHubMailbox~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: GitHubMailbox
+    kind: type
+  - id: internal/answerer/mailbox.go:KindArchitecture
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: KindArchitecture
+    kind: const
+  - id: internal/answerer/mailbox.go:KindReview
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: KindReview
+    kind: const
+  - id: internal/answerer/mailbox.go:Kind~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Kind
+    kind: type
+  - id: internal/answerer/mailbox.go:Mailbox.List
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Mailbox.List
+    kind: var
+  - id: internal/answerer/mailbox.go:Mailbox.Post
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Mailbox.Post
+    kind: var
+  - id: internal/answerer/mailbox.go:Mailbox~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Mailbox
+    kind: type
+  - id: internal/answerer/mailbox.go:NewGitHubMailbox
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: NewGitHubMailbox
+    kind: function
+  - id: internal/answerer/mailbox.go:Request.Comment
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Request.Comment
+    kind: var
+  - id: internal/answerer/mailbox.go:Request.ID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Request.ID
+    kind: var
+  - id: internal/answerer/mailbox.go:Request.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Request.Kind
+    kind: var
+  - id: internal/answerer/mailbox.go:Request.MailboxRepository
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Request.MailboxRepository
+    kind: var
+  - id: internal/answerer/mailbox.go:Request.TaskID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Request.TaskID
+    kind: var
+  - id: internal/answerer/mailbox.go:Request~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: Request
+    kind: type
+  - id: internal/answerer/mailbox.go:identity.id
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: identity.id
+    kind: var
+  - id: internal/answerer/mailbox.go:identity.is
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: identity.is
+    kind: method
+  - id: internal/answerer/mailbox.go:identity.login
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: identity.login
+    kind: var
+  - id: internal/answerer/mailbox.go:identity~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: identity
+    kind: type
+  - id: internal/answerer/mailbox.go:mailboxState.answered
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.answered
+    kind: method
+  - id: internal/answerer/mailbox.go:mailboxState.latest
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.latest
+    kind: var
+  - id: internal/answerer/mailbox.go:mailboxState.live
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.live
+    kind: method
+  - id: internal/answerer/mailbox.go:mailboxState.misrouted
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.misrouted
+    kind: var
+  - id: internal/answerer/mailbox.go:mailboxState.protocol
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.protocol
+    kind: var
+  - id: internal/answerer/mailbox.go:mailboxState.replies
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.replies
+    kind: var
+  - id: internal/answerer/mailbox.go:mailboxState.requests
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.requests
+    kind: var
+  - id: internal/answerer/mailbox.go:mailboxState.withdrawn
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState.withdrawn
+    kind: var
+  - id: internal/answerer/mailbox.go:mailboxState~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: mailboxState
+    kind: type
+  - id: internal/answerer/mailbox.go:maxPages
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: maxPages
+    kind: const
+  - id: internal/answerer/mailbox.go:readState
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: readState
+    kind: function
+  - id: internal/answerer/mailbox.go:restComment.$anon_3787b7069d163a87.ID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment.$anon_3787b7069d163a87.ID
+    kind: var
+  - id: internal/answerer/mailbox.go:restComment.$anon_3787b7069d163a87.Login
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment.$anon_3787b7069d163a87.Login
+    kind: var
+  - id: internal/answerer/mailbox.go:restComment.Body
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment.Body
+    kind: var
+  - id: internal/answerer/mailbox.go:restComment.ID
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment.ID
+    kind: var
+  - id: internal/answerer/mailbox.go:restComment.User
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment.User
+    kind: var
+  - id: internal/answerer/mailbox.go:restComment.comment
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment.comment
+    kind: method
+  - id: internal/answerer/mailbox.go:restComment~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/mailbox.go
+    symbol: restComment
+    kind: type
+  - id: internal/answerer/model.go:ChatModel.APIKey
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: ChatModel.APIKey
+    kind: var
+  - id: internal/answerer/model.go:ChatModel.Answer
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: ChatModel.Answer
+    kind: method
+  - id: internal/answerer/model.go:ChatModel.Client
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: ChatModel.Client
+    kind: var
+  - id: internal/answerer/model.go:ChatModel.Endpoint
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: ChatModel.Endpoint
+    kind: var
+  - id: internal/answerer/model.go:ChatModel.Name
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: ChatModel.Name
+    kind: var
+  - id: internal/answerer/model.go:ChatModel~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: ChatModel
+    kind: type
+  - id: internal/answerer/model.go:Model.Answer
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: Model.Answer
+    kind: var
+  - id: internal/answerer/model.go:Model~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: Model
+    kind: type
+  - id: internal/answerer/model.go:NewChatModel
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: NewChatModel
+    kind: function
+  - id: internal/answerer/model.go:Turn.Kind
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: Turn.Kind
+    kind: var
+  - id: internal/answerer/model.go:Turn.Request
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: Turn.Request
+    kind: var
+  - id: internal/answerer/model.go:Turn.System
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: Turn.System
+    kind: var
+  - id: internal/answerer/model.go:Turn~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: Turn
+    kind: type
+  - id: internal/answerer/model.go:bounded
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: bounded
+    kind: function
+  - id: internal/answerer/model.go:chatMessage.Content
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatMessage.Content
+    kind: var
+  - id: internal/answerer/model.go:chatMessage.Role
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatMessage.Role
+    kind: var
+  - id: internal/answerer/model.go:chatMessage~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatMessage
+    kind: type
+  - id: internal/answerer/model.go:chatRequest.Messages
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatRequest.Messages
+    kind: var
+  - id: internal/answerer/model.go:chatRequest.Model
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatRequest.Model
+    kind: var
+  - id: internal/answerer/model.go:chatRequest.Store
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatRequest.Store
+    kind: var
+  - id: internal/answerer/model.go:chatRequest~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatRequest
+    kind: type
+  - id: internal/answerer/model.go:chatResponse.$anon_cfba11fd851e90a3.$anon_0a7d2ee4071bfbd8.Content
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatResponse.$anon_cfba11fd851e90a3.$anon_0a7d2ee4071bfbd8.Content
+    kind: var
+  - id: internal/answerer/model.go:chatResponse.$anon_cfba11fd851e90a3.$anon_0a7d2ee4071bfbd8.Refusal
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatResponse.$anon_cfba11fd851e90a3.$anon_0a7d2ee4071bfbd8.Refusal
+    kind: var
+  - id: internal/answerer/model.go:chatResponse.$anon_cfba11fd851e90a3.FinishReason
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatResponse.$anon_cfba11fd851e90a3.FinishReason
+    kind: var
+  - id: internal/answerer/model.go:chatResponse.$anon_cfba11fd851e90a3.Message
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatResponse.$anon_cfba11fd851e90a3.Message
+    kind: var
+  - id: internal/answerer/model.go:chatResponse.Choices
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatResponse.Choices
+    kind: var
+  - id: internal/answerer/model.go:chatResponse~type
+    namespace: structural.scip
+    language: go
+    file: internal/answerer/model.go
+    symbol: chatResponse
+    kind: type
   - id: internal/architect/debt.go:Debt.CoveredFiles
     namespace: structural.scip
     language: go
@@ -16313,6 +17639,18 @@ code_symbols:
     file: internal/ghbridge/review_contract_test.go
     symbol: TestBothReviewModesTeachTheSameOuterArtifact
     kind: function
+  - id: internal/ghbridge/review_contract_test.go:TestMailboxReviewAnswersAndReviewAnswersShareOneBindingRule
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_contract_test.go
+    symbol: TestMailboxReviewAnswersAndReviewAnswersShareOneBindingRule
+    kind: function
+  - id: internal/ghbridge/review_contract_test.go:TestReviewAnswersBindsOnlyTheCanonicalReplyToThatRequest
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_contract_test.go
+    symbol: TestReviewAnswersBindsOnlyTheCanonicalReplyToThatRequest
+    kind: function
   - id: internal/ghbridge/review_contract_test.go:TestThePublishedRequestDoesNotClaimTheWholeReplyIsJSON
     namespace: structural.scip
     language: go
@@ -16366,6 +17704,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/review_contract_test.go
     symbol: publishedRequestBody
+    kind: function
+  - id: internal/ghbridge/review_contract_test.go:reviewSeamNegatives
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/review_contract_test.go
+    symbol: reviewSeamNegatives
     kind: function
   - id: internal/ghbridge/review_convergence_test.go:TestADifferentArtifactForAnAnsweredRequestConflicts
     namespace: structural.scip
@@ -18197,6 +19541,12 @@ code_symbols:
     file: internal/ghbridge/transport.go
     symbol: PublishRequest
     kind: function
+  - id: internal/ghbridge/transport.go:ReviewAnswers
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: ReviewAnswers
+    kind: function
   - id: internal/ghbridge/transport.go:ReviewWaitEnded.Cause
     namespace: structural.scip
     language: go
@@ -18256,6 +19606,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/transport.go
     symbol: VerifyMailboxIsPullRequest
+    kind: function
+  - id: internal/ghbridge/transport.go:artifactAnswers
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/transport.go
+    symbol: artifactAnswers
     kind: function
   - id: internal/ghbridge/transport.go:mailboxComments
     namespace: structural.scip
@@ -41147,6 +42503,18 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: ReviewPayloadHeading
     kind: const
+  - id: internal/workflow/engine.go:StrictValidateArchitectureBody
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: StrictValidateArchitectureBody
+    kind: function
+  - id: internal/workflow/engine.go:StrictValidateReviewPayload
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: StrictValidateReviewPayload
+    kind: function
   - id: internal/workflow/engine.go:UnprovenAuthorityScopeError.Error
     namespace: structural.scip
     language: go
@@ -41363,12 +42731,24 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: architectureDecision.TestEdits
     kind: var
+  - id: internal/workflow/engine.go:architectureDecisionFields
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: architectureDecisionFields
+    kind: var
   - id: internal/workflow/engine.go:architectureDecision~type
     namespace: structural.scip
     language: go
     file: internal/workflow/engine.go
     symbol: architectureDecision
     kind: type
+  - id: internal/workflow/engine.go:architectureFieldsCarried
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: architectureFieldsCarried
+    kind: function
   - id: internal/workflow/engine.go:architecturePrompt
     namespace: structural.scip
     language: go
@@ -41423,6 +42803,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: citedExecution
     kind: function
+  - id: internal/workflow/engine.go:claimSources
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: claimSources
+    kind: var
   - id: internal/workflow/engine.go:closureBudget
     namespace: structural.scip
     language: go
@@ -41501,6 +42887,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: coverageComputation
     kind: type
+  - id: internal/workflow/engine.go:decisions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: decisions
+    kind: var
   - id: internal/workflow/engine.go:declined
     namespace: structural.scip
     language: go
@@ -41585,6 +42977,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: failed
     kind: const
+  - id: internal/workflow/engine.go:field
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: field
+    kind: var
   - id: internal/workflow/engine.go:filesFor
     namespace: structural.scip
     language: go
@@ -42281,6 +43679,42 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: stopped
     kind: const
+  - id: internal/workflow/engine.go:strictArchitectureContract
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: strictArchitectureContract
+    kind: function
+  - id: internal/workflow/engine.go:strictDecisionOnlyFields
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: strictDecisionOnlyFields
+    kind: function
+  - id: internal/workflow/engine.go:strictDecodeModelJSON
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: strictDecodeModelJSON
+    kind: function
+  - id: internal/workflow/engine.go:strictNonBlankList
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: strictNonBlankList
+    kind: function
+  - id: internal/workflow/engine.go:strictProspectiveDeclaration
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: strictProspectiveDeclaration
+    kind: function
+  - id: internal/workflow/engine.go:strictReviewContract
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: strictReviewContract
+    kind: function
   - id: internal/workflow/engine.go:structuredString
     namespace: structural.scip
     language: go
@@ -50315,6 +51749,114 @@ code_symbols:
     file: internal/workflow/unexamined_test.go
     symbol: probeOf
     kind: function
+  - id: internal/workflow/validate_body_test.go:TestArchitectureFieldsCarriedSeesEveryReservedField
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestArchitectureFieldsCarriedSeesEveryReservedField
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyAcceptsADeclarativeNoOpTestEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyAcceptsADeclarativeNoOpTestEdit
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyAcceptsEachTestEditOperation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyAcceptsEachTestEditOperation
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyAcceptsWellFormedProceedAndEscalate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyAcceptsWellFormedProceedAndEscalate
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyAppliesTheRolePathAndPackageRules
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyAppliesTheRolePathAndPackageRules
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyReadsVocabulariesByExactMembership
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyReadsVocabulariesByExactMembership
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyRejectsFieldsReservedForAnotherDecision
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyRejectsFieldsReservedForAnotherDecision
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyRejectsIncompleteEscalate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyRejectsIncompleteEscalate
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyRejectsProceedMissingARequiredField
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyRejectsProceedMissingARequiredField
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateArchitectureBodyRejectsProceedWithoutClaims
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateArchitectureBodyRejectsProceedWithoutClaims
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateReviewPayloadAcceptsWellFormedReview
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateReviewPayloadAcceptsWellFormedReview
+    kind: function
+  - id: internal/workflow/validate_body_test.go:TestStrictValidateReviewPayloadRejectsMalformedFindingsBeforeNormalization
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: TestStrictValidateReviewPayloadRejectsMalformedFindingsBeforeNormalization
+    kind: function
+  - id: internal/workflow/validate_body_test.go:containsText
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: containsText
+    kind: function
+  - id: internal/workflow/validate_body_test.go:escalateOptions
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: escalateOptions
+    kind: const
+  - id: internal/workflow/validate_body_test.go:proceedCore
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: proceedCore
+    kind: const
+  - id: internal/workflow/validate_body_test.go:wellFormedEscalate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: wellFormedEscalate
+    kind: const
+  - id: internal/workflow/validate_body_test.go:wellFormedProceed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: wellFormedProceed
+    kind: const
+  - id: internal/workflow/validate_body_test.go:wellFormedReview
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/validate_body_test.go
+    symbol: wellFormedReview
+    kind: const
   - id: internal/workflow/w3_grant_proof_test.go:TestW3ControlTestIsGrantedByItsAuthoredNeighbour
     namespace: structural.scip
     language: go
