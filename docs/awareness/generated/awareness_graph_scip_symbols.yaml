@@ -13865,6 +13865,12 @@ code_symbols:
     file: internal/ghbridge/appconfig_test.go
     symbol: keyPathFixture
     kind: const
+  - id: internal/ghbridge/architecture.go:ArchitecturePayloadPlaceholder
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: ArchitecturePayloadPlaceholder
+    kind: const
   - id: internal/ghbridge/architecture.go:ArchitectureRefusal.Author
     namespace: structural.scip
     language: go
@@ -14033,11 +14039,23 @@ code_symbols:
     file: internal/ghbridge/architecture.go
     symbol: ArchitectureResponse.Marker
     kind: method
+  - id: internal/ghbridge/architecture.go:ArchitectureResponse.Rejected
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: ArchitectureResponse.Rejected
+    kind: var
   - id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
     namespace: structural.scip
     language: go
     file: internal/ghbridge/architecture.go
     symbol: ArchitectureResponse.RequestID
+    kind: var
+  - id: internal/ghbridge/architecture.go:ArchitectureResponse.Unusable
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: ArchitectureResponse.Unusable
     kind: var
   - id: internal/ghbridge/architecture.go:ArchitectureResponse.Validate
     namespace: structural.scip
@@ -14045,6 +14063,12 @@ code_symbols:
     file: internal/ghbridge/architecture.go
     symbol: ArchitectureResponse.Validate
     kind: method
+  - id: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: ArchitectureResponseScaffold
+    kind: function
   - id: internal/ghbridge/architecture.go:ArchitectureResponse~type
     namespace: structural.scip
     language: go
@@ -14123,6 +14147,12 @@ code_symbols:
     file: internal/ghbridge/architecture.go
     symbol: architectureRefusalMarker
     kind: const
+  - id: internal/ghbridge/architecture.go:architectureRequestBody
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: architectureRequestBody
+    kind: function
   - id: internal/ghbridge/architecture.go:architectureRequestID
     namespace: structural.scip
     language: go
@@ -14135,12 +14165,36 @@ code_symbols:
     file: internal/ghbridge/architecture.go
     symbol: architectureRequestMarker
     kind: const
+  - id: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: architectureResponseEnvelope
+    kind: function
+  - id: internal/ghbridge/architecture.go:architectureResponseFields
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: architectureResponseFields
+    kind: var
   - id: internal/ghbridge/architecture.go:architectureResponseMarker
     namespace: structural.scip
     language: go
     file: internal/ghbridge/architecture.go
     symbol: architectureResponseMarker
     kind: const
+  - id: internal/ghbridge/architecture.go:architectureResponseShaped
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: architectureResponseShaped
+    kind: function
+  - id: internal/ghbridge/architecture.go:architectureResponseValues
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: architectureResponseValues
+    kind: function
   - id: internal/ghbridge/architecture.go:firstLineOf
     namespace: structural.scip
     language: go
@@ -14152,6 +14206,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/architecture.go
     symbol: parseArchitectureEnvelope
+    kind: function
+  - id: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture.go
+    symbol: recognizeArchitectureResponseIdentity
     kind: function
   - id: internal/ghbridge/architecture.go:refusalStageField
     namespace: structural.scip
@@ -14519,6 +14579,48 @@ code_symbols:
     file: internal/ghbridge/architecture_test.go
     symbol: recordingLookup
     kind: type
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ArchitectureMalformedAnswer
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed.ArchitectureMalformedAnswer
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed.Error
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ExchangeCloseErr
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed.ExchangeCloseErr
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Rejected
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed.Rejected
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unusable
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed.Unusable
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unwrap
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed.Unwrap
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureAnswerMalformed
+    kind: type
   - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     namespace: structural.scip
     language: go
@@ -14543,6 +14645,12 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureConflict.Terminals
     kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unusable
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureConflict.Unusable
+    kind: var
   - id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unwrap
     namespace: structural.scip
     language: go
@@ -14554,6 +14662,48 @@ code_symbols:
     language: go
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureConflict
+    kind: type
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Author
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer.Author
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.AuthorID
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer.AuthorID
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Binding
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer.Binding
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Comment
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer.Comment
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Diagnostic
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer.Diagnostic
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.RequestID
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer.RequestID
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureMalformedAnswer
     kind: type
   - id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
     namespace: structural.scip
@@ -14572,6 +14722,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureObservation.Terminals
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureObservation.Unusable
     kind: var
   - id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
     namespace: structural.scip
@@ -14681,6 +14837,12 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureRefused.Stage
     kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unusable
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureRefused.Unusable
+    kind: var
   - id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unwrap
     namespace: structural.scip
     language: go
@@ -14693,6 +14855,42 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureRefused
     kind: type
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Author
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureResponseRejected.Author
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.AuthorID
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureResponseRejected.AuthorID
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureResponseRejected.Comment
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Diagnostic
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureResponseRejected.Diagnostic
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureResponseRejected.identity
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected~type
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureResponseRejected
+    kind: type
   - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
     namespace: structural.scip
     language: go
@@ -14704,6 +14902,18 @@ code_symbols:
     language: go
     file: internal/ghbridge/architecture_transport.go
     symbol: ArchitectureTerminal.Comment
+    kind: var
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureTerminal.IsMalformed
+    kind: method
+  - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Malformed
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ArchitectureTerminal.Malformed
     kind: var
   - id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
     namespace: structural.scip
@@ -14753,6 +14963,12 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: AwaitArchitecture
     kind: function
+  - id: internal/ghbridge/architecture_transport.go:ErrArchitectureAnswerMalformed
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: ErrArchitectureAnswerMalformed
+    kind: var
   - id: internal/ghbridge/architecture_transport.go:ErrArchitectureConflict
     namespace: structural.scip
     language: go
@@ -14789,6 +15005,12 @@ code_symbols:
     file: internal/ghbridge/architecture_transport.go
     symbol: PublishArchitectureRequest
     kind: function
+  - id: internal/ghbridge/architecture_transport.go:answerMismatch
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: answerMismatch
+    kind: function
   - id: internal/ghbridge/architecture_transport.go:architectureAnswers
     namespace: structural.scip
     language: go
@@ -14806,6 +15028,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/architecture_transport.go
     symbol: renderRejected
+    kind: function
+  - id: internal/ghbridge/architecture_transport.go:renderUnusable
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/architecture_transport.go
+    symbol: renderUnusable
     kind: function
   - id: internal/ghbridge/attestation.go:AcceptAttestation
     namespace: structural.scip
@@ -15197,6 +15425,66 @@ code_symbols:
     file: internal/ghbridge/await_test.go
     symbol: TestCancellationIsReportedAsCancellation
     kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    kind: function
+  - id: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    kind: function
   - id: internal/ghbridge/await_test.go:TestDefaultWaitIsFinite
     namespace: structural.scip
     language: go
@@ -15238,6 +15526,30 @@ code_symbols:
     language: go
     file: internal/ghbridge/await_test.go
     symbol: TestUnconfiguredMailboxIsRefusedNotPolled
+    kind: function
+  - id: internal/ghbridge/await_test.go:df26Bounded
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: df26Bounded
+    kind: function
+  - id: internal/ghbridge/await_test.go:df26EscalateBody
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: df26EscalateBody
+    kind: const
+  - id: internal/ghbridge/await_test.go:df26Mailbox
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: df26Mailbox
+    kind: function
+  - id: internal/ghbridge/await_test.go:df26MeasuredShape
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/await_test.go
+    symbol: df26MeasuredShape
     kind: function
   - id: internal/ghbridge/doorbell.go:Doorbell.Ring
     namespace: structural.scip
@@ -15364,6 +15676,12 @@ code_symbols:
     language: go
     file: internal/ghbridge/doorbell_test.go
     symbol: TestAGhFailureStillCarriesWhatGhSaid
+    kind: function
+  - id: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    namespace: structural.scip
+    language: go
+    file: internal/ghbridge/doorbell_test.go
+    symbol: TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
     kind: function
   - id: internal/ghbridge/doorbell_test.go:TestAMalformedWakeIsReportedAsABrokenWakeNotAnAbsentOne
     namespace: structural.scip

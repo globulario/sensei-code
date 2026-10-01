@@ -6372,11 +6372,11 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -8201,11 +8201,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/session/store.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -11270,11 +11270,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -28168,10 +28168,10 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -31590,11 +31590,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -34047,11 +34047,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -35719,7 +35719,7 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -35727,7 +35727,7 @@ code_references:
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/control/server.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -41824,10 +41824,10 @@ code_references:
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -48278,11 +48278,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -52869,26 +52869,6 @@ code_references:
     to_name: ArchitectureResponse.RequestID
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
-    to_name: ArchitectureBinding.BaseSHA
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
-    to_name: ArchitectureBinding.GraphBuildCommit
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
-    to_name: ArchitectureBinding.GraphRepository
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
-    to_name: ArchitectureBinding.ObjectiveDigest
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
-    to_name: ArchitectureBinding.TaskID
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
     to_name: ArchitectureResponse
     file: internal/ghbridge/architecture.go
@@ -52909,26 +52889,8 @@ code_references:
     to_name: ArchitectureResponse.Validate
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_name: Builder
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_name: Builder.String
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_name: Builder.WriteString
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_name: Fprintf
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
-    to_name: architectureResponseMarker
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_name: fmt
-    file: internal/ghbridge/architecture.go
-  - from: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
-    to_name: strings
+    to_id: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: architectureResponseEnvelope
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureResponse.Validate
     to_id: internal/roles/architecture.go:ArchitectureBinding.Valid
@@ -52974,6 +52936,30 @@ code_references:
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ArchitectureResponse.Validate
     to_name: strings
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitecturePayloadPlaceholder
+    to_name: ArchitecturePayloadPlaceholder
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Validate
+    to_name: ArchitectureRequest.Validate
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_id: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: architectureResponseEnvelope
     file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:ParseArchitectureRefusal
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal~type
@@ -53105,6 +53091,97 @@ code_references:
     to_id: internal/ghbridge/architecture.go:refusalStages
     to_name: refusalStages
     file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureRequestBody
+    to_id: internal/ghbridge/architecture.go:ArchitecturePayloadPlaceholder
+    to_name: ArchitecturePayloadPlaceholder
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureRequestBody
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureRequestBody
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
+    to_name: ArchitectureRequest.Marker
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureRequestBody
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_name: ArchitectureResponseScaffold
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_id: internal/roles/architecture.go:ArchitectureBinding~type
+    to_name: ArchitectureBinding
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: Builder
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: Builder.String
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: Builder.WriteString
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: Fprintf
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_id: internal/ghbridge/architecture.go:architectureResponseFields
+    to_name: architectureResponseFields
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_id: internal/ghbridge/architecture.go:architectureResponseValues
+    to_name: architectureResponseValues
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: fmt
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseEnvelope
+    to_name: strings
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseShaped
+    to_id: internal/reviewartifact/artifact.go:Opens
+    to_name: Opens
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseShaped
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseShaped
+    to_name: github.com/globulario/sensei-code/internal/reviewartifact
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_id: internal/roles/architecture.go:ArchitectureBinding~type
+    to_name: ArchitectureBinding
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
+    to_name: ArchitectureBinding.BaseSHA
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:architectureResponseValues
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture.go:firstLineOf
     to_name: Cut
     file: internal/ghbridge/architecture.go
@@ -53191,6 +53268,71 @@ code_references:
   - from: internal/ghbridge/architecture.go:parseArchitectureEnvelope
     to_name: strings
     file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding~type
+    to_name: ArchitectureBinding
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
+    to_name: ArchitectureBinding.BaseSHA
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/roles/architecture.go:ArchitectureBinding.Valid
+    to_name: ArchitectureBinding.Valid
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: Cut
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: CutPrefix
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: HasPrefix
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: Regexp.MatchString
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: Split
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/ghbridge/architecture.go:architectureRequestID
+    to_name: architectureRequestID
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/ghbridge/architecture.go:architectureResponseFields
+    to_name: architectureResponseFields
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_id: internal/ghbridge/architecture.go:architectureResponseShaped
+    to_name: architectureResponseShaped
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/architecture.go
+  - from: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: strings
+    file: internal/ghbridge/architecture.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/event/event.go:AgentFinished
     to_name: AgentFinished
@@ -53202,6 +53344,14 @@ code_references:
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/roles/roles.go:Architect
     to_name: Architect
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ExchangeCloseErr
+    to_name: ArchitectureAnswerMalformed.ExchangeCloseErr
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
@@ -53226,6 +53376,22 @@ code_references:
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/roles/architecture.go:ArchitectureBinding.Valid
     to_name: ArchitectureBinding.Valid
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Author
+    to_name: ArchitectureMalformedAnswer.Author
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.AuthorID
+    to_name: ArchitectureMalformedAnswer.AuthorID
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Comment
+    to_name: ArchitectureMalformedAnswer.Comment
+    file: internal/ghbridge/architecture_runner.go
+  - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Diagnostic
+    to_name: ArchitectureMalformedAnswer.Diagnostic
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused~type
@@ -56016,6 +56182,68 @@ code_references:
     to_id: internal/ghbridge/architecture_test.go:recordingLookup.attempted
     to_name: recordingLookup.attempted
     file: internal/ghbridge/architecture_test.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ArchitectureMalformedAnswer
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer~type
+    to_name: ArchitectureMalformedAnswer
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ExchangeCloseErr
+    to_name: ArchitectureAnswerMalformed.ExchangeCloseErr
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Rejected
+    to_name: ArchitectureAnswerMalformed.Rejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unusable
+    to_name: ArchitectureAnswerMalformed.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Author
+    to_name: ArchitectureMalformedAnswer.Author
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Comment
+    to_name: ArchitectureMalformedAnswer.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Diagnostic
+    to_name: ArchitectureMalformedAnswer.Diagnostic
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.RequestID
+    to_name: ArchitectureMalformedAnswer.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureAnswerMalformed
+    to_name: ErrArchitectureAnswerMalformed
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_name: Sprintf
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_name: fmt
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:renderRejected
+    to_name: renderRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Error
+    to_id: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: renderUnusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unwrap
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unwrap
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureAnswerMalformed
+    to_name: ErrArchitectureAnswerMalformed
+    file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
     to_name: ArchitectureConflict
@@ -56033,12 +56261,20 @@ code_references:
     to_name: ArchitectureConflict.Terminals
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unusable
+    to_name: ArchitectureConflict.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Stage
     to_name: ArchitectureRefusal.Stage
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
     to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    to_name: ArchitectureTerminal.IsMalformed
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
@@ -56070,6 +56306,10 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     to_id: internal/ghbridge/architecture_transport.go:renderRejected
     to_name: renderRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
+    to_id: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: renderUnusable
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Error
     to_name: strings
@@ -56197,6 +56437,10 @@ code_references:
     to_name: ArchitectureRefused.Stage
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Error
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unusable
+    to_name: ArchitectureRefused.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Error
     to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureRefused
     to_name: ErrArchitectureRefused
     file: internal/ghbridge/architecture_transport.go
@@ -56209,6 +56453,10 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Error
     to_id: internal/ghbridge/architecture_transport.go:renderRejected
     to_name: renderRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Error
+    to_id: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: renderUnusable
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unwrap
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused~type
@@ -56225,6 +56473,32 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unwrap
     to_name: github.com/globulario/sensei-code/internal/roles
     file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected~type
+    to_name: ArchitectureResponseRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    to_name: ArchitectureResponseRejected.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Diagnostic
+    to_name: ArchitectureResponseRejected.Diagnostic
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    to_name: Sprintf
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    to_name: fmt
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
+    to_name: ArchitectureTerminal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Malformed
+    to_name: ArchitectureTerminal.Malformed
+    file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refused
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
     to_name: ArchitectureTerminal
@@ -56236,6 +56510,14 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
     to_id: internal/roles/architecture.go:ArchitectureBinding~type
     to_name: ArchitectureBinding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Binding
+    to_name: ArchitectureMalformedAnswer.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.RequestID
+    to_name: ArchitectureMalformedAnswer.RequestID
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Binding
@@ -56272,6 +56554,10 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
     to_name: ArchitectureTerminal.Answer
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Malformed
+    to_name: ArchitectureTerminal.Malformed
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.material
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
@@ -56328,6 +56614,22 @@ code_references:
     to_name: After
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ArchitectureMalformedAnswer
+    to_name: ArchitectureAnswerMalformed.ArchitectureMalformedAnswer
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Rejected
+    to_name: ArchitectureAnswerMalformed.Rejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unusable
+    to_name: ArchitectureAnswerMalformed.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
     to_name: ArchitectureConflict
     file: internal/ghbridge/architecture_transport.go
@@ -56344,8 +56646,16 @@ code_references:
     to_name: ArchitectureConflict.Terminals
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unusable
+    to_name: ArchitectureConflict.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
     to_name: ArchitectureObservation.Rejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.settlement
@@ -56424,6 +56734,10 @@ code_references:
     to_name: ArchitectureRefused.Stage
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unusable
+    to_name: ArchitectureRefused.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
     to_name: ArchitectureRequest
     file: internal/ghbridge/architecture_transport.go
@@ -56440,8 +56754,32 @@ code_references:
     to_name: ArchitectureResponse
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Rejected
+    to_name: ArchitectureResponse.Rejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Unusable
+    to_name: ArchitectureResponse.Unusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected~type
+    to_name: ArchitectureResponseRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.identity
+    to_name: ArchitectureResponseRejected.identity
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
     to_name: ArchitectureTerminal.Answer
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    to_name: ArchitectureTerminal.IsMalformed
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Malformed
+    to_name: ArchitectureTerminal.Malformed
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
@@ -56492,6 +56830,10 @@ code_references:
     to_name: renderRejected
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: renderUnusable
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_id: internal/ghbridge/review_observation.go:settledConflict
     to_name: settledConflict
     file: internal/ghbridge/architecture_transport.go
@@ -56501,6 +56843,34 @@ code_references:
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:AwaitArchitecture
     to_name: time
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer~type
+    to_name: ArchitectureMalformedAnswer
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Author
+    to_name: ArchitectureMalformedAnswer.Author
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.AuthorID
+    to_name: ArchitectureMalformedAnswer.AuthorID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Binding
+    to_name: ArchitectureMalformedAnswer.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Comment
+    to_name: ArchitectureMalformedAnswer.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Diagnostic
+    to_name: ArchitectureMalformedAnswer.Diagnostic
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.RequestID
+    to_name: ArchitectureMalformedAnswer.RequestID
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation~type
@@ -56513,6 +56883,10 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
     to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Author
@@ -56559,6 +56933,10 @@ code_references:
     to_name: ArchitectureRequest
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Answers
     to_name: ArchitectureResponse.Answers
     file: internal/ghbridge/architecture_transport.go
@@ -56571,6 +56949,34 @@ code_references:
     to_name: ArchitectureResponse.AuthorID
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected~type
+    to_name: ArchitectureResponseRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Author
+    to_name: ArchitectureResponseRejected.Author
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.AuthorID
+    to_name: ArchitectureResponseRejected.AuthorID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    to_name: ArchitectureResponseRejected.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Diagnostic
+    to_name: ArchitectureResponseRejected.Diagnostic
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal~type
     to_name: ArchitectureTerminal
     file: internal/ghbridge/architecture_transport.go
@@ -56581,6 +56987,10 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
     to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Malformed
+    to_name: ArchitectureTerminal.Malformed
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
@@ -56622,11 +57032,31 @@ code_references:
     to_name: Principal.authenticatedAs
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_name: answerMismatch
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/architecture_transport.go:architectureComments
     to_name: architectureComments
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:architectureResponseShaped
+    to_name: architectureResponseShaped
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_name: context
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:parseArchitectureEnvelope
+    to_name: parseArchitectureEnvelope
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_id: internal/ghbridge/architecture.go:recognizeArchitectureResponseIdentity
+    to_name: recognizeArchitectureResponseIdentity
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:ObserveArchitecture
     to_id: internal/ghbridge/transport.go:restComment.$anon_c9440287ba795e5e.ID
@@ -56679,10 +57109,6 @@ code_references:
     to_name: ArchitectureRequest
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
-    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Marker
-    to_name: ArchitectureRequest.Marker
-    file: internal/ghbridge/architecture_transport.go
-  - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
     to_name: Context
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
@@ -56716,6 +57142,10 @@ code_references:
     to_name: New
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
+    to_id: internal/ghbridge/architecture.go:architectureRequestBody
+    to_name: architectureRequestBody
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
     to_name: context
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
@@ -56727,6 +57157,38 @@ code_references:
   - from: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
     to_id: internal/ghbridge/transport.go:run
     to_name: run
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal~type
+    to_name: ArchitectureRefusal
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Binding
+    to_name: ArchitectureRefusal.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.RequestID
+    to_name: ArchitectureRefusal.RequestID
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.mismatch
+    to_name: ArchitectureRefusal.mismatch
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:answerMismatch
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:architectureAnswers
     to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
@@ -56861,6 +57323,37 @@ code_references:
     to_name: fmt
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/architecture_transport.go:renderRejected
+    to_name: strings
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected~type
+    to_name: ArchitectureResponseRejected
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Author
+    to_name: ArchitectureResponseRejected.Author
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    to_name: ArchitectureResponseRejected.Comment
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Diagnostic
+    to_name: ArchitectureResponseRejected.Diagnostic
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: Builder
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: Builder.String
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: Fprintf
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
+    to_name: fmt
+    file: internal/ghbridge/architecture_transport.go
+  - from: internal/ghbridge/architecture_transport.go:renderUnusable
     to_name: strings
     file: internal/ghbridge/architecture_transport.go
   - from: internal/ghbridge/attestation.go:AcceptAttestation
@@ -61561,6 +62054,980 @@ code_references:
   - from: internal/ghbridge/await_test.go:TestCancellationIsReportedAsCancellation
     to_name: time
     file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: Context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: Context.Err
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ErrNoArchitectureAnswer
+    to_name: ErrNoArchitectureAnswer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.onCommentsGet
+    to_name: prMailbox.onCommentsGet
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26AMailboxReadErrorCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Rejected
+    to_name: ArchitectureAnswerMalformed.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.Unusable
+    to_name: ArchitectureAnswerMalformed.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    to_name: ArchitectureConflict
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Rejected
+    to_name: ArchitectureConflict.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Unusable
+    to_name: ArchitectureConflict.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Marker
+    to_name: ArchitectureRefusal.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefusalRejected~type
+    to_name: ArchitectureRefusalRejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefusalRejected.Comment
+    to_name: ArchitectureRefusalRejected.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused~type
+    to_name: ArchitectureRefused
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Rejected
+    to_name: ArchitectureRefused.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused.Unusable
+    to_name: ArchitectureRefused.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Rejected
+    to_name: ArchitectureResponse.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Unusable
+    to_name: ArchitectureResponse.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected~type
+    to_name: ArchitectureResponseRejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    to_name: ArchitectureResponseRejected.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: Replace
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: T.Run
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: common.Helper
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/await_test.go:df26Bounded
+    to_name: df26Bounded
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_id: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: df26MeasuredShape
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26EveryEndingCarriesTheAccumulatedDiagnostics
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/roles/architecture.go:ArchitectureBinding.Same
+    to_name: ArchitectureBinding.Same
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Binding
+    to_name: ArchitectureMalformedAnswer.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Comment
+    to_name: ArchitectureMalformedAnswer.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Diagnostic
+    to_name: ArchitectureMalformedAnswer.Diagnostic
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.RequestID
+    to_name: ArchitectureMalformedAnswer.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
+    to_name: ArchitectureObservation.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureRefused~type
+    to_name: ArchitectureRefused
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Answers
+    to_name: ArchitectureResponse.Answers
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
+    to_name: ArchitectureTerminal.Answer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    to_name: ArchitectureTerminal.IsMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
+    to_name: ArchitectureTerminal.Refusal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureAnswerMalformed
+    to_name: ErrArchitectureAnswerMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureRefused
+    to_name: ErrArchitectureRefused
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ErrNoArchitectureAnswer
+    to_name: ErrNoArchitectureAnswer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: Now
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureResponse
+    to_name: ParseArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: Since
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_id: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: df26MeasuredShape
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W1AMalformedBoundAnswerEndsTheWaitByName
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Answers
+    to_name: ArchitectureResponse.Answers
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Rejected
+    to_name: ArchitectureResponse.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Unusable
+    to_name: ArchitectureResponse.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/await_test.go:df26EscalateBody
+    to_name: df26EscalateBody
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_id: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: df26MeasuredShape
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W2TheSameAnswerWellFormedIsTheNormalTerminal
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    to_name: ArchitectureResponseRejected.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Diagnostic
+    to_name: ArchitectureResponseRejected.Diagnostic
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ErrNoArchitectureAnswer
+    to_name: ErrNoArchitectureAnswer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/await_test.go:df26EscalateBody
+    to_name: df26EscalateBody
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W3AWellFormedAnswerBoundElsewhereIsRecordedAndTheWaitContinues
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/roles/architecture.go:ArchitectureBinding.BaseSHA
+    to_name: ArchitectureBinding.BaseSHA
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphRepository
+    to_name: ArchitectureBinding.GraphRepository
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/roles/architecture.go:ArchitectureBinding.ObjectiveDigest
+    to_name: ArchitectureBinding.ObjectiveDigest
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
+    to_name: ArchitectureObservation.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Comment
+    to_name: ArchitectureResponseRejected.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureResponseRejected.Diagnostic
+    to_name: ArchitectureResponseRejected.Diagnostic
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ErrNoArchitectureAnswer
+    to_name: ErrNoArchitectureAnswer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: Join
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureResponse
+    to_name: ParseArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: ReplaceAll
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: T.Run
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: TrimPrefix
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/architecture.go:architectureResponseMarker
+    to_name: architectureResponseMarker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/await_test.go:df26EscalateBody
+    to_name: df26EscalateBody
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_id: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: df26MeasuredShape
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W4AnUnidentifiableMalformedResponseIsRecordedAndNotAttributed
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
+    to_name: ArchitectureObservation.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: df26MeasuredShape
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W5AResponseFromAnotherPrincipalIsIgnored
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Rejected
+    to_name: ArchitectureObservation.Rejected
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Unusable
+    to_name: ArchitectureObservation.Unusable
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/architecture.go:ArchitectureRefusal.Marker
+    to_name: ArchitectureRefusal.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: Replace
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W6ARefusalIsStillReadOnlyAsARefusal
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict~type
+    to_name: ArchitectureConflict
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureConflict.Terminals
+    to_name: ArchitectureConflict.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureMalformedAnswer.Comment
+    to_name: ArchitectureMalformedAnswer.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Settlement
+    to_name: ArchitectureObservation.Settlement
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureObservation.Terminals
+    to_name: ArchitectureObservation.Terminals
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Answer
+    to_name: ArchitectureTerminal.Answer
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Comment
+    to_name: ArchitectureTerminal.Comment
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.IsMalformed
+    to_name: ArchitectureTerminal.IsMalformed
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureTerminal.Refusal
+    to_name: ArchitectureTerminal.Refusal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:AwaitArchitecture
+    to_name: AwaitArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: Millisecond
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_transport.go:ObserveArchitecture
+    to_name: ObserveArchitecture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: T.Run
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: common.Errorf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/await_test.go:df26Bounded
+    to_name: df26Bounded
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: df26Mailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_id: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: df26MeasuredShape
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W7AValidAndAMalformedBoundAnswerConflictInEitherOrder
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/roles/architecture.go:ArchitectureBinding.Same
+    to_name: ArchitectureBinding.Same
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitecturePayloadPlaceholder
+    to_name: ArchitecturePayloadPlaceholder
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Answers
+    to_name: ArchitectureResponse.Answers
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponseScaffold
+    to_name: ArchitectureResponseScaffold
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: Contains
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureRequest
+    to_name: ParseArchitectureRequest
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureResponse
+    to_name: ParseArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture_transport.go:PublishArchitectureRequest
+    to_name: PublishArchitectureRequest
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: Replace
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/architecture_test.go:architectureRefusalFixture
+    to_name: architectureRefusalFixture
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/await_test.go:df26EscalateBody
+    to_name: df26EscalateBody
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.snapshot
+    to_name: prMailbox.snapshot
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:TestDF26W8TheRequestCarriesTheCanonicalResponseScaffold
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/await_test.go
   - from: internal/ghbridge/await_test.go:TestDefaultWaitIsFinite
     to_id: internal/ghbridge/runner.go:DefaultWait
     to_name: DefaultWait
@@ -62174,6 +63641,125 @@ code_references:
   - from: internal/ghbridge/await_test.go:TestUnconfiguredMailboxIsRefusedNotPolled
     to_name: time
     file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: Background
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: Context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: Second
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: WithTimeout
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: common.Cleanup
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: common.Helper
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: context
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Bounded
+    to_name: time
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_id: internal/ghbridge/transport.go:Issue~type
+    to_name: Issue
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: common.Helper
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_name: testing
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26Mailbox
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest~type
+    to_name: ArchitectureRequest
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: Count
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: Replace
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: T
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: common.Fatal
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: common.Fatalf
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: common.Helper
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_id: internal/ghbridge/await_test.go:df26EscalateBody
+    to_name: df26EscalateBody
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: strings
+    file: internal/ghbridge/await_test.go
+  - from: internal/ghbridge/await_test.go:df26MeasuredShape
+    to_name: testing
+    file: internal/ghbridge/await_test.go
   - from: internal/ghbridge/doorbell.go:GHDoorbell.Ring
     to_name: Context
     file: internal/ghbridge/doorbell.go
@@ -62765,6 +64351,258 @@ code_references:
     file: internal/ghbridge/doorbell_test.go
   - from: internal/ghbridge/doorbell_test.go:TestAGhFailureStillCarriesWhatGhSaid
     to_name: testing
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/roles/roles.go:Architect
+    to_name: Architect
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed~type
+    to_name: ArchitectureAnswerMalformed
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_transport.go:ArchitectureAnswerMalformed.ExchangeCloseErr
+    to_name: ArchitectureAnswerMalformed.ExchangeCloseErr
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/roles/architecture.go:ArchitectureBinding.GraphBuildCommit
+    to_name: ArchitectureBinding.GraphBuildCommit
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/roles/architecture.go:ArchitectureBinding.TaskID
+    to_name: ArchitectureBinding.TaskID
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.Binding
+    to_name: ArchitectureRequest.Binding
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureRequest.RequestID
+    to_name: ArchitectureRequest.RequestID
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse~type
+    to_name: ArchitectureResponse
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Binding
+    to_name: ArchitectureResponse.Binding
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Body
+    to_name: ArchitectureResponse.Body
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.Marker
+    to_name: ArchitectureResponse.Marker
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ArchitectureResponse.RequestID
+    to_name: ArchitectureResponse.RequestID
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner~type
+    to_name: ArchitectureRunner
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Binding
+    to_name: ArchitectureRunner.Binding
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Exchanges
+    to_name: ArchitectureRunner.Exchanges
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Issue
+    to_name: ArchitectureRunner.Issue
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.NewRequestID
+    to_name: ArchitectureRunner.NewRequestID
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Poll
+    to_name: ArchitectureRunner.Poll
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_name: ArchitectureRunner.Run
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Wait
+    to_name: ArchitectureRunner.Wait
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: As
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Background
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Contains
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/roles/unobtainable.go:ErrArchitectRefusal
+    to_name: ErrArchitectRefusal
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureAnswerMalformed
+    to_name: ErrArchitectureAnswerMalformed
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_transport.go:ErrArchitectureRefused
+    to_name: ErrArchitectureRefused
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_transport.go:ErrNoArchitectureAnswer
+    to_name: ErrNoArchitectureAnswer
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/event/event.go:Event~type
+    to_name: Event
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/event/event.go:Event.Payload
+    to_name: Event.Payload
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/event/event.go:Event.Summary
+    to_name: Event.Summary
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/exchange.go:ExchangeLog~type
+    to_name: ExchangeLog
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Dir
+    to_name: ExchangeLog.Dir
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/exchange.go:ExchangeLog.Pending
+    to_name: ExchangeLog.Pending
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: HasPrefix
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Is
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Join
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Millisecond
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Now
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture.go:ParseArchitectureRequest
+    to_name: ParseArchitectureRequest
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Replace
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/agent/agent.go:Request~type
+    to_name: Request
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/agent/agent.go:Request.Prompt
+    to_name: Request.Prompt
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/agent/agent.go:Request.Role
+    to_name: Request.Role
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/agent/agent.go:Request.TaskID
+    to_name: Request.TaskID
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/agent/agent.go:Result~type
+    to_name: Result
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Second
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Since
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: T
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: TrimSuffix
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: Unmarshal
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/architecture_test.go:architectureBinding
+    to_name: architectureBinding
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: common.Errorf
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: common.Fatal
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: common.Fatalf
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: common.TempDir
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: context
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: encoding/json
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: errors
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: github.com/globulario/sensei-code/internal/agent
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/mailbox_pr_test.go:newPRMailbox
+    to_name: newPRMailbox
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: path/filepath
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.append
+    to_name: prMailbox.append
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.onPost
+    to_name: prMailbox.onPost
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/mailbox_pr_test.go:prMailbox.snapshot
+    to_name: prMailbox.snapshot
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: strings
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: testing
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_name: time
+    file: internal/ghbridge/doorbell_test.go
+  - from: internal/ghbridge/doorbell_test.go:TestAMalformedArchitectAnswerIsReportedByNameAndClosesTheExchange
+    to_id: internal/ghbridge/installation_test.go:writeTestKey
+    to_name: writeTestKey
     file: internal/ghbridge/doorbell_test.go
   - from: internal/ghbridge/doorbell_test.go:TestAMalformedWakeIsReportedAsABrokenWakeNotAnAbsentOne
     to_id: internal/ghbridge/doorbell.go:ErrMalformedWake
@@ -95864,17 +97702,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -148955,11 +150793,11 @@ code_references:
     to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/mcpconfig/mcpconfig.go:Label
+    to_id: internal/provider/provider.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/provider/provider.go:Label
+    to_id: internal/mcpconfig/mcpconfig.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -148971,10 +150809,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -172348,11 +174186,11 @@ code_references:
     to_name: Engine.emit
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
@@ -175518,10 +177356,10 @@ code_references:
     to_name: Identity.BindGraph
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.execute
@@ -176203,10 +178041,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -176815,10 +178653,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -182589,11 +184427,11 @@ code_references:
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -182609,11 +184447,11 @@ code_references:
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -184345,11 +186183,11 @@ code_references:
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -190474,10 +192312,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -191360,11 +193198,11 @@ code_references:
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -191504,11 +193342,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -210229,11 +212067,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
