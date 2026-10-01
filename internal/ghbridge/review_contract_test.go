@@ -359,3 +359,107 @@ func TestACanonicalReplyFromAnotherProviderDoesNotSatisfy(t *testing.T) {
 		t.Fatalf("a reply naming another provider was not reported as wrong-target: %v", err)
 	}
 }
+
+// 9. THE EXPORTED REVIEW SEAM. ReviewAnswers is how a party outside this
+// package asks whether a reply answers a request, so it must say yes to the
+// canonical bound reply and no to every reply the bridge would not bind.
+func TestReviewAnswersBindsOnlyTheCanonicalReplyToThatRequest(t *testing.T) {
+	_, req, body := publishedRequestBody(t, contractNote)
+	bound := obeyTheRequest(t, body, contractVerdict)
+	if !ReviewAnswers(body, bound) {
+		t.Fatalf("the canonical bound reply does not answer its own request:\n%s", bound)
+	}
+	for name, reply := range reviewSeamNegatives(t, req, bound) {
+		if ReviewAnswers(body, reply) {
+			t.Errorf("%s reply answers the request:\n%s", name, reply)
+		}
+	}
+	// The request side is read canonically too: a body that is not a review
+	// request is answered by nothing.
+	if ReviewAnswers(strings.Replace(body, "kind=review", "kind=other", 1), bound) {
+		t.Error("a reply answers a body that is not a review request")
+	}
+	if ReviewAnswers(bound, bound) {
+		t.Error("a reply answers itself as though it were a request")
+	}
+}
+
+// 10. CONTROL: the mailbox reader and the exported seam apply ONE binding rule.
+// Every reply the mailbox reader can parse gets the same answer from
+// MailboxReview.Answers and from ReviewAnswers, and both delegate to the one
+// predicate, so neither can drift.
+func TestMailboxReviewAnswersAndReviewAnswersShareOneBindingRule(t *testing.T) {
+	_, req, body := publishedRequestBody(t, contractNote)
+	bound := obeyTheRequest(t, body, contractVerdict)
+	replies := reviewSeamNegatives(t, req, bound)
+	replies["canonical bound"] = bound
+	parsed := 0
+	for name, reply := range replies {
+		art, err := reviewartifact.Parse(reply)
+		if err != nil {
+			if ReviewAnswers(body, reply) {
+				t.Errorf("%s: unparseable reply answers through the seam", name)
+			}
+			continue
+		}
+		parsed++
+		if got, want := ReviewAnswers(body, reply), (MailboxReview{Artifact: art}).Answers(req); got != want {
+			t.Errorf("%s: ReviewAnswers=%v but MailboxReview.Answers=%v", name, got, want)
+		}
+	}
+	if parsed < 4 {
+		t.Fatalf("only %d replies parsed; the control compares nothing", parsed)
+	}
+
+	fset := token.NewFileSet()
+	parsedFile, err := parser.ParseFile(fset, "transport.go", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	delegates := map[string]bool{}
+	for _, decl := range parsedFile.Decls {
+		fn, ok := decl.(*ast.FuncDecl)
+		if !ok || (fn.Name.Name != "Answers" && fn.Name.Name != "ReviewAnswers") {
+			continue
+		}
+		if fn.Name.Name == "Answers" {
+			if fn.Recv == nil || len(fn.Recv.List) != 1 {
+				continue
+			}
+			if id, ok := fn.Recv.List[0].Type.(*ast.Ident); !ok || id.Name != "MailboxReview" {
+				continue
+			}
+		}
+		ast.Inspect(fn.Body, func(n ast.Node) bool {
+			if call, ok := n.(*ast.CallExpr); ok {
+				if id, ok := call.Fun.(*ast.Ident); ok && id.Name == "artifactAnswers" {
+					delegates[fn.Name.Name] = true
+				}
+			}
+			return true
+		})
+	}
+	if !delegates["Answers"] || !delegates["ReviewAnswers"] {
+		t.Fatalf("the two answer paths do not share the binding predicate: %v", delegates)
+	}
+}
+
+// reviewSeamNegatives are replies the bridge must not bind to req: malformed,
+// and well formed for another request, candidate or provider.
+func reviewSeamNegatives(t *testing.T, req Request, bound string) map[string]string {
+	t.Helper()
+	swap := func(field, from, to string) string {
+		line := field + "=" + from + "\n"
+		if !strings.Contains(bound, line) {
+			t.Fatalf("the bound reply carries no %q line:\n%s", line, bound)
+		}
+		return strings.Replace(bound, line, field+"="+to+"\n", 1)
+	}
+	return map[string]string{
+		"malformed (pre-R2)":     legacyEnvelope(req) + contractVerdict,
+		"malformed (no payload)": strings.Replace(bound, contractVerdict, "", 1),
+		"wrong-request":          swap("request", req.RequestID, "r-fedcba9876543210"),
+		"wrong-candidate":        swap("candidate_tree", req.CandidateTree, "0000000000000000000000000000000000000001"),
+		"wrong-provider":         swap("reviewer", req.ReviewerProvider, "claude"),
+	}
+}
