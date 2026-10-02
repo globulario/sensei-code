@@ -47135,6 +47135,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: confirmedMissing
     kind: function
+  - id: internal/workflow/prospective.go:dependencyAdmitted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: dependencyAdmitted
+    kind: function
   - id: internal/workflow/prospective.go:edgeFault
     namespace: structural.scip
     language: go
@@ -47147,11 +47153,29 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: errNotAtWorld
     kind: var
+  - id: internal/workflow/prospective.go:existingFault
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: existingFault
+    kind: function
+  - id: internal/workflow/prospective.go:existingPackageGrant
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: existingPackageGrant
+    kind: function
   - id: internal/workflow/prospective.go:gitShowAt
     namespace: structural.scip
     language: go
     file: internal/workflow/prospective.go
     symbol: gitShowAt
+    kind: function
+  - id: internal/workflow/prospective.go:goModRequires
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: goModRequires
     kind: function
   - id: internal/workflow/prospective.go:goModuleDir
     namespace: structural.scip
@@ -47170,6 +47194,12 @@ code_symbols:
     language: go
     file: internal/workflow/prospective.go
     symbol: grantTracesToItsSurface
+    kind: function
+  - id: internal/workflow/prospective.go:inspectExisting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: inspectExisting
     kind: function
   - id: internal/workflow/prospective.go:inspectProspective
     namespace: structural.scip
@@ -47261,6 +47291,36 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveEdge
     kind: type
+  - id: internal/workflow/prospective.go:prospectiveExisting.Envelope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveExisting.Envelope
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveExisting.Module
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveExisting.Module
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveExisting.ModuleDir
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveExisting.ModuleDir
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveExisting.Requires
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveExisting.Requires
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveExisting~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveExisting
+    kind: type
   - id: internal/workflow/prospective.go:prospectiveFacts.Imports
     namespace: structural.scip
     language: go
@@ -47302,6 +47362,12 @@ code_symbols:
     language: go
     file: internal/workflow/prospective.go
     symbol: prospectiveGrant.Edge
+    kind: var
+  - id: internal/workflow/prospective.go:prospectiveGrant.Existing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveGrant.Existing
     kind: var
   - id: internal/workflow/prospective.go:prospectiveGrant.Facts
     namespace: structural.scip
@@ -47345,6 +47411,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: prospectiveRecord
     kind: type
+  - id: internal/workflow/prospective.go:prospectiveRole.existingPackage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: prospectiveRole.existingPackage
+    kind: var
   - id: internal/workflow/prospective.go:prospectiveRole.newPackage
     namespace: structural.scip
     language: go
@@ -47393,6 +47465,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: roleGoCommandPackage
     kind: const
+  - id: internal/workflow/prospective.go:roleGoExistingPackage
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: roleGoExistingPackage
+    kind: const
   - id: internal/workflow/prospective.go:roleGoLibraryPackage
     namespace: structural.scip
     language: go
@@ -47405,6 +47483,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: roleGoRegressionTest
     kind: const
+  - id: internal/workflow/prospective.go:sameDirectoryNonTestGo
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: sameDirectoryNonTestGo
+    kind: function
   - id: internal/workflow/prospective.go:sameSurface
     namespace: structural.scip
     language: go
@@ -47512,6 +47596,54 @@ code_symbols:
     language: go
     file: internal/workflow/prospective_test.go
     symbol: TestNewPackageGrantsResumeOnlyWhenTheyStillTrace
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57BuildConstraintsDoNotAlterTheBinding
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57BuildConstraintsDoNotAlterTheBinding
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W1TheRecordLockPairIsGrantedThroughTheExistingPackageRole
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W1TheRecordLockPairIsGrantedThroughTheExistingPackageRole
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W2AnUndeclaredSiblingCreateIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W2AnUndeclaredSiblingCreateIsRefused
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W3APackageClauseMismatchIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W3APackageClauseMismatchIsRefused
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W4TestPathsAndNewDirectoriesAreNotThisRole
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W4TestPathsAndNewDirectoriesAreNotThisRole
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W5ExistenceAndAbsenceAloneGrantNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W5ExistenceAndAbsenceAloneGrantNothing
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W6TheDependencyRuleAdmitsDeclaredRequiredModulesOnly
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W6TheDependencyRuleAdmitsDeclaredRequiredModulesOnly
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestObj57W7TheBindingSurvivesRestartWithoutMintingOrWidening
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestObj57W7TheBindingSurvivesRestartWithoutMintingOrWidening
     kind: function
   - id: internal/workflow/prospective_test.go:TestPostCreationInspectionAcceptsTheAuthorizedShapeOnly
     namespace: structural.scip
@@ -47651,6 +47783,90 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: edgeRecordOf
     kind: function
+  - id: internal/workflow/prospective_test.go:existingDeclarations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingDeclarations
+    kind: function
+  - id: internal/workflow/prospective_test.go:existingDiff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingDiff
+    kind: function
+  - id: internal/workflow/prospective_test.go:existingGoMod
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingGoMod
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingGrants
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingGrants
+    kind: function
+  - id: internal/workflow/prospective_test.go:existingJournal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingJournal
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingPlanned
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingPlanned
+    kind: function
+  - id: internal/workflow/prospective_test.go:existingS
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingS
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingSibling
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingSibling
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingStoreSrc
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingStoreSrc
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingThird
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingThird
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingUnix
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingUnix
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingWindows
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingWindows
+    kind: const
+  - id: internal/workflow/prospective_test.go:existingWith
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingWith
+    kind: function
+  - id: internal/workflow/prospective_test.go:existingWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: existingWorld
+    kind: function
   - id: internal/workflow/prospective_test.go:gosumcheckAnchors
     namespace: structural.scip
     language: go
@@ -47759,12 +47975,30 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: prospectiveWorld
     kind: const
+  - id: internal/workflow/prospective_test.go:unixGranted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: unixGranted
+    kind: function
+  - id: internal/workflow/prospective_test.go:unixLockSrc
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: unixLockSrc
+    kind: const
   - id: internal/workflow/prospective_test.go:unreadableAt
     namespace: structural.scip
     language: go
     file: internal/workflow/prospective_test.go
     symbol: unreadableAt
     kind: function
+  - id: internal/workflow/prospective_test.go:windowsLockSrc
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: windowsLockSrc
+    kind: const
   - id: internal/workflow/prospective_test.go:worldOf
     namespace: structural.scip
     language: go
