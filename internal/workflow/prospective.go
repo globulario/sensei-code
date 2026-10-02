@@ -197,41 +197,76 @@ type prospectiveEdge struct {
 // intact, and a declaration with no facts behind it would then be inspected
 // against nothing but the role allowance -- role alone made sufficient by a
 // damaged record, which is the predicate changing across a restart.
+//
+// It is the ONE declaration/grant rule. Plan admission (routePlan, through
+// reconcileProspectiveGrants), restoration (restoreProspectiveGrants) and
+// candidate inspection (inspectProspectiveGrants) all read it, so the grant
+// set that admits a plan is the grant set that would resume and inspect it.
+// Every fault names the declaration it is about and why no canonical grant
+// stands for it; every declaration is judged, so a plan with one ungranted
+// declaration beside a granted one is refused naming only the ungranted one.
 func matchGrantsToDeclarations(declared []ProspectiveSurface, grants []prospectiveGrant) error {
 	byPath := map[string]prospectiveGrant{}
+	count := map[string]int{}
 	for _, g := range grants {
 		f := path.Clean(strings.TrimSpace(g.Anchor.File))
-		if _, dup := byPath[f]; dup {
-			return fmt.Errorf("the recorded prospective authorization holds two grants for %s", f)
+		count[f]++
+		if count[f] == 1 {
+			byPath[f] = g
 		}
-		byPath[f] = g
 	}
-	if len(byPath) != len(declared) {
-		return fmt.Errorf("the recorded prospective authorization holds %d grant(s) for %d declared surface(s)", len(byPath), len(declared))
-	}
+	var faults []error
+	seen := map[string]bool{}
 	for _, d := range declared {
 		f := path.Clean(strings.TrimSpace(d.Path))
-		g, ok := byPath[f]
-		if !ok {
-			return fmt.Errorf("the recorded prospective authorization holds no grant for declared surface %s", f)
+		if seen[f] {
+			faults = append(faults, fmt.Errorf("declared prospective surface %s is declared more than once, so no one grant can be its canonical authorization", f))
+			continue
 		}
-		if !sameSurface(g.Surface, d) {
-			return fmt.Errorf("the recorded grant for %s was issued for a different declaration", f)
-		}
-		if strings.TrimSpace(g.Covering) == "" || strings.TrimSpace(g.Facts.Package) == "" || g.Facts.Imports == nil {
-			return fmt.Errorf("the recorded grant for %s names no covering surface or carries no pinned-world facts", f)
-		}
-		if err := grantTracesToItsSurface(f, g, byPath); err != nil {
-			return err
-		}
-		if err := edgeFault(f, g, declared, byPath); err != nil {
-			return err
-		}
-		if err := existingFault(f, g); err != nil {
-			return err
+		seen[f] = true
+		if err := grantFault(f, d, count[f], byPath, declared); err != nil {
+			faults = append(faults, err)
 		}
 	}
+	extras := make([]string, 0, len(byPath))
+	for f := range byPath {
+		if !seen[f] {
+			extras = append(extras, f)
+		}
+	}
+	sort.Strings(extras)
+	for _, f := range extras {
+		faults = append(faults, fmt.Errorf("the recorded prospective authorization holds a grant for %s, which no declaration names", f))
+	}
+	if len(faults) != 0 {
+		return errors.Join(faults...)
+	}
 	return oneEdgePerCommand(grants)
+}
+
+// grantFault is matchGrantsToDeclarations for one declaration f, given how
+// many recorded grants name f.
+func grantFault(f string, d ProspectiveSurface, n int, byPath map[string]prospectiveGrant, declared []ProspectiveSurface) error {
+	switch {
+	case n == 0:
+		return fmt.Errorf("declared prospective surface %s (role %s, covering %q) holds no recorded grant: no canonical grant was derived for it at the pinned world", f, d.Role, d.Covering)
+	case n > 1:
+		return fmt.Errorf("declared prospective surface %s holds %d recorded grants, not exactly one", f, n)
+	}
+	g := byPath[f]
+	if !sameSurface(g.Surface, d) {
+		return fmt.Errorf("the recorded grant for declared prospective surface %s was issued for a different declaration", f)
+	}
+	if strings.TrimSpace(g.Covering) == "" || strings.TrimSpace(g.Facts.Package) == "" || g.Facts.Imports == nil {
+		return fmt.Errorf("the recorded grant for declared prospective surface %s names no covering surface or carries no pinned-world facts", f)
+	}
+	if err := grantTracesToItsSurface(f, g, byPath); err != nil {
+		return err
+	}
+	if err := edgeFault(f, g, declared, byPath); err != nil {
+		return err
+	}
+	return existingFault(f, g)
 }
 
 // edgeFault is the record-side form of the command-to-library rule. A grant
@@ -353,18 +388,26 @@ func sameDirectoryNonTestGo(f, covering string) bool {
 }
 
 // oneEdgePerCommand refuses a command package whose grants bind more than one
-// library: a command may depend on exactly one same-plan library package.
+// library: a command may depend on exactly one same-plan library package. The
+// refusal names both declared command files whose grants disagree, so a
+// conflict is reported against declarations, not only their directory.
 func oneEdgePerCommand(grants []prospectiveGrant) error {
-	libraryOf := map[string]string{}
+	type binding struct{ file, library string }
+	first := map[string]binding{}
 	for _, g := range grants {
 		if g.Edge == nil {
 			continue
 		}
-		dir := path.Dir(path.Clean(strings.TrimSpace(g.Anchor.File)))
-		if lib, ok := libraryOf[dir]; ok && lib != g.Edge.Library {
-			return fmt.Errorf("the recorded command package %s binds two library packages, %s and %s", dir, lib, g.Edge.Library)
+		f := path.Clean(strings.TrimSpace(g.Anchor.File))
+		dir := path.Dir(f)
+		b, ok := first[dir]
+		if !ok {
+			first[dir] = binding{f, g.Edge.Library}
+			continue
 		}
-		libraryOf[dir] = g.Edge.Library
+		if b.library != g.Edge.Library {
+			return fmt.Errorf("declared prospective surfaces %s and %s are files of one command package %s whose recorded grants bind two library packages, %s and %s: a command may depend on exactly one same-plan library package, so no canonical grant set authorizes both", b.file, f, dir, b.library, g.Edge.Library)
+		}
 	}
 	return nil
 }
@@ -1190,7 +1233,19 @@ func inspectProspectiveGrants(diff string, declarations []ProspectiveSurface, gr
 		}
 		envelopes[f] = envelope
 	}
-	return inspectProspective(diff, declarations, facts, edges, envelopes)
+	if err := inspectProspective(diff, declarations, facts, edges, envelopes); err != nil {
+		return err
+	}
+	// The candidate's content is judged above; the grant set itself is then
+	// held to the one declaration/grant rule admission and restoration read,
+	// so a grant set that could not have admitted the plan cannot pass here.
+	if len(declarations) == 0 {
+		return nil
+	}
+	if err := matchGrantsToDeclarations(declarations, grants); err != nil {
+		return fmt.Errorf("prospective surface refuted: %w", err)
+	}
+	return nil
 }
 
 // inspectProspective is inspectProspectiveSurfaces with, per declared path,
