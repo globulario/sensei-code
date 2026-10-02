@@ -42485,6 +42485,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: Engine.receipts
     kind: var
+  - id: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: Engine.reconcileProspectiveGrants
+    kind: method
   - id: internal/workflow/engine.go:Engine.recordClosureQuestion
     namespace: structural.scip
     language: go
@@ -44368,6 +44374,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine_test.go
     symbol: TestArchitectureOptionsRoundTrip
+    kind: function
+  - id: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine_test.go
+    symbol: TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
     kind: function
   - id: internal/workflow/engine_test.go:TestDecisionRecordNamesTheRealAuthorityOwner
     namespace: structural.scip
@@ -47189,6 +47201,12 @@ code_symbols:
     file: internal/workflow/prospective.go
     symbol: goModulePath
     kind: function
+  - id: internal/workflow/prospective.go:grantFault
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective.go
+    symbol: grantFault
+    kind: function
   - id: internal/workflow/prospective.go:grantTracesToItsSurface
     namespace: structural.scip
     language: go
@@ -47573,6 +47591,42 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: TestCauseBW4TheEdgeResumesOnlyIntact
     kind: function
+  - id: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF37W3AGrantedDeclarationIsAdmitted
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    kind: function
+  - id: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    kind: function
   - id: internal/workflow/prospective_test.go:TestEveryAdmissibleAnchorOverTheCoveringSurfaceIsCarried
     namespace: structural.scip
     language: go
@@ -47710,6 +47764,12 @@ code_symbols:
     language: go
     file: internal/workflow/prospective_test.go
     symbol: TestW4NewPackageInspectionRefusesDivergence
+    kind: function
+  - id: internal/workflow/prospective_test.go:admittedAfterRouting
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: admittedAfterRouting
     kind: function
   - id: internal/workflow/prospective_test.go:answererImport
     namespace: structural.scip
@@ -47963,6 +48023,36 @@ code_symbols:
     file: internal/workflow/prospective_test.go
     symbol: newPackageWorld
     kind: function
+  - id: internal/workflow/prospective_test.go:obj49Declaration
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: obj49Declaration
+    kind: function
+  - id: internal/workflow/prospective_test.go:obj49Test
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: obj49Test
+    kind: const
+  - id: internal/workflow/prospective_test.go:obj59Covering
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: obj59Covering
+    kind: const
+  - id: internal/workflow/prospective_test.go:obj59Declaration
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: obj59Declaration
+    kind: function
+  - id: internal/workflow/prospective_test.go:obj59Test
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/prospective_test.go
+    symbol: obj59Test
+    kind: const
   - id: internal/workflow/prospective_test.go:prospectiveFor
     namespace: structural.scip
     language: go

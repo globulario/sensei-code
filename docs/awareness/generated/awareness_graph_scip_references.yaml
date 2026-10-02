@@ -4872,11 +4872,11 @@ code_references:
     to_name: Join
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/auditrepair.go
   - from: cmd/sensei-code/auditrepair.go:runAuditRepair
@@ -6372,11 +6372,11 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6442,11 +6442,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6454,11 +6454,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6474,11 +6474,11 @@ code_references:
     to_name: Server.ListenRelay
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Serve
+    to_id: internal/control/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Serve
+    to_id: internal/ghwebhook/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7230,11 +7230,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7765,15 +7765,15 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
+    to_id: internal/control/server.go:New
+    to_name: New
+    file: cmd/sensei-code/control_test.go
+  - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/session/store.go:New
-    to_name: New
-    file: cmd/sensei-code/control_test.go
-  - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -8201,11 +8201,11 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/session/store.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -18126,11 +18126,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -28147,10 +28147,10 @@ code_references:
     to_name: strings
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Client~type
     to_name: Client
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Client~type
     to_name: Client
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -28168,10 +28168,10 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -34047,11 +34047,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -41817,10 +41817,10 @@ code_references:
     to_name: Second
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server~type
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -91837,10 +91837,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -92737,10 +92737,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -150793,11 +150793,11 @@ code_references:
     to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/provider/provider.go:Label
+    to_id: internal/mcpconfig/mcpconfig.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/mcpconfig/mcpconfig.go:Label
+    to_id: internal/provider/provider.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -178041,10 +178041,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -178653,10 +178653,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -179393,6 +179393,28 @@ code_references:
   - from: internal/workflow/engine.go:Engine.prospectiveGrants
     to_id: internal/workflow/prospective.go:prospectiveGrant~type
     to_name: prospectiveGrant
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_id: internal/workflow/engine.go:Engine.prospectiveGrants
+    to_name: Engine.prospectiveGrants
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_name: Errorf
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_name: fmt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_id: internal/workflow/prospective.go:matchGrantsToDeclarations
+    to_name: matchGrantsToDeclarations
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.recordClosureQuestion
     to_id: internal/derived/write.go:Append
@@ -180153,11 +180175,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -180552,10 +180574,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -181904,6 +181926,10 @@ code_references:
     to_name: Engine.preflightRecord
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.routePlan
+    to_id: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_name: Engine.reconcileProspectiveGrants
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.routePlan
     to_id: internal/workflow/engine.go:Engine.recordedObjective
     to_name: Engine.recordedObjective
     file: internal/workflow/engine.go
@@ -182649,6 +182675,7 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -182656,7 +182683,6 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -184427,11 +184453,11 @@ code_references:
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -186175,19 +186201,19 @@ code_references:
     to_name: ToolResult
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.IsError
-    to_name: ToolResult.IsError
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/authority/resolution.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
-    to_name: ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.IsError
+    to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_name: ToolResult.Structured
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:senseiProposer.CallTool
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -187940,6 +187966,34 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/authority
     file: internal/workflow/engine_test.go
   - from: internal/workflow/engine_test.go:TestArchitectureOptionsRoundTrip
+    to_name: testing
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: Contains
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: Count
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: Index
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: T
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: common.Fatal
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: common.Fatalf
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_id: internal/workflow/engine_test.go:rawSource
+    to_name: rawSource
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
+    to_name: strings
+    file: internal/workflow/engine_test.go
+  - from: internal/workflow/engine_test.go:TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting
     to_name: testing
     file: internal/workflow/engine_test.go
   - from: internal/workflow/engine_test.go:TestDecisionRecordNamesTheRealAuthorityOwner
@@ -193206,15 +193260,15 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
+    to_id: internal/workflow/engine.go:New
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/event/event.go:New
-    to_name: New
-    file: internal/workflow/external_block_test.go
-  - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -193354,11 +193408,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -203527,6 +203581,70 @@ code_references:
   - from: internal/workflow/prospective.go:goModulePath
     to_name: strings
     file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_name: Errorf
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Covering
+    to_name: ProspectiveSurface.Covering
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_name: TrimSpace
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:edgeFault
+    to_name: edgeFault
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:existingFault
+    to_name: existingFault
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_name: fmt
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:grantTracesToItsSurface
+    to_name: grantTracesToItsSurface
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:prospectiveFacts.Imports
+    to_name: prospectiveFacts.Imports
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:prospectiveFacts.Package
+    to_name: prospectiveFacts.Package
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:prospectiveGrant~type
+    to_name: prospectiveGrant
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Covering
+    to_name: prospectiveGrant.Covering
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Facts
+    to_name: prospectiveGrant.Facts
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Surface
+    to_name: prospectiveGrant.Surface
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_id: internal/workflow/prospective.go:sameSurface
+    to_name: sameSurface
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:grantFault
+    to_name: strings
+    file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:grantTracesToItsSurface
     to_name: Clean
     file: internal/workflow/prospective.go
@@ -203711,6 +203829,9 @@ code_references:
     to_name: CoverageAnchor.File
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:inspectProspectiveGrants
+    to_name: Errorf
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:inspectProspectiveGrants
     to_id: internal/workflow/prospective.go:ProspectiveSurface~type
     to_name: ProspectiveSurface
     file: internal/workflow/prospective.go
@@ -203730,8 +203851,15 @@ code_references:
     to_name: existingFault
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:inspectProspectiveGrants
+    to_name: fmt
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:inspectProspectiveGrants
     to_id: internal/workflow/prospective.go:inspectProspective
     to_name: inspectProspective
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:inspectProspectiveGrants
+    to_id: internal/workflow/prospective.go:matchGrantsToDeclarations
+    to_name: matchGrantsToDeclarations
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:inspectProspectiveGrants
     to_id: internal/workflow/prospective.go:oneEdgePerCommand
@@ -203917,6 +204045,9 @@ code_references:
     to_name: Errorf
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
+    to_name: Join
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_id: internal/workflow/prospective.go:ProspectiveSurface~type
     to_name: ProspectiveSurface
     file: internal/workflow/prospective.go
@@ -203925,22 +204056,20 @@ code_references:
     to_name: ProspectiveSurface.Path
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
+    to_name: Strings
+    file: internal/workflow/prospective.go
+  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_name: TrimSpace
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:edgeFault
-    to_name: edgeFault
-    file: internal/workflow/prospective.go
-  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:existingFault
-    to_name: existingFault
+    to_name: errors
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_name: fmt
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:grantTracesToItsSurface
-    to_name: grantTracesToItsSurface
+    to_id: internal/workflow/prospective.go:grantFault
+    to_name: grantFault
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_id: internal/workflow/prospective.go:oneEdgePerCommand
@@ -203948,14 +204077,6 @@ code_references:
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_name: path
-    file: internal/workflow/prospective.go
-  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:prospectiveFacts.Imports
-    to_name: prospectiveFacts.Imports
-    file: internal/workflow/prospective.go
-  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:prospectiveFacts.Package
-    to_name: prospectiveFacts.Package
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_id: internal/workflow/prospective.go:prospectiveGrant~type
@@ -203966,20 +204087,7 @@ code_references:
     to_name: prospectiveGrant.Anchor
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:prospectiveGrant.Covering
-    to_name: prospectiveGrant.Covering
-    file: internal/workflow/prospective.go
-  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:prospectiveGrant.Facts
-    to_name: prospectiveGrant.Facts
-    file: internal/workflow/prospective.go
-  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:prospectiveGrant.Surface
-    to_name: prospectiveGrant.Surface
-    file: internal/workflow/prospective.go
-  - from: internal/workflow/prospective.go:matchGrantsToDeclarations
-    to_id: internal/workflow/prospective.go:sameSurface
-    to_name: sameSurface
+    to_name: sort
     file: internal/workflow/prospective.go
   - from: internal/workflow/prospective.go:matchGrantsToDeclarations
     to_name: strings
@@ -205624,6 +205732,531 @@ code_references:
     to_name: strings
     file: internal/workflow/prospective_test.go
   - from: internal/workflow/prospective_test.go:TestCauseBW4TheEdgeResumesOnlyIntact
+    to_name: testing
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_name: Contains
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_name: T
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_name: admittedAfterRouting
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_name: common.Fatal
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_name: common.Fatalf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:obj59Covering
+    to_name: obj59Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:obj59Declaration
+    to_name: obj59Declaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:obj59Test
+    to_name: obj59Test
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:prospectiveFor
+    to_name: prospectiveFor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_name: strings
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W1Objective59UngrantedDeclarationRefusesAdmission
+    to_name: testing
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_name: Contains
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_name: T
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_name: admittedAfterRouting
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_name: common.Fatalf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:existingS
+    to_name: existingS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:existingWorld
+    to_name: existingWorld
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:obj49Declaration
+    to_name: obj49Declaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:obj49Test
+    to_name: obj49Test
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_id: internal/workflow/prospective_test.go:prospectiveFor
+    to_name: prospectiveFor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_name: strings
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W2Objective49UngrantedDeclarationRefusesAdmission
+    to_name: testing
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_name: T
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_name: admittedAfterRouting
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_name: common.Fatalf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:gosumcheckAnchors
+    to_name: gosumcheckAnchors
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:gosumcheckDeclaration
+    to_name: gosumcheckDeclaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:gosumcheckF
+    to_name: gosumcheckF
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:gosumcheckS
+    to_name: gosumcheckS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:gosumcheckSrc
+    to_name: gosumcheckSrc
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_id: internal/workflow/prospective_test.go:prospectiveFor
+    to_name: prospectiveFor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W3AGrantedDeclarationIsAdmitted
+    to_name: testing
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_name: Contains
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/relevance.go:CoverageAnchor.File
+    to_name: CoverageAnchor.File
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_name: T
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_name: admittedAfterRouting
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_name: common.Fatalf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:gosumcheckAnchors
+    to_name: gosumcheckAnchors
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:gosumcheckDeclaration
+    to_name: gosumcheckDeclaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:gosumcheckF
+    to_name: gosumcheckF
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:gosumcheckS
+    to_name: gosumcheckS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:gosumcheckSrc
+    to_name: gosumcheckSrc
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:obj59Covering
+    to_name: obj59Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:obj59Declaration
+    to_name: obj59Declaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:obj59Test
+    to_name: obj59Test
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective_test.go:prospectiveFor
+    to_name: prospectiveFor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Anchor
+    to_name: prospectiveGrant.Anchor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_name: strings
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan
+    to_name: testing
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: Background
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: Contains
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/relevance.go:CoverageAnchor.File
+    to_name: CoverageAnchor.File
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/engine.go:Engine.derivedCoverage
+    to_name: Engine.derivedCoverage
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_name: Engine.reconcileProspectiveGrants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/engine.go:Engine.setProspectiveGrants
+    to_name: Engine.setProspectiveGrants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Covering
+    to_name: ProspectiveSurface.Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Dependencies
+    to_name: ProspectiveSurface.Dependencies
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Package
+    to_name: ProspectiveSurface.Package
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Path
+    to_name: ProspectiveSurface.Path
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: T
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_name: admittedAfterRouting
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:cmdS
+    to_name: cmdS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:commandGrant
+    to_name: commandGrant
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: common.Errorf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: common.Fatal
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: common.Fatalf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: context
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:edgeDeclarations
+    to_name: edgeDeclarations
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:edgePlanned
+    to_name: edgePlanned
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:gosumcheckAnchors
+    to_name: gosumcheckAnchors
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:gosumcheckDeclaration
+    to_name: gosumcheckDeclaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:gosumcheckF
+    to_name: gosumcheckF
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:gosumcheckS
+    to_name: gosumcheckS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:gosumcheckSrc
+    to_name: gosumcheckSrc
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:grantedPaths
+    to_name: grantedPaths
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:libS
+    to_name: libS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:matchGrantsToDeclarations
+    to_name: matchGrantsToDeclarations
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:newCmdDir
+    to_name: newCmdDir
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:newPackageAnchors
+    to_name: newPackageAnchors
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:newPackageWorld
+    to_name: newPackageWorld
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveEdge~type
+    to_name: prospectiveEdge
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveEdge.Import
+    to_name: prospectiveEdge.Import
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveEdge.Library
+    to_name: prospectiveEdge.Library
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveEdge.Module
+    to_name: prospectiveEdge.Module
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveEdge.ModuleDir
+    to_name: prospectiveEdge.ModuleDir
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveFacts~type
+    to_name: prospectiveFacts
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective_test.go:prospectiveFor
+    to_name: prospectiveFor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveGrant~type
+    to_name: prospectiveGrant
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Anchor
+    to_name: prospectiveGrant.Anchor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Covering
+    to_name: prospectiveGrant.Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Edge
+    to_name: prospectiveGrant.Edge
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Facts
+    to_name: prospectiveGrant.Facts
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Surface
+    to_name: prospectiveGrant.Surface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:roleGoCommandPackage
+    to_name: roleGoCommandPackage
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_id: internal/workflow/prospective.go:roleGoLibraryPackage
+    to_name: roleGoLibraryPackage
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: strings
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission
+    to_name: testing
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/relevance.go:CoverageAnchor.File
+    to_name: CoverageAnchor.File
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/engine.go:Engine.restoreProspectiveGrants
+    to_name: Engine.restoreProspectiveGrants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: HasPrefix
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: HasSuffix
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/session/store.go:Interrupted~type
+    to_name: Interrupted
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/session/store.go:Interrupted.ProspectiveRecord
+    to_name: Interrupted.ProspectiveRecord
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/session/store.go:Interrupted.TaskID
+    to_name: Interrupted.TaskID
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: Marshal
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: T
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_name: admittedAfterRouting
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: common.Errorf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: common.Fatal
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: common.Fatalf
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:createdDiff
+    to_name: createdDiff
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: encoding/json
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: github.com/globulario/sensei-code/internal/session
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:gosumcheckAnchors
+    to_name: gosumcheckAnchors
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:gosumcheckDeclaration
+    to_name: gosumcheckDeclaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:gosumcheckF
+    to_name: gosumcheckF
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:gosumcheckS
+    to_name: gosumcheckS
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:gosumcheckSrc
+    to_name: gosumcheckSrc
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:inspectProspectiveGrants
+    to_name: inspectProspectiveGrants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:matchGrantsToDeclarations
+    to_name: matchGrantsToDeclarations
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:obj59Covering
+    to_name: obj59Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:obj59Declaration
+    to_name: obj59Declaration
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:obj59Test
+    to_name: obj59Test
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:prospectiveFor
+    to_name: prospectiveFor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:prospectiveGrant~type
+    to_name: prospectiveGrant
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:prospectiveGrant.Anchor
+    to_name: prospectiveGrant.Anchor
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:prospectiveRecord~type
+    to_name: prospectiveRecord
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:prospectiveRecord.Grants
+    to_name: prospectiveRecord.Grants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective.go:prospectiveRecord.World
+    to_name: prospectiveRecord.World
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_id: internal/workflow/prospective_test.go:prospectiveWorld
+    to_name: prospectiveWorld
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
+    to_name: strings
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:TestDF37W7RestorationUsesTheSameCanonicalMatcher
     to_name: testing
     file: internal/workflow/prospective_test.go
   - from: internal/workflow/prospective_test.go:TestEveryAdmissibleAnchorOverTheCoveringSurfaceIsCarried
@@ -207702,6 +208335,26 @@ code_references:
   - from: internal/workflow/prospective_test.go:TestW4NewPackageInspectionRefusesDivergence
     to_name: testing
     file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_id: internal/workflow/engine.go:Engine.reconcileProspectiveGrants
+    to_name: Engine.reconcileProspectiveGrants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_id: internal/workflow/engine.go:Engine.setProspectiveGrants
+    to_name: Engine.setProspectiveGrants
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:admittedAfterRouting
+    to_id: internal/workflow/prospective.go:prospectiveGrant~type
+    to_name: prospectiveGrant
+    file: internal/workflow/prospective_test.go
   - from: internal/workflow/prospective_test.go:commandGrant
     to_id: internal/workflow/prospective_test.go:grantedPaths
     to_name: grantedPaths
@@ -208316,6 +208969,70 @@ code_references:
   - from: internal/workflow/prospective_test.go:newPackageWorld
     to_id: internal/workflow/prospective_test.go:libSSource
     to_name: libSSource
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Dependencies
+    to_name: ProspectiveSurface.Dependencies
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Package
+    to_name: ProspectiveSurface.Package
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Path
+    to_name: ProspectiveSurface.Path
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective_test.go:obj49Test
+    to_name: obj49Test
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj49Declaration
+    to_id: internal/workflow/prospective.go:roleGoRegressionTest
+    to_name: roleGoRegressionTest
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Covering
+    to_name: ProspectiveSurface.Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Dependencies
+    to_name: ProspectiveSurface.Dependencies
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Package
+    to_name: ProspectiveSurface.Package
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Path
+    to_name: ProspectiveSurface.Path
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective_test.go:obj59Covering
+    to_name: obj59Covering
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective_test.go:obj59Test
+    to_name: obj59Test
+    file: internal/workflow/prospective_test.go
+  - from: internal/workflow/prospective_test.go:obj59Declaration
+    to_id: internal/workflow/prospective.go:roleGoRegressionTest
+    to_name: roleGoRegressionTest
     file: internal/workflow/prospective_test.go
   - from: internal/workflow/prospective_test.go:prospectiveFor
     to_name: Background
