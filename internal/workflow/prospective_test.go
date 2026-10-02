@@ -1203,3 +1203,433 @@ func TestCauseBW4TheEdgeResumesOnlyIntact(t *testing.T) {
 		}
 	}
 }
+
+// Objective 57 (DF-19 residual): go-existing-package. The Objective-49-shaped
+// world: an existing package internal/session whose covered store.go and
+// journal.go are read at the pinned world, a governing go.mod that requires
+// golang.org/x/sys, and a plan creating two platform files in that package.
+const (
+	existingS        = "internal/session/store.go"
+	existingSibling  = "internal/session/journal.go"
+	existingUnix     = "internal/session/recordlock_unix.go"
+	existingWindows  = "internal/session/recordlock_windows.go"
+	existingThird    = "internal/session/recordlock_plan9.go"
+	existingGoMod    = "module github.com/globulario/sensei-code\n\ngo 1.25.0\n\nrequire (\n\tcharm.land/bubbletea/v2 v2.0.8\n\tgolang.org/x/sys v0.46.0\n)\n\nrequire golang.org/x/sync v0.21.0 // indirect\n"
+	existingStoreSrc = "package session\n\nimport (\n\t\"encoding/json\"\n\t\"os\"\n\t\"sync\"\n\n\t\"github.com/globulario/sensei-code/internal/event\"\n)\n\ntype Store struct{ mu sync.Mutex }\n\nvar _ = json.Marshal\nvar _ = os.Open\nvar _ event.Event\n"
+	existingJournal  = "package session\n\nimport (\n\t\"bufio\"\n\t\"fmt\"\n)\n\nvar _ = bufio.NewReader\nvar _ = fmt.Sprint\n"
+)
+
+func existingWorld() map[string]string {
+	return map[string]string{"go.mod": existingGoMod, existingS: existingStoreSrc, existingSibling: existingJournal}
+}
+
+func existingDeclarations() []ProspectiveSurface {
+	return []ProspectiveSurface{
+		{Path: existingUnix, Package: "session", Role: roleGoExistingPackage, Covering: existingS, Dependencies: []string{"os", "golang.org/x/sys/unix"}},
+		{Path: existingWindows, Package: "session", Role: roleGoExistingPackage, Covering: existingS, Dependencies: []string{"os", "fmt", "golang.org/x/sys/windows"}},
+	}
+}
+
+func existingPlanned() []string { return []string{existingS, existingUnix, existingWindows} }
+
+// existingGrants drives a plan through coverPlannedAtWorld, the function the
+// router calls for a live plan, over a real derived anchor naming the covered
+// files of the package.
+func existingGrants(t *testing.T, planned []string, decl []ProspectiveSurface, files map[string]string) ([]prospectiveGrant, []CoverageAnchor) {
+	t.Helper()
+	anchors := derivedAnchorNaming(t, existingS, existingSibling)
+	return coverPlannedAtWorld(context.Background(), prospectiveWorld, planned, decl, anchors, worldOf(files))
+}
+
+const (
+	unixLockSrc    = "//go:build unix\n\npackage session\n\nimport (\n\t\"os\"\n\n\t\"golang.org/x/sys/unix\"\n)\n\nfunc lock(f *os.File) error { return unix.Flock(int(f.Fd()), unix.LOCK_EX) }\n"
+	windowsLockSrc = "//go:build windows\n\npackage session\n\nimport (\n\t\"fmt\"\n\t\"os\"\n\n\t\"golang.org/x/sys/windows\"\n)\n\nfunc lock(f *os.File) error { return fmt.Errorf(\"%v\", windows.Handle(f.Fd())) }\n"
+)
+
+func existingDiff() string {
+	return createdDiff(existingUnix, unixLockSrc) + createdDiff(existingWindows, windowsLockSrc)
+}
+
+// W1 + W9: the Objective-49-shaped pair, covered by store.go, both receive
+// prospective grants through the production router path, pass the strict
+// architecture contract, and their candidate files -- each importing a declared
+// golang.org/x/sys subpackage the package never imported -- pass the production
+// inspection against the recorded grants.
+func TestObj57W1TheRecordLockPairIsGrantedThroughTheExistingPackageRole(t *testing.T) {
+	decl := existingDeclarations()
+	for _, d := range decl {
+		if err := strictProspectiveDeclaration(d); err != nil {
+			t.Fatalf("the strict contract refused %s: %v", d.Path, err)
+		}
+	}
+	grants, out := existingGrants(t, existingPlanned(), decl, existingWorld())
+	got := grantedPaths(grants)
+	if len(grants) != 2 || len(got) != 2 {
+		t.Fatalf("expected exactly the two record-lock grants, got %+v", grants)
+	}
+	for _, f := range []string{existingUnix, existingWindows} {
+		g, ok := got[f]
+		if !ok {
+			t.Fatalf("no grant for %s", f)
+		}
+		if g.Covering != existingS || g.Facts.Package != "session" || g.Via != "" || g.Edge != nil || g.Existing == nil {
+			t.Fatalf("%s is not an existing-package grant over %s: %+v", f, existingS, g)
+		}
+		// The package facts are the union over the covered files of the package.
+		for _, imp := range []string{"encoding/json", "os", "sync", "bufio", "fmt", "github.com/globulario/sensei-code/internal/event"} {
+			if !g.Facts.Imports[imp] {
+				t.Fatalf("%s's package facts lack %q: %+v", f, imp, g.Facts)
+			}
+		}
+		if g.Existing.Module != "github.com/globulario/sensei-code" || g.Existing.ModuleDir != "." {
+			t.Fatalf("%s's grant names the wrong module: %+v", f, g.Existing)
+		}
+		if !strings.HasPrefix(g.Anchor.Describe, "PROSPECTIVE "+roleGoExistingPackage+" "+f) || !strings.Contains(g.Anchor.Describe, existingS) {
+			t.Fatalf("%s's anchor is not a prospective anchor naming its covering file: %+v", f, g.Anchor)
+		}
+	}
+	if env := strings.Join(got[existingUnix].Existing.Envelope, ","); env != "golang.org/x/sys/unix,os" {
+		t.Fatalf("the unix envelope is not exactly its declared dependencies: %s", env)
+	}
+	if env := strings.Join(got[existingWindows].Existing.Envelope, ","); env != "fmt,golang.org/x/sys/windows,os" {
+		t.Fatalf("the windows envelope is not exactly its declared dependencies: %s", env)
+	}
+	covered := map[string]int{}
+	for _, a := range out {
+		covered[a.File]++
+	}
+	if covered[existingUnix] != 1 || covered[existingWindows] != 1 || covered[existingS] == 0 {
+		t.Fatalf("the router output does not cover the created pair prospectively: %v", covered)
+	}
+	if err := matchGrantsToDeclarations(decl, grants); err != nil {
+		t.Fatalf("the issued grants are not a receipt for their declarations: %v", err)
+	}
+	if err := inspectProspectiveGrants(existingDiff(), decl, grants); err != nil {
+		t.Fatalf("the authorized record-lock files were refuted: %v", err)
+	}
+	// The worker is shown the envelope, not the package's whole import set.
+	rendered := renderProspectiveGrants(grants)
+	if !strings.Contains(rendered, "CREATE "+existingUnix) || !strings.Contains(rendered, "(exactly the declared dependencies the pinned package and go.mod admit; nothing else): golang.org/x/sys/unix, os\n") {
+		t.Fatalf("the rendered grant does not state the exact envelope:\n%s", rendered)
+	}
+}
+
+// W2 + requirement 8: an undeclared third sibling create receives no grant and
+// a candidate that creates it is refuted; a declaration with no planned file
+// grants nothing.
+func TestObj57W2AnUndeclaredSiblingCreateIsRefused(t *testing.T) {
+	grants, out := existingGrants(t, append(existingPlanned(), existingThird), existingDeclarations(), existingWorld())
+	if _, ok := grantedPaths(grants)[existingThird]; ok || len(grants) != 2 {
+		t.Fatalf("the undeclared sibling was granted: %+v", grants)
+	}
+	for _, a := range out {
+		if a.File == existingThird {
+			t.Fatalf("the undeclared sibling is covered: %+v", a)
+		}
+	}
+	diff := existingDiff() + createdDiff(existingThird, "package session\n\nimport \"os\"\n\nvar _ = os.Open\n")
+	if err := inspectProspectiveGrants(diff, existingDeclarations(), grants); err == nil || !strings.Contains(err.Error(), existingThird) {
+		t.Fatalf("a candidate creating an undeclared sibling was not refuted: %v", err)
+	}
+	// A declaration alone authorizes nothing: declared but not planned.
+	decl := append(existingDeclarations(), ProspectiveSurface{Path: existingThird, Package: "session", Role: roleGoExistingPackage, Covering: existingS, Dependencies: []string{"os"}})
+	grants, _ = existingGrants(t, existingPlanned(), decl, existingWorld())
+	if _, ok := grantedPaths(grants)[existingThird]; ok {
+		t.Fatalf("a declaration with no planned create was granted: %+v", grants)
+	}
+}
+
+// existingWith returns the declarations with the unix declaration mutated.
+func existingWith(mut func(d *ProspectiveSurface)) []ProspectiveSurface {
+	decl := existingDeclarations()
+	mut(&decl[0])
+	return decl
+}
+
+func unixGranted(t *testing.T, decl []ProspectiveSurface, files map[string]string, planned []string) bool {
+	t.Helper()
+	grants, _ := existingGrants(t, planned, decl, files)
+	for _, g := range grants {
+		if g.Surface.Path == decl[0].Path {
+			return true
+		}
+	}
+	return false
+}
+
+// W3: a declared package clause that differs from the covering file's is
+// refused at grant time, and a created file whose clause drifts is refuted.
+func TestObj57W3APackageClauseMismatchIsRefused(t *testing.T) {
+	if unixGranted(t, existingWith(func(d *ProspectiveSurface) { d.Package = "lock" }), existingWorld(), existingPlanned()) {
+		t.Fatal("a declaration whose package differs from the covering file's was granted")
+	}
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	drift := createdDiff(existingUnix, strings.Replace(unixLockSrc, "package session", "package lock", 1)) + createdDiff(existingWindows, windowsLockSrc)
+	if err := inspectProspectiveGrants(drift, existingDeclarations(), grants); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") {
+		t.Fatalf("a created file with a drifted package clause was not refuted: %v", err)
+	}
+	// The covering file's package governs: a sibling with another clause
+	// contributes nothing to the package facts.
+	world := existingWorld()
+	world[existingSibling] = "package session_other\n\nimport \"net/http\"\n\nvar _ = http.Get\n"
+	grants, _ = existingGrants(t, existingPlanned(), existingDeclarations()[:1], world)
+	if len(grants) != 1 || grants[0].Facts.Imports["net/http"] {
+		t.Fatalf("a file with another package clause widened the package facts: %+v", grants)
+	}
+}
+
+// W4: a *_test.go is never this role, and a path in a directory absent at the
+// pinned world is refused by it; the new-package roles are unchanged.
+func TestObj57W4TestPathsAndNewDirectoriesAreNotThisRole(t *testing.T) {
+	testDecl := existingWith(func(d *ProspectiveSurface) { d.Path = "internal/session/recordlock_test.go" })
+	if err := strictProspectiveDeclaration(testDecl[0]); err == nil {
+		t.Fatal("the strict contract admitted a *_test.go under go-existing-package")
+	}
+	if unixGranted(t, testDecl, existingWorld(), []string{existingS, testDecl[0].Path, existingWindows}) {
+		t.Fatal("a *_test.go was granted under go-existing-package")
+	}
+	if err := inspectProspectiveGrants(createdDiff(testDecl[0].Path, "package session\n"), testDecl[:1], nil); err == nil || !strings.Contains(err.Error(), "path shape") {
+		t.Fatalf("inspection did not refute a *_test.go under go-existing-package: %v", err)
+	}
+
+	// A new directory, covering file named inside it: nothing exists there.
+	newDir := existingWith(func(d *ProspectiveSurface) {
+		d.Path, d.Covering = "internal/recordlock/lock_unix.go", "internal/recordlock/lock.go"
+	})
+	if unixGranted(t, newDir, existingWorld(), []string{existingS, newDir[0].Path, existingWindows}) {
+		t.Fatal("a create in a directory absent at the pinned world was granted under go-existing-package")
+	}
+	// A new directory covered by a file of an existing package is refused
+	// statically and by the predicate.
+	outside := existingWith(func(d *ProspectiveSurface) { d.Path = "internal/recordlock/lock_unix.go" })
+	if err := strictProspectiveDeclaration(outside[0]); err == nil {
+		t.Fatal("the strict contract admitted a covering file outside the created file's directory")
+	}
+	if unixGranted(t, outside, existingWorld(), []string{existingS, outside[0].Path, existingWindows}) {
+		t.Fatal("a create in a new directory was granted through a covering file elsewhere")
+	}
+	// Mixed into a new-package directory, the role poisons the package rather
+	// than riding on its production grant.
+	mixed := append(newLibDeclarations(), ProspectiveSurface{Path: newLibDir + "/extra.go", Package: "answerer", Role: roleGoExistingPackage, Covering: libS, Dependencies: []string{"fmt"}})
+	if g := prospectiveFor(t, append(newLibPlanned(), newLibDir+"/extra.go"), mixed, newPackageAnchors(), newPackageWorld()); len(g) != 0 {
+		t.Fatalf("a go-existing-package declaration in a new package was granted: %+v", g)
+	}
+	// Control: the new-package roles still admit the new directory.
+	if g := prospectiveFor(t, newLibPlanned(), newLibDeclarations(), newPackageAnchors(), newPackageWorld()); len(g) != 3 {
+		t.Fatalf("the new-package roles changed: %+v", g)
+	}
+}
+
+// W5: a declared path that exists at the pinned world is refused, and absence
+// alone grants nothing: without a named, covered, readable covering file in
+// the package, an absent path stays ungranted.
+func TestObj57W5ExistenceAndAbsenceAloneGrantNothing(t *testing.T) {
+	world := existingWorld()
+	world[existingUnix] = "package session\n"
+	if unixGranted(t, existingDeclarations(), world, existingPlanned()) {
+		t.Fatal("a declared path present at the pinned world was granted as a create")
+	}
+	if err := inspectProspectiveGrants(createdDiff(existingWindows, windowsLockSrc), existingDeclarations(), nil); err == nil {
+		t.Fatal("inspection accepted a declared file the candidate did not create")
+	}
+	for name, decl := range map[string][]ProspectiveSurface{
+		"no covering file":          existingWith(func(d *ProspectiveSurface) { d.Covering = "" }),
+		"covering file absent":      existingWith(func(d *ProspectiveSurface) { d.Covering = "internal/session/missing.go" }),
+		"covering file is a test":   existingWith(func(d *ProspectiveSurface) { d.Covering = "internal/session/store_test.go" }),
+		"covering file is itself":   existingWith(func(d *ProspectiveSurface) { d.Covering = existingUnix }),
+		"covering file not covered": existingWith(func(d *ProspectiveSurface) { d.Covering = "internal/session/uncovered.go" }),
+		"unknown role":              existingWith(func(d *ProspectiveSurface) { d.Role = "go-existing-file" }),
+		"declared twice":            append(existingDeclarations(), existingDeclarations()[0]),
+		"no governing go.mod":       nil,
+	} {
+		files := existingWorld()
+		files["internal/session/uncovered.go"] = "package session\n"
+		files["internal/session/store_test.go"] = "package session\n"
+		if name == "no governing go.mod" {
+			delete(files, "go.mod")
+			decl = existingDeclarations()
+		}
+		if unixGranted(t, decl, files, existingPlanned()) {
+			t.Errorf("%s: an absent path was granted", name)
+		}
+	}
+	if err := strictProspectiveDeclaration(existingWith(func(d *ProspectiveSurface) { d.Covering = "" })[0]); err == nil {
+		t.Fatal("the strict contract admitted a go-existing-package with no covering file")
+	}
+}
+
+// W6: both sides of the closed dependency rule, through the production
+// predicate and the production inspection.
+func TestObj57W6TheDependencyRuleAdmitsDeclaredRequiredModulesOnly(t *testing.T) {
+	// Admitted: a declared subpackage of a required module (W1 also carries
+	// golang.org/x/sys/unix and /windows), and a package-set import.
+	if !unixGranted(t, existingWith(func(d *ProspectiveSurface) {
+		d.Dependencies = []string{"bufio", "golang.org/x/sys/unix", "golang.org/x/sync/errgroup", "charm.land/bubbletea/v2"}
+	}), existingWorld(), existingPlanned()) {
+		t.Fatal("declared imports the closed rule admits were refused")
+	}
+	// Refused at grant time: declared but inadmissible.
+	for _, dep := range []string{
+		"syscall",                // standard library the package does not import
+		"github.com/pkg/errors",  // a module go.mod does not require
+		"golang.org/x/sysx/unix", // prefix of a required module, not a path-segment descendant
+		"github.com/globulario/sensei-code/internal/workflow", // same-module package not already imported
+		"",
+	} {
+		if unixGranted(t, existingWith(func(d *ProspectiveSurface) { d.Dependencies = []string{"os", dep} }), existingWorld(), existingPlanned()) {
+			t.Errorf("declared dependency %q outside the closed rule was granted", dep)
+		}
+	}
+	// Longest path-segment ownership: an import inside the main module is not
+	// admitted by a shorter required prefix.
+	if dependencyAdmitted("example.com/m/sub/x", nil, "example.com/m/sub", []string{"example.com/m"}) {
+		t.Error("a shorter required module admitted an import the main module owns")
+	}
+	if !dependencyAdmitted("example.com/m/other", nil, "example.com/m/sub", []string{"example.com/m"}) {
+		t.Error("an import owned by a required module was refused")
+	}
+
+	// Refused at inspection: undeclared imports, including ones the package
+	// already imports and ones a build tag would never compile on this host.
+	grants, _ := existingGrants(t, existingPlanned(), existingDeclarations(), existingWorld())
+	for name, src := range map[string]string{
+		"undeclared package-set import": strings.Replace(unixLockSrc, "\"os\"\n", "\"os\"\n\t\"sync\"\n", 1),
+		"undeclared required module":    strings.Replace(unixLockSrc, "\"os\"\n", "\"os\"\n\t\"golang.org/x/sync/errgroup\"\n", 1),
+		"another platform's subpackage": strings.Replace(unixLockSrc, "golang.org/x/sys/unix\"", "golang.org/x/sys/unix\"\n\t\"golang.org/x/sys/windows\"", 1),
+		"stdlib behind a build tag":     strings.Replace(unixLockSrc, "\"os\"\n", "\"os\"\n\t\"syscall\"\n", 1),
+	} {
+		diff := createdDiff(existingUnix, src) + createdDiff(existingWindows, windowsLockSrc)
+		if err := inspectProspectiveGrants(diff, existingDeclarations(), grants); err == nil || !strings.Contains(err.Error(), "envelope") {
+			t.Errorf("%s: the candidate was not refuted for its import: %v", name, err)
+		}
+	}
+	// An envelope tampered in memory, bypassing restore, authorizes nothing.
+	tampered := append([]prospectiveGrant(nil), grants...)
+	for i := range tampered {
+		x := *tampered[i].Existing
+		x.Envelope = append(append([]string(nil), x.Envelope...), "syscall")
+		tampered[i].Existing = &x
+	}
+	diff := createdDiff(existingUnix, strings.Replace(unixLockSrc, "\"os\"\n", "\"os\"\n\t\"syscall\"\n", 1)) + createdDiff(existingWindows, windowsLockSrc)
+	if err := inspectProspectiveGrants(diff, existingDeclarations(), tampered); err == nil {
+		t.Fatal("a widened envelope authorized an undeclared import")
+	}
+}
+
+// W7: the binding read back through the session after a restart is the exact
+// recorded binding; resuming again restores the same bytes, and a resume that
+// would mint (an extra declaration) or widen (a tampered record) is refused.
+func TestObj57W7TheBindingSurvivesRestartWithoutMintingOrWidening(t *testing.T) {
+	decl := existingDeclarations()
+	grants, _ := existingGrants(t, existingPlanned(), decl, existingWorld())
+	if len(grants) != 2 {
+		t.Fatalf("premise: two grants, got %+v", grants)
+	}
+	found := session.FindInterrupted([]event.Event{
+		event.New("s", "t", event.SourceSystem, event.TaskCreated, "task", nil),
+		event.New("s", "t", event.SourceArchitect, event.PlanProposed, "plan", proposedPlan{architectureDecision: architectureDecision{Plan: "p"}}),
+		event.New("s", "t", event.SourceSystem, event.ProspectiveGranted, "recorded", prospectiveRecord{World: prospectiveWorld, Grants: grants}),
+	})
+	if len(found) != 1 || len(found[0].ProspectiveRecord) == 0 {
+		t.Fatalf("the record did not survive the session: %+v", found)
+	}
+	want, _ := json.Marshal(grants)
+	e := &Engine{}
+	for i := 0; i < 2; i++ {
+		if err := e.restoreProspectiveGrants(found[0], decl, prospectiveWorld); err != nil {
+			t.Fatalf("resume %d refused the intact record: %v", i+1, err)
+		}
+		got, _ := json.Marshal(e.prospectiveGrants("t"))
+		if string(got) != string(want) {
+			t.Fatalf("resume %d restored a different binding:\n got %s\nwant %s", i+1, got, want)
+		}
+	}
+	if err := inspectProspectiveGrants(existingDiff(), decl, e.prospectiveGrants("t")); err != nil {
+		t.Fatalf("the restored binding did not reach inspection: %v", err)
+	}
+
+	// Minting: a resume cannot add a declaration the record never granted.
+	minted := append(existingDeclarations(), ProspectiveSurface{Path: existingThird, Package: "session", Role: roleGoExistingPackage, Covering: existingS, Dependencies: []string{"os"}})
+	if err := (&Engine{}).restoreProspectiveGrants(found[0], minted, prospectiveWorld); err == nil {
+		t.Fatal("a resume minted a grant for a declaration the record never held")
+	}
+
+	// Substitution: a resumed declaration that repeats a dependency in place
+	// of one the record names is not the recorded declaration. Equal lengths
+	// and one-way membership must not let the record's
+	// golang.org/x/sys/unix survive a declaration that no longer names it.
+	substituted := existingDeclarations()
+	substituted[0].Dependencies = []string{"os", "os"}
+	sub := &Engine{}
+	if err := sub.restoreProspectiveGrants(found[0], substituted, prospectiveWorld); err == nil {
+		t.Fatal("a resume restored a recorded dependency the resumed declaration replaced with a duplicate")
+	}
+	if len(sub.prospectiveGrants("t")) != 0 {
+		t.Fatal("a refused duplicate-substitution resume registered grants")
+	}
+
+	tamper := func(f func(g *prospectiveGrant)) []prospectiveGrant {
+		out := append([]prospectiveGrant(nil), grants...)
+		for i := range out {
+			if out[i].Existing != nil {
+				x := *out[i].Existing
+				x.Envelope = append([]string(nil), x.Envelope...)
+				x.Requires = append([]string(nil), x.Requires...)
+				out[i].Existing = &x
+			}
+			if out[i].Anchor.File == existingUnix {
+				f(&out[i])
+			}
+		}
+		return out
+	}
+	for name, gs := range map[string][]prospectiveGrant{
+		"envelope dropped":            tamper(func(g *prospectiveGrant) { g.Existing = nil }),
+		"envelope widened":            tamper(func(g *prospectiveGrant) { g.Existing.Envelope = append(g.Existing.Envelope, "syscall") }),
+		"envelope substituted":        tamper(func(g *prospectiveGrant) { g.Existing.Envelope = []string{"fmt", "golang.org/x/sys/unix"} }),
+		"envelope narrowed":           tamper(func(g *prospectiveGrant) { g.Existing.Envelope = g.Existing.Envelope[:1] }),
+		"requirement removed":         tamper(func(g *prospectiveGrant) { g.Existing.Requires = []string{"charm.land/bubbletea/v2"} }),
+		"module removed":              tamper(func(g *prospectiveGrant) { g.Existing.Module = "" }),
+		"covering moved out of dir":   tamper(func(g *prospectiveGrant) { g.Covering = "internal/event/event.go" }),
+		"package facts altered":       tamper(func(g *prospectiveGrant) { g.Facts.Package = "lock" }),
+		"traced through another file": tamper(func(g *prospectiveGrant) { g.Via = existingWindows }),
+		"declaration altered": tamper(func(g *prospectiveGrant) {
+			g.Surface.Dependencies = append([]string{"syscall"}, g.Surface.Dependencies...)
+		}),
+		"envelope on another role": tamper(func(g *prospectiveGrant) {
+			g.Surface.Role = roleGoRegressionTest
+		}),
+	} {
+		raw, _ := json.Marshal(prospectiveRecord{World: prospectiveWorld, Grants: gs})
+		e := &Engine{}
+		if err := e.restoreProspectiveGrants(session.Interrupted{TaskID: "t", ProspectiveRecord: raw}, decl, prospectiveWorld); err == nil {
+			t.Errorf("%s: resumed", name)
+		}
+		if len(e.prospectiveGrants("t")) != 0 {
+			t.Errorf("%s: a refused resume registered grants", name)
+		}
+	}
+	// An envelope on a grant of another role is refused by the record check
+	// even when the declaration agrees.
+	reg := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, []ProspectiveSurface{gosumcheckDeclaration()}, gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	reg[0].Existing = &prospectiveExisting{Module: "m", ModuleDir: ".", Envelope: []string{"testing"}}
+	if err := matchGrantsToDeclarations([]ProspectiveSurface{gosumcheckDeclaration()}, reg); err == nil {
+		t.Fatal("a regression-test grant carrying an existing-package envelope was accepted")
+	}
+}
+
+// Requirement 10: build constraints and GOOS suffixes do not alter the
+// authority identity. The same declaration under a platform-neutral name is
+// granted the same binding, and the record carries no platform fact.
+func TestObj57BuildConstraintsDoNotAlterTheBinding(t *testing.T) {
+	neutral := existingWith(func(d *ProspectiveSurface) { d.Path = "internal/session/recordlock.go" })
+	gn, _ := existingGrants(t, []string{existingS, neutral[0].Path}, neutral[:1], existingWorld())
+	gu, _ := existingGrants(t, []string{existingS, existingUnix}, existingDeclarations()[:1], existingWorld())
+	if len(gn) != 1 || len(gu) != 1 {
+		t.Fatalf("premise: one grant each, got %+v %+v", gn, gu)
+	}
+	if gn[0].Covering != gu[0].Covering || strings.Join(gn[0].Existing.Envelope, ",") != strings.Join(gu[0].Existing.Envelope, ",") ||
+		strings.Join(gn[0].Existing.Requires, ",") != strings.Join(gu[0].Existing.Requires, ",") || len(gn[0].Facts.Imports) != len(gu[0].Facts.Imports) {
+		t.Fatalf("the GOOS suffix changed the binding: %+v vs %+v", gn[0], gu[0])
+	}
+}

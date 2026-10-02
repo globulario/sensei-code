@@ -2837,9 +2837,10 @@ func strictArchitectureContract(d architectureDecision) error {
 // strictProspectiveDeclaration applies the static part of the written
 // prospective_surfaces contract to one declaration: the closed role set and its
 // path shape, read through prospectiveRoles and roleAdmitsPath as the
-// prospective predicate reads them, and the package clause each new-package
-// role requires. Whatever needs the repository -- the covering file's facts,
-// the pinned world, the module -- stays with the prospective predicate.
+// prospective predicate reads them, the package clause each new-package role
+// requires, and the same-directory covering file go-existing-package names.
+// Whatever needs the repository -- the covering file's facts, the pinned
+// world, the module -- stays with the prospective predicate.
 func strictProspectiveDeclaration(s ProspectiveSurface) error {
 	role, known := prospectiveRoles[s.Role]
 	if !known {
@@ -2848,10 +2849,17 @@ func strictProspectiveDeclaration(s ProspectiveSurface) error {
 	if !roleAdmitsPath(role, path.Clean(strings.TrimSpace(s.Path))) {
 		return fmt.Errorf("prospective surface %s does not have the path shape role %s admits", s.Path, s.Role)
 	}
-	if role.newPackage && strings.TrimSpace(s.Covering) == "" {
+	if (role.newPackage || role.existingPackage) && strings.TrimSpace(s.Covering) == "" {
 		return fmt.Errorf("prospective surface %s has role %s and names no covering file", s.Path, s.Role)
 	}
 	switch s.Role {
+	case roleGoExistingPackage:
+		if !token.IsIdentifier(s.Package) {
+			return fmt.Errorf("prospective surface %s has role %s and package %q, which is not a Go identifier", s.Path, s.Role, s.Package)
+		}
+		if !sameDirectoryNonTestGo(path.Clean(strings.TrimSpace(s.Path)), path.Clean(strings.TrimSpace(s.Covering))) {
+			return fmt.Errorf("prospective surface %s has role %s and covering file %s, which is not another non-test Go file in its own directory", s.Path, s.Role, s.Covering)
+		}
 	case roleGoCommandPackage:
 		if s.Package != "main" {
 			return fmt.Errorf("prospective surface %s has role %s and package %q; a command package is package main", s.Path, s.Role, s.Package)
@@ -5580,7 +5588,8 @@ Return ONLY JSON in this exact shape:
   "premise_resolutions": [{"gap":"receipt id you were asked to answer","outcome":"established|refuted|unresolved","evidence":"..."}]
 }
 Declare every file the plan CREATES under "prospective_surfaces"; an undeclared new file
-stays uncovered. The roles are a closed set of exactly three:
+stays uncovered. The roles are a closed set of four. A test file or a file in a new package
+takes one of a closed set of exactly three:
   go-regression-test: a *_test.go beside a covered file, importing nothing beyond that file's
     imports and "testing". It is the only test role.
   go-library-package / go-command-package: a non-test .go file in a NEW directory, one that
@@ -5596,6 +5605,19 @@ stays uncovered. The roles are a closed set of exactly three:
   *_test.go in the new package is declared as go-regression-test with that same package;
   it is admitted only through the package's production declarations and the same covering
   file. Objective text, prose and future imports never establish a covering file.
+The fourth role is for a production file in a package that already exists:
+  go-existing-package: one non-test .go file, absent at the pinned base, in a directory that
+    exists there. It MUST name "covering": another existing non-test .go file in the SAME
+    directory, covered at the pinned base, and "package" MUST equal that file's package
+    clause. "dependencies" MUST list EVERY import the file will have, and nothing outside
+    that list may be imported. A dependency is admitted only when the package's covered
+    non-test files already import it at the pinned base, or when its module (longest
+    path match) is one the governing go.mod explicitly requires. Anything else -- a
+    standard-library or same-module package the package does not already import, or a
+    module go.mod does not require -- is refused. Each file is declared on its own; an
+    undeclared file created in that directory is refused. File names, GOOS suffixes and
+    build constraints grant nothing. Absence at the pinned base is required
+    and authorizes nothing by itself. A *_test.go or a new directory is never this role.
 Declare every ALREADY-EXISTING test file the plan EDITS under "test_edits", with the
 structural effects of that edit: "operation", the "package" clause it will still carry,
 its "build_constraints", and the "imports" it will need. Those files may only be edited in
