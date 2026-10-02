@@ -4621,6 +4621,19 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DeclaredConsequences: d.Consequences,
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
+	// EVERY DECLARATION IS AN ADMISSION OBLIGATION.
+	//
+	// The grants derivedCoverage just recorded are reconciled against the
+	// plan's complete declared prospective-surface set before the router may
+	// admit anything. A declared create with no canonical grant was otherwise
+	// noticed only by candidate inspection, after an implementer had spent a
+	// whole cycle on it: a test file is outside the architectural coverage set,
+	// so its missing grant never touched routing (Objectives 59 and 49, run 2).
+	// The rule is matchGrantsToDeclarations, the one restoration and candidate
+	// inspection read; nothing is dropped, minted or exempted here.
+	if err := e.reconcileProspectiveGrants(taskID, d.ProspectiveSurfaces); err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
 	// Which planned files the graph has NOT examined, established per file.
 	// The scoped answer cannot say: it is one verdict for the region, proven
@@ -5134,6 +5147,9 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) []CoverageAnchor {
 	c, ok := e.coverageAtWorld(ctx, taskID, planned, declarations)
 	if !ok {
+		// Nothing was derived for this plan, so no earlier plan's grants may
+		// stand for it at admission.
+		e.setProspectiveGrants(taskID, nil)
 		return nil
 	}
 	e.setProspectiveGrants(taskID, c.prospective)
@@ -5164,6 +5180,20 @@ func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []s
 			prospectiveRecord{World: c.world, Grants: c.prospective}))
 	}
 	return c.coverage
+}
+
+// reconcileProspectiveGrants is plan admission's reading of the prospective
+// grants routing just recorded: every declaration must hold exactly one valid
+// canonical grant (matchGrantsToDeclarations), or the plan is refused before
+// any implementer starts. A plan that declares nothing is untouched.
+func (e *Engine) reconcileProspectiveGrants(taskID string, declared []ProspectiveSurface) error {
+	if len(declared) == 0 {
+		return nil
+	}
+	if err := matchGrantsToDeclarations(declared, e.prospectiveGrants(taskID)); err != nil {
+		return fmt.Errorf("prospective admission refused before implementation: %w", err)
+	}
+	return nil
 }
 
 // restoreProspectiveGrants re-establishes, from the session record, the

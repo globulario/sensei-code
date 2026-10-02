@@ -1868,3 +1868,54 @@ func TestTheRecordedLibraryEdgeReachesCandidateInspection(t *testing.T) {
 		t.Fatalf("a plan with no declarations was inspected: %v", err)
 	}
 }
+
+// DF-37 (Objective 60), structural: plan admission reconciles the declared
+// prospective surfaces against the grants derivedCoverage just recorded,
+// AFTER that derivation and BEFORE the router can return an admitted plan,
+// and returns the refusal on the plan-admission error path. Admission,
+// restoration and candidate inspection all read the one canonical rule.
+func TestDF37ReconciliationRunsAfterDerivationAndBeforeRouting(t *testing.T) {
+	src := rawSource(t, "internal/workflow/engine.go")
+	at := strings.Index(src, "func (e *Engine) routePlan(")
+	if at < 0 {
+		t.Fatal("routePlan not found")
+	}
+	end := strings.Index(src[at+1:], "\nfunc ")
+	if end < 0 {
+		t.Fatal("routePlan has no end")
+	}
+	body := src[at : at+1+end]
+	derive := strings.Index(body, "e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces)")
+	reconcile := strings.Index(body, "if err := e.reconcileProspectiveGrants(taskID, d.ProspectiveSurfaces); err != nil {\n\t\treturn Routing{}, sensei.PreflightDecision{}, Action{}, err\n\t}")
+	route := strings.Index(body, "routeAuthorityForAction(")
+	if derive < 0 || reconcile < 0 || route < 0 {
+		t.Fatalf("routePlan lacks derivation (%d), reconciliation refusing admission (%d) or routing (%d)", derive, reconcile, route)
+	}
+	if !(derive < reconcile && reconcile < route) {
+		t.Fatalf("reconciliation is not between derivation (%d) and the first routing (%d): %d", derive, route, reconcile)
+	}
+	if strings.Count(body, "e.reconcileProspectiveGrants(") != 1 {
+		t.Fatal("routePlan reconciles prospective grants more or less than once")
+	}
+
+	for name, want := range map[string]string{
+		"func (e *Engine) reconcileProspectiveGrants(": "matchGrantsToDeclarations(declared, e.prospectiveGrants(taskID))",
+		"func (e *Engine) restoreProspectiveGrants(":   "matchGrantsToDeclarations(declared, rec.Grants)",
+	} {
+		i := strings.Index(src, name)
+		if i < 0 {
+			t.Fatalf("%s not found", name)
+		}
+		j := strings.Index(src[i+1:], "\nfunc ")
+		if j < 0 || !strings.Contains(src[i:i+1+j], want) {
+			t.Fatalf("%s does not read the canonical declaration/grant rule", name)
+		}
+	}
+	prospective := rawSource(t, "internal/workflow/prospective.go")
+	i := strings.Index(prospective, "func inspectProspectiveGrants(")
+	j := strings.Index(prospective[i+1:], "\nfunc ")
+	if i < 0 || j < 0 || !strings.Contains(prospective[i:i+1+j], "matchGrantsToDeclarations(declarations, grants)") ||
+		!strings.Contains(prospective[i:i+1+j], "inspectProspective(diff, declarations, facts, edges, envelopes)") {
+		t.Fatal("candidate inspection does not read both the canonical rule and the candidate-content checks")
+	}
+}

@@ -1633,3 +1633,213 @@ func TestObj57BuildConstraintsDoNotAlterTheBinding(t *testing.T) {
 		t.Fatalf("the GOOS suffix changed the binding: %+v vs %+v", gn[0], gu[0])
 	}
 }
+
+// Objective 60 (DF-37): a prospective declaration is an admission obligation.
+// The two specimens are the run-2 shapes of Objectives 59 and 49: a declared
+// go-regression-test whose covering surface carries no derivation, so the
+// production predicate produced no grant, and the plan was admitted anyway.
+const (
+	obj59Test     = "internal/workflow/coverage_reconciliation_test.go"
+	obj59Covering = "internal/workflow/authority.go"
+	obj49Test     = "internal/session/repair_test.go"
+)
+
+func obj59Declaration() ProspectiveSurface {
+	return ProspectiveSurface{Path: obj59Test, Package: "workflow", Role: roleGoRegressionTest, Covering: obj59Covering, Dependencies: []string{"testing"}}
+}
+
+func obj49Declaration() ProspectiveSurface {
+	return ProspectiveSurface{Path: obj49Test, Package: "session", Role: roleGoRegressionTest, Dependencies: []string{"testing"}}
+}
+
+// admittedAfterRouting records the grants the routing predicate produced, as
+// derivedCoverage does, and asks plan admission about the declarations.
+func admittedAfterRouting(grants []prospectiveGrant, decl []ProspectiveSurface) error {
+	e := &Engine{}
+	e.setProspectiveGrants("t", grants)
+	return e.reconcileProspectiveGrants("t", decl)
+}
+
+// W1: the Objective-59 run-2 shape is refused at admission, naming the
+// declaration and why no canonical grant exists.
+func TestDF37W1Objective59UngrantedDeclarationRefusesAdmission(t *testing.T) {
+	decl := []ProspectiveSurface{obj59Declaration()}
+	world := map[string]string{obj59Covering: "package workflow\n\nimport \"fmt\"\n\nvar _ = fmt.Sprint\n"}
+	grants := prospectiveFor(t, []string{obj59Covering, obj59Test}, decl, nil, world)
+	if len(grants) != 0 {
+		t.Fatalf("premise: the specimen's covering surface carries no derivation, so no grant, got %+v", grants)
+	}
+	err := admittedAfterRouting(grants, decl)
+	if err == nil {
+		t.Fatal("a declared test with no canonical grant was admitted")
+	}
+	for _, want := range []string{"prospective admission refused before implementation", obj59Test, "holds no recorded grant", obj59Covering} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the refusal does not say %q: %v", want, err)
+		}
+	}
+}
+
+// W2: the Objective-49 run-2 shape, the same refusal.
+func TestDF37W2Objective49UngrantedDeclarationRefusesAdmission(t *testing.T) {
+	decl := []ProspectiveSurface{obj49Declaration()}
+	grants := prospectiveFor(t, []string{existingS, obj49Test}, decl, nil, existingWorld())
+	if len(grants) != 0 {
+		t.Fatalf("premise: no grant, got %+v", grants)
+	}
+	err := admittedAfterRouting(grants, decl)
+	if err == nil || !strings.Contains(err.Error(), obj49Test) || !strings.Contains(err.Error(), "holds no recorded grant") {
+		t.Fatalf("the Objective-49 shape was not refused naming its declaration: %v", err)
+	}
+}
+
+// W3: a declaration with its matching grant proceeds, and a plan with no
+// declarations is untouched whatever is recorded.
+func TestDF37W3AGrantedDeclarationIsAdmitted(t *testing.T) {
+	decl := []ProspectiveSurface{gosumcheckDeclaration()}
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, decl, gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	if len(grants) != 1 {
+		t.Fatalf("premise: one grant, got %+v", grants)
+	}
+	if err := admittedAfterRouting(grants, decl); err != nil {
+		t.Fatalf("a granted declaration was refused: %v", err)
+	}
+	if err := admittedAfterRouting(nil, nil); err != nil {
+		t.Fatalf("a plan with no declarations was refused: %v", err)
+	}
+}
+
+// W4: one granted and one ungranted declaration -- the whole plan is refused,
+// and the refusal names only the unsatisfied declaration.
+func TestDF37W4OneUngrantedDeclarationRefusesTheWholePlan(t *testing.T) {
+	decl := []ProspectiveSurface{gosumcheckDeclaration(), obj59Declaration()}
+	world := map[string]string{gosumcheckS: gosumcheckSrc, obj59Covering: "package workflow\n"}
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF, obj59Covering, obj59Test}, decl, gosumcheckAnchors(), world)
+	if len(grants) != 1 || grants[0].Anchor.File != gosumcheckF {
+		t.Fatalf("premise: only the gosumcheck declaration is granted, got %+v", grants)
+	}
+	err := admittedAfterRouting(grants, decl)
+	if err == nil || !strings.Contains(err.Error(), obj59Test) {
+		t.Fatalf("the plan with an ungranted declaration was admitted or not named: %v", err)
+	}
+	if strings.Contains(err.Error(), gosumcheckF) {
+		t.Fatalf("the refusal names the satisfied declaration: %v", err)
+	}
+}
+
+// W5: duplicate, mismatched, malformed, extra and stale grants each refuse
+// admission, naming the declaration.
+func TestDF37W5DuplicateOrMismatchedGrantsRefuseAdmission(t *testing.T) {
+	decl := []ProspectiveSurface{gosumcheckDeclaration()}
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF}, decl, gosumcheckAnchors(), map[string]string{gosumcheckS: gosumcheckSrc})
+	if len(grants) != 1 {
+		t.Fatalf("premise: one grant, got %+v", grants)
+	}
+	mismatched := grants[0]
+	mismatched.Surface.Package = "other"
+	malformed := grants[0]
+	malformed.Covering, malformed.Facts = "", prospectiveFacts{}
+	elsewhere := grants[0]
+	elsewhere.Anchor.File = "gosumcheck/other_test.go"
+	for name, gs := range map[string][]prospectiveGrant{
+		"duplicate grants":  {grants[0], grants[0]},
+		"mismatched grant":  {mismatched},
+		"malformed grant":   {malformed},
+		"an extra grant":    {grants[0], elsewhere},
+		"grant elsewhere":   {elsewhere},
+		"no grant recorded": nil,
+	} {
+		err := admittedAfterRouting(gs, decl)
+		if err == nil {
+			t.Errorf("%s: admitted", name)
+			continue
+		}
+		if !strings.Contains(err.Error(), gosumcheckF) && name != "an extra grant" {
+			t.Errorf("%s: the refusal does not name the declaration: %v", name, err)
+		}
+	}
+
+	// Two individually valid command grants in one command package bound to
+	// different libraries: the record is refused naming both declarations.
+	second := ProspectiveSurface{Path: "internal/answerer2/a.go", Package: "answerer2", Role: roleGoLibraryPackage, Covering: libS, Dependencies: []string{"fmt"}}
+	two := ProspectiveSurface{Path: newCmdDir + "/two.go", Package: "main", Role: roleGoCommandPackage, Covering: cmdS,
+		Dependencies: []string{"fmt", "os", "example.com/m/internal/answerer2"}}
+	cmds := append(edgeDeclarations(), second)
+	cmdGrants := prospectiveFor(t, append(edgePlanned(), second.Path), cmds, newPackageAnchors(), newPackageWorld())
+	main, ok := commandGrant(cmdGrants)
+	if len(cmdGrants) != 5 || !ok || main.Edge == nil {
+		t.Fatalf("premise: both libraries and the edged command are granted, got %+v", cmdGrants)
+	}
+	twoGrant := main
+	twoGrant.Anchor.File, twoGrant.Surface = two.Path, two
+	twoGrant.Edge = &prospectiveEdge{Import: "example.com/m/internal/answerer2", Library: "internal/answerer2", Module: "example.com/m", ModuleDir: "."}
+	if err := matchGrantsToDeclarations([]ProspectiveSurface{second, two}, []prospectiveGrant{grantedPaths(cmdGrants)[second.Path], twoGrant}); err != nil {
+		t.Fatalf("premise: the second command grant is valid on its own: %v", err)
+	}
+	err := admittedAfterRouting(append(cmdGrants, twoGrant), append(cmds, two))
+	if err == nil {
+		t.Fatal("two command files bound to two libraries were admitted")
+	}
+	for _, want := range []string{newCmdDir + "/main.go", two.Path, "bind two library packages", "exactly one same-plan library package"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("the multi-edge refusal does not say %q: %v", want, err)
+		}
+	}
+
+	// Stale: grants recorded for an earlier plan do not survive a routing
+	// that derived nothing for this one.
+	e := &Engine{}
+	e.setProspectiveGrants("t", grants)
+	e.derivedCoverage(context.Background(), "t", nil, decl)
+	if err := e.reconcileProspectiveGrants("t", decl); err == nil {
+		t.Fatal("a stale grant from an earlier routing admitted the plan")
+	}
+}
+
+// W7: restoration and candidate inspection read the same declaration/grant
+// rule admission does: the same grant set fails all three with the same
+// canonical fault, and an intact one passes all three.
+func TestDF37W7RestorationUsesTheSameCanonicalMatcher(t *testing.T) {
+	decl := []ProspectiveSurface{gosumcheckDeclaration(), obj59Declaration()}
+	world := map[string]string{gosumcheckS: gosumcheckSrc, obj59Covering: "package workflow\n"}
+	grants := prospectiveFor(t, []string{gosumcheckS, gosumcheckF, obj59Covering, obj59Test}, decl, gosumcheckAnchors(), world)
+	canonical := matchGrantsToDeclarations(decl, grants)
+	if canonical == nil {
+		t.Fatal("premise: the canonical rule refuses the ungranted declaration")
+	}
+	raw, _ := json.Marshal(prospectiveRecord{World: prospectiveWorld, Grants: grants})
+	restore := (&Engine{}).restoreProspectiveGrants(session.Interrupted{TaskID: "t", ProspectiveRecord: raw}, decl, prospectiveWorld)
+	admit := admittedAfterRouting(grants, decl)
+	for name, err := range map[string]error{"restoration": restore, "admission": admit} {
+		if err == nil || !strings.HasSuffix(err.Error(), canonical.Error()) {
+			t.Errorf("%s does not refuse with the canonical fault %q: %v", name, canonical, err)
+		}
+	}
+
+	// A grant set whose content checks pass but whose record does not match
+	// the declarations is refuted at inspection by the same rule.
+	one := decl[:1]
+	extra := append([]prospectiveGrant{}, grants...)
+	other := grants[0]
+	other.Anchor.File = "gosumcheck/other_test.go"
+	extra = append(extra, other)
+	good := createdDiff(gosumcheckF, "package gosumcheck\n\nimport (\n\t\"strings\"\n\t\"testing\"\n)\n\nfunc TestX(t *testing.T) { _ = strings.ToUpper }\n")
+	want := matchGrantsToDeclarations(one, extra)
+	if want == nil {
+		t.Fatal("premise: an extra grant breaks the canonical rule")
+	}
+	if err := inspectProspectiveGrants(good, one, extra); err == nil || !strings.HasPrefix(err.Error(), "prospective surface refuted:") || !strings.HasSuffix(err.Error(), want.Error()) {
+		t.Fatalf("inspection did not refute with the canonical fault %q: %v", want, err)
+	}
+	// Intact: all three pass.
+	raw, _ = json.Marshal(prospectiveRecord{World: prospectiveWorld, Grants: grants})
+	if err := (&Engine{}).restoreProspectiveGrants(session.Interrupted{TaskID: "t", ProspectiveRecord: raw}, one, prospectiveWorld); err != nil {
+		t.Fatalf("restoration refused an intact grant: %v", err)
+	}
+	if err := admittedAfterRouting(grants, one); err != nil {
+		t.Fatalf("admission refused an intact grant: %v", err)
+	}
+	if err := inspectProspectiveGrants(good, one, grants); err != nil {
+		t.Fatalf("inspection refused an intact grant: %v", err)
+	}
+}
