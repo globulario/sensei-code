@@ -2657,6 +2657,12 @@ type architectureDecision struct {
 	// PremiseResolutions are the closure round's answers to the premise
 	// receipts it was asked about. See premise.go.
 	PremiseResolutions []PremiseResolution `json:"premise_resolutions,omitempty"`
+	// DeclaredEffects state, as typed relations, what particular occurrences
+	// of a consequence verb in Steps and Consequences operate on (DF-34). A
+	// claim like the statements it qualifies: a relation that is invalid,
+	// unmatched or contradicted declares nothing, and the occurrence it names
+	// is read exactly as it would be without it. See DeclaredEffect.
+	DeclaredEffects []DeclaredEffect `json:"declared_effects,omitempty"`
 }
 
 // reviewDecision is the reviewer's wire contract. It is deliberately separate
@@ -2878,6 +2884,8 @@ func strictProspectiveDeclaration(s ProspectiveSurface) error {
 // "plan", "steps", "consequences", "files", "mode", "related_invariants",
 // "prospective_surfaces" and "test_edits" are the proceed shape;
 // "human_question", "recommendation" and "options" only when escalating.
+// "declared_effects" is proceed-only too; strictDecisionOnlyFields reserves it
+// beside this table.
 // "claims" are the premises of a plan or of an escalation a closure round
 // reaches after verifying them, never of a conversational reply. A field
 // absent here -- decision, adjudication, proposed_recipe, premise_resolutions
@@ -2941,6 +2949,11 @@ func strictDecisionOnlyFields(d architectureDecision) error {
 		if !allowed {
 			return fmt.Errorf("%s carries %s, which the contract reserves for %s", d.Decision, f.field, strings.Join(f.decisions, " or "))
 		}
+	}
+	// declared_effects bind occurrences in a proceed plan's steps and
+	// consequences, so only a proceed decision has anything for them to name.
+	if len(d.DeclaredEffects) > 0 && d.Decision != "proceed" {
+		return fmt.Errorf("%s carries declared_effects, which the contract reserves for proceed", d.Decision)
 	}
 	return nil
 }
@@ -4619,6 +4632,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		Files:                d.Files,
 		DeclaredSteps:        d.Steps,
 		DeclaredConsequences: d.Consequences,
+		DeclaredEffects:      d.DeclaredEffects,
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
 	// EVERY DECLARATION IS AN ADMISSION OBLIGATION.
@@ -5611,6 +5625,7 @@ Return ONLY JSON in this exact shape:
   "related_invariants": ["existing Sensei invariant id this work is governed by"],
   "prospective_surfaces": [{"path":"pkg/x_test.go","package":"x","role":"go-regression-test","dependencies":["testing"]},{"path":"internal/n/n.go","package":"n","role":"go-library-package","covering":"internal/m/m.go","dependencies":["fmt"]}],
   "test_edits": [{"path":"pkg/y_test.go","operation":"edit","package":"y","build_constraints":[],"imports":["testing","strings"]}],
+  "declared_effects": [{"statement":"step","step":2,"operation":"publish","occurrence":1,"target":"what that occurrence acts on","scope":"in_process"}],
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
@@ -5665,6 +5680,20 @@ after the work is done: read the file's import block before you plan the witness
 An omitted field declares nothing and is checked only once the candidate exists. Nothing
 here grants anything: a declaration inside the pinned facts is admitted, and the
 candidate-time check still judges the file that is actually produced.
+When a step or the consequences use "publish" or "truncate" for an operation that is not
+outward, you may say so under "declared_effects"; without it such a word is read as an
+outward action the plan declares, and escalates. Each entry names ONE occurrence: "statement" is "step" (with
+its 1-based "step" number) or "consequences", "operation" is "publish" or "truncate", and
+"occurrence" counts that whole word within the statement, from 1. "target" names what it
+acts on. "scope" is exactly one of:
+  in_process      the target is inside the program being changed (an event on its own bus)
+  governed_local  the target is a local artifact the governed operation itself proves and bounds
+  outward         off the host, off the worktree, or shared
+  unknown         you cannot place it
+Only publish+in_process and truncate+governed_local stop that one occurrence escalating.
+An entry that is incomplete, names no such occurrence, or disagrees with another entry for
+the same occurrence declares nothing, and "npm publish" or "publish the release" escalate
+whatever an entry says.
 MODE IS REQUIRED WHENEVER YOU PROCEED.
   modify   - the plan edits this repository. A worker is expected to produce a diff.
   inspect  - the plan reads and reports and changes nothing: an audit, an

@@ -81,6 +81,12 @@ type Action struct {
 	// it will do. Claims: they may escalate an assessment, never clear one.
 	DeclaredSteps        []string
 	DeclaredConsequences string
+	// DeclaredEffects are the plan's typed account of what particular
+	// occurrences of a consequence verb in those statements operate on. See
+	// DeclaredEffect: a valid in-process or governed-local relation may keep
+	// the one occurrence it names from being read as an outward action, and
+	// nothing else.
+	DeclaredEffects []DeclaredEffect
 	// OperationalAuthority are planned files a bounded operational grant
 	// authorizes -- today, existing test files beside a covered subject
 	// (M2.2). They are subtracted from the ARCHITECTURAL coverage question
@@ -344,6 +350,10 @@ var outwardPhrases = []string{
 	"cut a release", "create a release", "tag a release", "ship a release",
 	"publish a release", "publish release", "publish the release", "release to ",
 	"push a release", "release v",
+	// Publishing a package or an artifact is outward in itself, so a typed
+	// relation calling that occurrence in-process contradicts it (DF-34).
+	"publish the package", "publish a package", "publish packages",
+	"publish the artifact", "publish an artifact", "publish artifacts",
 	"to production", "in production", "production deploy", "production environment",
 	"send a notification", "notify the team", "notify users", "notify customers",
 	"notify subscribers",
@@ -960,48 +970,237 @@ func clausesOf(text string) []string {
 	return strings.Split(text, "\x00")
 }
 
+// --- WHAT THE OPERATION ACTS ON, STATED AS A TYPE (DF-34) -------------------
+//
+// "publish" and "truncate" each name an outward or destructive operation and a
+// purely local one. Live, 2026-10-02: a plan bounded to five repository paths
+// said it would "publish completion" -- e.Bus.Publish, the engine's in-process
+// event bus -- and was routed to a person as "the plan declares an outward
+// action: publish". Objective 49 was escalated the same way for truncating a
+// session record to a proven all-NUL suffix, the governed local repair it was
+// commissioned to perform.
+//
+// The word cannot tell the two apart, and no reading of the prose around it
+// can do so honestly: every recognizer for "internal-sounding" objects is a
+// list of exempt nouns, and every unrecognised object it meets has to fall
+// somewhere. So the distinction is not inferred here at all. The plan STATES
+// it, as a closed typed relation bound to one exact occurrence, and the reader
+// only checks that the relation is complete, valid, unambiguous and matches.
+//
+// What a relation can do is narrow. It never clears an assessment -- the stage
+// boundary still carries that -- it only stops ONE occurrence of the plan's own
+// word from being read as a claim the plan never made. Everything else stays
+// exactly as asserted as before:
+//
+//   - no relation, or one naming any other occurrence      asserted
+//   - scope outward or unknown                              asserted
+//   - an operation or scope outside the closed vocabulary   asserted
+//   - a scope that is not THE bounded one for its operation asserted
+//   - two relations on one occurrence that disagree         asserted
+//   - an occurrence another outward entry also covers       asserted
+//     ("npm publish", "publish the release", "publish the package",
+//     "publish the artifact")
+//
+// and every other outward word in the same statement is read exactly as it was.
+
+// DeclaredEffect is the architect's typed statement of what one occurrence of
+// a consequence verb in its own plan operates on.
+type DeclaredEffect struct {
+	// Statement is EffectInStep or EffectInConsequences.
+	Statement string `json:"statement"`
+	// Step is the 1-based step the occurrence is in, when Statement is
+	// EffectInStep. It is zero for the consequences statement.
+	Step int `json:"step,omitempty"`
+	// Operation is the consequence verb, from the closed effectOperations.
+	Operation string `json:"operation"`
+	// Occurrence is the 1-based count of Operation's whole word in that
+	// statement: 2 names the second "publish" in it.
+	Occurrence int `json:"occurrence"`
+	// Target names what the operation acts on. It is explanation for the
+	// people reading the plan, and required so a relation is never anonymous;
+	// it is never read for its words, because that would be the open-ended
+	// noun recognizer this representation replaces.
+	Target string `json:"target"`
+	// Scope is where the target lives: one of the Effect* scopes below. Only
+	// the one effectOperations names for Operation is bounded.
+	Scope string `json:"scope"`
+}
+
+const (
+	EffectInStep         = "step"
+	EffectInConsequences = "consequences"
+
+	// EffectInProcess: the target is inside the program the plan changes -- an
+	// event on its own bus, a value on its own channel.
+	EffectInProcess = "in_process"
+	// EffectGovernedLocal: the target is a local artifact the governed
+	// operation itself proves and bounds, and nothing past it.
+	EffectGovernedLocal = "governed_local"
+	// EffectOutward: the target is off the host, off the worktree, or shared.
+	EffectOutward = "outward"
+	// EffectUnknown: the architect could not place the target.
+	EffectUnknown = "unknown"
+)
+
+// effectOperations maps each operation a relation may name to the ONE scope
+// under which its occurrence is not an outward action. The operation is also
+// the outwardVerbs entry whose occurrence the relation names. Anything absent
+// here has no bounded reading at all.
+var effectOperations = map[string]string{
+	"publish":  EffectInProcess,
+	"truncate": EffectGovernedLocal,
+}
+
+// effectSite is one occurrence a relation can name.
+type effectSite struct {
+	statement string
+	step      int
+	operation string
+	n         int
+}
+
+// boundedSites returns the occurrences the plan's valid, uncontradicted
+// relations place inside the program or the governed local operation.
+//
+// Validity is per relation and conflict is per site: one malformed relation
+// suppresses nothing, and two relations that disagree about the same site
+// suppress that site for neither. A relation naming a statement, step or
+// occurrence the plan does not have is unmatched: its site is never one the
+// reader asks about, so it suppresses nothing either.
+func boundedSites(effects []DeclaredEffect) map[effectSite]bool {
+	said := map[effectSite]DeclaredEffect{}
+	conflicted := map[effectSite]bool{}
+	for _, e := range effects {
+		site := effectSite{statement: e.Statement, step: e.Step, operation: e.Operation, n: e.Occurrence}
+		if prior, seen := said[site]; seen && prior != e {
+			conflicted[site] = true
+		}
+		said[site] = e
+	}
+	bounded := map[effectSite]bool{}
+	for site, e := range said {
+		if conflicted[site] || strings.TrimSpace(e.Target) == "" {
+			continue
+		}
+		// Exact membership of the operation, and exactly ITS bounded scope.
+		// An unknown operation has no bounded scope, so it never matches.
+		if scope, known := effectOperations[e.Operation]; known && e.Scope == scope {
+			bounded[site] = true
+		}
+	}
+	return bounded
+}
+
 // declaredOutwardActions reads a plan's own steps and consequences for an
-// outward action it ASSERTS.
+// outward action it ASSERTS, with no typed effect relations.
+func declaredOutwardActions(steps []string, consequences string) []string {
+	return declaredOutwardActionsWithEffects(steps, consequences, nil)
+}
+
+// declaredOutwardActionsWithEffects reads a plan's own steps and consequences
+// for an outward action it ASSERTS.
 //
 // Word-anchored for the bare tokens, so "deploy" does not fire inside
 // "deployment.go" or "redeployable"; phrase-anchored for the ambiguous ones.
 // Each occurrence is then read in its own clause, and it is a declaration
-// unless a negation can be shown to govern it.
-func declaredOutwardActions(steps []string, consequences string) []string {
+// unless a negation can be shown to govern it, or a typed relation in effects
+// places exactly that occurrence inside the program or the governed local
+// operation (boundedSites).
+func declaredOutwardActionsWithEffects(steps []string, consequences string, effects []DeclaredEffect) []string {
 	// Read PER STATEMENT, and never joined. A construction in one step has no
 	// way to reach an operation in another.
-	var clauses []clause
-	for _, s := range append(append([]string{}, steps...), consequences) {
+	type statement struct {
+		site    effectSite
+		clauses []clause
+	}
+	var statements []statement
+	for i, s := range append(append([]string{}, steps...), consequences) {
+		site := effectSite{statement: EffectInStep, step: i + 1}
+		if i == len(steps) {
+			site = effectSite{statement: EffectInConsequences}
+		}
 		s = strings.ToLower(s)
 		// Contractions carry their negator in a form no word split recovers.
 		s = strings.ReplaceAll(s, "n't", " not ")
+		var clauses []clause
 		for _, part := range clausesOf(s) {
 			clauses = append(clauses, readClause(part))
 		}
+		statements = append(statements, statement{site: site, clauses: clauses})
 	}
+	bounded := boundedSites(effects)
 
 	var found []string
 	for _, verb := range outwardVerbs {
-		if assertedIn(clauses, verb, true) {
-			found = append(found, verb)
+		for _, s := range statements {
+			if assertedIn(s.clauses, verb, true, s.site, bounded) {
+				found = append(found, verb)
+				break
+			}
 		}
 	}
 	for _, phrase := range outwardPhrases {
-		if assertedIn(clauses, phrase, false) {
-			found = append(found, strings.TrimSpace(phrase))
+		for _, s := range statements {
+			if assertedIn(s.clauses, phrase, false, s.site, nil) {
+				found = append(found, strings.TrimSpace(phrase))
+				break
+			}
 		}
 	}
 	return found
 }
 
-// assertedIn reports whether the token appears anywhere as an action the plan
-// asserts, rather than one it denies.
-func assertedIn(clauses []clause, token string, atWordBoundary bool) bool {
+// assertedIn reports whether the token appears anywhere in one statement as an
+// action the plan asserts, rather than one it denies or one a typed relation
+// in bounded places inside the program.
+//
+// Occurrences are counted per statement, across its clauses, in order -- the
+// count a DeclaredEffect's Occurrence names. A clause break never splits a
+// word, so this is the count of the token's whole words in the statement.
+func assertedIn(clauses []clause, token string, atWordBoundary bool, in effectSite, bounded map[effectSite]bool) bool {
+	n := 0
 	for _, c := range clauses {
 		for _, at := range occurrencesOf(c.text, token, atWordBoundary) {
-			if c.asserted(at, at+len(token)) {
+			n++
+			if !c.asserted(at, at+len(token)) {
+				continue
+			}
+			site := effectSite{statement: in.statement, step: in.step, operation: token, n: n}
+			if bounded[site] && !c.coveredByAnotherOutwardEntry(token, at) {
+				continue
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// coveredByAnotherOutwardEntry reports whether the occurrence of token at `at`
+// lies inside an occurrence of a DIFFERENT outward entry: "npm publish",
+// "publish the release", "publish the package". Such an entry is outward on its own terms, and a
+// relation calling its word in-process contradicts it, so the word stays
+// asserted.
+func (c clause) coveredByAnotherOutwardEntry(token string, at int) bool {
+	end := at + len(token)
+	covers := func(entry string, atWordBoundary bool) bool {
+		if entry == token {
+			return false
+		}
+		for _, o := range occurrencesOf(c.text, entry, atWordBoundary) {
+			if o < end && o+len(entry) > at {
 				return true
 			}
+		}
+		return false
+	}
+	for _, v := range outwardVerbs {
+		if covers(v, true) {
+			return true
+		}
+	}
+	for _, p := range outwardPhrases {
+		if covers(p, false) {
+			return true
 		}
 	}
 	return false
@@ -1073,7 +1272,7 @@ func AssessConsequences(a Action) ConsequenceAssessment {
 
 	// A declared outward action escalates whatever the stage is. This is the
 	// direction a claim is allowed to move an assessment.
-	declaredOutward := declaredOutwardActions(a.DeclaredSteps, a.DeclaredConsequences)
+	declaredOutward := declaredOutwardActionsWithEffects(a.DeclaredSteps, a.DeclaredConsequences, a.DeclaredEffects)
 	if len(declaredOutward) != 0 {
 		assessment.Result = ConsequenceUnacceptable
 		assessment.Effects = append(assessment.Effects, "the plan declares an outward action: "+strings.Join(declaredOutward, ", "))
