@@ -6372,15 +6372,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/session/store.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/control/server.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6442,11 +6442,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6474,11 +6474,11 @@ code_references:
     to_name: Server.ListenRelay
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Serve
+    to_id: internal/ghwebhook/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Serve
+    to_id: internal/control/server.go:Server.Serve
     to_name: Server.Serve
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7230,11 +7230,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7765,15 +7765,15 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/session/store.go:New
-    to_name: New
-    file: cmd/sensei-code/control_test.go
-  - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
     to_id: internal/control/server.go:New
+    to_name: New
+    file: cmd/sensei-code/control_test.go
+  - from: cmd/sensei-code/control_test.go:newControlServer
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -11270,11 +11270,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -35719,15 +35719,15 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
+    to_id: internal/workflow/engine.go:New
+    to_name: New
+    file: internal/control/control_test.go
+  - from: internal/control/control_test.go:newHarness
     to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
     to_id: internal/session/store.go:New
-    to_name: New
-    file: internal/control/control_test.go
-  - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -41824,10 +41824,10 @@ code_references:
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -48278,11 +48278,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -53617,10 +53617,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
@@ -92737,10 +92737,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -150853,10 +150853,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -163879,11 +163879,11 @@ code_references:
     to_name: Engine.applyAnsweredCondition
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
@@ -175171,11 +175171,11 @@ code_references:
     to_name: Engine.emit
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
@@ -176344,10 +176344,10 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
@@ -182108,11 +182108,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -184799,6 +184799,10 @@ code_references:
     to_name: Engine.openReview
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:Engine.operativePlanAttempt
+    to_name: Engine.operativePlanAttempt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:Engine.policyFor
     to_name: Engine.policyFor
     file: internal/workflow/engine.go
@@ -184817,6 +184821,10 @@ code_references:
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/adversarial.go:Engine.recordReconciliation
     to_name: Engine.recordReconciliation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:Engine.recordedGrants
+    to_name: Engine.recordedGrants
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:Engine.reinstateOperativePlanAttempt
@@ -184976,9 +184984,6 @@ code_references:
     to_name: Join
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_name: Join
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:ModeInspect
     to_name: ModeInspect
     file: internal/workflow/engine.go
@@ -185004,9 +185009,6 @@ code_references:
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/roles/provenance.go:Provenance.Provider
     to_name: Provenance.Provider
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
-    to_name: ReadFile
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/roles/reconcile.go:Reconciliation~type
@@ -185274,6 +185276,10 @@ code_references:
     to_name: candidateRevision
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: candidateTestStateAt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:certifiedAgainstCapture
     to_name: certifiedAgainstCapture
     file: internal/workflow/engine.go
@@ -185458,9 +185464,6 @@ code_references:
     to_name: openReviewFrom
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_name: os
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:outstandingFindings
     to_name: outstandingFindings
     file: internal/workflow/engine.go
@@ -185469,7 +185472,8 @@ code_references:
     to_name: parseFindingResponses
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_name: path/filepath
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/adversarial.go:reconciliationEvidence
@@ -188756,11 +188760,11 @@ code_references:
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -195046,10 +195050,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -195928,15 +195932,15 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
+    to_id: internal/workflow/engine.go:New
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/session/store.go:New
-    to_name: New
-    file: internal/workflow/external_block_test.go
-  - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -232197,6 +232201,42 @@ code_references:
   - from: internal/workflow/testedit.go:Engine.coverageWorld
     to_name: Mutex.Unlock
     file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_id: internal/workflow/engine.go:Engine.mu
+    to_name: Engine.mu
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_id: internal/workflow/engine.go:Engine.planAttemptsOf
+    to_name: Engine.planAttemptsOf
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_name: Mutex.Lock
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_name: Mutex.Unlock
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_name: TrimSpace
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_name: strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_id: internal/workflow/engine.go:taskPlanAttempts.recordedEdits
+    to_name: taskPlanAttempts.recordedEdits
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:Engine.planAttemptGrantRefusal
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
@@ -232250,6 +232290,10 @@ code_references:
   - from: internal/workflow/testedit.go:Engine.restoreTestEditGrants
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:Engine.restoreTestEditGrants
+    to_id: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    to_name: Engine.noteRestoredTestEditRecord
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:Engine.restoreTestEditGrants
     to_id: internal/workflow/testedit.go:Engine.planAttemptGrantRefusal
@@ -232675,6 +232719,52 @@ code_references:
   - from: internal/workflow/testedit.go:buildConstraints
     to_name: strings
     file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: Context
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: New
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: TrimSpace
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/testedit.go:candidateTestState.AtWorld
+    to_name: candidateTestState.AtWorld
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/testedit.go:candidateTestState.Diff
+    to_name: candidateTestState.Diff
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/testedit.go:candidateTestState.InCandidate
+    to_name: candidateTestState.InCandidate
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/testedit.go:candidateTestState.Paths
+    to_name: candidateTestState.Paths
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/testedit.go:candidateTestState.World
+    to_name: candidateTestState.World
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: context
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: errors
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_id: internal/workflow/prospective.go:gitShowAt
+    to_name: gitShowAt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: strings
+    file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:canonicalIdentity
     to_name: Strings
     file: internal/workflow/testedit.go
@@ -232906,6 +232996,60 @@ code_references:
   - from: internal/workflow/testedit.go:diffFileStates
     to_name: github.com/globulario/sensei-code/internal/report
     file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: Base
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: Errorf
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: HasSuffix
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: Strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.AtWorld
+    to_name: candidateTestState.AtWorld
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.InCandidate
+    to_name: candidateTestState.InCandidate
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.Paths
+    to_name: candidateTestState.Paths
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_id: internal/workflow/testedit.go:existsIn
+    to_name: existsIn
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: fmt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: path
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: sort
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existingTestMutations
+    to_name: strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existsIn
+    to_name: New
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existsIn
+    to_id: internal/workflow/prospective.go:confirmedMissing
+    to_name: confirmedMissing
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:existsIn
+    to_name: errors
+    file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:grantPaths
     to_name: Join
     file: internal/workflow/testedit.go
@@ -232953,11 +233097,39 @@ code_references:
     to_name: Strings
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
-    to_id: internal/workflow/testedit.go:diffFileStates
-    to_name: diffFileStates
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:candidateTestState.Diff
+    to_name: candidateTestState.Diff
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:candidateTestState.InCandidate
+    to_name: candidateTestState.InCandidate
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:candidateTestState.World
+    to_name: candidateTestState.World
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:existingTestMutations
+    to_name: existingTestMutations
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
     to_name: fmt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:mutationVerb
+    to_name: mutationVerb
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:recordBinds
+    to_name: recordBinds
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
     to_id: internal/workflow/testedit.go:refuteTestEditConstraints
@@ -232984,10 +233156,18 @@ code_references:
     to_name: refuteTestEditRenamed
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:renamePairs
+    to_name: renamePairs
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
     to_name: sort
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
     to_name: strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditAuthority
+    to_name: testEditAuthority
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
     to_id: internal/workflow/testedit.go:testEditFacts.Constraints
@@ -233012,6 +233192,14 @@ code_references:
   - from: internal/workflow/testedit.go:inspectTestEdits
     to_id: internal/workflow/testedit.go:testEditGrant.Path
     to_name: testEditGrant.Path
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:inspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:inspectTestEdits
     to_id: internal/workflow/testedit.go:testFacts
@@ -233259,6 +233447,36 @@ code_references:
     to_id: internal/workflow/testedit.go:testEditOperationRename
     to_name: testEditOperationRename
     file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_name: TrimSpace
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_name: strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:recordBinds
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:refuteTestEditConstraints
     to_name: Errorf
     file: internal/workflow/testedit.go
@@ -233304,6 +233522,33 @@ code_references:
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:refuteTestEditRenamed
     to_name: fmt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_id: internal/report/report.go:Change.Files
+    to_name: Change.Files
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_id: internal/report/report.go:FileChange.OldPath
+    to_name: FileChange.OldPath
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_id: internal/report/report.go:FileChange.Path
+    to_name: FileChange.Path
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_id: internal/report/report.go:FileChange.Status
+    to_name: FileChange.Status
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_id: internal/report/report.go:FromDiff
+    to_name: FromDiff
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_id: internal/report/report.go:Renamed
+    to_name: Renamed
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:renamePairs
+    to_name: github.com/globulario/sensei-code/internal/report
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:renderIdentity
     to_name: Join
@@ -233529,6 +233774,70 @@ code_references:
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:staleAuthoredNote
     to_name: strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_name: Errorf
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_name: TrimSpace
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_name: fmt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/engine.go:orNone
+    to_name: orNone
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/engine.go:short12
+    to_name: short12
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/prospective.go:shortWorldID
+    to_name: shortWorldID
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_name: strings
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditGrant.Path
+    to_name: testEditGrant.Path
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditGrant.World
+    to_name: testEditGrant.World
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit.go
+  - from: internal/workflow/testedit.go:testEditAuthority
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
     file: internal/workflow/testedit.go
   - from: internal/workflow/testedit.go:testEditGrants
     to_name: Clean
@@ -233796,10 +234105,6 @@ code_references:
     to_name: errors
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAGrantedTestEditIsInspectedAgainstItsExactGrant
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestAGrantedTestEditIsInspectedAgainstItsExactGrant
     to_id: internal/workflow/engine.go:isProspectiveSurfaceRefutation
     to_name: isProspectiveSurfaceRefutation
     file: internal/workflow/testedit_test.go
@@ -233817,6 +234122,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestAGrantedTestEditIsInspectedAgainstItsExactGrant
     to_id: internal/workflow/testedit_test.go:teFSrc
     to_name: teFSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestAGrantedTestEditIsInspectedAgainstItsExactGrant
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAGrantedTestEditIsInspectedAgainstItsExactGrant
     to_id: internal/workflow/testedit_test.go:teRead
@@ -233868,10 +234177,6 @@ code_references:
     to_name: diffFileStates
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAGrantedTestPathWithWhitespaceIsStillInspected
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestAGrantedTestPathWithWhitespaceIsStillInspected
     to_name: strings
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAGrantedTestPathWithWhitespaceIsStillInspected
@@ -233881,6 +234186,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestAGrantedTestPathWithWhitespaceIsStillInspected
     to_id: internal/workflow/testedit_test.go:teFSrc
     to_name: teFSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestAGrantedTestPathWithWhitespaceIsStillInspected
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAGrantedTestPathWithWhitespaceIsStillInspected
     to_id: internal/workflow/testedit_test.go:teRead
@@ -234395,10 +234704,6 @@ code_references:
     to_name: common.Fatalf
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -234413,6 +234718,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission
     to_id: internal/workflow/testedit_test.go:teInsideTheGrant
     to_name: teInsideTheGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnAdmissibleDeclarationIsNotRefusedAtPlanAdmission
     to_id: internal/workflow/testedit_test.go:teSourceFor
@@ -234621,10 +234930,6 @@ code_references:
     to_name: decodeModelJSON
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -234646,6 +234951,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot
     to_id: internal/workflow/testedit_test.go:teFSrc
     to_name: teFSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnExplicitlyEmptyBuildConstraintListIsADeclarationAndAnOmittedOneIsNot
     to_id: internal/workflow/testedit_test.go:teSourceFor
@@ -234685,10 +234994,6 @@ code_references:
     to_name: common.Fatalf
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -234714,6 +235019,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt
     to_id: internal/workflow/testedit_test.go:teInsideTheGrant
     to_name: teInsideTheGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnOperationOutsideTheClosedVocabularyIsNotReadAsAMemberOfIt
     to_id: internal/workflow/testedit_test.go:teSourceFor
@@ -234769,10 +235078,6 @@ code_references:
     to_name: common.Fatalf
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -234808,6 +235113,10 @@ code_references:
     to_name: teInsideTheGrant
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate
     to_id: internal/workflow/testedit_test.go:teSourceFor
     to_name: teSourceFor
     file: internal/workflow/testedit_test.go
@@ -234820,6 +235129,990 @@ code_references:
     to_name: testEditOperationEdit
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: Background
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/capture.go:Capture.Diff
+    to_name: Capture.Diff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/capture.go:Capture.Paths
+    to_name: Capture.Paths
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/capture.go:Capture.Tree
+    to_name: Capture.Tree
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: Replace
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/capture.go:Repo.CandidateCapture
+    to_name: Repo.CandidateCapture
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/git.go:Repo.CreateWorktreeAt
+    to_name: Repo.CreateWorktreeAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/git.go:Repo.RemoveWorktree
+    to_name: Repo.RemoveWorktree
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:candidateTestStateAt
+    to_name: candidateTestStateAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/prospective_test.go:commitFixtureFile
+    to_name: commitFixtureFile
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: common.Cleanup
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: context
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:inspectTestEdits
+    to_name: inspectTestEdits
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/mint_test.go:mintRepo
+    to_name: mintRepo
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: teAttemptAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit_test.go:teFSrc
+    to_name: teFSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit_test.go:teS
+    to_name: teS
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit_test.go:teSSrc
+    to_name: teSSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditGrant.Path
+    to_name: testEditGrant.Path
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditGrant.World
+    to_name: testEditGrant.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: teAttemptAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit.go:testEditGrant.World
+    to_name: testEditGrant.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/roles/verdict.go:Accept
+    to_name: Accept
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: Background
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/event/event.go:CandidateAudited
+    to_name: CandidateAudited
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/event/event.go:CandidateChanged
+    to_name: CandidateChanged
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.adoptPlanAttempt
+    to_name: Engine.adoptPlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.beginPlanAttempt
+    to_name: Engine.beginPlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.recordProspectiveGrants
+    to_name: Engine.recordProspectiveGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.recordTestEditGrants
+    to_name: Engine.recordTestEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.runCandidate
+    to_name: Engine.runCandidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:Engine.setProspectiveGrants
+    to_name: Engine.setProspectiveGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:Engine.setTestEditGrants
+    to_name: Engine.setTestEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/event/event.go:Event.Kind
+    to_name: Event.Kind
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/roles/roles.go:Fresh
+    to_name: Fresh
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/roles/assign.go:Policy~type
+    to_name: Policy
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: Replace
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/event/event.go:ReviewCompleted
+    to_name: ReviewCompleted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/event/event.go:ReviewStarted
+    to_name: ReviewStarted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/planattempt_test.go:attemptPlan
+    to_name: attemptPlan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/mint_test.go:candidateIdentityWithBase
+    to_name: candidateIdentityWithBase
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/prospective_test.go:commitFixtureFile
+    to_name: commitFixtureFile
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: context
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:df23Bus
+    to_name: df23Bus
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:df23Pin
+    to_name: df23Pin
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:df23Receipt
+    to_name: df23Receipt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/awaitingreview_test.go:drainEvents
+    to_name: drainEvents
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.events
+    to_name: gateHarness.events
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.sc
+    to_name: gateHarness.sc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.work
+    to_name: gateHarness.work
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
+    to_name: gateHarness.worker
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/reviewgate_test.go:newGateHarness
+    to_name: newGateHarness
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/prospective.go:prospectiveRecord~type
+    to_name: prospectiveRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/prospective.go:prospectiveRecord.PlanAttemptID
+    to_name: prospectiveRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/prospective.go:prospectiveRecord.World
+    to_name: prospectiveRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/authority_resume_identity_test.go:sessionStore
+    to_name: sessionStore
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:taskContext.Files
+    to_name: taskContext.Files
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/engine.go:taskContext.Identity
+    to_name: taskContext.Identity
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditGrant.Facts
+    to_name: testEditGrant.Facts
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditGrant.Path
+    to_name: testEditGrant.Path
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditGrant.World
+    to_name: testEditGrant.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_id: internal/workflow/testedit.go:testFacts
+    to_name: testFacts
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Bus
+    to_name: df23Bus
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Receipt
+    to_name: df23Receipt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Record
+    to_name: df23Record
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/engine.go:isProspectiveSurfaceRefutation
+    to_name: isProspectiveSurfaceRefutation
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit.go:testEditGrant.World
+    to_name: testEditGrant.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:df23Record
+    to_name: df23Record
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:teS
+    to_name: teS
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/engine.go:Engine.operativePlanAttempt
+    to_name: Engine.operativePlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/engine.go:Engine.recordedGrants
+    to_name: Engine.recordedGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/planattempt_test.go:attemptPlan
+    to_name: attemptPlan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:df23Engine
+    to_name: df23Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:df23Inspect
+    to_name: df23Inspect
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:df23Route
+    to_name: df23Route
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/engine.go:short12
+    to_name: short12
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:teS
+    to_name: teS
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/engine.go:Engine.Store
+    to_name: Engine.Store
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/engine.go:Engine.restorePlanAttempt
+    to_name: Engine.restorePlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit.go:Engine.restoreTestEditGrants
+    to_name: Engine.restoreTestEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/planattempt_test.go:attemptPlan
+    to_name: attemptPlan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:df23Bus
+    to_name: df23Bus
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:df23Engine
+    to_name: df23Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:df23Inspect
+    to_name: df23Inspect
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:df23Route
+    to_name: df23Route
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/planattempt_test.go:interruptedFrom
+    to_name: interruptedFrom
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:teS
+    to_name: teS
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:df23Record
+    to_name: df23Record
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Receipt
+    to_name: df23Receipt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Record
+    to_name: df23Record
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:teDiffDeleted
+    to_name: teDiffDeleted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:teDiffRenamed
+    to_name: teDiffRenamed
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: Background
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: Replace
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit.go:authoredEvidence~type
+    to_name: authoredEvidence
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: context
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:df23Receipt
+    to_name: df23Receipt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_name: preDF23InspectTestEdits
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: teAttemptAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teCovered
+    to_name: teCovered
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teDiffDeleted
+    to_name: teDiffDeleted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teFSrc
+    to_name: teFSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teRead
+    to_name: teRead
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teS
+    to_name: teS
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teSSrc
+    to_name: teSSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit.go:testEditGrants
+    to_name: testEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:df23Bus
+    to_name: df23Bus
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:df23Record
+    to_name: df23Record
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:teEditGrants
+    to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
     to_name: testing
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
@@ -234851,10 +236144,6 @@ code_references:
     to_name: common.Fatalf
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -234884,6 +236173,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     to_id: internal/workflow/testedit_test.go:teInsideTheGrant
     to_name: teInsideTheGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     to_id: internal/workflow/testedit_test.go:teSourceFor
@@ -234934,10 +236227,6 @@ code_references:
     to_name: common.Errorf
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestEveryProjectedRefusalIsAlsoALateRefusal
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestEveryProjectedRefusalIsAlsoALateRefusal
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -234971,6 +236260,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestEveryProjectedRefusalIsAlsoALateRefusal
     to_id: internal/workflow/testedit_test.go:teInsideTheGrant
     to_name: teInsideTheGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestEveryProjectedRefusalIsAlsoALateRefusal
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestEveryProjectedRefusalIsAlsoALateRefusal
     to_id: internal/workflow/testedit_test.go:teSourceFor
@@ -235145,10 +236438,6 @@ code_references:
     to_name: funcBody
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -235166,6 +236455,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection
     to_id: internal/workflow/testedit_test.go:teEditGrants
     to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestTheCandidateTimeCheckStillRefusesWithoutAnyProjection
     to_name: testing
@@ -235272,10 +236565,6 @@ code_references:
     to_name: common.Fatalf
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced
-    to_id: internal/workflow/testedit.go:inspectTestEdits
-    to_name: inspectTestEdits
-    file: internal/workflow/testedit_test.go
-  - from: internal/workflow/testedit_test.go:TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced
     to_id: internal/workflow/testedit.go:projectTestEditRefusals
     to_name: projectTestEditRefusals
     file: internal/workflow/testedit_test.go
@@ -235286,6 +236575,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced
     to_id: internal/workflow/testedit_test.go:teEditGrants
     to_name: teEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced
+    to_id: internal/workflow/testedit_test.go:teInspect
+    to_name: teInspect
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestTheProjectedRefusalIsTheSentenceTheLateCheckWouldHaveProduced
     to_id: internal/workflow/testedit_test.go:teSourceFor
@@ -236331,6 +237624,338 @@ code_references:
   - from: internal/workflow/testedit_test.go:derivedGrant
     to_name: testing
     file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Candidate
+    to_name: Replace
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Candidate
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Candidate
+    to_id: internal/workflow/testedit_test.go:teF
+    to_name: teF
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Candidate
+    to_id: internal/workflow/testedit_test.go:teFSrc
+    to_name: teFSrc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_id: internal/workflow/planattempt_test.go:attemptEngine
+    to_name: attemptEngine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_id: internal/workflow/testedit_test.go:df23Pin
+    to_name: df23Pin
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Engine
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Inspect
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Inspect
+    to_id: internal/workflow/engine.go:Engine.operativePlanAttempt
+    to_name: Engine.operativePlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Inspect
+    to_id: internal/workflow/engine.go:Engine.recordedGrants
+    to_name: Engine.recordedGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Inspect
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Inspect
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Inspect
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_id: internal/candidate/identity.go:Identity.Save
+    to_name: Identity.Save
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_id: internal/candidate/identity.go:Identity.TaskID
+    to_name: Identity.TaskID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_id: internal/workflow/mint_test.go:candidateIdentityWithBase
+    to_name: candidateIdentityWithBase
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Pin
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: teAttemptAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Record
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:Engine.adoptPlanAttempt
+    to_name: Engine.adoptPlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:Engine.beginPlanAttempt
+    to_name: Engine.beginPlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:Engine.recordProspectiveGrants
+    to_name: Engine.recordProspectiveGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:Engine.recordTestEditGrants
+    to_name: Engine.recordTestEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:Engine.setProspectiveGrants
+    to_name: Engine.setProspectiveGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/testedit.go:Engine.setTestEditGrants
+    to_name: Engine.setTestEditGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:architectureDecision~type
+    to_name: architectureDecision
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/planattempt_test.go:attemptObjective
+    to_name: attemptObjective
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/prospective.go:prospectiveRecord~type
+    to_name: prospectiveRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/prospective.go:prospectiveRecord.PlanAttemptID
+    to_name: prospectiveRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/prospective.go:prospectiveRecord.World
+    to_name: prospectiveRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df23Route
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:inspectDiff
+    to_id: internal/workflow/testedit.go:inspectTestEdits
+    to_name: inspectTestEdits
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:inspectDiff
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:inspectDiff
+    to_id: internal/workflow/testedit_test.go:teDiffState
+    to_name: teDiffState
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:inspectDiff
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_name: Join
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_name: New
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:diffFileStates
+    to_name: diffFileStates
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_name: errors
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:refuteTestEditConstraints
+    to_name: refuteTestEditConstraints
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:refuteTestEditCreated
+    to_name: refuteTestEditCreated
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:refuteTestEditDeleted
+    to_name: refuteTestEditDeleted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:refuteTestEditNovelImport
+    to_name: refuteTestEditNovelImport
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:refuteTestEditPackage
+    to_name: refuteTestEditPackage
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:refuteTestEditRenamed
+    to_name: refuteTestEditRenamed
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditFacts.Constraints
+    to_name: testEditFacts.Constraints
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditFacts.Imports
+    to_name: testEditFacts.Imports
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditFacts.Package
+    to_name: testEditFacts.Package
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditGrant.Facts
+    to_name: testEditGrant.Facts
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testEditGrant.Path
+    to_name: testEditGrant.Path
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    to_id: internal/workflow/testedit.go:testFacts
+    to_name: testFacts
+    file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:refusalOf
     to_id: internal/workflow/testedit.go:RestorationRefusal~type
     to_name: RestorationRefusal
@@ -236522,6 +238147,66 @@ code_references:
   - from: internal/workflow/testedit_test.go:rrRecord
     to_name: testing
     file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/suppliedplan.go:PlanByArchitect
+    to_name: PlanByArchitect
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:architectureDecision~type
+    to_name: architectureDecision
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:architectureDecision.Decision
+    to_name: architectureDecision.Decision
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:architectureDecision.Plan
+    to_name: architectureDecision.Plan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/planattempt_test.go:attemptObjective
+    to_name: attemptObjective
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttempt.Plan
+    to_name: planAttempt.Plan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttempt.PlanSource
+    to_name: planAttempt.PlanSource
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttempt.TaskID
+    to_name: planAttempt.TaskID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_id: internal/workflow/engine.go:planAttemptID
+    to_name: planAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: testing
+    file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:teCandidateWithNovelImport
     to_name: Replace
     file: internal/workflow/testedit_test.go
@@ -236555,6 +238240,50 @@ code_references:
   - from: internal/workflow/testedit_test.go:teCovered
     to_id: internal/workflow/testedit_test.go:teS
     to_name: teS
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_name: Cut
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_name: Split
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit.go:candidateTestState.AtWorld
+    to_name: candidateTestState.AtWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit.go:candidateTestState.Diff
+    to_name: candidateTestState.Diff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit.go:candidateTestState.InCandidate
+    to_name: candidateTestState.InCandidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit.go:candidateTestState.Paths
+    to_name: candidateTestState.Paths
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit.go:candidateTestState.World
+    to_name: candidateTestState.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit_test.go:teReader
+    to_name: teReader
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teDiffState
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:teEditGrants
     to_name: Background
@@ -236650,6 +238379,55 @@ code_references:
     to_id: internal/workflow/testedit.go:testEditOperationEdit
     to_name: testEditOperationEdit
     file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit_test.go:teAttemptAt
+    to_name: teAttemptAt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit.go:testEditGrant~type
+    to_name: testEditGrant
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit.go:testEditRecord.Grants
+    to_name: testEditRecord.Grants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teInspect
+    to_name: testing
+    file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:teRead
     to_name: Context
     file: internal/workflow/testedit_test.go
@@ -236673,6 +238451,10 @@ code_references:
   - from: internal/workflow/testedit_test.go:teRead
     to_id: internal/workflow/prospective.go:worldReader~type
     to_name: worldReader
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:teReader
+    to_id: internal/workflow/prospective.go:errNotAtWorld
+    to_name: errNotAtWorld
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:teSourceFor
     to_name: Builder
