@@ -210,6 +210,14 @@
         "."
       ],
       "why": "Value.State is the knownness of a run-receipt fact (measured, unknown, malformed). The pinned source constructs it only through the package's own constructors (MeasuredValue, UnknownValue, MalformedValue), which pair the state with its source or detail; a Value whose State is set by another package could claim a measurement without its provenance. Asked across the whole repository, because a forged knownness would appear wherever a caller writes a Value literal."
+    },
+    {
+      "kind": "package_import_confined_to",
+      "dir": "internal/runreceipt/legacy",
+      "search_paths": [
+        "."
+      ],
+      "why": "internal/runreceipt/legacy reconstructs run receipts from historical event streams after the fact. The governed program emits its own receipts and must not route through that reconstruction, so the package's architectural boundary is that no production source outside it imports it. Asked across the whole repository, because a production import of the package would appear wherever one is added."
     }
   ]
 }
