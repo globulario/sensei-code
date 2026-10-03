@@ -62,7 +62,10 @@ type receiptFacts struct {
 	notConverged runreceipt.Value
 	// restorationRefusal is the authority instrument whose binding a resume
 	// could not read or verify.
-	restorationRefusal                    runreceipt.Value
+	restorationRefusal runreceipt.Value
+	// planAdmissionRefusal is the exact canonical plan-admission refusal an
+	// invocation parked on, copied from its refusal record.
+	planAdmissionRefusal                  runreceipt.PlanAdmissionRefusal
 	formatterMutation                     runreceipt.Value
 	provider, executable, verdict, digest runreceipt.Value
 	serving                               runreceipt.Value
@@ -119,6 +122,10 @@ func freshFacts() *receiptFacts {
 		// A run that never resumed anything refused no restoration, and says
 		// so rather than carrying a blank.
 		restorationRefusal: notYet("the run refused no restoration"),
+		// Stated, like every other fact: a run that parked on no refusal says
+		// so rather than carrying a blank.
+		planAdmissionRefusal: runreceipt.PlanAdmissionRefusal{State: runreceipt.Unknown,
+			Detail: "not measured: the run parked on no plan-admission refusal"},
 		// Stated, not defaulted: a candidate that never reached validation has
 		// an UNKNOWN formatter fact, and UNKNOWN is a value rather than a gap.
 		formatterMutation: runreceipt.MeasuredValue(string(runreceipt.FormatterUnsaid),
@@ -347,6 +354,7 @@ func (e *Engine) emitReceipt(taskID string, terminal event.Kind, outcome runrece
 		ExternalBlock:             facts.externalBlock,
 		NotConverged:              facts.notConverged,
 		RestorationRefusal:        facts.restorationRefusal,
+		PlanAdmissionRefusal:      &facts.planAdmissionRefusal,
 		FormatterMutationState:    facts.formatterMutation,
 		CandidateCommitDiffDigest: facts.candRendering,
 		CandidateDigestRelation:   facts.digestRelation,
@@ -670,6 +678,29 @@ func (e *Engine) noteRestorationRefusal(taskID string, r RestorationRefusal) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
 		f.restorationRefusal = runreceipt.MeasuredValue(r.Describe(),
 			"the authority instrument whose binding this resume could not read or verify")
+		if f.candidateState == runreceipt.CandidatePresent {
+			f.candidateState = runreceipt.CandidateUnattempted
+		}
+	})
+}
+
+// notePlanAdmissionRefused records the exact canonical refusal an invocation
+// parked on, copied losslessly from its refusal record, so the receipt emitted
+// before the terminal event names it by itself. A candidate holding work at
+// this point was never minted and will not be in this invocation: it is
+// UNATTEMPTED, for the reason noteRestorationRefusal gives.
+func (e *Engine) notePlanAdmissionRefused(taskID string, r planAttemptRefusal) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
+		f.planAdmissionRefusal = runreceipt.PlanAdmissionRefusal{
+			State:               runreceipt.Known,
+			Source:              "the canonical plan-admission refusal record this invocation parked on",
+			PlanAttemptID:       r.PlanAttemptID,
+			RefusalID:           r.RefusalID,
+			Class:               runreceipt.PlanAdmissionRefusalClass(r.Class),
+			Declaration:         string(r.Declaration),
+			Reason:              r.Reason,
+			GoverningEvidenceID: r.GoverningEvidenceID,
+		}
 		if f.candidateState == runreceipt.CandidatePresent {
 			f.candidateState = runreceipt.CandidateUnattempted
 		}

@@ -151,6 +151,7 @@ func TestAnInvocationTerminalDoesNotEndTheTask(t *testing.T) {
 		"awaiting authority":   event.WorkflowAwaitingAuthority,
 		"blocked external":     event.WorkflowBlockedExternal,
 		"not converged":        event.WorkflowNotConverged,
+		"plan refused again":   event.WorkflowPlanAdmissionRefused,
 	} {
 		got := FindInterrupted([]event.Event{
 			ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
@@ -317,5 +318,149 @@ func TestAPreconditionRefusalSurvivesReconstructionWithItsQuestionStanding(t *te
 	// W2: a genuine failure is still the end of the task.
 	if got := FindInterrupted(history(ev("t1", event.SourceSystem, event.WorkflowFailed, "a real defect"))); len(got) != 0 {
 		t.Fatalf("a genuine WorkflowFailed no longer ends the task: %+v", got)
+	}
+}
+
+// pev is an event carrying a recorded payload, byte for byte.
+func pev(taskID string, kind event.Kind, payload string) event.Event {
+	return event.Event{TaskID: taskID, Source: event.SourceSystem, Kind: kind, Payload: []byte(payload)}
+}
+
+// W8 (Objective 61): MULTIPLE REFUSALS. Two distinct canonical refusals of ONE
+// plan attempt are both kept, each under its own RefusalID -- the later one
+// does not erase the earlier because they share a PlanAttemptID -- and the
+// refusal the task is owed a turn for is the one the parked invocation named,
+// not whichever record was written last.
+func TestDistinctRefusalsOfOneAttemptAreKeptAndTheOwedOneIsTheParkedOne(t *testing.T) {
+	const (
+		first  = `{"plan_attempt_id":"att-1","task_id":"t1","reason":"no grant","refusal_id":"ref-a"}`
+		second = `{"plan_attempt_id":"att-1","task_id":"t1","reason":"no grant","refusal_id":"ref-b"}`
+		parked = `{"plan_attempt_id":"att-1","task_id":"t1","reason":"no grant","refusal_id":"ref-a"}`
+	)
+	history := []event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		pev("t1", event.PlanAttemptStarted, `{"id":"att-1","plan_attempt_id":"att-1"}`),
+		pev("t1", event.PlanAttemptRefused, first),
+		pev("t1", event.PlanAttemptRefused, second),
+		pev("t1", event.WorkflowPlanAdmissionRefused, parked),
+	}
+	got := FindInterrupted(history)
+	if len(got) != 1 {
+		t.Fatalf("a parked plan-admission refusal ended the task: %+v", got)
+	}
+	task := got[0]
+	if len(task.PlanAttemptRefusals) != 2 || string(task.PlanAttemptRefusals["ref-a"]) != first || string(task.PlanAttemptRefusals["ref-b"]) != second {
+		t.Fatalf("distinct refusals of one attempt were not kept by RefusalID: %v", task.PlanAttemptRefusals)
+	}
+	if string(task.PlanAdmissionRefused) != parked || task.Planned {
+		t.Fatalf("the owed refusal is not the parked one: %s (planned %v)", task.PlanAdmissionRefused, task.Planned)
+	}
+	// The newest park wins, and an admitted plan discharges the owed turn
+	// while the refusal records stay as evidence.
+	reparked := `{"plan_attempt_id":"att-1","task_id":"t1","reason":"no grant","refusal_id":"ref-b"}`
+	got = FindInterrupted(append(history, pev("t1", event.WorkflowPlanAdmissionRefused, reparked)))
+	if len(got) != 1 || string(got[0].PlanAdmissionRefused) != reparked {
+		t.Fatalf("the newest park is not the owed refusal: %+v", got)
+	}
+	got = FindInterrupted(append(history, pev("t1", event.PlanProposed, `{"plan_attempt_id":"att-2"}`)))
+	if len(got) != 1 || len(got[0].PlanAdmissionRefused) != 0 || len(got[0].PlanAttemptRefusals) != 2 {
+		t.Fatalf("an admitted plan did not discharge the owed refusal, or dropped the records: %+v", got)
+	}
+	// A record written before refusals carried a RefusalID keeps its old key.
+	got = FindInterrupted([]event.Event{
+		ev("t2", event.SourceSystem, event.TaskCreated, "a task"),
+		pev("t2", event.PlanAttemptStarted, `{"plan_attempt_id":"att-9"}`),
+		pev("t2", event.PlanAttemptRefused, `{"plan_attempt_id":"att-9","task_id":"t2","reason":"x"}`),
+	})
+	if len(got) != 1 || len(got[0].PlanAttemptRefusals["att-9"]) == 0 {
+		t.Fatalf("a refusal predating RefusalID was not kept under its attempt: %+v", got)
+	}
+}
+
+// Objective 61: a FIRST canonical refusal the workflow recorded as returned to
+// the architect is owed an architect turn from the moment it is recorded --
+// not only once a repeat parks -- including beside an older operative plan,
+// until an admitted plan discharges it. A record written before refusals
+// carried a RefusalID owes nothing, and neither does a refusal recorded with
+// any continuation other than the architect turn, or none: the projection
+// reads the workflow's recorded decision and never infers one from the class
+// or from the RefusalID.
+func TestAFirstRefusalIsOwedBesideAnOperativePlanUntilAPlanIsAdmitted(t *testing.T) {
+	const refused = `{"plan_attempt_id":"att-2","task_id":"t1","reason":"no grant","refusal_class":"prospective_admission","refusal_id":"ref-a","continuation":"architect_turn"}`
+	history := []event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		pev("t1", event.PlanAttemptStarted, `{"plan_attempt_id":"att-1"}`),
+		pev("t1", event.PlanProposed, `{"plan_attempt_id":"att-1"}`),
+		pev("t1", event.PlanAttemptStarted, `{"plan_attempt_id":"att-2"}`),
+		pev("t1", event.PlanAttemptRefused, refused),
+	}
+	got := FindInterrupted(history)
+	if len(got) != 1 || !got[0].Planned || got[0].PlanAttemptID != "att-1" || string(got[0].PlanAdmissionRefused) != refused {
+		t.Fatalf("the first refusal of a re-plan is not owed beside the operative plan: %+v", got)
+	}
+	got = FindInterrupted(append(history, pev("t1", event.PlanProposed, `{"plan_attempt_id":"att-3"}`)))
+	if len(got) != 1 || len(got[0].PlanAdmissionRefused) != 0 || got[0].PlanAttemptID != "att-3" {
+		t.Fatalf("an admitted replacement did not discharge the owed first refusal: %+v", got)
+	}
+	got = FindInterrupted([]event.Event{
+		ev("t2", event.SourceSystem, event.TaskCreated, "a task"),
+		pev("t2", event.PlanAttemptRefused, `{"plan_attempt_id":"att-9","task_id":"t2","reason":"x"}`),
+	})
+	if len(got) != 1 || len(got[0].PlanAdmissionRefused) != 0 {
+		t.Fatalf("a refusal predating RefusalID was made owed: %+v", got)
+	}
+	for _, payload := range []string{
+		`{"plan_attempt_id":"att-2","task_id":"t1","reason":"declined","refusal_class":"authority_declined","refusal_id":"ref-d"}`,
+		`{"plan_attempt_id":"att-2","task_id":"t1","reason":"supplied","refusal_class":"supplied_plan_unrevisable","refusal_id":"ref-s"}`,
+		`{"plan_attempt_id":"att-2","task_id":"t1","reason":"no grant","refusal_class":"prospective_admission","refusal_id":"ref-n"}`,
+		`{"plan_attempt_id":"att-2","task_id":"t1","reason":"no grant","refusal_class":"prospective_admission","refusal_id":"ref-u","continuation":"Architect_Turn"}`,
+	} {
+		got = FindInterrupted(append(history[:4:4], pev("t1", event.PlanAttemptRefused, payload)))
+		if len(got) != 1 || len(got[0].PlanAdmissionRefused) != 0 || len(got[0].PlanAttemptRefusals) != 1 {
+			t.Fatalf("a refusal with no recorded return to the architect was made owed, or dropped: %s -> %+v", payload, got)
+		}
+	}
+	// An evidence-only refusal recorded after an owed one does not displace it.
+	got = FindInterrupted(append(history, pev("t1", event.PlanAttemptRefused,
+		`{"plan_attempt_id":"att-2","task_id":"t1","reason":"declined","refusal_class":"authority_declined","refusal_id":"ref-d"}`)))
+	if len(got) != 1 || string(got[0].PlanAdmissionRefused) != refused {
+		t.Fatalf("an evidence-only refusal displaced the owed one: %+v", got)
+	}
+}
+
+// Objective 61: a refusal is bound to its attempt only when that attempt was
+// durably started EARLIER in the record. A refusal recorded before its start
+// never enters the refusals restoration reads as repetition state -- not even
+// when the same PlanAttemptID starts later, which must not validate it
+// retroactively -- while an owed one stays owed, so restoration can refuse
+// its binding by name rather than lose the obligation.
+func TestARefusalBeforeItsAttemptStartedSeedsNoRepetitionState(t *testing.T) {
+	const refused = `{"plan_attempt_id":"att-1","task_id":"t1","reason":"no grant","refusal_class":"prospective_admission","refusal_id":"ref-a","continuation":"architect_turn"}`
+	got := FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		pev("t1", event.PlanAttemptRefused, refused),
+		pev("t1", event.PlanAttemptStarted, `{"plan_attempt_id":"att-1"}`),
+	})
+	if len(got) != 1 {
+		t.Fatalf("a refusal before its start ended the task: %+v", got)
+	}
+	task := got[0]
+	if len(task.PlanAttemptRefusals) != 0 {
+		t.Fatalf("a refusal recorded before its attempt started was admitted into repetition state: %v", task.PlanAttemptRefusals)
+	}
+	if !task.StartedPlanAttempts["att-1"] {
+		t.Fatalf("the later start itself was lost: %+v", task)
+	}
+	if string(task.PlanAdmissionRefused) != refused {
+		t.Fatalf("the owed refusal was dropped instead of preserved for restoration to refuse: %s", task.PlanAdmissionRefused)
+	}
+	// Control: the same record after its start is admitted.
+	got = FindInterrupted([]event.Event{
+		ev("t1", event.SourceSystem, event.TaskCreated, "a task"),
+		pev("t1", event.PlanAttemptStarted, `{"plan_attempt_id":"att-1"}`),
+		pev("t1", event.PlanAttemptRefused, refused),
+	})
+	if len(got) != 1 || string(got[0].PlanAttemptRefusals["ref-a"]) != refused {
+		t.Fatalf("a refusal after its start was not admitted: %+v", got)
 	}
 }

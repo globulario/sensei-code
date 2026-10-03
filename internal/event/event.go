@@ -207,6 +207,16 @@ const (
 	// and executed nothing. Terminal for the INVOCATION and not for the TASK,
 	// for the same reason as WorkflowBaseMovedRefused.
 	WorkflowDirtyCanonicalRefused Kind = "workflow.dirty_canonical_refused"
+	// WorkflowPlanAdmissionRefused is an invocation whose architect, returned
+	// a typed plan-admission refusal of its plan, answered with the materially
+	// same refused plan -- the same canonical PlanAttemptID, refused under the
+	// same canonical refusal identity, with no new governed evidence. No
+	// implementer started, and no third identical plan is requested.
+	//
+	// Terminal for the INVOCATION and not for the TASK: a refusal of a plan
+	// establishes that the plan cannot proceed, not that the objective is
+	// impossible (objective 61). The payload is workflow.PlanAdmissionRefused.
+	WorkflowPlanAdmissionRefused Kind = "workflow.plan_admission_refused"
 	// ProspectiveGranted records the prospective authorization the router read
 	// for a task's declared new surfaces (sensei#312): the covering surface,
 	// the pinned world and the facts read from it. The payload is the record
@@ -256,7 +266,7 @@ func RunTerminality(k Kind) (Terminality, bool) {
 		return TaskTerminal, true
 	case WorkflowStopped, WorkflowTimedOut, WorkflowAwaitingAuthority, WorkflowAwaitingReview,
 		WorkflowBlockedExternal, WorkflowNotConverged, WorkflowRestorationRefused,
-		WorkflowBaseMovedRefused, WorkflowDirtyCanonicalRefused:
+		WorkflowBaseMovedRefused, WorkflowDirtyCanonicalRefused, WorkflowPlanAdmissionRefused:
 		return InvocationTerminal, true
 	}
 	return "", false

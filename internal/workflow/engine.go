@@ -1273,6 +1273,12 @@ func (e *Engine) terminateRun(ctx context.Context, taskID, task string, err erro
 	if e.refuseCandidatePrecondition(taskID, err) {
 		return
 	}
+	// The same plan refused at admission twice, unchanged, after its refusal
+	// was returned to the architect, ends the invocation, not the task: a
+	// refusal of a plan does not establish that the objective is impossible.
+	if e.parkPlanAdmission(taskID, err) {
+		return
+	}
 	// One classifier for both authority paths. A person choosing Stop is not
 	// a broken run, and this used to arrive as an anonymous error and be
 	// recorded as FAILED -- teaching the behavioural record that this task
@@ -1965,11 +1971,33 @@ type planAttempt struct {
 	Plan       architectureDecision `json:"plan"`
 }
 
-// planAttemptRefusal is the PlanAttemptRefused payload.
+// planAttemptRefusal is the PlanAttemptRefused payload: the typed
+// plan-admission refusal of one canonical plan attempt.
+//
+// RefusalID is the refusal's canonical identity (planAdmissionRefusalID): the
+// attempt, the refusal class, the exact declarations under admission, the
+// reason, and the identity of the governing evidence the refusal was decided
+// on. It is what "the same refusal again" means, and nothing else does.
 type planAttemptRefusal struct {
-	PlanAttemptID string `json:"plan_attempt_id"`
-	TaskID        string `json:"task_id"`
-	Reason        string `json:"reason"`
+	PlanAttemptID string                    `json:"plan_attempt_id"`
+	TaskID        string                    `json:"task_id"`
+	Reason        string                    `json:"reason"`
+	Class         planAdmissionRefusalClass `json:"refusal_class,omitempty"`
+	// Declaration is the plan's exact declarations of the refused class, as
+	// the plan stated them.
+	Declaration json.RawMessage `json:"declaration,omitempty"`
+	// GoverningEvidenceID is the identity of the governing evidence -- world,
+	// certified graph, scoped preflight and recorded grant state -- the
+	// refusal was decided against (planAdmissionEvidenceID).
+	GoverningEvidenceID string `json:"governing_evidence_id,omitempty"`
+	RefusalID           string `json:"refusal_id,omitempty"`
+	// Continuation is the workflow's recorded decision on how this refusal
+	// continues: session.PlanAdmissionContinuationArchitectTurn when the shared
+	// boundary returned it to the architect, so the task is owed an architect
+	// turn for it; empty when it was recorded as evidence only. It is decided
+	// by continueAfterAdmissionRefusal and nowhere else, and is not part of
+	// the refusal's identity.
+	Continuation string `json:"continuation,omitempty"`
 }
 
 // taskPlanAttempts is one task's plan-attempt state in this process: the
@@ -1980,14 +2008,29 @@ type taskPlanAttempts struct {
 	operative            planAttempt
 	operativeProspective []prospectiveGrant
 	operativeEdits       []testEditGrant
-	// refused are the attempts whose admission refusal is already recorded, so
-	// each refusal is recorded exactly once.
+	// refused are the canonical refusal identities already recorded for this
+	// task -- each bound to its attempt, since the attempt is part of the
+	// identity -- so each refusal is recorded exactly once, and a refusal met
+	// again under an identity already recorded is the repetition behaviour 7
+	// bounds.
 	refused map[string]bool
+	// restoredRefusals are the durable refusals a resume reconstructed, held
+	// to be presented to the architect's next turn once. Evidence only: they
+	// confer no grant and make no attempt operative.
+	restoredRefusals []planAttemptRefusal
+	// owedRefusal is the restored refusal the session projection names as
+	// owed: the one the task's next architect turn is owed. Evidence only,
+	// like the rest.
+	owedRefusal *planAttemptRefusal
 	// recordedProspective and recordedEdits are the grant records written for
 	// each attempt, as written: the recorded authority facts routing reads,
 	// never the in-memory grant state another routing may have replaced.
 	recordedProspective map[string]prospectiveRecord
 	recordedEdits       map[string]testEditRecord
+	// scopedPreflight is, per attempt, the scoped preflight decision its
+	// routing was decided on: governing evidence a refusal of that attempt
+	// names (planAdmissionEvidenceID).
+	scopedPreflight map[string]sensei.PreflightDecision
 	// unrecorded is, per attempt, the first grant write that failed: an
 	// attempt holding authority no record carries is never adopted.
 	unrecorded map[string]error
@@ -2010,6 +2053,7 @@ func (e *Engine) planAttemptsOf(taskID string) *taskPlanAttempts {
 		t.refused = map[string]bool{}
 		t.recordedProspective = map[string]prospectiveRecord{}
 		t.recordedEdits = map[string]testEditRecord{}
+		t.scopedPreflight = map[string]sensei.PreflightDecision{}
 		t.unrecorded = map[string]error{}
 	}
 	return t
@@ -2144,27 +2188,329 @@ func (e *Engine) recordedGrants(taskID, attempt string) (prospectiveRecord, test
 // pending plan attempt is inadmissible: a declared create or existing-test edit
 // the attempt's own recorded grants refuse, a human's recorded decline of the
 // plan's condition, or a supplied plan that only a revision could admit. It is
-// set at exactly those branches and nowhere else.
+// set at exactly those branches and nowhere else, each naming its class.
 //
-// It is classification, not routing. It wraps the refusal unchanged -- the same
-// text, and errors.Is/As see through it -- so every caller routes the error
-// exactly as it did before (P2 continuation routing is not this type's to
-// change). What it decides is only whether closePlanAdmission records a
-// PlanAttemptRefused: an instrument that could not answer, a response that
-// could not be decoded, a probe, provider or persistence failure is NOT a
-// refusal of the plan, and is never recorded as one.
-type planAdmissionRefusal struct{ cause error }
+// It wraps the refusal unchanged -- the same text, and errors.Is/As see through
+// it. An instrument that could not answer, a response that could not be
+// decoded, a probe, provider or persistence failure is NOT a refusal of the
+// plan, and is never recorded as one.
+//
+// Its class decides its continuation, at ONE boundary
+// (continueAfterAdmissionRefusal), never at a call site: a class that establishes only that THIS plan
+// cannot proceed returns to the architect; every other class is routed exactly
+// as it was before.
+type planAdmissionRefusal struct {
+	class planAdmissionRefusalClass
+	// declaration is the plan's exact declarations of this class.
+	declaration json.RawMessage
+	cause       error
+}
 
 func (r *planAdmissionRefusal) Error() string { return r.cause.Error() }
 
 func (r *planAdmissionRefusal) Unwrap() error { return r.cause }
 
-// refusePlanAdmission marks err as a refusal of the pending attempt.
-func refusePlanAdmission(err error) error {
+// planAdmissionRefusalClass is the closed vocabulary of plan-admission refusal
+// classes, read by membership.
+type planAdmissionRefusalClass string
+
+const (
+	// refusalProspectiveAdmission: a declared prospective surface holds no
+	// valid canonical grant in the attempt's recorded grant state (DF-37).
+	refusalProspectiveAdmission planAdmissionRefusalClass = "prospective_admission"
+	// refusalTestEditAdmission: a declared existing-test edit holds no valid
+	// grant in the attempt's recorded state, or the pinned world already
+	// determines that the declared edit is refused (DF-37b, DF-23 projection).
+	refusalTestEditAdmission planAdmissionRefusalClass = "test_edit_admission"
+	// refusalAuthorityDeclined: a human's recorded answer declined a condition
+	// the plan still requires. A human-owned answer, not a plan-shape fact.
+	refusalAuthorityDeclined planAdmissionRefusalClass = "authority_declined"
+	// refusalSuppliedPlan: a supplied plan only a revision could admit, and no
+	// architect in this run may revise it.
+	refusalSuppliedPlan planAdmissionRefusalClass = "supplied_plan_unrevisable"
+)
+
+// returnsToArchitect reports whether a refusal of this class establishes only
+// that the proposed plan cannot lawfully proceed -- the plan's own declarations
+// against its own freshly derived grants -- so the architect may lawfully
+// propose a different one. Membership, never exclusion: an unknown class is
+// routed as it always was.
+func (c planAdmissionRefusalClass) returnsToArchitect() bool {
+	switch c {
+	case refusalProspectiveAdmission, refusalTestEditAdmission:
+		return true
+	}
+	return false
+}
+
+// refusePlanAdmission marks err as a refusal of the pending attempt, of class
+// c, over the plan's exact declarations of that class (nil when the class has
+// none).
+func refusePlanAdmission(c planAdmissionRefusalClass, declaration any, err error) error {
 	if err == nil {
 		return nil
 	}
-	return &planAdmissionRefusal{cause: err}
+	var raw json.RawMessage
+	if declaration != nil {
+		raw, _ = json.Marshal(declaration)
+	}
+	return &planAdmissionRefusal{class: c, declaration: raw, cause: err}
+}
+
+// planAdmissionRefusalIdentityVersion names the refusal identity rule.
+const planAdmissionRefusalIdentityVersion = "sensei-code/plan-admission-refusal/v1"
+
+// planAdmissionEvidenceID is the identity of the governing evidence a refusal
+// was decided against: the pinned world, the certified graph identity the task
+// is bound to, the scoped preflight decision the attempt was routed on, and the
+// attempt's COMPLETE recorded grant state, as recorded. A re-certified graph, a
+// changed scoped answer, a newly established grant or one no longer derived is
+// a different identity, and so new evidence.
+func planAdmissionEvidenceID(world, graph string, scoped sensei.PreflightDecision, p prospectiveRecord, t testEditRecord) string {
+	raw, _ := json.Marshal(struct {
+		Version     string                   `json:"version"`
+		World       string                   `json:"world"`
+		Graph       string                   `json:"certified_graph"`
+		Scoped      sensei.PreflightDecision `json:"scoped_preflight"`
+		Prospective prospectiveRecord        `json:"prospective"`
+		TestEdits   testEditRecord           `json:"test_edits"`
+	}{planAdmissionRefusalIdentityVersion, world, graph, scoped, p, t})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// planAdmissionRefusalID is the canonical refusal identity. The canonical
+// PlanAttemptID is consumed, never recomputed: sameness of the plan is that
+// identity's to decide, and is not reconstructed here from prose or slices.
+func planAdmissionRefusalID(r planAttemptRefusal) string {
+	raw, _ := json.Marshal(struct {
+		Version     string                    `json:"version"`
+		Attempt     string                    `json:"plan_attempt_id"`
+		Task        string                    `json:"task_id"`
+		Class       planAdmissionRefusalClass `json:"refusal_class"`
+		Declaration json.RawMessage           `json:"declaration"`
+		Reason      string                    `json:"reason"`
+		Evidence    string                    `json:"governing_evidence_id"`
+	}{planAdmissionRefusalIdentityVersion, r.PlanAttemptID, r.TaskID, r.Class, r.Declaration, r.Reason, r.GoverningEvidenceID})
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:])
+}
+
+// admissionRefusalOf is the typed refusal record cause establishes for the
+// pending attempt, or false when cause is not a refusal of a started attempt
+// that is not already operative.
+func (e *Engine) admissionRefusalOf(taskID string, cause error) (planAttemptRefusal, bool) {
+	var refusal *planAdmissionRefusal
+	if !errors.As(cause, &refusal) {
+		return planAttemptRefusal{}, false
+	}
+	e.mu.Lock()
+	t := e.planAttemptsOf(taskID)
+	a, operative := t.pending, t.operative.ID
+	p, ed, scoped := t.recordedProspective[a.ID], t.recordedEdits[a.ID], t.scopedPreflight[a.ID]
+	graph := ""
+	if b := e.graphs[taskID]; b != nil {
+		graph = b.Digest
+	}
+	e.mu.Unlock()
+	if a.ID == "" || a.ID == operative {
+		return planAttemptRefusal{}, false
+	}
+	r := planAttemptRefusal{PlanAttemptID: a.ID, TaskID: taskID, Reason: refusal.cause.Error(),
+		Class: refusal.class, Declaration: refusal.declaration,
+		GoverningEvidenceID: planAdmissionEvidenceID(a.World, graph, scoped, p, ed)}
+	r.RefusalID = planAdmissionRefusalID(r)
+	return r, true
+}
+
+// noteScopedPreflight keeps the scoped preflight decision the pending attempt
+// is routed on, as governing evidence of any refusal of that attempt.
+func (e *Engine) noteScopedPreflight(taskID string, scoped sensei.PreflightDecision) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	t.scopedPreflight[t.pending.ID] = scoped
+}
+
+// refusalRecorded reports whether this exact refusal identity is recorded for
+// the task.
+func (e *Engine) refusalRecorded(taskID, refusalID string) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.planAttemptsOf(taskID).refused[refusalID]
+}
+
+// PlanAdmissionRefused ends an INVOCATION, never the task: the architect was
+// returned a typed plan-admission refusal and answered with the materially
+// same refused plan -- the same canonical PlanAttemptID, refused under the same
+// canonical refusal identity, with no new governed evidence. No third identical
+// plan is requested. The payload is the refusal itself, so a resume presents it
+// to the architect bound to the attempt it refused.
+type PlanAdmissionRefused struct {
+	planAttemptRefusal
+	cause error
+}
+
+func (r *PlanAdmissionRefused) Error() string {
+	return "plan attempt " + short12(r.PlanAttemptID) + " was refused at admission again, unchanged and with no new governed evidence, " +
+		"after the refusal was returned to the architect: " + r.Reason
+}
+
+func (r *PlanAdmissionRefused) Unwrap() error { return r.cause }
+
+// Describe names the refusal for the receipt: attempt, class, identity, reason.
+func (r *PlanAdmissionRefused) Describe() string {
+	return fmt.Sprintf("plan attempt %s refused twice at admission (class %s, refusal %s): %s",
+		r.PlanAttemptID, r.Class, short12(r.RefusalID), r.Reason)
+}
+
+// continueAfterAdmissionRefusal is THE shared boundary that interprets a typed
+// pre-implementation admission refusal. Every architect routing path reaches it
+// (askArchitect's proceed and escalate routes), whichever admission door
+// refused: it does not know which file, which error text or which caller.
+//
+// A refusal whose class establishes only that the proposed plan cannot proceed
+// is recorded against its attempt and returned, as bounded evidence, for the
+// architect to plan again under -- the first time. Met again under a refusal
+// identity already recorded, it ends the invocation as PlanAdmissionRefused.
+// Any other error, any other class, and a refusal whose record could not be
+// written are returned exactly as they would have been: no implementer starts
+// under a refused attempt in any branch.
+func (e *Engine) continueAfterAdmissionRefusal(taskID string, cause error) (planAttemptRefusal, error) {
+	var refusal *planAdmissionRefusal
+	if !errors.As(cause, &refusal) || !refusal.class.returnsToArchitect() {
+		return planAttemptRefusal{}, cause
+	}
+	rec, ok := e.admissionRefusalOf(taskID, cause)
+	if !ok {
+		return planAttemptRefusal{}, cause
+	}
+	rec.Continuation = session.PlanAdmissionContinuationArchitectTurn
+	if e.refusalRecorded(taskID, rec.RefusalID) {
+		return planAttemptRefusal{}, &PlanAdmissionRefused{planAttemptRefusal: rec, cause: cause}
+	}
+	if err := e.recordPlanAdmissionRefusal(taskID, cause, rec.Continuation); err != cause {
+		return planAttemptRefusal{}, err
+	}
+	return rec, nil
+}
+
+// parkPlanAdmission ends the invocation as PLAN_ADMISSION_REFUSED when err
+// carries a repeated plan-admission refusal, and reports whether it did.
+// Nothing is executed and no authority is written; the task stays resumable.
+func (e *Engine) parkPlanAdmission(taskID string, err error) bool {
+	var r *PlanAdmissionRefused
+	if !errors.As(err, &r) || r == nil {
+		return false
+	}
+	e.notePlanAdmissionRefused(taskID, r.planAttemptRefusal)
+	e.emitRunTerminal(taskID, event.WorkflowPlanAdmissionRefused, event.SourceSystem,
+		runreceipt.OutcomePlanAdmissionRefused, e.candidateStateFor(taskID),
+		r.Error()+". No implementer started under it; the task is preserved and still resumable", r)
+	return true
+}
+
+// restorationSubjectPlanAdmissionRefusal names the owed plan-admission refusal
+// a resume re-establishes before any architect turn.
+const restorationSubjectPlanAdmissionRefusal = "owed-plan-admission-refusal"
+
+// restorePlanAdmissionRefusals reconstructs, for a resumed task, the durable
+// refusals recorded against its plan attempts -- the repetition state behaviour
+// 7 reads -- and the one refusal the task is currently OWED an architect turn
+// for, from the canonical session projection (session.FindInterrupted) and
+// nothing else.
+//
+// A record is accepted only for this task, for an attempt this task durably
+// started, keyed by its own RefusalID and reproducing that canonical identity.
+// The owed refusal is the one the session projection names
+// (Interrupted.PlanAdmissionRefused: a first refusal returned to the architect,
+// or a repeat an invocation parked on, until an admitted plan discharges it),
+// never the one keyed last: it must name an accepted record exactly -- the same
+// PlanAttemptID and RefusalID -- or the resume is refused, because an owed
+// refusal that cannot be bound to its record cannot be presented, and silently
+// dropping it would lose the obligation. A named refusal whose record does not
+// carry the workflow's recorded return to the architect, for a class that
+// returns, is equally inconsistent and refused. It restores no grant and makes
+// no attempt operative.
+func (e *Engine) restorePlanAdmissionRefusals(task session.Interrupted) error {
+	keys := make([]string, 0, len(task.PlanAttemptRefusals))
+	for k := range task.PlanAttemptRefusals {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	kept := map[string]planAttemptRefusal{}
+	var order []string
+	for _, k := range keys {
+		var r planAttemptRefusal
+		if json.Unmarshal(task.PlanAttemptRefusals[k], &r) != nil || r.RefusalID == "" || r.RefusalID != k ||
+			r.TaskID != task.TaskID || !task.StartedPlanAttempts[r.PlanAttemptID] || planAdmissionRefusalID(r) != r.RefusalID {
+			continue
+		}
+		kept[k] = r
+		order = append(order, k)
+	}
+	var owed *planAttemptRefusal
+	if raw := task.PlanAdmissionRefused; len(raw) != 0 {
+		refuse := func(binding, detail string) error {
+			return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectPlanAdmissionRefusal,
+				Instrument: RestorationInstrumentRecord, Binding: binding, Detail: detail}
+		}
+		var named planAttemptRefusal
+		if err := json.Unmarshal(raw, &named); err != nil {
+			return refuse(RestorationRecordUnreadable, "the owed plan-admission refusal does not parse: "+err.Error())
+		}
+		r, ok := kept[named.RefusalID]
+		if named.RefusalID == "" || !ok || r.PlanAttemptID != named.PlanAttemptID {
+			return refuse(RestorationRecordInconsistent, "the task is owed a turn for refusal "+orNone(short12(named.RefusalID), "none")+
+				" of plan attempt "+orNone(short12(named.PlanAttemptID), "none")+
+				", and no durable refusal record of this task is bound to exactly that PlanAttemptID and RefusalID")
+		}
+		// The obligation exists only where the workflow recorded that it
+		// returned this refusal to the architect, for a class that returns.
+		// Anything else asserted as owed is an inconsistent record, refused
+		// rather than quietly read as evidence.
+		if r.Continuation != session.PlanAdmissionContinuationArchitectTurn || !r.Class.returnsToArchitect() {
+			return refuse(RestorationRecordInconsistent, "the task is owed a turn for refusal "+short12(r.RefusalID)+
+				" of plan attempt "+short12(r.PlanAttemptID)+", but its durable record (class "+orNone(string(r.Class), "none")+
+				", continuation "+orNone(r.Continuation, "none")+") records no return to the architect")
+		}
+		owed = &r
+	}
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(task.TaskID)
+	t.restoredRefusals = nil
+	for _, k := range order {
+		t.refused[k] = true
+		if owed == nil || k != owed.RefusalID {
+			t.restoredRefusals = append(t.restoredRefusals, kept[k])
+		}
+	}
+	t.owedRefusal = owed
+	return nil
+}
+
+// owedPlanAdmissionRefusal is the restored refusal the task is owed an
+// architect turn for, if any.
+func (e *Engine) owedPlanAdmissionRefusal(taskID string) (planAttemptRefusal, bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	if t.owedRefusal == nil {
+		return planAttemptRefusal{}, false
+	}
+	return *t.owedRefusal, true
+}
+
+// takeRestoredRefusals is the restored refusal evidence, once: the owed
+// refusal, if any, and every other recorded refusal.
+func (e *Engine) takeRestoredRefusals(taskID string) (*planAttemptRefusal, []planAttemptRefusal) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	owed, out := t.owedRefusal, t.restoredRefusals
+	t.owedRefusal, t.restoredRefusals = nil, nil
+	return owed, out
 }
 
 // closePlanAdmission records that plan admission REFUSED the pending attempt,
@@ -2188,25 +2534,24 @@ func refusePlanAdmission(err error) error {
 // marked refused; a refusal that could not be written is returned beside its
 // cause, and is not suppressed as though it had been recorded.
 func (e *Engine) closePlanAdmission(taskID string, cause error) error {
-	var refusal *planAdmissionRefusal
-	if !errors.As(cause, &refusal) {
+	return e.recordPlanAdmissionRefusal(taskID, cause, "")
+}
+
+// recordPlanAdmissionRefusal is closePlanAdmission's recorder, writing the
+// continuation the caller decided on the record: only the shared continuation
+// boundary records a return to the architect.
+func (e *Engine) recordPlanAdmissionRefusal(taskID string, cause error, continuation string) error {
+	rec, ok := e.admissionRefusalOf(taskID, cause)
+	if !ok || e.refusalRecorded(taskID, rec.RefusalID) {
 		return cause
 	}
-	e.mu.Lock()
-	t := e.planAttemptsOf(taskID)
-	a := t.pending
-	if a.ID == "" || a.ID == t.operative.ID || t.refused[a.ID] {
-		e.mu.Unlock()
-		return cause
-	}
-	e.mu.Unlock()
+	rec.Continuation = continuation
 	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptRefused,
-		"plan attempt "+short12(a.ID)+" refused at admission: "+cause.Error(),
-		planAttemptRefusal{PlanAttemptID: a.ID, TaskID: taskID, Reason: cause.Error()})); err != nil {
+		"plan attempt "+short12(rec.PlanAttemptID)+" refused at admission: "+rec.Reason, rec)); err != nil {
 		return errors.Join(cause, err)
 	}
 	e.mu.Lock()
-	t.refused[a.ID] = true
+	e.planAttemptsOf(taskID).refused[rec.RefusalID] = true
 	e.mu.Unlock()
 	return cause
 }
@@ -3864,7 +4209,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 			return err
 		}
 		if open {
-			return refusePlanAdmission(errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + gap.Condition))
+			return refusePlanAdmission(refusalSuppliedPlan, nil, errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: "+gap.Condition))
 		}
 		return nil
 	}
@@ -3872,11 +4217,11 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	case routing.Route == RouteCannotEstablish:
 		return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
 	case routing.ClosesGap():
-		return architectureDecision{}, refusePlanAdmission(errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + routing.Condition))
+		return architectureDecision{}, refusePlanAdmission(refusalSuppliedPlan, nil, errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: "+routing.Condition))
 	case routing.RequiresHuman():
 		if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
 			if !authorized {
-				return architectureDecision{}, refusePlanAdmission(fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition))
+				return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
@@ -3893,7 +4238,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 		// re-plan would consult, so what authorises the run is the recorded
 		// resolution and not the option string the prompt returned.
 		if authorized, _ := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); !authorized {
-			return architectureDecision{}, refusePlanAdmission(errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: " + routing.Condition))
+			return architectureDecision{}, refusePlanAdmission(refusalSuppliedPlan, nil, errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: "+routing.Condition))
 		}
 		if err := unexaminedAfterAnswer(); err != nil {
 			return architectureDecision{}, err
@@ -4160,6 +4505,11 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 ) (architectureDecision, error) {
 	var lastErr error
 	newRound := rounds.begin
+	// A resumed task's durable plan-admission refusals reach its architect's
+	// first turn, bound to the attempts they refused. Evidence, never authority.
+	if owed, restored := e.takeRestoredRefusals(taskID); owed != nil || len(restored) != 0 {
+		prompt = restoredRefusalsPrompt(prompt, owed, restored)
+	}
 	// retryNote is what the second attempt says about the first, and it is set
 	// by every path that fails an attempt. A timeout or a blank result is not a
 	// malformed response: telling the architect its JSON was invalid when it
@@ -4253,7 +4603,18 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// the model sounds no different than usual.
 			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
-				return architectureDecision{}, err
+				// A typed refusal of THIS plan returns to the architect once,
+				// as bounded evidence; nothing else continues from here.
+				refusal, err := e.continueAfterAdmissionRefusal(taskID, err)
+				if err != nil {
+					return architectureDecision{}, err
+				}
+				if err := newRound("a plan-admission refusal"); err != nil {
+					return architectureDecision{}, err
+				}
+				prompt = planAdmissionRefusalPrompt(prompt, d, refusal)
+				attempt = 0
+				continue
 			}
 			// How expensive this change is decides how adversarially it is
 			// judged later, and whether it is routine at all. Recording both
@@ -4320,7 +4681,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				}
 				if asked {
 					if !authorized {
-						return architectureDecision{}, refusePlanAdmission(fmt.Errorf(
+						return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
 							"the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 					}
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
@@ -4355,7 +4716,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 							}
 							if asked {
 								if !authorized {
-									return architectureDecision{}, refusePlanAdmission(fmt.Errorf(
+									return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
 										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition))
 								}
 								e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
@@ -4410,7 +4771,18 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// confident one must not be able to skip them.
 			routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 			if err != nil {
-				return architectureDecision{}, err
+				// A typed refusal of THIS plan returns to the architect once,
+				// as bounded evidence; nothing else continues from here.
+				refusal, err := e.continueAfterAdmissionRefusal(taskID, err)
+				if err != nil {
+					return architectureDecision{}, err
+				}
+				if err := newRound("a plan-admission refusal"); err != nil {
+					return architectureDecision{}, err
+				}
+				prompt = planAdmissionRefusalPrompt(prompt, d, refusal)
+				attempt = 0
+				continue
 			}
 			e.setRouting(taskID, roles.PolicyFor(routing.Blast, routing.Gate), scoped, d.Claims, d.Files)
 			e.applyPremiseResolutions(taskID, d.PremiseResolutions)
@@ -4475,7 +4847,7 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			}
 			if asked {
 				if !authorized {
-					return architectureDecision{}, refusePlanAdmission(fmt.Errorf(
+					return architectureDecision{}, refusePlanAdmission(refusalAuthorityDeclined, nil, fmt.Errorf(
 						"the human declined this and the architect returned to it: %s", routing.Condition))
 				}
 				if err := newRound("an answer the human had already given"); err != nil {
@@ -5390,6 +5762,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	if err != nil {
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
+	e.noteScopedPreflight(taskID, scoped)
 	// The scoped decision is returned as well as the route. The router reduces
 	// it to one question -- who owns this plan -- and the Level-1 classifier
 	// asks a different one of the same evidence. Re-querying instead would ask
@@ -5536,7 +5909,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	}
 	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
 		// A refusal of this attempt, decided by its own recorded grants.
-		err = refusePlanAdmission(err)
+		err = refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, err)
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
 	// Read again: the AUTHORED grants recorded above belong to this attempt too.
@@ -6057,7 +6430,7 @@ func (e *Engine) reconcileProspectiveGrants(taskID string, declared []Prospectiv
 		return nil
 	}
 	if err := matchGrantsToDeclarations(declared, e.prospectiveGrants(taskID)); err != nil {
-		return refusePlanAdmission(fmt.Errorf("prospective admission refused before implementation: %w", err))
+		return refusePlanAdmission(refusalProspectiveAdmission, declared, fmt.Errorf("prospective admission refused before implementation: %w", err))
 	}
 	return nil
 }
@@ -6071,7 +6444,7 @@ func (e *Engine) reconcileTestEditGrants(taskID string, d architectureDecision) 
 	attempt := e.pendingPlanAttempt(taskID)
 	_, rec := e.recordedGrants(taskID, attempt.ID)
 	if err := reconcileTestEditDeclarations(d.TestEdits, d.Files, attempt, rec); err != nil {
-		return refusePlanAdmission(fmt.Errorf("existing-test edit admission refused before implementation: %w", err))
+		return refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, fmt.Errorf("existing-test edit admission refused before implementation: %w", err))
 	}
 	return nil
 }
@@ -7196,6 +7569,74 @@ func (e *Engine) recordClosureQuestion(taskID, condition string, d architectureD
 // evidence is reported as unclosed, which is a real and useful answer — and
 // the one that keeps this from becoming a machine for making warnings
 // disappear.
+// planAdmissionRefusalPrompt returns a typed plan-admission refusal to the
+// architect as bounded evidence. The refused attempt confers nothing on the
+// next plan: every grant is derived again, from scratch, for whatever plan is
+// returned.
+func planAdmissionRefusalPrompt(original string, d architectureDecision, r planAttemptRefusal) string {
+	refused, _ := json.Marshal(d)
+	return fmt.Sprintf(`%s
+
+PLAN ADMISSION REFUSED — THIS PLAN, NOT THE OBJECTIVE:
+Your plan was refused before any implementer started. The refusal establishes
+only that this proposed plan cannot lawfully proceed; it does not establish
+that the objective is impossible. The typed refusal, exactly as recorded:
+
+%s
+
+The refused plan was:
+%s
+
+Its declarations and any grant state derived for it confer NO authority on your
+next plan: every grant is derived again, from scratch, for the plan you return.
+Return a DIFFERENT lawful plan -- for example, place a test in an existing test
+file beside a governed production file under a test-edit grant -- or, if you
+conclude no lawful plan exists, ESCALATE and say why. Returning the same refused
+plan unchanged ends this invocation with the refusal named; it is not retried.`,
+		original, planAdmissionRefusalEnvelope(r), string(refused))
+}
+
+// planAdmissionRefusalEnvelope is the one rendering of a typed plan-admission
+// refusal an architect is shown, live or on resume: the canonical record
+// itself -- task, PlanAttemptID, RefusalID, governing evidence identity, class,
+// exact declaration, reason and recorded continuation -- never a hand-picked
+// projection of it.
+func planAdmissionRefusalEnvelope(r planAttemptRefusal) string {
+	raw, err := json.MarshalIndent(r, "    ", "  ")
+	if err != nil {
+		return "    (the refusal record could not be rendered: " + err.Error() + ")"
+	}
+	return "    " + string(raw)
+}
+
+// restoredRefusalsPrompt presents a resumed task's durable plan-admission
+// refusals, each bound to the PlanAttemptID it refused: first the one the
+// task is owed a turn for, then the rest.
+func restoredRefusalsPrompt(original string, owed *planAttemptRefusal, refusals []planAttemptRefusal) string {
+	line := func(b *strings.Builder, r planAttemptRefusal) {
+		b.WriteString("\n" + planAdmissionRefusalEnvelope(r))
+	}
+	var b strings.Builder
+	if owed != nil {
+		b.WriteString("\nThis task is owed an architect turn for this refusal, which was recorded before the previous invocation ended:")
+		line(&b, *owed)
+	}
+	if len(refusals) != 0 {
+		b.WriteString("\nEarlier plan attempts of this task were also refused before any implementer started:")
+		for _, r := range refusals {
+			line(&b, r)
+		}
+	}
+	return fmt.Sprintf(`%s
+
+RECORDED PLAN-ADMISSION REFUSALS FOR THIS TASK:%s
+
+They are evidence about those exact attempts and confer no authority. Returning
+one of those plans unchanged, with nothing new established, ends this
+invocation with the refusal named. Return a different lawful plan, or ESCALATE
+if you conclude none exists.`, original, b.String())
+}
+
 func gapClosurePrompt(original string, d architectureDecision, condition string) string {
 	return fmt.Sprintf(`%s
 
@@ -8172,6 +8613,40 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		// A resumed task keeps the mode it was running in. Resumption is not a
 		// new entry point a person chose, so its provenance says so.
 		e.announceMode(task.TaskID, governedMode(ResumedGoverned))
+		// A PLANNED resume -- the one continued below rather than re-entering
+		// execute -- owns its receipt, and opens it here, before anything can
+		// end the invocation. A resumed invocation is a run, and it owes its
+		// own receipt. Without one every fact it measured -- the world it
+		// re-certified, the plan it carried, the tree an ACCEPT was bound to --
+		// was recorded into nothing, and the mint refused an accepted candidate
+		// with "no bounded review delivered a content identity" (DF-9,
+		// 2026-09-19). The unplanned and question branches re-enter execute,
+		// which opens its own.
+		planned := len(task.AwaitingAuthority) == 0 && task.Planned
+		if planned {
+			e.beginReceipt(task.TaskID)
+			// The receipt opens with candidate_state NONE, a positive claim. A
+			// resumed task may already hold a retained candidate, and a failure
+			// before implement measures it -- a refused restoration included --
+			// would record "no candidate" beside work sitting on disk (canonical
+			// review of #194 at b23a8ae). So the inherited candidate is measured
+			// first, before anything here can fail.
+			if inherited, ok, err := candidate.Load(e.Repo.Root, task.TaskID); err == nil && ok {
+				e.noteInheritedCandidate(task.TaskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
+			} else {
+				e.noteCandidateWorkUnmeasured(task.TaskID)
+			}
+		}
+		// The refusal routing state is reconstructed from the durable
+		// PlanAttemptID-bound refusals before any architect turn; no grant or
+		// operative attempt is restored or minted from them.
+		if err := e.restorePlanAdmissionRefusals(task); err != nil {
+			if !planned {
+				e.beginReceipt(task.TaskID)
+			}
+			e.terminateRun(ctx, task.TaskID, task.Task, err)
+			return
+		}
 		if len(task.AwaitingAuthority) != 0 {
 			e.resumeAuthority(ctx, task)
 			return
@@ -8185,23 +8660,7 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			e.resumeUnplannedArchitecture(ctx, task)
 			return
 		}
-		// A resumed invocation is a run, and it owes its own receipt. Without
-		// one every fact it measured -- the world it re-certified, the plan it
-		// carried, the tree an ACCEPT was bound to -- was recorded into nothing,
-		// and the mint refused an accepted candidate with "no bounded review
-		// delivered a content identity" (DF-9, 2026-09-19). The unplanned and
-		// question branches above re-enter execute, which opens its own.
-		e.beginReceipt(task.TaskID)
-		// The receipt opens with candidate_state NONE, a positive claim. A
-		// resumed task may already hold a retained candidate, and a failure
-		// before implement measures it would record "no candidate" beside work
-		// sitting on disk (canonical review of #194 at b23a8ae). So the inherited
-		// candidate is measured first, before anything here can fail.
-		if inherited, ok, err := candidate.Load(e.Repo.Root, task.TaskID); err == nil && ok {
-			e.noteInheritedCandidate(task.TaskID, observeCandidate(ctx, inherited.Worktree, inherited.BaseSHA))
-		} else {
-			e.noteCandidateWorkUnmeasured(task.TaskID)
-		}
+		// The receipt opened, and the inherited candidate measured, above.
 		// The same classifier execute uses: blocked stays blocked, a deferred
 		// question stays deferred, a stop is a stop, and only a failure fails.
 		fail := func(err error) { e.terminateRun(ctx, task.TaskID, task.Task, err) }
@@ -8372,6 +8831,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			if err != nil {
 				fail(fmt.Errorf("the task cannot be resumed at its owed re-plan: %w", err))
 				return
+			}
+			// An owed plan-admission refusal -- first occurrence or parked
+			// repeat -- is owed an architect turn too, never implementer work
+			// under the older plan its replacement was meant to supersede.
+			if r, refused := e.owedPlanAdmissionRefusal(task.TaskID); !owed && refused {
+				why, owed = "plan attempt "+short12(r.PlanAttemptID)+" was refused at admission (refusal "+
+					short12(r.RefusalID)+") and no admitted plan has replaced it: "+r.Reason, true
 			}
 			if owed {
 				e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,

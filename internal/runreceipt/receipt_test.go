@@ -593,14 +593,15 @@ func TestADeferredRunWithAVerdictIsInconsistent(t *testing.T) {
 // moving the version fails here, rather than being caught by someone reading a
 // receipt from a live run.
 func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
-	const version = "sensei-code.governed-run-receipt/v12"
+	const version = "sensei-code.governed-run-receipt/v13"
 	if SchemaVersion != version {
 		t.Fatalf("SchemaVersion = %q, pinned %q. If the vocabulary below changed, move BOTH.", SchemaVersion, version)
 	}
 	outcomes := []Outcome{OutcomeAccepted, OutcomeRefused, OutcomeFailed,
 		OutcomeUnreviewed, OutcomeStopped, OutcomeDeferred, OutcomeTimedOut,
 		OutcomeReviewObligationUnmet, OutcomeBlockedExternal, OutcomeNotConverged,
-		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused, OutcomeUnknown}
+		OutcomeRestorationRefused, OutcomeBaseMovedRefused, OutcomeDirtyCanonicalRefused,
+		OutcomePlanAdmissionRefused, OutcomeUnknown}
 	for _, o := range outcomes {
 		if !o.Valid() {
 			t.Errorf("%q is enumerated here but not Valid()", o)
@@ -613,7 +614,7 @@ func TestTheSchemaVersionPinsItsVocabulary(t *testing.T) {
 			t.Errorf("%q is valid but not pinned by this test", candidate)
 		}
 	}
-	if len(outcomes) != 14 {
+	if len(outcomes) != 15 {
 		t.Fatalf("%d outcomes pinned; if the set changed, the version must move with it", len(outcomes))
 	}
 }
@@ -798,6 +799,129 @@ func TestARestorationRefusalIsACompleteRecordThatNamesItsInstrument(t *testing.T
 	}
 	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v10", OutcomeRestorationRefused); err == nil {
 		t.Fatal("v10 + RESTORATION_REFUSED must be invalid: RESTORATION_REFUSED was added in v11")
+	}
+}
+
+// A repeated plan-admission refusal ends the invocation as a complete record
+// with no candidate; PLAN_ADMISSION_REFUSED is v13 vocabulary and no earlier
+// version speaks it.
+func TestAPlanAdmissionRefusalIsAV13OutcomeOnly(t *testing.T) {
+	if !OutcomePlanAdmissionRefused.SufficientForComplete() {
+		t.Fatal("PLAN_ADMISSION_REFUSED must be sufficient for a complete record")
+	}
+	rec := completeReceipt()
+	rec.Outcome = OutcomePlanAdmissionRefused
+	rec.CandidateState = CandidateNone
+	rec.CandidateCommit = UnknownValue("no candidate")
+	rec.CandidateTree = UnknownValue("no candidate")
+	rec.CandidateFirstParent = UnknownValue("no candidate")
+	rec.CandidateDigest = UnknownValue("no candidate")
+	rec.CandidateCommitDiffDigest = UnknownValue("no candidate")
+	rec.PlanAdmissionRefusal = validPlanAdmissionRefusal()
+	if state, missing := rec.Completeness(); state != Complete {
+		t.Fatalf("COMPLETE / PLAN_ADMISSION_REFUSED must be representable: %v", missing)
+	}
+	if err := SpeaksItsVersion("sensei-code.governed-run-receipt/v13", OutcomePlanAdmissionRefused); err != nil {
+		t.Fatalf("v13 + PLAN_ADMISSION_REFUSED must be valid: %v", err)
+	}
+	for _, earlier := range []string{"sensei-code.governed-run-receipt/v12", "sensei-code.governed-run-receipt/v11"} {
+		if err := SpeaksItsVersion(earlier, OutcomePlanAdmissionRefused); err == nil {
+			t.Fatalf("%s + PLAN_ADMISSION_REFUSED must be invalid: it was added in v13", earlier)
+		}
+	}
+	if err := SpeaksItsCandidateVocabulary("sensei-code.governed-run-receipt/v13", CandidateUnattempted); err != nil {
+		t.Fatalf("v13 must carry the v12 candidate vocabulary forward: %v", err)
+	}
+	for _, arbitrary := range []Outcome{"PLAN_REFUSED", "ADMISSION_REFUSED", "plan_admission_refused"} {
+		if arbitrary.Valid() {
+			t.Errorf("%q is valid but the closed vocabulary never defined it", arbitrary)
+		}
+	}
+}
+
+func validPlanAdmissionRefusal() *PlanAdmissionRefusal {
+	return &PlanAdmissionRefusal{
+		State:               Known,
+		Source:              "the canonical PlanAttemptRefused record the invocation parked on",
+		PlanAttemptID:       strings.Repeat("a1", 32),
+		RefusalID:           strings.Repeat("b2", 32),
+		Class:               PlanAdmissionProspective,
+		Declaration:         `[{"path":"internal/workflow/coverage_reconciliation_test.go","role":"go-regression-test"}]`,
+		Reason:              "declared prospective surface holds no recorded grant",
+		GoverningEvidenceID: strings.Repeat("c3", 32),
+	}
+}
+
+func planAdmissionRefusedReceipt(p *PlanAdmissionRefusal) Receipt {
+	rec := completeReceipt()
+	rec.Outcome = OutcomePlanAdmissionRefused
+	rec.CandidateState = CandidateNone
+	rec.CandidateCommit = UnknownValue("no candidate")
+	rec.CandidateTree = UnknownValue("no candidate")
+	rec.CandidateFirstParent = UnknownValue("no candidate")
+	rec.CandidateDigest = UnknownValue("no candidate")
+	rec.CandidateCommitDiffDigest = UnknownValue("no candidate")
+	rec.PlanAdmissionRefusal = p
+	return rec
+}
+
+// PLAN_ADMISSION_REFUSED says a refusal ended the invocation; the record must
+// say WHICH. Without the typed refusal fact, or with any part of its canonical
+// identity missing, malformed or non-canonical, the receipt is INCOMPLETE. It
+// is COMPLETE only with the full valid payload.
+func TestAPlanAdmissionRefusedReceiptRequiresTheExactCanonicalRefusal(t *testing.T) {
+	if state, missing := planAdmissionRefusedReceipt(validPlanAdmissionRefusal()).Completeness(); state != Complete {
+		t.Fatalf("the full canonical refusal must make PLAN_ADMISSION_REFUSED complete: %v", missing)
+	}
+	mutate := func(f func(*PlanAdmissionRefusal)) *PlanAdmissionRefusal {
+		p := validPlanAdmissionRefusal()
+		f(p)
+		return p
+	}
+	cases := map[string]struct {
+		fact *PlanAdmissionRefusal
+		want string
+	}{
+		"absent":                  {nil, "plan_admission_refusal: absent"},
+		"unknown":                 {&PlanAdmissionRefusal{State: Unknown, Detail: "not measured"}, "plan_admission_refusal: not measured"},
+		"malformed":               {&PlanAdmissionRefusal{State: Malformed, Detail: "unreadable"}, "plan_admission_refusal: unreadable"},
+		"state outside vocab":     {mutate(func(p *PlanAdmissionRefusal) { p.State = "CERTAIN" }), "plan_admission_refusal: state"},
+		"sourceless":              {mutate(func(p *PlanAdmissionRefusal) { p.Source = "" }), "no stated source"},
+		"no plan attempt":         {mutate(func(p *PlanAdmissionRefusal) { p.PlanAttemptID = "" }), "plan_attempt_id"},
+		"short plan attempt":      {mutate(func(p *PlanAdmissionRefusal) { p.PlanAttemptID = p.PlanAttemptID[:12] }), "plan_attempt_id"},
+		"uppercase plan attempt":  {mutate(func(p *PlanAdmissionRefusal) { p.PlanAttemptID = strings.ToUpper(p.PlanAttemptID) }), "plan_attempt_id"},
+		"no refusal id":           {mutate(func(p *PlanAdmissionRefusal) { p.RefusalID = "" }), "refusal_id"},
+		"non-hex refusal id":      {mutate(func(p *PlanAdmissionRefusal) { p.RefusalID = strings.Repeat("zz", 32) }), "refusal_id"},
+		"no governing evidence":   {mutate(func(p *PlanAdmissionRefusal) { p.GoverningEvidenceID = "" }), "governing_evidence_id"},
+		"long governing evidence": {mutate(func(p *PlanAdmissionRefusal) { p.GoverningEvidenceID += "00" }), "governing_evidence_id"},
+		"no class":                {mutate(func(p *PlanAdmissionRefusal) { p.Class = "" }), "refusal_class"},
+		"unknown class":           {mutate(func(p *PlanAdmissionRefusal) { p.Class = "authority_declined" }), "refusal_class"},
+		"no declaration":          {mutate(func(p *PlanAdmissionRefusal) { p.Declaration = "" }), "declaration"},
+		"malformed declaration":   {mutate(func(p *PlanAdmissionRefusal) { p.Declaration = `[{"path":` }), "declaration"},
+		"no reason":               {mutate(func(p *PlanAdmissionRefusal) { p.Reason = " " }), "reason"},
+	}
+	for name, c := range cases {
+		state, missing := planAdmissionRefusedReceipt(c.fact).Completeness()
+		if state != Incomplete {
+			t.Errorf("%s: PLAN_ADMISSION_REFUSED with this refusal fact must be INCOMPLETE", name)
+			continue
+		}
+		if !strings.Contains(strings.Join(missing, "\n"), c.want) {
+			t.Errorf("%s: INCOMPLETE for the wrong reason; want %q in %v", name, c.want, missing)
+		}
+	}
+
+	// A refusal stated beside another outcome names a refusal that did not end
+	// the invocation, and is contradictory; an unstated one is not.
+	other := completeReceipt()
+	other.PlanAdmissionRefusal = validPlanAdmissionRefusal()
+	if state, missing := other.Completeness(); state != Incomplete ||
+		!strings.Contains(strings.Join(missing, "\n"), "plan_admission_refusal is measured while the outcome is ACCEPTED") {
+		t.Fatalf("a measured refusal beside ACCEPTED must be INCOMPLETE as a contradiction: %v %v", state, missing)
+	}
+	other.PlanAdmissionRefusal = &PlanAdmissionRefusal{State: Unknown, Detail: "the run parked on no plan-admission refusal"}
+	if state, missing := other.Completeness(); state != Complete {
+		t.Fatalf("an unmeasured refusal beside ACCEPTED is a stated absence and must stay complete: %v", missing)
 	}
 }
 

@@ -515,6 +515,11 @@ func TestW5TheIdentityIsDeterministicAndReDerivable(t *testing.T) {
 // its attempt, exactly once; it survives an interruption, does not make the
 // task planned, and does not attach to the replacement plan that a continued
 // run makes operative.
+//
+// Objective 61 changed only how the invocation ends: the refusal is returned to
+// the architect, which answers with the same refused plan, so the same attempt
+// is routed twice under its one identity and the invocation ends
+// PLAN_ADMISSION_REFUSED instead of FAILED. The binding claims are unchanged.
 func TestW6AnAdmissionRefusalIsBoundToItsAttemptAcrossInterruption(t *testing.T) {
 	const task = "task-w6"
 	store := sessionStore(t)
@@ -524,10 +529,14 @@ func TestW6AnAdmissionRefusalIsBoundToItsAttemptAcrossInterruption(t *testing.T)
 		`"prospective_surfaces":[{"path":"extra/new_test.go","package":"extra","role":"go-regression-test","dependencies":["testing"]}]}`
 	e, architect, _ := newGapLoopEngine(t, nil, store, refused)
 	world := grantWorld(t, e)
-	run := driveGapLoop(t, e, architect, world, task, "", func(ctx context.Context) {
+	run := drivePlanAdmission(t, e, architect, world, task, func(ctx context.Context) {
 		e.run(ctx, task, attemptObjective, RequestedByHuman)
 	})
 	attempts := startedAttempts(t, run.events)
+	if len(attempts) != 2 || attempts[0] != attempts[1] {
+		t.Fatalf("the repeated refused plan was not routed again under its one identity: %v\n%s", attempts, gapLoopTrace(run.events))
+	}
+	attempts = attempts[:1]
 	refusals := 0
 	var bound planAttemptRefusal
 	for _, ev := range run.events {
@@ -555,7 +564,8 @@ func TestW6AnAdmissionRefusalIsBoundToItsAttemptAcrossInterruption(t *testing.T)
 		}
 	}
 	found := reconstructed(t, interrupted, task)
-	if found.Planned || found.PlanAttemptID != "" || len(found.PlanAttemptRefusals) != 1 || len(found.PlanAttemptRefusals[attempts[0]]) == 0 {
+	if found.Planned || found.PlanAttemptID != "" || len(found.PlanAttemptRefusals) != 1 || len(found.PlanAttemptRefusals[bound.RefusalID]) == 0 ||
+		planAttemptOfRecord(found.PlanAttemptRefusals[bound.RefusalID]) != attempts[0] {
 		t.Fatalf("the refusal did not survive interruption bound to exactly its attempt: %+v", found)
 	}
 
@@ -578,9 +588,18 @@ func TestW6AnAdmissionRefusalIsBoundToItsAttemptAcrossInterruption(t *testing.T)
 	}
 	after := session.FindInterrupted(kept)
 	if len(after) != 1 || after[0].PlanAttemptID == "" || after[0].PlanAttemptID == attempts[0] ||
-		len(after[0].PlanAttemptRefusals) != 1 || len(after[0].PlanAttemptRefusals[after[0].PlanAttemptID]) != 0 {
+		len(after[0].PlanAttemptRefusals) != 1 || planAttemptOfRecord(after[0].PlanAttemptRefusals[bound.RefusalID]) != attempts[0] {
 		t.Fatalf("the refusal attached to the replacement or was lost: %+v", after)
 	}
+}
+
+// planAttemptOfRecord is the PlanAttemptID a durable refusal record names.
+func planAttemptOfRecord(raw json.RawMessage) string {
+	var r planAttemptRefusal
+	if json.Unmarshal(raw, &r) != nil {
+		return ""
+	}
+	return r.PlanAttemptID
 }
 
 // W7: prospective and test-edit grants consume the same identity mechanism.
@@ -1591,7 +1610,7 @@ func TestAnAdmissionRefusalThatCannotBeRecordedIsNotSuppressed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cause := refusePlanAdmission(errors.New("prospective admission refused before implementation: x"))
+	cause := refusePlanAdmission(refusalProspectiveAdmission, nil, errors.New("prospective admission refused before implementation: x"))
 	mend := breakStore(t, dir)
 	got := e.closePlanAdmission(task, cause)
 	mend()
@@ -1676,5 +1695,926 @@ func TestOnlyAGenuineAdmissionRefusalIsRecordedAsOne(t *testing.T) {
 				t.Fatalf("a preflight failure was recorded as the plan being refused:\n%s", gapLoopTrace(run.events))
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Objective 61 (P2 residual): A PLAN-LEVEL ADMISSION REFUSAL TERMINATES THE PLAN
+// ATTEMPT, NOT THE GOVERNED TASK. The architect receives the typed refusal and
+// may produce a different lawful plan; no implementer starts under the refused
+// plan; a materially identical refused plan returned again ends the invocation,
+// named and resumable, and is not requested a third time.
+// ---------------------------------------------------------------------------
+
+// drivePlanAdmission starts a run and follows it to its ending, read by
+// membership in the closed run-terminality vocabulary, so every governed ending
+// -- PLAN_ADMISSION_REFUSED included -- ends the drive. A human question is
+// deferred, so the run always ends.
+func drivePlanAdmission(t *testing.T, e *Engine, architect *scriptedArchitect, world, taskID string, start func(context.Context)) gapLoopRun {
+	t.Helper()
+	ch, cancel := e.Bus.Subscribe(8192)
+	defer cancel()
+	ctx, stop := context.WithCancel(context.Background())
+	defer stop()
+	go start(ctx)
+	run := gapLoopRun{engine: e, world: world}
+	timeout := time.After(90 * time.Second)
+	for {
+		select {
+		case ev := <-ch:
+			run.events = append(run.events, ev)
+			if ev.Kind == event.AuthorityRequired {
+				waitForPending(t, e, taskID)
+				e.DeferAuthority(taskID)
+			}
+			if _, ok := event.RunTerminality(ev.Kind); ok {
+				settle := time.After(300 * time.Millisecond)
+				for {
+					select {
+					case ev := <-ch:
+						run.events = append(run.events, ev)
+					case <-settle:
+						run.prompts = append(run.prompts, architect.prompts...)
+						return run
+					}
+				}
+			}
+		case <-timeout:
+			stop()
+			t.Fatalf("the governed run did not end:\n%s", gapLoopTrace(run.events))
+		}
+	}
+}
+
+const (
+	// obj61Refused is the Objective-59 run-3 shape: a new regression test
+	// declared with a covering surface, for which no canonical grant is derived.
+	obj61Refused = `{"decision":"proceed","summary":"reconcile coverage","plan":"plan A: a new coverage reconciliation test","files":["main.go","extra/coverage_reconciliation_test.go"],"mode":"modify",` +
+		`"prospective_surfaces":[{"path":"extra/coverage_reconciliation_test.go","package":"extra","role":"go-regression-test","covering":"main.go","dependencies":["testing"]}]}`
+	// obj61RefusedAgain is a materially different plan with the same refused
+	// declaration: a different canonical PlanAttemptID.
+	obj61RefusedAgain = `{"decision":"proceed","summary":"reconcile coverage","plan":"plan A2: the same new test, argued differently","files":["main.go","extra/coverage_reconciliation_test.go"],"mode":"modify",` +
+		`"prospective_surfaces":[{"path":"extra/coverage_reconciliation_test.go","package":"extra","role":"go-regression-test","covering":"main.go","dependencies":["testing"]}]}`
+	// obj61RefusedWithEdit is obj61Refused that also edits the existing test
+	// beside main.go, so routing derives a real test-edit grant for it before
+	// prospective admission refuses it.
+	obj61RefusedWithEdit = `{"decision":"proceed","summary":"reconcile coverage","plan":"plan A: a new test and an edit","files":["main.go","main_test.go","extra/coverage_reconciliation_test.go"],"mode":"modify",` +
+		`"test_edits":[{"path":"main_test.go","operation":"edit","package":"main","build_constraints":[],"imports":["testing"]}],` +
+		`"prospective_surfaces":[{"path":"extra/coverage_reconciliation_test.go","package":"extra","role":"go-regression-test","covering":"main.go","dependencies":["testing"]}]}`
+	// planAdmissionRefusedMarker is planAdmissionRefusalPrompt's own heading.
+	planAdmissionRefusedMarker = "PLAN ADMISSION REFUSED"
+	// obj61OwedHeading introduces the owed refusal in restoredRefusalsPrompt.
+	obj61OwedHeading = "This task is owed an architect turn for this refusal, which was recorded before the previous invocation ended:"
+)
+
+// obj61Run drives one fresh governed run in the grant world whose architect
+// answers turns in order (the last repeated).
+func obj61Run(t *testing.T, store *session.Store, taskID string, turns ...string) (gapLoopRun, *scriptedArchitect) {
+	t.Helper()
+	e, architect, _ := newGapLoopEngine(t, nil, store, turns...)
+	world := grantWorld(t, e)
+	e.Config.Sensei.Args = []string{"-c", regionScript(objectiveRunScript, "main.go", "main_test.go")}
+	return drivePlanAdmission(t, e, architect, world, taskID, func(ctx context.Context) {
+		e.run(ctx, taskID, attemptObjective, RequestedByHuman)
+	}), architect
+}
+
+// obj61CoveredRun drives one fresh governed run in the grant world extended
+// with a second existing test, other/other_test.go beside other/other.go,
+// whose deriving stand-in covers exactly covered -- so the production coverage
+// path derives a test-edit grant beside each covered file and none elsewhere.
+func obj61CoveredRun(t *testing.T, taskID string, covered, region []string, turns ...string) (gapLoopRun, *scriptedArchitect) {
+	t.Helper()
+	e, architect, _ := newGapLoopEngine(t, nil, sessionStore(t), turns...)
+	commitFixtureFile(t, e.Repo.Root, "other/other.go", "package other\n")
+	commitFixtureFile(t, e.Repo.Root, "other/other_test.go", "package other\n\nimport \"testing\"\n\nfunc TestOther(t *testing.T) {}\n")
+	world := grantWorld(t, e)
+	subjects := make([]string, 0, len(covered))
+	for _, f := range covered {
+		subjects = append(subjects, fmt.Sprintf(`{"file":"%s"}`, f))
+	}
+	bin := filepath.Join(t.TempDir(), "sensei")
+	script := "#!/bin/sh\nwhile [ $# -gt 0 ]; do [ \"$1\" = -revision ] && rev=\"$2\"; shift; done\n" +
+		"printf '{\"result\":\"DERIVED\",\"pinned_commit\":\"%s\",\"subjects\":[" + strings.Join(subjects, ",") + "]}' \"$rev\"\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("SENSEI_BIN", bin)
+	e.Config.Sensei.Args = []string{"-c", regionScript(objectiveRunScript, region...)}
+	return drivePlanAdmission(t, e, architect, world, taskID, func(ctx context.Context) {
+		e.run(ctx, taskID, attemptObjective, RequestedByHuman)
+	}), architect
+}
+
+// refusalsIn are the PlanAttemptRefused payloads of a run, in order.
+func refusalsIn(t *testing.T, evs []event.Event) []planAttemptRefusal {
+	t.Helper()
+	var out []planAttemptRefusal
+	for _, ev := range evs {
+		if ev.Kind == event.PlanAttemptRefused {
+			var r planAttemptRefusal
+			if err := json.Unmarshal(ev.Payload, &r); err != nil {
+				t.Fatal(err)
+			}
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// implementerStartedBefore reports whether any implementer was assigned or any
+// agent process started before the event at index end.
+func implementerStartedBefore(evs []event.Event, end int) bool {
+	for _, ev := range evs[:end] {
+		if ev.Kind == event.AgentStarted {
+			return true
+		}
+		if ev.Kind == event.RoleAssigned && !strings.Contains(ev.Summary, "architect role") {
+			return true
+		}
+	}
+	return false
+}
+
+func indexOfKind(evs []event.Event, k event.Kind) int {
+	for i, ev := range evs {
+		if ev.Kind == k {
+			return i
+		}
+	}
+	return -1
+}
+
+// requireRefusalEnvelope asserts that prompt carries, after heading, the
+// complete typed refusal want -- the durable record as written -- and that the
+// record decoded back out of the prompt is exactly that record, every identity
+// in full: TaskID, PlanAttemptID, RefusalID, GoverningEvidenceID, class, exact
+// declaration, reason and recorded continuation.
+func requireRefusalEnvelope(t *testing.T, prompt, heading string, want planAttemptRefusal) {
+	t.Helper()
+	if want.TaskID == "" || want.PlanAttemptID == "" || want.RefusalID == "" || want.GoverningEvidenceID == "" || want.Class == "" ||
+		len(want.Declaration) == 0 || want.Reason == "" || want.Continuation != session.PlanAdmissionContinuationArchitectTurn {
+		t.Fatalf("premise: the durable refusal is not complete: %+v", want)
+	}
+	at := strings.Index(prompt, heading+"\n"+planAdmissionRefusalEnvelope(want))
+	if at < 0 {
+		t.Fatalf("the architect was not shown the complete typed refusal %s of %s:\n%s", short12(want.RefusalID), short12(want.PlanAttemptID), prompt)
+	}
+	var got planAttemptRefusal
+	if err := json.NewDecoder(strings.NewReader(prompt[at+len(heading)+1:])).Decode(&got); err != nil {
+		t.Fatalf("the refusal shown to the architect does not decode: %v", err)
+	}
+	g, _ := json.Marshal(got)
+	w, _ := json.Marshal(want)
+	if string(g) != string(w) {
+		t.Fatalf("the refusal shown to the architect is not the durable record:\n got %s\nwant %s", g, w)
+	}
+}
+
+// W1 (Objective 61): the Objective-59 run-3 shape. The ungranted declaration
+// is refused before any agent starts, the architect receives the typed refusal,
+// its second plan uses a lawful witness shape (an existing test edited under a
+// test-edit grant), and the same governed task proceeds past admission.
+func TestObj61W1ARefusedPlanReturnsToTheArchitectAndTheTaskProceeds(t *testing.T) {
+	const task = "task-obj61-w1"
+	run, architect := obj61Run(t, sessionStore(t), task, obj61Refused, replanA)
+	refusals := refusalsIn(t, run.events)
+	attempts := startedAttempts(t, run.events)
+	if len(refusals) != 1 || len(attempts) != 2 || refusals[0].PlanAttemptID != attempts[0] || attempts[0] == attempts[1] {
+		t.Fatalf("premise: plan A refused once, plan B a new attempt: attempts %v refusals %+v\n%s", attempts, refusals, gapLoopTrace(run.events))
+	}
+	r := refusals[0]
+	if r.Class != refusalProspectiveAdmission || !strings.Contains(r.Reason, "holds no recorded grant") ||
+		!strings.Contains(string(r.Declaration), "extra/coverage_reconciliation_test.go") || r.RefusalID != planAdmissionRefusalID(r) || r.GoverningEvidenceID == "" {
+		t.Fatalf("the refusal is not typed with its class, declaration, reason and identities: %+v", r)
+	}
+	refusedAt := indexOfKind(run.events, event.PlanAttemptRefused)
+	if implementerStartedBefore(run.events, refusedAt) {
+		t.Fatalf("an agent started before plan admission refused the plan:\n%s", gapLoopTrace(run.events))
+	}
+	if len(architect.prompts) != 2 || strings.Contains(architect.prompts[0], planAdmissionRefusedMarker) ||
+		!strings.Contains(architect.prompts[1], planAdmissionRefusedMarker) {
+		t.Fatalf("the architect did not receive the typed refusal as bounded evidence on its second turn: %d prompts", len(architect.prompts))
+	}
+	requireRefusalEnvelope(t, architect.prompts[1], "The typed refusal, exactly as recorded:\n", r)
+	proposed := indexOfKind(run.events, event.PlanProposed)
+	if proposed < 0 {
+		t.Fatalf("the replacement plan did not become operative:\n%s", gapLoopTrace(run.events))
+	}
+	var p proposedPlan
+	_ = json.Unmarshal(run.events[proposed].Payload, &p)
+	if p.PlanAttemptID != attempts[1] || implementerStartedBefore(run.events, proposed) {
+		t.Fatalf("the operative plan is not the replacement attempt, or work started before it: %q", p.PlanAttemptID)
+	}
+	for _, ev := range run.events {
+		if ev.TaskID != "" && ev.TaskID != task {
+			t.Fatalf("the replacement ran under another task: %s", ev.TaskID)
+		}
+		if ev.Kind == event.WorkflowFailed && strings.Contains(ev.Summary, "admission refused") {
+			t.Fatalf("the plan refusal ended the task: %s", ev.Summary)
+		}
+		if ev.Kind == event.WorkflowPlanAdmissionRefused {
+			t.Fatal("a different lawful plan was parked as a repeated refusal")
+		}
+	}
+}
+
+// W2 (Objective 61): BOUNDED REPEAT. The first refused plan returns to the
+// architect; the materially identical refused plan returned under the same
+// world and evidence ends the invocation PLAN_ADMISSION_REFUSED, resumable,
+// and no third identical plan is requested.
+func TestObj61W2ARepeatedIdenticalRefusalEndsTheInvocationNamed(t *testing.T) {
+	const task = "task-obj61-w2"
+	store := sessionStore(t)
+	run, architect := obj61Run(t, store, task, obj61Refused)
+	if len(architect.prompts) != 2 {
+		t.Fatalf("the architect was asked %d times; the bound is one re-plan and no third identical attempt:\n%s", len(architect.prompts), gapLoopTrace(run.events))
+	}
+	last := run.events[len(run.events)-1]
+	terminal := indexOfKind(run.events, event.WorkflowPlanAdmissionRefused)
+	if terminal < 0 || hasKind(kindsOf(run.events), event.WorkflowFailed) || hasKind(kindsOf(run.events), event.PlanProposed) {
+		t.Fatalf("the repeated refusal did not end the invocation as PLAN_ADMISSION_REFUSED (last %s):\n%s", last.Kind, gapLoopTrace(run.events))
+	}
+	if implementerStartedBefore(run.events, len(run.events)) {
+		t.Fatal("an admission refusal was converted into implementer work")
+	}
+	refusals := refusalsIn(t, run.events)
+	attempts := startedAttempts(t, run.events)
+	if len(refusals) != 1 || len(attempts) != 2 || attempts[0] != attempts[1] {
+		t.Fatalf("the identical refusal is one refusal of one attempt: attempts %v refusals %d", attempts, len(refusals))
+	}
+	var parked PlanAdmissionRefused
+	if err := json.Unmarshal(run.events[terminal].Payload, &parked); err != nil || parked.RefusalID != refusals[0].RefusalID ||
+		parked.PlanAttemptID != attempts[0] || parked.Class != refusalProspectiveAdmission {
+		t.Fatalf("the terminal does not name the refusal it ended on: %+v (%v)", parked, err)
+	}
+	// The receipt, emitted BEFORE the terminal event, names the outcome and,
+	// by itself, the exact canonical refusal the invocation parked on. (This
+	// rig's binary carries no VCS stamp and its stub no graph digest; those
+	// gaps are the rig's, and are not what is asserted.)
+	var receipt struct {
+		Receipt struct {
+			Outcome string `json:"outcome"`
+			Refusal *struct {
+				State               string `json:"state"`
+				Source              string `json:"source"`
+				PlanAttemptID       string `json:"plan_attempt_id"`
+				RefusalID           string `json:"refusal_id"`
+				Class               string `json:"refusal_class"`
+				Declaration         string `json:"declaration"`
+				Reason              string `json:"reason"`
+				GoverningEvidenceID string `json:"governing_evidence_id"`
+			} `json:"plan_admission_refusal"`
+		} `json:"receipt"`
+		Missing []string `json:"missing"`
+	}
+	receipts := 0
+	for _, ev := range run.events[:terminal] {
+		if ev.Kind == event.RunReceipt {
+			receipts++
+			_ = json.Unmarshal(ev.Payload, &receipt)
+		}
+	}
+	if receipts != 1 || receipt.Receipt.Outcome != "PLAN_ADMISSION_REFUSED" || strings.Contains(strings.Join(receipt.Missing, " "), "outcome") {
+		t.Fatalf("the receipt does not record the named outcome before the terminal: %d receipts %+v missing %v", receipts, receipt.Receipt, receipt.Missing)
+	}
+	got, want := receipt.Receipt.Refusal, refusals[0]
+	if got == nil || got.State != "KNOWN" || got.Source == "" || got.PlanAttemptID != want.PlanAttemptID || got.RefusalID != want.RefusalID ||
+		got.Class != string(want.Class) || got.Declaration != string(want.Declaration) || got.Reason != want.Reason ||
+		got.GoverningEvidenceID != want.GoverningEvidenceID {
+		t.Fatalf("the receipt does not carry the exact canonical refusal it parked on:\n got %+v\nwant %+v", got, want)
+	}
+	if strings.Contains(strings.Join(receipt.Missing, " "), "plan_admission_refusal") {
+		t.Fatalf("the receipt's refusal fact is incomplete: %v", receipt.Missing)
+	}
+	// The TASK is not ended: it is still owed, planned by nothing, and the
+	// refusal it is owed a turn for is the durable record of the parked one.
+	found := reconstructed(t, store, task)
+	var owed planAttemptRefusal
+	if found.Planned || found.PlanAttemptID != "" || len(found.PlanAttemptRefusals[parked.RefusalID]) == 0 ||
+		json.Unmarshal(found.PlanAdmissionRefused, &owed) != nil || owed.RefusalID != parked.RefusalID || owed.PlanAttemptID != attempts[0] {
+		t.Fatalf("the parked task is not resumable with its owed refusal bound to its attempt: %+v", found)
+	}
+}
+
+// W2, reset: a materially different plan is a different canonical attempt and
+// so not the same refusal -- it returns to the architect again; only ITS
+// identical repetition parks.
+func TestObj61W2AMateriallyDifferentPlanResetsTheRepeatIdentity(t *testing.T) {
+	const task = "task-obj61-w2-reset"
+	run, architect := obj61Run(t, sessionStore(t), task, obj61Refused, obj61RefusedAgain, obj61RefusedAgain)
+	attempts := startedAttempts(t, run.events)
+	refusals := refusalsIn(t, run.events)
+	if len(architect.prompts) != 3 || len(attempts) != 3 || attempts[0] == attempts[1] || attempts[1] != attempts[2] ||
+		len(refusals) != 2 || !hasKind(kindsOf(run.events), event.WorkflowPlanAdmissionRefused) {
+		t.Fatalf("a different plan did not reset the identity, or its repeat did not park: prompts %d attempts %v refusals %d\n%s",
+			len(architect.prompts), attempts, len(refusals), gapLoopTrace(run.events))
+	}
+}
+
+// W2, new evidence: the same attempt and the same reason, decided against a
+// different recorded grant state, a re-certified graph identity or a changed
+// scoped preflight answer, is not the same refusal; the repetition under
+// unchanged evidence is.
+func TestObj61W2NewGovernedEvidenceResetsTheRepeatIdentity(t *testing.T) {
+	e, _ := attemptEngine(t)
+	const task = "task-obj61-w2-evidence"
+	d := attemptPlan("plan A", teS, teF)
+	refused := refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, errors.New("existing-test edit admission refused before implementation: x"))
+	route := func(grants []testEditGrant) (planAttemptRefusal, error) {
+		t.Helper()
+		routeWithTestEdits(t, e, task, d, grants)
+		return e.continueAfterAdmissionRefusal(task, refused)
+	}
+	first, err := route(nil)
+	if err != nil || first.RefusalID == "" {
+		t.Fatalf("the first refusal was not returned to the architect: %v", err)
+	}
+	second, err := route(teEditGrants(t))
+	if err != nil || second.PlanAttemptID != first.PlanAttemptID || second.RefusalID == first.RefusalID {
+		t.Fatalf("a newly recorded grant state was not new evidence: %v %+v", err, second)
+	}
+	var parked *PlanAdmissionRefused
+	if _, err := route(teEditGrants(t)); !errors.As(err, &parked) || parked.RefusalID != second.RefusalID {
+		t.Fatalf("the identical refusal under unchanged evidence was not parked: %v", err)
+	}
+	// The same attempt, declaration, reason, world and grant records, decided
+	// under a RE-CERTIFIED graph identity: new governed evidence. The first
+	// refusal under it returns to the architect; only its unchanged repeat
+	// parks.
+	e.mu.Lock()
+	e.graphs = map[string]*agent.GraphBinding{task: {Digest: strings.Repeat("a", 40)}}
+	e.mu.Unlock()
+	third, err := route(teEditGrants(t))
+	if err != nil || third.PlanAttemptID != second.PlanAttemptID || third.Reason != second.Reason ||
+		string(third.Declaration) != string(second.Declaration) || third.RefusalID == second.RefusalID {
+		t.Fatalf("a re-certified graph identity was not new governed evidence: %v %+v", err, third)
+	}
+	if _, err := route(teEditGrants(t)); !errors.As(err, &parked) || parked.RefusalID != third.RefusalID {
+		t.Fatalf("the identical refusal under the re-certified graph was not parked: %v", err)
+	}
+	// And under a changed scoped preflight answer for the same attempt.
+	scopedRoute := func() (planAttemptRefusal, error) {
+		t.Helper()
+		routeWithTestEdits(t, e, task, d, teEditGrants(t))
+		e.mu.Lock()
+		scoped := e.planAttemptsOf(task).scopedPreflight[third.PlanAttemptID]
+		e.mu.Unlock()
+		scoped.RiskClass = "HIGH_RISK"
+		e.noteScopedPreflight(task, scoped)
+		return e.continueAfterAdmissionRefusal(task, refused)
+	}
+	fourth, err := scopedRoute()
+	if err != nil || fourth.PlanAttemptID != third.PlanAttemptID || fourth.RefusalID == third.RefusalID {
+		t.Fatalf("a changed scoped preflight answer was not new governed evidence: %v %+v", err, fourth)
+	}
+	if _, err := scopedRoute(); !errors.As(err, &parked) || parked.RefusalID != fourth.RefusalID {
+		t.Fatalf("the identical refusal under the changed scoped answer was not parked: %v", err)
+	}
+	// Classes that do not establish only "this plan" are routed as before.
+	for _, c := range []planAdmissionRefusalClass{refusalAuthorityDeclined, refusalSuppliedPlan, "unknown"} {
+		cause := refusePlanAdmission(c, nil, errors.New("declined"))
+		if _, err := e.continueAfterAdmissionRefusal(task, cause); err != cause {
+			t.Errorf("class %s was continued: %v", c, err)
+		}
+	}
+	plain := errors.New("Sensei scoped preflight: connection reset")
+	if _, err := e.continueAfterAdmissionRefusal(task, plain); err != plain {
+		t.Fatalf("an operational failure was read as a plan refusal: %v", err)
+	}
+}
+
+// W3 (Objective 61): the replacement plan's grants are derived fresh. The
+// refused plan held a real derived test-edit grant; its replacement declares
+// none, and nothing of the refused attempt's grant state reaches it -- in
+// memory, in the record bound to it, or in the operative plan.
+func TestObj61W3AReplacementPlanDerivesItsAuthorityFresh(t *testing.T) {
+	const task = "task-obj61-w3"
+	run, _ := obj61Run(t, sessionStore(t), task, obj61RefusedWithEdit, replanNoGrants)
+	e := run.engine
+	attempts := startedAttempts(t, run.events)
+	if len(attempts) != 2 || len(refusalsIn(t, run.events)) != 1 {
+		t.Fatalf("premise: one refused attempt and one replacement: %v\n%s", attempts, gapLoopTrace(run.events))
+	}
+	_, refusedEdits := e.recordedGrants(task, attempts[0])
+	if len(refusedEdits.Grants) != 1 || refusedEdits.Grants[0].Path != "main_test.go" {
+		t.Fatalf("premise: the refused attempt held a derived test-edit grant: %+v", refusedEdits)
+	}
+	p, ed := e.recordedGrants(task, attempts[1])
+	if ed.PlanAttemptID != attempts[1] || p.PlanAttemptID != attempts[1] || len(ed.Grants) != 0 || len(p.Grants) != 0 {
+		t.Fatalf("the replacement's grant state is not its own fresh, empty derivation: %+v %+v", p, ed)
+	}
+	if op := e.operativePlanAttempt(task); op.ID != attempts[1] {
+		t.Fatalf("the operative attempt is not the replacement: %s", op.ID)
+	}
+	if g := e.testEditGrants(task); len(g) != 0 {
+		t.Fatalf("the refused attempt's grant reached the replacement: %+v", g)
+	}
+}
+
+// W7 (Objective 61): DURABLE REFUSAL RESUME. A parked task, interrupted after
+// its refusal and park were durably persisted, is reconstructed in a fresh
+// session view and resumed by a fresh engine at its architect turn, with the
+// exact owed refusal -- its PlanAttemptID and RefusalID, from the durable
+// record -- as evidence. No implementer starts before a plan is admitted; no
+// authority is restored or minted from the refused attempt; the identical plan
+// parks at once (it is the second occurrence) naming the same refusal, and a
+// different lawful plan proceeds.
+func TestObj61W7AResumePresentsTheOwedRefusalAndRestoresNoAuthority(t *testing.T) {
+	const task = "task-obj61-resume"
+	store := sessionStore(t)
+	first, _ := obj61Run(t, store, task, obj61Refused)
+	refused := startedAttempts(t, first.events)[0]
+	recorded := refusalsIn(t, first.events)
+	if len(recorded) != 1 {
+		t.Fatalf("premise: one durable refusal: %+v", recorded)
+	}
+	found := reconstructed(t, store, task)
+	var owed planAttemptRefusal
+	if json.Unmarshal(found.PlanAdmissionRefused, &owed) != nil || owed.PlanAttemptID != refused || owed.RefusalID != recorded[0].RefusalID {
+		t.Fatalf("FindInterrupted does not expose the exact owed refusal: %s", found.PlanAdmissionRefused)
+	}
+
+	for name, tc := range map[string]struct {
+		turn    string
+		parks   bool
+		prompts int
+	}{
+		"identical plan": {obj61Refused, true, 1},
+		"lawful plan":    {replanA, false, 1},
+	} {
+		t.Run(name, func(t *testing.T) {
+			resumed := sessionStore(t)
+			history, _ := store.Load()
+			for _, ev := range history {
+				if err := resumed.Append(ev); err != nil {
+					t.Fatal(err)
+				}
+			}
+			next, architect, _ := newGapLoopEngine(t, &gapLoopRun{engine: first.engine, world: first.world}, resumed, tc.turn)
+			next.Config.Sensei.Args = first.engine.Config.Sensei.Args
+			run := drivePlanAdmission(t, next, architect, first.world, task, func(ctx context.Context) { next.Resume(ctx, found) })
+			if len(architect.prompts) != tc.prompts || !strings.Contains(architect.prompts[0], "RECORDED PLAN-ADMISSION REFUSALS") {
+				t.Fatalf("the resumed architect turn was not shown the recorded refusals (%d prompts)", len(architect.prompts))
+			}
+			requireRefusalEnvelope(t, architect.prompts[0], obj61OwedHeading, recorded[0])
+			if got := hasKind(kindsOf(run.events), event.WorkflowPlanAdmissionRefused); got != tc.parks {
+				t.Fatalf("parked=%v, want %v:\n%s", got, tc.parks, gapLoopTrace(run.events))
+			}
+			admitted := indexOfKind(run.events, event.PlanProposed)
+			if admitted < 0 {
+				admitted = len(run.events)
+			}
+			if implementerStartedBefore(run.events, admitted) {
+				t.Fatalf("an implementer started on resume before any plan was admitted:\n%s", gapLoopTrace(run.events))
+			}
+			if tc.parks {
+				var again planAttemptRefusal
+				if at := indexOfKind(run.events, event.WorkflowPlanAdmissionRefused); json.Unmarshal(run.events[at].Payload, &again) != nil ||
+					again.RefusalID != owed.RefusalID || again.PlanAttemptID != refused || len(refusalsIn(t, run.events)) != 0 {
+					t.Fatalf("the resumed repeat did not park on the owed refusal: %+v", again)
+				}
+			}
+			for _, ev := range run.events {
+				if ev.Kind == event.PlanProposed && strings.Contains(string(ev.Payload), refused) {
+					t.Fatal("the refused attempt was made operative on resume")
+				}
+			}
+			if !tc.parks && !hasKind(kindsOf(run.events), event.PlanProposed) {
+				t.Fatalf("the lawful plan did not proceed on resume:\n%s", gapLoopTrace(run.events))
+			}
+		})
+	}
+}
+
+// W7, planned task (Objective 61): a task with an OPERATIVE plan whose in-cycle
+// architect re-plan receives its FIRST admission refusal, interrupted after
+// that refusal is durably recorded and before any replacement answer, still
+// owes the architect that refusal. FindInterrupted names it with its exact
+// PlanAttemptID and RefusalID beside the older operative plan; a fresh engine's
+// Resume routes the obligation to the architect, never to an implementer under
+// the older plan; the identical answer parks naming the same refusal, and a
+// lawful replacement is admitted through its own fresh attempt.
+func TestObj61W7BAFirstReplanRefusalOfAPlannedTaskIsOwedAcrossInterruption(t *testing.T) {
+	requireGofmt(t)
+	const task = "task-obj61-w7b"
+	store := sessionStore(t)
+	e, _, _ := newGapLoopEngine(t, nil, store, replanA)
+	world := grantWorld(t, e)
+	e.Config.Sensei.Args = []string{"-c", regionScript(objectiveRunScript, "main.go", "main_test.go")}
+	e.Config.Permissions.WriteCandidates, e.Config.Permissions.CreateWorktrees = true, true
+	e.Config.Permissions.RunFormatters, e.Config.Permissions.LocalCommit = true, true
+	e.Config.Validation = formattingValidation()
+	e.Config.Workflow.ReviewCycles = 1
+	worker := e.Config.Architect
+	worker.Command, worker.Args = stubProcess(t, "implementor", "")
+	e.Config.Implementors = []config.Agent{worker}
+	e.Config.Reviewer = e.Config.Architect
+	e.Config.Reviewer.Name = "codex"
+	architect := &scriptedArchitect{turns: []architectTurn{{text: replanA}, {text: obj61Refused}, {text: obj61Refused}}}
+	e.Runners = objectiveRoles{architect: architect, reviewer: escalatingReviewer, bindings: make(chan RunnerSpec, 8)}
+	first := drivePlanAdmission(t, e, architect, world, task, func(ctx context.Context) {
+		e.run(ctx, task, attemptObjective, RequestedByHuman)
+	})
+	attempts := startedAttempts(t, first.events)
+	refusals := refusalsIn(t, first.events)
+	proposed := indexOfKind(first.events, event.PlanProposed)
+	refusedAt := indexOfKind(first.events, event.PlanAttemptRefused)
+	if len(attempts) < 2 || len(refusals) != 1 || proposed < 0 || refusedAt < proposed || refusals[0].PlanAttemptID == attempts[0] {
+		t.Fatalf("premise: plan A operative, then an in-cycle re-plan refused once at admission: attempts %v refusals %+v\n%s",
+			attempts, refusals, gapLoopTrace(first.events))
+	}
+	operative, owedRefusal := attempts[0], refusals[0]
+
+	// THE INTERRUPTION: the durable record ends at the first refusal, before
+	// the architect answered it.
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cut := -1
+	for i, ev := range history {
+		if ev.TaskID == task && ev.Kind == event.PlanAttemptRefused {
+			cut = i
+			break
+		}
+	}
+	if cut < 0 {
+		t.Fatal("premise: the refusal was not durably recorded")
+	}
+	interrupted := func(t *testing.T) *session.Store {
+		t.Helper()
+		s := sessionStore(t)
+		for _, ev := range history[:cut+1] {
+			if err := s.Append(ev); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return s
+	}
+	found := reconstructed(t, interrupted(t), task)
+	var owed planAttemptRefusal
+	if !found.Planned || found.PlanAttemptID != operative || json.Unmarshal(found.PlanAdmissionRefused, &owed) != nil ||
+		owed.PlanAttemptID != owedRefusal.PlanAttemptID || owed.RefusalID != owedRefusal.RefusalID {
+		t.Fatalf("FindInterrupted does not name the first refusal as owed beside the operative plan: planned %v operative %s owed %s",
+			found.Planned, short12(found.PlanAttemptID), found.PlanAdmissionRefused)
+	}
+
+	for name, tc := range map[string]struct {
+		turn  string
+		parks bool
+	}{
+		"identical answer":   {obj61Refused, true},
+		"lawful replacement": {replanSamePaths, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			next, _, _ := newGapLoopEngine(t, &gapLoopRun{engine: e, world: world}, interrupted(t), tc.turn)
+			next.Config = e.Config
+			answer := &scriptedArchitect{turns: []architectTurn{{text: tc.turn}, {text: tc.turn}, {text: tc.turn}}}
+			next.Runners = objectiveRoles{architect: answer, reviewer: escalatingReviewer, bindings: make(chan RunnerSpec, 8)}
+			run := drivePlanAdmission(t, next, answer, world, task, func(ctx context.Context) { next.Resume(ctx, found) })
+			if len(answer.prompts) == 0 || !strings.Contains(answer.prompts[0], "RECORDED PLAN-ADMISSION REFUSALS") {
+				t.Fatalf("the resumed architect turn was not shown the recorded refusals (%d prompts):\n%s", len(answer.prompts), gapLoopTrace(run.events))
+			}
+			requireRefusalEnvelope(t, answer.prompts[0], obj61OwedHeading, owedRefusal)
+			admitted := indexOfKind(run.events, event.PlanProposed)
+			if admitted < 0 {
+				admitted = len(run.events)
+			}
+			if implementerStartedBefore(run.events, admitted) {
+				t.Fatalf("an implementer started under the older plan before any replacement was admitted:\n%s", gapLoopTrace(run.events))
+			}
+			if got := hasKind(kindsOf(run.events), event.WorkflowPlanAdmissionRefused); got != tc.parks {
+				t.Fatalf("parked=%v, want %v:\n%s", got, tc.parks, gapLoopTrace(run.events))
+			}
+			if tc.parks {
+				var again planAttemptRefusal
+				at := indexOfKind(run.events, event.WorkflowPlanAdmissionRefused)
+				if json.Unmarshal(run.events[at].Payload, &again) != nil || again.RefusalID != owed.RefusalID ||
+					again.PlanAttemptID != owed.PlanAttemptID || len(answer.prompts) != 1 || hasKind(kindsOf(run.events), event.PlanProposed) {
+					t.Fatalf("the identical answer did not park on the owed refusal: %+v (%d prompts)", again, len(answer.prompts))
+				}
+				return
+			}
+			var p proposedPlan
+			_ = json.Unmarshal(run.events[admitted].Payload, &p)
+			fresh := startedAttempts(t, run.events)
+			if len(fresh) == 0 || p.PlanAttemptID != fresh[len(fresh)-1] || p.PlanAttemptID == operative || p.PlanAttemptID == owed.PlanAttemptID {
+				t.Fatalf("the replacement was not admitted through its own fresh attempt: %q (started %v)", p.PlanAttemptID, fresh)
+			}
+			if _, ed := next.recordedGrants(task, p.PlanAttemptID); ed.PlanAttemptID != p.PlanAttemptID {
+				t.Fatalf("the replacement's authority was not derived under its own attempt: %+v", ed)
+			}
+		})
+	}
+}
+
+// W5 (Objective 61) CONTROL: the continuation is ONE shared boundary. routePlan
+// still reconciles exactly as DF-37 has it and decides no continuation; both
+// architect routing paths reach the boundary; nothing at it names a file, an
+// error text or a caller; and inspectProspective is untouched by the boundary.
+func TestObj61W5TheContinuationIsOneSharedBoundary(t *testing.T) {
+	route := sourceOf(t, "internal/workflow/engine.go", "routePlan")
+	if strings.Contains(route, "continueAfterAdmissionRefusal") || strings.Count(route, "e.reconcileProspectiveGrants(") != 1 {
+		t.Fatal("routePlan decides a continuation, or no longer reconciles prospective grants exactly once")
+	}
+	ask := sourceOf(t, "internal/workflow/engine.go", "askArchitect")
+	if strings.Count(ask, "e.continueAfterAdmissionRefusal(taskID, err)") != 2 {
+		t.Fatal("both architect routing paths (proceed and escalate) must reach the one shared boundary")
+	}
+	boundary := sourceOf(t, "internal/workflow/engine.go", "continueAfterAdmissionRefusal")
+	for _, special := range []string{"_test.go", "coverage_reconciliation", "prospective admission refused", "holds no recorded grant", "resolveSuppliedPlan"} {
+		if strings.Contains(boundary, special) {
+			t.Errorf("the shared boundary special-cases %q", special)
+		}
+	}
+	if strings.Contains(sourceOf(t, "internal/workflow/prospective.go", "inspectProspective"), "PlanAdmission") {
+		t.Fatal("candidate inspection reads plan-admission continuation state")
+	}
+}
+
+// W8 (Objective 61): MULTIPLE REFUSALS, through the production recorder, the
+// session projection and the resume restorer. One plan attempt is refused
+// twice under different governing evidence -- two canonical RefusalIDs -- and
+// the invocation parks on the FIRST; both durable records stay distinguishable,
+// and the owed refusal a fresh engine restores is the parked one, not the one
+// written last.
+func TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked(t *testing.T) {
+	e, store := attemptEngine(t)
+	const task = "task-obj61-w8"
+	if err := store.Append(event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
+		t.Fatal(err)
+	}
+	d := attemptPlan("plan A", teS, teF)
+	refused := refusePlanAdmission(refusalTestEditAdmission, d.TestEdits, errors.New("existing-test edit admission refused before implementation: x"))
+	route := func(grants []testEditGrant) (planAttemptRefusal, error) {
+		t.Helper()
+		routeWithTestEdits(t, e, task, d, grants)
+		return e.continueAfterAdmissionRefusal(task, refused)
+	}
+	first, err := route(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := route(teEditGrants(t))
+	if err != nil || second.PlanAttemptID != first.PlanAttemptID || second.RefusalID == first.RefusalID {
+		t.Fatalf("premise: two distinct refusals of one attempt: %v %+v %+v", err, first, second)
+	}
+	_, err = route(nil)
+	var parked *PlanAdmissionRefused
+	if !errors.As(err, &parked) || parked.RefusalID != first.RefusalID {
+		t.Fatalf("premise: the repeat of the FIRST refusal parks: %v", err)
+	}
+	e.beginReceipt(task)
+	if !e.parkPlanAdmission(task, err) {
+		t.Fatal("the repeated refusal did not park the invocation")
+	}
+
+	found := reconstructed(t, store, task)
+	if len(found.PlanAttemptRefusals) != 2 || planAttemptOfRecord(found.PlanAttemptRefusals[first.RefusalID]) != first.PlanAttemptID ||
+		planAttemptOfRecord(found.PlanAttemptRefusals[second.RefusalID]) != first.PlanAttemptID {
+		t.Fatalf("the two refusals of one attempt are not both kept by RefusalID: %v", found.PlanAttemptRefusals)
+	}
+	fresh, _ := attemptEngine(t)
+	if err := fresh.restorePlanAdmissionRefusals(found); err != nil {
+		t.Fatal(err)
+	}
+	owed, others := fresh.takeRestoredRefusals(task)
+	if owed == nil || owed.RefusalID != first.RefusalID || owed.PlanAttemptID != first.PlanAttemptID ||
+		len(others) != 1 || others[0].RefusalID != second.RefusalID {
+		t.Fatalf("the owed refusal is not the parked one: owed %+v others %+v", owed, others)
+	}
+	if !fresh.refusalRecorded(task, first.RefusalID) || !fresh.refusalRecorded(task, second.RefusalID) {
+		t.Fatal("a restored refusal does not count toward its repetition")
+	}
+	if g := fresh.testEditGrants(task); len(g) != 0 || fresh.operativePlanAttempt(task).ID != "" {
+		t.Fatalf("restoring refusals restored authority: %+v", g)
+	}
+
+	// An owed refusal no durable record binds is refused as a restoration,
+	// never dropped and never routed to work.
+	forged := found
+	forged.PlanAdmissionRefused = []byte(`{"plan_attempt_id":"` + first.PlanAttemptID + `","refusal_id":"` + strings.Repeat("0", 64) + `"}`)
+	var refusal *RestorationRefusal
+	if err := fresh.restorePlanAdmissionRefusals(forged); !errors.As(err, &refusal) || refusal.Subject != restorationSubjectPlanAdmissionRefusal ||
+		refusal.Binding != RestorationRecordInconsistent {
+		t.Fatalf("an unbound owed refusal was accepted: %v", err)
+	}
+	forged.PlanAdmissionRefused = []byte(`{"plan_attempt_id":"` + strings.Repeat("1", 64) + `","refusal_id":"` + first.RefusalID + `"}`)
+	if err := fresh.restorePlanAdmissionRefusals(forged); !errors.As(err, &refusal) {
+		t.Fatalf("an owed refusal naming another attempt was accepted: %v", err)
+	}
+}
+
+// Objective 61: only the workflow's RECORDED return to the architect creates
+// an owed architect turn. Refusals of classes that do not return --
+// authority_declined, supplied_plan_unrevisable, an unknown class -- recorded
+// through the production recorder are evidence only: the session projection
+// names none of them as owed, and a resume restores them as evidence. An owed
+// refusal whose durable record carries no recorded return to the architect,
+// whose record claims that return for a class that does not return, or whose
+// payload is malformed is refused as a restoration, never silently discarded
+// and never routed to work.
+func TestObj61OnlyARecordedReturnToTheArchitectIsOwed(t *testing.T) {
+	e, store := attemptEngine(t)
+	const task = "task-obj61-owed-disposition"
+	if err := store.Append(event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
+		t.Fatal(err)
+	}
+	attempt := routeWithTestEdits(t, e, task, attemptPlan("plan A", teS, teF), nil)
+	byClass := map[planAdmissionRefusalClass]string{}
+	for _, c := range []planAdmissionRefusalClass{refusalAuthorityDeclined, refusalSuppliedPlan, "unknown"} {
+		cause := refusePlanAdmission(c, nil, errors.New("refused as "+string(c)))
+		if _, err := e.continueAfterAdmissionRefusal(task, cause); err != cause {
+			t.Fatalf("premise: class %s was continued: %v", c, err)
+		}
+		if err := e.closePlanAdmission(task, cause); err != cause {
+			t.Fatalf("premise: class %s was not recorded by the production recorder: %v", c, err)
+		}
+		rec, ok := e.admissionRefusalOf(task, cause)
+		if !ok {
+			t.Fatalf("premise: class %s is not a refusal of the pending attempt", c)
+		}
+		byClass[c] = rec.RefusalID
+	}
+	found := reconstructed(t, store, task)
+	if len(found.PlanAdmissionRefused) != 0 || len(found.PlanAttemptRefusals) != 3 {
+		t.Fatalf("a refusal never returned to the architect was projected as owed, or a record was lost: owed %s records %d",
+			found.PlanAdmissionRefused, len(found.PlanAttemptRefusals))
+	}
+	for c, id := range byClass {
+		var r planAttemptRefusal
+		if err := json.Unmarshal(found.PlanAttemptRefusals[id], &r); err != nil || r.Class != c || r.Continuation != "" {
+			t.Fatalf("class %s was recorded with a continuation it was never given: %+v (%v)", c, r, err)
+		}
+	}
+	fresh, _ := attemptEngine(t)
+	if err := fresh.restorePlanAdmissionRefusals(found); err != nil {
+		t.Fatal(err)
+	}
+	if owed, others := fresh.takeRestoredRefusals(task); owed != nil || len(others) != 3 {
+		t.Fatalf("evidence-only refusals were restored as owed: owed %+v others %d", owed, len(others))
+	}
+
+	// Each of them asserted as owed -- a parked payload naming it -- is an
+	// inconsistent record.
+	var refusal *RestorationRefusal
+	for c, id := range byClass {
+		forged := found
+		forged.PlanAdmissionRefused = found.PlanAttemptRefusals[id]
+		if err := fresh.restorePlanAdmissionRefusals(forged); !errors.As(err, &refusal) ||
+			refusal.Subject != restorationSubjectPlanAdmissionRefusal || refusal.Binding != RestorationRecordInconsistent {
+			t.Fatalf("a %s refusal asserted as owed was accepted: %v", c, err)
+		}
+	}
+	// A malformed owed payload is unreadable, not dropped.
+	malformed := found
+	malformed.PlanAdmissionRefused = json.RawMessage(`{"plan_attempt_id":`)
+	if err := fresh.restorePlanAdmissionRefusals(malformed); !errors.As(err, &refusal) || refusal.Binding != RestorationRecordUnreadable {
+		t.Fatalf("a malformed owed refusal was accepted: %v", err)
+	}
+
+	// A durable record that claims the return to the architect for a class
+	// that does not return is projected as owed -- the projection reads only
+	// the recorded continuation -- and the restorer refuses it.
+	claimed := planAttemptRefusal{PlanAttemptID: attempt.ID, TaskID: task, Reason: "declined",
+		Class: refusalAuthorityDeclined, GoverningEvidenceID: "g"}
+	claimed.RefusalID = planAdmissionRefusalID(claimed)
+	claimed.Continuation = session.PlanAdmissionContinuationArchitectTurn
+	if err := store.Append(event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", claimed)); err != nil {
+		t.Fatal(err)
+	}
+	inconsistent := reconstructed(t, store, task)
+	var named planAttemptRefusal
+	if json.Unmarshal(inconsistent.PlanAdmissionRefused, &named) != nil || named.RefusalID != claimed.RefusalID {
+		t.Fatalf("premise: the recorded continuation was not projected: %s", inconsistent.PlanAdmissionRefused)
+	}
+	if err := fresh.restorePlanAdmissionRefusals(inconsistent); !errors.As(err, &refusal) || refusal.Binding != RestorationRecordInconsistent {
+		t.Fatalf("an owed refusal of a non-returning class was accepted: %v", err)
+	}
+}
+
+// beforeStartRefusal is a canonical plan-admission refusal, returned to the
+// architect, of an attempt that is durably started only AFTER the refusal is
+// recorded: every field valid, so ordering is the only thing wrong with it.
+func beforeStartRefusal(taskID string) (planAttemptRefusal, planAttempt) {
+	a := planAttempt{ID: strings.Repeat("d", 64), TaskID: taskID}
+	r := planAttemptRefusal{PlanAttemptID: a.ID, TaskID: taskID, Reason: "declared prospective surface holds no recorded grant",
+		Class: refusalProspectiveAdmission, Declaration: json.RawMessage(`[{"path":"extra/coverage_reconciliation_test.go"}]`),
+		GoverningEvidenceID: strings.Repeat("e", 64)}
+	r.RefusalID = planAdmissionRefusalID(r)
+	r.Continuation = session.PlanAdmissionContinuationArchitectTurn
+	return r, a
+}
+
+// Objective 61: a refusal recorded BEFORE its attempt's PlanAttemptStarted is
+// not a refusal of anything this task had routed, and a later start of the
+// same PlanAttemptID does not validate it retroactively. It seeds no
+// repetition state -- so the next occurrence of that refusal is a FIRST
+// occurrence, returned to the architect, never parked -- and, as the owed
+// refusal, it is refused as a restoration by name rather than dropped. The
+// same records in their lawful order restore.
+func TestObj61ARefusalBeforeItsStartIsNeverRepetitionState(t *testing.T) {
+	const task = "task-obj61-before-start"
+	refusal, attempt := beforeStartRefusal(task)
+	record := func(order ...event.Event) session.Interrupted {
+		t.Helper()
+		_, store := attemptEngine(t)
+		if err := store.Append(event.New("s1", task, event.SourceSystem, event.TaskCreated, attemptObjective, nil)); err != nil {
+			t.Fatal(err)
+		}
+		for _, ev := range order {
+			if err := store.Append(ev); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return reconstructed(t, store, task)
+	}
+	refused := event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", refusal)
+	started := event.New("s1", task, event.SourceSystem, event.PlanAttemptStarted, "started", attempt)
+
+	found := record(refused, started)
+	if !found.StartedPlanAttempts[attempt.ID] || len(found.PlanAttemptRefusals) != 0 || len(found.PlanAdmissionRefused) == 0 {
+		t.Fatalf("premise: the later start is recorded, the earlier refusal is not repetition state and stays owed: %+v", found)
+	}
+	fresh, _ := attemptEngine(t)
+	var r *RestorationRefusal
+	err := fresh.restorePlanAdmissionRefusals(found)
+	if !errors.As(err, &r) || r.Subject != restorationSubjectPlanAdmissionRefusal || r.Binding != RestorationRecordInconsistent ||
+		!strings.Contains(r.Detail, short12(refusal.RefusalID)) || !strings.Contains(r.Detail, short12(attempt.ID)) {
+		t.Fatalf("an owed refusal recorded before its start was not refused by name: %v", err)
+	}
+	if fresh.refusalRecorded(task, refusal.RefusalID) {
+		t.Fatal("a refusal recorded before its start seeded repetition state")
+	}
+
+	// Not owed: still never repetition state, so its next occurrence is a
+	// first occurrence and is not parked.
+	evidence := refusal
+	evidence.Continuation = ""
+	found = record(event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", evidence), started)
+	fresh, _ = attemptEngine(t)
+	if err := fresh.restorePlanAdmissionRefusals(found); err != nil {
+		t.Fatal(err)
+	}
+	if fresh.refusalRecorded(task, refusal.RefusalID) {
+		t.Fatal("an evidence-only refusal recorded before its start seeded repetition state")
+	}
+
+	// Control: the lawful order restores the same refusal as owed and counted.
+	found = record(started, refused)
+	fresh, _ = attemptEngine(t)
+	if err := fresh.restorePlanAdmissionRefusals(found); err != nil {
+		t.Fatalf("the same refusal after its start was refused: %v", err)
+	}
+	if owed, ok := fresh.owedPlanAdmissionRefusal(task); !ok || owed.RefusalID != refusal.RefusalID || !fresh.refusalRecorded(task, refusal.RefusalID) {
+		t.Fatalf("the lawfully ordered refusal was not restored as owed and counted: %+v", owed)
+	}
+}
+
+// Objective 61: a fresh engine's full Resume of a PLANNED task that retains
+// candidate work, whose owed refusal cannot be bound -- recorded before its
+// attempt started -- ends RESTORATION_REFUSED. The receipt was opened and the
+// inherited candidate measured before restoration could refuse, so it does
+// not claim CandidateNone beside the work on disk, and no implementer is
+// invoked.
+func TestObj61AResumeRefusingAnOwedRefusalMeasuresTheRetainedCandidate(t *testing.T) {
+	const task = "task-obj61-resume-unbound"
+	store := sessionStore(t)
+	prior, _, _ := replanRun(t, store, task, replanA, replanSamePaths)
+	refusal, attempt := beforeStartRefusal(task)
+	for _, ev := range []event.Event{
+		event.New("s1", task, event.SourceSystem, event.PlanAttemptRefused, "refused", refusal),
+		event.New("s1", task, event.SourceSystem, event.PlanAttemptStarted, "started", attempt),
+	} {
+		if err := store.Append(ev); err != nil {
+			t.Fatal(err)
+		}
+	}
+	found := reconstructed(t, store, task)
+	if !found.Planned || len(found.PlanAdmissionRefused) == 0 || len(found.PlanAttemptRefusals[refusal.RefusalID]) != 0 {
+		t.Fatalf("premise: a planned task owed a refusal no durable record binds: %+v", found)
+	}
+	_, seen := resumeFresh(t, prior, store, found)
+	terminal := indexOfKind(seen, event.WorkflowRestorationRefused)
+	if terminal < 0 || !strings.Contains(seen[terminal].Summary, short12(refusal.RefusalID)) {
+		t.Fatalf("the unbound owed refusal did not end the invocation RESTORATION_REFUSED by name:\n%s", gapLoopTrace(seen))
+	}
+	if implementerStartedBefore(seen, len(seen)) {
+		t.Fatalf("an implementer was invoked under an unbound owed refusal:\n%s", gapLoopTrace(seen))
+	}
+	var receipt struct {
+		Receipt struct {
+			Outcome   string `json:"outcome"`
+			Candidate string `json:"candidate_state"`
+		} `json:"receipt"`
+	}
+	for _, ev := range seen[:terminal] {
+		if ev.Kind == event.RunReceipt {
+			_ = json.Unmarshal(ev.Payload, &receipt)
+		}
+	}
+	if receipt.Receipt.Outcome != "RESTORATION_REFUSED" || receipt.Receipt.Candidate != "UNATTEMPTED" {
+		t.Fatalf("the restoration refusal receipt does not account for the retained candidate work: %+v", receipt.Receipt)
 	}
 }
