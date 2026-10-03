@@ -108,8 +108,11 @@ type governedNeighbour struct {
 
 // testEditRecord is the TestEditGranted payload.
 type testEditRecord struct {
-	World  string          `json:"world"`
-	Grants []testEditGrant `json:"grants"`
+	// PlanAttemptID is the plan attempt this grant state belongs to. A record
+	// carrying none predates plan attempts.
+	PlanAttemptID string          `json:"plan_attempt_id,omitempty"`
+	World         string          `json:"world"`
+	Grants        []testEditGrant `json:"grants"`
 }
 
 const roleGoRegressionTestEdit = "go-regression-test-edit"
@@ -739,6 +742,9 @@ func operationalFiles(grants []testEditGrant) []string {
 // WHOLE recorded authority was verified: a partial set would continue execution
 // under authority nobody established.
 func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []testEditGrant, planned []string, world string) error {
+	if refusal := e.planAttemptGrantRefusal(task, task.TestEditRecord, "existing-test edit"); refusal != "" {
+		return restorationRefused(task.TaskID, RestorationInstrumentRecord, RestorationPlanAttemptUnbound, refusal)
+	}
 	if len(task.TestEditRecord) == 0 {
 		if len(recomputed) != 0 {
 			// The world now authorises what the run never recorded: the run
@@ -756,6 +762,13 @@ func (e *Engine) restoreTestEditGrants(task session.Interrupted, recomputed []te
 		return restorationRefused(task.TaskID, RestorationInstrumentRecord, RestorationWorldMismatch,
 			fmt.Sprintf("the recorded test-edit authorization was read at world %s, not the candidate's pinned base %s",
 				shortWorldID(rec.World), shortWorldID(world)))
+	}
+	if len(rec.Grants) == 0 {
+		// An EXPLICIT empty grant set: the operative attempt operated under no
+		// existing-test edit authority, and neither does its resumption --
+		// whatever the world would authorise today.
+		e.setTestEditGrants(task.TaskID, nil)
+		return nil
 	}
 	if err := matchTestEditGrants(planned, rec.Grants, world); err != nil {
 		return restorationRefused(task.TaskID, RestorationInstrumentRecord, RestorationRecordInconsistent, err.Error())
@@ -1003,7 +1016,55 @@ const (
 	// produced a grant. The answer is not inferred from current graph state or
 	// current derivation output.
 	RestorationInstrumentAmbiguous = "instrument_binding_unavailable_or_ambiguous"
+	// RestorationPlanAttemptUnbound: the record is not bound to the task's
+	// operative plan attempt -- it names another attempt, the operative attempt
+	// recorded no grant state at all, or the operative attempt itself does not
+	// verify. Authority from another plan attempt is never restored, and
+	// absence is never read as an empty grant set.
+	RestorationPlanAttemptUnbound = "plan_attempt_unbound"
 )
+
+// restorationSubjectPlanAttempt and restorationSubjectProspective name the
+// other authorities a resume re-establishes beside existing-test edits.
+const (
+	restorationSubjectPlanAttempt = "operative-plan-attempt"
+	restorationSubjectProspective = "prospective-create-authority"
+)
+
+// planAttemptGrantRefusal is checked by every grant restorer before it reads a
+// record: the operative attempt must already be established and verified in
+// this engine (restorePlanAttempt), and the record must exist and be bound to
+// exactly it. A task whose operative plan predates plan attempts holds only
+// records that predate them too. It returns "" when the record may be read.
+func (e *Engine) planAttemptGrantRefusal(task session.Interrupted, record json.RawMessage, kind string) string {
+	attempt := strings.TrimSpace(task.PlanAttemptID)
+	var bound struct {
+		PlanAttemptID string `json:"plan_attempt_id"`
+	}
+	if len(record) != 0 {
+		_ = json.Unmarshal(record, &bound)
+	}
+	if attempt == "" {
+		if bound.PlanAttemptID != "" {
+			return "the " + kind + " record is bound to plan attempt " + short12(bound.PlanAttemptID) +
+				", and the operative plan names no plan attempt"
+		}
+		return ""
+	}
+	if op := e.operativePlanAttempt(task.TaskID); op.ID != attempt {
+		return "the operative plan attempt " + short12(attempt) + " is not established; " + kind +
+			" authority is never restored before the plan attempt that owns it"
+	}
+	if len(record) == 0 {
+		return "the operative plan attempt " + short12(attempt) + " recorded no " + kind +
+			" grant state; absence of a record is not an empty grant set"
+	}
+	if bound.PlanAttemptID != attempt {
+		return "the " + kind + " record is bound to plan attempt " + orNone(short12(bound.PlanAttemptID), "none") +
+			", not to the operative plan attempt " + short12(attempt)
+	}
+	return ""
+}
 
 // RestorationCounts are the quantities a refusal may cite.
 //
@@ -1064,6 +1125,8 @@ func (r RestorationRefusal) Describe() string {
 		what = r.Subject + ": the record cannot be read"
 	case RestorationRecordInconsistent:
 		what = r.Subject + ": the record disagrees with the plan it claims to authorize"
+	case RestorationPlanAttemptUnbound:
+		what = r.Subject + ": the record is not bound to the operative plan attempt"
 	}
 	out := fmt.Sprintf("%s [instrument %s, binding %s]: %s", what, r.Instrument, r.Binding, r.Detail)
 	if m := r.Measured; m != nil {
@@ -1089,7 +1152,8 @@ func validRestorationInstrument(s string) bool {
 func validRestorationBinding(s string) bool {
 	switch s {
 	case RestorationRecordUnreadable, RestorationWorldMismatch, RestorationRecordInconsistent,
-		RestorationDerivedMismatch, RestorationAuthoredUnverifiable, RestorationInstrumentAmbiguous:
+		RestorationDerivedMismatch, RestorationAuthoredUnverifiable, RestorationInstrumentAmbiguous,
+		RestorationPlanAttemptUnbound:
 		return true
 	}
 	return false

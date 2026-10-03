@@ -128,16 +128,18 @@ func TestARunThatDiesBeforeTheGateStillSaysWhatItNeverReached(t *testing.T) {
 }
 
 // A supplied plan governs from the first instruction, so an early failure must
-// report it rather than reporting no plan.
+// report it rather than reporting no plan. It is named by its PlanAttemptID,
+// with the supplied digest as provenance.
 func TestAnEarlyFailureStillNamesASuppliedPlan(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
-	e.notePlan("task-1", "990090fd50446fedcdf60f11e3256ede", "")
+	attempt := fixturePlanAttemptID(t, "task-1", "a supplied bound")
+	e.notePlan("task-1", "990090fd50446fedcdf60f11e3256ede", attempt)
 	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
 	if r.PlanState != runreceipt.PlanPresent {
 		t.Fatalf("plan state = %s, want PRESENT", r.PlanState)
 	}
-	if r.PlanDigest.State != runreceipt.Known || !strings.Contains(r.PlanDigest.Source, "supplied") {
+	if r.PlanDigest.State != runreceipt.Known || r.PlanDigest.Text != attempt || !strings.Contains(r.PlanDigest.Source, "supplied") {
 		t.Fatalf("plan digest = %+v", r.PlanDigest)
 	}
 }
@@ -207,7 +209,7 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 	e := &Engine{}
 	e.beginReceipt("task-1")
 	e.noteWorld("task-1", "f01592b0f0828605ed254047fc064f41dacc78f2", "fac399f8225f")
-	e.notePlan("task-1", "", "a plan the architect wrote")
+	e.notePlan("task-1", "", fixturePlanAttemptID(t, "task-1", "a plan the architect wrote"))
 	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
 	e.noteCandidateDigest("task-1", "b4f471f096d13f2b")
 	e.noteReviewerAssigned("task-1", "codex")
@@ -236,22 +238,27 @@ func TestAnAcceptedRunIsIncompleteWhileItsCandidateIsNeverCommitted(t *testing.T
 }
 
 // An architect's plan had no identity at all before this slice asked for one.
+// It is named by its canonical PlanAttemptID, the identity its authority binds to.
 func TestAnArchitectsPlanNowHasAnIdentityToo(t *testing.T) {
 	e := &Engine{}
 	e.beginReceipt("task-1")
-	e.notePlan("task-1", "", "two repairs, both in the governed loop")
+	attempt := fixturePlanAttemptID(t, "task-1", "two repairs, both in the governed loop")
+	e.notePlan("task-1", "", attempt)
 	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
-	if r.PlanDigest.State != runreceipt.Known || len(r.PlanDigest.Text) != 64 {
-		t.Fatalf("plan digest = %+v, want a sha256 of the architect's plan text", r.PlanDigest)
+	if r.PlanDigest.State != runreceipt.Known || len(r.PlanDigest.Text) != 64 || r.PlanDigest.Text != attempt {
+		t.Fatalf("plan digest = %+v, want the plan's canonical PlanAttemptID %s", r.PlanDigest, attempt)
 	}
 	if !strings.Contains(r.PlanDigest.Source, "architect") {
 		t.Errorf("the source must distinguish it from a supplied plan, got %q", r.PlanDigest.Source)
 	}
-	// A supplied plan keeps its own identity, and the source says which it is.
+	// A supplied plan is named by its PlanAttemptID too, not by its byte
+	// digest; the digest stays beside it as provenance, and the source says
+	// which kind of plan it is.
 	e.beginReceipt("task-2")
-	e.notePlan("task-2", "990090fd", "ignored when a supplied digest exists")
+	e.notePlan("task-2", "990090fd", attempt)
 	r2 := e.emitReceipt("task-2", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
-	if r2.PlanDigest.Text != "990090fd" || !strings.Contains(r2.PlanDigest.Source, "supplied") {
+	if r2.PlanDigest.Text != attempt || !strings.Contains(r2.PlanDigest.Source, "supplied") ||
+		!strings.Contains(r2.PlanDigest.Source, "990090fd") {
 		t.Fatalf("supplied plan digest = %+v", r2.PlanDigest)
 	}
 }
@@ -368,7 +375,7 @@ func TestAStoppedRunIsCompleteAndSaysStopped(t *testing.T) {
 	e.beginReceipt("task-1")
 	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteWorld("task-1", "f01592b0", "42e6e12c")
-	e.notePlan("task-1", "990090fd", "")
+	e.notePlan("task-1", "990090fd", fixturePlanAttemptID(t, "task-1", "a supplied bound"))
 	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeStopped, e.candidateStateFor("task-1"))
 	state, missing := r.Completeness()
 	if state != runreceipt.Complete {
@@ -404,7 +411,7 @@ func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
 	e.beginReceipt("task-2")
 	e.noteServingProducer("task-2", os.Getpid(), true)
 	e.noteWorld("task-2", "f01592b0", "42e6e12c")
-	e.notePlan("task-2", "990090fd", "")
+	e.notePlan("task-2", "990090fd", fixturePlanAttemptID(t, "task-2", "a supplied bound"))
 	e.withReceipt("task-2", func(f *receiptFacts) { f.planState = runreceipt.PlanNone })
 	r2 := e.emitReceipt("task-2", event.WorkflowFailed, runreceipt.OutcomeUnreviewed, runreceipt.CandidateNone)
 	if state, missing := r2.Completeness(); state != runreceipt.Incomplete ||

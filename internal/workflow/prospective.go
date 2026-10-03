@@ -469,8 +469,11 @@ func sameSurface(a, b ProspectiveSurface) bool {
 // world identity they were read at. World is checked against the candidate's
 // pinned base on resume; a record from another world authorizes nothing here.
 type prospectiveRecord struct {
-	World  string             `json:"world"`
-	Grants []prospectiveGrant `json:"grants"`
+	// PlanAttemptID is the plan attempt this grant state belongs to. A record
+	// carrying none predates plan attempts.
+	PlanAttemptID string             `json:"plan_attempt_id,omitempty"`
+	World         string             `json:"world"`
+	Grants        []prospectiveGrant `json:"grants"`
 }
 
 // parseGoFacts reads a Go file's package clause and imports. Parse failure is

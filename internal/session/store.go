@@ -254,6 +254,38 @@ type Interrupted struct {
 	// TestEditRecord is the existing-test edit authorization the router
 	// recorded (M2.2), carried byte for byte for the same reason.
 	TestEditRecord json.RawMessage
+	// PlanAttemptID is the canonical identity of the OPERATIVE plan attempt:
+	// the plan_attempt_id the newest PlanProposed carries. Empty when no plan
+	// is operative, or when the operative plan was recorded before plan
+	// attempts existed; no identity is ever minted for such a record.
+	//
+	// It decides which grant records the task holds. Once a plan attempt is
+	// operative, ProspectiveRecord and TestEditRecord are the records bound to
+	// THAT id and to no other: a record from a superseded or refused attempt
+	// never returns because it was written later or names the same paths, and
+	// an operative attempt with no record of its own holds none -- absence is
+	// not an empty grant set, and is left for the restorer to refuse.
+	PlanAttemptID string
+	// PlanAttemptRefusals are the plan-admission refusals this task recorded,
+	// keyed by the PlanAttemptID each refused, payload byte for byte. Evidence
+	// about those exact attempts: a refusal never attaches to another attempt
+	// and never makes the task planned.
+	PlanAttemptRefusals map[string]json.RawMessage
+	// PlanAttemptStart is the FIRST PlanAttemptStarted record of the operative
+	// attempt, payload byte for byte: the durable prerequisite every authority
+	// record and the operative PlanProposed of that attempt stand on. Absent
+	// when no attempt-bearing plan is operative, or when that attempt's start
+	// was never recorded -- which the restorer refuses, never mints.
+	PlanAttemptStart json.RawMessage
+	// PlanAttemptStartFirst reports that PlanAttemptStart was recorded BEFORE
+	// the operative PlanProposed and before both grant records selected for
+	// that attempt. A start written after the authority it is meant to precede
+	// does not establish it.
+	PlanAttemptStartFirst bool
+	// StartedPlanAttempts are the PlanAttemptIDs this task durably started, so
+	// a record naming an attempt (a deferred question, say) can be checked
+	// against an attempt that was actually recorded rather than trusted.
+	StartedPlanAttempts map[string]bool
 	// AwaitingReview marks a task whose candidate stands and whose required
 	// independent review has not happened.
 	//
@@ -320,6 +352,22 @@ func blockedRole(raw json.RawMessage) string {
 	return b.Role
 }
 
+// planAttemptOf reads only the plan_attempt_id a record names: "" for a record
+// written before plan attempts existed. The workflow package owns the records'
+// full shapes; this package needs one field of them and must not import it.
+func planAttemptOf(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var r struct {
+		PlanAttemptID string `json:"plan_attempt_id"`
+	}
+	if json.Unmarshal(raw, &r) != nil {
+		return ""
+	}
+	return r.PlanAttemptID
+}
+
 // FindInterrupted reconstructs, from one session record, every task that has
 // begun and not ended, together with what each of them currently owes.
 //
@@ -346,6 +394,19 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		// instruction, so a later status line cannot replace an obligation
 		// with a sentence about it.
 		reviewFromVerdict bool
+		// prospective and testEdits are the newest grant record of each kind
+		// per plan attempt ("" for records that predate plan attempts). Which
+		// one the task holds is decided once, by the operative attempt.
+		prospective map[string]json.RawMessage
+		testEdits   map[string]json.RawMessage
+		// The position in the record of each attempt's first start, of the
+		// operative PlanProposed and of each attempt's selected grant records,
+		// so the start can be shown to precede the authority it establishes.
+		startAt       map[string]int
+		starts        map[string]json.RawMessage
+		proposedAt    int
+		prospectiveAt map[string]int
+		testEditsAt   map[string]int
 	}
 	order := []string{}
 	byTask := map[string]*partial{}
@@ -354,12 +415,15 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			return nil
 		}
 		if _, ok := byTask[id]; !ok {
-			byTask[id] = &partial{Interrupted: Interrupted{TaskID: id}}
+			byTask[id] = &partial{Interrupted: Interrupted{TaskID: id},
+				prospective: map[string]json.RawMessage{}, testEdits: map[string]json.RawMessage{},
+				startAt: map[string]int{}, starts: map[string]json.RawMessage{},
+				prospectiveAt: map[string]int{}, testEditsAt: map[string]int{}}
 			order = append(order, id)
 		}
 		return byTask[id]
 	}
-	for _, e := range events {
+	for at, e := range events {
 		p := get(e.TaskID)
 		if p == nil {
 			continue
@@ -415,10 +479,32 @@ func FindInterrupted(events []event.Event) []Interrupted {
 			if len(e.Payload) != 0 && json.Unmarshal(e.Payload, &src) == nil {
 				p.PlanSource, p.PlanDigest = src.Source, src.Digest
 			}
+			// The newest PlanProposed is the operative attempt, and it
+			// supersedes the previous one whole: a legacy plan recorded after
+			// an attempt-bearing one has no attempt, not the previous one's.
+			p.PlanAttemptID = planAttemptOf(e.Payload)
+			p.proposedAt = at
+		case event.PlanAttemptStarted:
+			// The FIRST start of an attempt is its prerequisite; a later start
+			// of the same identity (the same plan routed again) adds nothing.
+			if id := planAttemptOf(e.Payload); id != "" {
+				if _, seen := p.starts[id]; !seen {
+					p.starts[id], p.startAt[id] = e.Payload, at
+				}
+			}
 		case event.ProspectiveGranted:
-			p.ProspectiveRecord = e.Payload
+			p.prospective[planAttemptOf(e.Payload)] = e.Payload
+			p.prospectiveAt[planAttemptOf(e.Payload)] = at
 		case event.TestEditGranted:
-			p.TestEditRecord = e.Payload
+			p.testEdits[planAttemptOf(e.Payload)] = e.Payload
+			p.testEditsAt[planAttemptOf(e.Payload)] = at
+		case event.PlanAttemptRefused:
+			if id := planAttemptOf(e.Payload); id != "" {
+				if p.PlanAttemptRefusals == nil {
+					p.PlanAttemptRefusals = map[string]json.RawMessage{}
+				}
+				p.PlanAttemptRefusals[id] = e.Payload
+			}
 		case event.WorkflowStopped:
 			// Deliberately not terminal. A stop is the human withdrawing
 			// attention, and the whole point of leaving the candidate as it
@@ -559,6 +645,29 @@ func FindInterrupted(events []event.Event) []Interrupted {
 		// eligibility are two statements, and both of them get made.
 		if p.created && !p.done {
 			p.Interrupted.Planned = p.planned
+			// The grant records the operative attempt owns, and only those.
+			// With no attempt-bearing plan operative, only records that
+			// predate plan attempts are read, exactly as before them.
+			p.Interrupted.ProspectiveRecord = p.prospective[p.PlanAttemptID]
+			p.Interrupted.TestEditRecord = p.testEdits[p.PlanAttemptID]
+			if id := p.PlanAttemptID; id != "" {
+				if start, ok := p.starts[id]; ok {
+					first := p.startAt[id] < p.proposedAt
+					if g, ok := p.prospectiveAt[id]; ok && g < p.startAt[id] {
+						first = false
+					}
+					if g, ok := p.testEditsAt[id]; ok && g < p.startAt[id] {
+						first = false
+					}
+					p.Interrupted.PlanAttemptStart, p.Interrupted.PlanAttemptStartFirst = start, first
+				}
+			}
+			if len(p.starts) != 0 {
+				p.Interrupted.StartedPlanAttempts = map[string]bool{}
+				for id := range p.starts {
+					p.Interrupted.StartedPlanAttempts[id] = true
+				}
+			}
 			out = append(out, p.Interrupted)
 		}
 	}

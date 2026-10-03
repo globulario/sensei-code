@@ -320,6 +320,32 @@ func TestAnUnreadableFWithAReadableSReceivesNoProspectiveAuthority(t *testing.T)
 	}
 }
 
+// commitFixtureFile commits one file at rel into the repository at root and
+// returns the new HEAD, so a fixture's pinned world can hold a file the minted
+// base does not.
+func commitFixtureFile(t *testing.T, root, rel, content string) string {
+	t.Helper()
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(root, rel)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, rel), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", "--", rel)
+	run("commit", "-q", "-m", "fixture: "+rel)
+	return run("rev-parse", "HEAD")
+}
+
 // The Git reader itself tells the three states apart: present, provably
 // missing from the tree, and unreadable (here: a world that is not an object).
 func TestGitShowAtDistinguishesMissingFromUnreadable(t *testing.T) {

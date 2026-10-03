@@ -470,7 +470,7 @@ func TestABlockAfterPlanningKeepsThePlan(t *testing.T) {
 	e, events, _ := blockedEngine(t, t.TempDir(), "session-d")
 	const task = "task-11"
 	e.beginReceipt(task)
-	e.notePlan(task, "", "the bounded plan")
+	e.notePlan(task, "", fixturePlanAttemptID(t, task, "the bounded plan"))
 	e.blockExternally(task, &RoleUnavailable{Role: roles.Architect, Provider: "chatgpt", Cause: quota()})
 	if rec := receiptFrom(t, drainEvents(events)); rec.PlanState != runreceipt.PlanPresent {
 		t.Fatalf("a recorded plan was erased by a later block: plan_state %q", rec.PlanState)

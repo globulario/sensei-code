@@ -45,7 +45,7 @@ func TestAnAcceptedRunProducesACompleteReceipt(t *testing.T) {
 	e.beginReceipt("task-1")
 	e.noteServingProducer("task-1", os.Getpid(), true)
 	e.noteWorld("task-1", base, "42e6e12cd5737530c4c8d054f8178cde849b72cae7c4845b6613f07a714d2b64")
-	e.notePlan("task-1", "", "a plan the architect wrote")
+	e.notePlan("task-1", "", fixturePlanAttemptID(t, "task-1", "a plan the architect wrote"))
 	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
 	e.noteCapturedTree("task-1", cap.Tree)
 	// The REAL rendering digest, so the canonical relation is measured rather

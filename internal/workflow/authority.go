@@ -85,7 +85,33 @@ type Claim struct {
 	// when a closure round could not settle it. It is a reference to an
 	// identity the engine owns, not an identity the model authored.
 	Gap string `json:"gap,omitempty"`
+	// Authority states, in structure, that this premise is about exactly one
+	// plan-local authority requirement the plan itself declares. Absent on
+	// every other premise. It is a statement of what the premise is ABOUT, so
+	// that a recorded grant can answer it exactly; it grants nothing.
+	Authority *AuthorityPremise `json:"authority,omitempty"`
 }
+
+// AuthorityPremise is the structured subject of a premise about plan-local
+// authority: one declared requirement, by kind and path, and what the premise
+// asserts about it. Every field is read by exact membership; a value outside
+// its closed set makes the premise an ordinary one.
+type AuthorityPremise struct {
+	// Requirement is premiseProspectiveCreate (a declared prospective_surfaces
+	// entry) or premiseTestEdit (a declared test_edits entry).
+	Requirement string `json:"requirement"`
+	// Path is the declared entry's path, exactly as declared.
+	Path string `json:"path"`
+	// State is what the premise asserts: premiseAuthorityUnestablished.
+	State string `json:"state"`
+}
+
+// The closed vocabularies of AuthorityPremise.
+const (
+	premiseProspectiveCreate      = "prospective_create"
+	premiseTestEdit               = "test_edit"
+	premiseAuthorityUnestablished = "unestablished"
+)
 
 // Routing is the router's decision plus the reason a human can act on.
 // RefusalBasis says what a stop RESTS ON. It never decides whether the stop
@@ -246,15 +272,102 @@ type taskResolutions struct {
 	hydrated bool
 	byKey    map[string]*AuthorityResolution
 	order    []string
+	// settlements are the explicit answers given about each identity, in the
+	// order given, each owned by the plan attempt it was asked about.
+	settlements map[string][]gapAnswer
+	// answerScope is which of the task's recorded answers a routing may
+	// consume: see answerScope.
+	answerScope answerScope
+	// observedBy is, per identity, the plan attempt whose routing last raised
+	// it: the attempt a question about it is about (questionOwner).
+	observedBy map[string]string
+}
+
+// observe records that attempt's routing raised the identity key.
+func (tr *taskResolutions) observe(key, attempt string) {
+	if attempt == "" {
+		return
+	}
+	if tr.observedBy == nil {
+		tr.observedBy = map[string]string{}
+	}
+	tr.observedBy[key] = attempt
+}
+
+// gapAnswer is one explicit settlement of a gap identity.
+type gapAnswer struct {
+	owner   string
+	epoch   int
+	outcome authority.Outcome
+}
+
+// answerScope is the plan-attempt ownership rule for recorded human answers --
+// gap settlements and consequence resolutions alike.
+//
+// An answer is owned by the plan attempt the question was asked about, and is
+// recorded with its PlanAttemptID. It may be consumed ONLY by a routing of that
+// exact attempt -- the same canonical identity, wherever it recurs -- and only
+// when this task durably started it. With no attempt being routed, the subject
+// is the operative attempt the record names.
+//
+// No answer crosses to any OTHER attempt: not to the plan the architect wrote
+// in reply to it, not to a replacement after an operative transition, and not
+// to a plan that differs from its owner only in a declared effect. Each attempt
+// is routed through its own authority decision; an answer about one plan never
+// authorizes another merely because its condition, gap or paths read the same.
+// An answer naming an attempt this task never durably started authorizes
+// nothing.
+//
+// A legacy answer, recorded before answers named their attempt, keeps its
+// compatibility reading: it is consumed within the resolution it was given in
+// and by the attempt that resolution made operative -- never across a
+// transition to another attempt.
+type answerScope struct {
+	// epoch counts the task's operative transitions recorded so far.
+	epoch int
+	// closedBy is the attempt each transition made operative, by the epoch it
+	// closed; operative is the latest of them.
+	closedBy  map[int]string
+	operative string
+	// started are the attempts this task durably started.
+	started map[string]bool
+}
+
+// admits reports whether an answer owned by owner, given in epoch, may be
+// consumed by a routing of the attempt subject ("" for none in progress).
+func (s answerScope) admits(owner string, epoch int, subject string) bool {
+	if subject == "" {
+		subject = s.operative
+	}
+	if owner != "" {
+		return s.started[owner] && owner == subject
+	}
+	// The legacy compatibility reading.
+	return epoch == s.epoch || (subject != "" && s.closedBy[epoch] == subject)
+}
+
+// transition records that attempt became operative, closing the current
+// resolution.
+func (s *answerScope) transition(attempt string) {
+	if s.closedBy == nil {
+		s.closedBy = map[int]string{}
+	}
+	s.closedBy[s.epoch] = attempt
+	s.epoch++
+	s.operative = attempt
 }
 
 // resolvedAuthority is the AuthorityResolved payload for an answer given about
-// an identified gap: the existing resolution, unchanged and inline, plus the
-// identity it settles. A reader that decodes an authority.Resolution sees
-// exactly the fields it always did.
+// a certifiability condition: the existing resolution, unchanged and inline,
+// plus the identity of the gap it settles, when it is about one, and the plan
+// attempt it was asked about. A reader that decodes an authority.Resolution
+// sees exactly the fields it always did.
 type resolvedAuthority struct {
 	authority.Resolution
 	Gap *GapIdentity `json:"gap_identity,omitempty"`
+	// PlanAttemptID is the attempt whose question this answers. Absent on
+	// records written before answers named their attempt (see answerScope).
+	PlanAttemptID string `json:"plan_attempt_id,omitempty"`
 }
 
 // authorityGapKey carries the gap a human question is about through the one
@@ -286,17 +399,33 @@ func (tr *taskResolutions) entry(gap GapIdentity) *AuthorityResolution {
 }
 
 // settle is the one settlement transition. Only an outcome that settles counts
-// (a revise answer asks for another design and leaves the gap standing), and
-// the first settlement stands.
-func (tr *taskResolutions) settle(gap GapIdentity, outcome authority.Outcome) {
+// (a revise answer asks for another design and leaves the gap standing). Each
+// settlement keeps the attempt that owns it; which one stands for a routing is
+// decided when it is read (view).
+func (tr *taskResolutions) settle(gap GapIdentity, outcome authority.Outcome, owner string, epoch int) {
 	if !outcome.Settles() {
 		return
 	}
-	r := tr.entry(gap)
-	if r.Settled {
-		return
+	tr.entry(gap)
+	if tr.settlements == nil {
+		tr.settlements = map[string][]gapAnswer{}
 	}
-	r.Settled, r.Outcome = true, outcome
+	tr.settlements[gap.Key()] = append(tr.settlements[gap.Key()], gapAnswer{owner: owner, epoch: epoch, outcome: outcome})
+}
+
+// view is the resolution of key as a routing of the attempt pending sees it:
+// settled by the FIRST settlement that routing may consume, and by no other.
+// The first admissible settlement stands; replay and resume cannot override it.
+func (tr *taskResolutions) view(key, pending string) AuthorityResolution {
+	r := *tr.byKey[key]
+	r.Settled, r.Outcome = false, ""
+	for _, a := range tr.settlements[key] {
+		if tr.answerScope.admits(a.owner, a.epoch, pending) {
+			r.Settled, r.Outcome = true, a.outcome
+			break
+		}
+	}
+	return r
 }
 
 // gapSubject resolves what a premise is about to a planned file, by path.
@@ -1069,4 +1198,81 @@ func (e *knowledgeLimitError) Error() string {
 	return "this task cannot be governed further without knowledge the graph does not hold: " + e.Condition +
 		"\nunexamined: " + strings.Join(e.Missing, ", ") +
 		"\ncloses: " + e.Closes
+}
+
+// premisesUnderRecordedAuthority separates the plan's premises into those the
+// router reads and those a RECORDED grant already answers.
+//
+// Grants this engine recorded for the plan attempt being routed -- at its
+// task, its pinned world and its PlanAttemptID -- are established governance
+// facts. A premise asserting that exactly such a grant is unestablished is
+// contradicted by the record: the record governs routing, and the premise is
+// returned as an architect-plan inconsistency rather than opening a bounded
+// knowledge gap the record has already closed.
+//
+// The predicate is structural and exact, never a reading of prose. A premise
+// is contradicted only when ALL of these hold:
+//
+//   - it carries an AuthorityPremise whose State is "unestablished" and whose
+//     Requirement is one of the two kinds, by exact membership;
+//   - it is about exactly that path (About is the Path), so it says nothing
+//     else that could be lost with it;
+//   - the plan declares that requirement: the same path among its
+//     prospective_surfaces, or among its test_edits;
+//   - the grant record of that kind written for THIS attempt, at THIS
+//     attempt's world, holds a grant for that path.
+//
+// Every other premise -- prose about grants included, a premise naming two
+// requirements, one whose grant was recorded for another attempt or world, or
+// was never recorded -- is kept exactly as it was, so no independent gap is
+// lost and a genuinely missing grant still opens its gap.
+func (e *Engine) premisesUnderRecordedAuthority(taskID string, d architectureDecision) (kept, contradicted []Claim) {
+	attempt := e.pendingPlanAttempt(taskID)
+	if attempt.ID == "" {
+		return d.Claims, nil
+	}
+	// The records written for exactly this attempt; nothing recorded for
+	// another attempt is looked at.
+	prospective, edits := e.recordedGrants(taskID, attempt.ID)
+	recorded := func(m AuthorityPremise) bool {
+		switch m.Requirement {
+		case premiseProspectiveCreate:
+			declared := false
+			for _, s := range d.ProspectiveSurfaces {
+				declared = declared || s.Path == m.Path
+			}
+			if !declared || prospective.World != attempt.World {
+				return false
+			}
+			for _, g := range prospective.Grants {
+				if g.Surface.Path == m.Path {
+					return true
+				}
+			}
+		case premiseTestEdit:
+			declared := false
+			for _, t := range d.TestEdits {
+				declared = declared || t.Path == m.Path
+			}
+			if !declared {
+				return false
+			}
+			for _, g := range edits.Grants {
+				if g.Path == m.Path && g.World == attempt.World {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	for _, c := range d.Claims {
+		m := c.Authority
+		if m == nil || m.State != premiseAuthorityUnestablished || m.Path == "" ||
+			strings.TrimSpace(c.About) != m.Path || !recorded(*m) {
+			kept = append(kept, c)
+			continue
+		}
+		contradicted = append(contradicted, c)
+	}
+	return kept, contradicted
 }

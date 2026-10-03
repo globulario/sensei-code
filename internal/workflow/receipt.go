@@ -188,28 +188,48 @@ func (e *Engine) notePlanAbsent(taskID string) {
 
 // notePlan records the identity of the bound this run carried.
 //
-// A supplied plan arrives with its own digest. An architect's plan had none at
-// all until this receipt asked for one: the bound that governs a run is an
-// artifact, and an artifact a run cannot name is one no later reader can check
-// a candidate against. The Source distinguishes the two rather than one field
-// silently meaning two things.
-func (e *Engine) notePlan(taskID, suppliedDigest, planText string) {
+// Every plan, architect-authored or supplied, is named by its canonical
+// PlanAttemptID (planAttemptID) -- the one identity every plan-local authority
+// binds to, re-derivable from the recorded plan, and binding the task,
+// objective, world, complete payload, source and supplied digest together. A
+// digest of the prose, or of the supplied bytes alone, would be a second plan
+// identity that two different attempts could share. A supplied plan's byte
+// digest is kept beside it as provenance: it says where the plan came from,
+// not which attempt this run carried.
+func (e *Engine) notePlan(taskID, suppliedDigest, planAttemptID string) {
 	e.withReceipt(taskID, func(f *receiptFacts) {
-		if strings.TrimSpace(suppliedDigest) != "" {
+		supplied := strings.TrimSpace(suppliedDigest)
+		switch {
+		case strings.TrimSpace(planAttemptID) != "":
 			f.planState = runreceipt.PlanPresent
-			f.plan = runreceipt.MeasuredValue(suppliedDigest, "sha256 of the supplied plan, as handed in")
-			return
-		}
-		if strings.TrimSpace(planText) == "" {
+			if supplied != "" {
+				f.plan = runreceipt.MeasuredValue(planAttemptID, "the canonical PlanAttemptID of the supplied plan "+
+					"(sha256 of the complete plan attempt identity); provenance: the supplied bytes, sha256 "+supplied+", as handed in")
+				return
+			}
+			f.plan = runreceipt.MeasuredValue(planAttemptID, "the canonical PlanAttemptID of the architect's plan (sha256 of the complete plan attempt identity)")
+		case supplied != "":
+			// A supplied plan recorded before plan-attempt identity: present,
+			// and its attempt identity is not minted after the fact.
+			f.planState = runreceipt.PlanPresent
+			f.plan = runreceipt.UnknownValue("the supplied plan (sha256 " + supplied + ", as handed in) was recorded before " +
+				"canonical plan-attempt identity; no identity is minted for it")
+		default:
 			// A conversational answer carries no plan. NONE is the claim, and
 			// the digest is the recorded absence that claim requires.
 			f.planState = runreceipt.PlanNone
-			f.plan = runreceipt.UnknownValue("no plan text was produced for this run")
-			return
+			f.plan = runreceipt.UnknownValue("no plan was produced for this run")
 		}
+	})
+}
+
+// notePlanUnidentified records that this run carries a plan whose record
+// predates plan-attempt identity. The plan is present and its identity is
+// UNKNOWN: none is minted for an already-recorded plan.
+func (e *Engine) notePlanUnidentified(taskID string) {
+	e.withReceipt(taskID, func(f *receiptFacts) {
 		f.planState = runreceipt.PlanPresent
-		sum := sha256.Sum256([]byte(planText))
-		f.plan = runreceipt.MeasuredValue(hex.EncodeToString(sum[:]), "sha256 of the architect's plan text")
+		f.plan = runreceipt.UnknownValue("the resumed plan was recorded before canonical plan-attempt identity; no identity is minted for it")
 	})
 }
 
