@@ -218,6 +218,16 @@ const (
 	// read (M2.2): operational, never coverage. Restored on resume and
 	// inspected against after the candidate is produced.
 	TestEditGranted Kind = "testedit.granted"
+	// PlanAttemptStarted records one routed architecture plan as a plan
+	// attempt BEFORE any plan-local authority is derived under it: its
+	// canonical PlanAttemptID and the complete plan payload that identity was
+	// derived from. It is not the operative plan; PlanProposed carrying the
+	// same id is the transition that makes it operative.
+	PlanAttemptStarted Kind = "plan.attempt.started"
+	// PlanAttemptRefused records that plan admission refused one plan attempt,
+	// bound to its PlanAttemptID. A refused attempt never becomes operative,
+	// and its refusal never attaches to any other attempt.
+	PlanAttemptRefused Kind = "plan.attempt.refused"
 )
 
 // Terminality is what a governed run's ending ends: the INVOCATION only, or

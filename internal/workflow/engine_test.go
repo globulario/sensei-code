@@ -317,25 +317,47 @@ func TestReviewerSeesExecutedEvidenceNotAWorkerReport(t *testing.T) {
 //
 // Typing /run authorizes the task. The plan that follows is published as
 // information, and nothing between it and the worker may ask the human to
-// authorize what they already authorized. The check is structural because the
-// property is about what the code cannot do: the governed run has exactly two
+// authorize what they already authorized. The governed run has exactly two
 // paths that put a decision to a person, and neither of them sits here.
+//
+// The plan's publication is observed by driving the ordinary production run --
+// run, through execute, to the canonical plan transition -- against a Sensei
+// that certifies the region, rather than by searching run's text: the one
+// durable PlanProposed is emitted by that transition, which the run calls.
 func TestRunDoesNotAskForRoutinePlanApproval(t *testing.T) {
-	// The governed run is entered through run and carried out by execute; the
-	// property is about the path, so both are read.
-	entry := funcBody(t, "internal/workflow/engine.go", "run")
-	if !strings.Contains(entry, "execute") {
-		t.Fatal("run no longer delegates to execute; this test would be reading the wrong function")
-	}
-	body := entry + " " + funcBody(t, "internal/workflow/engine.go", "execute")
+	const taskID = "task-routine-plan"
+	store := sessionStore(t)
+	routine := `{"decision":"proceed","summary":"edit main","plan":"edit main.go","files":["main.go"],"mode":"modify"}`
+	e, architect, world := newGapLoopEngine(t, nil, store, routine)
+	run := driveGapLoop(t, e, architect, world, taskID, "", func(ctx context.Context) {
+		e.run(ctx, taskID, "change main.go", RequestedByHuman)
+	})
 
 	// The plan is still shown. Removing the ceremony must not remove the
 	// information: a human who cannot see the plan cannot decide to stop.
-	if !strings.Contains(body, "event.PlanProposed") {
-		t.Error("the run no longer publishes the plan, so the human cannot see what was authorized")
+	history, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if strings.Contains(body, "approvePlan") {
-		t.Error("the plan-approval rendezvous is back in run()")
+	var proposed []event.Event
+	for _, ev := range history {
+		if ev.TaskID == taskID && ev.Kind == event.PlanProposed {
+			proposed = append(proposed, ev)
+		}
+	}
+	if len(proposed) != 1 {
+		t.Fatalf("the run no longer publishes the plan exactly once, so the human cannot see what was authorized: %d PlanProposed\n%s",
+			len(proposed), gapLoopTrace(run.events))
+	}
+	var rec proposedPlan
+	if err := json.Unmarshal(proposed[0].Payload, &rec); err != nil || rec.Plan != "edit main.go" || rec.PlanAttemptID == "" {
+		t.Fatalf("the published plan is not the routed plan made operative by the canonical transition: %v %+v", err, rec)
+	}
+	// No routine plan approval: nothing in the run asked the human anything.
+	for _, ev := range run.events {
+		if ev.Kind == event.AuthorityRequired || ev.Kind == event.WorkflowAwaitingAuthority {
+			t.Fatalf("a routine plan asked for human approval: %s: %s", ev.Kind, ev.Summary)
+		}
 	}
 	file := fileText(t, "internal/workflow/engine.go")
 	for _, gone := range []string{`"Implement this plan"`, `"the human declined the proposed plan"`} {
@@ -346,6 +368,11 @@ func TestRunDoesNotAskForRoutinePlanApproval(t *testing.T) {
 	// awaitChoice is how a decision is put to a human. In the governed run it
 	// must be reachable only through the router's escalation and through
 	// publication, both of which live in their own functions.
+	body := funcBody(t, "internal/workflow/engine.go", "run") + " " + funcBody(t, "internal/workflow/engine.go", "execute") +
+		" " + funcBody(t, "internal/workflow/engine.go", "adoptPlanAttempt")
+	if strings.Contains(body, "approvePlan") {
+		t.Error("the plan-approval rendezvous is back in the run")
+	}
 	if strings.Contains(body, "awaitChoice") || strings.Contains(body, "awaitHuman") {
 		t.Error("run() blocks on a human decision directly; only the authority router and publication may")
 	}

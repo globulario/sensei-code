@@ -1,7 +1,10 @@
 package workflow
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -106,7 +109,11 @@ type Engine struct {
 	// It is recorded at routing time rather than re-derived, because a second
 	// preflight would describe a possibly-moved graph while appearing to
 	// describe the moment the plan was authorised.
-	routings map[string]routingRecord
+	//
+	// Keyed by task and then by the plan attempt that was routed: a routing is
+	// plan-local, and a revision that is routed and never adopted must not
+	// leave its evidence standing for the operative plan (routingFor).
+	routings map[string]map[string]routingRecord
 	// timedOut records that a task's cancellation was a deadline, so the
 	// terminal can distinguish an expired budget from a human withdrawal.
 	timedOut map[string]bool
@@ -135,6 +142,9 @@ type Engine struct {
 	// coverageWorlds is the world each task's coverage was computed in, so the authored
 	// pass cannot resolve a second one.
 	coverageWorlds map[string]string
+	// attempts is, per task, the plan attempt routing most recently began and
+	// the one that is operative. See planAttemptID.
+	attempts map[string]*taskPlanAttempts
 	// openReviews is, per task, the unanswered part of the last non-accepting
 	// verdict, bound to the candidate digest and evidence it was raised on.
 	// It survives a worker handoff, which is the moment the reviewer changes.
@@ -323,7 +333,12 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 		return tr
 	}
 	tr.hydrated = true
-	for _, ev := range history {
+	// The record's answer scope, read by the one reader answeredConditions
+	// also uses; this process's later starts and transitions are added to it
+	// as they are recorded (notePlanAttemptStarted, noteOperativeTransition).
+	scope, epochAt := answerScopeOf(taskID, history)
+	tr.answerScope = scope
+	for i, ev := range history {
 		if ev.TaskID != taskID {
 			continue
 		}
@@ -331,7 +346,7 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 		case event.AuthorityResolved:
 			var res resolvedAuthority
 			if json.Unmarshal(ev.Payload, &res) == nil && res.Gap != nil && res.Gap.Identified() {
-				tr.settle(*res.Gap, res.Outcome)
+				tr.settle(*res.Gap, res.Outcome, res.PlanAttemptID, epochAt[i])
 			}
 		case event.WorkflowAwaitingAuthority:
 			var q DeferredAuthority
@@ -341,10 +356,35 @@ func (e *Engine) gapResolutions(taskID string) *taskResolutions {
 				// gap, so that is what a consumer re-asks.
 				r.Routing = Routing{Route: RouteHuman, Condition: q.Condition, Gap: *q.Gap}
 				r.Observed = true
+				if q.PlanAttemptID != "" {
+					tr.observe(q.Gap.Key(), q.PlanAttemptID)
+				}
 			}
 		}
 	}
 	return tr
+}
+
+// notePlanAttemptStarted adds a durably started attempt to the task's answer
+// scope: an answer naming it may be consumed (answerScope).
+func (e *Engine) notePlanAttemptStarted(taskID, id string) {
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if tr.answerScope.started == nil {
+		tr.answerScope.started = map[string]bool{}
+	}
+	tr.answerScope.started[id] = true
+}
+
+// noteOperativeTransition closes the task's current resolution: attempt was
+// recorded as operative, and no answer given before it is consumed by a
+// routing of any other attempt after it (answerScope).
+func (e *Engine) noteOperativeTransition(taskID, attempt string) {
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	tr.answerScope.transition(attempt)
 }
 
 // observeGap records a RouteCloseGap observation of an identified gap and
@@ -359,12 +399,34 @@ func (e *Engine) observeGap(taskID string, routing Routing) AuthorityResolution 
 		return AuthorityResolution{}
 	}
 	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	r := tr.entry(routing.Gap)
 	r.Routing = routing
 	r.Observed = true
-	return *r
+	tr.observe(routing.Gap.Key(), pending)
+	return tr.view(routing.Gap.Key(), pending)
+}
+
+// questionOwner is the plan attempt a question about gap is ABOUT, and so the
+// one that owns its answer: the attempt whose routing raised that gap -- which
+// is not the pending attempt when a differently shaped plan (an escalation the
+// graph certifies) is routed while the gap stands and the gap's own question is
+// asked. A question about no gap, or about one no attempt in this record
+// raised, is about the attempt routing has pending.
+func (e *Engine) questionOwner(taskID string, gap GapIdentity) string {
+	pending := e.pendingPlanAttempt(taskID).ID
+	if !gap.Identified() {
+		return pending
+	}
+	tr := e.gapResolutions(taskID)
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if by := tr.observedBy[gap.Key()]; by != "" {
+		return by
+	}
+	return pending
 }
 
 // observeGapAbsence records that a modifying plan re-evaluated an identity's
@@ -382,11 +444,12 @@ func (e *Engine) observeGapAbsence(taskID, world string, routing Routing, d arch
 		planned[f] = true
 	}
 	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, key := range tr.order {
 		r := tr.byKey[key]
-		if !r.Open() || r.Gap.World != world || (routing.ClosesGap() && routing.Gap.Key() == key) {
+		if !tr.view(key, pending).Open() || r.Gap.World != world || (routing.ClosesGap() && routing.Gap.Key() == key) {
 			continue
 		}
 		scope := normalizeEpisodeScope(r.Gap.Scope)
@@ -400,43 +463,56 @@ func (e *Engine) observeGapAbsence(taskID, world string, routing Routing, d arch
 	}
 }
 
-// settleGap is an explicit authority answer about exactly this identity.
+// settleGap is an explicit authority answer about exactly this identity, given
+// about the attempt routing has pending.
 func (e *Engine) settleGap(taskID string, gap GapIdentity, outcome authority.Outcome) {
+	e.settleGapFor(taskID, gap, outcome, e.pendingPlanAttempt(taskID).ID)
+}
+
+// settleGapFor is an explicit authority answer about exactly this identity,
+// owned by the plan attempt the question was asked about.
+func (e *Engine) settleGapFor(taskID string, gap GapIdentity, outcome authority.Outcome, owner string) {
 	if !gap.Identified() {
 		return
 	}
 	tr := e.gapResolutions(taskID)
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	tr.settle(gap, outcome)
+	tr.settle(gap, outcome, owner, tr.answerScope.epoch)
 }
 
 // openGap returns the first identity open for this task at this world.
 func (e *Engine) openGap(taskID, world string) (AuthorityResolution, bool) {
 	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	for _, key := range tr.order {
-		if r := tr.byKey[key]; r.Open() && r.Gap.World == world {
-			return *r, true
+		if r := tr.view(key, pending); r.Open() && r.Gap.World == world {
+			return r, true
 		}
 	}
 	return AuthorityResolution{}, false
 }
 
 // gapSettlement is P9's answer for a routing that carries a gap identity:
-// whether an explicit answer settled exactly that identity, and whether it
-// permits the run. A routing with no identity has no P9 answer, and the caller
-// falls back to the answered-condition history for records that carry none.
+// whether an explicit answer the pending attempt may consume (answerScope)
+// settled exactly that identity, and whether it permits the run. A routing
+// with no identity has no P9 answer, and the caller falls back to the
+// answered-condition history for records that carry none.
 func (e *Engine) gapSettlement(taskID string, routing Routing) (authorized, settled bool) {
 	if !routing.Gap.Identified() {
 		return false, false
 	}
 	tr := e.gapResolutions(taskID)
+	pending := e.pendingPlanAttempt(taskID).ID
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	r, ok := tr.byKey[routing.Gap.Key()]
-	if !ok || !r.Settled {
+	if _, ok := tr.byKey[routing.Gap.Key()]; !ok {
+		return false, false
+	}
+	r := tr.view(routing.Gap.Key(), pending)
+	if !r.Settled {
 		return false, false
 	}
 	return r.Outcome.Permits(), true
@@ -444,30 +520,55 @@ func (e *Engine) gapSettlement(taskID string, routing Routing) (authorized, sett
 
 // routingRecord is the evidence one plan was routed on.
 type routingRecord struct {
-	Policy roles.Policy
-	Scoped sensei.PreflightDecision
-	Claims []Claim
+	// PlanAttemptID is the plan attempt this routing was made for. A reader
+	// accepts the record only for exactly that attempt.
+	PlanAttemptID string
+	Policy        roles.Policy
+	Scoped        sensei.PreflightDecision
+	Claims        []Claim
 	// Planned is what the approved plan named, so a later widening is
 	// detectable against the decision rather than against the diff.
 	Planned []string
 }
 
-// setRouting records what the router read when it decided this task.
+// setRouting records what the router read when it decided this task, bound to
+// the plan attempt routing has pending: the attempt that was routed.
 func (e *Engine) setRouting(taskID string, p roles.Policy, scoped sensei.PreflightDecision, claims []Claim, planned []string) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.routings == nil {
-		e.routings = map[string]routingRecord{}
+	attempt := ""
+	if a := e.attempts[taskID]; a != nil {
+		attempt = a.pending.ID
 	}
-	e.routings[taskID] = routingRecord{Policy: p, Scoped: scoped, Claims: claims, Planned: planned}
+	if e.routings == nil {
+		e.routings = map[string]map[string]routingRecord{}
+	}
+	if e.routings[taskID] == nil {
+		e.routings[taskID] = map[string]routingRecord{}
+	}
+	e.routings[taskID][attempt] = routingRecord{PlanAttemptID: attempt, Policy: p, Scoped: scoped, Claims: claims, Planned: planned}
 }
 
-// routingFor returns what was recorded, and whether anything was.
+// routingFor returns what was recorded for the plan attempt the task now
+// stands on -- the operative one, or, before any is operative, the one being
+// routed -- and whether anything was. A routing recorded for any other attempt,
+// a revision routed and never adopted included, is not this plan's evidence and
+// is not returned.
 func (e *Engine) routingFor(taskID string) (routingRecord, bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	r, ok := e.routings[taskID]
-	return r, ok
+	subject := ""
+	if a := e.attempts[taskID]; a != nil {
+		subject = a.operative.ID
+		if subject == "" {
+			subject = a.pending.ID
+		}
+	}
+	r, ok := e.routings[taskID][subject]
+	if !ok || r.PlanAttemptID != subject {
+		return routingRecord{}, false
+	}
+	return r, true
 }
 
 // policyFor returns the recorded reading, or the fail-closed one.
@@ -532,6 +633,23 @@ func (e *Engine) emit(ev event.Event) {
 	if e.Bus != nil {
 		e.Bus.Publish(ev)
 	}
+}
+
+// emitDurable is emit for a record later authority stands on: the append is
+// acknowledged, and a record that could not be written is returned as the
+// error it is and never published as though it had been. An engine with no
+// session store keeps no durable record at all, so nothing can later be
+// resumed from one; there the event is published as emit publishes it.
+func (e *Engine) emitDurable(ev event.Event) error {
+	if e.Store != nil {
+		if err := e.Store.Append(ev); err != nil {
+			return fmt.Errorf("the %s record could not be written durably: %w", ev.Kind, err)
+		}
+	}
+	if e.Bus != nil {
+		e.Bus.Publish(ev)
+	}
+	return nil
 }
 
 // Errors shared by both workflows, named so the two state machines refuse in
@@ -640,6 +758,7 @@ func (e *Engine) preserveQuestion(ctx context.Context, taskID, condition, domain
 	if gap, ok := authorityGapFrom(ctx); ok {
 		q.Gap = &gap
 	}
+	q.PlanAttemptID = planAttemptFrom(ctx)
 	e.emitRunTerminal(taskID, event.WorkflowAwaitingAuthority, event.SourceUser,
 		runreceipt.OutcomeDeferred, e.candidateStateFor(taskID), summary, q)
 }
@@ -807,6 +926,12 @@ type DeferredAuthority struct {
 	// Absent on records written before it existed and on questions that are not
 	// about a gap.
 	Gap *GapIdentity `json:"gap_identity,omitempty"`
+	// PlanAttemptID is the plan attempt the question was asked about. An
+	// answer to the restored question is owned by exactly this attempt
+	// (answerScope), and a resume refuses a question naming an attempt this
+	// task never durably started. Absent on records written before it existed
+	// and on questions asked about no plan.
+	PlanAttemptID string `json:"plan_attempt_id,omitempty"`
 }
 
 // conversationSoFar reconstructs the dialogue with the architect from the
@@ -1406,10 +1531,10 @@ func (e *Engine) execute(ctx context.Context, taskID, task string) {
 	// The human's "no" did not disappear with it: a running task can be stopped
 	// (see Stop), which costs nothing when unused, where a mandatory prompt
 	// taxed every run.
-	e.emit(event.New(e.SessionID, taskID, planEventSource(e.planSource(taskID)), event.PlanProposed,
-		planSummaryFrom(decision, e.planSource(taskID), e.planDigest(taskID)),
-		proposedPlan{architectureDecision: decision, PlanSource: e.planSource(taskID), PlanDigest: e.planDigest(taskID),
-			Architect: e.architectAnswered(taskID)}))
+	if _, err := e.adoptPlanAttempt(taskID, task, decision); err != nil {
+		fail(err)
+		return
+	}
 	plan := decision.Plan
 	tc := taskContext{
 		Task:            task,
@@ -1764,6 +1889,513 @@ type proposedPlan struct {
 	// output, so a field on it would be something an agent could state. A plan
 	// that could name its own author could name somebody else.
 	Architect string `json:"architect,omitempty"`
+	// PlanAttemptID is the canonical identity of the plan attempt this
+	// PlanProposed makes operative (planAttemptID). Absent only on records
+	// written before plan attempts existed, which keep that compatibility
+	// reading: absence is absence, and no identity is minted for them.
+	PlanAttemptID string `json:"plan_attempt_id,omitempty"`
+}
+
+// THE CANONICAL PLAN ATTEMPT.
+//
+// Every operative architecture plan has one canonical durable identity, and all
+// plan-local authority -- prospective grants, existing-test edit grants, the
+// explicit empty grant set, admission refusals -- binds to it. It is ONE
+// identity function, used by the fresh run, every re-plan and every resume: a
+// test-edit, prospective, refusal or resume path that hashed its own fragment
+// of the plan would be a second identity that can disagree with this one
+// (Objectives 61 and 63, run 1, 2026-10-03, each invented one).
+//
+// The lifecycle is two durable events. PlanAttemptStarted is written when a
+// plan is routed, BEFORE any plan-local authority is derived under it, so every
+// grant and refusal has an identity to bind to. PlanProposed carrying the same
+// id is the one operative transition: it supersedes the previous attempt whole,
+// and its grant state with it. A resume reconstructs exactly the attempt the
+// newest PlanProposed names and verifies it by recomputing this identity from
+// the recorded plan; it never derives a different one and never mints one.
+
+// planAttemptIdentityVersion names the identity rule. A change to what the
+// identity binds is a change to this string, never a silent reinterpretation.
+const planAttemptIdentityVersion = "sensei-code/plan-attempt/v1"
+
+// planAttemptIdentity is everything a PlanAttemptID binds, serialized whole.
+//
+// Plan is the COMPLETE architect-plan contract exactly as it was routed --
+// prose, steps, files, mode, claims, prospective surfaces, test edits,
+// declared_effects and every other field -- not a summary, a file list or a
+// hand-picked projection, and not normalized: the contract defines no ordering
+// as semantically irrelevant, so this rule invents none. Two plans that differ
+// in any canonical field, one declared effect included, are two attempts.
+type planAttemptIdentity struct {
+	Version string `json:"version"`
+	TaskID  string `json:"task_id"`
+	// Objective is the task's objective, byte for byte.
+	Objective string `json:"objective"`
+	// World is the candidate's pinned base.
+	World      string               `json:"world"`
+	PlanSource PlanSource           `json:"plan_source"`
+	PlanDigest string               `json:"plan_digest"`
+	Plan       architectureDecision `json:"plan"`
+}
+
+// planAttemptID is the ONE canonical identity function: the SHA-256 of the
+// complete planAttemptIdentity, lowercase hex. Deterministic and re-derivable
+// from the durable record by anyone holding it -- nothing process-local, random
+// or counted enters it.
+func planAttemptID(taskID, objective, world string, source PlanSource, suppliedDigest string, d architectureDecision) (string, error) {
+	raw, err := json.Marshal(planAttemptIdentity{
+		Version: planAttemptIdentityVersion, TaskID: taskID, Objective: objective, World: world,
+		PlanSource: source, PlanDigest: suppliedDigest, Plan: d,
+	})
+	if err != nil {
+		return "", fmt.Errorf("the plan attempt identity cannot be serialized: %w", err)
+	}
+	sum := sha256.Sum256(raw)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// planAttempt is one routed plan and the identity it was routed under.
+type planAttempt struct {
+	ID         string               `json:"plan_attempt_id"`
+	TaskID     string               `json:"task_id"`
+	World      string               `json:"world"`
+	PlanSource PlanSource           `json:"plan_source"`
+	PlanDigest string               `json:"plan_digest,omitempty"`
+	Plan       architectureDecision `json:"plan"`
+}
+
+// planAttemptRefusal is the PlanAttemptRefused payload.
+type planAttemptRefusal struct {
+	PlanAttemptID string `json:"plan_attempt_id"`
+	TaskID        string `json:"task_id"`
+	Reason        string `json:"reason"`
+}
+
+// taskPlanAttempts is one task's plan-attempt state in this process: the
+// attempt routing most recently began, and the one the operative transition
+// (or a verified restoration) installed, with the grant state it owned.
+type taskPlanAttempts struct {
+	pending              planAttempt
+	operative            planAttempt
+	operativeProspective []prospectiveGrant
+	operativeEdits       []testEditGrant
+	// refused are the attempts whose admission refusal is already recorded, so
+	// each refusal is recorded exactly once.
+	refused map[string]bool
+	// recordedProspective and recordedEdits are the grant records written for
+	// each attempt, as written: the recorded authority facts routing reads,
+	// never the in-memory grant state another routing may have replaced.
+	recordedProspective map[string]prospectiveRecord
+	recordedEdits       map[string]testEditRecord
+	// unrecorded is, per attempt, the first grant write that failed: an
+	// attempt holding authority no record carries is never adopted.
+	unrecorded map[string]error
+	// operativeCoverageWorld is the world the operative attempt's coverage was
+	// computed in, reinstated with its grant state.
+	operativeCoverageWorld string
+}
+
+// planAttemptsOf is t's state, created on first use. The caller holds e.mu.
+func (e *Engine) planAttemptsOf(taskID string) *taskPlanAttempts {
+	if e.attempts == nil {
+		e.attempts = map[string]*taskPlanAttempts{}
+	}
+	t := e.attempts[taskID]
+	if t == nil {
+		t = &taskPlanAttempts{}
+		e.attempts[taskID] = t
+	}
+	if t.refused == nil {
+		t.refused = map[string]bool{}
+		t.recordedProspective = map[string]prospectiveRecord{}
+		t.recordedEdits = map[string]testEditRecord{}
+		t.unrecorded = map[string]error{}
+	}
+	return t
+}
+
+// beginPlanAttempt records d as a plan attempt of this task -- durably, BEFORE
+// any plan-local authority is derived under it -- and makes it the attempt
+// that authority binds to. Every routed plan begins here: initial, re-planned,
+// supplied and resumed alike.
+//
+// The start record is the prerequisite of everything bound to the attempt, so
+// its write is acknowledged: a start that could not be recorded is returned as
+// an error and nothing is derived under an identity no record establishes.
+func (e *Engine) beginPlanAttempt(taskID, task string, d architectureDecision) (planAttempt, error) {
+	world := strings.TrimSpace(e.governedBase(taskID))
+	source, digest := e.planSource(taskID), e.planDigest(taskID)
+	id, err := planAttemptID(taskID, task, world, source, digest, d)
+	if err != nil {
+		return planAttempt{}, err
+	}
+	a := planAttempt{ID: id, TaskID: taskID, World: world, PlanSource: source, PlanDigest: digest, Plan: d}
+	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptStarted,
+		"plan attempt "+short12(id)+" routed; plan-local authority derived for it binds to this identity", a)); err != nil {
+		return planAttempt{}, fmt.Errorf("plan attempt %s cannot be routed: %w", short12(id), err)
+	}
+	e.notePlanAttemptStarted(taskID, id)
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).pending = a
+	e.mu.Unlock()
+	// The run's receipt names the bound before routing can end the run. A
+	// proceed decision is a bound; an escalation is a question, and names none.
+	if d.Decision == "proceed" {
+		e.notePlan(taskID, digest, id)
+	}
+	return a, nil
+}
+
+// pendingPlanAttempt is the attempt routing most recently began for a task.
+func (e *Engine) pendingPlanAttempt(taskID string) planAttempt {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if a := e.attempts[taskID]; a != nil {
+		return a.pending
+	}
+	return planAttempt{}
+}
+
+// operativePlanAttempt is the attempt the operative transition, or a verified
+// restoration, installed for a task. Zero when none is operative.
+func (e *Engine) operativePlanAttempt(taskID string) planAttempt {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if a := e.attempts[taskID]; a != nil {
+		return a.operative
+	}
+	return planAttempt{}
+}
+
+// recordProspectiveGrants and recordTestEditGrants write one grant record bound
+// to the pending attempt, ACKNOWLEDGED, and only once it is written keep it, as
+// written, as that attempt's recorded authority. A record that could not be
+// written is returned as the error it is: nothing is installed for it, and the
+// attempt it belongs to cannot be adopted (requireRecordedGrantState).
+func (e *Engine) recordProspectiveGrants(taskID, summary string, rec prospectiveRecord) error {
+	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.ProspectiveGranted, summary, rec)); err != nil {
+		e.noteGrantRecordFailure(taskID, rec.PlanAttemptID, err)
+		return err
+	}
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).recordedProspective[rec.PlanAttemptID] = rec
+	e.mu.Unlock()
+	return nil
+}
+
+func (e *Engine) recordTestEditGrants(taskID, summary string, rec testEditRecord) error {
+	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted, summary, rec)); err != nil {
+		e.noteGrantRecordFailure(taskID, rec.PlanAttemptID, err)
+		return err
+	}
+	e.mu.Lock()
+	e.planAttemptsOf(taskID).recordedEdits[rec.PlanAttemptID] = rec
+	e.mu.Unlock()
+	return nil
+}
+
+// noteGrantRecordFailure keeps the first grant write that failed for an
+// attempt, so the attempt is refused adoption even where the failure surfaced
+// through a function that returns no error (derivedCoverage).
+func (e *Engine) noteGrantRecordFailure(taskID, attempt string, err error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	if t.unrecorded[attempt] == nil {
+		t.unrecorded[attempt] = err
+	}
+}
+
+// requireRecordedGrantState is the fail-closed check that the pending attempt's
+// COMPLETE grant state -- prospective and existing-test, explicit even when
+// empty -- was durably recorded, with no grant write for it having failed.
+// Authority that no restart could reconstruct is not used, and an attempt
+// holding it is not made operative.
+func (e *Engine) requireRecordedGrantState(taskID string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	id := t.pending.ID
+	if err := t.unrecorded[id]; err != nil {
+		return fmt.Errorf("the grant state of plan attempt %s was not recorded durably, so it holds no authority: %w", short12(id), err)
+	}
+	_, prospective := t.recordedProspective[id]
+	_, edits := t.recordedEdits[id]
+	if !prospective || !edits {
+		return fmt.Errorf("the grant state of plan attempt %s was never recorded, so it holds no authority", short12(id))
+	}
+	return nil
+}
+
+// recordedGrants is the grant state recorded for one attempt of a task: zero
+// records, holding no grant, for an attempt nothing was recorded for.
+func (e *Engine) recordedGrants(taskID, attempt string) (prospectiveRecord, testEditRecord) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.attempts[taskID]
+	if t == nil || t.refused == nil {
+		return prospectiveRecord{}, testEditRecord{}
+	}
+	return t.recordedProspective[attempt], t.recordedEdits[attempt]
+}
+
+// planAdmissionRefusal marks an error that MECHANICALLY establishes that the
+// pending plan attempt is inadmissible: a declared create or existing-test edit
+// the attempt's own recorded grants refuse, a human's recorded decline of the
+// plan's condition, or a supplied plan that only a revision could admit. It is
+// set at exactly those branches and nowhere else.
+//
+// It is classification, not routing. It wraps the refusal unchanged -- the same
+// text, and errors.Is/As see through it -- so every caller routes the error
+// exactly as it did before (P2 continuation routing is not this type's to
+// change). What it decides is only whether closePlanAdmission records a
+// PlanAttemptRefused: an instrument that could not answer, a response that
+// could not be decoded, a probe, provider or persistence failure is NOT a
+// refusal of the plan, and is never recorded as one.
+type planAdmissionRefusal struct{ cause error }
+
+func (r *planAdmissionRefusal) Error() string { return r.cause.Error() }
+
+func (r *planAdmissionRefusal) Unwrap() error { return r.cause }
+
+// refusePlanAdmission marks err as a refusal of the pending attempt.
+func refusePlanAdmission(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &planAdmissionRefusal{cause: err}
+}
+
+// closePlanAdmission records that plan admission REFUSED the pending attempt,
+// durably and bound to its PlanAttemptID, exactly once, and returns the error
+// the caller returns.
+//
+// It is THE ONE refusal recorder: every routing path that began an attempt and
+// returns an admission error passes through it (resolveArchitectureIn for an
+// architect's plan, initial or re-planned; resolveSuppliedPlan for a supplied
+// one), so no refusal kind records itself. It decides nothing about how the
+// refusal is routed: the caller returns the cause exactly as it would without
+// this record.
+//
+// Only an error classified as a planAdmissionRefusal is recorded. Everything
+// else -- a caller stop, a deferred or stopped human answer, an instrument,
+// decoding, provider or persistence failure -- is returned unrecorded, as the
+// failure class it already is. An attempt that is already the operative one
+// was admitted, and one already recorded as refused is not recorded again.
+//
+// The refusal's write is acknowledged. Only once it is written is the attempt
+// marked refused; a refusal that could not be written is returned beside its
+// cause, and is not suppressed as though it had been recorded.
+func (e *Engine) closePlanAdmission(taskID string, cause error) error {
+	var refusal *planAdmissionRefusal
+	if !errors.As(cause, &refusal) {
+		return cause
+	}
+	e.mu.Lock()
+	t := e.planAttemptsOf(taskID)
+	a := t.pending
+	if a.ID == "" || a.ID == t.operative.ID || t.refused[a.ID] {
+		e.mu.Unlock()
+		return cause
+	}
+	e.mu.Unlock()
+	if err := e.emitDurable(event.New(e.SessionID, taskID, event.SourceSystem, event.PlanAttemptRefused,
+		"plan attempt "+short12(a.ID)+" refused at admission: "+cause.Error(),
+		planAttemptRefusal{PlanAttemptID: a.ID, TaskID: taskID, Reason: cause.Error()})); err != nil {
+		return errors.Join(cause, err)
+	}
+	e.mu.Lock()
+	t.refused[a.ID] = true
+	e.mu.Unlock()
+	return cause
+}
+
+// adoptPlanAttempt is THE operative plan transition, for an initial plan and for
+// every re-plan alike: it emits the one PlanProposed for d, bound to d's
+// PlanAttemptID, and installs that attempt -- with the complete plan-local
+// state routing recorded for it -- as the task's operative plan, superseding
+// the previous one whole. Its write is acknowledged: a plan that could not be
+// recorded as operative is not made operative, and neither is one whose grant
+// state was not recorded.
+//
+// d must be the plan routing admitted last. A plan that does not reproduce the
+// pending attempt's identity was never admitted as itself, and making it
+// operative would attach another attempt's authority to it.
+func (e *Engine) adoptPlanAttempt(taskID, task string, d architectureDecision) (planAttempt, error) {
+	pending := e.pendingPlanAttempt(taskID)
+	id, err := planAttemptID(taskID, task, pending.World, e.planSource(taskID), e.planDigest(taskID), d)
+	if err != nil {
+		return planAttempt{}, err
+	}
+	if pending.ID == "" || id != pending.ID {
+		return planAttempt{}, fmt.Errorf("the plan being made operative (attempt %s) is not the plan attempt routing admitted (%s); "+
+			"no plan-local authority is attached to it", short12(id), orNone(short12(pending.ID), "none"))
+	}
+	if err := e.requireRecordedGrantState(taskID); err != nil {
+		return planAttempt{}, err
+	}
+	source := e.planSource(taskID)
+	// The task's answer scope is read in before the transition is written, so
+	// the transition is counted once: here, and not again by a later read.
+	e.gapResolutions(taskID)
+	if err := e.emitDurable(event.New(e.SessionID, taskID, planEventSource(source), event.PlanProposed,
+		planSummaryFrom(d, source, e.planDigest(taskID)),
+		proposedPlan{architectureDecision: d, PlanSource: source, PlanDigest: e.planDigest(taskID),
+			Architect: e.architectAnswered(taskID), PlanAttemptID: id})); err != nil {
+		return planAttempt{}, err
+	}
+	e.noteOperativeTransition(taskID, id)
+	e.installOperativePlanAttempt(taskID, pending)
+	e.notePlan(taskID, e.planDigest(taskID), id)
+	return pending, nil
+}
+
+// installOperativePlanAttempt makes a the operative attempt, owning the
+// plan-local state this engine now holds for the task -- its grant state and
+// the world its coverage was computed in -- in one step under the engine lock.
+// Its routing record is already keyed by its identity (setRouting), so it
+// becomes the one routingFor reads in the same step.
+func (e *Engine) installOperativePlanAttempt(taskID string, a planAttempt) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	t := e.planAttemptsOf(taskID)
+	t.pending, t.operative = a, a
+	t.operativeProspective, t.operativeEdits = e.prospective[taskID], e.testEdits[taskID]
+	t.operativeCoverageWorld = e.coverageWorlds[taskID]
+}
+
+// reinstateOperativePlanAttempt returns the task to its operative attempt after
+// a routed revision was NOT adopted: the revision's routing replaced plan-local
+// state in memory, and that state belongs to an attempt that never became
+// operative. The operative attempt's COMPLETE snapshot is put back in one step
+// -- grant state and coverage world here, and its routing record by identity
+// (routingFor reads the operative attempt's record, never the revision's).
+// The receipt, which beginPlanAttempt pointed at the revision, is rebound to
+// the operative attempt's canonical PlanAttemptID once the engine lock is
+// released (notePlan takes it); its supplied-plan digest stays provenance.
+func (e *Engine) reinstateOperativePlanAttempt(taskID string) {
+	e.mu.Lock()
+	t := e.attempts[taskID]
+	if t == nil {
+		e.mu.Unlock()
+		return
+	}
+	t.pending = t.operative
+	if e.prospective == nil {
+		e.prospective = map[string][]prospectiveGrant{}
+	}
+	if e.testEdits == nil {
+		e.testEdits = map[string][]testEditGrant{}
+	}
+	if e.coverageWorlds == nil {
+		e.coverageWorlds = map[string]string{}
+	}
+	e.prospective[taskID], e.testEdits[taskID] = t.operativeProspective, t.operativeEdits
+	e.coverageWorlds[taskID] = t.operativeCoverageWorld
+	operative := t.operative
+	e.mu.Unlock()
+	if operative.ID != "" {
+		e.notePlan(taskID, operative.PlanDigest, operative.ID)
+	}
+}
+
+// restorePlanAttempt reconstructs a resumed task's ONE operative plan attempt
+// and verifies it, BEFORE any plan-local authority is restored.
+//
+// The attempt must have been durably STARTED before it held authority: its
+// first PlanAttemptStarted record must exist and precede both its operative
+// PlanProposed and the grant records selected for it, and that start must
+// decode as exactly the attempt contract and name the same identity, world,
+// source, digest and complete plan the operative record holds. The operative
+// record must decode as exactly the PlanProposed contract -- an unknown field
+// anywhere in it, a declared effect included, is not ignored -- and the plan it
+// holds must reproduce the recorded PlanAttemptID through the same identity
+// function a fresh run uses, at the candidate's pinned base. Nothing is derived
+// to replace a mismatch: a resume verifies the identity it was handed and
+// never mints another. A record that predates plan attempts carries none and
+// is resumed under its compatibility reading, with no identity minted.
+func (e *Engine) restorePlanAttempt(task session.Interrupted, world string) error {
+	recorded := strings.TrimSpace(task.PlanAttemptID)
+	if recorded == "" {
+		return nil
+	}
+	refuse := func(detail string) error {
+		return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectPlanAttempt,
+			Instrument: RestorationInstrumentRecord, Binding: RestorationPlanAttemptUnbound, Detail: detail}
+	}
+	var rec proposedPlan
+	if err := decodeExactly(task.PlanRecord, &rec); err != nil {
+		return refuse("the operative plan record does not decode as the plan contract: " + err.Error())
+	}
+	if rec.PlanAttemptID != recorded {
+		return refuse(fmt.Sprintf("the operative plan record names attempt %s, not %s", short12(rec.PlanAttemptID), short12(recorded)))
+	}
+	id, err := planAttemptID(task.TaskID, task.Task, strings.TrimSpace(world), PlanSource(rec.PlanSource), rec.PlanDigest, rec.architectureDecision)
+	if err != nil {
+		return refuse(err.Error())
+	}
+	if id != recorded {
+		return refuse(fmt.Sprintf("the recorded plan does not reproduce its plan attempt identity at the candidate's pinned base %s: "+
+			"recorded %s, recomputed %s", shortWorldID(world), short12(recorded), short12(id)))
+	}
+	// THE PREREQUISITE. Authority bound to an attempt whose start was never
+	// recorded, or was recorded only after that authority, is not admitted.
+	if len(task.PlanAttemptStart) == 0 {
+		return refuse(fmt.Sprintf("plan attempt %s holds operative authority but no record shows it was started", short12(recorded)))
+	}
+	if !task.PlanAttemptStartFirst {
+		return refuse(fmt.Sprintf("plan attempt %s was recorded as started only after the authority it must precede", short12(recorded)))
+	}
+	var start planAttempt
+	if err := decodeExactly(task.PlanAttemptStart, &start); err != nil {
+		return refuse("the plan attempt start record does not decode as the attempt contract: " + err.Error())
+	}
+	startPlan, _ := json.Marshal(start.Plan)
+	operativePlan, _ := json.Marshal(rec.architectureDecision)
+	if start.ID != recorded || start.TaskID != task.TaskID || start.World != strings.TrimSpace(world) ||
+		start.PlanSource != PlanSource(rec.PlanSource) || start.PlanDigest != rec.PlanDigest || !bytes.Equal(startPlan, operativePlan) {
+		return refuse(fmt.Sprintf("the start record of plan attempt %s does not describe the operative plan it precedes", short12(recorded)))
+	}
+	a := planAttempt{ID: id, TaskID: task.TaskID, World: strings.TrimSpace(world), PlanSource: PlanSource(rec.PlanSource),
+		PlanDigest: rec.PlanDigest, Plan: rec.architectureDecision}
+	e.mu.Lock()
+	// Operative now, so the grant restorers can check their records against
+	// it; it owns grant state only once they have verified that state.
+	t := e.planAttemptsOf(task.TaskID)
+	t.pending, t.operative = a, a
+	e.mu.Unlock()
+	return nil
+}
+
+// decodeExactly decodes one JSON value into v, refusing an unknown field and
+// any trailing value: a record that says more than its contract is not read
+// as though it said only that.
+func decodeExactly(raw json.RawMessage, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if dec.More() {
+		return errors.New("the record holds more than one value")
+	}
+	return nil
+}
+
+// planAttemptKey carries the plan attempt a human question is ABOUT through
+// the one rendezvous every question uses, as authorityGapKey carries its gap.
+type planAttemptKey struct{}
+
+func withPlanAttempt(ctx context.Context, id string) context.Context {
+	if strings.TrimSpace(id) == "" {
+		return ctx
+	}
+	return context.WithValue(ctx, planAttemptKey{}, id)
+}
+
+func planAttemptFrom(ctx context.Context) string {
+	id, _ := ctx.Value(planAttemptKey{}).(string)
+	return id
 }
 
 // planEventSource is who the PlanProposed event is attributed to. A supplied
@@ -2020,7 +2652,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						Authority: roles.ArchitectAuthority,
 						Remaining: revised.Consequences,
 					})
-					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					// THE SAME OPERATIVE TRANSITION an initial plan takes: one durable
+					// PlanProposed bound to the revision's plan attempt, which supersedes the
+					// previous attempt and its grant state, and the whole scope moves with it.
+					if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
+					applyPlanScope(tc, revised)
 					plan = revised.Plan
 					feedback = "The architect resolved the review escalation. Inspect again under the revised plan."
 					continue
@@ -2278,7 +2916,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 						Authority: roles.ArchitectAuthority,
 						Remaining: revised.Consequences,
 					})
-					e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+					// THE SAME OPERATIVE TRANSITION an initial plan takes: one durable
+					// PlanProposed bound to the revision's plan attempt, which supersedes the
+					// previous attempt and its grant state, and the whole scope moves with it.
+					if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
+					applyPlanScope(tc, revised)
 					plan = revised.Plan
 					feedback = "The architect resolved the classification dispute. The reviewer's class stands and every finding below is still owed a response of that class: " +
 						account.Diagnosis() + "\n\nReconcile the current candidate with the revised plan."
@@ -2490,10 +3134,17 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 					return candidateNotConverged, plan, lastReview, lastAudit, err
 				}
 				if !stands {
+					if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+						return candidateNotConverged, plan, lastReview, lastAudit, err
+					}
+					applyPlanScope(tc, revised)
 					plan = revised.Plan
 					feedback = "The architect adjudicated a contradiction between two reviews of this candidate. Reconcile the current candidate with the revised plan."
 					continue
 				}
+				// The accepting review stands and the revision is NOT adopted, so
+				// the grant state its routing derived is not this task's.
+				e.reinstateOperativePlanAttempt(taskID)
 				// The accepting review stands: the earlier finding does not
 				// apply, on the architect's authority and on the record. No
 				// edit is owed, so none is manufactured -- forcing a worker
@@ -2568,7 +3219,13 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 				Authority: roles.ArchitectAuthority,
 				Remaining: revised.Consequences,
 			})
-			e.emit(event.New(e.SessionID, taskID, event.SourceArchitect, event.Status, revised.Summary, revised))
+			// THE SAME OPERATIVE TRANSITION an initial plan takes: one durable
+			// PlanProposed bound to the revision's plan attempt, which supersedes the
+			// previous attempt and its grant state, and the whole scope moves with it.
+			if _, err := e.adoptPlanAttempt(taskID, task, revised); err != nil {
+				return candidateNotConverged, plan, lastReview, lastAudit, err
+			}
+			applyPlanScope(tc, revised)
 			plan = revised.Plan
 			feedback = "The architect resolved the review escalation. Reconcile the current candidate with the revised plan."
 		default:
@@ -3056,12 +3713,15 @@ func (e *Engine) resolveArchitectureForRevision(ctx context.Context, sc *sensei.
 // with the architect would make the supplied bound a revised one. The one
 // human path kept is the answer that authorises the plan AS SUPPLIED: the run
 // asks, and proceeds only if the answer covers this exact plan.
-func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, supplied SuppliedPlan) (architectureDecision, error) {
+func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, supplied SuppliedPlan) (_ architectureDecision, err error) {
+	// A refusal of its attempt is recorded once against it, by the one
+	// recorder; every other way this admission ends is returned as it is.
+	defer func() { err = e.closePlanAdmission(taskID, err) }()
 	d := supplied.decision
 	e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 		"the plan was supplied with the task (sha256 "+supplied.Digest+"); the architect is not consulted for it, and it is routed as any plan is", nil))
-	// Before routing, for the same reason: routing can terminate this run.
-	e.notePlan(taskID, supplied.Digest, d.Plan)
+	// The bound is named before routing can terminate this run, by routePlan's
+	// first act (beginPlanAttempt).
 	routing, scoped, action, err := e.routePlan(ctx, sc, start, taskID, task, d)
 	if err != nil {
 		return architectureDecision{}, err
@@ -3076,7 +3736,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 			return err
 		}
 		if open {
-			return errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + gap.Condition)
+			return refusePlanAdmission(errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + gap.Condition))
 		}
 		return nil
 	}
@@ -3084,11 +3744,11 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 	case routing.Route == RouteCannotEstablish:
 		return architectureDecision{}, fmt.Errorf("cannot establish authority for this plan: %s", routing.Condition)
 	case routing.ClosesGap():
-		return architectureDecision{}, errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + routing.Condition)
+		return architectureDecision{}, refusePlanAdmission(errSuppliedPlanCannotBeRevised("a bounded knowledge gap must be closed first: " + routing.Condition))
 	case routing.RequiresHuman():
 		if authorized, asked := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); asked {
 			if !authorized {
-				return architectureDecision{}, fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition)
+				return architectureDecision{}, refusePlanAdmission(fmt.Errorf("the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 			}
 			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 				"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
@@ -3105,7 +3765,7 @@ func (e *Engine) resolveSuppliedPlan(ctx context.Context, sc *sensei.Client, sta
 		// re-plan would consult, so what authorises the run is the recorded
 		// resolution and not the option string the prompt returned.
 		if authorized, _ := e.applyAnsweredCondition(taskID, routing.Condition, d.Files...); !authorized {
-			return architectureDecision{}, errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: " + routing.Condition)
+			return architectureDecision{}, refusePlanAdmission(errSuppliedPlanCannotBeRevised("the human's answer did not authorise the plan as supplied: " + routing.Condition))
 		}
 		if err := unexaminedAfterAnswer(); err != nil {
 			return architectureDecision{}, err
@@ -3175,7 +3835,11 @@ func (e *Engine) resolveArchitectureIn(ctx context.Context, sc *sensei.Client, s
 		var notObtained *architectNotObtained
 		if !errors.As(err, &notObtained) {
 			// A bounded decision's own outcome, or a refusal no other provider
-			// may reinterpret. The turn ends here, on this entry's answer.
+			// may reinterpret. The turn ends here, on this entry's answer --
+			// and a plan attempt it routed and REFUSED is refused on the record,
+			// against that attempt. Only a refusal is recorded as
+			// one; every other outcome is returned as the failure it is.
+			err = e.closePlanAdmission(taskID, err)
 			return architectureDecision{}, err
 		}
 		// A resolution round may have rewritten the question before this entry
@@ -3451,7 +4115,8 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			// resolveArchitecture RETURNS -- which a deferral never reaches. The
 			// law is about control-flow boundaries, not about source order, and
 			// I put it on the wrong side of one while fixing exactly that bug.
-			e.notePlan(taskID, e.planDigest(taskID), d.Plan)
+			// The record is made by routePlan's first act, beginPlanAttempt,
+			// which names the bound by its canonical plan attempt identity.
 
 			// The architect proposes; it does not decide whether the proposal
 			// carries architectural authority. A confident model proceeding
@@ -3527,8 +4192,8 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 				}
 				if asked {
 					if !authorized {
-						return architectureDecision{}, fmt.Errorf(
-							"the human declined this architectural change and the plan still requires it: %s", routing.Condition)
+						return architectureDecision{}, refusePlanAdmission(fmt.Errorf(
+							"the human declined this architectural change and the plan still requires it: %s", routing.Condition))
 					}
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 						"proceeding on the human's earlier authorization for: "+routing.Condition, nil))
@@ -3562,8 +4227,8 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 							}
 							if asked {
 								if !authorized {
-									return architectureDecision{}, fmt.Errorf(
-										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition)
+									return architectureDecision{}, refusePlanAdmission(fmt.Errorf(
+										"the human declined to proceed with the gap open and the plan still requires it: %s", stillOpen.Condition))
 								}
 								e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
 									"proceeding on the human's earlier authorization for: "+stillOpen.Condition, nil))
@@ -3682,8 +4347,8 @@ func (e *Engine) askArchitect(ctx context.Context, sc *sensei.Client, start cert
 			}
 			if asked {
 				if !authorized {
-					return architectureDecision{}, fmt.Errorf(
-						"the human declined this and the architect returned to it: %s", routing.Condition)
+					return architectureDecision{}, refusePlanAdmission(fmt.Errorf(
+						"the human declined this and the architect returned to it: %s", routing.Condition))
 				}
 				if err := newRound("an answer the human had already given"); err != nil {
 					return architectureDecision{}, err
@@ -4562,6 +5227,11 @@ func shortDigest(d string) string {
 // gate ran before a plan existed. The architect's own decision is not consulted
 // here and is not a parameter.
 func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifiedStart, taskID, task string, d architectureDecision) (Routing, sensei.PreflightDecision, Action, error) {
+	// The plan attempt is recorded before anything is derived for it, so every
+	// grant and refusal below binds to its identity.
+	if _, err := e.beginPlanAttempt(taskID, task, d); err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
 	args := map[string]any{"task": task, "files": d.Files, "mode": "compact"}
 	if domain := start.Domain(); domain != "" {
 		args["domain"] = domain
@@ -4635,6 +5305,11 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		DeclaredEffects:      d.DeclaredEffects,
 		DerivedCoverage:      e.derivedCoverage(ctx, taskID, d.Files, d.ProspectiveSurfaces),
 	}
+	// The grant state just derived is authority only if it was recorded: a
+	// write that failed is this plan's failure, never an empty grant set.
+	if err := e.requireRecordedGrantState(taskID); err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
 	// EVERY DECLARATION IS AN ADMISSION OBLIGATION.
 	//
 	// The grants derivedCoverage just recorded are reconciled against the
@@ -4649,6 +5324,10 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
 	action.OperationalAuthority = operationalFiles(e.testEditGrants(taskID))
+	// RECORDED AUTHORITY BEFORE ARCHITECT PROSE. A premise that only claims a
+	// grant recorded above for this attempt is unestablished is contradicted by
+	// the record, and is not read as a knowledge gap.
+	claims, _ := e.premisesUnderRecordedAuthority(taskID, d)
 	// Which planned files the graph has NOT examined, established per file.
 	// The scoped answer cannot say: it is one verdict for the region, proven
 	// the moment one planned file carries anchors, so an ungrounded file
@@ -4673,7 +5352,7 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// it, the caller that consumes the recorded answer asks
 	// afterHumanAuthorization, which probes then. Nothing about the answer
 	// is read in this function.
-	if probeNeeded(routeAuthorityForAction(scoped, d.Claims, action), false) {
+	if probeNeeded(routeAuthorityForAction(scoped, claims, action), false) {
 		unexamined, docs, prod, err := e.unexaminedPlannedFiles(sc, start, task, action, scoped)
 		if err != nil {
 			return Routing{}, sensei.PreflightDecision{}, Action{}, err
@@ -4694,11 +5373,17 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 		// worlds would authorize an edit against bytes neither answer describes.
 		if extra := e.authoredTestEditGrants(ctx, taskID, d.Files, authored); len(extra) != 0 {
 			merged := append(e.testEditGrants(taskID), extra...)
+			// The attempt's COMPLETE grant state, derived and authored together:
+			// the newest record for an attempt is the whole of it. Installed
+			// only once that record is written.
+			if err := e.recordTestEditGrants(taskID,
+				"existing-test edit authority recorded from AUTHORED production governance: "+
+					strings.Join(operationalFiles(extra), ", "),
+				testEditRecord{PlanAttemptID: e.pendingPlanAttempt(taskID).ID, World: extra[0].World, Grants: merged}); err != nil {
+				return Routing{}, sensei.PreflightDecision{}, Action{}, err
+			}
 			e.setTestEditGrants(taskID, merged)
 			action.OperationalAuthority = operationalFiles(merged)
-			e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
-				"existing-test edit authority recorded from AUTHORED production governance: "+
-					strings.Join(operationalFiles(extra), ", "), testEditRecord{World: extra[0].World, Grants: extra}))
 		}
 	}
 	// THE SAME REFUSAL, AT THE ENTRANCE.
@@ -4713,9 +5398,23 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// inspectTestEdits still runs on the candidate, unchanged, and is the
 	// authority of record.
 	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
+		// A refusal of this attempt, decided by its own recorded grants.
+		err = refusePlanAdmission(err)
 		return Routing{}, sensei.PreflightDecision{}, Action{}, err
 	}
-	routing := routeAuthorityForAction(scoped, d.Claims, action)
+	// Read again: the AUTHORED grants recorded above belong to this attempt too.
+	claims, contradicted := e.premisesUnderRecordedAuthority(taskID, d)
+	if len(contradicted) != 0 {
+		statements := make([]string, 0, len(contradicted))
+		for _, c := range contradicted {
+			statements = append(statements, strings.TrimSpace(c.Statement))
+		}
+		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status,
+			"architect-plan inconsistency: the plan claims grant authority is unestablished that this run recorded for plan attempt "+
+				short12(e.pendingPlanAttempt(taskID).ID)+"; the recorded grants govern routing: "+strings.Join(statements, "; "),
+			map[string]any{"plan_attempt_id": e.pendingPlanAttempt(taskID).ID, "contradicted_premises": contradicted}))
+	}
+	routing := routeAuthorityForAction(scoped, claims, action)
 	// The gap's identity is completed with the world it was met in. The
 	// router does not know the pinned base; the budget must, or the same gap
 	// at two bases would share one round.
@@ -5159,40 +5858,56 @@ func (e *Engine) coverageAtWorld(ctx context.Context, taskID string, planned []s
 // them against the record. Only routing writes; a resume computes (see
 // coverageAtWorld) and compares.
 func (e *Engine) derivedCoverage(ctx context.Context, taskID string, planned []string, declarations []ProspectiveSurface) []CoverageAnchor {
+	// Every grant recorded here belongs to the plan attempt routing began for
+	// this plan, and the plan's COMPLETE grant state is recorded -- an explicit
+	// empty set when it derives none -- so a replacement plan never leaves the
+	// previous plan's grants standing, in memory or in the record.
+	//
+	// Each grant kind is installed only once its record is ACKNOWLEDGED. Until
+	// then this attempt holds none: a write that fails leaves it with no
+	// authority, notes the failure against the attempt, and routePlan refuses
+	// to go on with it (requireRecordedGrantState).
+	attempt := e.pendingPlanAttempt(taskID).ID
+	e.setProspectiveGrants(taskID, nil)
+	e.setTestEditGrants(taskID, nil)
 	c, ok := e.coverageAtWorld(ctx, taskID, planned, declarations)
 	if !ok {
 		// Nothing was derived for this plan, so no earlier plan's grants may
 		// stand for it at admission.
-		e.setProspectiveGrants(taskID, nil)
+		c = coverageComputation{world: strings.TrimSpace(e.governedBase(taskID))}
+	} else {
+		e.setCoverageWorld(taskID, c.world)
+	}
+	names := make([]string, 0, len(c.edits))
+	for _, g := range c.edits {
+		names = append(names, g.Path+" beside "+g.Covering)
+	}
+	summary := "existing-test edit authority recorded for " + strings.Join(names, ", ") + " (operational, not coverage)"
+	if len(names) == 0 {
+		summary = "no existing-test edit authority for this plan attempt (an explicit empty grant set)"
+	}
+	if err := e.recordTestEditGrants(taskID, summary, testEditRecord{PlanAttemptID: attempt, World: c.world, Grants: c.edits}); err != nil {
 		return nil
 	}
-	e.setProspectiveGrants(taskID, c.prospective)
 	e.setTestEditGrants(taskID, c.edits)
-	e.setCoverageWorld(taskID, c.world)
-	if len(c.edits) != 0 {
-		names := make([]string, 0, len(c.edits))
-		for _, g := range c.edits {
-			names = append(names, g.Path+" beside "+g.Covering)
-		}
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.TestEditGranted,
-			"existing-test edit authority recorded for "+strings.Join(names, ", ")+" (operational, not coverage)",
-			testEditRecord{World: c.world, Grants: c.edits}))
-	}
 	for _, r := range c.reasons {
 		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, "no test-edit authority: "+r, nil))
 	}
-	if len(c.prospective) != 0 {
-		names := make([]string, 0, len(c.prospective))
-		for _, g := range c.prospective {
-			names = append(names, g.Anchor.File+" by "+g.Covering)
-		}
-		// The authorization is recorded verbatim, bound to the world it was
-		// read at, so a task resumed after a restart inspects its created
-		// files against these facts and not against a fresh read.
-		e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.ProspectiveGranted,
-			"prospective authority recorded for "+strings.Join(names, ", "),
-			prospectiveRecord{World: c.world, Grants: c.prospective}))
+	surfaces := make([]string, 0, len(c.prospective))
+	for _, g := range c.prospective {
+		surfaces = append(surfaces, g.Anchor.File+" by "+g.Covering)
 	}
+	summary = "prospective authority recorded for " + strings.Join(surfaces, ", ")
+	if len(surfaces) == 0 {
+		summary = "no prospective authority for this plan attempt (an explicit empty grant set)"
+	}
+	// The authorization is recorded verbatim, bound to the world it was read
+	// at, so a task resumed after a restart inspects its created files against
+	// these facts and not against a fresh read.
+	if err := e.recordProspectiveGrants(taskID, summary, prospectiveRecord{PlanAttemptID: attempt, World: c.world, Grants: c.prospective}); err != nil {
+		return nil
+	}
+	e.setProspectiveGrants(taskID, c.prospective)
 	return c.coverage
 }
 
@@ -5205,7 +5920,7 @@ func (e *Engine) reconcileProspectiveGrants(taskID string, declared []Prospectiv
 		return nil
 	}
 	if err := matchGrantsToDeclarations(declared, e.prospectiveGrants(taskID)); err != nil {
-		return fmt.Errorf("prospective admission refused before implementation: %w", err)
+		return refusePlanAdmission(fmt.Errorf("prospective admission refused before implementation: %w", err))
 	}
 	return nil
 }
@@ -5219,6 +5934,25 @@ func (e *Engine) reconcileProspectiveGrants(taskID string, declared []Prospectiv
 // creation or accept one whose authorization was never recorded. A record from
 // another world is refused for the same reason.
 func (e *Engine) restoreProspectiveGrants(task session.Interrupted, declared []ProspectiveSurface, world string) error {
+	if refusal := e.planAttemptGrantRefusal(task, task.ProspectiveRecord, "prospective"); refusal != "" {
+		return &RestorationRefusal{TaskID: task.TaskID, Subject: restorationSubjectProspective,
+			Instrument: RestorationInstrumentRecord, Binding: RestorationPlanAttemptUnbound, Detail: refusal}
+	}
+	if strings.TrimSpace(task.PlanAttemptID) != "" {
+		// The operative attempt's own record, explicit even when empty. A
+		// record holding grants the plan never declared is not this plan's.
+		var rec prospectiveRecord
+		if json.Unmarshal(task.ProspectiveRecord, &rec) != nil {
+			return fmt.Errorf("cannot resume %s: the recorded prospective authorization is unreadable", task.TaskID)
+		}
+		if len(declared) == 0 {
+			if len(rec.Grants) != 0 {
+				return fmt.Errorf("cannot resume %s: the operative plan declares no prospective surfaces but its record holds %d prospective grant(s)", task.TaskID, len(rec.Grants))
+			}
+			e.setProspectiveGrants(task.TaskID, nil)
+			return nil
+		}
+	}
 	if len(declared) == 0 {
 		return nil
 	}
@@ -5364,6 +6098,8 @@ func (e *Engine) awaitHuman(ctx context.Context, sc *sensei.Client, start certif
 	}
 	// A question about an identified gap carries that identity to the answer,
 	// which is what lets the answer settle it (P9) and nothing else.
+	// And the plan attempt it is asked about, which owns the answer.
+	ctx = withPlanAttempt(ctx, e.questionOwner(taskID, gap))
 	return e.awaitChoice(withAuthorityGap(ctx, gap), sc, taskID, condition, start.Domain(), e.governedBase(taskID), decision, options, d.Files...)
 }
 
@@ -5467,11 +6203,12 @@ func (e *Engine) awaitChoice(ctx context.Context, sc *sensei.Client, taskID, con
 					}
 					// An answer about an identified gap settles exactly that
 					// identity (P9), durably: the payload carries it, so a
-					// resumed task hydrates the same settlement.
-					var resolved any = resolution
+					// resumed task hydrates the same settlement. Every answer
+					// is owned by the plan attempt it was asked about.
+					resolved := resolvedAuthority{Resolution: resolution, PlanAttemptID: planAttemptFrom(ctx)}
 					if gap, ok := authorityGapFrom(ctx); ok {
-						resolved = resolvedAuthority{Resolution: resolution, Gap: &gap}
-						e.settleGap(taskID, gap, resolution.Outcome)
+						resolved.Gap = &gap
+						e.settleGapFor(taskID, gap, resolution.Outcome, resolved.PlanAttemptID)
 					}
 					e.emit(event.New(e.SessionID, taskID, event.SourceUser, event.AuthorityResolved, option.Label, resolved))
 					e.emit(event.New(e.SessionID, taskID, event.SourceSystem, event.Status, resolution.Summary(), resolution))
@@ -5629,9 +6366,13 @@ Return ONLY JSON in this exact shape:
   "human_question": "only when escalating",
   "recommendation": "option id only when escalating",
   "options": [{"id":"1","label":"...","description":"..."}],
-  "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference","gap":"only the receipt id of an unsettled premise this claim continues"}],
+  "claims": [{"statement":"the factual premise","about":"path or component it concerns","source":"graph|repository|inference","gap":"only the receipt id of an unsettled premise this claim continues","authority":{"requirement":"prospective_create|test_edit","path":"exactly one declared path","state":"unestablished"}}],
   "premise_resolutions": [{"gap":"receipt id you were asked to answer","outcome":"established|refuted|unresolved","evidence":"..."}]
 }
+A claim carries "authority" only when its whole premise is that the grant for exactly one
+path this plan declares (under "prospective_surfaces" or "test_edits") is not established;
+"about" is then that path. A grant the run has already recorded for this plan answers such a
+premise, and it is not treated as a knowledge gap. Any other premise omits "authority".
 Declare every file the plan CREATES under "prospective_surfaces"; an undeclared new file
 stays uncovered. The roles are a closed set of four. A test file or a file in a new package
 takes one of a closed set of exactly three:
@@ -7131,6 +7872,15 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 			"the preserved question is bound to task "+deferred.TaskID+", not to this one; it cannot be answered here", nil)
 		return
 	}
+	// A question about a plan attempt is answerable only if that attempt was
+	// durably started by this task: the answer will be owned by it, and an
+	// identity no record establishes owns nothing. No attempt is minted for it.
+	if id := strings.TrimSpace(deferred.PlanAttemptID); id != "" && !task.StartedPlanAttempts[id] {
+		e.emitRunTerminal(task.TaskID, event.WorkflowFailed, event.SourceSystem,
+			runreceipt.OutcomeFailed, e.candidateStateFor(task.TaskID),
+			"the preserved question names plan attempt "+short12(id)+", which this task never recorded as started; it cannot be answered here", nil)
+		return
+	}
 	// A refusal decidable before the answer is consumed is decided before it.
 	// The candidate's base and the checkout it governs are read now, so a
 	// moved base or a dirty checkout leaves the question standing, unanswered,
@@ -7185,6 +7935,8 @@ func (e *Engine) resumeAuthority(ctx context.Context, task session.Interrupted) 
 	if deferred.Gap != nil {
 		askCtx = withAuthorityGap(ctx, *deferred.Gap)
 	}
+	// And the plan attempt it was asked about, which owns the answer.
+	askCtx = withPlanAttempt(askCtx, deferred.PlanAttemptID)
 	choice, err := e.awaitChoice(askCtx, sc, task.TaskID, deferred.Condition, deferred.Domain, deferred.BaseSHA,
 		deferred.Decision, deferred.Decision.Options, deferred.Scope...)
 	if err != nil {
@@ -7381,6 +8133,13 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 			fail(err)
 			return
 		}
+		// THE ONE OPERATIVE PLAN ATTEMPT, reconstructed and verified before any
+		// plan-local authority is restored: the grants below are accepted only
+		// when bound to exactly this identity.
+		if err := e.restorePlanAttempt(task, identity.BaseSHA); err != nil {
+			fail(err)
+			return
+		}
 		// The prospective authorization is restored from the record it was
 		// written to, bound to the candidate's pinned base. Routing does not
 		// re-run on resume, so it is the only source of the facts the
@@ -7400,6 +8159,10 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 		if err := e.restoreProspectiveGrants(task, bound.Prospective, identity.BaseSHA); err != nil {
 			fail(err)
 			return
+		}
+		// The verified attempt now owns the verified grant state.
+		if op := e.operativePlanAttempt(task.TaskID); op.ID != "" {
+			e.installOperativePlanAttempt(task.TaskID, op)
 		}
 		tc := taskContext{
 			Task:            task.Task,
@@ -7468,10 +8231,10 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 				// interruption: re-plan again from the plan that did not converge, or
 				// continue the candidate under that plan. This plan discharges the
 				// obligation (FindInterrupted) and binds every later resume.
-				e.emit(event.New(e.SessionID, task.TaskID, planEventSource(e.planSource(task.TaskID)), event.PlanProposed,
-					planSummaryFrom(revised, e.planSource(task.TaskID), e.planDigest(task.TaskID)),
-					proposedPlan{architectureDecision: revised, PlanSource: e.planSource(task.TaskID), PlanDigest: e.planDigest(task.TaskID),
-						Architect: e.architectAnswered(task.TaskID)}))
+				if _, err := e.adoptPlanAttempt(task.TaskID, task.Task, revised); err != nil {
+					fail(err)
+					return
+				}
 				plan = revised.Plan
 				// The WHOLE scope moves to the revised plan -- files and prospective
 				// surfaces included. Moving only the prose left the resumed candidate
@@ -7484,15 +8247,21 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 					"Reconcile the existing candidate with the revised plan.\n\nThe last review said:\n" + strings.TrimSpace(task.Review)
 			}
 		}
-		// The plan this invocation carries: the supplied bound by its digest, or
+		// The plan this invocation carries: the supplied bound, or
 		// the architect's plan -- the re-planned one when a re-plan was owed. A
 		// supplied bound is never re-planned: restorePlanBound put it back in
 		// memory above, so resolveArchitectureForRevision refuses before any plan
 		// changes (TestARestartedEngineStillRefusesToRePlanASuppliedPlan).
+		// Either way it is named by its verified PlanAttemptID; the supplied
+		// digest is provenance beside it.
+		supplied := ""
 		if bound.Source == PlanSupplied {
-			e.notePlan(task.TaskID, task.PlanDigest, "")
+			supplied = task.PlanDigest
+		}
+		if op := e.operativePlanAttempt(task.TaskID); op.ID != "" || supplied != "" {
+			e.notePlan(task.TaskID, supplied, op.ID)
 		} else {
-			e.notePlan(task.TaskID, "", plan)
+			e.notePlanUnidentified(task.TaskID)
 		}
 		e.emit(event.New(e.SessionID, task.TaskID, event.SourceSystem, event.Status,
 			"resuming the interrupted candidate rather than starting over", nil))
@@ -7502,8 +8271,8 @@ func (e *Engine) Resume(ctx context.Context, task session.Interrupted) string {
 }
 
 // applyPlanScope is the one mapping from a plan to the scope a candidate is
-// worked, captured and inspected under. execute and a resumed re-plan both go
-// through it, so a plan cannot move only part of its scope.
+// worked, captured and inspected under. execute, every in-cycle re-plan and a
+// resumed re-plan go through it, so a plan cannot move only part of its scope.
 func applyPlanScope(tc *taskContext, d architectureDecision) {
 	tc.Rationale = d.Summary
 	tc.Files = d.Files
@@ -7665,12 +8434,19 @@ func (e *Engine) answeredConditions(taskID string) []authority.Resolution {
 	if err != nil {
 		return out
 	}
-	for _, ev := range events {
+	scope, epochAt := answerScopeOf(taskID, events)
+	pending := e.pendingPlanAttempt(taskID).ID
+	for i, ev := range events {
 		if ev.TaskID != taskID || ev.Kind != event.AuthorityResolved {
 			continue
 		}
 		var res resolvedAuthority
 		if json.Unmarshal(ev.Payload, &res) != nil {
+			continue
+		}
+		// Only an answer the pending attempt may consume: its own, or one given
+		// in the resolution it was routed in (answerScope).
+		if !scope.admits(res.PlanAttemptID, epochAt[i], pending) {
 			continue
 		}
 		// An answer about an identified gap is owned by P9 and applies to that
@@ -7693,6 +8469,31 @@ func (e *Engine) answeredConditions(taskID string) []authority.Resolution {
 		}
 	}
 	return out
+}
+
+// answerScopeOf reads a task's answer scope out of its session record, and the
+// epoch each event was recorded in: the same reading gapResolutions hydrates.
+func answerScopeOf(taskID string, events []event.Event) (answerScope, []int) {
+	scope := answerScope{started: map[string]bool{}}
+	epochAt := make([]int, len(events))
+	for i, ev := range events {
+		epochAt[i] = scope.epoch
+		if ev.TaskID != taskID || (ev.Kind != event.PlanAttemptStarted && ev.Kind != event.PlanProposed) {
+			continue
+		}
+		var bound struct {
+			ID string `json:"plan_attempt_id"`
+		}
+		if json.Unmarshal(ev.Payload, &bound) != nil || bound.ID == "" {
+			continue
+		}
+		if ev.Kind == event.PlanAttemptStarted {
+			scope.started[bound.ID] = true
+		} else {
+			scope.transition(bound.ID)
+		}
+	}
+	return scope, epochAt
 }
 
 // applyAnsweredCondition decides what to do with a routing whose condition the

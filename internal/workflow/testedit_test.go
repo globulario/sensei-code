@@ -297,7 +297,7 @@ func TestARepeatedResumeCannotMintTestEditAuthority(t *testing.T) {
 		t.Fatal("Resume re-establishes through the recording path")
 	}
 	routing := funcBody(t, "internal/workflow/engine.go", "derivedCoverage")
-	if !strings.Contains(routing, "e.setTestEditGrants(") || !strings.Contains(routing, "TestEditGranted") {
+	if !strings.Contains(routing, "e.setTestEditGrants(") || !strings.Contains(routing, "e.recordTestEditGrants(") {
 		t.Fatal("the routing path no longer records what it acts on")
 	}
 

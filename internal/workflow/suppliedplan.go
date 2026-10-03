@@ -151,6 +151,9 @@ type resumedBound struct {
 	Consequences string
 	Invariants   []string
 	Prospective  []ProspectiveSurface
+	// Decision is the complete recorded plan, declared_effects included, not
+	// only the projection above. Its identity is verified by restorePlanAttempt.
+	Decision architectureDecision
 }
 
 // restorePlanBound re-establishes, from the session record, both who authored a
@@ -209,5 +212,6 @@ func (e *Engine) restorePlanBound(task session.Interrupted) (resumedBound, error
 		Consequences: rec.Consequences,
 		Invariants:   rec.Invariants,
 		Prospective:  rec.ProspectiveSurfaces,
+		Decision:     rec.architectureDecision,
 	}, nil
 }
