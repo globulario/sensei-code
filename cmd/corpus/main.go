@@ -15,6 +15,8 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+
+	"github.com/globulario/sensei-code/internal/derived"
 )
 
 type event struct {
@@ -489,7 +491,7 @@ func discover(root string) ([]string, error) {
 	return logs, nil
 }
 
-// recipeIdentity mirrors derived.Recipe.Identity for the three families, so a
+// recipeIdentity mirrors derived.Recipe.Identity for the four families, so a
 // receipt's output_candidate_identity can be matched against a recipe.
 func recipeIdentity(r map[string]any) string {
 	str := func(k string) string { return strings.TrimSpace(fmt.Sprint(r[k])) }
@@ -505,6 +507,22 @@ func recipeIdentity(r map[string]any) string {
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s", str("kind"), str("command"), strings.Trim(str("owner"), "/"), strings.Join(paths, ",")))
 	case "state_mutation_confined_to_owner":
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s", str("kind"), strings.Trim(str("dir"), "/"), str("type"), str("field"), strings.Join(paths, ",")))
+	case "package_import_confined_to":
+		// Delegated rather than mirrored, so the two cannot normalize
+		// differently. An absent Owner stays the empty term, not "<nil>".
+		text := func(k string) string {
+			if s, ok := r[k].(string); ok {
+				return s
+			}
+			return ""
+		}
+		rec := derived.Recipe{Kind: text("kind"), Dir: text("dir"), Owner: text("owner")}
+		if sp, ok := r["search_paths"].([]any); ok {
+			for _, p := range sp {
+				rec.SearchPaths = append(rec.SearchPaths, fmt.Sprint(p))
+			}
+		}
+		return rec.Identity()
 	default:
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s", str("kind"), strings.Trim(str("dir"), "/"), str("type"), str("field"), str("lock")))
 	}

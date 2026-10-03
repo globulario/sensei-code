@@ -59,6 +59,8 @@ var answerableKinds = map[string][]string{
 	"field_access_under_lock":          {"dir", "type", "field", "lock"},
 	"command_invocation_confined_to":   {"command", "owner", "search_paths"},
 	"state_mutation_confined_to_owner": {"dir", "type", "field", "search_paths"},
+	// owner is optional for this kind, so it is not a required term.
+	"package_import_confined_to": {"dir", "search_paths"},
 }
 
 // Identity is a recipe's canonical key, computed from the QUESTION only.
@@ -84,6 +86,16 @@ func (r Recipe) Identity() string {
 		sort.Strings(paths)
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s",
 			r.Kind, clean(r.Dir), r.Type, r.Field, strings.Join(paths, ",")))
+	case "package_import_confined_to":
+		// Owner and scope are both terms of the proposition: with no owner the
+		// claim is stronger, and a narrower search is a weaker claim.
+		paths := make([]string, 0, len(r.SearchPaths))
+		for _, p := range r.SearchPaths {
+			paths = append(paths, clean(p))
+		}
+		sort.Strings(paths)
+		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s",
+			r.Kind, clean(r.Dir), clean(r.Owner), strings.Join(paths, ",")))
 	default:
 		return strings.ToLower(fmt.Sprintf("%s|%s|%s|%s|%s",
 			r.Kind, clean(r.Dir), r.Type, r.Field, r.Lock))

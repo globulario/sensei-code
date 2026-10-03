@@ -54,6 +54,11 @@ type Recipe struct {
 	// inside the owner package "confirms" a confinement by not looking where a
 	// violation would live. It is carried here so the recipe cannot be widened
 	// or narrowed silently between revalidations.
+	//
+	// Dir, Owner and SearchPaths also name a package_import_confined_to
+	// question: every non-test import of the package declared by Dir, under
+	// SearchPaths, originates from Dir or from Owner. Owner is optional there;
+	// without it the claim is that nothing outside Dir imports the package.
 	Command     string   `json:"command,omitempty"`
 	Owner       string   `json:"owner,omitempty"`
 	SearchPaths []string `json:"search_paths,omitempty"`
@@ -70,9 +75,17 @@ type Recipe struct {
 }
 
 func (r Recipe) String() string {
-	if r.Kind == "command_invocation_confined_to" {
+	switch r.Kind {
+	case "command_invocation_confined_to":
 		return fmt.Sprintf("%s(%q confined to %s) searched under %s",
 			r.Kind, r.Command, r.Owner, strings.Join(r.SearchPaths, ", "))
+	case "package_import_confined_to":
+		allowed := r.Dir
+		if strings.TrimSpace(r.Owner) != "" {
+			allowed += " and " + r.Owner
+		}
+		return fmt.Sprintf("%s(imports of %s confined to %s) searched under %s",
+			r.Kind, r.Dir, allowed, strings.Join(r.SearchPaths, ", "))
 	}
 	return fmt.Sprintf("%s(%s.%s under %s.%s) in %s", r.Kind, r.Type, r.Field, r.Type, r.Lock, r.Dir)
 }
@@ -224,6 +237,17 @@ func (c CLI) Revalidate(ctx context.Context, repoRoot, revision string, r Recipe
 	switch r.Kind {
 	case "command_invocation_confined_to":
 		args = append(args, "-command", r.Command, "-owner", r.Owner)
+		for _, p := range r.SearchPaths {
+			args = append(args, "-search", p)
+		}
+	case "package_import_confined_to":
+		// Owner is optional on the CLI and its absence is a different, stronger
+		// claim (nothing outside Dir imports the package), so an empty Owner is
+		// omitted rather than passed as an empty -owner.
+		args = append(args, "-dir", r.Dir)
+		if strings.TrimSpace(r.Owner) != "" {
+			args = append(args, "-owner", r.Owner)
+		}
 		for _, p := range r.SearchPaths {
 			args = append(args, "-search", p)
 		}
