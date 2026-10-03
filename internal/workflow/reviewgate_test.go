@@ -110,17 +110,63 @@ func newGateHarness(t *testing.T, policy roles.Policy, mode roles.Session, decis
 		reviewer: answeringRunner{text: string(verdict), mode: mode},
 		name:     "remote:abc", session: "session-1",
 	}
-	e.setRouting("task-1", policy, sensei.PreflightDecision{}, nil, nil)
 	e.beginReceipt("task-1")
+
+	tc := &taskContext{
+		Task: "print a number from main", Mode: ModeModify,
+		Files: []string{"main.go"}, Identity: candidateIdentityWithBase(base),
+	}
+	// FIXTURE MIGRATION (DF-39, ruling 115): the candidate loop inspects
+	// production scope against the operative plan attempt, so the harness
+	// routes its plan through the production attempt transition at its
+	// pinned base. Routing is recorded for that attempt exactly as before.
+	adoptFixturePlanAttempt(t, e, "task-1", tc.Task, base, "Rewrite main.go so it prints a number.", tc.Files, func() {
+		e.setRouting("task-1", policy, sensei.PreflightDecision{}, nil, nil)
+	})
 
 	return &gateHarness{
 		engine: e, sc: sc, work: workspace, worker: worker, workerSaw: workerSaw,
 		events: events,
-		tc: &taskContext{
-			Task: "print a number from main", Mode: ModeModify,
-			Files: []string{"main.go"}, Identity: candidateIdentityWithBase(base),
-		},
+		tc:     tc,
 	}
+}
+
+// adoptFixturePlanAttempt makes a canonical plan attempt operative for a
+// candidate-loop fixture through the production path: the task is pinned at
+// world, the attempt begins there, route runs while it is pending (so what
+// it records binds to it), its explicit empty grant state is recorded, and it
+// is adopted. files is the plan's Files, which must name every existing
+// production file the fixture's candidate changes.
+func adoptFixturePlanAttempt(t *testing.T, e *Engine, taskID, objective, world, plan string, files []string, route func()) planAttempt {
+	t.Helper()
+	pin := candidateIdentityWithBase(world)
+	pin.TaskID = taskID
+	if err := pin.Save(e.Repo.Root); err != nil {
+		t.Fatal(err)
+	}
+	d := architectureDecision{Decision: "proceed", Summary: plan, Plan: plan, Files: files}
+	a, err := e.beginPlanAttempt(taskID, objective, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.World != world {
+		t.Fatalf("premise: the fixture's plan attempt was derived at %q, not its pinned base %q", a.World, world)
+	}
+	if route != nil {
+		route()
+	}
+	if err := e.recordTestEditGrants(taskID, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+		t.Fatal(err)
+	}
+	e.setTestEditGrants(taskID, nil)
+	if err := e.recordProspectiveGrants(taskID, "recorded", prospectiveRecord{PlanAttemptID: a.ID, World: a.World}); err != nil {
+		t.Fatal(err)
+	}
+	e.setProspectiveGrants(taskID, nil)
+	if _, err := e.adoptPlanAttempt(taskID, objective, d); err != nil {
+		t.Fatal(err)
+	}
+	return a
 }
 
 func (h *gateHarness) run(t *testing.T) candidateOutcome {

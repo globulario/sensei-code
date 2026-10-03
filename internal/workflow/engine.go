@@ -13,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -2439,6 +2440,113 @@ func planSummary(d architectureDecision) string {
 	return strings.TrimRight(b.String(), "\n")
 }
 
+// inspectProductionScope is candidate inspection of production scope (DF-39).
+//
+// THE CANDIDATE IS THE ENUMERATION; THE OPERATIVE PLAN IS ONLY THE ANSWER.
+// Every existing production Go file the candidate mutates -- edited in place,
+// deleted, or the SOURCE of a rename -- is enumerated from the candidate's
+// exact path set and measured at the pinned world and in the frozen tree,
+// before the plan is read, and each must then be named by the Files of the
+// operative plan attempt. Objective 61, run 6, modified
+// internal/runreceipt/legacy/fromevents.go, which its operative plan never
+// named, and nothing refused it.
+//
+// Authority is the operative attempt alone, at the candidate's base: no
+// operative attempt, or one pinned at another world, authorizes nothing, and
+// a superseded attempt's plan is never consulted. Plan entries are read in
+// their canonical spelling (path.Clean of the trimmed entry, as grants are);
+// the candidate's path is compared as measured.
+//
+// A production file the candidate CREATES -- a rename's destination included
+// -- is not an existing file: prospective CREATE authority governs it. An
+// existing *_test.go is the test-edit inspection's. Both are left untouched
+// here, and a path this inspection admits still continues to them.
+//
+// Every unauthorized path is named, sorted, in one error beginning
+// "production scope refuted:", and the refusal is terminal, as a test-edit
+// refutation is.
+func inspectProductionScope(state candidateTestState, operative planAttempt) error {
+	mutated, deleted, renamed, err := existingProductionMutations(state)
+	if err != nil {
+		return err
+	}
+	if len(mutated) == 0 {
+		return nil
+	}
+	describe := func(paths []string) string {
+		named := make([]string, 0, len(paths))
+		for _, f := range paths {
+			named = append(named, mutationVerb(f, deleted, renamed)+" "+f)
+		}
+		return strings.Join(named, ", ")
+	}
+	attemptID, world, base := strings.TrimSpace(operative.ID), strings.TrimSpace(operative.World), strings.TrimSpace(state.World)
+	if attemptID == "" {
+		return fmt.Errorf("production scope refuted: the candidate %s, and no operative plan attempt is established, so no plan names it",
+			describe(mutated))
+	}
+	if world == "" || base == "" || world != base {
+		return fmt.Errorf("production scope refuted: the candidate %s, and the operative plan attempt %s is pinned at world %s, not the candidate's base %s; its plan does not describe this candidate",
+			describe(mutated), short12(attemptID), orNone(shortWorldID(world), "none"), orNone(shortWorldID(base), "none"))
+	}
+	planned := make(map[string]bool, len(operative.Plan.Files))
+	for _, f := range operative.Plan.Files {
+		planned[path.Clean(strings.TrimSpace(f))] = true
+	}
+	var unplanned []string
+	for _, f := range mutated {
+		if !planned[f] {
+			unplanned = append(unplanned, f)
+		}
+	}
+	if len(unplanned) != 0 {
+		return fmt.Errorf("production scope refuted: the candidate %s, and the operative plan attempt %s does not name it; an existing production file outside the operative plan is refused",
+			describe(unplanned), short12(attemptID))
+	}
+	return nil
+}
+
+// existingProductionMutations classifies, from the candidate's exact path set
+// alone -- no plan is consulted, or passed -- every changed production Go file
+// (a .go file whose base name does not end in _test.go) by whether it exists
+// at the pinned world and in the candidate. One present at the world is an
+// existing-production mutation, sorted; absent from the candidate it was
+// deleted, and a deletion Git pairs with an addition is labelled a rename. One
+// absent at the world is created, and is never an existing-production
+// mutation.
+//
+// Existence is MEASURED: a read that neither returns the file nor establishes
+// its absence is refused, never read as either.
+func existingProductionMutations(state candidateTestState) (mutated []string, deleted, renamed map[string]bool, err error) {
+	created, deleted := map[string]bool{}, map[string]bool{}
+	seen := map[string]bool{}
+	for _, f := range state.Paths {
+		if seen[f] || !strings.HasSuffix(f, ".go") || strings.HasSuffix(path.Base(f), "_test.go") {
+			continue
+		}
+		seen[f] = true
+		before, err := existsIn(state.AtWorld, f)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("production scope refuted: the candidate changes %s, and whether it exists at the pinned world could not be established: %v", f, err)
+		}
+		if !before {
+			created[f] = true
+			continue
+		}
+		after, err := existsIn(state.InCandidate, f)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("production scope refuted: the candidate changes the existing production file %s, and whether the candidate still holds it could not be established: %v", f, err)
+		}
+		if !after {
+			deleted[f] = true
+		}
+		mutated = append(mutated, f)
+	}
+	sort.Strings(mutated)
+	renamed, _ = renamePairs(state.Diff, deleted, created)
+	return mutated, deleted, renamed, nil
+}
+
 // tc is a pointer because the change report is produced here and read by the
 // caller when it offers publication. Taking it by value silently dropped the
 // report, and the pull request body went out with the evidence missing.
@@ -2728,6 +2836,20 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		}
 		capture, diff = reviewed, reviewed.Diff
 
+		// Production-scope inspection of every existing production Go file
+		// the candidate mutates (DF-39): enumerated from the frozen capture's
+		// exact path set and measured at the pinned base and in the frozen
+		// tree, and only then answered by the Files of the OPERATIVE plan
+		// attempt. Before any review, with no retry. A path the operative
+		// plan does not name is refused by name; one it names continues to
+		// the prospective and test-edit inspections below, which keep their
+		// own authority over created files and existing tests.
+		operative := e.operativePlanAttempt(taskID)
+		mutations := candidateTestStateAt(ctx, workspace, tc.Identity.BaseSHA, capture.Tree, capture.Paths, diff)
+		if err := inspectProductionScope(mutations, operative); err != nil {
+			return candidateNotConverged, plan, lastReview, lastAudit, err
+		}
+
 		// Post-creation inspection of every declared prospective surface
 		// (sensei#312). The authorization was for a shape; a candidate whose
 		// created file has another shape is refuted here, before any review
@@ -2750,9 +2872,7 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 		// frozen tree -- never from the mutable worktree. The operative attempt
 		// is handed over whole, so its ID and the world it was derived at stay
 		// one identity, and inspection proves that world is this base.
-		operative := e.operativePlanAttempt(taskID)
 		_, edits := e.recordedGrants(taskID, operative.ID)
-		mutations := candidateTestStateAt(ctx, workspace, tc.Identity.BaseSHA, capture.Tree, capture.Paths, diff)
 		if err := inspectTestEdits(mutations, operative, edits); err != nil {
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
@@ -7495,7 +7615,10 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 			// post-creation inspection refutes that shape, the run is terminal:
 			// a later implementor has no authority to reinterpret or retry it.
 			// All other candidate failures retain the ordinary handoff path.
-			if isProspectiveSurfaceRefutation(err) {
+			// An unplanned existing-production mutation (DF-39) is terminal the
+			// same way: no later implementor's work can bring a path the
+			// operative plan does not name into its scope.
+			if isProspectiveSurfaceRefutation(err) || isProductionScopeRefutation(err) {
 				fail(err)
 				return
 			}
@@ -7707,6 +7830,12 @@ func (e *Engine) implement(ctx context.Context, sc *sensei.Client, start certifi
 
 func isProspectiveSurfaceRefutation(err error) bool {
 	return err != nil && (strings.HasPrefix(err.Error(), "prospective surface refuted:") || strings.HasPrefix(err.Error(), "test edit refuted:"))
+}
+
+// isProductionScopeRefutation recognises the refusal inspectProductionScope
+// produces for an existing production file outside the operative plan.
+func isProductionScopeRefutation(err error) bool {
+	return err != nil && strings.HasPrefix(err.Error(), "production scope refuted:")
 }
 
 // candidateEvidence is what survives a candidate, assembled from what the run
