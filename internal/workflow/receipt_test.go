@@ -419,3 +419,100 @@ func TestAConversationalAnswerIsCompleteWithNoPlan(t *testing.T) {
 		t.Fatalf("state=%s missing=%v", state, missing)
 	}
 }
+
+// DF-35 W3. A run that ends before any candidate exists still says so: NONE,
+// and every candidate field carries the opening absence reason. The repair must
+// not manufacture presence.
+func TestDF35W3ATrueNoCandidateRunStillReportsAbsence(t *testing.T) {
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
+	if r.CandidateState != runreceipt.CandidateNone {
+		t.Fatalf("candidate_state %s, want NONE for a run that created nothing", r.CandidateState)
+	}
+	for name, v := range map[string]runreceipt.Value{
+		"candidate_commit": r.CandidateCommit, "candidate_tree": r.CandidateTree,
+		"candidate_first_parent": r.CandidateFirstParent, "candidate_digest": r.CandidateDigest,
+	} {
+		if v.State != runreceipt.Unknown || !strings.Contains(v.Detail, "no candidate was created") {
+			t.Errorf("%s = %+v, want the recorded absence", name, v)
+		}
+	}
+	if _, missing := r.Completeness(); strings.Contains(strings.Join(missing, " "), "candidate_") {
+		t.Fatalf("a true NONE is incomplete about its candidate: %v", missing)
+	}
+}
+
+// DF-35 W8 SINGLE OBSERVATION. The specimen shape: noteCandidateWork made the
+// candidate PRESENT and no mint ran, so at base the mint-only fields kept
+// "no candidate was created" / "no candidate identity was minted" beside
+// PRESENT. Through the production receipt path every candidate field now reads
+// one observation: none of them denies the candidate the state asserts, and
+// each unmeasured field says what measurement is missing.
+func TestDF35W8EveryCandidateFieldReadsOneObservation(t *testing.T) {
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
+	if r.CandidateState != runreceipt.CandidatePresent {
+		t.Fatalf("premise: candidate_state %s", r.CandidateState)
+	}
+	for name, v := range map[string]runreceipt.Value{
+		"candidate_commit": r.CandidateCommit, "candidate_tree": r.CandidateTree,
+		"candidate_first_parent": r.CandidateFirstParent, "candidate_digest": r.CandidateDigest,
+		"candidate_commit_diff_digest": r.CandidateCommitDiffDigest,
+	} {
+		for _, absence := range []string{"no candidate was created", "no candidate identity was minted"} {
+			if strings.Contains(v.Detail, absence) {
+				t.Errorf("%s says %q beside candidate_state PRESENT", name, absence)
+			}
+		}
+	}
+	if !strings.Contains(r.CandidateCommit.Detail, "candidate ref") || !strings.Contains(r.CandidateCommit.Detail, "could not be read") {
+		t.Errorf("candidate_commit does not name the failed ref measurement: %+v", r.CandidateCommit)
+	}
+	if !strings.Contains(r.CandidateCommitDiffDigest.Detail, "minted no canonical identity") {
+		t.Errorf("candidate_commit_diff_digest does not give its mint-specific reason: %+v", r.CandidateCommitDiffDigest)
+	}
+
+	// UNATTEMPTED, the same observation: its identity fields stay unstated, as
+	// v13 requires, without denying the work exists.
+	e.withReceipt("task-1", func(f *receiptFacts) { f.candidateState = runreceipt.CandidateUnattempted })
+	u := e.emitReceipt("task-1", event.WorkflowNotConverged, runreceipt.OutcomeNotConverged, e.candidateStateFor("task-1"))
+	for name, v := range map[string]runreceipt.Value{
+		"candidate_commit": u.CandidateCommit, "candidate_tree": u.CandidateTree, "candidate_first_parent": u.CandidateFirstParent,
+	} {
+		if v.State == runreceipt.Known || strings.Contains(v.Detail, "no candidate was created") {
+			t.Errorf("UNATTEMPTED %s = %+v", name, v)
+		}
+	}
+}
+
+// DF-35 W9 SCHEMA VERSION COHERENCE. The repair keeps the v13 vocabulary and
+// its COMPLETE rules, so the receipt it emits still says v13, and the v13
+// semantics hold of it: PRESENT without measured identity is INCOMPLETE and
+// names the missing identity, and UNATTEMPTED with unstated identity is not
+// incomplete about its candidate.
+func TestDF35W9TheRepairedReceiptIsStillV13(t *testing.T) {
+	const pinned = "sensei-code.governed-run-receipt/v13"
+	e := &Engine{}
+	e.beginReceipt("task-1")
+	e.noteCandidateWork("task-1", "some-tree", "a-different-base-tree")
+	r := e.emitReceipt("task-1", event.WorkflowFailed, runreceipt.OutcomeFailed, e.candidateStateFor("task-1"))
+	if r.Schema != pinned || runreceipt.SchemaVersion != pinned {
+		t.Fatalf("schema %q / SchemaVersion %q, pinned %q: the vocabulary did not change, so neither may the version", r.Schema, runreceipt.SchemaVersion, pinned)
+	}
+	state, missing := r.Completeness()
+	joined := strings.Join(missing, " ")
+	if state != runreceipt.Incomplete || !strings.Contains(joined, "candidate_commit") || !strings.Contains(joined, "candidate_tree") {
+		t.Fatalf("v13: PRESENT without identity must be INCOMPLETE naming it: %s %v", state, missing)
+	}
+	e.withReceipt("task-1", func(f *receiptFacts) { f.candidateState = runreceipt.CandidateUnattempted })
+	u := e.emitReceipt("task-1", event.WorkflowNotConverged, runreceipt.OutcomeNotConverged, e.candidateStateFor("task-1"))
+	_, missing = u.Completeness()
+	for _, m := range missing {
+		if strings.HasPrefix(m, "candidate_") {
+			t.Fatalf("v13: UNATTEMPTED with unstated identity became incomplete about its candidate: %s", m)
+		}
+	}
+}

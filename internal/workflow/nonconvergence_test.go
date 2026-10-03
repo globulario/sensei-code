@@ -45,8 +45,11 @@ func terminalPayload(t *testing.T, events []event.Event, kind event.Kind) json.R
 }
 
 // The task that spent every review cycle ends NOT_CONVERGED: not FAILED, not
-// via the fail path, its candidate kept as resumable work, its receipt a
-// COMPLETE-able positive claim (UNATTEMPTED, never PRESENT without a mint).
+// via the fail path, its candidate kept as resumable work. Its certified
+// candidate is PRESENT (DF-35). This worker never commits, so the candidate
+// ref still names the base: the receipt may be incomplete about the mint
+// evidence and the identity the ref cannot supply, never by denying the
+// candidate exists.
 func TestSpendingEveryReviewCycleEndsNotConvergedNotFailed(t *testing.T) {
 	h := reviseForever(t)
 	failed, seen := runImplement(h)
@@ -71,15 +74,19 @@ func TestSpendingEveryReviewCycleEndsNotConvergedNotFailed(t *testing.T) {
 	if rec.NotConverged.State != runreceipt.Known {
 		t.Fatalf("the receipt does not state the non-convergence: %+v", rec.NotConverged)
 	}
-	if rec.CandidateState != runreceipt.CandidateUnattempted {
-		t.Fatalf("a kept, never-minted candidate reads as %q; PRESENT would demand mint evidence that does not exist", rec.CandidateState)
+	if rec.CandidateState != runreceipt.CandidatePresent {
+		t.Fatalf("a kept, certified candidate reads as %q; DF-35 forbids demoting it to never-created", rec.CandidateState)
 	}
 	_, missing := rec.Completeness()
 	for _, m := range missing {
-		if strings.HasPrefix(m, "candidate_") || strings.Contains(m, "not_converged") {
+		if strings.Contains(m, "not_converged") {
 			t.Fatalf("the non-convergence receipt is incomplete about its own claim: %s", m)
 		}
+		if strings.HasPrefix(m, "candidate_") && !mintSpecific(m) && !strings.Contains(m, "still names the base") {
+			t.Fatalf("the non-convergence receipt is incomplete for a reason other than the mint or the ref measurement: %s", m)
+		}
 	}
+	noAbsenceClaim(t, rec)
 	// The candidate the record calls resumable is on disk.
 	if _, err := os.Stat(h.work); err != nil {
 		t.Fatalf("the candidate of a non-converged task is gone: %v", err)
@@ -901,5 +908,268 @@ func TestW5ProducedNothingAndProducedEvidenceNotCodeAreDistinctDiagnoses(t *test
 	if strings.Contains(partial, producedEvidenceNotCode) || strings.Contains(partial, producedNothing) ||
 		!strings.Contains(partial, "[f3]") || strings.Contains(partial, "[f2]") {
 		t.Fatalf("with evidence still owed, the diagnosis must name the open finding only: %s", partial)
+	}
+}
+
+// DF-35: A RECEIPT CANNOT ERASE A CANDIDATE THAT EXISTED.
+//
+// Four measured runs each committed and validated a candidate, then failed at a
+// later step, and each receipt said "no candidate was created". These drive the
+// REAL candidate loop to the failure, end it through the production terminal
+// (terminateRun), and compare the receipt with the candidate ref itself.
+
+// committingWorker makes the harness worker write main.go and commit it on the
+// candidate branch, moving the printed value each cycle and printing answer
+// from its second cycle on.
+func committingWorker(t *testing.T, h *gateHarness, answer string) {
+	t.Helper()
+	dir := t.TempDir()
+	cycles := dir + "/cycles"
+	script := "cat >/dev/null\n" +
+		"n=$(cat '" + cycles + "' 2>/dev/null || echo 0); n=$((n+1)); echo \"$n\" > '" + cycles + "'\n" +
+		"printf \"package main\\n\\nfunc main() { println($n) }\\n\" > main.go\n" +
+		"git add main.go >/dev/null && git -c user.name=w -c user.email=w@w commit -q -m \"cycle $n\" >/dev/null\n" +
+		"if [ \"$n\" -gt 1 ]; then cat <<'ANSWER'\n" + answer + "\nANSWER\nfi\n"
+	path := dir + "/worker.sh"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	h.worker = config.Agent{Name: "claude", Command: "sh", Args: []string{path}, Graph: "none"}
+	h.engine.Config.Implementors = []config.Agent{h.worker}
+}
+
+// candidateRefIdentity measures the candidate branch directly: commit, tree,
+// first parent, and sha256 of git diff <base> <commit>.
+func candidateRefIdentity(t *testing.T, h *gateHarness) (commit, tree, parent, digest string) {
+	t.Helper()
+	ctx := context.Background()
+	repo := h.engine.Repo
+	commits, err := repo.RevList(ctx, "refs/heads/"+repo.WorktreeBranch("task-1"), 1)
+	if err != nil || len(commits) != 1 {
+		t.Fatalf("the candidate ref does not read: %v %v", commits, err)
+	}
+	commit = commits[0]
+	if commit == h.tc.Identity.BaseSHA {
+		t.Fatal("premise: the worker committed nothing on the candidate branch")
+	}
+	if tree, err = repo.CommitTreeOf(ctx, commit); err != nil {
+		t.Fatal(err)
+	}
+	if parent, err = repo.FirstParentOf(ctx, commit); err != nil {
+		t.Fatal(err)
+	}
+	rendered, err := repo.RenderCandidateDiff(ctx, h.tc.Identity.BaseSHA, commit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return commit, tree, parent, candidateRevision(rendered)
+}
+
+// terminateWith ends the run through the production terminal for an error and
+// returns its receipt.
+func terminateWith(t *testing.T, h *gateHarness, err error) runreceipt.Receipt {
+	t.Helper()
+	drainEvents(h.events)
+	h.engine.terminateRun(context.Background(), "task-1", "Rewrite main.go so it prints a number.", err)
+	return receiptFrom(t, drainEvents(h.events))
+}
+
+// noAbsenceClaim fails if any candidate field of a receipt denies a candidate.
+func noAbsenceClaim(t *testing.T, r runreceipt.Receipt) {
+	t.Helper()
+	for name, v := range map[string]runreceipt.Value{
+		"candidate_commit": r.CandidateCommit, "candidate_tree": r.CandidateTree,
+		"candidate_first_parent": r.CandidateFirstParent, "candidate_digest": r.CandidateDigest,
+		"candidate_commit_diff_digest": r.CandidateCommitDiffDigest,
+	} {
+		for _, absence := range []string{"no candidate was created", "no candidate identity was minted"} {
+			if strings.Contains(v.Detail, absence) {
+				t.Errorf("%s says %q while a candidate exists: %+v", name, absence, v)
+			}
+		}
+	}
+}
+
+// assertRefIdentity requires the receipt's identity fields to equal the ref's.
+func assertRefIdentity(t *testing.T, h *gateHarness, r runreceipt.Receipt) {
+	t.Helper()
+	commit, tree, parent, digest := candidateRefIdentity(t, h)
+	if r.CandidateState != runreceipt.CandidatePresent {
+		t.Fatalf("candidate_state %s; a committed, validated candidate exists", r.CandidateState)
+	}
+	for name, got := range map[string]struct {
+		v    runreceipt.Value
+		want string
+	}{
+		"candidate_commit": {r.CandidateCommit, commit}, "candidate_tree": {r.CandidateTree, tree},
+		"candidate_first_parent": {r.CandidateFirstParent, parent}, "candidate_digest": {r.CandidateDigest, digest},
+	} {
+		if got.v.State != runreceipt.Known || got.v.Text != got.want {
+			t.Errorf("%s = %+v, want the candidate ref's %s", name, got.v, got.want)
+		}
+	}
+	noAbsenceClaim(t, r)
+}
+
+// assertCertifiedDigestSource requires the validated digest's provenance to be
+// the certified capture, not a review binding the run may never have built.
+func assertCertifiedDigestSource(t *testing.T, r runreceipt.Receipt) {
+	t.Helper()
+	if r.CandidateDigest.Source != candidateDigestSource || !strings.Contains(r.CandidateDigest.Source, "certified") {
+		t.Errorf("candidate_digest source %q, want the certified capture measurement", r.CandidateDigest.Source)
+	}
+	if strings.Contains(r.CandidateDigest.Source, "review binding") {
+		t.Errorf("candidate_digest names a review binding no run refused before review constructs: %q", r.CandidateDigest.Source)
+	}
+}
+
+// prospectiveFailure drives one committing cycle that is refused at
+// prospective inspection: the plan declares a surface it holds no grant for.
+func prospectiveFailure(t *testing.T) (*gateHarness, error) {
+	t.Helper()
+	h := newGateHarness(t, roles.Policy{Reason: "blast radius file with approval gate none"}, roles.Fresh, "accept")
+	committingWorker(t, h, "")
+	h.tc.Prospective = []ProspectiveSurface{{Path: "extra_test.go", Package: "main", Role: "go-regression-test"}}
+	outcome, err := h.run1()
+	if outcome.Accepted() || err == nil || !strings.Contains(err.Error(), "prospective") {
+		t.Fatalf("premise: the cycle was not refused at prospective inspection: outcome %q err %v", outcome, err)
+	}
+	return h, err
+}
+
+func (h *gateHarness) run1() (candidateOutcome, error) {
+	outcome, _, _, _, err := h.engine.runCandidate(context.Background(), h.sc, certifiedStart{},
+		"task-1", h.tc, "Rewrite main.go so it prints a number.", h.worker, h.work, "")
+	return outcome, err
+}
+
+// W1 (specimens 1 and 3). A committed, validated candidate refused at
+// prospective inspection: the receipt states the candidate ref's commit, tree,
+// first parent and the validated diff digest. At base it said "no candidate
+// was created" for every one of them.
+func TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity(t *testing.T) {
+	h, err := prospectiveFailure(t)
+	r := terminateWith(t, h, err)
+	if r.Outcome != runreceipt.OutcomeFailed {
+		t.Fatalf("outcome %s, want FAILED", r.Outcome)
+	}
+	assertRefIdentity(t, h, r)
+	assertCertifiedDigestSource(t, r)
+}
+
+// W2 (specimen 4). Two committed cycles, the second refused because a CODE
+// finding was not accounted for: PRESENT, and the identity fields agree with it.
+func TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate(t *testing.T) {
+	h, _ := scriptedLoop(t, codeFinding, true, `nothing to report`)
+	committingWorker(t, h, `nothing to report`)
+	_, err := h.runTwoCycles()
+	if err == nil || !strings.Contains(err.Error(), "f1") {
+		t.Fatalf("premise: cycle two was not refused for the unaccounted finding: %v", err)
+	}
+	r := terminateWith(t, h, err)
+	assertRefIdentity(t, h, r)
+	assertCertifiedDigestSource(t, r)
+	if r.CandidateFirstParent.Text == h.tc.Identity.BaseSHA {
+		t.Fatal("premise: the second cycle's commit should be parented on the first cycle's, not the base")
+	}
+}
+
+// W4. An unreadable candidate ref is UNKNOWN with the read error, never an
+// absence claim.
+func TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError(t *testing.T) {
+	h, err := prospectiveFailure(t)
+	ref := h.engine.Repo.Root + "/.git/refs/heads/sensei-code/task-1"
+	if werr := os.WriteFile(ref, []byte("not-an-object-id\n"), 0o644); werr != nil {
+		t.Fatal(werr)
+	}
+	r := terminateWith(t, h, err)
+	if r.CandidateState != runreceipt.CandidatePresent {
+		t.Fatalf("candidate_state %s; the validated candidate still existed", r.CandidateState)
+	}
+	for name, v := range map[string]runreceipt.Value{
+		"candidate_commit": r.CandidateCommit, "candidate_tree": r.CandidateTree, "candidate_first_parent": r.CandidateFirstParent,
+	} {
+		if v.State != runreceipt.Unknown || !strings.Contains(v.Detail, "could not be read") {
+			t.Errorf("%s = %+v, want UNKNOWN with the ref read error", name, v)
+		}
+	}
+	if r.CandidateDigest.State != runreceipt.Known {
+		t.Errorf("the validated digest was recorded before the failure and is lost: %+v", r.CandidateDigest)
+	}
+	noAbsenceClaim(t, r)
+}
+
+// W5 CONSISTENCY SOURCE. Candidate existence is established and exactly one
+// identity measurement -- the tree -- is made unavailable: PRESENT, the tree
+// UNKNOWN with that exact error, the rest measured, and no absence claim.
+func TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent(t *testing.T) {
+	h, err := prospectiveFailure(t)
+	restore := readCandidateRef
+	readCandidateRef = func(ctx context.Context, repo gitx.Repo, branch, base string) candidateRef {
+		r := restore(ctx, repo, branch, base)
+		r.tree, r.treeErr = "", errBrokenTreeForWitness
+		return r
+	}
+	defer func() { readCandidateRef = restore }()
+
+	r := terminateWith(t, h, err)
+	if r.CandidateState != runreceipt.CandidatePresent {
+		t.Fatalf("candidate_state %s", r.CandidateState)
+	}
+	if r.CandidateTree.State != runreceipt.Unknown || !strings.Contains(r.CandidateTree.Detail, errBrokenTreeForWitness.Error()) {
+		t.Fatalf("candidate_tree = %+v, want UNKNOWN with the exact measurement error", r.CandidateTree)
+	}
+	if r.CandidateCommit.State != runreceipt.Known || r.CandidateFirstParent.State != runreceipt.Known {
+		t.Fatalf("one failed measurement took the others with it: commit %+v parent %+v", r.CandidateCommit, r.CandidateFirstParent)
+	}
+	noAbsenceClaim(t, r)
+	if _, missing := r.Completeness(); !strings.Contains(strings.Join(missing, " "), errBrokenTreeForWitness.Error()) {
+		t.Fatalf("the incompleteness does not name the missing measurement: %v", missing)
+	}
+}
+
+var errBrokenTreeForWitness = &witnessError{"tree object unreadable (injected by the DF-35 W5 witness)"}
+
+type witnessError struct{ s string }
+
+func (e *witnessError) Error() string { return e.s }
+
+// mintSpecific reports whether an incompleteness reason concerns only the
+// acceptance-mint evidence a non-accepted candidate never has.
+func mintSpecific(reason string) bool {
+	return strings.HasPrefix(reason, "candidate_commit_diff_digest:") ||
+		strings.HasPrefix(reason, "candidate_digest_relation UNKNOWN")
+}
+
+// W2 (specimen 4, through the real NOT_CONVERGED terminal). A committing worker
+// spends every review cycle: the production loop ends in endNotConverged, and
+// the receipt states the certified candidate as PRESENT with the candidate
+// ref's commit, tree and first parent and the certified diff digest. Only the
+// mint-specific rendering digest is UNKNOWN, for its precise reason. At the
+// previous candidate, noteNotConverged demoted it to UNATTEMPTED and the
+// observation withheld the ref's identity.
+func TestDF35W2NotConvergedKeepsTheCommittedCandidate(t *testing.T) {
+	h := reviseForever(t)
+	committingWorker(t, h, "")
+	failed, seen := runImplement(h)
+	if failed != nil || !contains(seen, event.WorkflowNotConverged) {
+		t.Fatalf("premise: the run did not end NOT_CONVERGED: %v %v", failed, kinds(seen))
+	}
+	r := receiptFrom(t, seen)
+	if r.Outcome != runreceipt.OutcomeNotConverged {
+		t.Fatalf("outcome %s, want NOT_CONVERGED", r.Outcome)
+	}
+	assertRefIdentity(t, h, r)
+	assertCertifiedDigestSource(t, r)
+	if r.CandidateCommitDiffDigest.State != runreceipt.Unknown ||
+		!strings.Contains(r.CandidateCommitDiffDigest.Detail, "minted no canonical identity") ||
+		!strings.Contains(r.CandidateCommitDiffDigest.Detail, "the candidate exists") {
+		t.Fatalf("candidate_commit_diff_digest = %+v, want UNKNOWN for the mint-specific reason", r.CandidateCommitDiffDigest)
+	}
+	_, missing := r.Completeness()
+	for _, m := range missing {
+		if strings.HasPrefix(m, "candidate_") && !mintSpecific(m) {
+			t.Fatalf("incomplete about more than the mint evidence: %s", m)
+		}
 	}
 }

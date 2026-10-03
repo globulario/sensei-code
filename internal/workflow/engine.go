@@ -3180,6 +3180,11 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			return candidateNotConverged, plan, lastReview, lastAudit, err
 		}
 		capture, diff = reviewed, reviewed.Diff
+		// The certified candidate is recorded HERE, before any inspection or
+		// audit below can end the run. Recorded only after they all passed, a
+		// run that failed at prospective inspection with a committed, validated
+		// candidate emitted a receipt saying no candidate was created (DF-35).
+		e.noteCertifiedCandidate(taskID, tc.Identity.BaseSHA, candidateRevision(diff), capture.Tree, capture.BaseTree)
 
 		// Production-scope inspection of every existing production Go file
 		// the candidate mutates (DF-39): enumerated from the frozen capture's
@@ -3489,9 +3494,6 @@ func (e *Engine) runCandidate(ctx context.Context, sc *sensei.Client, start cert
 			CandidateDigest: candidateRevision(diff),
 			CandidateTree:   capture.Tree,
 		}
-		e.noteCandidateDigest(taskID, binding.CandidateDigest)
-		e.noteCapturedTree(taskID, capture.Tree)
-		e.noteCandidateWork(taskID, capture.Tree, capture.BaseTree)
 		// A resumed WAITING_REVIEW task states, once and before the review is
 		// asked again, whether this is the candidate its unanswered request was
 		// about. The review below is bound to the binding captured now either way.
