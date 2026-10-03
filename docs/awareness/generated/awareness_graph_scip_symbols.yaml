@@ -52181,6 +52181,12 @@ code_symbols:
     file: internal/workflow/testedit.go
     symbol: Engine.coverageWorld
     kind: method
+  - id: internal/workflow/testedit.go:Engine.noteRestoredTestEditRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: Engine.noteRestoredTestEditRecord
+    kind: method
   - id: internal/workflow/testedit.go:Engine.planAttemptGrantRefusal
     namespace: structural.scip
     language: go
@@ -52439,6 +52445,48 @@ code_symbols:
     file: internal/workflow/testedit.go
     symbol: buildConstraints
     kind: function
+  - id: internal/workflow/testedit.go:candidateTestState.AtWorld
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestState.AtWorld
+    kind: var
+  - id: internal/workflow/testedit.go:candidateTestState.Diff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestState.Diff
+    kind: var
+  - id: internal/workflow/testedit.go:candidateTestState.InCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestState.InCandidate
+    kind: var
+  - id: internal/workflow/testedit.go:candidateTestState.Paths
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestState.Paths
+    kind: var
+  - id: internal/workflow/testedit.go:candidateTestState.World
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestState.World
+    kind: var
+  - id: internal/workflow/testedit.go:candidateTestStateAt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestStateAt
+    kind: function
+  - id: internal/workflow/testedit.go:candidateTestState~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: candidateTestState
+    kind: type
   - id: internal/workflow/testedit.go:canonicalIdentity
     namespace: structural.scip
     language: go
@@ -52523,6 +52571,18 @@ code_symbols:
     file: internal/workflow/testedit.go
     symbol: evidenceDerived
     kind: const
+  - id: internal/workflow/testedit.go:existingTestMutations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: existingTestMutations
+    kind: function
+  - id: internal/workflow/testedit.go:existsIn
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: existsIn
+    kind: function
   - id: internal/workflow/testedit.go:governedNeighbour.evidence
     namespace: structural.scip
     language: go
@@ -52571,6 +52631,12 @@ code_symbols:
     file: internal/workflow/testedit.go
     symbol: matchTestEditGrants
     kind: function
+  - id: internal/workflow/testedit.go:mutationVerb
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: mutationVerb
+    kind: function
   - id: internal/workflow/testedit.go:namesAnIdentity
     namespace: structural.scip
     language: go
@@ -52594,6 +52660,12 @@ code_symbols:
     language: go
     file: internal/workflow/testedit.go
     symbol: projectTestEditRefusals
+    kind: function
+  - id: internal/workflow/testedit.go:recordBinds
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: recordBinds
     kind: function
   - id: internal/workflow/testedit.go:refuteTestEditConstraints
     namespace: structural.scip
@@ -52630,6 +52702,12 @@ code_symbols:
     language: go
     file: internal/workflow/testedit.go
     symbol: refuteTestEditRenamed
+    kind: function
+  - id: internal/workflow/testedit.go:renamePairs
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: renamePairs
     kind: function
   - id: internal/workflow/testedit.go:renderIdentity
     namespace: structural.scip
@@ -52732,6 +52810,12 @@ code_symbols:
     language: go
     file: internal/workflow/testedit.go
     symbol: staleAuthoredNote
+    kind: function
+  - id: internal/workflow/testedit.go:testEditAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit.go
+    symbol: testEditAuthority
     kind: function
   - id: internal/workflow/testedit.go:testEditFacts.Constraints
     namespace: structural.scip
@@ -52943,6 +53027,72 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: TestAnUndecidableEffectIsAdmittedEarlyAndRefusedLate
     kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23AnOperativeAttemptAtAnotherWorldAuthorizesNothing
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23CandidateAdmissionRefusesAnUngrantedExistingTestEdit
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W1AnUngrantedExistingTestEditIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W1AnUngrantedExistingTestEditIsRefused
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W2AGrantedExistingTestEditProceeds
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W2AGrantedExistingTestEditProceeds
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W3AGrantFromASupersededPlanAttemptConfersNoAuthority
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W3AResumedTaskInspectsUnderItsOperativeAttemptsRecord
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W4ACreatedTestIsNotAnExistingTestEdit
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W5DeletingOrRenamingAnUngrantedExistingTestIsRefused
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W6aTheMigratedControlFixtureDoesNotItselfRefuse
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF23W7SomeValidGrantsDoNotNarrowTheEnumeration
+    kind: function
   - id: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     namespace: structural.scip
     language: go
@@ -53051,6 +53201,72 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: derivedGrant
     kind: function
+  - id: internal/workflow/testedit_test.go:df23Bus
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Bus
+    kind: const
+  - id: internal/workflow/testedit_test.go:df23Candidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Candidate
+    kind: function
+  - id: internal/workflow/testedit_test.go:df23Edit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Edit
+    kind: function
+  - id: internal/workflow/testedit_test.go:df23Engine
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Engine
+    kind: function
+  - id: internal/workflow/testedit_test.go:df23Inspect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Inspect
+    kind: function
+  - id: internal/workflow/testedit_test.go:df23Pin
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Pin
+    kind: function
+  - id: internal/workflow/testedit_test.go:df23Receipt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Receipt
+    kind: const
+  - id: internal/workflow/testedit_test.go:df23Record
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Record
+    kind: function
+  - id: internal/workflow/testedit_test.go:df23Route
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df23Route
+    kind: function
+  - id: internal/workflow/testedit_test.go:inspectDiff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: inspectDiff
+    kind: function
+  - id: internal/workflow/testedit_test.go:preDF23InspectTestEdits
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: preDF23InspectTestEdits
+    kind: function
   - id: internal/workflow/testedit_test.go:refusalOf
     namespace: structural.scip
     language: go
@@ -53117,6 +53333,12 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: rrSSrc
     kind: const
+  - id: internal/workflow/testedit_test.go:teAttemptAt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: teAttemptAt
+    kind: function
   - id: internal/workflow/testedit_test.go:teCandidateWithNovelImport
     namespace: structural.scip
     language: go
@@ -53159,6 +53381,12 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: teDiffRenamed
     kind: const
+  - id: internal/workflow/testedit_test.go:teDiffState
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: teDiffState
+    kind: function
   - id: internal/workflow/testedit_test.go:teEditGrants
     namespace: structural.scip
     language: go
@@ -53183,11 +53411,23 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: teInsideTheGrant
     kind: function
+  - id: internal/workflow/testedit_test.go:teInspect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: teInspect
+    kind: function
   - id: internal/workflow/testedit_test.go:teRead
     namespace: structural.scip
     language: go
     file: internal/workflow/testedit_test.go
     symbol: teRead
+    kind: function
+  - id: internal/workflow/testedit_test.go:teReader
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: teReader
     kind: function
   - id: internal/workflow/testedit_test.go:teS
     namespace: structural.scip
