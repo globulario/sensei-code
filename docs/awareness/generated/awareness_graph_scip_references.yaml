@@ -6399,7 +6399,7 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6407,7 +6407,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6469,11 +6469,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6481,11 +6481,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7257,11 +7257,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7792,7 +7792,7 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/control/server.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7800,7 +7800,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/session/store.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -11297,11 +11297,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -18153,11 +18153,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -28202,10 +28202,10 @@ code_references:
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -31617,11 +31617,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -35746,7 +35746,7 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -35754,7 +35754,7 @@ code_references:
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -48308,11 +48308,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -97740,17 +97740,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -153349,10 +153349,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -182081,10 +182081,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -187864,20 +187864,12 @@ code_references:
     to_name: Engine.graphFor
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/workflow/receipt.go:Engine.noteCandidateDigest
-    to_name: Engine.noteCandidateDigest
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/receipt.go:Engine.noteCandidateUnattempted
     to_name: Engine.noteCandidateUnattempted
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/workflow/receipt.go:Engine.noteCandidateWork
-    to_name: Engine.noteCandidateWork
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/workflow/receipt.go:Engine.noteCapturedTree
-    to_name: Engine.noteCapturedTree
+    to_id: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_name: Engine.noteCertifiedCandidate
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:Engine.obligationLeftOpen
@@ -188077,14 +188069,14 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/broker/broker.go:New
+    to_name: New
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_name: New
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -190046,19 +190038,19 @@ code_references:
     to_name: Evidence
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditDetail
-    to_name: Evidence.AuditDetail
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
-    to_name: Evidence.AuditVerdict
+    to_id: internal/candidate/disposition.go:Evidence.AuditDetail
+    to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_name: Evidence.AuditVerdict
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -190066,19 +190058,19 @@ code_references:
     to_name: Evidence.BaseSHA
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
-    to_name: Evidence.ChangedPaths
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/taskstate/state.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
-    to_name: Evidence.DiffBytes
+    to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
+    to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_name: Evidence.DiffBytes
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -192251,19 +192243,19 @@ code_references:
     to_name: ToolResult
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.IsError
-    to_name: ToolResult.IsError
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/authority/resolution.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.Structured
-    to_name: ToolResult.Structured
+    to_id: internal/sensei/mcp.go:ToolResult.IsError
+    to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
     to_id: internal/sensei/mcp.go:ToolResult.Structured
+    to_name: ToolResult.Structured
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:senseiProposer.CallTool
+    to_id: internal/authority/resolution.go:ToolResult.Structured
     to_name: ToolResult.Structured
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -198549,10 +198541,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -203884,6 +203876,408 @@ code_references:
   - from: internal/workflow/nonconvergence_test.go:TestARestartedEngineStillRefusesToRePlanASuppliedPlan
     to_name: testing
     file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_id: internal/runreceipt/receipt.go:OutcomeFailed
+    to_name: OutcomeFailed
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_id: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: assertCertifiedDigestSource
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_id: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: assertRefIdentity
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_id: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: prospectiveFailure
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_id: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: terminateWith
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/candidate/identity.go:Identity.BaseSHA
+    to_name: Identity.BaseSHA
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: assertCertifiedDigestSource
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: assertRefIdentity
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:codeFinding
+    to_name: codeFinding
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: committingWorker
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_name: common.Fatal
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:gateHarness.runTwoCycles
+    to_name: gateHarness.runTwoCycles
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:scriptedLoop
+    to_name: scriptedLoop
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/engine.go:taskContext.Identity
+    to_name: taskContext.Identity
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_id: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: terminateWith
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: HasPrefix
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:OutcomeNotConverged
+    to_name: OutcomeNotConverged
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:Receipt.Outcome
+    to_name: Receipt.Outcome
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/event/event.go:WorkflowNotConverged
+    to_name: WorkflowNotConverged
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: assertCertifiedDigestSource
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: assertRefIdentity
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: committingWorker
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/awaitingreview_test.go:contains
+    to_name: contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/awaitingreview_test.go:kinds
+    to_name: kinds
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/nonconvergence_test.go:mintSpecific
+    to_name: mintSpecific
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/external_block_test.go:receiptFrom
+    to_name: receiptFrom
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/nonconvergence_test.go:reviseForever
+    to_name: reviseForever
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_id: internal/workflow/nonconvergence_test.go:runImplement
+    to_name: runImplement
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: WriteFile
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: common.Errorf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: common.Fatal
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: noAbsenceClaim
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: os
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: prospectiveFailure
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_id: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: terminateWith
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: Context
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: Join
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/gitx/git.go:Repo~type
+    to_name: Repo
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/receipt.go:candidateRef~type
+    to_name: candidateRef
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/receipt.go:candidateRef.tree
+    to_name: candidateRef.tree
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/receipt.go:candidateRef.treeErr
+    to_name: candidateRef.treeErr
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: context
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/nonconvergence_test.go:errBrokenTreeForWitness
+    to_name: errBrokenTreeForWitness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: github.com/globulario/sensei-code/internal/gitx
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: noAbsenceClaim
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: prospectiveFailure
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/receipt.go:readCandidateRef
+    to_name: readCandidateRef
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: terminateWith
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    to_id: internal/workflow/nonconvergence_test.go:witnessError.Error
+    to_name: witnessError.Error
+    file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:TestExhaustionBesideARealFailureStaysFailed
     to_id: internal/config/config.go:Agent~type
     to_name: Agent
@@ -204036,8 +204430,8 @@ code_references:
     to_name: testing
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
-    to_id: internal/runreceipt/receipt.go:CandidateUnattempted
-    to_name: CandidateUnattempted
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
     to_name: Contains
@@ -204131,6 +204525,14 @@ code_references:
   - from: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
     to_id: internal/workflow/awaitingreview_test.go:kinds
     to_name: kinds
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
+    to_id: internal/workflow/nonconvergence_test.go:mintSpecific
+    to_name: mintSpecific
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
+    to_id: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: noAbsenceClaim
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:TestSpendingEveryReviewCycleEndsNotConvergedNotFailed
     to_name: os
@@ -205156,6 +205558,117 @@ code_references:
   - from: internal/workflow/nonconvergence_test.go:TestW7AClasslessFindingIsValidWireDataAndRefusedOnlyAtTheBoundary
     to_name: testing
     file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_id: internal/runreceipt/receipt.go:Value.Source
+    to_name: Value.Source
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_id: internal/workflow/receipt.go:candidateDigestSource
+    to_name: candidateDigestSource
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: common.Errorf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: candidateRefIdentity
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: common.Errorf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_id: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: noAbsenceClaim
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:blockRoleOf
     to_id: internal/workflow/external_block.go:ExternalBlock.Role
     to_name: ExternalBlock.Role
@@ -205216,6 +205729,139 @@ code_references:
     to_name: scriptedLoop
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:brokeredLoop
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: Background
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/candidate/identity.go:Identity.BaseSHA
+    to_name: Identity.BaseSHA
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/gitx/identity.go:Repo.CommitTreeOf
+    to_name: Repo.CommitTreeOf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/gitx/identity.go:Repo.FirstParentOf
+    to_name: Repo.FirstParentOf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/gitx/capture.go:Repo.RenderCandidateDiff
+    to_name: Repo.RenderCandidateDiff
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/gitx/git.go:Repo.RevList
+    to_name: Repo.RevList
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/gitx/git.go:Repo.WorktreeBranch
+    to_name: Repo.WorktreeBranch
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/workflow/adversarial.go:candidateRevision
+    to_name: candidateRevision
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: common.Fatal
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: context
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_id: internal/workflow/engine.go:taskContext.Identity
+    to_name: taskContext.Identity
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/config/config.go:Agent~type
+    to_name: Agent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/config/config.go:Agent.Args
+    to_name: Agent.Args
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/config/config.go:Agent.Command
+    to_name: Agent.Command
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/config/config.go:Agent.Graph
+    to_name: Agent.Graph
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/config/config.go:Config.Implementors
+    to_name: Config.Implementors
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: WriteFile
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: common.Fatal
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: common.TempDir
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
+    to_name: gateHarness.worker
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: github.com/globulario/sensei-code/internal/config
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: os
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:committingWorker
     to_name: testing
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:durableEvidence
@@ -205297,6 +205943,48 @@ code_references:
   - from: internal/workflow/nonconvergence_test.go:evidenceLoop
     to_name: testing
     file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_name: Background
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/engine.go:Engine.runCandidate
+    to_name: Engine.runCandidate
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewresult.go:candidateOutcome~type
+    to_name: candidateOutcome
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_name: context
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.sc
+    to_name: gateHarness.sc
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.work
+    to_name: gateHarness.work
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
+    to_name: gateHarness.worker
+    file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:gateHarness.runTwoCycles
     to_name: Background
     file: internal/workflow/nonconvergence_test.go
@@ -205338,6 +206026,142 @@ code_references:
   - from: internal/workflow/nonconvergence_test.go:gateHarness.runTwoCycles
     to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
     to_name: gateHarness.worker
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:mintSpecific
+    to_name: HasPrefix
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:mintSpecific
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: common.Errorf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: Contains
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/roles/roles.go:Fresh
+    to_name: Fresh
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/roles/assign.go:Policy~type
+    to_name: Policy
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/roles/assign.go:Policy.Reason
+    to_name: Policy.Reason
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Package
+    to_name: ProspectiveSurface.Package
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Path
+    to_name: ProspectiveSurface.Path
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/reviewresult.go:candidateOutcome.Accepted
+    to_name: candidateOutcome.Accepted
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/nonconvergence_test.go:committingWorker
+    to_name: committingWorker
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: common.Fatalf
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    to_name: gateHarness.run1
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/reviewgate_test.go:newGateHarness
+    to_name: newGateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: strings
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_id: internal/workflow/engine.go:taskContext.Prospective
+    to_name: taskContext.Prospective
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    to_name: testing
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:reviewCalls
     to_name: ReadFile
@@ -205579,6 +206403,60 @@ code_references:
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/nonconvergence_test.go:terminalPayload
     to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: Background
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/workflow/engine.go:Engine.terminateRun
+    to_name: Engine.terminateRun
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/runreceipt/receipt.go:Receipt~type
+    to_name: Receipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: T
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: common.Helper
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: context
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/workflow/awaitingreview_test.go:drainEvents
+    to_name: drainEvents
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/workflow/reviewgate_test.go:gateHarness~type
+    to_name: gateHarness
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.events
+    to_name: gateHarness.events
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_id: internal/workflow/external_block_test.go:receiptFrom
+    to_name: receiptFrom
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:terminateWith
+    to_name: testing
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:witnessError.Error
+    to_id: internal/workflow/nonconvergence_test.go:witnessError~type
+    to_name: witnessError
+    file: internal/workflow/nonconvergence_test.go
+  - from: internal/workflow/nonconvergence_test.go:witnessError.Error
+    to_id: internal/workflow/nonconvergence_test.go:witnessError.s
+    to_name: witnessError.s
     file: internal/workflow/nonconvergence_test.go
   - from: internal/workflow/objective.go:AuthorityStatement.Render
     to_id: internal/workflow/objective.go:AuthorityStatement~type
@@ -210446,10 +211324,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61OnlyARecordedReturnToTheArchitectIsOwed
@@ -211821,10 +212699,10 @@ code_references:
     to_name: Interrupted.PlanAttemptRefusals
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/planattempt_test.go
   - from: internal/workflow/planattempt_test.go:TestObj61W8DistinctRefusalsOfOneAttemptStayDistinctAndTheOwedOneIsParked
@@ -223053,6 +223931,10 @@ code_references:
     to_name: Engine.receipts
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: Engine.terminalCandidate
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
     to_id: internal/event/event.go:Kind~type
     to_name: Kind
     file: internal/workflow/receipt.go
@@ -223215,6 +224097,34 @@ code_references:
     to_name: SourceSystem
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.commit
+    to_name: candidateObservation.commit
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.diff
+    to_name: candidateObservation.diff
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.parent
+    to_name: candidateObservation.parent
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.relation
+    to_name: candidateObservation.relation
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.rendering
+    to_name: candidateObservation.rendering
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.state
+    to_name: candidateObservation.state
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
+    to_id: internal/workflow/receipt.go:candidateObservation.tree
+    to_name: candidateObservation.tree
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.emitReceipt
     to_id: internal/workflow/receipt.go:freshFacts
     to_name: freshFacts
     file: internal/workflow/receipt.go
@@ -223237,36 +224147,12 @@ code_references:
     to_name: receiptFacts.base
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.emitReceipt
-    to_id: internal/workflow/receipt.go:receiptFacts.candCommit
-    to_name: receiptFacts.candCommit
-    file: internal/workflow/receipt.go
-  - from: internal/workflow/receipt.go:Engine.emitReceipt
-    to_id: internal/workflow/receipt.go:receiptFacts.candDiff
-    to_name: receiptFacts.candDiff
-    file: internal/workflow/receipt.go
-  - from: internal/workflow/receipt.go:Engine.emitReceipt
-    to_id: internal/workflow/receipt.go:receiptFacts.candParent
-    to_name: receiptFacts.candParent
-    file: internal/workflow/receipt.go
-  - from: internal/workflow/receipt.go:Engine.emitReceipt
-    to_id: internal/workflow/receipt.go:receiptFacts.candRendering
-    to_name: receiptFacts.candRendering
-    file: internal/workflow/receipt.go
-  - from: internal/workflow/receipt.go:Engine.emitReceipt
-    to_id: internal/workflow/receipt.go:receiptFacts.candTree
-    to_name: receiptFacts.candTree
-    file: internal/workflow/receipt.go
-  - from: internal/workflow/receipt.go:Engine.emitReceipt
     to_id: internal/workflow/receipt.go:receiptFacts.deferredQuestion
     to_name: receiptFacts.deferredQuestion
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.emitReceipt
     to_id: internal/workflow/receipt.go:receiptFacts.digest
     to_name: receiptFacts.digest
-    file: internal/workflow/receipt.go
-  - from: internal/workflow/receipt.go:Engine.emitReceipt
-    to_id: internal/workflow/receipt.go:receiptFacts.digestRelation
-    to_name: receiptFacts.digestRelation
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.emitReceipt
     to_id: internal/workflow/receipt.go:receiptFacts.executable
@@ -223408,6 +224294,10 @@ code_references:
   - from: internal/workflow/receipt.go:Engine.noteCandidateDigest
     to_id: internal/runreceipt/receipt.go:MeasuredValue
     to_name: MeasuredValue
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCandidateDigest
+    to_id: internal/workflow/receipt.go:candidateDigestSource
+    to_name: candidateDigestSource
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.noteCandidateDigest
     to_name: github.com/globulario/sensei-code/internal/runreceipt
@@ -223554,6 +224444,55 @@ code_references:
   - from: internal/workflow/receipt.go:Engine.noteCapturedTree
     to_id: internal/workflow/receipt.go:receiptFacts.capturedTree
     to_name: receiptFacts.capturedTree
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:Engine.noteCandidateDigest
+    to_name: Engine.noteCandidateDigest
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:Engine.noteCandidateWork
+    to_name: Engine.noteCandidateWork
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:Engine.noteCapturedTree
+    to_name: Engine.noteCapturedTree
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:Engine.withReceipt
+    to_name: Engine.withReceipt
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_name: TrimSpace
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts~type
+    to_name: receiptFacts
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candBase
+    to_name: receiptFacts.candBase
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candidateState
+    to_name: receiptFacts.candidateState
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.certified
+    to_name: receiptFacts.certified
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    to_name: strings
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.noteDeferredQuestion
     to_id: internal/workflow/engine.go:Engine~type
@@ -223793,6 +224732,10 @@ code_references:
   - from: internal/workflow/receipt.go:Engine.noteNotConverged
     to_id: internal/workflow/receipt.go:receiptFacts.candidateState
     to_name: receiptFacts.candidateState
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.noteNotConverged
+    to_id: internal/workflow/receipt.go:receiptFacts.certified
+    to_name: receiptFacts.certified
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.noteNotConverged
     to_id: internal/workflow/receipt.go:receiptFacts.notConverged
@@ -224446,6 +225389,152 @@ code_references:
     to_id: internal/workflow/receipt.go:receiptFacts.reviewedTree
     to_name: receiptFacts.reviewedTree
     file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: Background
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateState~type
+    to_name: CandidateState
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:CandidateUnattempted
+    to_name: CandidateUnattempted
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/gitx/git.go:Repo.WorktreeBranch
+    to_name: Repo.WorktreeBranch
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: Second
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:UnknownValue
+    to_name: UnknownValue
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:Value.Source
+    to_name: Value.Source
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: WithTimeout
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation~type
+    to_name: candidateObservation
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.commit
+    to_name: candidateObservation.commit
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.diff
+    to_name: candidateObservation.diff
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.parent
+    to_name: candidateObservation.parent
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.relation
+    to_name: candidateObservation.relation
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.rendering
+    to_name: candidateObservation.rendering
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.state
+    to_name: candidateObservation.state
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:candidateObservation.tree
+    to_name: candidateObservation.tree
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: context
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:identityFromRef
+    to_name: identityFromRef
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:readCandidateRef
+    to_name: readCandidateRef
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts~type
+    to_name: receiptFacts
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.base
+    to_name: receiptFacts.base
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candBase
+    to_name: receiptFacts.candBase
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candCommit
+    to_name: receiptFacts.candCommit
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candDiff
+    to_name: receiptFacts.candDiff
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candParent
+    to_name: receiptFacts.candParent
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candRendering
+    to_name: receiptFacts.candRendering
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.candTree
+    to_name: receiptFacts.candTree
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.certified
+    to_name: receiptFacts.certified
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_id: internal/workflow/receipt.go:receiptFacts.digestRelation
+    to_name: receiptFacts.digestRelation
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:Engine.terminalCandidate
+    to_name: time
+    file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:Engine.withReceipt
     to_id: internal/workflow/engine.go:Engine~type
     to_name: Engine
@@ -224701,6 +225790,73 @@ code_references:
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt.go:governorIdentity
     to_name: runtime/debug
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/runreceipt/receipt.go:MeasuredValue
+    to_name: MeasuredValue
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/runreceipt/receipt.go:UnknownValue
+    to_name: UnknownValue
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/runreceipt/receipt.go:Value.Text
+    to_name: Value.Text
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef~type
+    to_name: candidateRef
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.commit
+    to_name: candidateRef.commit
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.parent
+    to_name: candidateRef.parent
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.parentErr
+    to_name: candidateRef.parentErr
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.readErr
+    to_name: candidateRef.readErr
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.ref
+    to_name: candidateRef.ref
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.renderErr
+    to_name: candidateRef.renderErr
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.rendering
+    to_name: candidateRef.rendering
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.tree
+    to_name: candidateRef.tree
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_id: internal/workflow/receipt.go:candidateRef.treeErr
+    to_name: candidateRef.treeErr
+    file: internal/workflow/receipt.go
+  - from: internal/workflow/receipt.go:identityFromRef
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
     file: internal/workflow/receipt.go
   - from: internal/workflow/receipt_test.go:TestAConversationalAnswerIsCompleteWithNoPlan
     to_id: internal/runreceipt/receipt.go:CandidateNone
@@ -225415,6 +226571,316 @@ code_references:
     to_name: github.com/globulario/sensei-code/internal/runreceipt
     file: internal/workflow/receipt_test.go
   - from: internal/workflow/receipt_test.go:TestCandidateAndPlanStatesAreRecordedNotInferred
+    to_name: testing
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:CandidateNone
+    to_name: CandidateNone
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: Contains
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/workflow/receipt.go:Engine.beginReceipt
+    to_name: Engine.beginReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/workflow/receipt.go:Engine.candidateStateFor
+    to_name: Engine.candidateStateFor
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/workflow/receipt.go:Engine.emitReceipt
+    to_name: Engine.emitReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: Join
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:OutcomeFailed
+    to_name: OutcomeFailed
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: T
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Unknown
+    to_name: Unknown
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_id: internal/event/event.go:WorkflowFailed
+    to_name: WorkflowFailed
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: common.Errorf
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: common.Fatalf
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: strings
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    to_name: testing
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:CandidatePresent
+    to_name: CandidatePresent
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:CandidateUnattempted
+    to_name: CandidateUnattempted
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: Contains
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:Engine.beginReceipt
+    to_name: Engine.beginReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:Engine.candidateStateFor
+    to_name: Engine.candidateStateFor
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:Engine.emitReceipt
+    to_name: Engine.emitReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:Engine.noteCandidateWork
+    to_name: Engine.noteCandidateWork
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:Engine.withReceipt
+    to_name: Engine.withReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Known
+    to_name: Known
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:OutcomeFailed
+    to_name: OutcomeFailed
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:OutcomeNotConverged
+    to_name: OutcomeNotConverged
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommit
+    to_name: Receipt.CandidateCommit
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateCommitDiffDigest
+    to_name: Receipt.CandidateCommitDiffDigest
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateDigest
+    to_name: Receipt.CandidateDigest
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateFirstParent
+    to_name: Receipt.CandidateFirstParent
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateState
+    to_name: Receipt.CandidateState
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Receipt.CandidateTree
+    to_name: Receipt.CandidateTree
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: T
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Value~type
+    to_name: Value
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Value.Detail
+    to_name: Value.Detail
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/runreceipt/receipt.go:Value.State
+    to_name: Value.State
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/event/event.go:WorkflowFailed
+    to_name: WorkflowFailed
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/event/event.go:WorkflowNotConverged
+    to_name: WorkflowNotConverged
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: common.Errorf
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: common.Fatalf
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:receiptFacts~type
+    to_name: receiptFacts
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_id: internal/workflow/receipt.go:receiptFacts.candidateState
+    to_name: receiptFacts.candidateState
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: strings
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    to_name: testing
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:CandidateUnattempted
+    to_name: CandidateUnattempted
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: Contains
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:Engine.beginReceipt
+    to_name: Engine.beginReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:Engine.candidateStateFor
+    to_name: Engine.candidateStateFor
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:Engine.emitReceipt
+    to_name: Engine.emitReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:Engine.noteCandidateWork
+    to_name: Engine.noteCandidateWork
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:Engine.withReceipt
+    to_name: Engine.withReceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: HasPrefix
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:Incomplete
+    to_name: Incomplete
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: Join
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:OutcomeFailed
+    to_name: OutcomeFailed
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:OutcomeNotConverged
+    to_name: OutcomeNotConverged
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:Receipt.Completeness
+    to_name: Receipt.Completeness
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:Receipt.Schema
+    to_name: Receipt.Schema
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/runreceipt/receipt.go:SchemaVersion
+    to_name: SchemaVersion
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: T
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/event/event.go:WorkflowFailed
+    to_name: WorkflowFailed
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/event/event.go:WorkflowNotConverged
+    to_name: WorkflowNotConverged
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: common.Fatalf
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: github.com/globulario/sensei-code/internal/runreceipt
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:receiptFacts~type
+    to_name: receiptFacts
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_id: internal/workflow/receipt.go:receiptFacts.candidateState
+    to_name: receiptFacts.candidateState
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    to_name: strings
+    file: internal/workflow/receipt_test.go
+  - from: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
     to_name: testing
     file: internal/workflow/receipt_test.go
   - from: internal/workflow/receipt_test.go:TestOnlyEmitRunTerminalEndsARun
@@ -228100,11 +229566,11 @@ code_references:
     to_name: Join
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/resume_composition_test.go
   - from: internal/workflow/resume_composition_test.go:resumeHarness

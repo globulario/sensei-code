@@ -47603,6 +47603,36 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: TestARestartedEngineStillRefusesToRePlanASuppliedPlan
     kind: function
+  - id: internal/workflow/nonconvergence_test.go:TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: TestDF35W1AProspectiveRefusalKeepsTheCandidateIdentity
+    kind: function
+  - id: internal/workflow/nonconvergence_test.go:TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: TestDF35W2ACycleTwoFailureWithOutstandingFindingsKeepsTheCandidate
+    kind: function
+  - id: internal/workflow/nonconvergence_test.go:TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: TestDF35W2NotConvergedKeepsTheCommittedCandidate
+    kind: function
+  - id: internal/workflow/nonconvergence_test.go:TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: TestDF35W4AnUnreadableCandidateRefIsUnknownWithItsError
+    kind: function
+  - id: internal/workflow/nonconvergence_test.go:TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: TestDF35W5OneUnavailableMeasurementIsUnknownNotAbsent
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:TestExhaustionBesideARealFailureStaysFailed
     namespace: structural.scip
     language: go
@@ -47693,6 +47723,18 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: answerF2WithTheRun
     kind: const
+  - id: internal/workflow/nonconvergence_test.go:assertCertifiedDigestSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: assertCertifiedDigestSource
+    kind: function
+  - id: internal/workflow/nonconvergence_test.go:assertRefIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: assertRefIdentity
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:blockRoleOf
     namespace: structural.scip
     language: go
@@ -47705,12 +47747,24 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: brokeredLoop
     kind: function
+  - id: internal/workflow/nonconvergence_test.go:candidateRefIdentity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: candidateRefIdentity
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:codeFinding
     namespace: structural.scip
     language: go
     file: internal/workflow/nonconvergence_test.go
     symbol: codeFinding
     kind: const
+  - id: internal/workflow/nonconvergence_test.go:committingWorker
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: committingWorker
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:durableEvidence
     namespace: structural.scip
     language: go
@@ -47789,6 +47843,12 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: durableRecord
     kind: type
+  - id: internal/workflow/nonconvergence_test.go:errBrokenTreeForWitness
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: errBrokenTreeForWitness
+    kind: var
   - id: internal/workflow/nonconvergence_test.go:evidenceFinding
     namespace: structural.scip
     language: go
@@ -47807,6 +47867,12 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: failingFirstFinding
     kind: const
+  - id: internal/workflow/nonconvergence_test.go:gateHarness.run1
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: gateHarness.run1
+    kind: method
   - id: internal/workflow/nonconvergence_test.go:gateHarness.runTwoCycles
     namespace: structural.scip
     language: go
@@ -47819,6 +47885,18 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: infraFinding
     kind: const
+  - id: internal/workflow/nonconvergence_test.go:mintSpecific
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: mintSpecific
+    kind: function
+  - id: internal/workflow/nonconvergence_test.go:noAbsenceClaim
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: noAbsenceClaim
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:producedEvidenceNotCode
     namespace: structural.scip
     language: go
@@ -47837,6 +47915,12 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: producedNothingSame
     kind: const
+  - id: internal/workflow/nonconvergence_test.go:prospectiveFailure
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: prospectiveFailure
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:reviewCalls
     namespace: structural.scip
     language: go
@@ -47879,12 +47963,36 @@ code_symbols:
     file: internal/workflow/nonconvergence_test.go
     symbol: terminalPayload
     kind: function
+  - id: internal/workflow/nonconvergence_test.go:terminateWith
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: terminateWith
+    kind: function
   - id: internal/workflow/nonconvergence_test.go:witnessCommand
     namespace: structural.scip
     language: go
     file: internal/workflow/nonconvergence_test.go
     symbol: witnessCommand
     kind: const
+  - id: internal/workflow/nonconvergence_test.go:witnessError.Error
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: witnessError.Error
+    kind: method
+  - id: internal/workflow/nonconvergence_test.go:witnessError.s
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: witnessError.s
+    kind: var
+  - id: internal/workflow/nonconvergence_test.go:witnessError~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/nonconvergence_test.go
+    symbol: witnessError
+    kind: type
   - id: internal/workflow/objective.go:AuthorityStatement.ArchitectProposals
     namespace: structural.scip
     language: go
@@ -50345,6 +50453,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.noteCapturedTree
     kind: method
+  - id: internal/workflow/receipt.go:Engine.noteCertifiedCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.noteCertifiedCandidate
+    kind: method
   - id: internal/workflow/receipt.go:Engine.noteDeferredQuestion
     namespace: structural.scip
     language: go
@@ -50459,12 +50573,156 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: Engine.reviewedTreeFor
     kind: method
+  - id: internal/workflow/receipt.go:Engine.terminalCandidate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: Engine.terminalCandidate
+    kind: method
   - id: internal/workflow/receipt.go:Engine.withReceipt
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
     symbol: Engine.withReceipt
     kind: method
+  - id: internal/workflow/receipt.go:base
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: base
+    kind: var
+  - id: internal/workflow/receipt.go:branch
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: branch
+    kind: var
+  - id: internal/workflow/receipt.go:candidateDigestSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateDigestSource
+    kind: const
+  - id: internal/workflow/receipt.go:candidateObservation.commit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.commit
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.diff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.diff
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.parent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.parent
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.relation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.relation
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.rendering
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.rendering
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.state
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.state
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation.tree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation.tree
+    kind: var
+  - id: internal/workflow/receipt.go:candidateObservation~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateObservation
+    kind: type
+  - id: internal/workflow/receipt.go:candidateRef
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.commit
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.commit
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.parent
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.parent
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.parentErr
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.parentErr
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.readErr
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.readErr
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.ref
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.ref
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.renderErr
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.renderErr
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.rendering
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.rendering
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.tree
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.tree
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef.treeErr
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef.treeErr
+    kind: var
+  - id: internal/workflow/receipt.go:candidateRef~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: candidateRef
+    kind: type
+  - id: internal/workflow/receipt.go:ctx
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: ctx
+    kind: var
   - id: internal/workflow/receipt.go:error
     namespace: structural.scip
     language: go
@@ -50495,11 +50753,23 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: governorIdentityFn
     kind: var
+  - id: internal/workflow/receipt.go:identityFromRef
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: identityFromRef
+    kind: function
   - id: internal/workflow/receipt.go:osExecutable
     namespace: structural.scip
     language: go
     file: internal/workflow/receipt.go
     symbol: osExecutable
+    kind: var
+  - id: internal/workflow/receipt.go:readCandidateRef
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: readCandidateRef
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts.attempts
     namespace: structural.scip
@@ -50512,6 +50782,12 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: receiptFacts.base
+    kind: var
+  - id: internal/workflow/receipt.go:receiptFacts.candBase
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: receiptFacts.candBase
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts.candCommit
     namespace: structural.scip
@@ -50554,6 +50830,12 @@ code_symbols:
     language: go
     file: internal/workflow/receipt.go
     symbol: receiptFacts.capturedTree
+    kind: var
+  - id: internal/workflow/receipt.go:receiptFacts.certified
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: receiptFacts.certified
     kind: var
   - id: internal/workflow/receipt.go:receiptFacts.deferredQuestion
     namespace: structural.scip
@@ -50663,6 +50945,12 @@ code_symbols:
     file: internal/workflow/receipt.go
     symbol: receiptFacts
     kind: type
+  - id: internal/workflow/receipt.go:repo
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt.go
+    symbol: repo
+    kind: var
   - id: internal/workflow/receipt.go:string
     namespace: structural.scip
     language: go
@@ -50722,6 +51010,24 @@ code_symbols:
     language: go
     file: internal/workflow/receipt_test.go
     symbol: TestCandidateAndPlanStatesAreRecordedNotInferred
+    kind: function
+  - id: internal/workflow/receipt_test.go:TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt_test.go
+    symbol: TestDF35W3ATrueNoCandidateRunStillReportsAbsence
+    kind: function
+  - id: internal/workflow/receipt_test.go:TestDF35W8EveryCandidateFieldReadsOneObservation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt_test.go
+    symbol: TestDF35W8EveryCandidateFieldReadsOneObservation
+    kind: function
+  - id: internal/workflow/receipt_test.go:TestDF35W9TheRepairedReceiptIsStillV13
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/receipt_test.go
+    symbol: TestDF35W9TheRepairedReceiptIsStillV13
     kind: function
   - id: internal/workflow/receipt_test.go:TestOnlyEmitRunTerminalEndsARun
     namespace: structural.scip
