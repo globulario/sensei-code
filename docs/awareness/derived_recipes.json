@@ -190,6 +190,26 @@
         "written_at": "2026-09-30T00:53:05Z",
         "written_by": "closure_round"
       }
+    },
+    {
+      "kind": "construction_confined_to_owner",
+      "dir": "internal/event",
+      "type": "Event",
+      "field": "ID",
+      "search_paths": [
+        "."
+      ],
+      "why": "Event.ID is the identity of a durable session record. The pinned source mints it in event.New, which stamps the identifier together with the time; a record carrying an ID that some other package composed by hand would be an identity no single owner vouches for. Asked across the whole repository, because a second construction site would appear anywhere a caller builds an Event literal instead of calling New."
+    },
+    {
+      "kind": "construction_confined_to_owner",
+      "dir": "internal/runreceipt",
+      "type": "Value",
+      "field": "State",
+      "search_paths": [
+        "."
+      ],
+      "why": "Value.State is the knownness of a run-receipt fact (measured, unknown, malformed). The pinned source constructs it only through the package's own constructors (MeasuredValue, UnknownValue, MalformedValue), which pair the state with its source or detail; a Value whose State is set by another package could claim a measurement without its provenance. Asked across the whole repository, because a forged knownness would appear wherever a caller writes a Value literal."
     }
   ]
 }
