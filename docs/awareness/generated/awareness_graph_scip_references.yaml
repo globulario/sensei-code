@@ -6275,11 +6275,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6372,11 +6372,11 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6454,11 +6454,11 @@ code_references:
     to_name: Server.CloseLocal
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Listen
     to_name: Server.Listen
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7230,11 +7230,11 @@ code_references:
     to_name: Reviewer
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/agent/agent.go:Runner~type
+    to_id: internal/ghbridge/runner.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
-    to_id: internal/ghbridge/runner.go:Runner~type
+    to_id: internal/agent/agent.go:Runner~type
     to_name: Runner
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:TestTheBridgeCarriesOnlyItsProvidersReviewTurns
@@ -7765,7 +7765,7 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -7773,7 +7773,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -8197,7 +8197,7 @@ code_references:
     to_name: Load
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/tui/model.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -8205,7 +8205,7 @@ code_references:
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/session/store.go:New
+    to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -16447,11 +16447,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -18126,11 +18126,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -28147,10 +28147,10 @@ code_references:
     to_name: strings
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Client~type
     to_name: Client
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Client~type
     to_name: Client
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -31590,11 +31590,11 @@ code_references:
     to_name: Agent.Name
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/behavioral/behavioral.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/config/config.go
   - from: internal/config/config.go:Default
@@ -41824,10 +41824,10 @@ code_references:
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -48278,11 +48278,11 @@ code_references:
     to_name: Unknown
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/mcpconfig/mcpconfig.go:Unproven
+    to_id: internal/doctor/doctor.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
-    to_id: internal/doctor/doctor.go:Unproven
+    to_id: internal/mcpconfig/mcpconfig.go:Unproven
     to_name: Unproven
     file: internal/doctor/doctor.go
   - from: internal/doctor/doctor.go:Run
@@ -53617,10 +53617,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/architecture_runner.go
   - from: internal/ghbridge/architecture_runner.go:ArchitectureRunner.Run
@@ -91837,10 +91837,10 @@ code_references:
     to_name: Issue.Number
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.Run
@@ -92737,10 +92737,10 @@ code_references:
     to_name: Event
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/ghbridge/runner.go
   - from: internal/ghbridge/runner.go:Runner.storedReviewFor
@@ -97709,10 +97709,10 @@ code_references:
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -163879,11 +163879,11 @@ code_references:
     to_name: Engine.applyAnsweredCondition
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/authority_resume_identity_test.go
   - from: internal/workflow/authority_resume_identity_test.go:TestAResumedAnswerAuthorisesOnlyTheQuestionItAnswered
@@ -179786,6 +179786,10 @@ code_references:
     to_name: handoffPacket
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/workflow/engine.go:isProductionScopeRefutation
+    to_name: isProductionScopeRefutation
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.implement
     to_id: internal/workflow/engine.go:isProspectiveSurfaceRefutation
     to_name: isProspectiveSurfaceRefutation
     file: internal/workflow/engine.go
@@ -180182,10 +180186,10 @@ code_references:
     to_name: Errorf
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.observe
@@ -182150,11 +182154,11 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/event/event.go:New
+    to_id: internal/behavioral/behavioral.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
-    to_id: internal/behavioral/behavioral.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.reportOutcome
@@ -185037,11 +185041,11 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/event/event.go:New
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -185452,6 +185456,10 @@ code_references:
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/engine.go:implementationPrompt
     to_name: implementationPrompt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/workflow/engine.go:inspectProductionScope
+    to_name: inspectProductionScope
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
     to_id: internal/workflow/prospective.go:inspectProspectiveGrants
@@ -186907,11 +186915,11 @@ code_references:
     to_name: Evidence
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditDetail
+    to_id: internal/taskstate/state.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditDetail
+    to_id: internal/candidate/disposition.go:Evidence.AuditDetail
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -186927,19 +186935,19 @@ code_references:
     to_name: Evidence.BaseSHA
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.ChangedPaths
-    to_name: Evidence.ChangedPaths
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
-    to_name: Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.ChangedPaths
+    to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_name: Evidence.DiffBytes
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -187468,6 +187476,58 @@ code_references:
   - from: internal/workflow/engine.go:escalationPrompt
     to_name: github.com/globulario/sensei-code/internal/roles
     file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: Base
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: Errorf
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: HasSuffix
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: Strings
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.AtWorld
+    to_name: candidateTestState.AtWorld
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.Diff
+    to_name: candidateTestState.Diff
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.InCandidate
+    to_name: candidateTestState.InCandidate
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:candidateTestState.Paths
+    to_name: candidateTestState.Paths
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:existsIn
+    to_name: existsIn
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: fmt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: path
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_id: internal/workflow/testedit.go:renamePairs
+    to_name: renamePairs
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: sort
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:existingProductionMutations
+    to_name: strings
+    file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:filesFor
     to_id: internal/workflow/authority.go:Claim~type
     to_name: Claim
@@ -187725,6 +187785,75 @@ code_references:
   - from: internal/workflow/engine.go:indentOrNone
     to_name: strings
     file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: Clean
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: Errorf
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: Join
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: TrimSpace
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:architectureDecision.Files
+    to_name: architectureDecision.Files
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/testedit.go:candidateTestState~type
+    to_name: candidateTestState
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/testedit.go:candidateTestState.World
+    to_name: candidateTestState.World
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:existingProductionMutations
+    to_name: existingProductionMutations
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: fmt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/testedit.go:mutationVerb
+    to_name: mutationVerb
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:orNone
+    to_name: orNone
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: path
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:planAttempt.Plan
+    to_name: planAttempt.Plan
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/engine.go:short12
+    to_name: short12
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_id: internal/workflow/prospective.go:shortWorldID
+    to_name: shortWorldID
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:inspectProductionScope
+    to_name: strings
+    file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:inspectionReviewPrompt
     to_id: internal/roles/packet.go:IndependentReviewPacket~type
     to_name: IndependentReviewPacket
@@ -187782,6 +187911,12 @@ code_references:
     to_name: TrimSpace
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:intentOrNone
+    to_name: strings
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:isProductionScopeRefutation
+    to_name: HasPrefix
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:isProductionScopeRefutation
     to_name: strings
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:isProspectiveSurfaceRefutation
@@ -195096,10 +195231,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -195978,15 +196113,15 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
-    to_name: New
-    file: internal/workflow/external_block_test.go
-  - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
     to_id: internal/session/store.go:New
+    to_name: New
+    file: internal/workflow/external_block_test.go
+  - from: internal/workflow/external_block_test.go:architectRoster
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -196126,11 +196261,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
@@ -209071,6 +209206,10 @@ code_references:
     file: internal/workflow/postvalidation_test.go
   - from: internal/workflow/postvalidation_test.go:TestTheGovernedLoopBindsTheCandidateTheFormatterProduced
     to_name: WriteFile
+    file: internal/workflow/postvalidation_test.go
+  - from: internal/workflow/postvalidation_test.go:TestTheGovernedLoopBindsTheCandidateTheFormatterProduced
+    to_id: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: adoptFixturePlanAttempt
     file: internal/workflow/postvalidation_test.go
   - from: internal/workflow/postvalidation_test.go:TestTheGovernedLoopBindsTheCandidateTheFormatterProduced
     to_id: internal/workflow/mint_test.go:candidateIdentityWithBase
@@ -226281,6 +226420,125 @@ code_references:
   - from: internal/workflow/reviewgate_test.go:TestTheBlockedRunSaysWhatWasNotEstablishedAndClaimsNoSuccess
     to_name: testing
     file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine~type
+    to_name: Engine
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine.Repo
+    to_name: Engine.Repo
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine.adoptPlanAttempt
+    to_name: Engine.adoptPlanAttempt
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine.beginPlanAttempt
+    to_name: Engine.beginPlanAttempt
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine.recordProspectiveGrants
+    to_name: Engine.recordProspectiveGrants
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine.recordTestEditGrants
+    to_name: Engine.recordTestEditGrants
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:Engine.setProspectiveGrants
+    to_name: Engine.setProspectiveGrants
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/testedit.go:Engine.setTestEditGrants
+    to_name: Engine.setTestEditGrants
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/candidate/identity.go:Identity.Save
+    to_name: Identity.Save
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/candidate/identity.go:Identity.TaskID
+    to_name: Identity.TaskID
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/gitx/git.go:Repo.Root
+    to_name: Repo.Root
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: T
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:architectureDecision~type
+    to_name: architectureDecision
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:architectureDecision.Decision
+    to_name: architectureDecision.Decision
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:architectureDecision.Files
+    to_name: architectureDecision.Files
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:architectureDecision.Plan
+    to_name: architectureDecision.Plan
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:architectureDecision.Summary
+    to_name: architectureDecision.Summary
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/mint_test.go:candidateIdentityWithBase
+    to_name: candidateIdentityWithBase
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: common.Fatal
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: common.Fatalf
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: common.Helper
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/prospective.go:prospectiveRecord~type
+    to_name: prospectiveRecord
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/prospective.go:prospectiveRecord.PlanAttemptID
+    to_name: prospectiveRecord.PlanAttemptID
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/prospective.go:prospectiveRecord.World
+    to_name: prospectiveRecord.World
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: testing
+    file: internal/workflow/reviewgate_test.go
   - from: internal/workflow/reviewgate_test.go:gateHarness.run
     to_name: Background
     file: internal/workflow/reviewgate_test.go
@@ -226510,6 +226768,10 @@ code_references:
   - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_id: internal/config/config.go:Workflow.ReviewCycles
     to_name: Workflow.ReviewCycles
+    file: internal/workflow/reviewgate_test.go
+  - from: internal/workflow/reviewgate_test.go:newGateHarness
+    to_id: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: adoptFixturePlanAttempt
     file: internal/workflow/reviewgate_test.go
   - from: internal/workflow/reviewgate_test.go:newGateHarness
     to_id: internal/workflow/advisory_test.go:answeringRunner~type
@@ -236551,6 +236813,753 @@ code_references:
   - from: internal/workflow/testedit_test.go:TestDF37bW4ASupersededAttemptsGrantDoesNotAdmitTheReplacement
     to_name: testing
     file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/roles/verdict.go:Accept
+    to_name: Accept
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/config/config.go:Agent.Name
+    to_name: Agent.Name
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:AgentStarted
+    to_name: AgentStarted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: Background
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/config/config.go:Config.Implementors
+    to_name: Config.Implementors
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/engine.go:Engine.Config
+    to_name: Engine.Config
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/engine.go:Engine.implement
+    to_name: Engine.implement
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:Event.Kind
+    to_name: Event.Kind
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:Event.Source
+    to_name: Event.Source
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:HandoffCreated
+    to_name: HandoffCreated
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/roles/assign.go:Policy~type
+    to_name: Policy
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/roles/assign.go:Policy.Reason
+    to_name: Policy.Reason
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: Replace
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:Source~type
+    to_name: Source
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:SourceClaude
+    to_name: SourceClaude
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/event/event.go:SourceCodex
+    to_name: SourceCodex
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/roles/roles.go:Unverified
+    to_name: Unverified
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: adoptFixturePlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/mint_test.go:candidateIdentityWithBase
+    to_name: candidateIdentityWithBase
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/prospective_test.go:commitFixtureFile
+    to_name: commitFixtureFile
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: common.Error
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/awaitingreview_test.go:contains
+    to_name: contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: context
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/testedit_test.go:df39FromEvents
+    to_name: df39FromEvents
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/testedit_test.go:df39Refused
+    to_name: df39Refused
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/awaitingreview_test.go:drainEvents
+    to_name: drainEvents
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.events
+    to_name: gateHarness.events
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.sc
+    to_name: gateHarness.sc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.work
+    to_name: gateHarness.work
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
+    to_name: gateHarness.worker
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/awaitingreview_test.go:kinds
+    to_name: kinds
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/reviewgate_test.go:newGateHarness
+    to_name: newGateHarness
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/engine.go:taskContext.Files
+    to_name: taskContext.Files
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/engine.go:taskContext.Identity
+    to_name: taskContext.Identity
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_id: internal/workflow/engine.go:taskContext.Task
+    to_name: taskContext.Task
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_id: internal/workflow/testedit_test.go:df39B
+    to_name: df39B
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_id: internal/workflow/testedit_test.go:df39Refused
+    to_name: df39Refused
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_id: internal/workflow/testedit_test.go:df39B
+    to_name: df39B
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_id: internal/workflow/testedit_test.go:df39FromEvents
+    to_name: df39FromEvents
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: common.Error
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:df23Receipt
+    to_name: df23Receipt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit_test.go:inspectDiff
+    to_name: inspectDiff
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit.go:testEditRecord~type
+    to_name: testEditRecord
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit.go:testEditRecord.PlanAttemptID
+    to_name: testEditRecord.PlanAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_id: internal/workflow/testedit.go:testEditRecord.World
+    to_name: testEditRecord.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Covering
+    to_name: ProspectiveSurface.Covering
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Package
+    to_name: ProspectiveSurface.Package
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Path
+    to_name: ProspectiveSurface.Path
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/testedit_test.go:df39Created
+    to_name: df39Created
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_id: internal/workflow/prospective.go:inspectProspectiveGrants
+    to_name: inspectProspectiveGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df39B
+    to_name: df39B
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df39Deleted
+    to_name: df39Deleted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df39Refused
+    to_name: df39Refused
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/prospective.go:ProspectiveSurface~type
+    to_name: ProspectiveSurface
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Covering
+    to_name: ProspectiveSurface.Covering
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Package
+    to_name: ProspectiveSurface.Package
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Path
+    to_name: ProspectiveSurface.Path
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/prospective.go:ProspectiveSurface.Role
+    to_name: ProspectiveSurface.Role
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df39B
+    to_name: df39B
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df39Refused
+    to_name: df39Refused
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df39Renamed
+    to_name: df39Renamed
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_id: internal/workflow/prospective.go:inspectProspectiveGrants
+    to_name: inspectProspectiveGrants
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/engine.go:Engine.operativePlanAttempt
+    to_name: Engine.operativePlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/planattempt_test.go:attemptPlan
+    to_name: attemptPlan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Engine
+    to_name: df23Engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df23Route
+    to_name: df23Route
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df39B
+    to_name: df39B
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:df39Refused
+    to_name: df39Refused
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/engine.go:inspectProductionScope
+    to_name: inspectProductionScope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/engine.go:short12
+    to_name: short12
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_id: internal/workflow/testedit_test.go:teDiffState
+    to_name: teDiffState
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/roles/verdict.go:Accept
+    to_name: Accept
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: Background
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/event/event.go:CandidateAudited
+    to_name: CandidateAudited
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/event/event.go:CandidateChanged
+    to_name: CandidateChanged
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/engine.go:Engine.runCandidate
+    to_name: Engine.runCandidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/event/event.go:Event.Kind
+    to_name: Event.Kind
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/roles/roles.go:Fresh
+    to_name: Fresh
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/roles/assign.go:Policy~type
+    to_name: Policy
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: Replace
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/event/event.go:ReviewCompleted
+    to_name: ReviewCompleted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/event/event.go:ReviewStarted
+    to_name: ReviewStarted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    to_name: adoptFixturePlanAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/mint_test.go:candidateIdentityWithBase
+    to_name: candidateIdentityWithBase
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewresult.go:candidateOutcome~type
+    to_name: candidateOutcome
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewresult.go:candidateOutcome.Accepted
+    to_name: candidateOutcome.Accepted
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/gate.go:certifiedStart~type
+    to_name: certifiedStart
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/prospective_test.go:commitFixtureFile
+    to_name: commitFixtureFile
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: common.Error
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: common.Fatalf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: context
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/testedit_test.go:df39FromEvents
+    to_name: df39FromEvents
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/testedit_test.go:df39Refused
+    to_name: df39Refused
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/awaitingreview_test.go:drainEvents
+    to_name: drainEvents
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.engine
+    to_name: gateHarness.engine
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.events
+    to_name: gateHarness.events
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.sc
+    to_name: gateHarness.sc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.tc
+    to_name: gateHarness.tc
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.work
+    to_name: gateHarness.work
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:gateHarness.worker
+    to_name: gateHarness.worker
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: github.com/globulario/sensei-code/internal/event
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: github.com/globulario/sensei-code/internal/roles
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/reviewgate_test.go:newGateHarness
+    to_name: newGateHarness
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/engine.go:taskContext.Files
+    to_name: taskContext.Files
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/engine.go:taskContext.Identity
+    to_name: taskContext.Identity
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_id: internal/workflow/engine.go:taskContext.Task
+    to_name: taskContext.Task
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/testedit_test.go:df23Edit
+    to_name: df23Edit
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/testedit_test.go:df23Receipt
+    to_name: df23Receipt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/testedit_test.go:df39A
+    to_name: df39A
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/testedit_test.go:df39Attempt
+    to_name: df39Attempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/testedit_test.go:df39Created
+    to_name: df39Created
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/testedit_test.go:df39Scope
+    to_name: df39Scope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    to_name: testing
+    file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     to_name: Contains
     file: internal/workflow/testedit_test.go
@@ -238534,6 +239543,99 @@ code_references:
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:df37bRefusesNaming
     to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/suppliedplan.go:PlanByArchitect
+    to_name: PlanByArchitect
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/planattempt_test.go:attemptObjective
+    to_name: attemptObjective
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/planattempt_test.go:attemptPlan
+    to_name: attemptPlan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_name: common.Fatal
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttempt.ID
+    to_name: planAttempt.ID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttempt.Plan
+    to_name: planAttempt.Plan
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttempt.PlanSource
+    to_name: planAttempt.PlanSource
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttempt.TaskID
+    to_name: planAttempt.TaskID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttempt.World
+    to_name: planAttempt.World
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/engine.go:planAttemptID
+    to_name: planAttemptID
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_id: internal/workflow/testedit_test.go:teWorld
+    to_name: teWorld
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Attempt
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: Contains
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: HasPrefix
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: T
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: common.Errorf
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: common.Helper
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: strings
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Refused
+    to_name: testing
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Scope
+    to_id: internal/workflow/testedit_test.go:df23Candidate
+    to_name: df23Candidate
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Scope
+    to_id: internal/workflow/engine.go:inspectProductionScope
+    to_name: inspectProductionScope
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Scope
+    to_id: internal/workflow/engine.go:planAttempt~type
+    to_name: planAttempt
+    file: internal/workflow/testedit_test.go
+  - from: internal/workflow/testedit_test.go:df39Scope
+    to_id: internal/workflow/testedit_test.go:teDiffState
+    to_name: teDiffState
     file: internal/workflow/testedit_test.go
   - from: internal/workflow/testedit_test.go:inspectDiff
     to_id: internal/workflow/testedit.go:inspectTestEdits

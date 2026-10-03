@@ -43895,6 +43895,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: escalationPrompt
     kind: function
+  - id: internal/workflow/engine.go:existingProductionMutations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: existingProductionMutations
+    kind: function
   - id: internal/workflow/engine.go:failed
     namespace: structural.scip
     language: go
@@ -44063,6 +44069,12 @@ code_symbols:
     file: internal/workflow/engine.go
     symbol: indentOrNone
     kind: function
+  - id: internal/workflow/engine.go:inspectProductionScope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: inspectProductionScope
+    kind: function
   - id: internal/workflow/engine.go:inspectionReviewPrompt
     namespace: structural.scip
     language: go
@@ -44074,6 +44086,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: intentOrNone
+    kind: function
+  - id: internal/workflow/engine.go:isProductionScopeRefutation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: isProductionScopeRefutation
     kind: function
   - id: internal/workflow/engine.go:isProspectiveSurfaceRefutation
     namespace: structural.scip
@@ -50771,6 +50789,12 @@ code_symbols:
     file: internal/workflow/reviewgate_test.go
     symbol: TestTheBlockedRunSaysWhatWasNotEstablishedAndClaimsNoSuccess
     kind: function
+  - id: internal/workflow/reviewgate_test.go:adoptFixturePlanAttempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/reviewgate_test.go
+    symbol: adoptFixturePlanAttempt
+    kind: function
   - id: internal/workflow/reviewgate_test.go:gateHarness.engine
     namespace: structural.scip
     language: go
@@ -53159,6 +53183,66 @@ code_symbols:
     file: internal/workflow/testedit_test.go
     symbol: TestDF37bW4ASupersededAttemptsGrantDoesNotAdmitTheReplacement
     kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39AProductionScopeRefusalReachesNoSecondImplementorAndNoHandoff
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W1AnExtraExistingProductionFileIsRefusedByPath
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W2PlannedExistingProductionEditsAreNotRefused
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W3AnExistingTestEditIsNotReclassifiedAsProduction
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W4ACreatedProductionFileContinuesToProspectiveInspection
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W5DeletingAnUnplannedExistingProductionFileIsRefused
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W6RenamingAnUnplannedExistingProductionFileIsRefusedOnItsSource
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W7APathPlannedOnlyByASupersededAttemptIsRefused
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39W8TheObjective61UnplannedFromEventsEditIsRefusedBeforeReview
+    kind: function
+  - id: internal/workflow/testedit_test.go:TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: TestDF39WithoutAnOperativeAttemptAtTheBaseNoProductionEditIsAuthorized
+    kind: function
   - id: internal/workflow/testedit_test.go:TestDeclarationsOfOnePathThatDisagreeAreNotProjectedInEitherOrder
     namespace: structural.scip
     language: go
@@ -53362,6 +53446,60 @@ code_symbols:
     language: go
     file: internal/workflow/testedit_test.go
     symbol: df37bRefusesNaming
+    kind: function
+  - id: internal/workflow/testedit_test.go:df39A
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39A
+    kind: const
+  - id: internal/workflow/testedit_test.go:df39Attempt
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39Attempt
+    kind: function
+  - id: internal/workflow/testedit_test.go:df39B
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39B
+    kind: const
+  - id: internal/workflow/testedit_test.go:df39Created
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39Created
+    kind: function
+  - id: internal/workflow/testedit_test.go:df39Deleted
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39Deleted
+    kind: function
+  - id: internal/workflow/testedit_test.go:df39FromEvents
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39FromEvents
+    kind: const
+  - id: internal/workflow/testedit_test.go:df39Refused
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39Refused
+    kind: function
+  - id: internal/workflow/testedit_test.go:df39Renamed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39Renamed
+    kind: function
+  - id: internal/workflow/testedit_test.go:df39Scope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/testedit_test.go
+    symbol: df39Scope
     kind: function
   - id: internal/workflow/testedit_test.go:inspectDiff
     namespace: structural.scip
