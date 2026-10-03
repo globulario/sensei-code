@@ -5285,31 +5285,142 @@ type findingResponse struct {
 	Reason        string             `json:"reason,omitempty"`
 }
 
-// findingResponsesKey is the one field a worker's accounting is found by.
-const findingResponsesKey = `"finding_responses"`
+// findingResponsesMember is the one member a canonical accounting object is
+// recognized by. It is matched as a decoded object key, never as text.
+const findingResponsesMember = "finding_responses"
 
 // parseFindingResponses reads the worker's accounting out of its report.
 //
-// The report is prose around one JSON object, so the object is located by its
-// key rather than by the first brace: a report that quotes code would otherwise
-// decode the code. No accounting is not an error here -- it is an account of
-// nothing, and every outstanding finding stays open.
+// The accounting is located by JSON STRUCTURE, never by where the key's text
+// first or last appears: prose that mentions the key, before or after the
+// accounting, is prose. Every top-level JSON object the report contains is
+// decoded to find its boundaries (a top-level array too, so that an object
+// inside it is never mistaken for an independent one), and an object is the
+// accounting only when it is in a canonical position -- the whole report, the
+// final object (optionally closed by a markdown fence), or an object standing
+// on lines of its own -- and has a finding_responses member. An example quoted inside a sentence is
+// not in a canonical position and is not accounting.
+//
+// Zero accounting objects is an account of nothing, not an error: every
+// outstanding finding stays open. Two or more, or one whose member repeats or
+// does not hold the response schema, is ambiguous or malformed, and yields no
+// responses at all -- nothing here selects the first, the last, or a merge.
 func parseFindingResponses(report string) ([]findingResponse, error) {
-	at := strings.Index(report, findingResponsesKey)
-	if at < 0 {
+	var found []json.RawMessage
+	for i := 0; i < len(report); i++ {
+		if report[i] != '{' && report[i] != '[' {
+			continue
+		}
+		dec := json.NewDecoder(strings.NewReader(report[i:]))
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			continue
+		}
+		end := i + int(dec.InputOffset())
+		if report[i] == '{' && canonicalAccountingPosition(report, i, end) && hasAccountingMember(value) {
+			found = append(found, value)
+		}
+		// The decoded value's interior belongs to it: an object nested in an
+		// enclosing object or array is an element of that value, never a
+		// second, independent one -- however the value is laid out on lines.
+		i = end - 1
+	}
+	switch len(found) {
+	case 0:
 		return nil, nil
+	case 1:
+		return decodeAccounting(found[0])
+	default:
+		return nil, fmt.Errorf("the report carries %d finding accounting objects; ambiguous accounting answers no finding", len(found))
 	}
-	start := strings.LastIndex(report[:at], "{")
-	if start < 0 {
-		return nil, errors.New("the finding accounting is not inside a JSON object")
+}
+
+// canonicalAccountingPosition reports whether the object at report[start:end]
+// sits where the worker protocol puts its accounting: nothing but whitespace
+// (or a closing markdown fence) after it, or alone on its own lines.
+func canonicalAccountingPosition(report string, start, end int) bool {
+	rest := strings.TrimSpace(report[end:])
+	if rest == "" || strings.TrimSpace(strings.TrimPrefix(rest, "```")) == "" {
+		return true
 	}
-	var payload struct {
-		Responses []findingResponse `json:"finding_responses"`
+	lineStart := strings.LastIndexByte(report[:start], '\n') + 1
+	lineEnd := len(report)
+	if n := strings.IndexByte(report[end:], '\n'); n >= 0 {
+		lineEnd = end + n
 	}
-	if err := json.NewDecoder(strings.NewReader(report[start:])).Decode(&payload); err != nil {
+	return strings.TrimSpace(report[lineStart:start]) == "" && strings.TrimSpace(report[end:lineEnd]) == ""
+}
+
+// hasAccountingMember reports whether a decoded object has a top-level
+// finding_responses member, by its exact key.
+func hasAccountingMember(object json.RawMessage) bool {
+	members, err := objectMembers(object)
+	if err != nil {
+		return false
+	}
+	for _, m := range members {
+		if m.key == findingResponsesMember {
+			return true
+		}
+	}
+	return false
+}
+
+type objectMember struct {
+	key   string
+	value json.RawMessage
+}
+
+// objectMembers lists a JSON object's top-level members in order, repeats
+// included: decoding into a struct or map would silently keep only one.
+func objectMembers(object json.RawMessage) ([]objectMember, error) {
+	dec := json.NewDecoder(bytes.NewReader(object))
+	if tok, err := dec.Token(); err != nil || tok != json.Delim('{') {
+		return nil, errors.New("not a JSON object")
+	}
+	var members []objectMember
+	for dec.More() {
+		tok, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, _ := tok.(string)
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return nil, err
+		}
+		members = append(members, objectMember{key: key, value: value})
+	}
+	return members, nil
+}
+
+// decodeAccounting validates the one canonical accounting object against the
+// response schema: exactly one finding_responses member, holding an array of
+// response objects.
+func decodeAccounting(object json.RawMessage) ([]findingResponse, error) {
+	members, err := objectMembers(object)
+	if err != nil {
 		return nil, fmt.Errorf("the finding accounting does not decode: %w", err)
 	}
-	return payload.Responses, nil
+	var value json.RawMessage
+	count := 0
+	for _, m := range members {
+		if m.key == findingResponsesMember {
+			value = m.value
+			count++
+		}
+	}
+	if count != 1 {
+		return nil, fmt.Errorf("the finding accounting carries %d %s members; ambiguous accounting answers no finding", count, findingResponsesMember)
+	}
+	if t := bytes.TrimSpace(value); len(t) == 0 || t[0] != '[' {
+		return nil, fmt.Errorf("the finding accounting's %s member is not an array of responses", findingResponsesMember)
+	}
+	var responses []findingResponse
+	if err := json.Unmarshal(value, &responses); err != nil {
+		return nil, fmt.Errorf("the finding accounting does not decode: %w", err)
+	}
+	return responses, nil
 }
 
 // openFinding is an outstanding finding the cycle did not discharge, and why.
@@ -5411,16 +5522,16 @@ func outstandingFindings(open openReview) []roles.Finding {
 //	         proof gap names, retained and READ BACK as a durable record; a
 //	         code change, an unrelated check, or a naming alone does not
 //
-// A missing, mismatched or disputed response leaves the finding open. A finding
+// A missing, mismatched, disputed or duplicated response leaves the finding open. A finding
 // with no valid class cannot be discharged at all: nothing in the record says
 // what would discharge it, and guessing is the thing refused here.
 func accountForFindings(outstanding []roles.Finding, responses []findingResponse, moved map[string]bool, evidence validation.Bundle, readBack map[string]string) findingAccount {
 	byID := make(map[string]findingResponse, len(responses))
+	envelopes := make(map[string]int, len(responses))
 	for _, r := range responses {
 		id := strings.TrimSpace(r.ID)
-		if _, seen := byID[id]; !seen {
-			byID[id] = r
-		}
+		byID[id] = r
+		envelopes[id]++
 	}
 	account := findingAccount{Outstanding: len(outstanding)}
 	for _, f := range outstanding {
@@ -5433,6 +5544,9 @@ func accountForFindings(outstanding []roles.Finding, responses []findingResponse
 			open(fmt.Sprintf("the finding carries no valid class (%q), so nothing says what would discharge it", f.Class))
 		case !answered:
 			open("no response accounted for it")
+		case envelopes[strings.TrimSpace(f.ID)] > 1:
+			// Duplicate or conflicting: no envelope is chosen over another.
+			open(fmt.Sprintf("the accounting carries %d responses for it; a duplicated or conflicting response discharges nothing", envelopes[strings.TrimSpace(f.ID)]))
 		case r.DisputesClass != "":
 			account.Disputes = append(account.Disputes, r)
 			open(fmt.Sprintf("the worker disputes its class as %q; a dispute is an escalation, not a discharge", r.DisputesClass))
