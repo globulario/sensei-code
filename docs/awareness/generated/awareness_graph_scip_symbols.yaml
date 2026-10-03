@@ -41213,6 +41213,12 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: Action.DeclaredConsequences
     kind: var
+  - id: internal/workflow/consequence.go:Action.DeclaredEffects
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: Action.DeclaredEffects
+    kind: var
   - id: internal/workflow/consequence.go:Action.DeclaredSteps
     namespace: structural.scip
     language: go
@@ -41375,6 +41381,84 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: ConsequenceUnacceptable
     kind: const
+  - id: internal/workflow/consequence.go:DeclaredEffect.Occurrence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect.Occurrence
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredEffect.Operation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect.Operation
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredEffect.Scope
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect.Scope
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredEffect.Statement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect.Statement
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredEffect.Step
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect.Step
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredEffect.Target
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect.Target
+    kind: var
+  - id: internal/workflow/consequence.go:DeclaredEffect~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: DeclaredEffect
+    kind: type
+  - id: internal/workflow/consequence.go:EffectGovernedLocal
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: EffectGovernedLocal
+    kind: const
+  - id: internal/workflow/consequence.go:EffectInConsequences
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: EffectInConsequences
+    kind: const
+  - id: internal/workflow/consequence.go:EffectInProcess
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: EffectInProcess
+    kind: const
+  - id: internal/workflow/consequence.go:EffectInStep
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: EffectInStep
+    kind: const
+  - id: internal/workflow/consequence.go:EffectOutward
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: EffectOutward
+    kind: const
+  - id: internal/workflow/consequence.go:EffectUnknown
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: EffectUnknown
+    kind: const
   - id: internal/workflow/consequence.go:StageCandidateEdit
     namespace: structural.scip
     language: go
@@ -41423,6 +41507,12 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: auxiliaries
     kind: var
+  - id: internal/workflow/consequence.go:boundedSites
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: boundedSites
+    kind: function
   - id: internal/workflow/consequence.go:classDocument
     namespace: structural.scip
     language: go
@@ -41470,6 +41560,12 @@ code_symbols:
     language: go
     file: internal/workflow/consequence.go
     symbol: clause.compound
+    kind: method
+  - id: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: clause.coveredByAnotherOutwardEntry
     kind: method
   - id: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
     namespace: structural.scip
@@ -41591,6 +41687,12 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: declaredOutwardActions
     kind: function
+  - id: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: declaredOutwardActionsWithEffects
+    kind: function
   - id: internal/workflow/consequence.go:determiners
     namespace: structural.scip
     language: go
@@ -41603,6 +41705,42 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: disjunctions
     kind: var
+  - id: internal/workflow/consequence.go:effectOperations
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: effectOperations
+    kind: var
+  - id: internal/workflow/consequence.go:effectSite.n
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: effectSite.n
+    kind: var
+  - id: internal/workflow/consequence.go:effectSite.operation
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: effectSite.operation
+    kind: var
+  - id: internal/workflow/consequence.go:effectSite.statement
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: effectSite.statement
+    kind: var
+  - id: internal/workflow/consequence.go:effectSite.step
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: effectSite.step
+    kind: var
+  - id: internal/workflow/consequence.go:effectSite~type
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence.go
+    symbol: effectSite
+    kind: type
   - id: internal/workflow/consequence.go:isWordByte
     namespace: structural.scip
     language: go
@@ -41717,6 +41855,114 @@ code_symbols:
     file: internal/workflow/consequence.go
     symbol: word
     kind: type
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34AmbiguousPublishStillEscalates
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34DeclaredEffectsAreReservedForProceed
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34DeclaredEffectsCrossTheArchitectureContract
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34DestructiveTruncateStillEscalates
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34GovernedLocalTruncateIsNotOutward
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34InvalidRelationsSuppressNothing
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34MeasuredEventBusPublishIsNotOutward
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34OutwardPublicationStillEscalates
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34RelationBindsOnlyItsOccurrence
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: TestDF34StructuredProseParity
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:assessed
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: assessed
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:df34PublishSentence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: df34PublishSentence
+    kind: const
+  - id: internal/workflow/consequence_semantic_effect_test.go:df34PublishedSentence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: df34PublishedSentence
+    kind: const
+  - id: internal/workflow/consequence_semantic_effect_test.go:df34TruncateSentence
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: df34TruncateSentence
+    kind: const
+  - id: internal/workflow/consequence_semantic_effect_test.go:effect
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: effect
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: mustBound
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: mustEscalate
+    kind: function
+  - id: internal/workflow/consequence_semantic_effect_test.go:quoteJSON
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/consequence_semantic_effect_test.go
+    symbol: quoteJSON
+    kind: function
   - id: internal/workflow/consequence_structural_test.go:TestConsequencesAreAssessedForEveryRoutedAction
     namespace: structural.scip
     language: go
@@ -42970,6 +43216,12 @@ code_symbols:
     language: go
     file: internal/workflow/engine.go
     symbol: architectureDecision.Decision
+    kind: var
+  - id: internal/workflow/engine.go:architectureDecision.DeclaredEffects
+    namespace: structural.scip
+    language: go
+    file: internal/workflow/engine.go
+    symbol: architectureDecision.DeclaredEffects
     kind: var
   - id: internal/workflow/engine.go:architectureDecision.Files
     namespace: structural.scip

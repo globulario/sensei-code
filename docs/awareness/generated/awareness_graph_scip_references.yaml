@@ -6275,11 +6275,11 @@ code_references:
     to_name: Bus.Subscribe
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/config/config.go:Config~type
+    to_id: internal/ghwebhook/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/config.go:Config~type
+    to_id: internal/config/config.go:Config~type
     to_name: Config
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6372,15 +6372,15 @@ code_references:
     to_name: ModeSelected
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
+    to_id: internal/session/store.go:New
+    to_name: New
+    file: cmd/sensei-code/control.go
+  - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
     to_id: internal/control/server.go:New
-    to_name: New
-    file: cmd/sensei-code/control.go
-  - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -6442,11 +6442,11 @@ code_references:
     to_name: SIGTERM
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/ghwebhook/server.go:Server.Close
+    to_id: internal/control/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
-    to_id: internal/control/server.go:Server.Close
+    to_id: internal/ghwebhook/server.go:Server.Close
     to_name: Server.Close
     file: cmd/sensei-code/control.go
   - from: cmd/sensei-code/control.go:runControlSurface
@@ -7765,11 +7765,11 @@ code_references:
     to_name: Mint
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: cmd/sensei-code/control_test.go
   - from: cmd/sensei-code/control_test.go:newControlServer
@@ -8197,15 +8197,15 @@ code_references:
     to_name: Load
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
-    to_id: internal/workflow/engine.go:New
-    to_name: New
-    file: cmd/sensei-code/main.go
-  - from: cmd/sensei-code/main.go:main
     to_id: internal/tui/model.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
     to_id: internal/session/store.go:New
+    to_name: New
+    file: cmd/sensei-code/main.go
+  - from: cmd/sensei-code/main.go:main
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/main.go
   - from: cmd/sensei-code/main.go:main
@@ -11270,11 +11270,11 @@ code_references:
     to_name: Interrupted.TaskID
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/resume.go
   - from: cmd/sensei-code/resume.go:resumeAuthorityAnswered
@@ -16447,11 +16447,11 @@ code_references:
     to_name: ID
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: cmd/sensei-code/run.go
   - from: cmd/sensei-code/run.go:runHeadless
@@ -18126,11 +18126,11 @@ code_references:
     to_name: testing
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/control/server.go:Endpoint
+    to_id: internal/ghwebhook/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
-    to_id: internal/ghwebhook/server.go:Endpoint
+    to_id: internal/control/server.go:Endpoint
     to_name: Endpoint
     file: cmd/sensei-code/webhook_test.go
   - from: cmd/sensei-code/webhook_test.go:TestTheMCPAndWebhookSurfacesAreSeparate
@@ -28168,17 +28168,17 @@ code_references:
     to_name: Client.http
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_name: Config
+    file: internal/behavioral/behavioral.go
+  - from: internal/behavioral/behavioral.go:New
     to_id: internal/behavioral/behavioral.go:Config~type
     to_name: Config
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
-    to_name: Config
-    file: internal/behavioral/behavioral.go
-  - from: internal/behavioral/behavioral.go:New
-    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
+    to_id: internal/behavioral/behavioral.go:Config.InsecureSkipVerify
     to_name: Config.InsecureSkipVerify
     file: internal/behavioral/behavioral.go
   - from: internal/behavioral/behavioral.go:New
@@ -34047,11 +34047,11 @@ code_references:
     to_name: Mint
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
-    to_id: internal/control/server.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:TestAServerWithoutACredentialOrWorkspaceRefusesToExist
@@ -35719,15 +35719,15 @@ code_references:
     to_name: Minute
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
+    to_id: internal/workflow/engine.go:New
+    to_name: New
+    file: internal/control/control_test.go
+  - from: internal/control/control_test.go:newHarness
     to_id: internal/control/server.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
     to_id: internal/session/store.go:New
-    to_name: New
-    file: internal/control/control_test.go
-  - from: internal/control/control_test.go:newHarness
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/control/control_test.go
   - from: internal/control/control_test.go:newHarness
@@ -41824,10 +41824,10 @@ code_references:
     to_name: Server
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
-    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
+    to_id: internal/control/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/control/server.go
   - from: internal/control/server.go:Server.Listen
@@ -97702,17 +97702,17 @@ code_references:
     to_name: Second
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_name: Server
+    file: internal/ghwebhook/server.go
+  - from: internal/ghwebhook/server.go:Server.Listen
     to_id: internal/ghwebhook/server.go:Server~type
     to_name: Server
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
-    to_name: Server
-    file: internal/ghwebhook/server.go
-  - from: internal/ghwebhook/server.go:Server.Listen
-    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
+    to_id: internal/ghwebhook/server.go:Server.Handler
     to_name: Server.Handler
     file: internal/ghwebhook/server.go
   - from: internal/ghwebhook/server.go:Server.Listen
@@ -150793,11 +150793,11 @@ code_references:
     to_name: KeyPressMsg.String
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/mcpconfig/mcpconfig.go:Label
+    to_id: internal/provider/provider.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/provider/provider.go:Label
+    to_id: internal/mcpconfig/mcpconfig.go:Label
     to_name: Label
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -150809,10 +150809,10 @@ code_references:
     to_name: ModeSelected
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
+    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
-    to_id: internal/tui/model.go:Model~type
     to_name: Model
     file: internal/tui/model.go
   - from: internal/tui/model.go:Model.Update
@@ -171297,6 +171297,10 @@ code_references:
     to_name: Action.DeclaredConsequences
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:AssessConsequences
+    to_id: internal/workflow/consequence.go:Action.DeclaredEffects
+    to_name: Action.DeclaredEffects
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:AssessConsequences
     to_id: internal/workflow/consequence.go:Action.DeclaredSteps
     to_name: Action.DeclaredSteps
     file: internal/workflow/consequence.go
@@ -171362,8 +171366,8 @@ code_references:
     to_name: TrimPrefix
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:AssessConsequences
-    to_id: internal/workflow/consequence.go:declaredOutwardActions
-    to_name: declaredOutwardActions
+    to_id: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_name: declaredOutwardActionsWithEffects
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:AssessConsequences
     to_id: internal/workflow/consequence.go:outwardSurfaces
@@ -171393,12 +171397,94 @@ code_references:
     to_name: clause.asserted
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    to_name: clause.coveredByAnotherOutwardEntry
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
     to_id: internal/workflow/consequence.go:clause.text
     to_name: clause.text
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:effectSite~type
+    to_name: effectSite
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:effectSite.n
+    to_name: effectSite.n
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:effectSite.operation
+    to_name: effectSite.operation
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:effectSite.statement
+    to_name: effectSite.statement
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
+    to_id: internal/workflow/consequence.go:effectSite.step
+    to_name: effectSite.step
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:assertedIn
     to_id: internal/workflow/consequence.go:occurrencesOf
     to_name: occurrencesOf
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Occurrence
+    to_name: DeclaredEffect.Occurrence
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Operation
+    to_name: DeclaredEffect.Operation
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Scope
+    to_name: DeclaredEffect.Scope
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Statement
+    to_name: DeclaredEffect.Statement
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Step
+    to_name: DeclaredEffect.Step
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Target
+    to_name: DeclaredEffect.Target
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_name: TrimSpace
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:effectOperations
+    to_name: effectOperations
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:effectSite~type
+    to_name: effectSite
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:effectSite.n
+    to_name: effectSite.n
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:effectSite.operation
+    to_name: effectSite.operation
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:effectSite.statement
+    to_name: effectSite.statement
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_id: internal/workflow/consequence.go:effectSite.step
+    to_name: effectSite.step
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:boundedSites
+    to_name: strings
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:classifyArtifact
     to_name: Clean
@@ -171514,6 +171600,26 @@ code_references:
   - from: internal/workflow/consequence.go:clause.compound
     to_id: internal/workflow/consequence.go:word.start
     to_name: word.start
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    to_id: internal/workflow/consequence.go:clause~type
+    to_name: clause
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    to_id: internal/workflow/consequence.go:clause.text
+    to_name: clause.text
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    to_id: internal/workflow/consequence.go:occurrencesOf
+    to_name: occurrencesOf
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    to_id: internal/workflow/consequence.go:outwardPhrases
+    to_name: outwardPhrases
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:clause.coveredByAnotherOutwardEntry
+    to_id: internal/workflow/consequence.go:outwardVerbs
+    to_name: outwardVerbs
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:clause.frontedNegativeAdverbial
     to_id: internal/workflow/consequence.go:auxiliaries
@@ -171939,39 +172045,71 @@ code_references:
     to_name: occurrencesOf
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:declaredOutwardActions
+    to_id: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_name: declaredOutwardActionsWithEffects
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:EffectInConsequences
+    to_name: EffectInConsequences
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:EffectInStep
+    to_name: EffectInStep
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_name: ReplaceAll
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_name: ToLower
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_name: TrimSpace
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_id: internal/workflow/consequence.go:assertedIn
     to_name: assertedIn
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:boundedSites
+    to_name: boundedSites
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_id: internal/workflow/consequence.go:clause~type
     to_name: clause
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_id: internal/workflow/consequence.go:clausesOf
     to_name: clausesOf
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:effectSite~type
+    to_name: effectSite
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:effectSite.statement
+    to_name: effectSite.statement
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_id: internal/workflow/consequence.go:effectSite.step
+    to_name: effectSite.step
+    file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_id: internal/workflow/consequence.go:outwardPhrases
     to_name: outwardPhrases
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_id: internal/workflow/consequence.go:outwardVerbs
     to_name: outwardVerbs
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_id: internal/workflow/consequence.go:readClause
     to_name: readClause
     file: internal/workflow/consequence.go
-  - from: internal/workflow/consequence.go:declaredOutwardActions
+  - from: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
     to_name: strings
     file: internal/workflow/consequence.go
   - from: internal/workflow/consequence.go:negatingVerb
@@ -172054,6 +172192,591 @@ code_references:
     to_id: internal/workflow/consequence.go:isWordByte
     to_name: isWordByte
     file: internal/workflow/consequence.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    to_id: internal/workflow/consequence.go:EffectUnknown
+    to_name: EffectUnknown
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34AmbiguousPublishStillEscalates
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_name: Contains
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_id: internal/workflow/engine.go:StrictValidateArchitectureBody
+    to_name: StrictValidateArchitectureBody
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_name: common.Errorf
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_name: common.Fatalf
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_name: strings
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsAreReservedForProceed
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Occurrence
+    to_name: DeclaredEffect.Occurrence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Operation
+    to_name: DeclaredEffect.Operation
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Scope
+    to_name: DeclaredEffect.Scope
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Statement
+    to_name: DeclaredEffect.Statement
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Step
+    to_name: DeclaredEffect.Step
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Target
+    to_name: DeclaredEffect.Target
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence.go:EffectInStep
+    to_name: EffectInStep
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/engine.go:StrictValidateArchitectureBody
+    to_name: StrictValidateArchitectureBody
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/engine.go:architectureDecision~type
+    to_name: architectureDecision
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/engine.go:architectureDecision.Consequences
+    to_name: architectureDecision.Consequences
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/engine.go:architectureDecision.DeclaredEffects
+    to_name: architectureDecision.DeclaredEffects
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/engine.go:architectureDecision.Steps
+    to_name: architectureDecision.Steps
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_name: common.Fatal
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_name: common.Fatalf
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34PublishSentence
+    to_name: df34PublishSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: mustBound
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/consequence_semantic_effect_test.go:quoteJSON
+    to_name: quoteJSON
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_id: internal/workflow/engine.go:strictDecodeModelJSON
+    to_name: strictDecodeModelJSON
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DeclaredEffectsCrossTheArchitectureContract
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence.go:EffectGovernedLocal
+    to_name: EffectGovernedLocal
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence.go:EffectOutward
+    to_name: EffectOutward
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence.go:EffectUnknown
+    to_name: EffectUnknown
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34DestructiveTruncateStillEscalates
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Occurrence
+    to_name: DeclaredEffect.Occurrence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Operation
+    to_name: DeclaredEffect.Operation
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Scope
+    to_name: DeclaredEffect.Scope
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Statement
+    to_name: DeclaredEffect.Statement
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Target
+    to_name: DeclaredEffect.Target
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:EffectGovernedLocal
+    to_name: EffectGovernedLocal
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence.go:EffectInConsequences
+    to_name: EffectInConsequences
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34TruncateSentence
+    to_name: df34TruncateSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: mustBound
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34GovernedLocalTruncateIsNotOutward
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Occurrence
+    to_name: DeclaredEffect.Occurrence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Operation
+    to_name: DeclaredEffect.Operation
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Scope
+    to_name: DeclaredEffect.Scope
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Statement
+    to_name: DeclaredEffect.Statement
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Step
+    to_name: DeclaredEffect.Step
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Target
+    to_name: DeclaredEffect.Target
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:EffectGovernedLocal
+    to_name: EffectGovernedLocal
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:EffectInConsequences
+    to_name: EffectInConsequences
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:EffectInStep
+    to_name: EffectInStep
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence.go:EffectOutward
+    to_name: EffectOutward
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34PublishSentence
+    to_name: df34PublishSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: mustBound
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34InvalidRelationsSuppressNothing
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34PublishSentence
+    to_name: df34PublishSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34PublishedSentence
+    to_name: df34PublishedSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: mustBound
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34MeasuredEventBusPublishIsNotOutward
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_id: internal/workflow/consequence.go:EffectOutward
+    to_name: EffectOutward
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_id: internal/workflow/consequence.go:EffectUnknown
+    to_name: EffectUnknown
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34OutwardPublicationStillEscalates
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34PublishSentence
+    to_name: df34PublishSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: mustBound
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34RelationBindsOnlyItsOccurrence
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence.go:EffectGovernedLocal
+    to_name: EffectGovernedLocal
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence.go:EffectInProcess
+    to_name: EffectInProcess
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence.go:EffectOutward
+    to_name: EffectOutward
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence.go:EffectUnknown
+    to_name: EffectUnknown
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence_semantic_effect_test.go:df34TruncateSentence
+    to_name: df34TruncateSentence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_name: effect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: mustBound
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_id: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: mustEscalate
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:TestDF34StructuredProseParity
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:Action~type
+    to_name: Action
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:Action.DeclaredConsequences
+    to_name: Action.DeclaredConsequences
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:Action.DeclaredEffects
+    to_name: Action.DeclaredEffects
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:Action.DeclaredSteps
+    to_name: Action.DeclaredSteps
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:Action.Stage
+    to_name: Action.Stage
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:AssessConsequences
+    to_name: AssessConsequences
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment~type
+    to_name: ConsequenceAssessment
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_id: internal/workflow/consequence.go:StageCandidateEdit
+    to_name: StageCandidateEdit
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Occurrence
+    to_name: DeclaredEffect.Occurrence
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Operation
+    to_name: DeclaredEffect.Operation
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Scope
+    to_name: DeclaredEffect.Scope
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Statement
+    to_name: DeclaredEffect.Statement
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Step
+    to_name: DeclaredEffect.Step
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:DeclaredEffect.Target
+    to_name: DeclaredEffect.Target
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:effect
+    to_id: internal/workflow/consequence.go:EffectInStep
+    to_name: EffectInStep
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_id: internal/workflow/consequence.go:ConsequenceBounded
+    to_name: ConsequenceBounded
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_id: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_name: assessed
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: common.Errorf
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: common.Helper
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_id: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_name: declaredOutwardActionsWithEffects
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustBound
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Effects
+    to_name: ConsequenceAssessment.Effects
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence.go:ConsequenceAssessment.Result
+    to_name: ConsequenceAssessment.Result
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence.go:ConsequenceUnacceptable
+    to_name: ConsequenceUnacceptable
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: Contains
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence.go:DeclaredEffect~type
+    to_name: DeclaredEffect
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: Join
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: T
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence_semantic_effect_test.go:assessed
+    to_name: assessed
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: common.Errorf
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: common.Helper
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence.go:declaredOutwardActionsWithEffects
+    to_name: declaredOutwardActionsWithEffects
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_id: internal/workflow/consequence.go:listed
+    to_name: listed
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: strings
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:mustEscalate
+    to_name: testing
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:quoteJSON
+    to_name: ReplaceAll
+    file: internal/workflow/consequence_semantic_effect_test.go
+  - from: internal/workflow/consequence_semantic_effect_test.go:quoteJSON
+    to_name: strings
+    file: internal/workflow/consequence_semantic_effect_test.go
   - from: internal/workflow/consequence_structural_test.go:TestConsequencesAreAssessedForEveryRoutedAction
     to_id: internal/workflow/consequence.go:Action~type
     to_name: Action
@@ -174186,11 +174909,11 @@ code_references:
     to_name: Engine.emit
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/emit_test.go
   - from: internal/workflow/emit_test.go:TestAStalledWatcherCannotStopTheWorkflow
@@ -174551,10 +175274,10 @@ code_references:
     to_name: Load
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.Resume
@@ -175242,10 +175965,10 @@ code_references:
     to_name: Is
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.askArchitect
@@ -178041,10 +178764,10 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.implement
@@ -180574,10 +181297,10 @@ code_references:
     to_name: Engine.resolveRunner
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
-    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.resolveArchitectureIn
@@ -181819,6 +182542,10 @@ code_references:
     to_name: Action.DeclaredConsequences
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.routePlan
+    to_id: internal/workflow/consequence.go:Action.DeclaredEffects
+    to_name: Action.DeclaredEffects
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.routePlan
     to_id: internal/workflow/consequence.go:Action.DeclaredSteps
     to_name: Action.DeclaredSteps
     file: internal/workflow/engine.go
@@ -182040,6 +182767,10 @@ code_references:
   - from: internal/workflow/engine.go:Engine.routePlan
     to_id: internal/workflow/engine.go:architectureDecision.Consequences
     to_name: architectureDecision.Consequences
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:Engine.routePlan
+    to_id: internal/workflow/engine.go:architectureDecision.DeclaredEffects
+    to_name: architectureDecision.DeclaredEffects
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.routePlan
     to_id: internal/workflow/engine.go:architectureDecision.Files
@@ -182675,7 +183406,6 @@ code_references:
     to_name: ModeInspect
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
-    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -182683,6 +183413,7 @@ code_references:
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
+    to_id: internal/broker/broker.go:New
     to_name: New
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:Engine.runCandidate
@@ -184453,11 +185184,11 @@ code_references:
     to_name: Evidence.AuditDetail
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
+    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/candidate/disposition.go:Evidence.AuditVerdict
+    to_id: internal/taskstate/state.go:Evidence.AuditVerdict
     to_name: Evidence.AuditVerdict
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -184465,19 +185196,19 @@ code_references:
     to_name: Evidence.BaseSHA
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.ChangedPaths
-    to_name: Evidence.ChangedPaths
-    file: internal/workflow/engine.go
-  - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.ChangedPaths
     to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
-    to_id: internal/taskstate/state.go:Evidence.DiffBytes
-    to_name: Evidence.DiffBytes
+    to_id: internal/taskstate/state.go:Evidence.ChangedPaths
+    to_name: Evidence.ChangedPaths
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
     to_id: internal/candidate/disposition.go:Evidence.DiffBytes
+    to_name: Evidence.DiffBytes
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:candidateEvidence
+    to_id: internal/taskstate/state.go:Evidence.DiffBytes
     to_name: Evidence.DiffBytes
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:candidateEvidence
@@ -186201,11 +186932,11 @@ code_references:
     to_name: ToolResult
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/authority/resolution.go:ToolResult.IsError
+    to_id: internal/sensei/mcp.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
-    to_id: internal/sensei/mcp.go:ToolResult.IsError
+    to_id: internal/authority/resolution.go:ToolResult.IsError
     to_name: ToolResult.IsError
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:senseiProposer.CallTool
@@ -186451,6 +187182,10 @@ code_references:
   - from: internal/workflow/engine.go:strictDecisionOnlyFields
     to_id: internal/workflow/engine.go:architectureDecision.Decision
     to_name: architectureDecision.Decision
+    file: internal/workflow/engine.go
+  - from: internal/workflow/engine.go:strictDecisionOnlyFields
+    to_id: internal/workflow/engine.go:architectureDecision.DeclaredEffects
+    to_name: architectureDecision.DeclaredEffects
     file: internal/workflow/engine.go
   - from: internal/workflow/engine.go:strictDecisionOnlyFields
     to_id: internal/workflow/engine.go:architectureDecisionFields
@@ -192378,10 +193113,10 @@ code_references:
     to_name: Is
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
-    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:TestAnOrdinaryRunnerFailureIsNotLaunderedIntoAnExternalBlock
@@ -193264,11 +193999,11 @@ code_references:
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/session/store.go:New
+    to_id: internal/event/event.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
-    to_id: internal/event/event.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:architectRoster
@@ -193408,11 +194143,11 @@ code_references:
     to_name: Event
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/workflow/engine.go:New
+    to_id: internal/session/store.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
-    to_id: internal/session/store.go:New
+    to_id: internal/workflow/engine.go:New
     to_name: New
     file: internal/workflow/external_block_test.go
   - from: internal/workflow/external_block_test.go:blockedEngine
