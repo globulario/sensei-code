@@ -5405,6 +5405,15 @@ func (e *Engine) routePlan(ctx context.Context, sc *sensei.Client, start certifi
 	// function already has. It is an additional door, not a moved one:
 	// inspectTestEdits still runs on the candidate, unchanged, and is the
 	// authority of record.
+	//
+	// Presence comes first: every declared existing-test edit must hold exactly
+	// one grant in this attempt's COMPLETE recorded test-edit state, or the
+	// plan is refused here. Before this, a declared path with no grant was
+	// projected nothing and was found only by candidate inspection, after an
+	// implementer had spent a cycle on it (DF-37b; objective 61, run 3).
+	if err := e.reconcileTestEditGrants(taskID, d); err != nil {
+		return Routing{}, sensei.PreflightDecision{}, Action{}, err
+	}
 	if err := projectTestEditRefusals(d.TestEdits, e.testEditGrants(taskID)); err != nil {
 		// A refusal of this attempt, decided by its own recorded grants.
 		err = refusePlanAdmission(err)
@@ -5929,6 +5938,20 @@ func (e *Engine) reconcileProspectiveGrants(taskID string, declared []Prospectiv
 	}
 	if err := matchGrantsToDeclarations(declared, e.prospectiveGrants(taskID)); err != nil {
 		return refusePlanAdmission(fmt.Errorf("prospective admission refused before implementation: %w", err))
+	}
+	return nil
+}
+
+// reconcileTestEditGrants is plan admission's reading of the test-edit record
+// routing wrote for the pending attempt: every declared existing-test edit
+// must hold exactly one valid grant in it (reconcileTestEditDeclarations), or
+// the plan is refused before any implementer starts. A plan that declares no
+// existing-test edit is untouched.
+func (e *Engine) reconcileTestEditGrants(taskID string, d architectureDecision) error {
+	attempt := e.pendingPlanAttempt(taskID)
+	_, rec := e.recordedGrants(taskID, attempt.ID)
+	if err := reconcileTestEditDeclarations(d.TestEdits, d.Files, attempt, rec); err != nil {
+		return refusePlanAdmission(fmt.Errorf("existing-test edit admission refused before implementation: %w", err))
 	}
 	return nil
 }

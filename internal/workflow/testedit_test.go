@@ -2309,3 +2309,210 @@ func TestDF23AQuotedExistingTestPathIsEnumeratedFromTheCapture(t *testing.T) {
 		t.Errorf("mixed: both granted edits were refused: %v", err)
 	}
 }
+
+// DF-37b -- A DECLARED EXISTING-TEST EDIT IS AN ADMISSION OBLIGATION.
+//
+// Objective 61, run 3: the plan's test_edits declared internal/event/bus_test.go
+// and internal/runreceipt/receipt_test.go, routing recorded "no test-edit
+// authority" for both, and the plan was admitted anyway -- the projector checks
+// only the declarations a grant answers. These witnesses are separate from the
+// objective 60, 63 and 64 witnesses above, which are unchanged.
+
+const (
+	df37bBusS     = "internal/event/bus.go"
+	df37bReceiptS = "internal/runreceipt/receipt.go"
+)
+
+// df37bFiles is the pinned world of the objective-61 plan: each test beside
+// its production file, in the same package.
+func df37bFiles() map[string]string {
+	return map[string]string{
+		df37bBusS:     "package event\n\nfunc Publish() {}\n",
+		df23Bus:       "package event\n\nimport \"testing\"\n\nfunc TestBus(t *testing.T) {}\n",
+		df37bReceiptS: "package runreceipt\n\nfunc Mint() {}\n",
+		df23Receipt:   "package runreceipt\n\nimport \"testing\"\n\nfunc TestReceipt(t *testing.T) {}\n",
+	}
+}
+
+// df37bPlan is the objective-61 run-3 plan: both tests declared as edits.
+func df37bPlan(text string) architectureDecision {
+	d := attemptPlan(text, df37bBusS, df23Bus, df37bReceiptS, df23Receipt)
+	d.TestEdits = []TestEditDeclaration{
+		{Path: df23Bus, Operation: testEditOperationEdit, Package: "event"},
+		{Path: df23Receipt, Operation: testEditOperationEdit, Package: "runreceipt"},
+	}
+	return d
+}
+
+// df37bGrants derives the grants the predicate gives the plan at teWorld when
+// the given production files are governed -- none when nothing is.
+func df37bGrants(t *testing.T, governed ...string) ([]testEditGrant, []string) {
+	t.Helper()
+	var covered []CoverageAnchor
+	for _, f := range governed {
+		covered = append(covered, CoverageAnchor{File: f, Requirement: RequirementMutationConfinement})
+	}
+	return testEditGrants(context.Background(), teWorld, df37bPlan("").Files, covered, authoredEvidence{}, teRead(df37bFiles()))
+}
+
+// df37bAdmit begins d's attempt at the pinned world, records its complete
+// test-edit state exactly as routing does, and asks plan admission.
+func df37bAdmit(t *testing.T, e *Engine, task string, d architectureDecision, grants []testEditGrant) (planAttempt, error) {
+	t.Helper()
+	a, err := e.beginPlanAttempt(task, attemptObjective, d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.recordTestEditGrants(task, "recorded", testEditRecord{PlanAttemptID: a.ID, World: a.World, Grants: grants}); err != nil {
+		t.Fatal(err)
+	}
+	e.setTestEditGrants(task, grants)
+	return a, e.reconcileTestEditGrants(task, d)
+}
+
+func df37bRefusesNaming(t *testing.T, err error, ungranted string, granted ...string) {
+	t.Helper()
+	var refusal *planAdmissionRefusal
+	if err == nil || !errors.As(err, &refusal) {
+		t.Fatalf("the plan was not refused at plan admission: %v", err)
+	}
+	if !strings.Contains(err.Error(), "refused before implementation") || !strings.Contains(err.Error(), ungranted) {
+		t.Fatalf("the refusal does not name the ungranted %s: %v", ungranted, err)
+	}
+	for _, g := range granted {
+		if strings.Contains(err.Error(), g) {
+			t.Fatalf("the refusal names the granted %s: %v", g, err)
+		}
+	}
+}
+
+// W1 -- the objective-61 run-3 specimen: both declared tests receive explicit
+// no-authority results, and the plan is refused before an implementer starts.
+func TestDF37bW1DeclaredTestEditsWithNoAuthorityAreRefusedAtAdmission(t *testing.T) {
+	grants, reasons := df37bGrants(t)
+	if len(grants) != 0 || len(reasons) != 2 {
+		t.Fatalf("premise: both declared tests are refused authority explicitly: grants %+v, reasons %q", grants, reasons)
+	}
+	for i, f := range []string{df23Bus, df23Receipt} {
+		if !strings.Contains(reasons[i], f) || !strings.Contains(reasons[i], "no planned file in its directory is governed") {
+			t.Fatalf("premise: no explicit no-authority result for %s: %q", f, reasons)
+		}
+	}
+	const task = "task-df37b-w1"
+	e := df23Engine(t, "", task)
+	_, err := df37bAdmit(t, e, task, df37bPlan("objective 61 run 3"), grants)
+	df37bRefusesNaming(t, err, df23Bus)
+	if !strings.Contains(err.Error(), "holds no test-edit grant") {
+		t.Fatalf("the refusal does not state the reason: %v", err)
+	}
+	// The projector alone admits it: that was the hole.
+	if err := projectTestEditRefusals(df37bPlan("").TestEdits, grants); err != nil {
+		t.Fatalf("premise: the projector refuses nothing ungranted: %v", err)
+	}
+	// A plan with no declared existing-test edit is untouched, and so is one
+	// whose only entries declare nothing (no operation in the closed vocabulary).
+	plain := df37bPlan("no test edits")
+	plain.TestEdits = nil
+	if _, err := df37bAdmit(t, e, task, plain, nil); err != nil {
+		t.Fatalf("a plan declaring no existing-test edit was refused: %v", err)
+	}
+	unread := df37bPlan("unread operations")
+	unread.TestEdits = []TestEditDeclaration{{Path: df23Bus, Operation: "Edit"}, {Path: df23Receipt}}
+	if _, err := df37bAdmit(t, e, task, unread, nil); err != nil {
+		t.Fatalf("declarations outside the closed vocabulary were read as edits: %v", err)
+	}
+	// Declarations that disagree still declare the path.
+	disagree := df37bPlan("disagreeing")
+	disagree.TestEdits = append(disagree.TestEdits, TestEditDeclaration{Path: "./" + df23Bus, Operation: testEditOperationDelete})
+	_, err = df37bAdmit(t, e, task, disagree, nil)
+	df37bRefusesNaming(t, err, df23Bus)
+}
+
+// W2 -- control: the same plan with valid grants for both proceeds; a
+// malformed or duplicated grant does not count as one.
+func TestDF37bW2DeclaredTestEditsWithValidGrantsProceed(t *testing.T) {
+	grants, reasons := df37bGrants(t, df37bBusS, df37bReceiptS)
+	if len(grants) != 2 || len(reasons) != 0 {
+		t.Fatalf("premise: both tests are granted: grants %+v, reasons %q", grants, reasons)
+	}
+	const task = "task-df37b-w2"
+	e := df23Engine(t, "", task)
+	if _, err := df37bAdmit(t, e, task, df37bPlan("objective 61 run 3, granted"), grants); err != nil {
+		t.Fatalf("a plan whose declared test edits are all granted was refused: %v", err)
+	}
+	malformed := append([]testEditGrant{}, grants...)
+	malformed[1].BaseHash = ""
+	_, err := df37bAdmit(t, e, task, df37bPlan("malformed"), malformed)
+	df37bRefusesNaming(t, err, df23Receipt)
+	if !strings.Contains(err.Error(), "malformed") {
+		t.Fatalf("a malformed grant was not refused as malformed: %v", err)
+	}
+	_, err = df37bAdmit(t, e, task, df37bPlan("duplicated"), append(grants, grants[0]))
+	df37bRefusesNaming(t, err, df23Bus)
+	if !strings.Contains(err.Error(), "not exactly one") {
+		t.Fatalf("a duplicated grant was not refused: %v", err)
+	}
+	elsewhere := append([]testEditGrant{}, grants...)
+	elsewhere[0].World = "other-world"
+	_, err = df37bAdmit(t, e, task, df37bPlan("other world"), elsewhere)
+	df37bRefusesNaming(t, err, df23Bus)
+}
+
+// W3 -- one granted and one ungranted declared edit: refused, naming only the
+// ungranted path.
+func TestDF37bW3OnlyTheUngrantedDeclaredPathIsNamed(t *testing.T) {
+	grants, _ := df37bGrants(t, df37bBusS)
+	if len(grants) != 1 || grants[0].Path != df23Bus {
+		t.Fatalf("premise: only %s is granted: %+v", df23Bus, grants)
+	}
+	const task = "task-df37b-w3"
+	e := df23Engine(t, "", task)
+	_, err := df37bAdmit(t, e, task, df37bPlan("one granted"), grants)
+	df37bRefusesNaming(t, err, df23Receipt, df23Bus)
+}
+
+// W4 -- a grant recorded under a superseded PlanAttemptID does not satisfy the
+// replacement plan's declaration; the replacement's own fresh grant does.
+func TestDF37bW4ASupersededAttemptsGrantDoesNotAdmitTheReplacement(t *testing.T) {
+	grants, _ := df37bGrants(t, df37bBusS, df37bReceiptS)
+	const task = "task-df37b-w4"
+	e := df23Engine(t, "", task)
+	a, err := df37bAdmit(t, e, task, df37bPlan("plan A"), grants)
+	if err != nil {
+		t.Fatalf("premise: plan A is admitted under its own grants: %v", err)
+	}
+	b, err := df37bAdmit(t, e, task, df37bPlan("plan B"), nil)
+	if a.ID == b.ID {
+		t.Fatal("premise: the replacement plan is a new attempt")
+	}
+	df37bRefusesNaming(t, err, df23Bus)
+	// Plan A's record, handed to plan B whole, is bound to the superseded attempt.
+	_, stale := e.recordedGrants(task, a.ID)
+	if len(stale.Grants) != 2 {
+		t.Fatalf("premise: plan A's record still holds its grants: %+v", stale)
+	}
+	err = reconcileTestEditDeclarations(df37bPlan("plan B").TestEdits, df37bPlan("plan B").Files, b, stale)
+	if err == nil || !strings.Contains(err.Error(), "superseded") || !strings.Contains(err.Error(), df23Bus) {
+		t.Fatalf("a superseded attempt's grants admitted the replacement plan: %v", err)
+	}
+	// A replacement that derives its grants fresh under its own attempt is admitted.
+	if _, err := df37bAdmit(t, e, task, df37bPlan("plan C"), grants); err != nil {
+		t.Fatalf("the replacement's own fresh grants were refused: %v", err)
+	}
+}
+
+// The door is in routePlan, after every grant the plan operates under is
+// recorded -- the authored ones included -- and with the projector beside it.
+func TestDF37bRoutePlanReconcilesAfterTheCompleteGrantState(t *testing.T) {
+	calls := callsIn(funcDeclIn(t, "internal/workflow/engine.go", "routePlan").Body)
+	reconcile, ok := calls["reconcileTestEditGrants"]
+	if !ok {
+		t.Fatal("routePlan does not reconcile declared test edits against recorded grants")
+	}
+	if authored, ok := calls["authoredTestEditGrants"]; !ok || reconcile < authored {
+		t.Fatal("routePlan reconciles before the authored grants are recorded")
+	}
+	if project, ok := calls["projectTestEditRefusals"]; !ok || reconcile > project {
+		t.Fatal("routePlan projects structural refusals before it establishes each declared edit is granted")
+	}
+}
