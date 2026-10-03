@@ -64,6 +64,10 @@ const (
 	// state_mutation_confined_to_owner. A composition family: state identity,
 	// ownership, mutation sites and the authorized boundary, related.
 	RequirementMutationConfinement Requirement = "mutation confinement"
+	// RequirementPackageImportConfinement: whether a package is imported, by
+	// non-test source under the searched paths, only from itself or the one
+	// package claimed to own it. Answered by package_import_confined_to.
+	RequirementPackageImportConfinement Requirement = "package import confinement"
 )
 
 // requirementOfFamily says what a derivation family is able to answer.
@@ -85,6 +89,8 @@ func requirementOfFamily(kind string) Requirement {
 		return RequirementInvocationConfinement
 	case "state_mutation_confined_to_owner":
 		return RequirementMutationConfinement
+	case "package_import_confined_to":
+		return RequirementPackageImportConfinement
 	default:
 		return RequirementUnrecognised
 	}
@@ -226,9 +232,10 @@ func satisfies(anchor, gap Requirement) bool {
 // nobody added is absent because nobody added it -- which is how a future
 // requirement fails closed instead of arriving as silent autonomy.
 var resolvable = map[Requirement]bool{
-	RequirementLockDiscipline:        true,
-	RequirementInvocationConfinement: true,
-	RequirementMutationConfinement:   true,
+	RequirementLockDiscipline:           true,
+	RequirementInvocationConfinement:    true,
+	RequirementMutationConfinement:      true,
+	RequirementPackageImportConfinement: true,
 }
 
 func dedupe(in []string) []string {

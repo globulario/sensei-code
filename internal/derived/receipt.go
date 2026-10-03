@@ -42,7 +42,7 @@ import (
 // Bumped whenever that handling changes, because the same proposal can be
 // accepted by one version and refused by the next, and a receipt that did not
 // say which one ran would make two incomparable outcomes look like one.
-const PostProcessingVersion = "closure-recipe/v1"
+const PostProcessingVersion = "closure-recipe/v2"
 
 // FeatureExtractorVersion identifies what built the investigator's inputs.
 //
@@ -64,7 +64,9 @@ const PostProcessingVersion = "closure-recipe/v1"
 // region) it never can be by claims. v4 tells it the gap is graph coverage,
 // that claims do not close it, and to propose the checkable part whether or
 // not it considers the gap closed. It does not say what to propose.
-const FeatureExtractorVersion = "gap-closure-prompt/v4"
+// v5: the prompt offers a fourth answerable shape, package_import_confined_to,
+// so the set of questions the investigator can propose has changed.
+const FeatureExtractorVersion = "gap-closure-prompt/v5"
 
 // InferenceOutcome is what a run produced. Every value is data about the loop,
 // including the ones that produced nothing.

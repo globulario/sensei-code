@@ -7683,7 +7683,7 @@ nothing by writing it: this task still stops, and the question cannot cover the
 run that proposed it. Only a later derivation can turn it into coverage, and
 only if the relationship actually holds there.
 
-Three kinds are answerable. Anything else derives UNKNOWN forever, which is
+Four kinds are answerable. Anything else derives UNKNOWN forever, which is
 writing nothing while looking like accumulation:
 
   {"kind":"field_access_under_lock","dir":"<pkg dir>","type":"<type name>",
@@ -7695,6 +7695,9 @@ writing nothing while looking like accumulation:
 
   {"kind":"state_mutation_confined_to_owner","dir":"<declaring pkg dir>","type":"<exported type>",
    "field":"<exported field>","search_paths":["<dir>"],"why":"..."}
+
+  {"kind":"package_import_confined_to","dir":"<pkg dir>","owner":"<importing pkg dir, optional>",
+   "search_paths":["<dir>"],"why":"..."}
 
 The question must be about the region you were asked to investigate.
 
